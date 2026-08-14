@@ -1,0 +1,1693 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "ja": {
+      "messages": {
+        "app.Q2lyY2xl.action.Y3JlYXRlLWNvbW1lbnQ.desc": {
+          "source": "Creates a new comment on a post in Circle",
+          "message": "Circleの投稿に新しいコメントを作成します"
+        },
+        "app.Q2lyY2xl.action.Y3JlYXRlLWNvbW1lbnQ.display_name": {
+          "source": "Create a Comment",
+          "message": "コメントの作成"
+        },
+        "app.Q2lyY2xl.action.Y3JlYXRlLWNvbW1lbnQ.option.Ym9keQ.desc": {
+          "source": "The body content of the comment in HTML format. Example: `<p>Great post!</p>`",
+          "message": "HTML形式のコメント本文コンテンツ。例: `<p>Great post!</p>`"
+        },
+        "app.Q2lyY2xl.action.Y3JlYXRlLWNvbW1lbnQ.option.Ym9keQ.display_name": {
+          "source": "Body",
+          "message": "ボディ"
+        },
+        "app.Q2lyY2xl.action.Y3JlYXRlLWNvbW1lbnQ.option.Ym9keQ.short_desc": {
+          "source": "Comment content",
+          "message": "コメント内容"
+        },
+        "app.Q2lyY2xl.action.Y3JlYXRlLWNvbW1lbnQ.option.cG9zdF9pZA.desc": {
+          "source": "The ID of the post to add the comment to",
+          "message": "コメントを追加する投稿のID"
+        },
+        "app.Q2lyY2xl.action.Y3JlYXRlLWNvbW1lbnQ.option.cG9zdF9pZA.display_name": {
+          "source": "Post ID",
+          "message": "投稿ID"
+        },
+        "app.Q2lyY2xl.action.Y3JlYXRlLWNvbW1lbnQ.option.cG9zdF9pZA.short_desc": {
+          "source": "Post to comment on",
+          "message": "コメント対象の投稿"
+        },
+        "app.Q2lyY2xl.action.Y3JlYXRlLWNvbW1lbnQ.short_desc": {
+          "source": "Create a new comment",
+          "message": "新しいコメントを作成"
+        },
+        "app.Q2lyY2xl.action.Y3JlYXRlLXBvc3Q.desc": {
+          "source": "Creates a new post in a Circle space",
+          "message": "Circleスペースに新しい投稿を作成します"
+        },
+        "app.Q2lyY2xl.action.Y3JlYXRlLXBvc3Q.display_name": {
+          "source": "Create a Post",
+          "message": "投稿の作成"
+        },
+        "app.Q2lyY2xl.action.Y3JlYXRlLXBvc3Q.option.Ym9keQ.desc": {
+          "source": "The body content of the post in HTML format. Example: `<p>Hello <strong>world</strong></p>`",
+          "message": "HTML形式の投稿本文コンテンツ。例: `<p>Hello <strong>world</strong></p>`"
+        },
+        "app.Q2lyY2xl.action.Y3JlYXRlLXBvc3Q.option.Ym9keQ.display_name": {
+          "source": "Body",
+          "message": "ボディ"
+        },
+        "app.Q2lyY2xl.action.Y3JlYXRlLXBvc3Q.option.Ym9keQ.short_desc": {
+          "source": "Post content",
+          "message": "投稿内容"
+        },
+        "app.Q2lyY2xl.action.Y3JlYXRlLXBvc3Q.option.aXNfY29tbWVudHNfZW5hYmxlZA.desc": {
+          "source": "Whether to enable comments on the post. Default: `True`",
+          "message": "投稿のコメントを有効にするかどうか。デフォルト: `True`"
+        },
+        "app.Q2lyY2xl.action.Y3JlYXRlLXBvc3Q.option.aXNfY29tbWVudHNfZW5hYmxlZA.display_name": {
+          "source": "Comments Enabled",
+          "message": "コメント有効"
+        },
+        "app.Q2lyY2xl.action.Y3JlYXRlLXBvc3Q.option.aXNfY29tbWVudHNfZW5hYmxlZA.short_desc": {
+          "source": "Enable comments on the post",
+          "message": "投稿のコメントを有効にする"
+        },
+        "app.Q2lyY2xl.action.Y3JlYXRlLXBvc3Q.option.aXNfbGlraW5nX2VuYWJsZWQ.desc": {
+          "source": "Whether to enable liking on the post. Default: `True`",
+          "message": "投稿のいいねを有効にするかどうか。デフォルト: `True`"
+        },
+        "app.Q2lyY2xl.action.Y3JlYXRlLXBvc3Q.option.aXNfbGlraW5nX2VuYWJsZWQ.display_name": {
+          "source": "Liking Enabled",
+          "message": "いいね有効"
+        },
+        "app.Q2lyY2xl.action.Y3JlYXRlLXBvc3Q.option.aXNfbGlraW5nX2VuYWJsZWQ.short_desc": {
+          "source": "Enable liking on the post",
+          "message": "投稿のいいねを有効にする"
+        },
+        "app.Q2lyY2xl.action.Y3JlYXRlLXBvc3Q.option.aXNfcGlubmVk.desc": {
+          "source": "Whether to pin the post to the top of its space",
+          "message": "投稿をスペースのトップに固定するかどうか"
+        },
+        "app.Q2lyY2xl.action.Y3JlYXRlLXBvc3Q.option.aXNfcGlubmVk.display_name": {
+          "source": "Is Pinned",
+          "message": "固定設定"
+        },
+        "app.Q2lyY2xl.action.Y3JlYXRlLXBvc3Q.option.aXNfcGlubmVk.short_desc": {
+          "source": "Pin post to top of space",
+          "message": "投稿をスペースのトップに固定"
+        },
+        "app.Q2lyY2xl.action.Y3JlYXRlLXBvc3Q.option.bmFtZQ.desc": {
+          "source": "The title of the post",
+          "message": "投稿のタイトル"
+        },
+        "app.Q2lyY2xl.action.Y3JlYXRlLXBvc3Q.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "名前"
+        },
+        "app.Q2lyY2xl.action.Y3JlYXRlLXBvc3Q.option.bmFtZQ.short_desc": {
+          "source": "Post title",
+          "message": "投稿タイトル"
+        },
+        "app.Q2lyY2xl.action.Y3JlYXRlLXBvc3Q.option.c2tpcF9ub3RpZmljYXRpb25z.desc": {
+          "source": "If `True`, no notifications will be sent to members about this post",
+          "message": "`True` の場合、この投稿に関する通知はメンバーに送信されません"
+        },
+        "app.Q2lyY2xl.action.Y3JlYXRlLXBvc3Q.option.c2tpcF9ub3RpZmljYXRpb25z.display_name": {
+          "source": "Skip Notifications",
+          "message": "通知をスキップ"
+        },
+        "app.Q2lyY2xl.action.Y3JlYXRlLXBvc3Q.option.c2tpcF9ub3RpZmljYXRpb25z.short_desc": {
+          "source": "Skip sending notifications",
+          "message": "通知送信をスキップ"
+        },
+        "app.Q2lyY2xl.action.Y3JlYXRlLXBvc3Q.option.c3BhY2VfaWQ.desc": {
+          "source": "The ID of the space to create the post in",
+          "message": "投稿を作成するスペースのID"
+        },
+        "app.Q2lyY2xl.action.Y3JlYXRlLXBvc3Q.option.c3BhY2VfaWQ.display_name": {
+          "source": "Space ID",
+          "message": "スペース ID"
+        },
+        "app.Q2lyY2xl.action.Y3JlYXRlLXBvc3Q.option.c3BhY2VfaWQ.short_desc": {
+          "source": "Space to create the post in",
+          "message": "投稿を作成するスペース"
+        },
+        "app.Q2lyY2xl.action.Y3JlYXRlLXBvc3Q.option.c3RhdHVz.allowed-value.c3RyaW5nOmRyYWZ0.display_name": {
+          "source": "Draft",
+          "message": "下書き"
+        },
+        "app.Q2lyY2xl.action.Y3JlYXRlLXBvc3Q.option.c3RhdHVz.allowed-value.c3RyaW5nOnB1Ymxpc2hlZA.display_name": {
+          "source": "Published",
+          "message": "公開済み"
+        },
+        "app.Q2lyY2xl.action.Y3JlYXRlLXBvc3Q.option.c3RhdHVz.allowed-value.c3RyaW5nOnNjaGVkdWxlZA.display_name": {
+          "source": "Scheduled",
+          "message": "スケジュール済み"
+        },
+        "app.Q2lyY2xl.action.Y3JlYXRlLXBvc3Q.option.c3RhdHVz.desc": {
+          "source": "The publication status of the post",
+          "message": "投稿の公開ステータス"
+        },
+        "app.Q2lyY2xl.action.Y3JlYXRlLXBvc3Q.option.c3RhdHVz.display_name": {
+          "source": "Status",
+          "message": "ステータス"
+        },
+        "app.Q2lyY2xl.action.Y3JlYXRlLXBvc3Q.option.c3RhdHVz.short_desc": {
+          "source": "Post status",
+          "message": "投稿ステータス"
+        },
+        "app.Q2lyY2xl.action.Y3JlYXRlLXBvc3Q.option.cHVibGlzaGVkX2F0.desc": {
+          "source": "The date and time to publish the post in ISO 8601 format. Use with `status` set to `scheduled` to schedule a post for future publication. Example: `2026-04-15T10:00:00Z`",
+          "message": "ISO 8601形式の投稿公開日時。将来の公開スケジュールを設定するには、`status` を `scheduled` に設定して使用します。例: `2026-04-15T10:00:00Z`"
+        },
+        "app.Q2lyY2xl.action.Y3JlYXRlLXBvc3Q.option.cHVibGlzaGVkX2F0.display_name": {
+          "source": "Published At",
+          "message": "公開日時"
+        },
+        "app.Q2lyY2xl.action.Y3JlYXRlLXBvc3Q.option.cHVibGlzaGVkX2F0.short_desc": {
+          "source": "Publication date for scheduling",
+          "message": "スケジュール用の公開日時"
+        },
+        "app.Q2lyY2xl.action.Y3JlYXRlLXBvc3Q.short_desc": {
+          "source": "Create a new post",
+          "message": "新しい投稿を作成"
+        },
+        "app.Q2lyY2xl.action.Y3JlYXRlLXNwYWNl.desc": {
+          "source": "Creates a new space in a Circle community",
+          "message": "Circleコミュニティに新しいスペースを作成します"
+        },
+        "app.Q2lyY2xl.action.Y3JlYXRlLXNwYWNl.display_name": {
+          "source": "Create a Space",
+          "message": "スペースを作成"
+        },
+        "app.Q2lyY2xl.action.Y3JlYXRlLXNwYWNl.option.ZW1vamk.desc": {
+          "source": "An emoji to use as the space icon",
+          "message": "スペースのアイコンとして使用する絵文字"
+        },
+        "app.Q2lyY2xl.action.Y3JlYXRlLXNwYWNl.option.ZW1vamk.display_name": {
+          "source": "Emoji",
+          "message": "絵文字"
+        },
+        "app.Q2lyY2xl.action.Y3JlYXRlLXNwYWNl.option.ZW1vamk.short_desc": {
+          "source": "Space emoji icon",
+          "message": "スペースの絵文字アイコン"
+        },
+        "app.Q2lyY2xl.action.Y3JlYXRlLXNwYWNl.option.aXNfaGlkZGVu.desc": {
+          "source": "Whether the space is completely hidden",
+          "message": "スペースを完全に非表示にするかどうか"
+        },
+        "app.Q2lyY2xl.action.Y3JlYXRlLXNwYWNl.option.aXNfaGlkZGVu.display_name": {
+          "source": "Is Hidden",
+          "message": "非表示"
+        },
+        "app.Q2lyY2xl.action.Y3JlYXRlLXNwYWNl.option.aXNfaGlkZGVu.short_desc": {
+          "source": "Whether the space is hidden",
+          "message": "スペースが非表示かどうか"
+        },
+        "app.Q2lyY2xl.action.Y3JlYXRlLXNwYWNl.option.aXNfaGlkZGVuX2Zyb21fbm9uX21lbWJlcnM.desc": {
+          "source": "Whether the space is hidden from users who are not members of it",
+          "message": "このスペースのメンバーではないユーザーに対してスペースを非表示にするかどうか"
+        },
+        "app.Q2lyY2xl.action.Y3JlYXRlLXNwYWNl.option.aXNfaGlkZGVuX2Zyb21fbm9uX21lbWJlcnM.display_name": {
+          "source": "Hidden from Non-Members",
+          "message": "非メンバーに対して非表示"
+        },
+        "app.Q2lyY2xl.action.Y3JlYXRlLXNwYWNl.option.aXNfaGlkZGVuX2Zyb21fbm9uX21lbWJlcnM.short_desc": {
+          "source": "Whether the space is hidden from non-members",
+          "message": "非メンバーに対してスペースが非表示かどうか"
+        },
+        "app.Q2lyY2xl.action.Y3JlYXRlLXNwYWNl.option.aXNfcG9zdF9kaXNhYmxlZA.desc": {
+          "source": "Whether member posting is disabled in this space",
+          "message": "このスペースでメンバーによる投稿が無効化されているかどうか"
+        },
+        "app.Q2lyY2xl.action.Y3JlYXRlLXNwYWNl.option.aXNfcG9zdF9kaXNhYmxlZA.display_name": {
+          "source": "Posts Disabled",
+          "message": "投稿無効"
+        },
+        "app.Q2lyY2xl.action.Y3JlYXRlLXNwYWNl.option.aXNfcG9zdF9kaXNhYmxlZA.short_desc": {
+          "source": "Whether posting is disabled",
+          "message": "投稿が無効化されているかどうか"
+        },
+        "app.Q2lyY2xl.action.Y3JlYXRlLXNwYWNl.option.aXNfcHJpdmF0ZQ.desc": {
+          "source": "Whether the space should be private. Default: `False`",
+          "message": "スペースをプライベートにするかどうか。デフォルト: `False`"
+        },
+        "app.Q2lyY2xl.action.Y3JlYXRlLXNwYWNl.option.aXNfcHJpdmF0ZQ.display_name": {
+          "source": "Is Private",
+          "message": "非公開設定"
+        },
+        "app.Q2lyY2xl.action.Y3JlYXRlLXNwYWNl.option.aXNfcHJpdmF0ZQ.short_desc": {
+          "source": "Whether the space is private",
+          "message": "スペースがプライベートかどうか"
+        },
+        "app.Q2lyY2xl.action.Y3JlYXRlLXNwYWNl.option.bmFtZQ.desc": {
+          "source": "The name of the space",
+          "message": "スペースの名前"
+        },
+        "app.Q2lyY2xl.action.Y3JlYXRlLXNwYWNl.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "名前"
+        },
+        "app.Q2lyY2xl.action.Y3JlYXRlLXNwYWNl.option.bmFtZQ.short_desc": {
+          "source": "Space name",
+          "message": "スペース名"
+        },
+        "app.Q2lyY2xl.action.Y3JlYXRlLXNwYWNl.option.c3BhY2VfdHlwZQ.allowed-value.c3RyaW5nOm1lbWJlcnM.display_name": {
+          "source": "Members",
+          "message": "メンバー"
+        },
+        "app.Q2lyY2xl.action.Y3JlYXRlLXNwYWNl.option.c3BhY2VfdHlwZQ.allowed-value.c3RyaW5nOmJhc2lj.display_name": {
+          "source": "Basic",
+          "message": "ベーシック"
+        },
+        "app.Q2lyY2xl.action.Y3JlYXRlLXNwYWNl.option.c3BhY2VfdHlwZQ.allowed-value.c3RyaW5nOmNoYXQ.display_name": {
+          "source": "Chat",
+          "message": "チャット"
+        },
+        "app.Q2lyY2xl.action.Y3JlYXRlLXNwYWNl.option.c3BhY2VfdHlwZQ.allowed-value.c3RyaW5nOmNvdXJzZQ.display_name": {
+          "source": "Course",
+          "message": "コース"
+        },
+        "app.Q2lyY2xl.action.Y3JlYXRlLXNwYWNl.option.c3BhY2VfdHlwZQ.allowed-value.c3RyaW5nOmV2ZW50.display_name": {
+          "source": "Event",
+          "message": "イベント"
+        },
+        "app.Q2lyY2xl.action.Y3JlYXRlLXNwYWNl.option.c3BhY2VfdHlwZQ.allowed-value.c3RyaW5nOmltYWdl.display_name": {
+          "source": "Image",
+          "message": "画像"
+        },
+        "app.Q2lyY2xl.action.Y3JlYXRlLXNwYWNl.option.c3BhY2VfdHlwZQ.desc": {
+          "source": "The type of space to create",
+          "message": "作成するスペースのタイプ"
+        },
+        "app.Q2lyY2xl.action.Y3JlYXRlLXNwYWNl.option.c3BhY2VfdHlwZQ.display_name": {
+          "source": "Space Type",
+          "message": "スペースの種類"
+        },
+        "app.Q2lyY2xl.action.Y3JlYXRlLXNwYWNl.option.c3BhY2VfdHlwZQ.short_desc": {
+          "source": "Type of space",
+          "message": "スペースのタイプ"
+        },
+        "app.Q2lyY2xl.action.Y3JlYXRlLXNwYWNl.short_desc": {
+          "source": "Create a new space",
+          "message": "新しいスペースを作成"
+        },
+        "app.Q2lyY2xl.action.YWRkLW1lbWJlci10by1zcGFjZQ.desc": {
+          "source": "Adds a member to a certain space in Circle",
+          "message": "Circle内の特定のスペースにメンバーを追加します"
+        },
+        "app.Q2lyY2xl.action.YWRkLW1lbWJlci10by1zcGFjZQ.display_name": {
+          "source": "Add a Member to a Space",
+          "message": "スペースにメンバーを追加"
+        },
+        "app.Q2lyY2xl.action.YWRkLW1lbWJlci10by1zcGFjZQ.option.ZW1haWw.desc": {
+          "source": "The email address of the member to add to the space",
+          "message": "スペースに追加するメンバーのメールアドレス"
+        },
+        "app.Q2lyY2xl.action.YWRkLW1lbWJlci10by1zcGFjZQ.option.ZW1haWw.display_name": {
+          "source": "Email",
+          "message": "メール"
+        },
+        "app.Q2lyY2xl.action.YWRkLW1lbWJlci10by1zcGFjZQ.option.ZW1haWw.short_desc": {
+          "source": "Member email address",
+          "message": "メンバーのメールアドレス"
+        },
+        "app.Q2lyY2xl.action.YWRkLW1lbWJlci10by1zcGFjZQ.option.c3BhY2VfaWQ.desc": {
+          "source": "The ID of the space to add the member to",
+          "message": "メンバーを追加するスペースのID"
+        },
+        "app.Q2lyY2xl.action.YWRkLW1lbWJlci10by1zcGFjZQ.option.c3BhY2VfaWQ.display_name": {
+          "source": "Space ID",
+          "message": "スペース ID"
+        },
+        "app.Q2lyY2xl.action.YWRkLW1lbWJlci10by1zcGFjZQ.option.c3BhY2VfaWQ.short_desc": {
+          "source": "Space to add the member to",
+          "message": "メンバーを追加するスペース"
+        },
+        "app.Q2lyY2xl.action.YWRkLW1lbWJlci10by1zcGFjZQ.short_desc": {
+          "source": "Add a member to a certain space",
+          "message": "特定のスペースにメンバーを追加"
+        },
+        "app.Q2lyY2xl.action.YWRkLW1lbWJlci10by1zcGFjZS1ncm91cA.desc": {
+          "source": "Adds a member to a specific space group in Circle",
+          "message": "Circle内の特定のスペースグループにメンバーを追加します"
+        },
+        "app.Q2lyY2xl.action.YWRkLW1lbWJlci10by1zcGFjZS1ncm91cA.display_name": {
+          "source": "Add a Member to a Space Group",
+          "message": "スペースグループにメンバーを追加"
+        },
+        "app.Q2lyY2xl.action.YWRkLW1lbWJlci10by1zcGFjZS1ncm91cA.option.ZW1haWw.desc": {
+          "source": "The email address of the member to add to the space group",
+          "message": "スペースグループに追加するメンバーのメールアドレス"
+        },
+        "app.Q2lyY2xl.action.YWRkLW1lbWJlci10by1zcGFjZS1ncm91cA.option.ZW1haWw.display_name": {
+          "source": "Email",
+          "message": "メール"
+        },
+        "app.Q2lyY2xl.action.YWRkLW1lbWJlci10by1zcGFjZS1ncm91cA.option.ZW1haWw.short_desc": {
+          "source": "Member email address",
+          "message": "メンバーのメールアドレス"
+        },
+        "app.Q2lyY2xl.action.YWRkLW1lbWJlci10by1zcGFjZS1ncm91cA.option.c3BhY2VfZ3JvdXBfaWQ.desc": {
+          "source": "The ID of the space group to add the member to",
+          "message": "メンバーを追加するスペースグループのID"
+        },
+        "app.Q2lyY2xl.action.YWRkLW1lbWJlci10by1zcGFjZS1ncm91cA.option.c3BhY2VfZ3JvdXBfaWQ.display_name": {
+          "source": "Space Group ID",
+          "message": "スペースグループID"
+        },
+        "app.Q2lyY2xl.action.YWRkLW1lbWJlci10by1zcGFjZS1ncm91cA.option.c3BhY2VfZ3JvdXBfaWQ.short_desc": {
+          "source": "Space group to add the member to",
+          "message": "メンバーを追加するスペースグループ"
+        },
+        "app.Q2lyY2xl.action.YWRkLW1lbWJlci10by1zcGFjZS1ncm91cA.short_desc": {
+          "source": "Add a member to a specific space group",
+          "message": "特定のスペースグループにメンバーを追加"
+        },
+        "app.Q2lyY2xl.action.Z2V0LWNvbW11bml0eQ.desc": {
+          "source": "Retrieve a single community by its ID",
+          "message": "IDによって単一のコミュニティを取得します"
+        },
+        "app.Q2lyY2xl.action.Z2V0LWNvbW11bml0eQ.display_name": {
+          "source": "Get a Community",
+          "message": "コミュニティを取得"
+        },
+        "app.Q2lyY2xl.action.Z2V0LWNvbW11bml0eQ.option.aWQ.display_name": {
+          "source": "Community ID",
+          "message": "コミュニティID"
+        },
+        "app.Q2lyY2xl.action.Z2V0LWNvbW11bml0eQ.option.aWQ.short_desc": {
+          "source": "The community ID",
+          "message": "コミュニティID"
+        },
+        "app.Q2lyY2xl.action.Z2V0LWNvbW11bml0eQ.short_desc": {
+          "source": "Retrieve a specific community",
+          "message": "特定のコミュニティを取得"
+        },
+        "app.Q2lyY2xl.action.Z2V0LWNvbW1lbnQ.desc": {
+          "source": "Retrieve a single comment by its ID",
+          "message": "IDによって単一のコメントを取得します"
+        },
+        "app.Q2lyY2xl.action.Z2V0LWNvbW1lbnQ.display_name": {
+          "source": "Get a Comment",
+          "message": "コメントを取得"
+        },
+        "app.Q2lyY2xl.action.Z2V0LWNvbW1lbnQ.option.aWQ.display_name": {
+          "source": "Comment ID",
+          "message": "コメントID"
+        },
+        "app.Q2lyY2xl.action.Z2V0LWNvbW1lbnQ.option.aWQ.short_desc": {
+          "source": "The comment ID",
+          "message": "コメントID"
+        },
+        "app.Q2lyY2xl.action.Z2V0LWNvbW1lbnQ.short_desc": {
+          "source": "Retrieve a specific comment",
+          "message": "特定のコメントを取得"
+        },
+        "app.Q2lyY2xl.action.Z2V0LXBvc3Q.desc": {
+          "source": "Retrieve a single post by its ID",
+          "message": "IDによって単一の投稿を取得します"
+        },
+        "app.Q2lyY2xl.action.Z2V0LXBvc3Q.display_name": {
+          "source": "Get a Post",
+          "message": "投稿を取得"
+        },
+        "app.Q2lyY2xl.action.Z2V0LXBvc3Q.option.aWQ.display_name": {
+          "source": "Post ID",
+          "message": "投稿ID"
+        },
+        "app.Q2lyY2xl.action.Z2V0LXBvc3Q.option.aWQ.short_desc": {
+          "source": "The post ID",
+          "message": "投稿ID"
+        },
+        "app.Q2lyY2xl.action.Z2V0LXBvc3Q.short_desc": {
+          "source": "Retrieve a specific post",
+          "message": "特定の投稿を取得"
+        },
+        "app.Q2lyY2xl.action.Z2V0LXNwYWNl.desc": {
+          "source": "Retrieve a single space by its ID",
+          "message": "IDで単一のスペースを取得します"
+        },
+        "app.Q2lyY2xl.action.Z2V0LXNwYWNl.display_name": {
+          "source": "Get a Space",
+          "message": "スペースの取得"
+        },
+        "app.Q2lyY2xl.action.Z2V0LXNwYWNl.option.aWQ.display_name": {
+          "source": "Space ID",
+          "message": "スペース ID"
+        },
+        "app.Q2lyY2xl.action.Z2V0LXNwYWNl.option.aWQ.short_desc": {
+          "source": "The space ID",
+          "message": "スペースID"
+        },
+        "app.Q2lyY2xl.action.Z2V0LXNwYWNl.short_desc": {
+          "source": "Retrieve a specific space",
+          "message": "特定のスペースを取得"
+        },
+        "app.Q2lyY2xl.action.ZGVsZXRlLWNvbW1lbnQ.desc": {
+          "source": "Permanently deletes a comment from Circle",
+          "message": "Circleからコメントを完全に削除します"
+        },
+        "app.Q2lyY2xl.action.ZGVsZXRlLWNvbW1lbnQ.display_name": {
+          "source": "Delete a Comment",
+          "message": "コメントの削除"
+        },
+        "app.Q2lyY2xl.action.ZGVsZXRlLWNvbW1lbnQ.option.aWQ.desc": {
+          "source": "The unique identifier of the comment to delete",
+          "message": "削除するコメントの一意の識別子"
+        },
+        "app.Q2lyY2xl.action.ZGVsZXRlLWNvbW1lbnQ.option.aWQ.display_name": {
+          "source": "Comment ID",
+          "message": "コメントID"
+        },
+        "app.Q2lyY2xl.action.ZGVsZXRlLWNvbW1lbnQ.option.aWQ.short_desc": {
+          "source": "ID of the comment to delete",
+          "message": "削除するコメントのID"
+        },
+        "app.Q2lyY2xl.action.ZGVsZXRlLWNvbW1lbnQ.short_desc": {
+          "source": "Delete a specific comment",
+          "message": "特定のコメントを削除"
+        },
+        "app.Q2lyY2xl.action.ZGVsZXRlLXBvc3Q.desc": {
+          "source": "Permanently deletes a post from Circle",
+          "message": "Circleから投稿を完全に削除します"
+        },
+        "app.Q2lyY2xl.action.ZGVsZXRlLXBvc3Q.display_name": {
+          "source": "Delete a Post",
+          "message": "投稿の削除"
+        },
+        "app.Q2lyY2xl.action.ZGVsZXRlLXBvc3Q.option.aWQ.desc": {
+          "source": "The unique identifier of the post to delete",
+          "message": "削除する投稿の一意の識別子"
+        },
+        "app.Q2lyY2xl.action.ZGVsZXRlLXBvc3Q.option.aWQ.display_name": {
+          "source": "Post ID",
+          "message": "投稿ID"
+        },
+        "app.Q2lyY2xl.action.ZGVsZXRlLXBvc3Q.option.aWQ.short_desc": {
+          "source": "ID of the post to delete",
+          "message": "削除する投稿のID"
+        },
+        "app.Q2lyY2xl.action.ZGVsZXRlLXBvc3Q.short_desc": {
+          "source": "Delete a specific post",
+          "message": "特定の投稿を削除"
+        },
+        "app.Q2lyY2xl.action.ZGVsZXRlLXNwYWNl.desc": {
+          "source": "Permanently deletes a space from Circle",
+          "message": "Circleからスペースを完全に削除します"
+        },
+        "app.Q2lyY2xl.action.ZGVsZXRlLXNwYWNl.display_name": {
+          "source": "Delete a Space",
+          "message": "スペースの削除"
+        },
+        "app.Q2lyY2xl.action.ZGVsZXRlLXNwYWNl.option.aWQ.desc": {
+          "source": "The unique identifier of the space to delete",
+          "message": "削除するスペースの一意の識別子"
+        },
+        "app.Q2lyY2xl.action.ZGVsZXRlLXNwYWNl.option.aWQ.display_name": {
+          "source": "Space ID",
+          "message": "スペース ID"
+        },
+        "app.Q2lyY2xl.action.ZGVsZXRlLXNwYWNl.option.aWQ.short_desc": {
+          "source": "ID of the space to delete",
+          "message": "削除するスペースのID"
+        },
+        "app.Q2lyY2xl.action.ZGVsZXRlLXNwYWNl.short_desc": {
+          "source": "Delete a specific space",
+          "message": "特定のスペースを削除"
+        },
+        "app.Q2lyY2xl.action.aW52aXRlLW1lbWJlcg.desc": {
+          "source": "Invites a member to a Circle community by email",
+          "message": "メールでCircleコミュニティにメンバーを招待します"
+        },
+        "app.Q2lyY2xl.action.aW52aXRlLW1lbWJlcg.display_name": {
+          "source": "Invite a Member",
+          "message": "メンバーの招待"
+        },
+        "app.Q2lyY2xl.action.aW52aXRlLW1lbWJlcg.option.ZW1haWw.desc": {
+          "source": "The email address of the person to invite to the community",
+          "message": "コミュニティに招待するユーザーのメールアドレス"
+        },
+        "app.Q2lyY2xl.action.aW52aXRlLW1lbWJlcg.option.ZW1haWw.display_name": {
+          "source": "Email",
+          "message": "メール"
+        },
+        "app.Q2lyY2xl.action.aW52aXRlLW1lbWJlcg.option.ZW1haWw.short_desc": {
+          "source": "Email address to invite",
+          "message": "招待するメールアドレス"
+        },
+        "app.Q2lyY2xl.action.aW52aXRlLW1lbWJlcg.option.aGVhZGxpbmU.desc": {
+          "source": "The headline or tagline for the member's profile",
+          "message": "メンバープロフィールのヘッドラインまたはタグライン"
+        },
+        "app.Q2lyY2xl.action.aW52aXRlLW1lbWJlcg.option.aGVhZGxpbmU.display_name": {
+          "source": "Headline",
+          "message": "見出し"
+        },
+        "app.Q2lyY2xl.action.aW52aXRlLW1lbWJlcg.option.aGVhZGxpbmU.short_desc": {
+          "source": "Member headline",
+          "message": "メンバーのヘッドライン"
+        },
+        "app.Q2lyY2xl.action.aW52aXRlLW1lbWJlcg.option.bmFtZQ.desc": {
+          "source": "The name of the person being invited",
+          "message": "招待されるユーザーの名前"
+        },
+        "app.Q2lyY2xl.action.aW52aXRlLW1lbWJlcg.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "名前"
+        },
+        "app.Q2lyY2xl.action.aW52aXRlLW1lbWJlcg.option.bmFtZQ.short_desc": {
+          "source": "Member name",
+          "message": "メンバー名"
+        },
+        "app.Q2lyY2xl.action.aW52aXRlLW1lbWJlcg.option.c2tpcF9pbnZpdGF0aW9u.desc": {
+          "source": "If `True`, the member will be added without sending an invitation email",
+          "message": "`True` の場合、招待メールを送信せずにメンバーを追加します"
+        },
+        "app.Q2lyY2xl.action.aW52aXRlLW1lbWJlcg.option.c2tpcF9pbnZpdGF0aW9u.display_name": {
+          "source": "Skip Invitation",
+          "message": "招待をスキップ"
+        },
+        "app.Q2lyY2xl.action.aW52aXRlLW1lbWJlcg.option.c2tpcF9pbnZpdGF0aW9u.short_desc": {
+          "source": "Skip sending the invitation email",
+          "message": "招待メールの送信をスキップ"
+        },
+        "app.Q2lyY2xl.action.aW52aXRlLW1lbWJlcg.option.c3BhY2VfaWRz.desc": {
+          "source": "List of space IDs to add the member to upon invitation",
+          "message": "招待時にメンバーを追加するスペースIDのリスト"
+        },
+        "app.Q2lyY2xl.action.aW52aXRlLW1lbWJlcg.option.c3BhY2VfaWRz.display_name": {
+          "source": "Space IDs",
+          "message": "スペースID"
+        },
+        "app.Q2lyY2xl.action.aW52aXRlLW1lbWJlcg.option.c3BhY2VfaWRz.short_desc": {
+          "source": "Spaces to add the member to",
+          "message": "メンバーを追加するスペース"
+        },
+        "app.Q2lyY2xl.action.aW52aXRlLW1lbWJlcg.short_desc": {
+          "source": "Invite a member to the community",
+          "message": "コミュニティにメンバーを招待"
+        },
+        "app.Q2lyY2xl.action.bGlzdC1jb21tZW50cw.desc": {
+          "source": "List comments with optional filtering by post",
+          "message": "投稿によるオプションのフィルタリングを使用してコメントを一覧表示します"
+        },
+        "app.Q2lyY2xl.action.bGlzdC1jb21tZW50cw.display_name": {
+          "source": "List Comments",
+          "message": "コメント一覧を取得"
+        },
+        "app.Q2lyY2xl.action.bGlzdC1jb21tZW50cw.option.aWQ.display_name": {
+          "source": "Comment ID",
+          "message": "コメントID"
+        },
+        "app.Q2lyY2xl.action.bGlzdC1jb21tZW50cw.option.aWQ.short_desc": {
+          "source": "Get a specific comment",
+          "message": "特定のコメントを取得"
+        },
+        "app.Q2lyY2xl.action.bGlzdC1jb21tZW50cw.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "上限"
+        },
+        "app.Q2lyY2xl.action.bGlzdC1jb21tZW50cw.option.bGltaXQ.short_desc": {
+          "source": "Maximum results",
+          "message": "最大結果数"
+        },
+        "app.Q2lyY2xl.action.bGlzdC1jb21tZW50cw.option.cG9zdF9pZA.display_name": {
+          "source": "Post ID",
+          "message": "投稿ID"
+        },
+        "app.Q2lyY2xl.action.bGlzdC1jb21tZW50cw.option.cG9zdF9pZA.short_desc": {
+          "source": "Filter by post",
+          "message": "投稿でフィルタリング"
+        },
+        "app.Q2lyY2xl.action.bGlzdC1jb21tZW50cw.short_desc": {
+          "source": "List comments in the community",
+          "message": "コミュニティ内のコメントを一覧表示"
+        },
+        "app.Q2lyY2xl.action.bGlzdC1jb21tdW5pdGllcw.desc": {
+          "source": "List communities accessible to the current API token",
+          "message": "現在のAPIトークンでアクセス可能なコミュニティを一覧表示します"
+        },
+        "app.Q2lyY2xl.action.bGlzdC1jb21tdW5pdGllcw.display_name": {
+          "source": "List Communities",
+          "message": "コミュニティの一覧表示"
+        },
+        "app.Q2lyY2xl.action.bGlzdC1jb21tdW5pdGllcw.option.aWQ.display_name": {
+          "source": "Community ID",
+          "message": "コミュニティID"
+        },
+        "app.Q2lyY2xl.action.bGlzdC1jb21tdW5pdGllcw.option.aWQ.short_desc": {
+          "source": "Get a specific community",
+          "message": "特定のコミュニティを取得"
+        },
+        "app.Q2lyY2xl.action.bGlzdC1jb21tdW5pdGllcw.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "上限"
+        },
+        "app.Q2lyY2xl.action.bGlzdC1jb21tdW5pdGllcw.option.bGltaXQ.short_desc": {
+          "source": "Maximum results",
+          "message": "最大結果数"
+        },
+        "app.Q2lyY2xl.action.bGlzdC1jb21tdW5pdGllcw.short_desc": {
+          "source": "List communities in the account",
+          "message": "アカウント内のコミュニティを一覧表示"
+        },
+        "app.Q2lyY2xl.action.bGlzdC1tZW1iZXJz.desc": {
+          "source": "List community members with optional filtering by email",
+          "message": "メールによるオプションのフィルタリングを使用してコミュニティメンバーを一覧表示します"
+        },
+        "app.Q2lyY2xl.action.bGlzdC1tZW1iZXJz.display_name": {
+          "source": "List Members",
+          "message": "メンバーを一覧表示"
+        },
+        "app.Q2lyY2xl.action.bGlzdC1tZW1iZXJz.option.ZW1haWw.display_name": {
+          "source": "Email",
+          "message": "メール"
+        },
+        "app.Q2lyY2xl.action.bGlzdC1tZW1iZXJz.option.ZW1haWw.short_desc": {
+          "source": "Filter by email",
+          "message": "メールアドレスで絞り込み"
+        },
+        "app.Q2lyY2xl.action.bGlzdC1tZW1iZXJz.option.aWQ.display_name": {
+          "source": "Member ID",
+          "message": "メンバー ID"
+        },
+        "app.Q2lyY2xl.action.bGlzdC1tZW1iZXJz.option.aWQ.short_desc": {
+          "source": "Get a specific member",
+          "message": "特定のメンバーを取得"
+        },
+        "app.Q2lyY2xl.action.bGlzdC1tZW1iZXJz.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "上限"
+        },
+        "app.Q2lyY2xl.action.bGlzdC1tZW1iZXJz.option.bGltaXQ.short_desc": {
+          "source": "Maximum results",
+          "message": "最大結果数"
+        },
+        "app.Q2lyY2xl.action.bGlzdC1tZW1iZXJz.option.c3RhdHVz.allowed-value.c3RyaW5nOmFsbA.display_name": {
+          "source": "All",
+          "message": "すべて"
+        },
+        "app.Q2lyY2xl.action.bGlzdC1tZW1iZXJz.option.c3RhdHVz.allowed-value.c3RyaW5nOmluYWN0aXZl.display_name": {
+          "source": "Inactive",
+          "message": "非アクティブ"
+        },
+        "app.Q2lyY2xl.action.bGlzdC1tZW1iZXJz.option.c3RhdHVz.display_name": {
+          "source": "Status",
+          "message": "ステータス"
+        },
+        "app.Q2lyY2xl.action.bGlzdC1tZW1iZXJz.option.c3RhdHVz.short_desc": {
+          "source": "Filter by member status",
+          "message": "メンバーステータスでフィルタリング"
+        },
+        "app.Q2lyY2xl.action.bGlzdC1tZW1iZXJz.short_desc": {
+          "source": "List community members",
+          "message": "コミュニティメンバーを一覧表示"
+        },
+        "app.Q2lyY2xl.action.bGlzdC1wb3N0cw.desc": {
+          "source": "List posts in the community with optional filtering by space and status",
+          "message": "スペースおよびステータスによるオプションのフィルタリングを使用してコミュニティ内の投稿を一覧表示します"
+        },
+        "app.Q2lyY2xl.action.bGlzdC1wb3N0cw.display_name": {
+          "source": "List Posts",
+          "message": "投稿の一覧表示"
+        },
+        "app.Q2lyY2xl.action.bGlzdC1wb3N0cw.option.aWQ.display_name": {
+          "source": "Post ID",
+          "message": "投稿ID"
+        },
+        "app.Q2lyY2xl.action.bGlzdC1wb3N0cw.option.aWQ.short_desc": {
+          "source": "Get a specific post",
+          "message": "特定の投稿を取得"
+        },
+        "app.Q2lyY2xl.action.bGlzdC1wb3N0cw.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "上限"
+        },
+        "app.Q2lyY2xl.action.bGlzdC1wb3N0cw.option.bGltaXQ.short_desc": {
+          "source": "Maximum results",
+          "message": "最大結果数"
+        },
+        "app.Q2lyY2xl.action.bGlzdC1wb3N0cw.option.c3BhY2VfaWQ.display_name": {
+          "source": "Space ID",
+          "message": "スペース ID"
+        },
+        "app.Q2lyY2xl.action.bGlzdC1wb3N0cw.option.c3BhY2VfaWQ.short_desc": {
+          "source": "Filter by space",
+          "message": "スペースでフィルター"
+        },
+        "app.Q2lyY2xl.action.bGlzdC1wb3N0cw.option.c3RhdHVz.allowed-value.c3RyaW5nOmRyYWZ0.display_name": {
+          "source": "Draft",
+          "message": "下書き"
+        },
+        "app.Q2lyY2xl.action.bGlzdC1wb3N0cw.option.c3RhdHVz.allowed-value.c3RyaW5nOnB1Ymxpc2hlZA.display_name": {
+          "source": "Published",
+          "message": "公開済み"
+        },
+        "app.Q2lyY2xl.action.bGlzdC1wb3N0cw.option.c3RhdHVz.allowed-value.c3RyaW5nOnNjaGVkdWxlZA.display_name": {
+          "source": "Scheduled",
+          "message": "スケジュール済み"
+        },
+        "app.Q2lyY2xl.action.bGlzdC1wb3N0cw.option.c3RhdHVz.display_name": {
+          "source": "Status",
+          "message": "ステータス"
+        },
+        "app.Q2lyY2xl.action.bGlzdC1wb3N0cw.option.c3RhdHVz.short_desc": {
+          "source": "Filter by status",
+          "message": "ステータスで絞り込み"
+        },
+        "app.Q2lyY2xl.action.bGlzdC1wb3N0cw.short_desc": {
+          "source": "List posts in the community",
+          "message": "コミュニティ内の投稿を一覧表示"
+        },
+        "app.Q2lyY2xl.action.bGlzdC1zcGFjZXM.desc": {
+          "source": "List spaces in the community with optional sorting",
+          "message": "オプションの並べ替えを使用してコミュニティ内のスペースを一覧表示します"
+        },
+        "app.Q2lyY2xl.action.bGlzdC1zcGFjZXM.display_name": {
+          "source": "List Spaces",
+          "message": "スペースの一覧表示"
+        },
+        "app.Q2lyY2xl.action.bGlzdC1zcGFjZXM.option.aWQ.display_name": {
+          "source": "Space ID",
+          "message": "スペース ID"
+        },
+        "app.Q2lyY2xl.action.bGlzdC1zcGFjZXM.option.aWQ.short_desc": {
+          "source": "Get a specific space",
+          "message": "特定のスペースを取得"
+        },
+        "app.Q2lyY2xl.action.bGlzdC1zcGFjZXM.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "上限"
+        },
+        "app.Q2lyY2xl.action.bGlzdC1zcGFjZXM.option.bGltaXQ.short_desc": {
+          "source": "Maximum results",
+          "message": "最大結果数"
+        },
+        "app.Q2lyY2xl.action.bGlzdC1zcGFjZXM.option.c29ydA.allowed-value.c3RyaW5nOm9sZGVzdA.display_name": {
+          "source": "Oldest",
+          "message": "最も古い順"
+        },
+        "app.Q2lyY2xl.action.bGlzdC1zcGFjZXM.option.c29ydA.allowed-value.c3RyaW5nOmFjdGl2ZQ.display_name": {
+          "source": "Active",
+          "message": "アクティブ"
+        },
+        "app.Q2lyY2xl.action.bGlzdC1zcGFjZXM.option.c29ydA.allowed-value.c3RyaW5nOmFscGhhYmV0aWNhbA.display_name": {
+          "source": "Alphabetical",
+          "message": "アルファベット順"
+        },
+        "app.Q2lyY2xl.action.bGlzdC1zcGFjZXM.option.c29ydA.allowed-value.c3RyaW5nOmxhdGVzdF91cGRhdGVk.display_name": {
+          "source": "Latest Updated",
+          "message": "最終更新日時が新しい順"
+        },
+        "app.Q2lyY2xl.action.bGlzdC1zcGFjZXM.option.c29ydA.display_name": {
+          "source": "Sort Order",
+          "message": "並べ替え順序"
+        },
+        "app.Q2lyY2xl.action.bGlzdC1zcGFjZXM.option.c29ydA.short_desc": {
+          "source": "Sort order for spaces",
+          "message": "スペースの並べ替え順序"
+        },
+        "app.Q2lyY2xl.action.bGlzdC1zcGFjZXM.short_desc": {
+          "source": "List spaces in the community",
+          "message": "コミュニティ内のスペースを一覧表示"
+        },
+        "app.Q2lyY2xl.action.bWFrZS1hcGktY2FsbA.desc": {
+          "source": "Make a custom HTTP / REST API call to **Circle** using the configured connection's authentication.\n\nSpecify the HTTP method, the URI path (relative to the connection's API base URL), optional query parameters, headers, and request body. The response is returned as a hash containing the status code, response headers, and response body.\n\nUse this action for endpoints that are not yet exposed as first-class actions on this app.",
+          "message": "設定された接続の認証を使用して **Circle** へのカスタムHTTP / REST API呼び出しを実行します。\n\nHTTPメソッド、URIパス（接続のAPIベースURLに対する相対パス）、オプションのクエリパラメータ、ヘッダー、リクエスト本文を指定します。レスポンスはステータスコード、レスポンスヘッダー、レスポンス本文を含むハッシュとして返されます。\n\nこのアプリでファーストクラスのアクションとしてまだ公開されていないエンドポイントには、このアクションを使用します。"
+        },
+        "app.Q2lyY2xl.action.bWFrZS1hcGktY2FsbA.display_name": {
+          "source": "Make an API call",
+          "message": "API コールを実行"
+        },
+        "app.Q2lyY2xl.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.desc": {
+          "source": "The request body. The effective type depends on `body_type`: JSON/form/YAML expect a hash, XML/text expect a string, multipart expects a file structure, binary expects raw bytes.",
+          "message": "リクエストボディ。有効な型は`body_type`に依存します。JSON/form/YAMLはハッシュを期待し、XML/textは文字列を期待し、multipartはファイル構造を期待し、binaryは生バイトを期待します。"
+        },
+        "app.Q2lyY2xl.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.display_name": {
+          "source": "Body",
+          "message": "ボディ"
+        },
+        "app.Q2lyY2xl.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.short_desc": {
+          "source": "The request body",
+          "message": "リクエストボディ"
+        },
+        "app.Q2lyY2xl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.desc": {
+          "source": "Upload a file using `multipart/form-data`. The body must be a @ref DataProvider::FileDataType \"FileDataType\" structure (filename + content + mime_type). The framework builds the multipart envelope and sets the boundary header.",
+          "message": "`multipart/form-data`を使用してファイルをアップロードします。ボディは@ref DataProvider::FileDataType \"FileDataType\"構造（filename + content + mime_type）である必要があります。フレームワークがmultipartエンベロープを構築し、boundaryヘッダーを設定します。"
+        },
+        "app.Q2lyY2xl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.display_name": {
+          "source": "Multipart Form",
+          "message": "マルチパートフォーム"
+        },
+        "app.Q2lyY2xl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.short_desc": {
+          "source": "Upload a file using multipart/form-data",
+          "message": "multipart/form-dataを使用してファイルをアップロード"
+        },
+        "app.Q2lyY2xl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.desc": {
+          "source": "Pass the body to the REST client unchanged; the client decides serialization based on its configured `data` option and the value type",
+          "message": "ボディを変更せずにRESTクライアントに渡します。クライアントは設定された`data`オプションと値の型に基づいてシリアライズを決定します"
+        },
+        "app.Q2lyY2xl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.display_name": {
+          "source": "Auto",
+          "message": "自動"
+        },
+        "app.Q2lyY2xl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.short_desc": {
+          "source": "Pass-through; use connection serialization and let the REST client decide",
+          "message": "パススルー。接続のシリアライズを使用し、RESTクライアントに決定させます"
+        },
+        "app.Q2lyY2xl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.desc": {
+          "source": "Send the body as raw bytes. The body must be a binary value. Sets `Content-Type: application/octet-stream` unless overridden by `hdr`.",
+          "message": "ボディを生バイトとして送信します。ボディはバイナリ値である必要があります。`hdr`によってオーバーライドされない限り、`Content-Type: application/octet-stream`を設定します。"
+        },
+        "app.Q2lyY2xl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.display_name": {
+          "source": "Raw Binary",
+          "message": "生バイナリ"
+        },
+        "app.Q2lyY2xl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.short_desc": {
+          "source": "Send body as raw bytes",
+          "message": "ボディを生バイトとして送信"
+        },
+        "app.Q2lyY2xl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.desc": {
+          "source": "Serialize a hash of form fields as `application/x-www-form-urlencoded`. The body must be a hash whose values are scalars (strings/numbers/booleans).",
+          "message": "フォームフィールドのハッシュを`application/x-www-form-urlencoded`としてシリアライズします。ボディは値がスカラー（文字列/数値/ブール値）のハッシュである必要があります。"
+        },
+        "app.Q2lyY2xl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.display_name": {
+          "source": "Form (URL-encoded)",
+          "message": "フォーム (URLエンコード)"
+        },
+        "app.Q2lyY2xl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.short_desc": {
+          "source": "Serialize body as application/x-www-form-urlencoded form fields",
+          "message": "ボディをapplication/x-www-form-urlencodedフォームフィールドとしてシリアライズ"
+        },
+        "app.Q2lyY2xl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.desc": {
+          "source": "Serialize the body as JSON; sets `Content-Type: application/json`. The body should be a hash, list, or scalar value.",
+          "message": "ボディをJSONとしてシリアライズします。`Content-Type: application/json`を設定します。ボディはハッシュ、リスト、またはスカラー値である必要があります。"
+        },
+        "app.Q2lyY2xl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.display_name": {
+          "source": "JSON",
+          "message": "JSON"
+        },
+        "app.Q2lyY2xl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.short_desc": {
+          "source": "Serialize body as JSON",
+          "message": "ボディをJSONとしてシリアライズ"
+        },
+        "app.Q2lyY2xl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.desc": {
+          "source": "Send the body as plain text. The body must be a string. Sets `Content-Type: text/plain`.",
+          "message": "ボディをプレーンテキストとして送信します。ボディは文字列である必要があります。`Content-Type: text/plain`を設定します。"
+        },
+        "app.Q2lyY2xl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.display_name": {
+          "source": "Plain Text",
+          "message": "プレーンテキスト"
+        },
+        "app.Q2lyY2xl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.short_desc": {
+          "source": "Send body as text/plain",
+          "message": "ボディをtext/plainとして送信"
+        },
+        "app.Q2lyY2xl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.desc": {
+          "source": "Send the body as XML. If the body is a hash it is serialized to XML; if it is a string it is sent verbatim. Sets `Content-Type: application/xml`.",
+          "message": "ボディをXMLとして送信します。ボディがハッシュの場合はXMLにシリアライズされ、文字列の場合はそのまま送信されます。`Content-Type: application/xml`を設定します。"
+        },
+        "app.Q2lyY2xl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.display_name": {
+          "source": "XML",
+          "message": "XML"
+        },
+        "app.Q2lyY2xl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.short_desc": {
+          "source": "Send body as XML",
+          "message": "ボディをXMLとして送信"
+        },
+        "app.Q2lyY2xl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.desc": {
+          "source": "Send the body as YAML. If the body is a hash it is serialized to YAML; if it is a string it is sent verbatim. Sets `Content-Type: application/x-yaml`.",
+          "message": "ボディをYAMLとして送信します。ボディがハッシュの場合はYAMLにシリアライズされ、文字列の場合はそのまま送信されます。`Content-Type: application/x-yaml`を設定します。"
+        },
+        "app.Q2lyY2xl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.display_name": {
+          "source": "YAML",
+          "message": "YAML"
+        },
+        "app.Q2lyY2xl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.short_desc": {
+          "source": "Send body as YAML",
+          "message": "ボディをYAMLとして送信"
+        },
+        "app.Q2lyY2xl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.desc": {
+          "source": "Selects the body serialization mode and the corresponding `Content-Type` header. Changing this field reshapes the `body` editor - selecting JSON exposes a JSON editor, selecting Multipart Form exposes a file picker, and so on.",
+          "message": "ボディのシリアライズモードと対応する`Content-Type`ヘッダーを選択します。このフィールドを変更すると`body`エディターの形状が変わります。JSONを選択するとJSONエディターが表示され、マルチパートフォームを選択するとファイルピッカーが表示される、などです。"
+        },
+        "app.Q2lyY2xl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.display_name": {
+          "source": "Body Type",
+          "message": "ボディタイプ"
+        },
+        "app.Q2lyY2xl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.short_desc": {
+          "source": "How the body is serialized and what Content-Type is sent",
+          "message": "ボディのシリアライズ方法および送信されるContent-Type"
+        },
+        "app.Q2lyY2xl.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.desc": {
+          "source": "If `True`, non-2xx HTTP responses return as the normal response hash (with the actual status code) instead of raising `REST-RESPONSE-ERROR`. Useful for handling 4xx/5xx as data - e.g. checking whether a resource exists. Overrides the connection's `error_passthru` setting for this call only.",
+          "message": "`True`の場合、2xx以外のHTTPレスポンスは`REST-RESPONSE-ERROR`を発生させる代わりに（実際のステータスコードを含む）通常のレスポンスハッシュとして返されます。リソースが存在するかどうかの確認など、4xx/5xxをデータとして処理する場合に便利です。この呼び出しに限り、接続の`error_passthru`設定をオーバーライドします。"
+        },
+        "app.Q2lyY2xl.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.display_name": {
+          "source": "Return Errors as Data",
+          "message": "エラーをデータとして返す"
+        },
+        "app.Q2lyY2xl.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.short_desc": {
+          "source": "Return non-2xx responses normally instead of throwing",
+          "message": "例外をスローする代わりに2xx以外のレスポンスを通常通り返す"
+        },
+        "app.Q2lyY2xl.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.desc": {
+          "source": "Optional list of HTTP status codes treated as success. If set and the response status is not in this list, the action throws `REST-STATUS-ERROR`. When unset, the REST client's default behavior applies (typically: 2xx is success, non-2xx throws).",
+          "message": "成功として扱われるHTTPステータスコードのオプションリスト。設定されていてレスポンスステータスがこのリストに含まれない場合、アクションは`REST-STATUS-ERROR`をスローします。未設定の場合、RESTクライアントのデフォルト動作が適用されます（通常：2xxは成功、2xx以外はスロー）。"
+        },
+        "app.Q2lyY2xl.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.display_name": {
+          "source": "Expected Status Codes",
+          "message": "期待されるステータスコード"
+        },
+        "app.Q2lyY2xl.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.short_desc": {
+          "source": "Response status codes treated as success",
+          "message": "成功として扱われるレスポンスステータスコード"
+        },
+        "app.Q2lyY2xl.action.bWFrZS1hcGktY2FsbA.option.aGRy.desc": {
+          "source": "Hash of custom headers added to the request. These override any default headers set by `body_type` (e.g. supplying `Content-Type` here wins over the body-type default).",
+          "message": "リクエストに追加されるカスタムヘッダーのハッシュ。これらは`body_type`によって設定されたデフォルトヘッダーをオーバーライドします（例：ここで`Content-Type`を指定すると、ボディタイプのデフォルトより優先されます）。"
+        },
+        "app.Q2lyY2xl.action.bWFrZS1hcGktY2FsbA.option.aGRy.display_name": {
+          "source": "Custom Headers",
+          "message": "カスタムヘッダー"
+        },
+        "app.Q2lyY2xl.action.bWFrZS1hcGktY2FsbA.option.aGRy.short_desc": {
+          "source": "Extra request headers",
+          "message": "追加のリクエストヘッダー"
+        },
+        "app.Q2lyY2xl.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.desc": {
+          "source": "If `True`, the response hash includes a `debug` sub-hash containing the request method/URL/headers (with sensitive values redacted), request and response sizes, and round-trip duration. Useful when investigating slow or failing calls. Off by default to keep responses lean.",
+          "message": "`True`の場合、レスポンスハッシュにはリクエストメソッド/URL/ヘッダー（機密値は伏字処理済み）、リクエストとレスポンスのサイズ、およびラウンドトリップ時間を含む`debug`サブハッシュが含まれます。遅い呼び出しや失敗した呼び出しを調査する際に便利です。レスポンスを軽量に保つため、デフォルトではオフになっています。"
+        },
+        "app.Q2lyY2xl.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.display_name": {
+          "source": "Include Debug Info",
+          "message": "デバッグ情報を含める"
+        },
+        "app.Q2lyY2xl.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.short_desc": {
+          "source": "Include request/timing/size debug info in the response",
+          "message": "レスポンスにリクエスト/タイミング/サイズのデバッグ情報を含める"
+        },
+        "app.Q2lyY2xl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.desc": {
+          "source": "HTTP `OPTIONS`",
+          "message": "HTTP `OPTIONS`"
+        },
+        "app.Q2lyY2xl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.display_name": {
+          "source": "OPTIONS",
+          "message": "OPTIONS"
+        },
+        "app.Q2lyY2xl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.short_desc": {
+          "source": "HTTP OPTIONS",
+          "message": "HTTP OPTIONS"
+        },
+        "app.Q2lyY2xl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.desc": {
+          "source": "HTTP `DELETE`",
+          "message": "HTTP `DELETE`"
+        },
+        "app.Q2lyY2xl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.display_name": {
+          "source": "DELETE",
+          "message": "DELETE"
+        },
+        "app.Q2lyY2xl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.short_desc": {
+          "source": "HTTP DELETE",
+          "message": "HTTP DELETE"
+        },
+        "app.Q2lyY2xl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.desc": {
+          "source": "HTTP `GET`",
+          "message": "HTTP `GET`"
+        },
+        "app.Q2lyY2xl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.display_name": {
+          "source": "GET",
+          "message": "GET"
+        },
+        "app.Q2lyY2xl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.short_desc": {
+          "source": "HTTP GET",
+          "message": "HTTP GET"
+        },
+        "app.Q2lyY2xl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.desc": {
+          "source": "HTTP `HEAD`",
+          "message": "HTTP `HEAD`"
+        },
+        "app.Q2lyY2xl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.display_name": {
+          "source": "HEAD",
+          "message": "HEAD"
+        },
+        "app.Q2lyY2xl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.short_desc": {
+          "source": "HTTP HEAD",
+          "message": "HTTP HEAD"
+        },
+        "app.Q2lyY2xl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.desc": {
+          "source": "HTTP `PATCH`",
+          "message": "HTTP `PATCH`"
+        },
+        "app.Q2lyY2xl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.display_name": {
+          "source": "PATCH",
+          "message": "PATCH"
+        },
+        "app.Q2lyY2xl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.short_desc": {
+          "source": "HTTP PATCH",
+          "message": "HTTP PATCH"
+        },
+        "app.Q2lyY2xl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.desc": {
+          "source": "HTTP `POST`",
+          "message": "HTTP `POST`"
+        },
+        "app.Q2lyY2xl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.display_name": {
+          "source": "POST",
+          "message": "POST"
+        },
+        "app.Q2lyY2xl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.short_desc": {
+          "source": "HTTP POST",
+          "message": "HTTP POST"
+        },
+        "app.Q2lyY2xl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.desc": {
+          "source": "HTTP `PUT`",
+          "message": "HTTP `PUT`"
+        },
+        "app.Q2lyY2xl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.display_name": {
+          "source": "PUT",
+          "message": "PUT"
+        },
+        "app.Q2lyY2xl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.short_desc": {
+          "source": "HTTP PUT",
+          "message": "HTTP PUT"
+        },
+        "app.Q2lyY2xl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.desc": {
+          "source": "HTTP `TRACE`",
+          "message": "HTTP `TRACE`"
+        },
+        "app.Q2lyY2xl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.display_name": {
+          "source": "TRACE",
+          "message": "TRACE"
+        },
+        "app.Q2lyY2xl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.short_desc": {
+          "source": "HTTP TRACE",
+          "message": "HTTP TRACE"
+        },
+        "app.Q2lyY2xl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "リクエストに使用するHTTPメソッド"
+        },
+        "app.Q2lyY2xl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.display_name": {
+          "source": "HTTP Method",
+          "message": "HTTPメソッド"
+        },
+        "app.Q2lyY2xl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.short_desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "リクエストに使用するHTTPメソッド"
+        },
+        "app.Q2lyY2xl.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain `{name}` placeholders that are replaced from `path_vars`. Example: `/users/{id}/comments`.",
+          "message": "接続のAPIベースURLに対する相対URIパス。`path_vars`から置換される`{name}`プレースホルダーを含めることができます。例: `/users/{id}/comments`。"
+        },
+        "app.Q2lyY2xl.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.display_name": {
+          "source": "URI Path",
+          "message": "URIパス"
+        },
+        "app.Q2lyY2xl.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.short_desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain '{name}' placeholders that are replaced from 'path_vars'. Example: '/users/{id}/comments'",
+          "message": "接続のAPIベースURLに対する相対URIパス。'path_vars' から置換される '{name}' プレースホルダーを含めることができます。例: '/users/{id}/comments'"
+        },
+        "app.Q2lyY2xl.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.desc": {
+          "source": "Hash of values substituted into `{name}` placeholders in the URI path. Example: with `path = /users/{id}` and `path_vars = {id: 123}` the framework sends `/users/123`. Values are URL-encoded.",
+          "message": "URIパス内の `{name}` プレースホルダーに置換される値のハッシュ。例: `path = /users/{id}` と `path_vars = {id: 123}` を指定すると、フレームワークは `/users/123` を送信します。値はURLエンコードされます。"
+        },
+        "app.Q2lyY2xl.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.display_name": {
+          "source": "Path Variables",
+          "message": "パス変数"
+        },
+        "app.Q2lyY2xl.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.short_desc": {
+          "source": "Values for {name} placeholders in path",
+          "message": "パス内の {name} プレースホルダーの値"
+        },
+        "app.Q2lyY2xl.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.desc": {
+          "source": "Hash of query string parameters to append to the URI path. Values are URL-encoded; list values are joined with `,`.",
+          "message": "URIパスに追加するクエリ文字列パラメータのハッシュ。値はURLエンコードされます。リスト値は `,` で結合されます。"
+        },
+        "app.Q2lyY2xl.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.display_name": {
+          "source": "Query Arguments",
+          "message": "クエリ引数"
+        },
+        "app.Q2lyY2xl.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.short_desc": {
+          "source": "Query string parameters",
+          "message": "クエリ文字列パラメータ"
+        },
+        "app.Q2lyY2xl.action.bWFrZS1hcGktY2FsbA.short_desc": {
+          "source": "Make a custom API call to Circle",
+          "message": "CircleへのカスタムAPI呼び出しを実行"
+        },
+        "app.Q2lyY2xl.action.bWVtYmVyLWFjY2VwdGVkLWludml0YXRpb24.desc": {
+          "source": "Fires when a member accepts an invitation to the Circle community",
+          "message": "メンバーがCircleコミュニティへの招待を承諾したときにトリガーされます"
+        },
+        "app.Q2lyY2xl.action.bWVtYmVyLWFjY2VwdGVkLWludml0YXRpb24.display_name": {
+          "source": "Member Accepted an Invitation",
+          "message": "メンバーが招待を承諾したとき"
+        },
+        "app.Q2lyY2xl.action.bWVtYmVyLWFjY2VwdGVkLWludml0YXRpb24.short_desc": {
+          "source": "Trigger when a member accepts an invitation",
+          "message": "メンバーが招待を承諾したときにトリガー"
+        },
+        "app.Q2lyY2xl.action.bWVtYmVyLXRhZ2dlZA.desc": {
+          "source": "Fires when a member is tagged in the Circle community",
+          "message": "Circleコミュニティでメンバーがタグ付けされたときにトリガーされます"
+        },
+        "app.Q2lyY2xl.action.bWVtYmVyLXRhZ2dlZA.display_name": {
+          "source": "Member Tagged",
+          "message": "メンバーがタグ付けされたとき"
+        },
+        "app.Q2lyY2xl.action.bWVtYmVyLXRhZ2dlZA.short_desc": {
+          "source": "Trigger when a member is tagged",
+          "message": "メンバーがタグ付けされたときにトリガー"
+        },
+        "app.Q2lyY2xl.action.bmV3LWNvbW11bml0eQ.desc": {
+          "source": "Fires when new communities are created in Circle",
+          "message": "Circle で新しいコミュニティが作成されたときに発火します"
+        },
+        "app.Q2lyY2xl.action.bmV3LWNvbW11bml0eQ.display_name": {
+          "source": "New Community",
+          "message": "新規コミュニティ"
+        },
+        "app.Q2lyY2xl.action.bmV3LWNvbW11bml0eQ.short_desc": {
+          "source": "Trigger when new communities are created",
+          "message": "新しいコミュニティが作成されたときにトリガー"
+        },
+        "app.Q2lyY2xl.action.bmV3LWNvbW1lbnQ.desc": {
+          "source": "Fires when new comments are posted in the Circle community",
+          "message": "Circle コミュニティに新しいコメントが投稿されたときに発火します"
+        },
+        "app.Q2lyY2xl.action.bmV3LWNvbW1lbnQ.display_name": {
+          "source": "New Comment",
+          "message": "新しいコメント"
+        },
+        "app.Q2lyY2xl.action.bmV3LWNvbW1lbnQ.short_desc": {
+          "source": "Trigger when new comments are posted",
+          "message": "新しいコメントが投稿されたときにトリガー"
+        },
+        "app.Q2lyY2xl.action.bmV3LXBvc3Q.desc": {
+          "source": "Fires when new posts are created in the Circle community",
+          "message": "Circle コミュニティに新しい投稿が作成されたときに発火します"
+        },
+        "app.Q2lyY2xl.action.bmV3LXBvc3Q.display_name": {
+          "source": "New Post",
+          "message": "新規投稿"
+        },
+        "app.Q2lyY2xl.action.bmV3LXBvc3Q.short_desc": {
+          "source": "Trigger when new posts are created",
+          "message": "新しい投稿が作成されたときにトリガー"
+        },
+        "app.Q2lyY2xl.action.bmV3LXNwYWNl.desc": {
+          "source": "Fires when new spaces are created in the Circle community",
+          "message": "Circle コミュニティに新しいスペースが作成されたときに発火します"
+        },
+        "app.Q2lyY2xl.action.bmV3LXNwYWNl.display_name": {
+          "source": "New Space",
+          "message": "新規スペース"
+        },
+        "app.Q2lyY2xl.action.bmV3LXNwYWNl.short_desc": {
+          "source": "Trigger when new spaces are created",
+          "message": "新しいスペースが作成されたときにトリガー"
+        },
+        "app.Q2lyY2xl.action.c2VuZC1tZXNzYWdl.desc": {
+          "source": "Sends a message to a specific user on behalf of the current user in Circle",
+          "message": "Circle で現在のユーザーの代理として特定のユーザーにメッセージを送信します"
+        },
+        "app.Q2lyY2xl.action.c2VuZC1tZXNzYWdl.display_name": {
+          "source": "Send a Message",
+          "message": "メッセージを送信"
+        },
+        "app.Q2lyY2xl.action.c2VuZC1tZXNzYWdl.option.Ym9keQ.desc": {
+          "source": "The body content of the message",
+          "message": "メッセージの本文"
+        },
+        "app.Q2lyY2xl.action.c2VuZC1tZXNzYWdl.option.Ym9keQ.display_name": {
+          "source": "Body",
+          "message": "ボディ"
+        },
+        "app.Q2lyY2xl.action.c2VuZC1tZXNzYWdl.option.Ym9keQ.short_desc": {
+          "source": "Message content",
+          "message": "メッセージ内容"
+        },
+        "app.Q2lyY2xl.action.c2VuZC1tZXNzYWdl.option.cmVjaXBpZW50X2lk.desc": {
+          "source": "The ID of the community member to send the message to",
+          "message": "メッセージの送信先となるコミュニティメンバーの ID"
+        },
+        "app.Q2lyY2xl.action.c2VuZC1tZXNzYWdl.option.cmVjaXBpZW50X2lk.display_name": {
+          "source": "Recipient ID",
+          "message": "受信者 ID"
+        },
+        "app.Q2lyY2xl.action.c2VuZC1tZXNzYWdl.option.cmVjaXBpZW50X2lk.short_desc": {
+          "source": "ID of the message recipient",
+          "message": "メッセージ受信者の ID"
+        },
+        "app.Q2lyY2xl.action.c2VuZC1tZXNzYWdl.short_desc": {
+          "source": "Send a message to a specific user",
+          "message": "特定のユーザーにメッセージを送信"
+        },
+        "app.Q2lyY2xl.action.cmVtb3ZlLW1lbWJlcg.desc": {
+          "source": "Removes a member from a Circle community",
+          "message": "Circle コミュニティからメンバーを削除します"
+        },
+        "app.Q2lyY2xl.action.cmVtb3ZlLW1lbWJlcg.display_name": {
+          "source": "Remove a Member",
+          "message": "メンバーを削除"
+        },
+        "app.Q2lyY2xl.action.cmVtb3ZlLW1lbWJlcg.option.aWQ.desc": {
+          "source": "The unique identifier of the community member to remove",
+          "message": "削除するコミュニティメンバーの一意の識別子"
+        },
+        "app.Q2lyY2xl.action.cmVtb3ZlLW1lbWJlcg.option.aWQ.display_name": {
+          "source": "Member ID",
+          "message": "メンバー ID"
+        },
+        "app.Q2lyY2xl.action.cmVtb3ZlLW1lbWJlcg.option.aWQ.short_desc": {
+          "source": "ID of the member to remove",
+          "message": "削除するメンバーの ID"
+        },
+        "app.Q2lyY2xl.action.cmVtb3ZlLW1lbWJlcg.short_desc": {
+          "source": "Remove a member from the community",
+          "message": "コミュニティからメンバーを削除"
+        },
+        "app.Q2lyY2xl.action.cmVtb3ZlLW1lbWJlci1mcm9tLXNwYWNl.desc": {
+          "source": "Removes a member from a space in Circle",
+          "message": "Circle のスペースからメンバーを削除します"
+        },
+        "app.Q2lyY2xl.action.cmVtb3ZlLW1lbWJlci1mcm9tLXNwYWNl.display_name": {
+          "source": "Remove a Member from a Space",
+          "message": "スペースからメンバーを削除"
+        },
+        "app.Q2lyY2xl.action.cmVtb3ZlLW1lbWJlci1mcm9tLXNwYWNl.option.bWVtYmVyX2lk.desc": {
+          "source": "The ID of the community member to remove from the space",
+          "message": "スペースから削除するコミュニティメンバーの ID"
+        },
+        "app.Q2lyY2xl.action.cmVtb3ZlLW1lbWJlci1mcm9tLXNwYWNl.option.bWVtYmVyX2lk.display_name": {
+          "source": "Member ID",
+          "message": "メンバー ID"
+        },
+        "app.Q2lyY2xl.action.cmVtb3ZlLW1lbWJlci1mcm9tLXNwYWNl.option.bWVtYmVyX2lk.short_desc": {
+          "source": "Member to remove",
+          "message": "削除するメンバー"
+        },
+        "app.Q2lyY2xl.action.cmVtb3ZlLW1lbWJlci1mcm9tLXNwYWNl.option.c3BhY2VfaWQ.desc": {
+          "source": "The ID of the space to remove the member from",
+          "message": "メンバーを削除するスペースの ID"
+        },
+        "app.Q2lyY2xl.action.cmVtb3ZlLW1lbWJlci1mcm9tLXNwYWNl.option.c3BhY2VfaWQ.display_name": {
+          "source": "Space ID",
+          "message": "スペース ID"
+        },
+        "app.Q2lyY2xl.action.cmVtb3ZlLW1lbWJlci1mcm9tLXNwYWNl.option.c3BhY2VfaWQ.short_desc": {
+          "source": "Space to remove the member from",
+          "message": "メンバーを削除するスペース"
+        },
+        "app.Q2lyY2xl.action.cmVtb3ZlLW1lbWJlci1mcm9tLXNwYWNl.short_desc": {
+          "source": "Remove a member from a space",
+          "message": "スペースからメンバーを削除"
+        },
+        "app.Q2lyY2xl.action.cmVtb3ZlLW1lbWJlci1mcm9tLXNwYWNlLWdyb3Vw.desc": {
+          "source": "Removes a member from a space group in Circle",
+          "message": "Circle のスペースグループからメンバーを削除します"
+        },
+        "app.Q2lyY2xl.action.cmVtb3ZlLW1lbWJlci1mcm9tLXNwYWNlLWdyb3Vw.display_name": {
+          "source": "Remove a Member from a Space Group",
+          "message": "スペースグループからメンバーを削除"
+        },
+        "app.Q2lyY2xl.action.cmVtb3ZlLW1lbWJlci1mcm9tLXNwYWNlLWdyb3Vw.option.bWVtYmVyX2lk.desc": {
+          "source": "The ID of the community member to remove from the space group",
+          "message": "スペースグループから削除するコミュニティメンバーの ID"
+        },
+        "app.Q2lyY2xl.action.cmVtb3ZlLW1lbWJlci1mcm9tLXNwYWNlLWdyb3Vw.option.bWVtYmVyX2lk.display_name": {
+          "source": "Member ID",
+          "message": "メンバー ID"
+        },
+        "app.Q2lyY2xl.action.cmVtb3ZlLW1lbWJlci1mcm9tLXNwYWNlLWdyb3Vw.option.bWVtYmVyX2lk.short_desc": {
+          "source": "Member to remove",
+          "message": "削除するメンバー"
+        },
+        "app.Q2lyY2xl.action.cmVtb3ZlLW1lbWJlci1mcm9tLXNwYWNlLWdyb3Vw.option.c3BhY2VfZ3JvdXBfaWQ.desc": {
+          "source": "The ID of the space group to remove the member from",
+          "message": "メンバーを削除するスペースグループの ID"
+        },
+        "app.Q2lyY2xl.action.cmVtb3ZlLW1lbWJlci1mcm9tLXNwYWNlLWdyb3Vw.option.c3BhY2VfZ3JvdXBfaWQ.display_name": {
+          "source": "Space Group ID",
+          "message": "スペースグループID"
+        },
+        "app.Q2lyY2xl.action.cmVtb3ZlLW1lbWJlci1mcm9tLXNwYWNlLWdyb3Vw.option.c3BhY2VfZ3JvdXBfaWQ.short_desc": {
+          "source": "Space group to remove the member from",
+          "message": "メンバーを削除するスペースグループ"
+        },
+        "app.Q2lyY2xl.action.cmVtb3ZlLW1lbWJlci1mcm9tLXNwYWNlLWdyb3Vw.short_desc": {
+          "source": "Remove a member from a space group",
+          "message": "スペースグループからメンバーを削除"
+        },
+        "app.Q2lyY2xl.action.dGFnLW1lbWJlcg.desc": {
+          "source": "Tags a specific community member in Circle",
+          "message": "Circle で特定のコミュニティメンバーにタグを付けます"
+        },
+        "app.Q2lyY2xl.action.dGFnLW1lbWJlcg.display_name": {
+          "source": "Tag a Member",
+          "message": "メンバーにタグを付ける"
+        },
+        "app.Q2lyY2xl.action.dGFnLW1lbWJlcg.option.aWQ.desc": {
+          "source": "The unique identifier of the community member to tag",
+          "message": "タグを付けるコミュニティメンバーの一意の識別子"
+        },
+        "app.Q2lyY2xl.action.dGFnLW1lbWJlcg.option.aWQ.display_name": {
+          "source": "Member ID",
+          "message": "メンバー ID"
+        },
+        "app.Q2lyY2xl.action.dGFnLW1lbWJlcg.option.aWQ.short_desc": {
+          "source": "ID of the member to tag",
+          "message": "タグを付けるメンバーの ID"
+        },
+        "app.Q2lyY2xl.action.dGFnLW1lbWJlcg.option.dGFn.desc": {
+          "source": "The tag to apply to the member",
+          "message": "メンバーに適用するタグ"
+        },
+        "app.Q2lyY2xl.action.dGFnLW1lbWJlcg.option.dGFn.display_name": {
+          "source": "Tag",
+          "message": "タグ"
+        },
+        "app.Q2lyY2xl.action.dGFnLW1lbWJlcg.option.dGFn.short_desc": {
+          "source": "Tag name",
+          "message": "タグ名"
+        },
+        "app.Q2lyY2xl.action.dGFnLW1lbWJlcg.short_desc": {
+          "source": "Tag a specific member",
+          "message": "特定のメンバーにタグを付ける"
+        },
+        "app.Q2lyY2xl.action.dW50YWctbWVtYmVy.desc": {
+          "source": "Removes a tag from a specific community member in Circle",
+          "message": "Circle で特定のコミュニティメンバーからタグを削除します"
+        },
+        "app.Q2lyY2xl.action.dW50YWctbWVtYmVy.display_name": {
+          "source": "Untag a Member",
+          "message": "メンバーのタグを解除"
+        },
+        "app.Q2lyY2xl.action.dW50YWctbWVtYmVy.option.aWQ.desc": {
+          "source": "The unique identifier of the community member to untag",
+          "message": "タグを解除するコミュニティメンバーの一意の識別子"
+        },
+        "app.Q2lyY2xl.action.dW50YWctbWVtYmVy.option.aWQ.display_name": {
+          "source": "Member ID",
+          "message": "メンバー ID"
+        },
+        "app.Q2lyY2xl.action.dW50YWctbWVtYmVy.option.aWQ.short_desc": {
+          "source": "ID of the member to untag",
+          "message": "タグを解除するメンバーの ID"
+        },
+        "app.Q2lyY2xl.action.dW50YWctbWVtYmVy.option.dGFnX2lk.desc": {
+          "source": "The ID of the tag to remove from the member",
+          "message": "メンバーから削除するタグの ID"
+        },
+        "app.Q2lyY2xl.action.dW50YWctbWVtYmVy.option.dGFnX2lk.display_name": {
+          "source": "Tag ID",
+          "message": "タグ ID"
+        },
+        "app.Q2lyY2xl.action.dW50YWctbWVtYmVy.option.dGFnX2lk.short_desc": {
+          "source": "ID of the tag to remove",
+          "message": "削除するタグの ID"
+        },
+        "app.Q2lyY2xl.action.dW50YWctbWVtYmVy.short_desc": {
+          "source": "Untag a specific member",
+          "message": "特定のメンバーのタグを解除"
+        },
+        "app.Q2lyY2xl.action.dXBkYXRlLXBvc3Q.desc": {
+          "source": "Updates an existing post in Circle",
+          "message": "Circle の既存の投稿を更新します"
+        },
+        "app.Q2lyY2xl.action.dXBkYXRlLXBvc3Q.display_name": {
+          "source": "Update a Post",
+          "message": "投稿を更新"
+        },
+        "app.Q2lyY2xl.action.dXBkYXRlLXBvc3Q.option.Ym9keQ.desc": {
+          "source": "The body content of the post in HTML format. Example: `<p>Hello <strong>world</strong></p>`",
+          "message": "HTML形式の投稿本文コンテンツ。例: `<p>Hello <strong>world</strong></p>`"
+        },
+        "app.Q2lyY2xl.action.dXBkYXRlLXBvc3Q.option.Ym9keQ.display_name": {
+          "source": "Body",
+          "message": "ボディ"
+        },
+        "app.Q2lyY2xl.action.dXBkYXRlLXBvc3Q.option.Ym9keQ.short_desc": {
+          "source": "Post content",
+          "message": "投稿内容"
+        },
+        "app.Q2lyY2xl.action.dXBkYXRlLXBvc3Q.option.aWQ.desc": {
+          "source": "The unique identifier of the post to update",
+          "message": "更新する投稿の一意の識別子"
+        },
+        "app.Q2lyY2xl.action.dXBkYXRlLXBvc3Q.option.aWQ.display_name": {
+          "source": "Post ID",
+          "message": "投稿ID"
+        },
+        "app.Q2lyY2xl.action.dXBkYXRlLXBvc3Q.option.aWQ.short_desc": {
+          "source": "ID of the post to update",
+          "message": "更新する投稿の ID"
+        },
+        "app.Q2lyY2xl.action.dXBkYXRlLXBvc3Q.option.aXNfY29tbWVudHNfY2xvc2Vk.desc": {
+          "source": "Whether to close comments on the post",
+          "message": "投稿へのコメントを締め切るかどうか"
+        },
+        "app.Q2lyY2xl.action.dXBkYXRlLXBvc3Q.option.aXNfY29tbWVudHNfY2xvc2Vk.display_name": {
+          "source": "Comments Closed",
+          "message": "コメント締め切り済み"
+        },
+        "app.Q2lyY2xl.action.dXBkYXRlLXBvc3Q.option.aXNfY29tbWVudHNfY2xvc2Vk.short_desc": {
+          "source": "Close comments on the post",
+          "message": "投稿へのコメントを締め切る"
+        },
+        "app.Q2lyY2xl.action.dXBkYXRlLXBvc3Q.option.aXNfY29tbWVudHNfZW5hYmxlZA.desc": {
+          "source": "Whether to enable comments on the post",
+          "message": "投稿でコメントを有効にするかどうか"
+        },
+        "app.Q2lyY2xl.action.dXBkYXRlLXBvc3Q.option.aXNfY29tbWVudHNfZW5hYmxlZA.display_name": {
+          "source": "Comments Enabled",
+          "message": "コメント有効"
+        },
+        "app.Q2lyY2xl.action.dXBkYXRlLXBvc3Q.option.aXNfY29tbWVudHNfZW5hYmxlZA.short_desc": {
+          "source": "Enable comments on the post",
+          "message": "投稿のコメントを有効にする"
+        },
+        "app.Q2lyY2xl.action.dXBkYXRlLXBvc3Q.option.aXNfbGlraW5nX2VuYWJsZWQ.desc": {
+          "source": "Whether to enable liking on the post",
+          "message": "投稿で「いいね」を有効にするかどうか"
+        },
+        "app.Q2lyY2xl.action.dXBkYXRlLXBvc3Q.option.aXNfbGlraW5nX2VuYWJsZWQ.display_name": {
+          "source": "Liking Enabled",
+          "message": "いいね有効"
+        },
+        "app.Q2lyY2xl.action.dXBkYXRlLXBvc3Q.option.aXNfbGlraW5nX2VuYWJsZWQ.short_desc": {
+          "source": "Enable liking on the post",
+          "message": "投稿のいいねを有効にする"
+        },
+        "app.Q2lyY2xl.action.dXBkYXRlLXBvc3Q.option.aXNfcGlubmVk.desc": {
+          "source": "Whether to pin the post to the top of its space",
+          "message": "投稿をスペースのトップに固定するかどうか"
+        },
+        "app.Q2lyY2xl.action.dXBkYXRlLXBvc3Q.option.aXNfcGlubmVk.display_name": {
+          "source": "Is Pinned",
+          "message": "固定設定"
+        },
+        "app.Q2lyY2xl.action.dXBkYXRlLXBvc3Q.option.aXNfcGlubmVk.short_desc": {
+          "source": "Pin post to top of space",
+          "message": "投稿をスペースのトップに固定"
+        },
+        "app.Q2lyY2xl.action.dXBkYXRlLXBvc3Q.option.bmFtZQ.desc": {
+          "source": "The title of the post",
+          "message": "投稿のタイトル"
+        },
+        "app.Q2lyY2xl.action.dXBkYXRlLXBvc3Q.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "名前"
+        },
+        "app.Q2lyY2xl.action.dXBkYXRlLXBvc3Q.option.bmFtZQ.short_desc": {
+          "source": "Post title",
+          "message": "投稿タイトル"
+        },
+        "app.Q2lyY2xl.action.dXBkYXRlLXBvc3Q.option.c2tpcF9ub3RpZmljYXRpb25z.desc": {
+          "source": "If `True`, no notifications will be sent about this update",
+          "message": "`True` の場合、この更新に関する通知は送信されません"
+        },
+        "app.Q2lyY2xl.action.dXBkYXRlLXBvc3Q.option.c2tpcF9ub3RpZmljYXRpb25z.display_name": {
+          "source": "Skip Notifications",
+          "message": "通知をスキップ"
+        },
+        "app.Q2lyY2xl.action.dXBkYXRlLXBvc3Q.option.c2tpcF9ub3RpZmljYXRpb25z.short_desc": {
+          "source": "Skip sending notifications",
+          "message": "通知送信をスキップ"
+        },
+        "app.Q2lyY2xl.action.dXBkYXRlLXBvc3Q.option.c3RhdHVz.allowed-value.c3RyaW5nOmRyYWZ0.display_name": {
+          "source": "Draft",
+          "message": "下書き"
+        },
+        "app.Q2lyY2xl.action.dXBkYXRlLXBvc3Q.option.c3RhdHVz.allowed-value.c3RyaW5nOnB1Ymxpc2hlZA.display_name": {
+          "source": "Published",
+          "message": "公開済み"
+        },
+        "app.Q2lyY2xl.action.dXBkYXRlLXBvc3Q.option.c3RhdHVz.allowed-value.c3RyaW5nOnNjaGVkdWxlZA.display_name": {
+          "source": "Scheduled",
+          "message": "スケジュール済み"
+        },
+        "app.Q2lyY2xl.action.dXBkYXRlLXBvc3Q.option.c3RhdHVz.desc": {
+          "source": "The publication status of the post",
+          "message": "投稿の公開ステータス"
+        },
+        "app.Q2lyY2xl.action.dXBkYXRlLXBvc3Q.option.c3RhdHVz.display_name": {
+          "source": "Status",
+          "message": "ステータス"
+        },
+        "app.Q2lyY2xl.action.dXBkYXRlLXBvc3Q.option.c3RhdHVz.short_desc": {
+          "source": "Post status",
+          "message": "投稿ステータス"
+        },
+        "app.Q2lyY2xl.action.dXBkYXRlLXBvc3Q.option.cHVibGlzaGVkX2F0.desc": {
+          "source": "The date and time to publish the post in ISO 8601 format. Example: `2026-04-15T10:00:00Z`",
+          "message": "ISO 8601 形式での投稿公開日時。例: `2026-04-15T10:00:00Z`"
+        },
+        "app.Q2lyY2xl.action.dXBkYXRlLXBvc3Q.option.cHVibGlzaGVkX2F0.display_name": {
+          "source": "Published At",
+          "message": "公開日時"
+        },
+        "app.Q2lyY2xl.action.dXBkYXRlLXBvc3Q.option.cHVibGlzaGVkX2F0.short_desc": {
+          "source": "Publication date",
+          "message": "公開日"
+        },
+        "app.Q2lyY2xl.action.dXBkYXRlLXBvc3Q.short_desc": {
+          "source": "Update an existing post",
+          "message": "既存の投稿を更新"
+        },
+        "app.Q2lyY2xl.action.dXBkYXRlLXNwYWNl.desc": {
+          "source": "Updates an existing space in Circle",
+          "message": "Circle の既存のスペースを更新します"
+        },
+        "app.Q2lyY2xl.action.dXBkYXRlLXNwYWNl.display_name": {
+          "source": "Update a Space",
+          "message": "スペースの更新"
+        },
+        "app.Q2lyY2xl.action.dXBkYXRlLXNwYWNl.option.ZW1vamk.desc": {
+          "source": "An emoji to use as the space icon",
+          "message": "スペースのアイコンとして使用する絵文字"
+        },
+        "app.Q2lyY2xl.action.dXBkYXRlLXNwYWNl.option.ZW1vamk.display_name": {
+          "source": "Emoji",
+          "message": "絵文字"
+        },
+        "app.Q2lyY2xl.action.dXBkYXRlLXNwYWNl.option.ZW1vamk.short_desc": {
+          "source": "Space emoji icon",
+          "message": "スペースの絵文字アイコン"
+        },
+        "app.Q2lyY2xl.action.dXBkYXRlLXNwYWNl.option.aGlkZV9mcm9tX2ZlYXR1cmVkX2FyZWFz.desc": {
+          "source": "Whether to hide this space from featured areas in the community",
+          "message": "コミュニティ内の注目エリアでこのスペースを非表示にするかどうか"
+        },
+        "app.Q2lyY2xl.action.dXBkYXRlLXNwYWNl.option.aGlkZV9mcm9tX2ZlYXR1cmVkX2FyZWFz.display_name": {
+          "source": "Hide from Featured Areas",
+          "message": "注目エリアで非表示"
+        },
+        "app.Q2lyY2xl.action.dXBkYXRlLXNwYWNl.option.aGlkZV9mcm9tX2ZlYXR1cmVkX2FyZWFz.short_desc": {
+          "source": "Whether to hide from featured areas",
+          "message": "注目エリアで非表示にするかどうか"
+        },
+        "app.Q2lyY2xl.action.dXBkYXRlLXNwYWNl.option.aGlkZV9wb3N0X3NldHRpbmdz.desc": {
+          "source": "Whether to hide post settings in this space",
+          "message": "このスペースで投稿設定を非表示にするかどうか"
+        },
+        "app.Q2lyY2xl.action.dXBkYXRlLXNwYWNl.option.aGlkZV9wb3N0X3NldHRpbmdz.display_name": {
+          "source": "Hide Post Settings",
+          "message": "投稿設定を非表示"
+        },
+        "app.Q2lyY2xl.action.dXBkYXRlLXNwYWNl.option.aGlkZV9wb3N0X3NldHRpbmdz.short_desc": {
+          "source": "Whether post settings are hidden",
+          "message": "投稿設定が非表示かどうか"
+        },
+        "app.Q2lyY2xl.action.dXBkYXRlLXNwYWNl.option.aWQ.desc": {
+          "source": "The unique identifier of the space to update",
+          "message": "更新するスペースの一意の識別子"
+        },
+        "app.Q2lyY2xl.action.dXBkYXRlLXNwYWNl.option.aWQ.display_name": {
+          "source": "Space ID",
+          "message": "スペース ID"
+        },
+        "app.Q2lyY2xl.action.dXBkYXRlLXNwYWNl.option.aWQ.short_desc": {
+          "source": "ID of the space to update",
+          "message": "更新するスペースのID"
+        },
+        "app.Q2lyY2xl.action.dXBkYXRlLXNwYWNl.option.aXNfaGlkZGVu.desc": {
+          "source": "Whether the space is completely hidden",
+          "message": "スペースを完全に非表示にするかどうか"
+        },
+        "app.Q2lyY2xl.action.dXBkYXRlLXNwYWNl.option.aXNfaGlkZGVu.display_name": {
+          "source": "Is Hidden",
+          "message": "非表示"
+        },
+        "app.Q2lyY2xl.action.dXBkYXRlLXNwYWNl.option.aXNfaGlkZGVu.short_desc": {
+          "source": "Whether the space is hidden",
+          "message": "スペースが非表示かどうか"
+        },
+        "app.Q2lyY2xl.action.dXBkYXRlLXNwYWNl.option.aXNfaGlkZGVuX2Zyb21fbm9uX21lbWJlcnM.desc": {
+          "source": "Whether the space is hidden from users who are not members of it",
+          "message": "このスペースのメンバーではないユーザーに対してスペースを非表示にするかどうか"
+        },
+        "app.Q2lyY2xl.action.dXBkYXRlLXNwYWNl.option.aXNfaGlkZGVuX2Zyb21fbm9uX21lbWJlcnM.display_name": {
+          "source": "Hidden from Non-Members",
+          "message": "非メンバーに対して非表示"
+        },
+        "app.Q2lyY2xl.action.dXBkYXRlLXNwYWNl.option.aXNfaGlkZGVuX2Zyb21fbm9uX21lbWJlcnM.short_desc": {
+          "source": "Whether the space is hidden from non-members",
+          "message": "非メンバーに対してスペースが非表示かどうか"
+        },
+        "app.Q2lyY2xl.action.dXBkYXRlLXNwYWNl.option.aXNfcG9zdF9kaXNhYmxlZA.desc": {
+          "source": "Whether member posting is disabled in this space",
+          "message": "このスペースでメンバーによる投稿が無効化されているかどうか"
+        },
+        "app.Q2lyY2xl.action.dXBkYXRlLXNwYWNl.option.aXNfcG9zdF9kaXNhYmxlZA.display_name": {
+          "source": "Posts Disabled",
+          "message": "投稿無効"
+        },
+        "app.Q2lyY2xl.action.dXBkYXRlLXNwYWNl.option.aXNfcG9zdF9kaXNhYmxlZA.short_desc": {
+          "source": "Whether posting is disabled",
+          "message": "投稿が無効化されているかどうか"
+        },
+        "app.Q2lyY2xl.action.dXBkYXRlLXNwYWNl.option.aXNfcHJpdmF0ZQ.desc": {
+          "source": "Whether the space should be private",
+          "message": "スペースをプライベートにするかどうか"
+        },
+        "app.Q2lyY2xl.action.dXBkYXRlLXNwYWNl.option.aXNfcHJpdmF0ZQ.display_name": {
+          "source": "Is Private",
+          "message": "非公開設定"
+        },
+        "app.Q2lyY2xl.action.dXBkYXRlLXNwYWNl.option.aXNfcHJpdmF0ZQ.short_desc": {
+          "source": "Whether the space is private",
+          "message": "スペースがプライベートかどうか"
+        },
+        "app.Q2lyY2xl.action.dXBkYXRlLXNwYWNl.option.bmFtZQ.desc": {
+          "source": "The name of the space",
+          "message": "スペースの名前"
+        },
+        "app.Q2lyY2xl.action.dXBkYXRlLXNwYWNl.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "名前"
+        },
+        "app.Q2lyY2xl.action.dXBkYXRlLXNwYWNl.option.bmFtZQ.short_desc": {
+          "source": "Space name",
+          "message": "スペース名"
+        },
+        "app.Q2lyY2xl.action.dXBkYXRlLXNwYWNl.short_desc": {
+          "source": "Update an existing space",
+          "message": "既存のスペースを更新"
+        },
+        "app.Q2lyY2xl.desc": {
+          "source": "Circle is a community platform for managing posts, comments, members, spaces, events, and messaging.\n\nThis integration supports creating and managing community content, member management, space membership, tagging, and direct messaging.",
+          "message": "Circleは、投稿、コメント、メンバー、スペース、イベント、メッセージングを管理するためのコミュニティプラットフォームです。\n\nこの統合では、コミュニティコンテンツの作成と管理、メンバー管理、スペースメンバーシップ、タグ付け、およびダイレクトメッセージングがサポートされています。"
+        },
+        "app.Q2lyY2xl.display_name": {
+          "source": "Circle",
+          "message": "Circle"
+        },
+        "app.Q2lyY2xl.short_desc": {
+          "source": "Circle community platform",
+          "message": "Circleコミュニティプラットフォーム"
+        }
+      }
+    }
+  }
+}

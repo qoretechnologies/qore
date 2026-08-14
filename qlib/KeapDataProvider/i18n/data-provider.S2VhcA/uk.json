@@ -1,0 +1,2345 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "uk": {
+      "messages": {
+        "app.S2VhcA.action.Y29udGFjdC11cGRhdGVk.desc": {
+          "source": "Triggers when a contact is updated in Keap",
+          "message": "Спрацьовує, коли контакт оновлюється в Keap"
+        },
+        "app.S2VhcA.action.Y29udGFjdC11cGRhdGVk.display_name": {
+          "source": "Contact Updated",
+          "message": "Контакт оновлено"
+        },
+        "app.S2VhcA.action.Y29udGFjdC11cGRhdGVk.short_desc": {
+          "source": "Watch for contact updates",
+          "message": "Відстежувати оновлення контактів"
+        },
+        "app.S2VhcA.action.Y29udGFjdC1hZGRlZA.desc": {
+          "source": "Triggers when a new contact is created in Keap",
+          "message": "Спрацьовує, коли створюється новий контакт у Keap"
+        },
+        "app.S2VhcA.action.Y29udGFjdC1hZGRlZA.display_name": {
+          "source": "Contact Added",
+          "message": "Контакт додано"
+        },
+        "app.S2VhcA.action.Y29udGFjdC1hZGRlZA.short_desc": {
+          "source": "Watch for new contacts",
+          "message": "Відстежувати нові контакти"
+        },
+        "app.S2VhcA.action.Y3JlYXRlLW5vdGU.desc": {
+          "source": "Create a new note for a contact in Keap",
+          "message": "Створити нову примітку для контакту в Keap"
+        },
+        "app.S2VhcA.action.Y3JlYXRlLW5vdGU.display_name": {
+          "source": "Create a Note",
+          "message": "Створити нотатку"
+        },
+        "app.S2VhcA.action.Y3JlYXRlLW5vdGU.option.Y29udGFjdF9pZA.display_name": {
+          "source": "Contact ID",
+          "message": "ID контакту"
+        },
+        "app.S2VhcA.action.Y3JlYXRlLW5vdGU.option.Y29udGFjdF9pZA.short_desc": {
+          "source": "The contact",
+          "message": "Контакт"
+        },
+        "app.S2VhcA.action.Y3JlYXRlLW5vdGU.option.Ym9keQ.display_name": {
+          "source": "Body",
+          "message": "Тіло"
+        },
+        "app.S2VhcA.action.Y3JlYXRlLW5vdGU.option.Ym9keQ.short_desc": {
+          "source": "Note body",
+          "message": "Текст примітки"
+        },
+        "app.S2VhcA.action.Y3JlYXRlLW5vdGU.option.dGl0bGU.display_name": {
+          "source": "Title",
+          "message": "Заголовок"
+        },
+        "app.S2VhcA.action.Y3JlYXRlLW5vdGU.option.dGl0bGU.short_desc": {
+          "source": "Note title",
+          "message": "Заголовок нотатки"
+        },
+        "app.S2VhcA.action.Y3JlYXRlLW5vdGU.option.dHlwZQ.desc": {
+          "source": "The type of note",
+          "message": "Тип примітки"
+        },
+        "app.S2VhcA.action.Y3JlYXRlLW5vdGU.option.dHlwZQ.display_name": {
+          "source": "Type",
+          "message": "Тип"
+        },
+        "app.S2VhcA.action.Y3JlYXRlLW5vdGU.option.dHlwZQ.short_desc": {
+          "source": "Note type",
+          "message": "Тип примітки"
+        },
+        "app.S2VhcA.action.Y3JlYXRlLW5vdGU.short_desc": {
+          "source": "Create a new note",
+          "message": "Створити нову нотатку"
+        },
+        "app.S2VhcA.action.Y3JlYXRlLW9wcG9ydHVuaXR5.desc": {
+          "source": "Create a new opportunity in Keap",
+          "message": "Створити нову нагоду в Keap"
+        },
+        "app.S2VhcA.action.Y3JlYXRlLW9wcG9ydHVuaXR5.display_name": {
+          "source": "Create an Opportunity",
+          "message": "Створити можливість"
+        },
+        "app.S2VhcA.action.Y3JlYXRlLW9wcG9ydHVuaXR5.option.Y29udGFjdF9pZA.display_name": {
+          "source": "Contact ID",
+          "message": "ID контакту"
+        },
+        "app.S2VhcA.action.Y3JlYXRlLW9wcG9ydHVuaXR5.option.Y29udGFjdF9pZA.short_desc": {
+          "source": "Associated contact",
+          "message": "Пов'язаний контакт"
+        },
+        "app.S2VhcA.action.Y3JlYXRlLW9wcG9ydHVuaXR5.option.ZXN0aW1hdGVkX2Nsb3NlX3RpbWU.display_name": {
+          "source": "Estimated Close Time",
+          "message": "Орієнтовний час закриття"
+        },
+        "app.S2VhcA.action.Y3JlYXRlLW9wcG9ydHVuaXR5.option.ZXN0aW1hdGVkX2Nsb3NlX3RpbWU.short_desc": {
+          "source": "Expected close date/time",
+          "message": "Очікувана дата/час закриття"
+        },
+        "app.S2VhcA.action.Y3JlYXRlLW9wcG9ydHVuaXR5.option.b3Bwb3J0dW5pdHlfbm90ZXM.display_name": {
+          "source": "Notes",
+          "message": "Примітки"
+        },
+        "app.S2VhcA.action.Y3JlYXRlLW9wcG9ydHVuaXR5.option.b3Bwb3J0dW5pdHlfbm90ZXM.short_desc": {
+          "source": "Opportunity notes",
+          "message": "Примітки до нагоди"
+        },
+        "app.S2VhcA.action.Y3JlYXRlLW9wcG9ydHVuaXR5.option.b3Bwb3J0dW5pdHlfdGl0bGU.desc": {
+          "source": "Title of the opportunity",
+          "message": "Назва нагоди"
+        },
+        "app.S2VhcA.action.Y3JlYXRlLW9wcG9ydHVuaXR5.option.b3Bwb3J0dW5pdHlfdGl0bGU.display_name": {
+          "source": "Title",
+          "message": "Заголовок"
+        },
+        "app.S2VhcA.action.Y3JlYXRlLW9wcG9ydHVuaXR5.option.b3Bwb3J0dW5pdHlfdGl0bGU.short_desc": {
+          "source": "Opportunity title",
+          "message": "Назва нагоди"
+        },
+        "app.S2VhcA.action.Y3JlYXRlLW9wcG9ydHVuaXR5.option.c3RhZ2VfaWQ.display_name": {
+          "source": "Stage ID",
+          "message": "ID етапу"
+        },
+        "app.S2VhcA.action.Y3JlYXRlLW9wcG9ydHVuaXR5.option.c3RhZ2VfaWQ.short_desc": {
+          "source": "Pipeline stage",
+          "message": "Етап воронки"
+        },
+        "app.S2VhcA.action.Y3JlYXRlLW9wcG9ydHVuaXR5.option.cHJvamVjdGVkX3JldmVudWVfaGlnaA.display_name": {
+          "source": "Projected Revenue High",
+          "message": "Максимальний прогнозований дохід"
+        },
+        "app.S2VhcA.action.Y3JlYXRlLW9wcG9ydHVuaXR5.option.cHJvamVjdGVkX3JldmVudWVfaGlnaA.short_desc": {
+          "source": "High revenue estimate",
+          "message": "Верхня оцінка доходу"
+        },
+        "app.S2VhcA.action.Y3JlYXRlLW9wcG9ydHVuaXR5.option.cHJvamVjdGVkX3JldmVudWVfbG93.display_name": {
+          "source": "Projected Revenue Low",
+          "message": "Мінімальний прогнозований дохід"
+        },
+        "app.S2VhcA.action.Y3JlYXRlLW9wcG9ydHVuaXR5.option.cHJvamVjdGVkX3JldmVudWVfbG93.short_desc": {
+          "source": "Low revenue estimate",
+          "message": "Нижня оцінка доходу"
+        },
+        "app.S2VhcA.action.Y3JlYXRlLW9wcG9ydHVuaXR5.short_desc": {
+          "source": "Create a new opportunity",
+          "message": "Створити нову можливість"
+        },
+        "app.S2VhcA.action.Y3JlYXRlLW9yZGVy.desc": {
+          "source": "Create a new order in Keap",
+          "message": "Створити нове замовлення в Keap"
+        },
+        "app.S2VhcA.action.Y3JlYXRlLW9yZGVy.display_name": {
+          "source": "Create an Order",
+          "message": "Створити замовлення"
+        },
+        "app.S2VhcA.action.Y3JlYXRlLW9yZGVy.option.Y29udGFjdF9pZA.display_name": {
+          "source": "Contact ID",
+          "message": "ID контакту"
+        },
+        "app.S2VhcA.action.Y3JlYXRlLW9yZGVy.option.Y29udGFjdF9pZA.short_desc": {
+          "source": "Associated contact",
+          "message": "Пов'язаний контакт"
+        },
+        "app.S2VhcA.action.Y3JlYXRlLW9yZGVy.option.b3JkZXJfaXRlbXM.desc": {
+          "source": "List of order item hashes",
+          "message": "Список хешів позицій замовлення"
+        },
+        "app.S2VhcA.action.Y3JlYXRlLW9yZGVy.option.b3JkZXJfaXRlbXM.display_name": {
+          "source": "Order Items",
+          "message": "Товари замовлення"
+        },
+        "app.S2VhcA.action.Y3JlYXRlLW9yZGVy.option.b3JkZXJfaXRlbXM.short_desc": {
+          "source": "Items in the order",
+          "message": "Позиції в замовленні"
+        },
+        "app.S2VhcA.action.Y3JlYXRlLW9yZGVy.option.b3JkZXJfdGl0bGU.display_name": {
+          "source": "Order Title",
+          "message": "Назва замовлення"
+        },
+        "app.S2VhcA.action.Y3JlYXRlLW9yZGVy.option.b3JkZXJfdGl0bGU.short_desc": {
+          "source": "Title of the order",
+          "message": "Назва замовлення"
+        },
+        "app.S2VhcA.action.Y3JlYXRlLW9yZGVy.option.b3JkZXJfdGltZQ.display_name": {
+          "source": "Order Time",
+          "message": "Час замовлення"
+        },
+        "app.S2VhcA.action.Y3JlYXRlLW9yZGVy.option.b3JkZXJfdGltZQ.short_desc": {
+          "source": "Date/time of the order",
+          "message": "Дата/час замовлення"
+        },
+        "app.S2VhcA.action.Y3JlYXRlLW9yZGVy.option.cHJvbW9fY29kZXM.display_name": {
+          "source": "Promo Codes",
+          "message": "Промокоди"
+        },
+        "app.S2VhcA.action.Y3JlYXRlLW9yZGVy.option.cHJvbW9fY29kZXM.short_desc": {
+          "source": "Promotional codes",
+          "message": "Промокоди"
+        },
+        "app.S2VhcA.action.Y3JlYXRlLW9yZGVy.short_desc": {
+          "source": "Create a new order",
+          "message": "Створити нове замовлення"
+        },
+        "app.S2VhcA.action.Y3JlYXRlLWNvbXBhbnk.desc": {
+          "source": "Create a new company in Keap",
+          "message": "Створити нову компанію в Keap"
+        },
+        "app.S2VhcA.action.Y3JlYXRlLWNvbXBhbnk.display_name": {
+          "source": "Create a Company",
+          "message": "Створити компанію"
+        },
+        "app.S2VhcA.action.Y3JlYXRlLWNvbXBhbnk.option.Y29tcGFueV9uYW1l.desc": {
+          "source": "Name of the company",
+          "message": "Назва компанії"
+        },
+        "app.S2VhcA.action.Y3JlYXRlLWNvbXBhbnk.option.Y29tcGFueV9uYW1l.display_name": {
+          "source": "Company Name",
+          "message": "Назва компанії"
+        },
+        "app.S2VhcA.action.Y3JlYXRlLWNvbXBhbnk.option.Y29tcGFueV9uYW1l.short_desc": {
+          "source": "Name of the company",
+          "message": "Назва компанії"
+        },
+        "app.S2VhcA.action.Y3JlYXRlLWNvbXBhbnk.option.ZW1haWxfYWRkcmVzcw.display_name": {
+          "source": "Email",
+          "message": "Електронна пошта"
+        },
+        "app.S2VhcA.action.Y3JlYXRlLWNvbXBhbnk.option.ZW1haWxfYWRkcmVzcw.short_desc": {
+          "source": "Company email",
+          "message": "Електронна пошта компанії"
+        },
+        "app.S2VhcA.action.Y3JlYXRlLWNvbXBhbnk.option.cGhvbmVfbnVtYmVy.display_name": {
+          "source": "Phone",
+          "message": "Телефон"
+        },
+        "app.S2VhcA.action.Y3JlYXRlLWNvbXBhbnk.option.cGhvbmVfbnVtYmVy.short_desc": {
+          "source": "Company phone",
+          "message": "Телефон компанії"
+        },
+        "app.S2VhcA.action.Y3JlYXRlLWNvbXBhbnk.option.d2Vic2l0ZQ.display_name": {
+          "source": "Website",
+          "message": "Вебсайт"
+        },
+        "app.S2VhcA.action.Y3JlYXRlLWNvbXBhbnk.option.d2Vic2l0ZQ.short_desc": {
+          "source": "Company website",
+          "message": "Вебсайт компанії"
+        },
+        "app.S2VhcA.action.Y3JlYXRlLWNvbXBhbnk.short_desc": {
+          "source": "Create a new company",
+          "message": "Створити нову компанію"
+        },
+        "app.S2VhcA.action.Y3JlYXRlLWNvbnRhY3Q.desc": {
+          "source": "Create a new contact in Keap",
+          "message": "Створити новий контакт у Keap"
+        },
+        "app.S2VhcA.action.Y3JlYXRlLWNvbnRhY3Q.display_name": {
+          "source": "Create a Contact",
+          "message": "Створити контакт"
+        },
+        "app.S2VhcA.action.Y3JlYXRlLWNvbnRhY3Q.option.YW5uaXZlcnNhcnlfZGF0ZQ.display_name": {
+          "source": "Anniversary",
+          "message": "Річниця"
+        },
+        "app.S2VhcA.action.Y3JlYXRlLWNvbnRhY3Q.option.YW5uaXZlcnNhcnlfZGF0ZQ.short_desc": {
+          "source": "Contact anniversary",
+          "message": "Річниця контакту"
+        },
+        "app.S2VhcA.action.Y3JlYXRlLWNvbnRhY3Q.option.YmlydGhfZGF0ZQ.display_name": {
+          "source": "Birthday",
+          "message": "День народження"
+        },
+        "app.S2VhcA.action.Y3JlYXRlLWNvbnRhY3Q.option.YmlydGhfZGF0ZQ.short_desc": {
+          "source": "Contact birthday",
+          "message": "День народження контакту"
+        },
+        "app.S2VhcA.action.Y3JlYXRlLWNvbnRhY3Q.option.Z2l2ZW5fbmFtZQ.desc": {
+          "source": "First name of the contact",
+          "message": "Ім'я контакту"
+        },
+        "app.S2VhcA.action.Y3JlYXRlLWNvbnRhY3Q.option.Z2l2ZW5fbmFtZQ.display_name": {
+          "source": "First Name",
+          "message": "Ім'я"
+        },
+        "app.S2VhcA.action.Y3JlYXRlLWNvbnRhY3Q.option.Z2l2ZW5fbmFtZQ.short_desc": {
+          "source": "Contact first name",
+          "message": "Ім'я контакту"
+        },
+        "app.S2VhcA.action.Y3JlYXRlLWNvbnRhY3Q.option.ZW1haWw.desc": {
+          "source": "The contact's email address",
+          "message": "Адреса електронної пошти контакту"
+        },
+        "app.S2VhcA.action.Y3JlYXRlLWNvbnRhY3Q.option.ZW1haWw.display_name": {
+          "source": "Email",
+          "message": "Електронна пошта"
+        },
+        "app.S2VhcA.action.Y3JlYXRlLWNvbnRhY3Q.option.ZW1haWw.short_desc": {
+          "source": "Contact email address",
+          "message": "Адреса електронної пошти контакту"
+        },
+        "app.S2VhcA.action.Y3JlYXRlLWNvbnRhY3Q.option.ZmFtaWx5X25hbWU.desc": {
+          "source": "Last name of the contact",
+          "message": "Прізвище контакту"
+        },
+        "app.S2VhcA.action.Y3JlYXRlLWNvbnRhY3Q.option.ZmFtaWx5X25hbWU.display_name": {
+          "source": "Last Name",
+          "message": "Прізвище"
+        },
+        "app.S2VhcA.action.Y3JlYXRlLWNvbnRhY3Q.option.ZmFtaWx5X25hbWU.short_desc": {
+          "source": "Contact last name",
+          "message": "Прізвище контакту"
+        },
+        "app.S2VhcA.action.Y3JlYXRlLWNvbnRhY3Q.option.am9iX3RpdGxl.display_name": {
+          "source": "Job Title",
+          "message": "Посада"
+        },
+        "app.S2VhcA.action.Y3JlYXRlLWNvbnRhY3Q.option.am9iX3RpdGxl.short_desc": {
+          "source": "Contact job title",
+          "message": "Посада контакту"
+        },
+        "app.S2VhcA.action.Y3JlYXRlLWNvbnRhY3Q.option.b3duZXJfaWQ.desc": {
+          "source": "The ID of the user who owns this contact",
+          "message": "ID користувача, якому належить цей контакт"
+        },
+        "app.S2VhcA.action.Y3JlYXRlLWNvbnRhY3Q.option.b3duZXJfaWQ.display_name": {
+          "source": "Owner ID",
+          "message": "ID власника"
+        },
+        "app.S2VhcA.action.Y3JlYXRlLWNvbnRhY3Q.option.b3duZXJfaWQ.short_desc": {
+          "source": "Contact owner user ID",
+          "message": "Ідентифікатор користувача-власника контакту"
+        },
+        "app.S2VhcA.action.Y3JlYXRlLWNvbnRhY3Q.option.bGVhZHNvdXJjZV9pZA.display_name": {
+          "source": "Lead Source ID",
+          "message": "ID джерела ліда"
+        },
+        "app.S2VhcA.action.Y3JlYXRlLWNvbnRhY3Q.option.bGVhZHNvdXJjZV9pZA.short_desc": {
+          "source": "Lead source",
+          "message": "Джерело ліда"
+        },
+        "app.S2VhcA.action.Y3JlYXRlLWNvbnRhY3Q.option.bWlkZGxlX25hbWU.display_name": {
+          "source": "Middle Name",
+          "message": "По батькові"
+        },
+        "app.S2VhcA.action.Y3JlYXRlLWNvbnRhY3Q.option.bWlkZGxlX25hbWU.short_desc": {
+          "source": "Contact middle name",
+          "message": "По батькові / друге ім'я контакту"
+        },
+        "app.S2VhcA.action.Y3JlYXRlLWNvbnRhY3Q.option.c291cmNlX3R5cGU.allowed-value.c3RyaW5nOk1BTlVBTA.desc": {
+          "source": "Created manually",
+          "message": "Створено вручну"
+        },
+        "app.S2VhcA.action.Y3JlYXRlLWNvbnRhY3Q.option.c291cmNlX3R5cGU.allowed-value.c3RyaW5nOkFQSQ.desc": {
+          "source": "Created via API",
+          "message": "Створено через API"
+        },
+        "app.S2VhcA.action.Y3JlYXRlLWNvbnRhY3Q.option.c291cmNlX3R5cGU.allowed-value.c3RyaW5nOklNUE9SVA.desc": {
+          "source": "Created via import",
+          "message": "Створено через імпорт"
+        },
+        "app.S2VhcA.action.Y3JlYXRlLWNvbnRhY3Q.option.c291cmNlX3R5cGU.allowed-value.c3RyaW5nOldFQkZPUk0.desc": {
+          "source": "Created via web form",
+          "message": "Створено через вебформу"
+        },
+        "app.S2VhcA.action.Y3JlYXRlLWNvbnRhY3Q.option.c291cmNlX3R5cGU.display_name": {
+          "source": "Source Type",
+          "message": "Тип джерела"
+        },
+        "app.S2VhcA.action.Y3JlYXRlLWNvbnRhY3Q.option.c291cmNlX3R5cGU.short_desc": {
+          "source": "How the contact was created",
+          "message": "Спосіб створення контакту"
+        },
+        "app.S2VhcA.action.Y3JlYXRlLWNvbnRhY3Q.option.c3BvdXNlX25hbWU.display_name": {
+          "source": "Spouse Name",
+          "message": "Ім'я чоловіка/дружини"
+        },
+        "app.S2VhcA.action.Y3JlYXRlLWNvbnRhY3Q.option.c3BvdXNlX25hbWU.short_desc": {
+          "source": "Contact spouse name",
+          "message": "Ім'я чоловіка/дружини контакту"
+        },
+        "app.S2VhcA.action.Y3JlYXRlLWNvbnRhY3Q.option.c3VmZml4.display_name": {
+          "source": "Suffix",
+          "message": "Суфікс"
+        },
+        "app.S2VhcA.action.Y3JlYXRlLWNvbnRhY3Q.option.c3VmZml4.short_desc": {
+          "source": "Name suffix (e.g., Jr., III)",
+          "message": "Суфікс імені (наприклад, Jr., III)"
+        },
+        "app.S2VhcA.action.Y3JlYXRlLWNvbnRhY3Q.option.cGhvbmVfbnVtYmVy.desc": {
+          "source": "The contact's phone number",
+          "message": "Номер телефону контакту"
+        },
+        "app.S2VhcA.action.Y3JlYXRlLWNvbnRhY3Q.option.cGhvbmVfbnVtYmVy.display_name": {
+          "source": "Phone Number",
+          "message": "Номер телефону"
+        },
+        "app.S2VhcA.action.Y3JlYXRlLWNvbnRhY3Q.option.cGhvbmVfbnVtYmVy.short_desc": {
+          "source": "Contact phone number",
+          "message": "Номер телефону контакту"
+        },
+        "app.S2VhcA.action.Y3JlYXRlLWNvbnRhY3Q.option.cHJlZmVycmVkX25hbWU.display_name": {
+          "source": "Preferred Name",
+          "message": "Бажане ім'я"
+        },
+        "app.S2VhcA.action.Y3JlYXRlLWNvbnRhY3Q.option.cHJlZmVycmVkX25hbWU.short_desc": {
+          "source": "Contact preferred name",
+          "message": "Бажане ім'я контакту"
+        },
+        "app.S2VhcA.action.Y3JlYXRlLWNvbnRhY3Q.option.cHJlZml4.display_name": {
+          "source": "Prefix",
+          "message": "Префікс"
+        },
+        "app.S2VhcA.action.Y3JlYXRlLWNvbnRhY3Q.option.cHJlZml4.short_desc": {
+          "source": "Name prefix (e.g., Mr., Dr.)",
+          "message": "Префікс імені (наприклад, Mr., Dr.)"
+        },
+        "app.S2VhcA.action.Y3JlYXRlLWNvbnRhY3Q.option.d2Vic2l0ZQ.display_name": {
+          "source": "Website",
+          "message": "Вебсайт"
+        },
+        "app.S2VhcA.action.Y3JlYXRlLWNvbnRhY3Q.option.d2Vic2l0ZQ.short_desc": {
+          "source": "Contact website URL",
+          "message": "URL-адреса вебсайту контакту"
+        },
+        "app.S2VhcA.action.Y3JlYXRlLWNvbnRhY3Q.option.dGltZV96b25l.display_name": {
+          "source": "Time Zone",
+          "message": "Часовий пояс"
+        },
+        "app.S2VhcA.action.Y3JlYXRlLWNvbnRhY3Q.option.dGltZV96b25l.short_desc": {
+          "source": "Contact time zone",
+          "message": "Часовий пояс контакту"
+        },
+        "app.S2VhcA.action.Y3JlYXRlLWNvbnRhY3Q.short_desc": {
+          "source": "Create a new contact",
+          "message": "Створити новий контакт"
+        },
+        "app.S2VhcA.action.Y3JlYXRlLXRhZw.desc": {
+          "source": "Create a new tag in Keap",
+          "message": "Створити новий тег у Keap"
+        },
+        "app.S2VhcA.action.Y3JlYXRlLXRhZw.display_name": {
+          "source": "Create a Tag",
+          "message": "Створити тег"
+        },
+        "app.S2VhcA.action.Y3JlYXRlLXRhZw.option.Y2F0ZWdvcnlfaWQ.display_name": {
+          "source": "Category ID",
+          "message": "Ідентифікатор категорії"
+        },
+        "app.S2VhcA.action.Y3JlYXRlLXRhZw.option.Y2F0ZWdvcnlfaWQ.short_desc": {
+          "source": "Tag category",
+          "message": "Категорія тегу"
+        },
+        "app.S2VhcA.action.Y3JlYXRlLXRhZw.option.ZGVzY3JpcHRpb24.display_name": {
+          "source": "Description",
+          "message": "Опис"
+        },
+        "app.S2VhcA.action.Y3JlYXRlLXRhZw.option.ZGVzY3JpcHRpb24.short_desc": {
+          "source": "Tag description",
+          "message": "Опис тегу"
+        },
+        "app.S2VhcA.action.Y3JlYXRlLXRhZw.option.bmFtZQ.desc": {
+          "source": "Name of the tag",
+          "message": "Назва тегу"
+        },
+        "app.S2VhcA.action.Y3JlYXRlLXRhZw.option.bmFtZQ.display_name": {
+          "source": "Tag Name",
+          "message": "Назва тегу"
+        },
+        "app.S2VhcA.action.Y3JlYXRlLXRhZw.option.bmFtZQ.short_desc": {
+          "source": "Name of the tag",
+          "message": "Назва тегу"
+        },
+        "app.S2VhcA.action.Y3JlYXRlLXRhZw.short_desc": {
+          "source": "Create a new tag",
+          "message": "Створити новий тег"
+        },
+        "app.S2VhcA.action.Y3JlYXRlLXRhc2s.desc": {
+          "source": "Create a new task in Keap",
+          "message": "Створити нове завдання в Keap"
+        },
+        "app.S2VhcA.action.Y3JlYXRlLXRhc2s.display_name": {
+          "source": "Create a Task",
+          "message": "Створити завдання"
+        },
+        "app.S2VhcA.action.Y3JlYXRlLXRhc2s.option.Y29tcGxldGVk.display_name": {
+          "source": "Completed",
+          "message": "Завершено"
+        },
+        "app.S2VhcA.action.Y3JlYXRlLXRhc2s.option.Y29tcGxldGVk.short_desc": {
+          "source": "Task completion status",
+          "message": "Стан виконання завдання"
+        },
+        "app.S2VhcA.action.Y3JlYXRlLXRhc2s.option.Y29udGFjdF9pZA.display_name": {
+          "source": "Contact ID",
+          "message": "ID контакту"
+        },
+        "app.S2VhcA.action.Y3JlYXRlLXRhc2s.option.Y29udGFjdF9pZA.short_desc": {
+          "source": "Associated contact",
+          "message": "Пов'язаний контакт"
+        },
+        "app.S2VhcA.action.Y3JlYXRlLXRhc2s.option.YXNzaWduZWRfdG9fdXNlcl9pZA.display_name": {
+          "source": "Assigned User ID",
+          "message": "ID призначеного користувача"
+        },
+        "app.S2VhcA.action.Y3JlYXRlLXRhc2s.option.YXNzaWduZWRfdG9fdXNlcl9pZA.short_desc": {
+          "source": "Assigned user",
+          "message": "Призначений користувач"
+        },
+        "app.S2VhcA.action.Y3JlYXRlLXRhc2s.option.ZGVzY3JpcHRpb24.display_name": {
+          "source": "Description",
+          "message": "Опис"
+        },
+        "app.S2VhcA.action.Y3JlYXRlLXRhc2s.option.ZGVzY3JpcHRpb24.short_desc": {
+          "source": "Task description",
+          "message": "Опис завдання"
+        },
+        "app.S2VhcA.action.Y3JlYXRlLXRhc2s.option.ZHVlX3RpbWU.display_name": {
+          "source": "Due Time",
+          "message": "Термін виконання"
+        },
+        "app.S2VhcA.action.Y3JlYXRlLXRhc2s.option.ZHVlX3RpbWU.short_desc": {
+          "source": "Task due date/time",
+          "message": "Дата/час виконання завдання"
+        },
+        "app.S2VhcA.action.Y3JlYXRlLXRhc2s.option.cHJpb3JpdHk.display_name": {
+          "source": "Priority",
+          "message": "Пріоритет"
+        },
+        "app.S2VhcA.action.Y3JlYXRlLXRhc2s.option.cHJpb3JpdHk.short_desc": {
+          "source": "Task priority",
+          "message": "Пріоритет завдання"
+        },
+        "app.S2VhcA.action.Y3JlYXRlLXRhc2s.option.dGl0bGU.display_name": {
+          "source": "Title",
+          "message": "Заголовок"
+        },
+        "app.S2VhcA.action.Y3JlYXRlLXRhc2s.option.dGl0bGU.short_desc": {
+          "source": "Task title",
+          "message": "Назва завдання"
+        },
+        "app.S2VhcA.action.Y3JlYXRlLXRhc2s.option.dHlwZQ.display_name": {
+          "source": "Type",
+          "message": "Тип"
+        },
+        "app.S2VhcA.action.Y3JlYXRlLXRhc2s.option.dHlwZQ.short_desc": {
+          "source": "Task type",
+          "message": "Тип завдання"
+        },
+        "app.S2VhcA.action.Y3JlYXRlLXRhc2s.short_desc": {
+          "source": "Create a new task",
+          "message": "Створити нове завдання"
+        },
+        "app.S2VhcA.action.YXBwbHktdGFn.desc": {
+          "source": "Apply one or more tags to a contact in Keap",
+          "message": "Застосувати один або кілька тегів до контакту в Keap"
+        },
+        "app.S2VhcA.action.YXBwbHktdGFn.display_name": {
+          "source": "Apply Tag to Contact",
+          "message": "Застосувати тег до контакту"
+        },
+        "app.S2VhcA.action.YXBwbHktdGFn.option.Y29udGFjdF9pZA.display_name": {
+          "source": "Contact ID",
+          "message": "ID контакту"
+        },
+        "app.S2VhcA.action.YXBwbHktdGFn.option.Y29udGFjdF9pZA.short_desc": {
+          "source": "The contact to tag",
+          "message": "Контакт для додавання тегу"
+        },
+        "app.S2VhcA.action.YXBwbHktdGFn.option.dGFnX2lkcw.desc": {
+          "source": "List of integer tag IDs",
+          "message": "Список цілочисельних ID тегів"
+        },
+        "app.S2VhcA.action.YXBwbHktdGFn.option.dGFnX2lkcw.display_name": {
+          "source": "Tag IDs",
+          "message": "ID тегів"
+        },
+        "app.S2VhcA.action.YXBwbHktdGFn.option.dGFnX2lkcw.short_desc": {
+          "source": "Tags to apply",
+          "message": "Теги для застосування"
+        },
+        "app.S2VhcA.action.YXBwbHktdGFn.short_desc": {
+          "source": "Apply a tag to a contact",
+          "message": "Застосувати тег до контакту"
+        },
+        "app.S2VhcA.action.Z2V0LW9wcG9ydHVuaXR5.desc": {
+          "source": "Retrieve a single opportunity by ID from Keap",
+          "message": "Отримати одну угоду за ID з Keap"
+        },
+        "app.S2VhcA.action.Z2V0LW9wcG9ydHVuaXR5.display_name": {
+          "source": "Get an Opportunity",
+          "message": "Отримати можливість"
+        },
+        "app.S2VhcA.action.Z2V0LW9wcG9ydHVuaXR5.option.b3Bwb3J0dW5pdHlfaWQ.display_name": {
+          "source": "Opportunity ID",
+          "message": "ID можливості"
+        },
+        "app.S2VhcA.action.Z2V0LW9wcG9ydHVuaXR5.option.b3Bwb3J0dW5pdHlfaWQ.short_desc": {
+          "source": "The opportunity ID",
+          "message": "ID можливості"
+        },
+        "app.S2VhcA.action.Z2V0LW9wcG9ydHVuaXR5.short_desc": {
+          "source": "Get a single opportunity by ID",
+          "message": "Отримати одну можливість за ID"
+        },
+        "app.S2VhcA.action.Z2V0LW9yZGVy.desc": {
+          "source": "Retrieve a single order by ID from Keap",
+          "message": "Отримати одне замовлення за ID з Keap"
+        },
+        "app.S2VhcA.action.Z2V0LW9yZGVy.display_name": {
+          "source": "Get an Order",
+          "message": "Отримати замовлення"
+        },
+        "app.S2VhcA.action.Z2V0LW9yZGVy.option.b3JkZXJfaWQ.display_name": {
+          "source": "Order ID",
+          "message": "Ідентифікатор замовлення"
+        },
+        "app.S2VhcA.action.Z2V0LW9yZGVy.option.b3JkZXJfaWQ.short_desc": {
+          "source": "The order ID",
+          "message": "ID замовлення"
+        },
+        "app.S2VhcA.action.Z2V0LW9yZGVy.short_desc": {
+          "source": "Get a single order by ID",
+          "message": "Отримати одне замовлення за ID"
+        },
+        "app.S2VhcA.action.Z2V0LWNvbXBhbnk.desc": {
+          "source": "Retrieve a single company by ID from Keap",
+          "message": "Отримати одну компанію за ID з Keap"
+        },
+        "app.S2VhcA.action.Z2V0LWNvbXBhbnk.display_name": {
+          "source": "Get a Company",
+          "message": "Отримати компанію"
+        },
+        "app.S2VhcA.action.Z2V0LWNvbXBhbnk.option.Y29tcGFueV9pZA.display_name": {
+          "source": "Company ID",
+          "message": "ID компанії"
+        },
+        "app.S2VhcA.action.Z2V0LWNvbXBhbnk.option.Y29tcGFueV9pZA.short_desc": {
+          "source": "The company ID",
+          "message": "ID компанії"
+        },
+        "app.S2VhcA.action.Z2V0LWNvbXBhbnk.short_desc": {
+          "source": "Get a single company by ID",
+          "message": "Отримати одну компанію за ID"
+        },
+        "app.S2VhcA.action.Z2V0LWNvbnRhY3Q.desc": {
+          "source": "Retrieve a single contact by ID from Keap",
+          "message": "Отримати один контакт за ID з Keap"
+        },
+        "app.S2VhcA.action.Z2V0LWNvbnRhY3Q.display_name": {
+          "source": "Get a Contact",
+          "message": "Отримати контакт"
+        },
+        "app.S2VhcA.action.Z2V0LWNvbnRhY3Q.option.Y29udGFjdF9pZA.display_name": {
+          "source": "Contact ID",
+          "message": "ID контакту"
+        },
+        "app.S2VhcA.action.Z2V0LWNvbnRhY3Q.option.Y29udGFjdF9pZA.short_desc": {
+          "source": "The contact ID",
+          "message": "ID контакту"
+        },
+        "app.S2VhcA.action.Z2V0LWNvbnRhY3Q.short_desc": {
+          "source": "Get a single contact by ID",
+          "message": "Отримати один контакт за ID"
+        },
+        "app.S2VhcA.action.Z2V0LWZpbGU.desc": {
+          "source": "Get file details from Keap",
+          "message": "Отримати відомості про файл із Keap"
+        },
+        "app.S2VhcA.action.Z2V0LWZpbGU.display_name": {
+          "source": "Get a File",
+          "message": "Отримати файл"
+        },
+        "app.S2VhcA.action.Z2V0LWZpbGU.option.ZmlsZV9pZA.display_name": {
+          "source": "File ID",
+          "message": "Ідентифікатор файлу"
+        },
+        "app.S2VhcA.action.Z2V0LWZpbGU.option.ZmlsZV9pZA.short_desc": {
+          "source": "The file to retrieve",
+          "message": "Файл для отримання"
+        },
+        "app.S2VhcA.action.Z2V0LWZpbGU.short_desc": {
+          "source": "Get file details",
+          "message": "Отримати відомості про файл"
+        },
+        "app.S2VhcA.action.Z2V0LXByb2R1Y3Q.desc": {
+          "source": "Retrieve a single product by ID from Keap",
+          "message": "Отримати один продукт за ID з Keap"
+        },
+        "app.S2VhcA.action.Z2V0LXByb2R1Y3Q.display_name": {
+          "source": "Get a Product",
+          "message": "Отримати товар"
+        },
+        "app.S2VhcA.action.Z2V0LXByb2R1Y3Q.option.cHJvZHVjdF9pZA.display_name": {
+          "source": "Product ID",
+          "message": "ID товару"
+        },
+        "app.S2VhcA.action.Z2V0LXByb2R1Y3Q.option.cHJvZHVjdF9pZA.short_desc": {
+          "source": "The product ID",
+          "message": "Ідентифікатор товару"
+        },
+        "app.S2VhcA.action.Z2V0LXByb2R1Y3Q.short_desc": {
+          "source": "Get a single product by ID",
+          "message": "Отримати один товар за ID"
+        },
+        "app.S2VhcA.action.Z2V0LXRhZw.desc": {
+          "source": "Retrieve a single tag by ID from Keap",
+          "message": "Отримати один тег за ID з Keap"
+        },
+        "app.S2VhcA.action.Z2V0LXRhZw.display_name": {
+          "source": "Get a Tag",
+          "message": "Отримати тег"
+        },
+        "app.S2VhcA.action.Z2V0LXRhZw.option.dGFnX2lk.display_name": {
+          "source": "Tag ID",
+          "message": "Ідентифікатор тегу"
+        },
+        "app.S2VhcA.action.Z2V0LXRhZw.option.dGFnX2lk.short_desc": {
+          "source": "The tag ID",
+          "message": "ID тегу"
+        },
+        "app.S2VhcA.action.Z2V0LXRhZw.short_desc": {
+          "source": "Get a single tag by ID",
+          "message": "Отримати один тег за ID"
+        },
+        "app.S2VhcA.action.Z2V0LXRhc2s.desc": {
+          "source": "Retrieve a single task by ID from Keap",
+          "message": "Отримати одне завдання за ID з Keap"
+        },
+        "app.S2VhcA.action.Z2V0LXRhc2s.display_name": {
+          "source": "Get a Task",
+          "message": "Отримати завдання"
+        },
+        "app.S2VhcA.action.Z2V0LXRhc2s.option.dGFza19pZA.display_name": {
+          "source": "Task ID",
+          "message": "ID завдання"
+        },
+        "app.S2VhcA.action.Z2V0LXRhc2s.option.dGFza19pZA.short_desc": {
+          "source": "The task ID",
+          "message": "ID завдання"
+        },
+        "app.S2VhcA.action.Z2V0LXRhc2s.short_desc": {
+          "source": "Get a single task by ID",
+          "message": "Отримати одне завдання за ID"
+        },
+        "app.S2VhcA.action.ZGVsZXRlLW5vdGU.desc": {
+          "source": "Delete a note from Keap",
+          "message": "Видалити примітку з Keap"
+        },
+        "app.S2VhcA.action.ZGVsZXRlLW5vdGU.display_name": {
+          "source": "Delete a Note",
+          "message": "Видалити примітку"
+        },
+        "app.S2VhcA.action.ZGVsZXRlLW5vdGU.option.Y29udGFjdF9pZA.display_name": {
+          "source": "Contact ID",
+          "message": "ID контакту"
+        },
+        "app.S2VhcA.action.ZGVsZXRlLW5vdGU.option.Y29udGFjdF9pZA.short_desc": {
+          "source": "The contact",
+          "message": "Контакт"
+        },
+        "app.S2VhcA.action.ZGVsZXRlLW5vdGU.option.bm90ZV9pZA.display_name": {
+          "source": "Note ID",
+          "message": "ID нотатки"
+        },
+        "app.S2VhcA.action.ZGVsZXRlLW5vdGU.option.bm90ZV9pZA.short_desc": {
+          "source": "The note to delete",
+          "message": "Нотатка для видалення"
+        },
+        "app.S2VhcA.action.ZGVsZXRlLW5vdGU.short_desc": {
+          "source": "Delete a note",
+          "message": "Видалити примітку"
+        },
+        "app.S2VhcA.action.ZGVsZXRlLW9wcG9ydHVuaXR5.desc": {
+          "source": "Delete an opportunity from Keap",
+          "message": "Видалити угоду з Keap"
+        },
+        "app.S2VhcA.action.ZGVsZXRlLW9wcG9ydHVuaXR5.display_name": {
+          "source": "Delete an Opportunity",
+          "message": "Видалити можливість"
+        },
+        "app.S2VhcA.action.ZGVsZXRlLW9wcG9ydHVuaXR5.option.b3Bwb3J0dW5pdHlfaWQ.display_name": {
+          "source": "Opportunity ID",
+          "message": "ID можливості"
+        },
+        "app.S2VhcA.action.ZGVsZXRlLW9wcG9ydHVuaXR5.option.b3Bwb3J0dW5pdHlfaWQ.short_desc": {
+          "source": "The opportunity to delete",
+          "message": "Можливість для видалення"
+        },
+        "app.S2VhcA.action.ZGVsZXRlLW9wcG9ydHVuaXR5.short_desc": {
+          "source": "Delete an opportunity",
+          "message": "Видалити можливість"
+        },
+        "app.S2VhcA.action.ZGVsZXRlLWNvbXBhbnk.desc": {
+          "source": "Delete a company from Keap",
+          "message": "Видалити компанію з Keap"
+        },
+        "app.S2VhcA.action.ZGVsZXRlLWNvbXBhbnk.display_name": {
+          "source": "Delete a Company",
+          "message": "Видалити компанію"
+        },
+        "app.S2VhcA.action.ZGVsZXRlLWNvbXBhbnk.option.Y29tcGFueV9pZA.display_name": {
+          "source": "Company ID",
+          "message": "ID компанії"
+        },
+        "app.S2VhcA.action.ZGVsZXRlLWNvbXBhbnk.option.Y29tcGFueV9pZA.short_desc": {
+          "source": "The company to delete",
+          "message": "Компанія для видалення"
+        },
+        "app.S2VhcA.action.ZGVsZXRlLWNvbXBhbnk.short_desc": {
+          "source": "Delete a company",
+          "message": "Видалити компанію"
+        },
+        "app.S2VhcA.action.ZGVsZXRlLWNvbnRhY3Q.desc": {
+          "source": "Delete a contact from Keap",
+          "message": "Видалити контакт із Keap"
+        },
+        "app.S2VhcA.action.ZGVsZXRlLWNvbnRhY3Q.display_name": {
+          "source": "Delete a Contact",
+          "message": "Видалити контакт"
+        },
+        "app.S2VhcA.action.ZGVsZXRlLWNvbnRhY3Q.option.Y29udGFjdF9pZA.display_name": {
+          "source": "Contact ID",
+          "message": "ID контакту"
+        },
+        "app.S2VhcA.action.ZGVsZXRlLWNvbnRhY3Q.option.Y29udGFjdF9pZA.short_desc": {
+          "source": "The contact to delete",
+          "message": "Контакт для видалення"
+        },
+        "app.S2VhcA.action.ZGVsZXRlLWNvbnRhY3Q.short_desc": {
+          "source": "Delete a contact",
+          "message": "Видалити контакт"
+        },
+        "app.S2VhcA.action.ZGVsZXRlLWZpbGU.desc": {
+          "source": "Delete a file from Keap",
+          "message": "Видалити файл із Keap"
+        },
+        "app.S2VhcA.action.ZGVsZXRlLWZpbGU.display_name": {
+          "source": "Delete a File",
+          "message": "Видалити файл"
+        },
+        "app.S2VhcA.action.ZGVsZXRlLWZpbGU.option.ZmlsZV9pZA.display_name": {
+          "source": "File ID",
+          "message": "Ідентифікатор файлу"
+        },
+        "app.S2VhcA.action.ZGVsZXRlLWZpbGU.option.ZmlsZV9pZA.short_desc": {
+          "source": "The file to delete",
+          "message": "Файл для видалення"
+        },
+        "app.S2VhcA.action.ZGVsZXRlLWZpbGU.short_desc": {
+          "source": "Delete a file",
+          "message": "Видалити файл"
+        },
+        "app.S2VhcA.action.ZGVsZXRlLXRhZw.desc": {
+          "source": "Delete a tag from Keap",
+          "message": "Видалити тег із Keap"
+        },
+        "app.S2VhcA.action.ZGVsZXRlLXRhZw.display_name": {
+          "source": "Delete a Tag",
+          "message": "Видалити тег"
+        },
+        "app.S2VhcA.action.ZGVsZXRlLXRhZw.option.dGFnX2lk.display_name": {
+          "source": "Tag ID",
+          "message": "Ідентифікатор тегу"
+        },
+        "app.S2VhcA.action.ZGVsZXRlLXRhZw.option.dGFnX2lk.short_desc": {
+          "source": "The tag to delete",
+          "message": "Тег для видалення"
+        },
+        "app.S2VhcA.action.ZGVsZXRlLXRhZw.short_desc": {
+          "source": "Delete a tag",
+          "message": "Видалити тег"
+        },
+        "app.S2VhcA.action.ZGVsZXRlLXRhc2s.desc": {
+          "source": "Delete a task from Keap",
+          "message": "Видалити завдання з Keap"
+        },
+        "app.S2VhcA.action.ZGVsZXRlLXRhc2s.display_name": {
+          "source": "Delete a Task",
+          "message": "Видалити завдання"
+        },
+        "app.S2VhcA.action.ZGVsZXRlLXRhc2s.option.dGFza19pZA.display_name": {
+          "source": "Task ID",
+          "message": "ID завдання"
+        },
+        "app.S2VhcA.action.ZGVsZXRlLXRhc2s.option.dGFza19pZA.short_desc": {
+          "source": "The task to delete",
+          "message": "Завдання для видалення"
+        },
+        "app.S2VhcA.action.ZGVsZXRlLXRhc2s.short_desc": {
+          "source": "Delete a task",
+          "message": "Видалити завдання"
+        },
+        "app.S2VhcA.action.b3Bwb3J0dW5pdHktYWRkZWQ.desc": {
+          "source": "Triggers when a new opportunity is created in Keap",
+          "message": "Спрацьовує, коли в Keap створюється нова угода"
+        },
+        "app.S2VhcA.action.b3Bwb3J0dW5pdHktYWRkZWQ.display_name": {
+          "source": "Opportunity Added",
+          "message": "Угоду додано"
+        },
+        "app.S2VhcA.action.b3Bwb3J0dW5pdHktYWRkZWQ.short_desc": {
+          "source": "Watch for new opportunities",
+          "message": "Стежити за новими угодами"
+        },
+        "app.S2VhcA.action.b3JkZXItYWRkZWQ.desc": {
+          "source": "Triggers when a new order is created in Keap",
+          "message": "Спрацьовує, коли в Keap створюється нове замовлення"
+        },
+        "app.S2VhcA.action.b3JkZXItYWRkZWQ.display_name": {
+          "source": "Order Added",
+          "message": "Замовлення додано"
+        },
+        "app.S2VhcA.action.b3JkZXItYWRkZWQ.short_desc": {
+          "source": "Watch for new orders",
+          "message": "Стежити за новими замовленнями"
+        },
+        "app.S2VhcA.action.bGlzdC10YWdz.desc": {
+          "source": "List tags in Keap with optional filtering",
+          "message": "Список тегів у Keap із можливістю фільтрації"
+        },
+        "app.S2VhcA.action.bGlzdC10YWdz.display_name": {
+          "source": "List Tags",
+          "message": "Список тегів"
+        },
+        "app.S2VhcA.action.bGlzdC10YWdz.option.Y2F0ZWdvcnlfaWQ.display_name": {
+          "source": "Category ID",
+          "message": "Ідентифікатор категорії"
+        },
+        "app.S2VhcA.action.bGlzdC10YWdz.option.Y2F0ZWdvcnlfaWQ.short_desc": {
+          "source": "Filter by category",
+          "message": "Фільтрувати за категорією"
+        },
+        "app.S2VhcA.action.bGlzdC10YWdz.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "Ліміт"
+        },
+        "app.S2VhcA.action.bGlzdC10YWdz.option.bGltaXQ.short_desc": {
+          "source": "Maximum results",
+          "message": "Максимальна кількість результатів"
+        },
+        "app.S2VhcA.action.bGlzdC10YWdz.option.bmFtZQ.display_name": {
+          "source": "Tag Name",
+          "message": "Назва тегу"
+        },
+        "app.S2VhcA.action.bGlzdC10YWdz.option.bmFtZQ.short_desc": {
+          "source": "Filter by tag name",
+          "message": "Фільтрувати за назвою тегу"
+        },
+        "app.S2VhcA.action.bGlzdC10YWdz.option.dGFnX2lk.display_name": {
+          "source": "Tag ID",
+          "message": "Ідентифікатор тегу"
+        },
+        "app.S2VhcA.action.bGlzdC10YWdz.option.dGFnX2lk.short_desc": {
+          "source": "Filter by tag ID",
+          "message": "Фільтрувати за ID тегу"
+        },
+        "app.S2VhcA.action.bGlzdC10YWdz.short_desc": {
+          "source": "List all tags",
+          "message": "Отримати список усіх тегів"
+        },
+        "app.S2VhcA.action.bGlzdC10YXNrcw.desc": {
+          "source": "List tasks in Keap with optional filtering",
+          "message": "Список завдань у Keap із можливістю фільтрації"
+        },
+        "app.S2VhcA.action.bGlzdC10YXNrcw.display_name": {
+          "source": "List Tasks",
+          "message": "Отримати список завдань"
+        },
+        "app.S2VhcA.action.bGlzdC10YXNrcw.option.Y29tcGxldGVk.display_name": {
+          "source": "Completed",
+          "message": "Завершено"
+        },
+        "app.S2VhcA.action.bGlzdC10YXNrcw.option.Y29tcGxldGVk.short_desc": {
+          "source": "Filter by completion status",
+          "message": "Фільтрувати за статусом виконання"
+        },
+        "app.S2VhcA.action.bGlzdC10YXNrcw.option.Y29udGFjdF9pZA.display_name": {
+          "source": "Contact ID",
+          "message": "ID контакту"
+        },
+        "app.S2VhcA.action.bGlzdC10YXNrcw.option.Y29udGFjdF9pZA.short_desc": {
+          "source": "Filter by contact",
+          "message": "Фільтрувати за контактом"
+        },
+        "app.S2VhcA.action.bGlzdC10YXNrcw.option.b3JkZXJfYnk.display_name": {
+          "source": "Order By",
+          "message": "Сортувати за"
+        },
+        "app.S2VhcA.action.bGlzdC10YXNrcw.option.b3JkZXJfYnk.short_desc": {
+          "source": "Sort field",
+          "message": "Поле сортування"
+        },
+        "app.S2VhcA.action.bGlzdC10YXNrcw.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "Ліміт"
+        },
+        "app.S2VhcA.action.bGlzdC10YXNrcw.option.bGltaXQ.short_desc": {
+          "source": "Maximum results",
+          "message": "Максимальна кількість результатів"
+        },
+        "app.S2VhcA.action.bGlzdC10YXNrcw.option.dGFza19pZA.display_name": {
+          "source": "Task ID",
+          "message": "ID завдання"
+        },
+        "app.S2VhcA.action.bGlzdC10YXNrcw.option.dGFza19pZA.short_desc": {
+          "source": "Filter by task ID",
+          "message": "Фільтрувати за ID завдання"
+        },
+        "app.S2VhcA.action.bGlzdC10YXNrcw.option.dXNlcl9pZA.display_name": {
+          "source": "User ID",
+          "message": "ID користувача"
+        },
+        "app.S2VhcA.action.bGlzdC10YXNrcw.option.dXNlcl9pZA.short_desc": {
+          "source": "Filter by assigned user",
+          "message": "Фільтрувати за призначеним користувачем"
+        },
+        "app.S2VhcA.action.bGlzdC10YXNrcw.short_desc": {
+          "source": "List all tasks",
+          "message": "Список усіх завдань"
+        },
+        "app.S2VhcA.action.bGlzdC1hZmZpbGlhdGVz.desc": {
+          "source": "List affiliates in Keap",
+          "message": "Список партнерів у Keap"
+        },
+        "app.S2VhcA.action.bGlzdC1hZmZpbGlhdGVz.display_name": {
+          "source": "List Affiliates",
+          "message": "Список партнерів"
+        },
+        "app.S2VhcA.action.bGlzdC1hZmZpbGlhdGVz.option.b3JkZXJfYnk.display_name": {
+          "source": "Order By",
+          "message": "Сортувати за"
+        },
+        "app.S2VhcA.action.bGlzdC1hZmZpbGlhdGVz.option.b3JkZXJfYnk.short_desc": {
+          "source": "Sort field",
+          "message": "Поле сортування"
+        },
+        "app.S2VhcA.action.bGlzdC1hZmZpbGlhdGVz.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "Ліміт"
+        },
+        "app.S2VhcA.action.bGlzdC1hZmZpbGlhdGVz.option.bGltaXQ.short_desc": {
+          "source": "Maximum results",
+          "message": "Максимальна кількість результатів"
+        },
+        "app.S2VhcA.action.bGlzdC1hZmZpbGlhdGVz.short_desc": {
+          "source": "List all affiliates",
+          "message": "Список усіх партнерів"
+        },
+        "app.S2VhcA.action.bGlzdC1jYW1wYWlnbnM.desc": {
+          "source": "List campaigns in Keap with optional filtering",
+          "message": "Список кампаній у Keap із можливістю фільтрації"
+        },
+        "app.S2VhcA.action.bGlzdC1jYW1wYWlnbnM.display_name": {
+          "source": "List Campaigns",
+          "message": "Список кампаній"
+        },
+        "app.S2VhcA.action.bGlzdC1jYW1wYWlnbnM.option.b3JkZXJfYnk.display_name": {
+          "source": "Order By",
+          "message": "Сортувати за"
+        },
+        "app.S2VhcA.action.bGlzdC1jYW1wYWlnbnM.option.b3JkZXJfYnk.short_desc": {
+          "source": "Sort field",
+          "message": "Поле сортування"
+        },
+        "app.S2VhcA.action.bGlzdC1jYW1wYWlnbnM.option.b3JkZXJfZGlyZWN0aW9u.desc": {
+          "source": "Sort direction",
+          "message": "Напрямок сортування"
+        },
+        "app.S2VhcA.action.bGlzdC1jYW1wYWlnbnM.option.b3JkZXJfZGlyZWN0aW9u.display_name": {
+          "source": "Order Direction",
+          "message": "Напрямок сортування"
+        },
+        "app.S2VhcA.action.bGlzdC1jYW1wYWlnbnM.option.b3JkZXJfZGlyZWN0aW9u.short_desc": {
+          "source": "Sort direction",
+          "message": "Напрямок сортування"
+        },
+        "app.S2VhcA.action.bGlzdC1jYW1wYWlnbnM.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "Ліміт"
+        },
+        "app.S2VhcA.action.bGlzdC1jYW1wYWlnbnM.option.bGltaXQ.short_desc": {
+          "source": "Maximum results",
+          "message": "Максимальна кількість результатів"
+        },
+        "app.S2VhcA.action.bGlzdC1jYW1wYWlnbnM.short_desc": {
+          "source": "List all campaigns",
+          "message": "Список усіх кампаній"
+        },
+        "app.S2VhcA.action.bGlzdC1jb21wYW5pZXM.desc": {
+          "source": "List companies in Keap with optional filtering",
+          "message": "Список компаній у Keap із можливістю фільтрації"
+        },
+        "app.S2VhcA.action.bGlzdC1jb21wYW5pZXM.display_name": {
+          "source": "List Companies",
+          "message": "Список компаній"
+        },
+        "app.S2VhcA.action.bGlzdC1jb21wYW5pZXM.option.Y29tcGFueV9pZA.display_name": {
+          "source": "Company ID",
+          "message": "ID компанії"
+        },
+        "app.S2VhcA.action.bGlzdC1jb21wYW5pZXM.option.Y29tcGFueV9pZA.short_desc": {
+          "source": "Filter by company ID",
+          "message": "Фільтрувати за ID компанії"
+        },
+        "app.S2VhcA.action.bGlzdC1jb21wYW5pZXM.option.Y29tcGFueV9uYW1l.display_name": {
+          "source": "Company Name",
+          "message": "Назва компанії"
+        },
+        "app.S2VhcA.action.bGlzdC1jb21wYW5pZXM.option.Y29tcGFueV9uYW1l.short_desc": {
+          "source": "Filter by company name",
+          "message": "Фільтрувати за назвою компанії"
+        },
+        "app.S2VhcA.action.bGlzdC1jb21wYW5pZXM.option.b3JkZXJfYnk.display_name": {
+          "source": "Order By",
+          "message": "Сортувати за"
+        },
+        "app.S2VhcA.action.bGlzdC1jb21wYW5pZXM.option.b3JkZXJfYnk.short_desc": {
+          "source": "Sort field",
+          "message": "Поле сортування"
+        },
+        "app.S2VhcA.action.bGlzdC1jb21wYW5pZXM.option.b3JkZXJfZGlyZWN0aW9u.desc": {
+          "source": "Sort direction",
+          "message": "Напрямок сортування"
+        },
+        "app.S2VhcA.action.bGlzdC1jb21wYW5pZXM.option.b3JkZXJfZGlyZWN0aW9u.display_name": {
+          "source": "Order Direction",
+          "message": "Напрямок сортування"
+        },
+        "app.S2VhcA.action.bGlzdC1jb21wYW5pZXM.option.b3JkZXJfZGlyZWN0aW9u.short_desc": {
+          "source": "Sort direction",
+          "message": "Напрямок сортування"
+        },
+        "app.S2VhcA.action.bGlzdC1jb21wYW5pZXM.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "Ліміт"
+        },
+        "app.S2VhcA.action.bGlzdC1jb21wYW5pZXM.option.bGltaXQ.short_desc": {
+          "source": "Maximum results",
+          "message": "Максимальна кількість результатів"
+        },
+        "app.S2VhcA.action.bGlzdC1jb21wYW5pZXM.short_desc": {
+          "source": "List all companies",
+          "message": "Список усіх компаній"
+        },
+        "app.S2VhcA.action.bGlzdC1jb250YWN0cw.desc": {
+          "source": "List contacts in Keap with optional filtering",
+          "message": "Список контактів у Keap з необов'язковою фільтрацією"
+        },
+        "app.S2VhcA.action.bGlzdC1jb250YWN0cw.display_name": {
+          "source": "List Contacts",
+          "message": "Список контактів"
+        },
+        "app.S2VhcA.action.bGlzdC1jb250YWN0cw.option.Y29udGFjdF9pZA.display_name": {
+          "source": "Contact ID",
+          "message": "ID контакту"
+        },
+        "app.S2VhcA.action.bGlzdC1jb250YWN0cw.option.Y29udGFjdF9pZA.short_desc": {
+          "source": "Filter by contact ID",
+          "message": "Фільтрувати за ID контакту"
+        },
+        "app.S2VhcA.action.bGlzdC1jb250YWN0cw.option.Z2l2ZW5fbmFtZQ.display_name": {
+          "source": "First Name",
+          "message": "Ім'я"
+        },
+        "app.S2VhcA.action.bGlzdC1jb250YWN0cw.option.Z2l2ZW5fbmFtZQ.short_desc": {
+          "source": "Filter by first name",
+          "message": "Фільтрувати за ім'ям"
+        },
+        "app.S2VhcA.action.bGlzdC1jb250YWN0cw.option.ZW1haWw.display_name": {
+          "source": "Email",
+          "message": "Електронна пошта"
+        },
+        "app.S2VhcA.action.bGlzdC1jb250YWN0cw.option.ZW1haWw.short_desc": {
+          "source": "Filter by email",
+          "message": "Фільтрувати за електронною поштою"
+        },
+        "app.S2VhcA.action.bGlzdC1jb250YWN0cw.option.ZmFtaWx5X25hbWU.display_name": {
+          "source": "Last Name",
+          "message": "Прізвище"
+        },
+        "app.S2VhcA.action.bGlzdC1jb250YWN0cw.option.ZmFtaWx5X25hbWU.short_desc": {
+          "source": "Filter by last name",
+          "message": "Фільтрувати за прізвищем"
+        },
+        "app.S2VhcA.action.bGlzdC1jb250YWN0cw.option.b3JkZXJfYnk.display_name": {
+          "source": "Order By",
+          "message": "Сортувати за"
+        },
+        "app.S2VhcA.action.bGlzdC1jb250YWN0cw.option.b3JkZXJfYnk.short_desc": {
+          "source": "Sort field",
+          "message": "Поле сортування"
+        },
+        "app.S2VhcA.action.bGlzdC1jb250YWN0cw.option.b3JkZXJfZGlyZWN0aW9u.desc": {
+          "source": "Sort direction",
+          "message": "Напрямок сортування"
+        },
+        "app.S2VhcA.action.bGlzdC1jb250YWN0cw.option.b3JkZXJfZGlyZWN0aW9u.display_name": {
+          "source": "Order Direction",
+          "message": "Напрямок сортування"
+        },
+        "app.S2VhcA.action.bGlzdC1jb250YWN0cw.option.b3JkZXJfZGlyZWN0aW9u.short_desc": {
+          "source": "Sort direction",
+          "message": "Напрямок сортування"
+        },
+        "app.S2VhcA.action.bGlzdC1jb250YWN0cw.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "Ліміт"
+        },
+        "app.S2VhcA.action.bGlzdC1jb250YWN0cw.option.bGltaXQ.short_desc": {
+          "source": "Maximum results",
+          "message": "Максимальна кількість результатів"
+        },
+        "app.S2VhcA.action.bGlzdC1jb250YWN0cw.short_desc": {
+          "source": "List all contacts",
+          "message": "Отримати список усіх контактів"
+        },
+        "app.S2VhcA.action.bGlzdC1lbWFpbHM.desc": {
+          "source": "List emails in Keap with optional filtering",
+          "message": "Список листів у Keap з необов'язковою фільтрацією"
+        },
+        "app.S2VhcA.action.bGlzdC1lbWFpbHM.display_name": {
+          "source": "List Emails",
+          "message": "Отримати список електронних листів"
+        },
+        "app.S2VhcA.action.bGlzdC1lbWFpbHM.option.Y29udGFjdF9pZA.display_name": {
+          "source": "Contact ID",
+          "message": "ID контакту"
+        },
+        "app.S2VhcA.action.bGlzdC1lbWFpbHM.option.Y29udGFjdF9pZA.short_desc": {
+          "source": "Filter by contact",
+          "message": "Фільтрувати за контактом"
+        },
+        "app.S2VhcA.action.bGlzdC1lbWFpbHM.option.ZW1haWw.display_name": {
+          "source": "Email",
+          "message": "Електронна пошта"
+        },
+        "app.S2VhcA.action.bGlzdC1lbWFpbHM.option.ZW1haWw.short_desc": {
+          "source": "Filter by email address",
+          "message": "Фільтрувати за адресою електронної пошти"
+        },
+        "app.S2VhcA.action.bGlzdC1lbWFpbHM.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "Ліміт"
+        },
+        "app.S2VhcA.action.bGlzdC1lbWFpbHM.option.bGltaXQ.short_desc": {
+          "source": "Maximum results",
+          "message": "Максимальна кількість результатів"
+        },
+        "app.S2VhcA.action.bGlzdC1lbWFpbHM.short_desc": {
+          "source": "List emails",
+          "message": "Список листів"
+        },
+        "app.S2VhcA.action.bGlzdC1maWxlcw.desc": {
+          "source": "List files in Keap with optional filtering",
+          "message": "Список файлів у Keap з необов'язковою фільтрацією"
+        },
+        "app.S2VhcA.action.bGlzdC1maWxlcw.display_name": {
+          "source": "List Files",
+          "message": "Список файлів"
+        },
+        "app.S2VhcA.action.bGlzdC1maWxlcw.option.Y29udGFjdF9pZA.display_name": {
+          "source": "Contact ID",
+          "message": "ID контакту"
+        },
+        "app.S2VhcA.action.bGlzdC1maWxlcw.option.Y29udGFjdF9pZA.short_desc": {
+          "source": "Filter by contact",
+          "message": "Фільтрувати за контактом"
+        },
+        "app.S2VhcA.action.bGlzdC1maWxlcw.option.ZmlsZV9pZA.display_name": {
+          "source": "File ID",
+          "message": "Ідентифікатор файлу"
+        },
+        "app.S2VhcA.action.bGlzdC1maWxlcw.option.ZmlsZV9pZA.short_desc": {
+          "source": "Filter by file ID",
+          "message": "Фільтрувати за ID файлу"
+        },
+        "app.S2VhcA.action.bGlzdC1maWxlcw.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "Ліміт"
+        },
+        "app.S2VhcA.action.bGlzdC1maWxlcw.option.bGltaXQ.short_desc": {
+          "source": "Maximum results",
+          "message": "Максимальна кількість результатів"
+        },
+        "app.S2VhcA.action.bGlzdC1maWxlcw.option.cGVybWlzc2lvbg.allowed-value.c3RyaW5nOkJPVEg.desc": {
+          "source": "Both user and company files",
+          "message": "Файли як користувача, так і компанії"
+        },
+        "app.S2VhcA.action.bGlzdC1maWxlcw.option.cGVybWlzc2lvbg.allowed-value.c3RyaW5nOkNPTVBBTlk.desc": {
+          "source": "Files owned by the company",
+          "message": "Файли, що належать компанії"
+        },
+        "app.S2VhcA.action.bGlzdC1maWxlcw.option.cGVybWlzc2lvbg.allowed-value.c3RyaW5nOlVTRVI.desc": {
+          "source": "Files owned by the user",
+          "message": "Файли, що належать користувачеві"
+        },
+        "app.S2VhcA.action.bGlzdC1maWxlcw.option.cGVybWlzc2lvbg.display_name": {
+          "source": "Permission",
+          "message": "Права доступу"
+        },
+        "app.S2VhcA.action.bGlzdC1maWxlcw.option.cGVybWlzc2lvbg.short_desc": {
+          "source": "Filter by permission",
+          "message": "Фільтрувати за дозволом"
+        },
+        "app.S2VhcA.action.bGlzdC1maWxlcw.short_desc": {
+          "source": "List all files",
+          "message": "Список усіх файлів"
+        },
+        "app.S2VhcA.action.bGlzdC1ub3Rlcw.desc": {
+          "source": "List notes for a contact in Keap",
+          "message": "Список нотаток для контакту в Keap"
+        },
+        "app.S2VhcA.action.bGlzdC1ub3Rlcw.display_name": {
+          "source": "List Notes",
+          "message": "Список нотаток"
+        },
+        "app.S2VhcA.action.bGlzdC1ub3Rlcw.option.Y29udGFjdF9pZA.display_name": {
+          "source": "Contact ID",
+          "message": "ID контакту"
+        },
+        "app.S2VhcA.action.bGlzdC1ub3Rlcw.option.Y29udGFjdF9pZA.short_desc": {
+          "source": "The contact",
+          "message": "Контакт"
+        },
+        "app.S2VhcA.action.bGlzdC1ub3Rlcw.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "Ліміт"
+        },
+        "app.S2VhcA.action.bGlzdC1ub3Rlcw.option.bGltaXQ.short_desc": {
+          "source": "Maximum results",
+          "message": "Максимальна кількість результатів"
+        },
+        "app.S2VhcA.action.bGlzdC1ub3Rlcw.option.bm90ZV9pZA.display_name": {
+          "source": "Note ID",
+          "message": "ID нотатки"
+        },
+        "app.S2VhcA.action.bGlzdC1ub3Rlcw.option.bm90ZV9pZA.short_desc": {
+          "source": "Filter by note ID",
+          "message": "Фільтрувати за ID нотатки"
+        },
+        "app.S2VhcA.action.bGlzdC1ub3Rlcw.short_desc": {
+          "source": "List notes for a contact",
+          "message": "Отримати список нотаток для контакту"
+        },
+        "app.S2VhcA.action.bGlzdC1vcHBvcnR1bml0aWVz.desc": {
+          "source": "List opportunities in Keap with optional filtering",
+          "message": "Список угод у Keap з необов'язковою фільтрацією"
+        },
+        "app.S2VhcA.action.bGlzdC1vcHBvcnR1bml0aWVz.display_name": {
+          "source": "List Opportunities",
+          "message": "Список можливостей"
+        },
+        "app.S2VhcA.action.bGlzdC1vcHBvcnR1bml0aWVz.option.Y29udGFjdF9pZA.display_name": {
+          "source": "Contact ID",
+          "message": "ID контакту"
+        },
+        "app.S2VhcA.action.bGlzdC1vcHBvcnR1bml0aWVz.option.Y29udGFjdF9pZA.short_desc": {
+          "source": "Filter by contact",
+          "message": "Фільтрувати за контактом"
+        },
+        "app.S2VhcA.action.bGlzdC1vcHBvcnR1bml0aWVz.option.b3Bwb3J0dW5pdHlfaWQ.display_name": {
+          "source": "Opportunity ID",
+          "message": "ID можливості"
+        },
+        "app.S2VhcA.action.bGlzdC1vcHBvcnR1bml0aWVz.option.b3Bwb3J0dW5pdHlfaWQ.short_desc": {
+          "source": "Filter by opportunity ID",
+          "message": "Фільтрувати за ID можливості"
+        },
+        "app.S2VhcA.action.bGlzdC1vcHBvcnR1bml0aWVz.option.b3JkZXJfYnk.display_name": {
+          "source": "Order By",
+          "message": "Сортувати за"
+        },
+        "app.S2VhcA.action.bGlzdC1vcHBvcnR1bml0aWVz.option.b3JkZXJfYnk.short_desc": {
+          "source": "Sort field",
+          "message": "Поле сортування"
+        },
+        "app.S2VhcA.action.bGlzdC1vcHBvcnR1bml0aWVz.option.b3JkZXJfZGlyZWN0aW9u.desc": {
+          "source": "Sort direction",
+          "message": "Напрямок сортування"
+        },
+        "app.S2VhcA.action.bGlzdC1vcHBvcnR1bml0aWVz.option.b3JkZXJfZGlyZWN0aW9u.display_name": {
+          "source": "Order Direction",
+          "message": "Напрямок сортування"
+        },
+        "app.S2VhcA.action.bGlzdC1vcHBvcnR1bml0aWVz.option.b3JkZXJfZGlyZWN0aW9u.short_desc": {
+          "source": "Sort direction",
+          "message": "Напрямок сортування"
+        },
+        "app.S2VhcA.action.bGlzdC1vcHBvcnR1bml0aWVz.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "Ліміт"
+        },
+        "app.S2VhcA.action.bGlzdC1vcHBvcnR1bml0aWVz.option.bGltaXQ.short_desc": {
+          "source": "Maximum results",
+          "message": "Максимальна кількість результатів"
+        },
+        "app.S2VhcA.action.bGlzdC1vcHBvcnR1bml0aWVz.option.c3RhZ2VfaWQ.display_name": {
+          "source": "Stage ID",
+          "message": "ID етапу"
+        },
+        "app.S2VhcA.action.bGlzdC1vcHBvcnR1bml0aWVz.option.c3RhZ2VfaWQ.short_desc": {
+          "source": "Filter by stage",
+          "message": "Фільтр за етапом"
+        },
+        "app.S2VhcA.action.bGlzdC1vcHBvcnR1bml0aWVz.short_desc": {
+          "source": "List all opportunities",
+          "message": "Список усіх угод"
+        },
+        "app.S2VhcA.action.bGlzdC1vcmRlcnM.desc": {
+          "source": "List orders in Keap with optional filtering",
+          "message": "Список замовлень у Keap з необов'язковою фільтрацією"
+        },
+        "app.S2VhcA.action.bGlzdC1vcmRlcnM.display_name": {
+          "source": "List Orders",
+          "message": "Список замовлень"
+        },
+        "app.S2VhcA.action.bGlzdC1vcmRlcnM.option.Y29udGFjdF9pZA.display_name": {
+          "source": "Contact ID",
+          "message": "ID контакту"
+        },
+        "app.S2VhcA.action.bGlzdC1vcmRlcnM.option.Y29udGFjdF9pZA.short_desc": {
+          "source": "Filter by contact",
+          "message": "Фільтрувати за контактом"
+        },
+        "app.S2VhcA.action.bGlzdC1vcmRlcnM.option.b3JkZXJfYnk.display_name": {
+          "source": "Order By",
+          "message": "Сортувати за"
+        },
+        "app.S2VhcA.action.bGlzdC1vcmRlcnM.option.b3JkZXJfYnk.short_desc": {
+          "source": "Sort field",
+          "message": "Поле сортування"
+        },
+        "app.S2VhcA.action.bGlzdC1vcmRlcnM.option.b3JkZXJfZGlyZWN0aW9u.desc": {
+          "source": "Sort direction",
+          "message": "Напрямок сортування"
+        },
+        "app.S2VhcA.action.bGlzdC1vcmRlcnM.option.b3JkZXJfZGlyZWN0aW9u.display_name": {
+          "source": "Order Direction",
+          "message": "Напрямок сортування"
+        },
+        "app.S2VhcA.action.bGlzdC1vcmRlcnM.option.b3JkZXJfZGlyZWN0aW9u.short_desc": {
+          "source": "Sort direction",
+          "message": "Напрямок сортування"
+        },
+        "app.S2VhcA.action.bGlzdC1vcmRlcnM.option.b3JkZXJfaWQ.display_name": {
+          "source": "Order ID",
+          "message": "Ідентифікатор замовлення"
+        },
+        "app.S2VhcA.action.bGlzdC1vcmRlcnM.option.b3JkZXJfaWQ.short_desc": {
+          "source": "Filter by order ID",
+          "message": "Фільтрувати за ідентифікатором замовлення"
+        },
+        "app.S2VhcA.action.bGlzdC1vcmRlcnM.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "Ліміт"
+        },
+        "app.S2VhcA.action.bGlzdC1vcmRlcnM.option.bGltaXQ.short_desc": {
+          "source": "Maximum results",
+          "message": "Максимальна кількість результатів"
+        },
+        "app.S2VhcA.action.bGlzdC1vcmRlcnM.option.cGFpZA.display_name": {
+          "source": "Paid",
+          "message": "Оплачено"
+        },
+        "app.S2VhcA.action.bGlzdC1vcmRlcnM.option.cGFpZA.short_desc": {
+          "source": "Filter by payment status",
+          "message": "Фільтрувати за статусом оплати"
+        },
+        "app.S2VhcA.action.bGlzdC1vcmRlcnM.short_desc": {
+          "source": "List all orders",
+          "message": "Отримати список усіх замовлень"
+        },
+        "app.S2VhcA.action.bGlzdC1wcm9kdWN0cw.desc": {
+          "source": "List products in Keap with optional filtering",
+          "message": "Список продуктів у Keap з необов'язковою фільтрацією"
+        },
+        "app.S2VhcA.action.bGlzdC1wcm9kdWN0cw.display_name": {
+          "source": "List Products",
+          "message": "Список продуктів"
+        },
+        "app.S2VhcA.action.bGlzdC1wcm9kdWN0cw.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "Ліміт"
+        },
+        "app.S2VhcA.action.bGlzdC1wcm9kdWN0cw.option.bGltaXQ.short_desc": {
+          "source": "Maximum results",
+          "message": "Максимальна кількість результатів"
+        },
+        "app.S2VhcA.action.bGlzdC1wcm9kdWN0cw.option.cHJvZHVjdF9pZA.display_name": {
+          "source": "Product ID",
+          "message": "ID товару"
+        },
+        "app.S2VhcA.action.bGlzdC1wcm9kdWN0cw.option.cHJvZHVjdF9pZA.short_desc": {
+          "source": "Filter by product ID",
+          "message": "Фільтрувати за ідентифікатором товару"
+        },
+        "app.S2VhcA.action.bGlzdC1wcm9kdWN0cw.short_desc": {
+          "source": "List all products",
+          "message": "Отримати список усіх продуктів"
+        },
+        "app.S2VhcA.action.bWFrZS1hcGktY2FsbA.desc": {
+          "source": "Make a custom HTTP / REST API call to **Keap** using the configured connection's authentication.\n\nSpecify the HTTP method, the URI path (relative to the connection's API base URL), optional query parameters, headers, and request body. The response is returned as a hash containing the status code, response headers, and response body.\n\nUse this action for endpoints that are not yet exposed as first-class actions on this app.",
+          "message": "Виконати спеціальний виклик HTTP / REST API до **Keap**, використовуючи автентифікацію налаштованого підключення.\n\nУкажіть метод HTTP, шлях URI (відносно базової URL-адреси API підключення), необов'язкові параметри запиту, заголовки та тіло запиту. Відповідь повертається у вигляді хешу, що містить код стану, заголовки відповіді та тіло відповіді.\n\nВикористовуйте цю дію для кінцевих точок, які ще не представлені як повноцінні дії в цьому додатку."
+        },
+        "app.S2VhcA.action.bWFrZS1hcGktY2FsbA.display_name": {
+          "source": "Make an API call",
+          "message": "Зробити виклик API"
+        },
+        "app.S2VhcA.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.desc": {
+          "source": "The request body. The effective type depends on `body_type`: JSON/form/YAML expect a hash, XML/text expect a string, multipart expects a file structure, binary expects raw bytes.",
+          "message": "Тіло запиту. Ефективний тип залежить від `body_type`: JSON/form/YAML очікують хеш, XML/text очікують рядок, multipart очікує структуру файлу, binary очікує необроблені байти."
+        },
+        "app.S2VhcA.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.display_name": {
+          "source": "Body",
+          "message": "Тіло"
+        },
+        "app.S2VhcA.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.short_desc": {
+          "source": "The request body",
+          "message": "Тіло запиту"
+        },
+        "app.S2VhcA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.desc": {
+          "source": "Upload a file using `multipart/form-data`. The body must be a @ref DataProvider::FileDataType \"FileDataType\" structure (filename + content + mime_type). The framework builds the multipart envelope and sets the boundary header.",
+          "message": "Завантажити файл за допомогою `multipart/form-data`. Тіло має бути структурою @ref DataProvider::FileDataType \"FileDataType\" (filename + content + mime_type). Фреймворк створює конверт multipart і встановлює заголовок boundary."
+        },
+        "app.S2VhcA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.display_name": {
+          "source": "Multipart Form",
+          "message": "Форма Multipart"
+        },
+        "app.S2VhcA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.short_desc": {
+          "source": "Upload a file using multipart/form-data",
+          "message": "Завантажити файл за допомогою multipart/form-data"
+        },
+        "app.S2VhcA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.desc": {
+          "source": "Pass the body to the REST client unchanged; the client decides serialization based on its configured `data` option and the value type",
+          "message": "Передати тіло REST-клієнту без змін; клієнт визначає серіалізацію на основі налаштованого параметра `data` та типу значення"
+        },
+        "app.S2VhcA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.display_name": {
+          "source": "Auto",
+          "message": "Авто"
+        },
+        "app.S2VhcA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.short_desc": {
+          "source": "Pass-through; use connection serialization and let the REST client decide",
+          "message": "Пряма передача; використовувати серіалізацію з'єднання та дозволити REST-клієнту приймати рішення"
+        },
+        "app.S2VhcA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.desc": {
+          "source": "Send the body as raw bytes. The body must be a binary value. Sets `Content-Type: application/octet-stream` unless overridden by `hdr`.",
+          "message": "Надіслати тіло як необроблені байти. Тіло має бути бінарним значенням. Установлює `Content-Type: application/octet-stream`, якщо не перевизначено через `hdr`."
+        },
+        "app.S2VhcA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.display_name": {
+          "source": "Raw Binary",
+          "message": "Необроблені бінарні дані"
+        },
+        "app.S2VhcA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.short_desc": {
+          "source": "Send body as raw bytes",
+          "message": "Надіслати тіло як необроблені байти"
+        },
+        "app.S2VhcA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.desc": {
+          "source": "Serialize a hash of form fields as `application/x-www-form-urlencoded`. The body must be a hash whose values are scalars (strings/numbers/booleans).",
+          "message": "Серіалізувати хеш полів форми як `application/x-www-form-urlencoded`. Тіло має бути хешем, значеннями якого є скаляри (рядки/числа/булеві значення)."
+        },
+        "app.S2VhcA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.display_name": {
+          "source": "Form (URL-encoded)",
+          "message": "Форма (URL-encoded)"
+        },
+        "app.S2VhcA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.short_desc": {
+          "source": "Serialize body as application/x-www-form-urlencoded form fields",
+          "message": "Серіалізувати тіло як поля форми application/x-www-form-urlencoded"
+        },
+        "app.S2VhcA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.desc": {
+          "source": "Serialize the body as JSON; sets `Content-Type: application/json`. The body should be a hash, list, or scalar value.",
+          "message": "Серіалізувати тіло як JSON; встановлює `Content-Type: application/json`. Тіло має бути хешем, списком або скалярним значенням."
+        },
+        "app.S2VhcA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.display_name": {
+          "source": "JSON",
+          "message": "JSON"
+        },
+        "app.S2VhcA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.short_desc": {
+          "source": "Serialize body as JSON",
+          "message": "Серіалізувати тіло як JSON"
+        },
+        "app.S2VhcA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.desc": {
+          "source": "Send the body as plain text. The body must be a string. Sets `Content-Type: text/plain`.",
+          "message": "Надіслати тіло як простий текст. Тіло має бути рядком. Установлює `Content-Type: text/plain`."
+        },
+        "app.S2VhcA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.display_name": {
+          "source": "Plain Text",
+          "message": "Простий текст"
+        },
+        "app.S2VhcA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.short_desc": {
+          "source": "Send body as text/plain",
+          "message": "Надіслати тіло як text/plain"
+        },
+        "app.S2VhcA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.desc": {
+          "source": "Send the body as XML. If the body is a hash it is serialized to XML; if it is a string it is sent verbatim. Sets `Content-Type: application/xml`.",
+          "message": "Надіслати тіло як XML. Якщо тіло є хешем, воно серіалізується в XML; якщо це рядок, воно надсилається без змін. Установлює `Content-Type: application/xml`."
+        },
+        "app.S2VhcA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.display_name": {
+          "source": "XML",
+          "message": "XML"
+        },
+        "app.S2VhcA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.short_desc": {
+          "source": "Send body as XML",
+          "message": "Надіслати тіло як XML"
+        },
+        "app.S2VhcA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.desc": {
+          "source": "Send the body as YAML. If the body is a hash it is serialized to YAML; if it is a string it is sent verbatim. Sets `Content-Type: application/x-yaml`.",
+          "message": "Надіслати тіло як YAML. Якщо тіло є хешем, воно серіалізується в YAML; якщо це рядок, воно надсилається без змін. Установлює `Content-Type: application/x-yaml`."
+        },
+        "app.S2VhcA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.display_name": {
+          "source": "YAML",
+          "message": "YAML"
+        },
+        "app.S2VhcA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.short_desc": {
+          "source": "Send body as YAML",
+          "message": "Надіслати тіло як YAML"
+        },
+        "app.S2VhcA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.desc": {
+          "source": "Selects the body serialization mode and the corresponding `Content-Type` header. Changing this field reshapes the `body` editor - selecting JSON exposes a JSON editor, selecting Multipart Form exposes a file picker, and so on.",
+          "message": "Вибирає режим серіалізації тіла та відповідний заголовок `Content-Type`. Зміна цього поля змінює вигляд редактора `body` — вибір JSON відкриває редактор JSON, вибір Multipart Form відкриває вибір файлу тощо."
+        },
+        "app.S2VhcA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.display_name": {
+          "source": "Body Type",
+          "message": "Тип тіла"
+        },
+        "app.S2VhcA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.short_desc": {
+          "source": "How the body is serialized and what Content-Type is sent",
+          "message": "Як серіалізується тіло та який Content-Type надсилається"
+        },
+        "app.S2VhcA.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.desc": {
+          "source": "If `True`, non-2xx HTTP responses return as the normal response hash (with the actual status code) instead of raising `REST-RESPONSE-ERROR`. Useful for handling 4xx/5xx as data - e.g. checking whether a resource exists. Overrides the connection's `error_passthru` setting for this call only.",
+          "message": "Якщо `True`, HTTP-відповіді з кодом, відмінним від 2xx, повертаються як звичайний хеш відповіді (з фактичним кодом стану) замість генерації `REST-RESPONSE-ERROR`. Корисно для обробки 4xx/5xx як даних — наприклад, перевірки існування ресурсу. Перевизначає налаштування `error_passthru` з'єднання лише для цього виклику."
+        },
+        "app.S2VhcA.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.display_name": {
+          "source": "Return Errors as Data",
+          "message": "Повертати помилки як дані"
+        },
+        "app.S2VhcA.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.short_desc": {
+          "source": "Return non-2xx responses normally instead of throwing",
+          "message": "Повертати відповіді з кодом, відмінним від 2xx, у звичайному режимі замість генерації помилки"
+        },
+        "app.S2VhcA.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.desc": {
+          "source": "Optional list of HTTP status codes treated as success. If set and the response status is not in this list, the action throws `REST-STATUS-ERROR`. When unset, the REST client's default behavior applies (typically: 2xx is success, non-2xx throws).",
+          "message": "Необов'язковий список кодів стану HTTP, які вважаються успішними. Якщо задано і код стану відповіді відсутній у цьому списку, дія генерує `REST-STATUS-ERROR`. Якщо не задано, застосовується поведінка REST-клієнта за замовчуванням (зазвичай: 2xx — успіх, не-2xx генерує помилку)."
+        },
+        "app.S2VhcA.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.display_name": {
+          "source": "Expected Status Codes",
+          "message": "Очікувані коди стану"
+        },
+        "app.S2VhcA.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.short_desc": {
+          "source": "Response status codes treated as success",
+          "message": "Коди стану відповіді, які вважаються успішними"
+        },
+        "app.S2VhcA.action.bWFrZS1hcGktY2FsbA.option.aGRy.desc": {
+          "source": "Hash of custom headers added to the request. These override any default headers set by `body_type` (e.g. supplying `Content-Type` here wins over the body-type default).",
+          "message": "Хеш користувацьких заголовків, доданих до запиту. Вони перевизначають будь-які заголовки за замовчуванням, встановлені `body_type` (наприклад, передання `Content-Type` тут має перевагу над замовчуваним значенням для типу тіла)."
+        },
+        "app.S2VhcA.action.bWFrZS1hcGktY2FsbA.option.aGRy.display_name": {
+          "source": "Custom Headers",
+          "message": "Користувацькі заголовки"
+        },
+        "app.S2VhcA.action.bWFrZS1hcGktY2FsbA.option.aGRy.short_desc": {
+          "source": "Extra request headers",
+          "message": "Додаткові заголовки запиту"
+        },
+        "app.S2VhcA.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.desc": {
+          "source": "If `True`, the response hash includes a `debug` sub-hash containing the request method/URL/headers (with sensitive values redacted), request and response sizes, and round-trip duration. Useful when investigating slow or failing calls. Off by default to keep responses lean.",
+          "message": "Якщо `True`, хеш відповіді містить підхеш `debug`, що містить метод/URL/заголовки запиту (з відредагованими конфіденційними значеннями), розміри запиту та відповіді, а також тривалість виконання. Корисно під час дослідження повільних або невдалих викликів. Вимкнено за замовчуванням для зменшення обсягу відповідей."
+        },
+        "app.S2VhcA.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.display_name": {
+          "source": "Include Debug Info",
+          "message": "Включати зневаджувальну інформацію"
+        },
+        "app.S2VhcA.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.short_desc": {
+          "source": "Include request/timing/size debug info in the response",
+          "message": "Включати зневаджувальну інформацію про запит/час/розмір у відповідь"
+        },
+        "app.S2VhcA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.desc": {
+          "source": "HTTP `OPTIONS`",
+          "message": "HTTP `OPTIONS`"
+        },
+        "app.S2VhcA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.display_name": {
+          "source": "OPTIONS",
+          "message": "OPTIONS"
+        },
+        "app.S2VhcA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.short_desc": {
+          "source": "HTTP OPTIONS",
+          "message": "HTTP OPTIONS"
+        },
+        "app.S2VhcA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.desc": {
+          "source": "HTTP `DELETE`",
+          "message": "HTTP `DELETE`"
+        },
+        "app.S2VhcA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.display_name": {
+          "source": "DELETE",
+          "message": "DELETE"
+        },
+        "app.S2VhcA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.short_desc": {
+          "source": "HTTP DELETE",
+          "message": "HTTP DELETE"
+        },
+        "app.S2VhcA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.desc": {
+          "source": "HTTP `GET`",
+          "message": "HTTP `GET`"
+        },
+        "app.S2VhcA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.display_name": {
+          "source": "GET",
+          "message": "GET"
+        },
+        "app.S2VhcA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.short_desc": {
+          "source": "HTTP GET",
+          "message": "HTTP GET"
+        },
+        "app.S2VhcA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.desc": {
+          "source": "HTTP `HEAD`",
+          "message": "HTTP `HEAD`"
+        },
+        "app.S2VhcA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.display_name": {
+          "source": "HEAD",
+          "message": "HEAD"
+        },
+        "app.S2VhcA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.short_desc": {
+          "source": "HTTP HEAD",
+          "message": "HTTP HEAD"
+        },
+        "app.S2VhcA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.desc": {
+          "source": "HTTP `PATCH`",
+          "message": "HTTP `PATCH`"
+        },
+        "app.S2VhcA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.display_name": {
+          "source": "PATCH",
+          "message": "PATCH"
+        },
+        "app.S2VhcA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.short_desc": {
+          "source": "HTTP PATCH",
+          "message": "HTTP PATCH"
+        },
+        "app.S2VhcA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.desc": {
+          "source": "HTTP `POST`",
+          "message": "HTTP `POST`"
+        },
+        "app.S2VhcA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.display_name": {
+          "source": "POST",
+          "message": "POST"
+        },
+        "app.S2VhcA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.short_desc": {
+          "source": "HTTP POST",
+          "message": "HTTP POST"
+        },
+        "app.S2VhcA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.desc": {
+          "source": "HTTP `PUT`",
+          "message": "HTTP `PUT`"
+        },
+        "app.S2VhcA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.display_name": {
+          "source": "PUT",
+          "message": "PUT"
+        },
+        "app.S2VhcA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.short_desc": {
+          "source": "HTTP PUT",
+          "message": "HTTP PUT"
+        },
+        "app.S2VhcA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.desc": {
+          "source": "HTTP `TRACE`",
+          "message": "HTTP `TRACE`"
+        },
+        "app.S2VhcA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.display_name": {
+          "source": "TRACE",
+          "message": "TRACE"
+        },
+        "app.S2VhcA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.short_desc": {
+          "source": "HTTP TRACE",
+          "message": "HTTP TRACE"
+        },
+        "app.S2VhcA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "Метод HTTP для використання в запиті"
+        },
+        "app.S2VhcA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.display_name": {
+          "source": "HTTP Method",
+          "message": "Метод HTTP"
+        },
+        "app.S2VhcA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.short_desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "Метод HTTP для використання в запиті"
+        },
+        "app.S2VhcA.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain `{name}` placeholders that are replaced from `path_vars`. Example: `/users/{id}/comments`.",
+          "message": "Шлях URI відносно базового URL API з'єднання. Може містити заповнювачі `{name}`, які замінюються з `path_vars`. Приклад: `/users/{id}/comments`."
+        },
+        "app.S2VhcA.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.display_name": {
+          "source": "URI Path",
+          "message": "Шлях URI"
+        },
+        "app.S2VhcA.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.short_desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain '{name}' placeholders that are replaced from 'path_vars'. Example: '/users/{id}/comments'",
+          "message": "Шлях URI відносно базового URL API підключення. Може містити заповнювачі '{name}', які замінюються з 'path_vars'. Приклад: '/users/{id}/comments'"
+        },
+        "app.S2VhcA.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.desc": {
+          "source": "Hash of values substituted into `{name}` placeholders in the URI path. Example: with `path = /users/{id}` and `path_vars = {id: 123}` the framework sends `/users/123`. Values are URL-encoded.",
+          "message": "Хеш значень, що підставляються замість заповнювачів `{name}` у шляху URI. Приклад: із `path = /users/{id}` та `path_vars = {id: 123}` фреймворк надсилає `/users/123`. Значення кодуються у форматі URL."
+        },
+        "app.S2VhcA.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.display_name": {
+          "source": "Path Variables",
+          "message": "Змінні шляху"
+        },
+        "app.S2VhcA.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.short_desc": {
+          "source": "Values for {name} placeholders in path",
+          "message": "Значення для заповнювачів {name} у шляху"
+        },
+        "app.S2VhcA.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.desc": {
+          "source": "Hash of query string parameters to append to the URI path. Values are URL-encoded; list values are joined with `,`.",
+          "message": "Хеш параметрів рядка запиту для додавання до шляху URI. Значення кодуються у форматі URL; значення списку об'єднуються за допомогою `,`."
+        },
+        "app.S2VhcA.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.display_name": {
+          "source": "Query Arguments",
+          "message": "Аргументи запиту"
+        },
+        "app.S2VhcA.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.short_desc": {
+          "source": "Query string parameters",
+          "message": "Параметри рядка запиту"
+        },
+        "app.S2VhcA.action.bWFrZS1hcGktY2FsbA.short_desc": {
+          "source": "Make a custom API call to Keap",
+          "message": "Зробити спеціальний виклик API до Keap"
+        },
+        "app.S2VhcA.action.bWVyZ2UtY29udGFjdHM.desc": {
+          "source": "Merge a duplicate contact into a surviving contact in Keap",
+          "message": "Об'єднати контакт-дублікат зі збереженим контактом у Keap"
+        },
+        "app.S2VhcA.action.bWVyZ2UtY29udGFjdHM.display_name": {
+          "source": "Merge Contacts",
+          "message": "Об'єднати контакти"
+        },
+        "app.S2VhcA.action.bWVyZ2UtY29udGFjdHM.option.Y29udGFjdF9pZA.display_name": {
+          "source": "Surviving Contact ID",
+          "message": "ID збереженого контакту"
+        },
+        "app.S2VhcA.action.bWVyZ2UtY29udGFjdHM.option.Y29udGFjdF9pZA.short_desc": {
+          "source": "The contact that survives",
+          "message": "Контакт, який зберігається"
+        },
+        "app.S2VhcA.action.bWVyZ2UtY29udGFjdHM.option.ZHVwbGljYXRlX2NvbnRhY3RfaWQ.display_name": {
+          "source": "Duplicate Contact ID",
+          "message": "ID контакту-дубліката"
+        },
+        "app.S2VhcA.action.bWVyZ2UtY29udGFjdHM.option.ZHVwbGljYXRlX2NvbnRhY3RfaWQ.short_desc": {
+          "source": "The contact to merge and delete",
+          "message": "Контакт для об'єднання та видалення"
+        },
+        "app.S2VhcA.action.bWVyZ2UtY29udGFjdHM.short_desc": {
+          "source": "Merge two contacts",
+          "message": "Об'єднати два контакти"
+        },
+        "app.S2VhcA.action.bm90ZS1hZGRlZA.desc": {
+          "source": "Triggers when a new note is added in Keap",
+          "message": "Спрацьовує, коли в Keap додається нова нотатка"
+        },
+        "app.S2VhcA.action.bm90ZS1hZGRlZA.display_name": {
+          "source": "Note Added",
+          "message": "Нотатку додано"
+        },
+        "app.S2VhcA.action.bm90ZS1hZGRlZA.short_desc": {
+          "source": "Watch for new notes",
+          "message": "Відстежувати нові нотатки"
+        },
+        "app.S2VhcA.action.cmVtb3ZlLXRhZw.desc": {
+          "source": "Remove a tag from a contact in Keap",
+          "message": "Видалити тег із контакту в Keap"
+        },
+        "app.S2VhcA.action.cmVtb3ZlLXRhZw.display_name": {
+          "source": "Remove Tag from Contact",
+          "message": "Видалити тег із контакту"
+        },
+        "app.S2VhcA.action.cmVtb3ZlLXRhZw.option.Y29udGFjdF9pZA.display_name": {
+          "source": "Contact ID",
+          "message": "ID контакту"
+        },
+        "app.S2VhcA.action.cmVtb3ZlLXRhZw.option.Y29udGFjdF9pZA.short_desc": {
+          "source": "The contact",
+          "message": "Контакт"
+        },
+        "app.S2VhcA.action.cmVtb3ZlLXRhZw.option.dGFnX2lk.display_name": {
+          "source": "Tag ID",
+          "message": "Ідентифікатор тегу"
+        },
+        "app.S2VhcA.action.cmVtb3ZlLXRhZw.option.dGFnX2lk.short_desc": {
+          "source": "The tag to remove",
+          "message": "Тег для видалення"
+        },
+        "app.S2VhcA.action.cmVtb3ZlLXRhZw.short_desc": {
+          "source": "Remove a tag from a contact",
+          "message": "Видалити тег із контакту"
+        },
+        "app.S2VhcA.action.dGFnLWFwcGxpZWQ.desc": {
+          "source": "Triggers when a tag is applied to a contact in Keap",
+          "message": "Спрацьовує, коли тег застосовується до контакту в Keap"
+        },
+        "app.S2VhcA.action.dGFnLWFwcGxpZWQ.display_name": {
+          "source": "Tag Applied",
+          "message": "Тег застосовано"
+        },
+        "app.S2VhcA.action.dGFnLWFwcGxpZWQ.short_desc": {
+          "source": "Watch for tag applications",
+          "message": "Відстежувати застосування тегів"
+        },
+        "app.S2VhcA.action.dGFzay1jcmVhdGVk.desc": {
+          "source": "Triggers when a new task is created in Keap",
+          "message": "Спрацьовує, коли в Keap створюється нове завдання"
+        },
+        "app.S2VhcA.action.dGFzay1jcmVhdGVk.display_name": {
+          "source": "Task Created",
+          "message": "Завдання створено"
+        },
+        "app.S2VhcA.action.dGFzay1jcmVhdGVk.short_desc": {
+          "source": "Watch for new tasks",
+          "message": "Відстежувати нові завдання"
+        },
+        "app.S2VhcA.action.dXBkYXRlLW5vdGU.desc": {
+          "source": "Update an existing note in Keap",
+          "message": "Оновити наявну нотатку в Keap"
+        },
+        "app.S2VhcA.action.dXBkYXRlLW5vdGU.display_name": {
+          "source": "Update a Note",
+          "message": "Оновити примітку"
+        },
+        "app.S2VhcA.action.dXBkYXRlLW5vdGU.option.Y29udGFjdF9pZA.display_name": {
+          "source": "Contact ID",
+          "message": "ID контакту"
+        },
+        "app.S2VhcA.action.dXBkYXRlLW5vdGU.option.Y29udGFjdF9pZA.short_desc": {
+          "source": "The contact",
+          "message": "Контакт"
+        },
+        "app.S2VhcA.action.dXBkYXRlLW5vdGU.option.Ym9keQ.display_name": {
+          "source": "Body",
+          "message": "Тіло"
+        },
+        "app.S2VhcA.action.dXBkYXRlLW5vdGU.option.Ym9keQ.short_desc": {
+          "source": "Note body",
+          "message": "Текст примітки"
+        },
+        "app.S2VhcA.action.dXBkYXRlLW5vdGU.option.bm90ZV9pZA.display_name": {
+          "source": "Note ID",
+          "message": "ID нотатки"
+        },
+        "app.S2VhcA.action.dXBkYXRlLW5vdGU.option.bm90ZV9pZA.short_desc": {
+          "source": "The note to update",
+          "message": "Нотатка для оновлення"
+        },
+        "app.S2VhcA.action.dXBkYXRlLW5vdGU.option.dGl0bGU.display_name": {
+          "source": "Title",
+          "message": "Заголовок"
+        },
+        "app.S2VhcA.action.dXBkYXRlLW5vdGU.option.dGl0bGU.short_desc": {
+          "source": "Note title",
+          "message": "Заголовок нотатки"
+        },
+        "app.S2VhcA.action.dXBkYXRlLW5vdGU.short_desc": {
+          "source": "Update an existing note",
+          "message": "Оновити наявну нотатку"
+        },
+        "app.S2VhcA.action.dXBkYXRlLW9wcG9ydHVuaXR5.desc": {
+          "source": "Update an existing opportunity in Keap",
+          "message": "Оновити наявну угоду в Keap"
+        },
+        "app.S2VhcA.action.dXBkYXRlLW9wcG9ydHVuaXR5.display_name": {
+          "source": "Update an Opportunity",
+          "message": "Оновити можливість"
+        },
+        "app.S2VhcA.action.dXBkYXRlLW9wcG9ydHVuaXR5.option.ZXN0aW1hdGVkX2Nsb3NlX3RpbWU.display_name": {
+          "source": "Estimated Close Time",
+          "message": "Орієнтовний час закриття"
+        },
+        "app.S2VhcA.action.dXBkYXRlLW9wcG9ydHVuaXR5.option.ZXN0aW1hdGVkX2Nsb3NlX3RpbWU.short_desc": {
+          "source": "Expected close date/time",
+          "message": "Очікувана дата/час закриття"
+        },
+        "app.S2VhcA.action.dXBkYXRlLW9wcG9ydHVuaXR5.option.b3Bwb3J0dW5pdHlfaWQ.display_name": {
+          "source": "Opportunity ID",
+          "message": "ID можливості"
+        },
+        "app.S2VhcA.action.dXBkYXRlLW9wcG9ydHVuaXR5.option.b3Bwb3J0dW5pdHlfaWQ.short_desc": {
+          "source": "The opportunity to update",
+          "message": "Можливість для оновлення"
+        },
+        "app.S2VhcA.action.dXBkYXRlLW9wcG9ydHVuaXR5.option.b3Bwb3J0dW5pdHlfbm90ZXM.display_name": {
+          "source": "Notes",
+          "message": "Примітки"
+        },
+        "app.S2VhcA.action.dXBkYXRlLW9wcG9ydHVuaXR5.option.b3Bwb3J0dW5pdHlfbm90ZXM.short_desc": {
+          "source": "Opportunity notes",
+          "message": "Примітки до нагоди"
+        },
+        "app.S2VhcA.action.dXBkYXRlLW9wcG9ydHVuaXR5.option.b3Bwb3J0dW5pdHlfdGl0bGU.display_name": {
+          "source": "Title",
+          "message": "Заголовок"
+        },
+        "app.S2VhcA.action.dXBkYXRlLW9wcG9ydHVuaXR5.option.b3Bwb3J0dW5pdHlfdGl0bGU.short_desc": {
+          "source": "Opportunity title",
+          "message": "Назва нагоди"
+        },
+        "app.S2VhcA.action.dXBkYXRlLW9wcG9ydHVuaXR5.option.c3RhZ2VfaWQ.display_name": {
+          "source": "Stage ID",
+          "message": "ID етапу"
+        },
+        "app.S2VhcA.action.dXBkYXRlLW9wcG9ydHVuaXR5.option.c3RhZ2VfaWQ.short_desc": {
+          "source": "Pipeline stage",
+          "message": "Етап воронки"
+        },
+        "app.S2VhcA.action.dXBkYXRlLW9wcG9ydHVuaXR5.option.cHJvamVjdGVkX3JldmVudWVfaGlnaA.display_name": {
+          "source": "Projected Revenue High",
+          "message": "Максимальний прогнозований дохід"
+        },
+        "app.S2VhcA.action.dXBkYXRlLW9wcG9ydHVuaXR5.option.cHJvamVjdGVkX3JldmVudWVfaGlnaA.short_desc": {
+          "source": "High revenue estimate",
+          "message": "Верхня оцінка доходу"
+        },
+        "app.S2VhcA.action.dXBkYXRlLW9wcG9ydHVuaXR5.option.cHJvamVjdGVkX3JldmVudWVfbG93.display_name": {
+          "source": "Projected Revenue Low",
+          "message": "Мінімальний прогнозований дохід"
+        },
+        "app.S2VhcA.action.dXBkYXRlLW9wcG9ydHVuaXR5.option.cHJvamVjdGVkX3JldmVudWVfbG93.short_desc": {
+          "source": "Low revenue estimate",
+          "message": "Нижня оцінка доходу"
+        },
+        "app.S2VhcA.action.dXBkYXRlLW9wcG9ydHVuaXR5.short_desc": {
+          "source": "Update an existing opportunity",
+          "message": "Оновити наявну можливість"
+        },
+        "app.S2VhcA.action.dXBkYXRlLWNvbXBhbnk.desc": {
+          "source": "Update an existing company in Keap",
+          "message": "Оновити наявну компанію в Keap"
+        },
+        "app.S2VhcA.action.dXBkYXRlLWNvbXBhbnk.display_name": {
+          "source": "Update a Company",
+          "message": "Оновити компанію"
+        },
+        "app.S2VhcA.action.dXBkYXRlLWNvbXBhbnk.option.Y29tcGFueV9pZA.display_name": {
+          "source": "Company ID",
+          "message": "ID компанії"
+        },
+        "app.S2VhcA.action.dXBkYXRlLWNvbXBhbnk.option.Y29tcGFueV9pZA.short_desc": {
+          "source": "The company to update",
+          "message": "Компанія для оновлення"
+        },
+        "app.S2VhcA.action.dXBkYXRlLWNvbXBhbnk.option.Y29tcGFueV9uYW1l.display_name": {
+          "source": "Company Name",
+          "message": "Назва компанії"
+        },
+        "app.S2VhcA.action.dXBkYXRlLWNvbXBhbnk.option.Y29tcGFueV9uYW1l.short_desc": {
+          "source": "Name of the company",
+          "message": "Назва компанії"
+        },
+        "app.S2VhcA.action.dXBkYXRlLWNvbXBhbnk.option.ZW1haWxfYWRkcmVzcw.display_name": {
+          "source": "Email",
+          "message": "Електронна пошта"
+        },
+        "app.S2VhcA.action.dXBkYXRlLWNvbXBhbnk.option.ZW1haWxfYWRkcmVzcw.short_desc": {
+          "source": "Company email",
+          "message": "Електронна пошта компанії"
+        },
+        "app.S2VhcA.action.dXBkYXRlLWNvbXBhbnk.option.cGhvbmVfbnVtYmVy.display_name": {
+          "source": "Phone",
+          "message": "Телефон"
+        },
+        "app.S2VhcA.action.dXBkYXRlLWNvbXBhbnk.option.cGhvbmVfbnVtYmVy.short_desc": {
+          "source": "Company phone",
+          "message": "Телефон компанії"
+        },
+        "app.S2VhcA.action.dXBkYXRlLWNvbXBhbnk.option.d2Vic2l0ZQ.display_name": {
+          "source": "Website",
+          "message": "Вебсайт"
+        },
+        "app.S2VhcA.action.dXBkYXRlLWNvbXBhbnk.option.d2Vic2l0ZQ.short_desc": {
+          "source": "Company website",
+          "message": "Вебсайт компанії"
+        },
+        "app.S2VhcA.action.dXBkYXRlLWNvbXBhbnk.short_desc": {
+          "source": "Update an existing company",
+          "message": "Оновити наявну компанію"
+        },
+        "app.S2VhcA.action.dXBkYXRlLWNvbnRhY3Q.desc": {
+          "source": "Update an existing contact in Keap",
+          "message": "Оновити наявний контакт у Keap"
+        },
+        "app.S2VhcA.action.dXBkYXRlLWNvbnRhY3Q.display_name": {
+          "source": "Update a Contact",
+          "message": "Оновити контакт"
+        },
+        "app.S2VhcA.action.dXBkYXRlLWNvbnRhY3Q.option.Y29udGFjdF9pZA.display_name": {
+          "source": "Contact ID",
+          "message": "ID контакту"
+        },
+        "app.S2VhcA.action.dXBkYXRlLWNvbnRhY3Q.option.Y29udGFjdF9pZA.short_desc": {
+          "source": "The contact to update",
+          "message": "Контакт для оновлення"
+        },
+        "app.S2VhcA.action.dXBkYXRlLWNvbnRhY3Q.option.YmlydGhfZGF0ZQ.display_name": {
+          "source": "Birthday",
+          "message": "День народження"
+        },
+        "app.S2VhcA.action.dXBkYXRlLWNvbnRhY3Q.option.YmlydGhfZGF0ZQ.short_desc": {
+          "source": "Contact birthday",
+          "message": "День народження контакту"
+        },
+        "app.S2VhcA.action.dXBkYXRlLWNvbnRhY3Q.option.Z2l2ZW5fbmFtZQ.display_name": {
+          "source": "First Name",
+          "message": "Ім'я"
+        },
+        "app.S2VhcA.action.dXBkYXRlLWNvbnRhY3Q.option.Z2l2ZW5fbmFtZQ.short_desc": {
+          "source": "Contact first name",
+          "message": "Ім'я контакту"
+        },
+        "app.S2VhcA.action.dXBkYXRlLWNvbnRhY3Q.option.ZW1haWw.desc": {
+          "source": "The contact's email address",
+          "message": "Адреса електронної пошти контакту"
+        },
+        "app.S2VhcA.action.dXBkYXRlLWNvbnRhY3Q.option.ZW1haWw.display_name": {
+          "source": "Email",
+          "message": "Електронна пошта"
+        },
+        "app.S2VhcA.action.dXBkYXRlLWNvbnRhY3Q.option.ZW1haWw.short_desc": {
+          "source": "Contact email address",
+          "message": "Адреса електронної пошти контакту"
+        },
+        "app.S2VhcA.action.dXBkYXRlLWNvbnRhY3Q.option.ZmFtaWx5X25hbWU.display_name": {
+          "source": "Last Name",
+          "message": "Прізвище"
+        },
+        "app.S2VhcA.action.dXBkYXRlLWNvbnRhY3Q.option.ZmFtaWx5X25hbWU.short_desc": {
+          "source": "Contact last name",
+          "message": "Прізвище контакту"
+        },
+        "app.S2VhcA.action.dXBkYXRlLWNvbnRhY3Q.option.am9iX3RpdGxl.display_name": {
+          "source": "Job Title",
+          "message": "Посада"
+        },
+        "app.S2VhcA.action.dXBkYXRlLWNvbnRhY3Q.option.am9iX3RpdGxl.short_desc": {
+          "source": "Contact job title",
+          "message": "Посада контакту"
+        },
+        "app.S2VhcA.action.dXBkYXRlLWNvbnRhY3Q.option.b3duZXJfaWQ.display_name": {
+          "source": "Owner ID",
+          "message": "ID власника"
+        },
+        "app.S2VhcA.action.dXBkYXRlLWNvbnRhY3Q.option.b3duZXJfaWQ.short_desc": {
+          "source": "Contact owner user ID",
+          "message": "Ідентифікатор користувача-власника контакту"
+        },
+        "app.S2VhcA.action.dXBkYXRlLWNvbnRhY3Q.option.bWlkZGxlX25hbWU.display_name": {
+          "source": "Middle Name",
+          "message": "По батькові"
+        },
+        "app.S2VhcA.action.dXBkYXRlLWNvbnRhY3Q.option.bWlkZGxlX25hbWU.short_desc": {
+          "source": "Contact middle name",
+          "message": "По батькові / друге ім'я контакту"
+        },
+        "app.S2VhcA.action.dXBkYXRlLWNvbnRhY3Q.option.c3BvdXNlX25hbWU.display_name": {
+          "source": "Spouse Name",
+          "message": "Ім'я чоловіка/дружини"
+        },
+        "app.S2VhcA.action.dXBkYXRlLWNvbnRhY3Q.option.c3BvdXNlX25hbWU.short_desc": {
+          "source": "Contact spouse name",
+          "message": "Ім'я чоловіка/дружини контакту"
+        },
+        "app.S2VhcA.action.dXBkYXRlLWNvbnRhY3Q.option.c3VmZml4.display_name": {
+          "source": "Suffix",
+          "message": "Суфікс"
+        },
+        "app.S2VhcA.action.dXBkYXRlLWNvbnRhY3Q.option.c3VmZml4.short_desc": {
+          "source": "Name suffix (e.g., Jr., III)",
+          "message": "Суфікс імені (наприклад, Jr., III)"
+        },
+        "app.S2VhcA.action.dXBkYXRlLWNvbnRhY3Q.option.cGhvbmVfbnVtYmVy.desc": {
+          "source": "The contact's phone number",
+          "message": "Номер телефону контакту"
+        },
+        "app.S2VhcA.action.dXBkYXRlLWNvbnRhY3Q.option.cGhvbmVfbnVtYmVy.display_name": {
+          "source": "Phone Number",
+          "message": "Номер телефону"
+        },
+        "app.S2VhcA.action.dXBkYXRlLWNvbnRhY3Q.option.cGhvbmVfbnVtYmVy.short_desc": {
+          "source": "Contact phone number",
+          "message": "Номер телефону контакту"
+        },
+        "app.S2VhcA.action.dXBkYXRlLWNvbnRhY3Q.option.cHJlZmVycmVkX25hbWU.display_name": {
+          "source": "Preferred Name",
+          "message": "Бажане ім'я"
+        },
+        "app.S2VhcA.action.dXBkYXRlLWNvbnRhY3Q.option.cHJlZmVycmVkX25hbWU.short_desc": {
+          "source": "Contact preferred name",
+          "message": "Бажане ім'я контакту"
+        },
+        "app.S2VhcA.action.dXBkYXRlLWNvbnRhY3Q.option.cHJlZml4.display_name": {
+          "source": "Prefix",
+          "message": "Префікс"
+        },
+        "app.S2VhcA.action.dXBkYXRlLWNvbnRhY3Q.option.cHJlZml4.short_desc": {
+          "source": "Name prefix (e.g., Mr., Dr.)",
+          "message": "Префікс імені (наприклад, Mr., Dr.)"
+        },
+        "app.S2VhcA.action.dXBkYXRlLWNvbnRhY3Q.option.d2Vic2l0ZQ.display_name": {
+          "source": "Website",
+          "message": "Вебсайт"
+        },
+        "app.S2VhcA.action.dXBkYXRlLWNvbnRhY3Q.option.d2Vic2l0ZQ.short_desc": {
+          "source": "Contact website URL",
+          "message": "URL-адреса вебсайту контакту"
+        },
+        "app.S2VhcA.action.dXBkYXRlLWNvbnRhY3Q.option.dGltZV96b25l.display_name": {
+          "source": "Time Zone",
+          "message": "Часовий пояс"
+        },
+        "app.S2VhcA.action.dXBkYXRlLWNvbnRhY3Q.option.dGltZV96b25l.short_desc": {
+          "source": "Contact time zone",
+          "message": "Часовий пояс контакту"
+        },
+        "app.S2VhcA.action.dXBkYXRlLWNvbnRhY3Q.short_desc": {
+          "source": "Update an existing contact",
+          "message": "Оновити існуючий контакт"
+        },
+        "app.S2VhcA.action.dXBkYXRlLXRhc2s.desc": {
+          "source": "Update an existing task in Keap",
+          "message": "Оновити наявне завдання в Keap"
+        },
+        "app.S2VhcA.action.dXBkYXRlLXRhc2s.display_name": {
+          "source": "Update a Task",
+          "message": "Оновити завдання"
+        },
+        "app.S2VhcA.action.dXBkYXRlLXRhc2s.option.Y29tcGxldGVk.display_name": {
+          "source": "Completed",
+          "message": "Завершено"
+        },
+        "app.S2VhcA.action.dXBkYXRlLXRhc2s.option.Y29tcGxldGVk.short_desc": {
+          "source": "Task completion status",
+          "message": "Стан виконання завдання"
+        },
+        "app.S2VhcA.action.dXBkYXRlLXRhc2s.option.ZGVzY3JpcHRpb24.display_name": {
+          "source": "Description",
+          "message": "Опис"
+        },
+        "app.S2VhcA.action.dXBkYXRlLXRhc2s.option.ZGVzY3JpcHRpb24.short_desc": {
+          "source": "Task description",
+          "message": "Опис завдання"
+        },
+        "app.S2VhcA.action.dXBkYXRlLXRhc2s.option.ZHVlX3RpbWU.display_name": {
+          "source": "Due Time",
+          "message": "Термін виконання"
+        },
+        "app.S2VhcA.action.dXBkYXRlLXRhc2s.option.ZHVlX3RpbWU.short_desc": {
+          "source": "Task due date/time",
+          "message": "Дата/час виконання завдання"
+        },
+        "app.S2VhcA.action.dXBkYXRlLXRhc2s.option.cHJpb3JpdHk.display_name": {
+          "source": "Priority",
+          "message": "Пріоритет"
+        },
+        "app.S2VhcA.action.dXBkYXRlLXRhc2s.option.cHJpb3JpdHk.short_desc": {
+          "source": "Task priority",
+          "message": "Пріоритет завдання"
+        },
+        "app.S2VhcA.action.dXBkYXRlLXRhc2s.option.dGFza19pZA.display_name": {
+          "source": "Task ID",
+          "message": "ID завдання"
+        },
+        "app.S2VhcA.action.dXBkYXRlLXRhc2s.option.dGFza19pZA.short_desc": {
+          "source": "The task to update",
+          "message": "Завдання для оновлення"
+        },
+        "app.S2VhcA.action.dXBkYXRlLXRhc2s.option.dGl0bGU.display_name": {
+          "source": "Title",
+          "message": "Заголовок"
+        },
+        "app.S2VhcA.action.dXBkYXRlLXRhc2s.option.dGl0bGU.short_desc": {
+          "source": "Task title",
+          "message": "Назва завдання"
+        },
+        "app.S2VhcA.action.dXBkYXRlLXRhc2s.short_desc": {
+          "source": "Update an existing task",
+          "message": "Оновити наявне завдання"
+        },
+        "app.S2VhcA.action.dXBsb2FkLWZpbGU.desc": {
+          "source": "Upload a file to Keap",
+          "message": "Завантажити файл до Keap"
+        },
+        "app.S2VhcA.action.dXBsb2FkLWZpbGU.display_name": {
+          "source": "Upload a File",
+          "message": "Завантажити файл"
+        },
+        "app.S2VhcA.action.dXBsb2FkLWZpbGU.option.Y29udGFjdF9pZA.display_name": {
+          "source": "Contact ID",
+          "message": "ID контакту"
+        },
+        "app.S2VhcA.action.dXBsb2FkLWZpbGU.option.Y29udGFjdF9pZA.short_desc": {
+          "source": "Associated contact",
+          "message": "Пов'язаний контакт"
+        },
+        "app.S2VhcA.action.dXBsb2FkLWZpbGU.option.ZmlsZV9kYXRh.desc": {
+          "source": "Base64-encoded file data",
+          "message": "Дані файлу, закодовані в Base64"
+        },
+        "app.S2VhcA.action.dXBsb2FkLWZpbGU.option.ZmlsZV9kYXRh.display_name": {
+          "source": "File Data",
+          "message": "Дані файлу"
+        },
+        "app.S2VhcA.action.dXBsb2FkLWZpbGU.option.ZmlsZV9kYXRh.short_desc": {
+          "source": "Base64-encoded file data",
+          "message": "Дані файлу, закодовані в Base64"
+        },
+        "app.S2VhcA.action.dXBsb2FkLWZpbGU.option.ZmlsZV9uYW1l.display_name": {
+          "source": "File Name",
+          "message": "Назва файлу"
+        },
+        "app.S2VhcA.action.dXBsb2FkLWZpbGU.option.ZmlsZV9uYW1l.short_desc": {
+          "source": "Name of the file",
+          "message": "Назва файлу"
+        },
+        "app.S2VhcA.action.dXBsb2FkLWZpbGU.option.aXNfcHVibGlj.display_name": {
+          "source": "Is Public",
+          "message": "Загальнодоступно"
+        },
+        "app.S2VhcA.action.dXBsb2FkLWZpbGU.option.aXNfcHVibGlj.short_desc": {
+          "source": "File visibility",
+          "message": "Видимість файлу"
+        },
+        "app.S2VhcA.action.dXBsb2FkLWZpbGU.short_desc": {
+          "source": "Upload a file",
+          "message": "Завантажити файл"
+        },
+        "app.S2VhcA.desc": {
+          "source": "Keap (formerly Infusionsoft) is a CRM and marketing automation platform for contacts, companies, opportunities, orders, tags, tasks, and email.\n\nThis integration supports full CRUD operations on core CRM resources, tag management, and event-based triggers.",
+          "message": "Keap (раніше Infusionsoft) — це платформа CRM та автоматизації маркетингу для контактів, компаній, угод, замовлень, тегів, завдань та електронної пошти.\n\nЦя інтеграція підтримує повні операції CRUD над основними ресурсами CRM, керування тегами та тригери на основі подій."
+        },
+        "app.S2VhcA.display_name": {
+          "source": "Keap",
+          "message": "Keap"
+        },
+        "app.S2VhcA.short_desc": {
+          "source": "Keap CRM and marketing automation platform",
+          "message": "Платформа CRM та автоматизації маркетингу Keap"
+        }
+      }
+    }
+  }
+}

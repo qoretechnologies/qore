@@ -1,0 +1,1301 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "zh-Hant": {
+      "messages": {
+        "app.QXBvbGxv.action.Y29udGFjdC11cGRhdGVk.desc": {
+          "source": "Triggers when a contact is updated in Apollo",
+          "message": "在 Apollo 中更新聯絡人時觸發"
+        },
+        "app.QXBvbGxv.action.Y29udGFjdC11cGRhdGVk.display_name": {
+          "source": "Contact Updated",
+          "message": "聯絡人已更新"
+        },
+        "app.QXBvbGxv.action.Y29udGFjdC11cGRhdGVk.short_desc": {
+          "source": "Watch for contact updates",
+          "message": "監控聯絡人更新"
+        },
+        "app.QXBvbGxv.action.Y29udGFjdC1jcmVhdGVk.desc": {
+          "source": "Triggers when a new contact is created in Apollo",
+          "message": "在 Apollo 中建立新聯絡人時觸發"
+        },
+        "app.QXBvbGxv.action.Y29udGFjdC1jcmVhdGVk.display_name": {
+          "source": "Contact Created",
+          "message": "聯絡人已建立"
+        },
+        "app.QXBvbGxv.action.Y29udGFjdC1jcmVhdGVk.short_desc": {
+          "source": "Watch for new contacts",
+          "message": "監視新聯絡人"
+        },
+        "app.QXBvbGxv.action.Y3JlYXRlLWFjY291bnQ.desc": {
+          "source": "Create a new account in Apollo",
+          "message": "在 Apollo 中建立新帳戶"
+        },
+        "app.QXBvbGxv.action.Y3JlYXRlLWFjY291bnQ.display_name": {
+          "source": "Create an Account",
+          "message": "建立帳戶"
+        },
+        "app.QXBvbGxv.action.Y3JlYXRlLWFjY291bnQ.option.ZG9tYWlu.display_name": {
+          "source": "Domain",
+          "message": "網域"
+        },
+        "app.QXBvbGxv.action.Y3JlYXRlLWFjY291bnQ.option.ZG9tYWlu.short_desc": {
+          "source": "Company domain",
+          "message": "公司網域"
+        },
+        "app.QXBvbGxv.action.Y3JlYXRlLWFjY291bnQ.option.b3duZXJfaWQ.display_name": {
+          "source": "Owner ID",
+          "message": "擁有者 ID"
+        },
+        "app.QXBvbGxv.action.Y3JlYXRlLWFjY291bnQ.option.b3duZXJfaWQ.short_desc": {
+          "source": "Owner user ID",
+          "message": "擁有者使用者 ID"
+        },
+        "app.QXBvbGxv.action.Y3JlYXRlLWFjY291bnQ.option.bmFtZQ.desc": {
+          "source": "The name of the account",
+          "message": "帳戶名稱"
+        },
+        "app.QXBvbGxv.action.Y3JlYXRlLWFjY291bnQ.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "名稱"
+        },
+        "app.QXBvbGxv.action.Y3JlYXRlLWFjY291bnQ.option.bmFtZQ.short_desc": {
+          "source": "Account name",
+          "message": "帳戶名稱"
+        },
+        "app.QXBvbGxv.action.Y3JlYXRlLWFjY291bnQ.option.cGhvbmU.display_name": {
+          "source": "Phone",
+          "message": "電話"
+        },
+        "app.QXBvbGxv.action.Y3JlYXRlLWFjY291bnQ.option.cGhvbmU.short_desc": {
+          "source": "Company phone number",
+          "message": "公司電話號碼"
+        },
+        "app.QXBvbGxv.action.Y3JlYXRlLWFjY291bnQ.option.d2Vic2l0ZV91cmw.display_name": {
+          "source": "Website URL",
+          "message": "網站 URL"
+        },
+        "app.QXBvbGxv.action.Y3JlYXRlLWFjY291bnQ.option.d2Vic2l0ZV91cmw.short_desc": {
+          "source": "Company website URL",
+          "message": "公司網站 URL"
+        },
+        "app.QXBvbGxv.action.Y3JlYXRlLWFjY291bnQ.short_desc": {
+          "source": "Create a new account",
+          "message": "建立新帳戶"
+        },
+        "app.QXBvbGxv.action.Y3JlYXRlLWNvbnRhY3Q.desc": {
+          "source": "Create a new contact in Apollo",
+          "message": "在 Apollo 中建立新聯絡人"
+        },
+        "app.QXBvbGxv.action.Y3JlYXRlLWNvbnRhY3Q.display_name": {
+          "source": "Create a Contact",
+          "message": "建立聯絡人"
+        },
+        "app.QXBvbGxv.action.Y3JlYXRlLWNvbnRhY3Q.option.ZW1haWw.desc": {
+          "source": "The contact's email address",
+          "message": "聯絡人的電子郵件地址"
+        },
+        "app.QXBvbGxv.action.Y3JlYXRlLWNvbnRhY3Q.option.ZW1haWw.display_name": {
+          "source": "Email",
+          "message": "電子郵件"
+        },
+        "app.QXBvbGxv.action.Y3JlYXRlLWNvbnRhY3Q.option.ZW1haWw.short_desc": {
+          "source": "Contact email address",
+          "message": "聯絡人電子郵件地址"
+        },
+        "app.QXBvbGxv.action.Y3JlYXRlLWNvbnRhY3Q.option.Zmlyc3RfbmFtZQ.desc": {
+          "source": "The contact's first name",
+          "message": "聯絡人的名字"
+        },
+        "app.QXBvbGxv.action.Y3JlYXRlLWNvbnRhY3Q.option.Zmlyc3RfbmFtZQ.display_name": {
+          "source": "First Name",
+          "message": "名字"
+        },
+        "app.QXBvbGxv.action.Y3JlYXRlLWNvbnRhY3Q.option.Zmlyc3RfbmFtZQ.short_desc": {
+          "source": "Contact first name",
+          "message": "聯絡人名字"
+        },
+        "app.QXBvbGxv.action.Y3JlYXRlLWNvbnRhY3Q.option.b3JnYW5pemF0aW9uX25hbWU.display_name": {
+          "source": "Organization Name",
+          "message": "組織名稱"
+        },
+        "app.QXBvbGxv.action.Y3JlYXRlLWNvbnRhY3Q.option.b3JnYW5pemF0aW9uX25hbWU.short_desc": {
+          "source": "The company name",
+          "message": "公司名稱"
+        },
+        "app.QXBvbGxv.action.Y3JlYXRlLWNvbnRhY3Q.option.b3duZXJfaWQ.desc": {
+          "source": "The ID of the user who owns this contact",
+          "message": "擁有此聯絡人的使用者 ID"
+        },
+        "app.QXBvbGxv.action.Y3JlYXRlLWNvbnRhY3Q.option.b3duZXJfaWQ.display_name": {
+          "source": "Owner ID",
+          "message": "擁有者 ID"
+        },
+        "app.QXBvbGxv.action.Y3JlYXRlLWNvbnRhY3Q.option.b3duZXJfaWQ.short_desc": {
+          "source": "Owner user ID",
+          "message": "擁有者使用者 ID"
+        },
+        "app.QXBvbGxv.action.Y3JlYXRlLWNvbnRhY3Q.option.bGFzdF9uYW1l.desc": {
+          "source": "The contact's last name",
+          "message": "聯絡人的姓氏"
+        },
+        "app.QXBvbGxv.action.Y3JlYXRlLWNvbnRhY3Q.option.bGFzdF9uYW1l.display_name": {
+          "source": "Last Name",
+          "message": "姓氏"
+        },
+        "app.QXBvbGxv.action.Y3JlYXRlLWNvbnRhY3Q.option.bGFzdF9uYW1l.short_desc": {
+          "source": "Contact last name",
+          "message": "聯絡人姓氏"
+        },
+        "app.QXBvbGxv.action.Y3JlYXRlLWNvbnRhY3Q.option.cGhvbmVfbnVtYmVy.display_name": {
+          "source": "Phone Number",
+          "message": "電話號碼"
+        },
+        "app.QXBvbGxv.action.Y3JlYXRlLWNvbnRhY3Q.option.cGhvbmVfbnVtYmVy.short_desc": {
+          "source": "Contact phone number",
+          "message": "聯絡人電話號碼"
+        },
+        "app.QXBvbGxv.action.Y3JlYXRlLWNvbnRhY3Q.option.cHJlc2VudF9yYXdfYWRkcmVzcw.display_name": {
+          "source": "Address",
+          "message": "地址"
+        },
+        "app.QXBvbGxv.action.Y3JlYXRlLWNvbnRhY3Q.option.cHJlc2VudF9yYXdfYWRkcmVzcw.short_desc": {
+          "source": "Contact address",
+          "message": "聯絡地址"
+        },
+        "app.QXBvbGxv.action.Y3JlYXRlLWNvbnRhY3Q.option.dGl0bGU.display_name": {
+          "source": "Job Title",
+          "message": "職稱"
+        },
+        "app.QXBvbGxv.action.Y3JlYXRlLWNvbnRhY3Q.option.dGl0bGU.short_desc": {
+          "source": "Contact job title",
+          "message": "聯絡人職稱"
+        },
+        "app.QXBvbGxv.action.Y3JlYXRlLWNvbnRhY3Q.short_desc": {
+          "source": "Create a new contact",
+          "message": "建立新聯絡人"
+        },
+        "app.QXBvbGxv.action.Y3JlYXRlLWRlYWw.desc": {
+          "source": "Create a new deal (opportunity) in Apollo",
+          "message": "在 Apollo 中建立新交易 (商機)"
+        },
+        "app.QXBvbGxv.action.Y3JlYXRlLWRlYWw.display_name": {
+          "source": "Create a Deal",
+          "message": "建立交易"
+        },
+        "app.QXBvbGxv.action.Y3JlYXRlLWRlYWw.option.Y2xvc2VkX2RhdGU.desc": {
+          "source": "Expected close date in ISO 8601 format",
+          "message": "ISO 8601 格式的預期結束日期"
+        },
+        "app.QXBvbGxv.action.Y3JlYXRlLWRlYWw.option.Y2xvc2VkX2RhdGU.display_name": {
+          "source": "Close Date",
+          "message": "關閉日期"
+        },
+        "app.QXBvbGxv.action.Y3JlYXRlLWRlYWw.option.Y2xvc2VkX2RhdGU.short_desc": {
+          "source": "Expected close date",
+          "message": "預計關閉日期"
+        },
+        "app.QXBvbGxv.action.Y3JlYXRlLWRlYWw.option.YW1vdW50.display_name": {
+          "source": "Amount",
+          "message": "數量"
+        },
+        "app.QXBvbGxv.action.Y3JlYXRlLWRlYWw.option.YW1vdW50.short_desc": {
+          "source": "Deal amount",
+          "message": "交易金額"
+        },
+        "app.QXBvbGxv.action.Y3JlYXRlLWRlYWw.option.YWNjb3VudF9pZA.display_name": {
+          "source": "Account ID",
+          "message": "帳戶 ID"
+        },
+        "app.QXBvbGxv.action.Y3JlYXRlLWRlYWw.option.YWNjb3VudF9pZA.short_desc": {
+          "source": "Associated account ID",
+          "message": "關聯帳戶 ID"
+        },
+        "app.QXBvbGxv.action.Y3JlYXRlLWRlYWw.option.b3duZXJfaWQ.display_name": {
+          "source": "Owner ID",
+          "message": "擁有者 ID"
+        },
+        "app.QXBvbGxv.action.Y3JlYXRlLWRlYWw.option.b3duZXJfaWQ.short_desc": {
+          "source": "Owner user ID",
+          "message": "擁有者使用者 ID"
+        },
+        "app.QXBvbGxv.action.Y3JlYXRlLWRlYWw.option.bmFtZQ.desc": {
+          "source": "The name of the deal",
+          "message": "交易名稱"
+        },
+        "app.QXBvbGxv.action.Y3JlYXRlLWRlYWw.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "名稱"
+        },
+        "app.QXBvbGxv.action.Y3JlYXRlLWRlYWw.option.bmFtZQ.short_desc": {
+          "source": "Deal name",
+          "message": "交易名稱"
+        },
+        "app.QXBvbGxv.action.Y3JlYXRlLWRlYWw.option.c3RhZ2VfbmFtZQ.display_name": {
+          "source": "Stage",
+          "message": "階段"
+        },
+        "app.QXBvbGxv.action.Y3JlYXRlLWRlYWw.option.c3RhZ2VfbmFtZQ.short_desc": {
+          "source": "Deal stage name",
+          "message": "交易階段名稱"
+        },
+        "app.QXBvbGxv.action.Y3JlYXRlLWRlYWw.option.c3RhdHVz.desc": {
+          "source": "The deal status: `open`, `won`, or `lost`",
+          "message": "交易狀態：`open`、`won` 或 `lost`"
+        },
+        "app.QXBvbGxv.action.Y3JlYXRlLWRlYWw.option.c3RhdHVz.display_name": {
+          "source": "Status",
+          "message": "狀態"
+        },
+        "app.QXBvbGxv.action.Y3JlYXRlLWRlYWw.option.c3RhdHVz.short_desc": {
+          "source": "Deal status",
+          "message": "交易狀態"
+        },
+        "app.QXBvbGxv.action.Y3JlYXRlLWRlYWw.short_desc": {
+          "source": "Create a new deal",
+          "message": "建立新交易"
+        },
+        "app.QXBvbGxv.action.YWNjb3VudC1jcmVhdGVk.desc": {
+          "source": "Triggers when a new account is created in Apollo",
+          "message": "在 Apollo 中建立新帳戶時觸發"
+        },
+        "app.QXBvbGxv.action.YWNjb3VudC1jcmVhdGVk.display_name": {
+          "source": "Account Created",
+          "message": "帳戶已建立"
+        },
+        "app.QXBvbGxv.action.YWNjb3VudC1jcmVhdGVk.short_desc": {
+          "source": "Watch for new accounts",
+          "message": "監視新帳戶"
+        },
+        "app.QXBvbGxv.action.YnVsay1lbnJpY2gtb3JnYW5pemF0aW9ucw.desc": {
+          "source": "Bulk enrich multiple organizations using Apollo",
+          "message": "使用 Apollo 批次豐富化多個組織資料"
+        },
+        "app.QXBvbGxv.action.YnVsay1lbnJpY2gtb3JnYW5pemF0aW9ucw.display_name": {
+          "source": "Bulk Enrich Organizations",
+          "message": "批次豐富化組織資料"
+        },
+        "app.QXBvbGxv.action.YnVsay1lbnJpY2gtb3JnYW5pemF0aW9ucw.option.ZG9tYWlucw.desc": {
+          "source": "List of organization domains to enrich",
+          "message": "要豐富化資料的組織網域清單"
+        },
+        "app.QXBvbGxv.action.YnVsay1lbnJpY2gtb3JnYW5pemF0aW9ucw.option.ZG9tYWlucw.display_name": {
+          "source": "Domains",
+          "message": "網域"
+        },
+        "app.QXBvbGxv.action.YnVsay1lbnJpY2gtb3JnYW5pemF0aW9ucw.option.ZG9tYWlucw.short_desc": {
+          "source": "List of domains to enrich",
+          "message": "要豐富化資料的網域清單"
+        },
+        "app.QXBvbGxv.action.YnVsay1lbnJpY2gtb3JnYW5pemF0aW9ucw.short_desc": {
+          "source": "Bulk enrich organizations",
+          "message": "批次豐富化組織資料"
+        },
+        "app.QXBvbGxv.action.YnVsay1lbnJpY2gtcGVvcGxl.desc": {
+          "source": "Bulk enrich multiple people's data using Apollo",
+          "message": "使用 Apollo 批次豐富化多個人員的資料"
+        },
+        "app.QXBvbGxv.action.YnVsay1lbnJpY2gtcGVvcGxl.display_name": {
+          "source": "Bulk Enrich People",
+          "message": "批次豐富化人員資料"
+        },
+        "app.QXBvbGxv.action.YnVsay1lbnJpY2gtcGVvcGxl.option.ZGV0YWlscw.desc": {
+          "source": "List of person detail objects, each containing fields like `email`, `first_name`, `last_name`, `organization_name`, `domain`",
+          "message": "人員詳細資訊物件清單，每個物件包含像是 `email`、`first_name`、`last_name`、`organization_name`、`domain` 等欄位"
+        },
+        "app.QXBvbGxv.action.YnVsay1lbnJpY2gtcGVvcGxl.option.ZGV0YWlscw.display_name": {
+          "source": "Details",
+          "message": "詳細資料"
+        },
+        "app.QXBvbGxv.action.YnVsay1lbnJpY2gtcGVvcGxl.option.ZGV0YWlscw.short_desc": {
+          "source": "List of person details to enrich",
+          "message": "要豐富化資料的人員詳細資訊清單"
+        },
+        "app.QXBvbGxv.action.YnVsay1lbnJpY2gtcGVvcGxl.short_desc": {
+          "source": "Bulk enrich people data",
+          "message": "批次豐富化人員資料"
+        },
+        "app.QXBvbGxv.action.Z2V0LWFjY291bnQ.desc": {
+          "source": "Retrieve a single account by ID from Apollo",
+          "message": "從 Apollo 依 ID 擷取單一帳戶"
+        },
+        "app.QXBvbGxv.action.Z2V0LWFjY291bnQ.display_name": {
+          "source": "Get an Account",
+          "message": "取得帳戶"
+        },
+        "app.QXBvbGxv.action.Z2V0LWFjY291bnQ.option.YWNjb3VudF9pZA.display_name": {
+          "source": "Account ID",
+          "message": "帳戶 ID"
+        },
+        "app.QXBvbGxv.action.Z2V0LWFjY291bnQ.option.YWNjb3VudF9pZA.short_desc": {
+          "source": "The account ID",
+          "message": "帳戶 ID"
+        },
+        "app.QXBvbGxv.action.Z2V0LWFjY291bnQ.short_desc": {
+          "source": "Get a single account by ID",
+          "message": "依 ID 取得單一帳戶"
+        },
+        "app.QXBvbGxv.action.Z2V0LWNvbnRhY3Q.desc": {
+          "source": "Retrieve a single contact by ID from Apollo",
+          "message": "從 Apollo 依 ID 擷取單一聯絡人"
+        },
+        "app.QXBvbGxv.action.Z2V0LWNvbnRhY3Q.display_name": {
+          "source": "Get a Contact",
+          "message": "取得聯絡人"
+        },
+        "app.QXBvbGxv.action.Z2V0LWNvbnRhY3Q.option.Y29udGFjdF9pZA.display_name": {
+          "source": "Contact ID",
+          "message": "聯絡人 ID"
+        },
+        "app.QXBvbGxv.action.Z2V0LWNvbnRhY3Q.option.Y29udGFjdF9pZA.short_desc": {
+          "source": "The contact ID",
+          "message": "聯絡人 ID"
+        },
+        "app.QXBvbGxv.action.Z2V0LWNvbnRhY3Q.short_desc": {
+          "source": "Get a single contact by ID",
+          "message": "依 ID 取得單一聯絡人"
+        },
+        "app.QXBvbGxv.action.Z2V0LWRlYWw.desc": {
+          "source": "Retrieve a single deal by ID from Apollo",
+          "message": "從 Apollo 依 ID 擷取單一交易"
+        },
+        "app.QXBvbGxv.action.Z2V0LWRlYWw.display_name": {
+          "source": "Get a Deal",
+          "message": "取得交易"
+        },
+        "app.QXBvbGxv.action.Z2V0LWRlYWw.option.ZGVhbF9pZA.display_name": {
+          "source": "Deal ID",
+          "message": "交易 ID"
+        },
+        "app.QXBvbGxv.action.Z2V0LWRlYWw.option.ZGVhbF9pZA.short_desc": {
+          "source": "The deal ID",
+          "message": "交易 ID"
+        },
+        "app.QXBvbGxv.action.Z2V0LWRlYWw.short_desc": {
+          "source": "Get a single deal by ID",
+          "message": "依 ID 取得單一交易"
+        },
+        "app.QXBvbGxv.action.ZGVhbC1jcmVhdGVk.desc": {
+          "source": "Triggers when a new deal is created in Apollo",
+          "message": "在 Apollo 中建立新交易時觸發"
+        },
+        "app.QXBvbGxv.action.ZGVhbC1jcmVhdGVk.display_name": {
+          "source": "Deal Created",
+          "message": "交易已建立"
+        },
+        "app.QXBvbGxv.action.ZGVhbC1jcmVhdGVk.short_desc": {
+          "source": "Watch for new deals",
+          "message": "監視新交易"
+        },
+        "app.QXBvbGxv.action.ZW5yaWNoLW9yZ2FuaXphdGlvbg.desc": {
+          "source": "Enrich an organization's data using Apollo's database",
+          "message": "使用 Apollo 資料庫豐富化組織資料"
+        },
+        "app.QXBvbGxv.action.ZW5yaWNoLW9yZ2FuaXphdGlvbg.display_name": {
+          "source": "Enrich Organization",
+          "message": "豐富化組織資料"
+        },
+        "app.QXBvbGxv.action.ZW5yaWNoLW9yZ2FuaXphdGlvbg.option.ZG9tYWlu.desc": {
+          "source": "The organization domain to enrich",
+          "message": "要豐富化資料的組織網域"
+        },
+        "app.QXBvbGxv.action.ZW5yaWNoLW9yZ2FuaXphdGlvbg.option.ZG9tYWlu.display_name": {
+          "source": "Domain",
+          "message": "網域"
+        },
+        "app.QXBvbGxv.action.ZW5yaWNoLW9yZ2FuaXphdGlvbg.option.ZG9tYWlu.short_desc": {
+          "source": "Organization domain",
+          "message": "組織網域"
+        },
+        "app.QXBvbGxv.action.ZW5yaWNoLW9yZ2FuaXphdGlvbg.short_desc": {
+          "source": "Enrich an organization's data",
+          "message": "豐富化組織資料"
+        },
+        "app.QXBvbGxv.action.ZW5yaWNoLXBlcnNvbg.desc": {
+          "source": "Enrich a person's data using Apollo's database of 210M+ contacts",
+          "message": "使用 Apollo 超過 2.1 億聯絡人的資料庫豐富化個人資料"
+        },
+        "app.QXBvbGxv.action.ZW5yaWNoLXBlcnNvbg.display_name": {
+          "source": "Enrich Person",
+          "message": "豐富化人員資料"
+        },
+        "app.QXBvbGxv.action.ZW5yaWNoLXBlcnNvbg.option.ZG9tYWlu.display_name": {
+          "source": "Domain",
+          "message": "網域"
+        },
+        "app.QXBvbGxv.action.ZW5yaWNoLXBlcnNvbg.option.ZG9tYWlu.short_desc": {
+          "source": "Person company domain",
+          "message": "人員所屬公司網域"
+        },
+        "app.QXBvbGxv.action.ZW5yaWNoLXBlcnNvbg.option.ZW1haWw.desc": {
+          "source": "The person's email address for enrichment",
+          "message": "用於擴充資料的人員電子郵件地址"
+        },
+        "app.QXBvbGxv.action.ZW5yaWNoLXBlcnNvbg.option.ZW1haWw.display_name": {
+          "source": "Email",
+          "message": "電子郵件"
+        },
+        "app.QXBvbGxv.action.ZW5yaWNoLXBlcnNvbg.option.ZW1haWw.short_desc": {
+          "source": "Person email for enrichment",
+          "message": "用於擴充資料的人員電子郵件"
+        },
+        "app.QXBvbGxv.action.ZW5yaWNoLXBlcnNvbg.option.Zmlyc3RfbmFtZQ.display_name": {
+          "source": "First Name",
+          "message": "名字"
+        },
+        "app.QXBvbGxv.action.ZW5yaWNoLXBlcnNvbg.option.Zmlyc3RfbmFtZQ.short_desc": {
+          "source": "Person first name",
+          "message": "人員名字"
+        },
+        "app.QXBvbGxv.action.ZW5yaWNoLXBlcnNvbg.option.b3JnYW5pemF0aW9uX25hbWU.display_name": {
+          "source": "Organization Name",
+          "message": "組織名稱"
+        },
+        "app.QXBvbGxv.action.ZW5yaWNoLXBlcnNvbg.option.b3JnYW5pemF0aW9uX25hbWU.short_desc": {
+          "source": "Person company name",
+          "message": "人員公司名稱"
+        },
+        "app.QXBvbGxv.action.ZW5yaWNoLXBlcnNvbg.option.bGFzdF9uYW1l.display_name": {
+          "source": "Last Name",
+          "message": "姓氏"
+        },
+        "app.QXBvbGxv.action.ZW5yaWNoLXBlcnNvbg.option.bGFzdF9uYW1l.short_desc": {
+          "source": "Person last name",
+          "message": "人員姓氏"
+        },
+        "app.QXBvbGxv.action.ZW5yaWNoLXBlcnNvbg.option.bGlua2VkaW5fdXJs.display_name": {
+          "source": "LinkedIn URL",
+          "message": "LinkedIn URL"
+        },
+        "app.QXBvbGxv.action.ZW5yaWNoLXBlcnNvbg.option.bGlua2VkaW5fdXJs.short_desc": {
+          "source": "Person LinkedIn URL",
+          "message": "人員 LinkedIn URL"
+        },
+        "app.QXBvbGxv.action.ZW5yaWNoLXBlcnNvbg.short_desc": {
+          "source": "Enrich a person's data",
+          "message": "擴充人員資料"
+        },
+        "app.QXBvbGxv.action.bGlzdC1kZWFscw.desc": {
+          "source": "List deals (opportunities) in Apollo",
+          "message": "列出 Apollo 中的交易（商機）"
+        },
+        "app.QXBvbGxv.action.bGlzdC1kZWFscw.display_name": {
+          "source": "List Deals",
+          "message": "列出交易"
+        },
+        "app.QXBvbGxv.action.bGlzdC1kZWFscw.option.ZGVhbF9pZA.display_name": {
+          "source": "Deal ID",
+          "message": "交易 ID"
+        },
+        "app.QXBvbGxv.action.bGlzdC1kZWFscw.option.ZGVhbF9pZA.short_desc": {
+          "source": "Filter by deal ID",
+          "message": "依交易 ID 篩選"
+        },
+        "app.QXBvbGxv.action.bGlzdC1kZWFscw.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "限制數量"
+        },
+        "app.QXBvbGxv.action.bGlzdC1kZWFscw.option.bGltaXQ.short_desc": {
+          "source": "Maximum results",
+          "message": "最多結果數"
+        },
+        "app.QXBvbGxv.action.bGlzdC1kZWFscw.short_desc": {
+          "source": "List deals",
+          "message": "列出交易"
+        },
+        "app.QXBvbGxv.action.bWFrZS1hcGktY2FsbA.desc": {
+          "source": "Make a custom HTTP / REST API call to **Apollo** using the configured connection's authentication.\n\nSpecify the HTTP method, the URI path (relative to the connection's API base URL), optional query parameters, headers, and request body. The response is returned as a hash containing the status code, response headers, and response body.\n\nUse this action for endpoints that are not yet exposed as first-class actions on this app.",
+          "message": "使用已設定連線的驗證向 **Apollo** 發出自訂 HTTP / REST API 呼叫。\n\n指定 HTTP 方法、URI 路徑（相對於連線的 API 基本 URL）、選填查詢參數、標頭和請求主體。回應將以包含狀態碼、回應標頭和回應主體的雜湊形式傳回。\n\n將此動作運用於此應用程式中尚未公開為頂級動作的端點。"
+        },
+        "app.QXBvbGxv.action.bWFrZS1hcGktY2FsbA.display_name": {
+          "source": "Make an API call",
+          "message": "發出 API 呼叫"
+        },
+        "app.QXBvbGxv.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.desc": {
+          "source": "The request body. The effective type depends on `body_type`: JSON/form/YAML expect a hash, XML/text expect a string, multipart expects a file structure, binary expects raw bytes.",
+          "message": "請求主體。有效類型取決於 `body_type`：JSON/form/YAML 期望雜湊，XML/text 期望字串，multipart 期望檔案結構，binary 期望原始位元組。"
+        },
+        "app.QXBvbGxv.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.display_name": {
+          "source": "Body",
+          "message": "內文"
+        },
+        "app.QXBvbGxv.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.short_desc": {
+          "source": "The request body",
+          "message": "請求主體"
+        },
+        "app.QXBvbGxv.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.desc": {
+          "source": "Upload a file using `multipart/form-data`. The body must be a @ref DataProvider::FileDataType \"FileDataType\" structure (filename + content + mime_type). The framework builds the multipart envelope and sets the boundary header.",
+          "message": "使用 `multipart/form-data` 上傳檔案。主體必須是 @ref DataProvider::FileDataType \"FileDataType\" 結構（filename + content + mime_type）。架構會建立 multipart 封套並設定 boundary 標頭。"
+        },
+        "app.QXBvbGxv.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.display_name": {
+          "source": "Multipart Form",
+          "message": "Multipart 表單"
+        },
+        "app.QXBvbGxv.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.short_desc": {
+          "source": "Upload a file using multipart/form-data",
+          "message": "使用 multipart/form-data 上傳檔案"
+        },
+        "app.QXBvbGxv.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.desc": {
+          "source": "Pass the body to the REST client unchanged; the client decides serialization based on its configured `data` option and the value type",
+          "message": "原封不動地將主體傳遞給 REST 用戶端；用戶端會根據其設定的 `data` 選項和值類型來決定序列化方式"
+        },
+        "app.QXBvbGxv.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.display_name": {
+          "source": "Auto",
+          "message": "自動"
+        },
+        "app.QXBvbGxv.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.short_desc": {
+          "source": "Pass-through; use connection serialization and let the REST client decide",
+          "message": "透傳；使用連線序列化並由 REST 用戶端決定"
+        },
+        "app.QXBvbGxv.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.desc": {
+          "source": "Send the body as raw bytes. The body must be a binary value. Sets `Content-Type: application/octet-stream` unless overridden by `hdr`.",
+          "message": "將主體作為原始位元組傳送。主體必須是二進位值。除非被 `hdr` 覆蓋，否則會設定 `Content-Type: application/octet-stream`。"
+        },
+        "app.QXBvbGxv.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.display_name": {
+          "source": "Raw Binary",
+          "message": "原始二進位"
+        },
+        "app.QXBvbGxv.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.short_desc": {
+          "source": "Send body as raw bytes",
+          "message": "將主體作為原始位元組傳送"
+        },
+        "app.QXBvbGxv.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.desc": {
+          "source": "Serialize a hash of form fields as `application/x-www-form-urlencoded`. The body must be a hash whose values are scalars (strings/numbers/booleans).",
+          "message": "將表單欄位的雜湊序列化為 `application/x-www-form-urlencoded`。主體必須是值為純量（字串/數字/布林值）的雜湊。"
+        },
+        "app.QXBvbGxv.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.display_name": {
+          "source": "Form (URL-encoded)",
+          "message": "表單 (URL 編碼)"
+        },
+        "app.QXBvbGxv.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.short_desc": {
+          "source": "Serialize body as application/x-www-form-urlencoded form fields",
+          "message": "將主體序列化為 application/x-www-form-urlencoded 表單欄位"
+        },
+        "app.QXBvbGxv.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.desc": {
+          "source": "Serialize the body as JSON; sets `Content-Type: application/json`. The body should be a hash, list, or scalar value.",
+          "message": "將主體序列化為 JSON；設定 `Content-Type: application/json`。主體應為雜湊、清單或純量值。"
+        },
+        "app.QXBvbGxv.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.display_name": {
+          "source": "JSON",
+          "message": "JSON"
+        },
+        "app.QXBvbGxv.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.short_desc": {
+          "source": "Serialize body as JSON",
+          "message": "將主體序列化為 JSON"
+        },
+        "app.QXBvbGxv.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.desc": {
+          "source": "Send the body as plain text. The body must be a string. Sets `Content-Type: text/plain`.",
+          "message": "將主體作為純文字傳送。主體必須是字串。設定 `Content-Type: text/plain`。"
+        },
+        "app.QXBvbGxv.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.display_name": {
+          "source": "Plain Text",
+          "message": "純文字"
+        },
+        "app.QXBvbGxv.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.short_desc": {
+          "source": "Send body as text/plain",
+          "message": "將主體作為 text/plain 傳送"
+        },
+        "app.QXBvbGxv.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.desc": {
+          "source": "Send the body as XML. If the body is a hash it is serialized to XML; if it is a string it is sent verbatim. Sets `Content-Type: application/xml`.",
+          "message": "將主體作為 XML 傳送。若主體為雜湊，則會序列化為 XML；若為字串，則原樣傳送。設定 `Content-Type: application/xml`。"
+        },
+        "app.QXBvbGxv.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.display_name": {
+          "source": "XML",
+          "message": "XML"
+        },
+        "app.QXBvbGxv.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.short_desc": {
+          "source": "Send body as XML",
+          "message": "將主體作為 XML 傳送"
+        },
+        "app.QXBvbGxv.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.desc": {
+          "source": "Send the body as YAML. If the body is a hash it is serialized to YAML; if it is a string it is sent verbatim. Sets `Content-Type: application/x-yaml`.",
+          "message": "將主體作為 YAML 傳送。若主體為雜湊，則會序列化為 YAML；若為字串，則原樣傳送。設定 `Content-Type: application/x-yaml`。"
+        },
+        "app.QXBvbGxv.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.display_name": {
+          "source": "YAML",
+          "message": "YAML"
+        },
+        "app.QXBvbGxv.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.short_desc": {
+          "source": "Send body as YAML",
+          "message": "將主體作為 YAML 傳送"
+        },
+        "app.QXBvbGxv.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.desc": {
+          "source": "Selects the body serialization mode and the corresponding `Content-Type` header. Changing this field reshapes the `body` editor - selecting JSON exposes a JSON editor, selecting Multipart Form exposes a file picker, and so on.",
+          "message": "選擇主體序列化模式及對應的 `Content-Type` 標頭。變更此欄位會重新配置 `body` 編輯器 — 選擇 JSON 會顯示 JSON 編輯器，選擇 Multipart 表單會顯示檔案選擇器，依此類推。"
+        },
+        "app.QXBvbGxv.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.display_name": {
+          "source": "Body Type",
+          "message": "主體類型"
+        },
+        "app.QXBvbGxv.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.short_desc": {
+          "source": "How the body is serialized and what Content-Type is sent",
+          "message": "主體如何序列化以及傳送何種 Content-Type"
+        },
+        "app.QXBvbGxv.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.desc": {
+          "source": "If `True`, non-2xx HTTP responses return as the normal response hash (with the actual status code) instead of raising `REST-RESPONSE-ERROR`. Useful for handling 4xx/5xx as data - e.g. checking whether a resource exists. Overrides the connection's `error_passthru` setting for this call only.",
+          "message": "若為 `True`，非 2xx HTTP 回應會作為正常的相應雜湊傳回（帶有實際狀態碼），而非引發 `REST-RESPONSE-ERROR`。有助於將 4xx/5xx 作為資料處理 — 例如檢查資源是否存在。僅針對本次呼叫覆蓋連線的 `error_passthru` 設定。"
+        },
+        "app.QXBvbGxv.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.display_name": {
+          "source": "Return Errors as Data",
+          "message": "將錯誤作為資料傳回"
+        },
+        "app.QXBvbGxv.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.short_desc": {
+          "source": "Return non-2xx responses normally instead of throwing",
+          "message": "正常傳回非 2xx 回應而非拋出例外"
+        },
+        "app.QXBvbGxv.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.desc": {
+          "source": "Optional list of HTTP status codes treated as success. If set and the response status is not in this list, the action throws `REST-STATUS-ERROR`. When unset, the REST client's default behavior applies (typically: 2xx is success, non-2xx throws).",
+          "message": "視為成功的 HTTP 狀態碼選擇性清單。若有設定且回應狀態不在此清單中，該動作會拋出 `REST-STATUS-ERROR`。若未設定，則套用 REST 用戶端的預設行為（通常：2xx 為成功，非 2xx 則拋出例外）。"
+        },
+        "app.QXBvbGxv.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.display_name": {
+          "source": "Expected Status Codes",
+          "message": "預期的狀態碼"
+        },
+        "app.QXBvbGxv.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.short_desc": {
+          "source": "Response status codes treated as success",
+          "message": "視為成功的回應狀態碼"
+        },
+        "app.QXBvbGxv.action.bWFrZS1hcGktY2FsbA.option.aGRy.desc": {
+          "source": "Hash of custom headers added to the request. These override any default headers set by `body_type` (e.g. supplying `Content-Type` here wins over the body-type default).",
+          "message": "新增至請求的自訂標頭雜湊。這些標頭會覆蓋由 `body_type` 設定的任何預設標頭（例如，在此處提供 `Content-Type` 會優先於主體類型的預設值）。"
+        },
+        "app.QXBvbGxv.action.bWFrZS1hcGktY2FsbA.option.aGRy.display_name": {
+          "source": "Custom Headers",
+          "message": "自訂標頭"
+        },
+        "app.QXBvbGxv.action.bWFrZS1hcGktY2FsbA.option.aGRy.short_desc": {
+          "source": "Extra request headers",
+          "message": "額外的請求標頭"
+        },
+        "app.QXBvbGxv.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.desc": {
+          "source": "If `True`, the response hash includes a `debug` sub-hash containing the request method/URL/headers (with sensitive values redacted), request and response sizes, and round-trip duration. Useful when investigating slow or failing calls. Off by default to keep responses lean.",
+          "message": "若為 `True`，回應雜湊包含 `debug` 子雜湊，其中含有請求方法/URL/標頭（敏感值已被隱藏）、請求與回應大小以及來回時間。在調查過慢或失敗的呼叫時很有用。預設為關閉以保持回應精簡。"
+        },
+        "app.QXBvbGxv.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.display_name": {
+          "source": "Include Debug Info",
+          "message": "包含除錯資訊"
+        },
+        "app.QXBvbGxv.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.short_desc": {
+          "source": "Include request/timing/size debug info in the response",
+          "message": "在回應中包含請求/計時/大小等除錯資訊"
+        },
+        "app.QXBvbGxv.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.desc": {
+          "source": "HTTP `OPTIONS`",
+          "message": "HTTP `OPTIONS`"
+        },
+        "app.QXBvbGxv.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.display_name": {
+          "source": "OPTIONS",
+          "message": "OPTIONS"
+        },
+        "app.QXBvbGxv.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.short_desc": {
+          "source": "HTTP OPTIONS",
+          "message": "HTTP OPTIONS"
+        },
+        "app.QXBvbGxv.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.desc": {
+          "source": "HTTP `DELETE`",
+          "message": "HTTP `DELETE`"
+        },
+        "app.QXBvbGxv.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.display_name": {
+          "source": "DELETE",
+          "message": "DELETE"
+        },
+        "app.QXBvbGxv.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.short_desc": {
+          "source": "HTTP DELETE",
+          "message": "HTTP DELETE"
+        },
+        "app.QXBvbGxv.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.desc": {
+          "source": "HTTP `GET`",
+          "message": "HTTP `GET`"
+        },
+        "app.QXBvbGxv.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.display_name": {
+          "source": "GET",
+          "message": "GET"
+        },
+        "app.QXBvbGxv.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.short_desc": {
+          "source": "HTTP GET",
+          "message": "HTTP GET"
+        },
+        "app.QXBvbGxv.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.desc": {
+          "source": "HTTP `HEAD`",
+          "message": "HTTP `HEAD`"
+        },
+        "app.QXBvbGxv.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.display_name": {
+          "source": "HEAD",
+          "message": "HEAD"
+        },
+        "app.QXBvbGxv.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.short_desc": {
+          "source": "HTTP HEAD",
+          "message": "HTTP HEAD"
+        },
+        "app.QXBvbGxv.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.desc": {
+          "source": "HTTP `PATCH`",
+          "message": "HTTP `PATCH`"
+        },
+        "app.QXBvbGxv.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.display_name": {
+          "source": "PATCH",
+          "message": "PATCH"
+        },
+        "app.QXBvbGxv.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.short_desc": {
+          "source": "HTTP PATCH",
+          "message": "HTTP PATCH"
+        },
+        "app.QXBvbGxv.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.desc": {
+          "source": "HTTP `POST`",
+          "message": "HTTP `POST`"
+        },
+        "app.QXBvbGxv.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.display_name": {
+          "source": "POST",
+          "message": "POST"
+        },
+        "app.QXBvbGxv.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.short_desc": {
+          "source": "HTTP POST",
+          "message": "HTTP POST"
+        },
+        "app.QXBvbGxv.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.desc": {
+          "source": "HTTP `PUT`",
+          "message": "HTTP `PUT`"
+        },
+        "app.QXBvbGxv.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.display_name": {
+          "source": "PUT",
+          "message": "PUT"
+        },
+        "app.QXBvbGxv.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.short_desc": {
+          "source": "HTTP PUT",
+          "message": "HTTP PUT"
+        },
+        "app.QXBvbGxv.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.desc": {
+          "source": "HTTP `TRACE`",
+          "message": "HTTP `TRACE`"
+        },
+        "app.QXBvbGxv.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.display_name": {
+          "source": "TRACE",
+          "message": "TRACE"
+        },
+        "app.QXBvbGxv.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.short_desc": {
+          "source": "HTTP TRACE",
+          "message": "HTTP TRACE"
+        },
+        "app.QXBvbGxv.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "用於請求的 HTTP 方法"
+        },
+        "app.QXBvbGxv.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.display_name": {
+          "source": "HTTP Method",
+          "message": "HTTP 方法"
+        },
+        "app.QXBvbGxv.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.short_desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "用於請求的 HTTP 方法"
+        },
+        "app.QXBvbGxv.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain `{name}` placeholders that are replaced from `path_vars`. Example: `/users/{id}/comments`.",
+          "message": "相於連線 API 基底 URL 的 URI 路徑。可能包含從 `path_vars` 替換的 `{name}` 預留位置。範例：`/users/{id}/comments`。"
+        },
+        "app.QXBvbGxv.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.display_name": {
+          "source": "URI Path",
+          "message": "URI 路徑"
+        },
+        "app.QXBvbGxv.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.short_desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain '{name}' placeholders that are replaced from 'path_vars'. Example: '/users/{id}/comments'",
+          "message": "相對於連線 API 根 URL 的 URI 路徑。可能包含從 'path_vars' 替換的 '{name}' 預留位置。範例：'/users/{id}/comments'"
+        },
+        "app.QXBvbGxv.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.desc": {
+          "source": "Hash of values substituted into `{name}` placeholders in the URI path. Example: with `path = /users/{id}` and `path_vars = {id: 123}` the framework sends `/users/123`. Values are URL-encoded.",
+          "message": "代入 URI 路徑中 `{name}` 預留位置的值 Hash。範例：使用 `path = /users/{id}` 與 `path_vars = {id: 123}`，框架會傳送 `/users/123`。值均經過 URL 編碼。"
+        },
+        "app.QXBvbGxv.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.display_name": {
+          "source": "Path Variables",
+          "message": "路徑變數"
+        },
+        "app.QXBvbGxv.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.short_desc": {
+          "source": "Values for {name} placeholders in path",
+          "message": "路徑中 {name} 預留位置的值"
+        },
+        "app.QXBvbGxv.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.desc": {
+          "source": "Hash of query string parameters to append to the URI path. Values are URL-encoded; list values are joined with `,`.",
+          "message": "要附加至 URI 路徑的查詢字串參數 Hash。值均經過 URL 編碼；清單值會以 `,` 連接。"
+        },
+        "app.QXBvbGxv.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.display_name": {
+          "source": "Query Arguments",
+          "message": "查詢引數"
+        },
+        "app.QXBvbGxv.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.short_desc": {
+          "source": "Query string parameters",
+          "message": "查詢字串參數"
+        },
+        "app.QXBvbGxv.action.bWFrZS1hcGktY2FsbA.short_desc": {
+          "source": "Make a custom API call to Apollo",
+          "message": "對 Apollo 進行自訂 API 呼叫"
+        },
+        "app.QXBvbGxv.action.c2VhcmNoLW9yZ2FuaXphdGlvbnM.desc": {
+          "source": "Search Apollo's global database of 35M+ companies",
+          "message": "搜尋 Apollo 包含 3500 萬家以上公司的全球資料庫"
+        },
+        "app.QXBvbGxv.action.c2VhcmNoLW9yZ2FuaXphdGlvbnM.display_name": {
+          "source": "Search Organizations",
+          "message": "搜尋組織"
+        },
+        "app.QXBvbGxv.action.c2VhcmNoLW9yZ2FuaXphdGlvbnM.option.b3JnYW5pemF0aW9uX251bV9lbXBsb3llZXNfcmFuZ2Vz.desc": {
+          "source": "Employee count ranges (e.g., `1,10` or `1001,5000`)",
+          "message": "員工人數範圍（例如 `1,10` 或 `1001,5000`）"
+        },
+        "app.QXBvbGxv.action.c2VhcmNoLW9yZ2FuaXphdGlvbnM.option.b3JnYW5pemF0aW9uX251bV9lbXBsb3llZXNfcmFuZ2Vz.display_name": {
+          "source": "Employee Ranges",
+          "message": "員工範圍"
+        },
+        "app.QXBvbGxv.action.c2VhcmNoLW9yZ2FuaXphdGlvbnM.option.b3JnYW5pemF0aW9uX251bV9lbXBsb3llZXNfcmFuZ2Vz.short_desc": {
+          "source": "Filter by employee count",
+          "message": "依員工人數篩選"
+        },
+        "app.QXBvbGxv.action.c2VhcmNoLW9yZ2FuaXphdGlvbnM.option.b3JnYW5pemF0aW9uX2RvbWFpbnM.desc": {
+          "source": "List of company domains to search for",
+          "message": "要搜尋的公司網域清單"
+        },
+        "app.QXBvbGxv.action.c2VhcmNoLW9yZ2FuaXphdGlvbnM.option.b3JnYW5pemF0aW9uX2RvbWFpbnM.display_name": {
+          "source": "Domains",
+          "message": "網域"
+        },
+        "app.QXBvbGxv.action.c2VhcmNoLW9yZ2FuaXphdGlvbnM.option.b3JnYW5pemF0aW9uX2RvbWFpbnM.short_desc": {
+          "source": "Filter by domains",
+          "message": "依網域篩選"
+        },
+        "app.QXBvbGxv.action.c2VhcmNoLW9yZ2FuaXphdGlvbnM.option.b3JnYW5pemF0aW9uX2xvY2F0aW9ucw.display_name": {
+          "source": "Locations",
+          "message": "地點"
+        },
+        "app.QXBvbGxv.action.c2VhcmNoLW9yZ2FuaXphdGlvbnM.option.b3JnYW5pemF0aW9uX2xvY2F0aW9ucw.short_desc": {
+          "source": "Filter by locations",
+          "message": "依地點篩選"
+        },
+        "app.QXBvbGxv.action.c2VhcmNoLW9yZ2FuaXphdGlvbnM.option.cGFnZQ.display_name": {
+          "source": "Page",
+          "message": "頁碼"
+        },
+        "app.QXBvbGxv.action.c2VhcmNoLW9yZ2FuaXphdGlvbnM.option.cGFnZQ.short_desc": {
+          "source": "Page number",
+          "message": "頁碼"
+        },
+        "app.QXBvbGxv.action.c2VhcmNoLW9yZ2FuaXphdGlvbnM.option.cGVyX3BhZ2U.display_name": {
+          "source": "Per Page",
+          "message": "每頁"
+        },
+        "app.QXBvbGxv.action.c2VhcmNoLW9yZ2FuaXphdGlvbnM.option.cGVyX3BhZ2U.short_desc": {
+          "source": "Results per page (max 100)",
+          "message": "每頁結果數（上限 100）"
+        },
+        "app.QXBvbGxv.action.c2VhcmNoLW9yZ2FuaXphdGlvbnM.option.cV9rZXl3b3Jkcw.display_name": {
+          "source": "Keywords",
+          "message": "關鍵字"
+        },
+        "app.QXBvbGxv.action.c2VhcmNoLW9yZ2FuaXphdGlvbnM.option.cV9rZXl3b3Jkcw.short_desc": {
+          "source": "Search keywords",
+          "message": "搜尋關鍵字"
+        },
+        "app.QXBvbGxv.action.c2VhcmNoLW9yZ2FuaXphdGlvbnM.short_desc": {
+          "source": "Search Apollo's organization database",
+          "message": "搜尋 Apollo 的組織資料庫"
+        },
+        "app.QXBvbGxv.action.c2VhcmNoLWFjY291bnRz.desc": {
+          "source": "Search accounts in Apollo with optional filtering",
+          "message": "在 Apollo 中搜尋帳戶（含選填篩選條件）"
+        },
+        "app.QXBvbGxv.action.c2VhcmNoLWFjY291bnRz.display_name": {
+          "source": "Search Accounts",
+          "message": "搜尋帳戶"
+        },
+        "app.QXBvbGxv.action.c2VhcmNoLWFjY291bnRz.option.YWNjb3VudF9pZA.display_name": {
+          "source": "Account ID",
+          "message": "帳戶 ID"
+        },
+        "app.QXBvbGxv.action.c2VhcmNoLWFjY291bnRz.option.YWNjb3VudF9pZA.short_desc": {
+          "source": "Filter by account ID",
+          "message": "依帳戶 ID 篩選"
+        },
+        "app.QXBvbGxv.action.c2VhcmNoLWFjY291bnRz.option.ZG9tYWlu.display_name": {
+          "source": "Domain",
+          "message": "網域"
+        },
+        "app.QXBvbGxv.action.c2VhcmNoLWFjY291bnRz.option.ZG9tYWlu.short_desc": {
+          "source": "Filter by domain",
+          "message": "依網域篩選"
+        },
+        "app.QXBvbGxv.action.c2VhcmNoLWFjY291bnRz.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "限制數量"
+        },
+        "app.QXBvbGxv.action.c2VhcmNoLWFjY291bnRz.option.bGltaXQ.short_desc": {
+          "source": "Maximum results",
+          "message": "最多結果數"
+        },
+        "app.QXBvbGxv.action.c2VhcmNoLWFjY291bnRz.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "名稱"
+        },
+        "app.QXBvbGxv.action.c2VhcmNoLWFjY291bnRz.option.bmFtZQ.short_desc": {
+          "source": "Filter by account name",
+          "message": "依帳戶名稱篩選"
+        },
+        "app.QXBvbGxv.action.c2VhcmNoLWFjY291bnRz.short_desc": {
+          "source": "Search accounts",
+          "message": "搜尋帳戶"
+        },
+        "app.QXBvbGxv.action.c2VhcmNoLWNvbnRhY3Rz.desc": {
+          "source": "Search contacts in Apollo with optional filtering",
+          "message": "在 Apollo 中搜尋聯絡人（含選填篩選條件）"
+        },
+        "app.QXBvbGxv.action.c2VhcmNoLWNvbnRhY3Rz.display_name": {
+          "source": "Search Contacts",
+          "message": "搜尋聯絡人"
+        },
+        "app.QXBvbGxv.action.c2VhcmNoLWNvbnRhY3Rz.option.Y29udGFjdF9pZA.display_name": {
+          "source": "Contact ID",
+          "message": "聯絡人 ID"
+        },
+        "app.QXBvbGxv.action.c2VhcmNoLWNvbnRhY3Rz.option.Y29udGFjdF9pZA.short_desc": {
+          "source": "Filter by contact ID",
+          "message": "依聯絡人 ID 篩選"
+        },
+        "app.QXBvbGxv.action.c2VhcmNoLWNvbnRhY3Rz.option.ZW1haWw.display_name": {
+          "source": "Email",
+          "message": "電子郵件"
+        },
+        "app.QXBvbGxv.action.c2VhcmNoLWNvbnRhY3Rz.option.ZW1haWw.short_desc": {
+          "source": "Filter by email",
+          "message": "依電子郵件篩選"
+        },
+        "app.QXBvbGxv.action.c2VhcmNoLWNvbnRhY3Rz.option.Zmlyc3RfbmFtZQ.display_name": {
+          "source": "First Name",
+          "message": "名字"
+        },
+        "app.QXBvbGxv.action.c2VhcmNoLWNvbnRhY3Rz.option.Zmlyc3RfbmFtZQ.short_desc": {
+          "source": "Filter by first name",
+          "message": "依名字篩選"
+        },
+        "app.QXBvbGxv.action.c2VhcmNoLWNvbnRhY3Rz.option.bGFzdF9uYW1l.display_name": {
+          "source": "Last Name",
+          "message": "姓氏"
+        },
+        "app.QXBvbGxv.action.c2VhcmNoLWNvbnRhY3Rz.option.bGFzdF9uYW1l.short_desc": {
+          "source": "Filter by last name",
+          "message": "依姓氏篩選"
+        },
+        "app.QXBvbGxv.action.c2VhcmNoLWNvbnRhY3Rz.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "限制數量"
+        },
+        "app.QXBvbGxv.action.c2VhcmNoLWNvbnRhY3Rz.option.bGltaXQ.short_desc": {
+          "source": "Maximum results",
+          "message": "最多結果數"
+        },
+        "app.QXBvbGxv.action.c2VhcmNoLWNvbnRhY3Rz.short_desc": {
+          "source": "Search contacts",
+          "message": "搜尋聯絡人"
+        },
+        "app.QXBvbGxv.action.c2VhcmNoLXBlb3BsZQ.desc": {
+          "source": "Search Apollo's global database of 210M+ people",
+          "message": "搜尋 Apollo 包含 2.1 億人以上的全球資料庫"
+        },
+        "app.QXBvbGxv.action.c2VhcmNoLXBlb3BsZQ.display_name": {
+          "source": "Search People",
+          "message": "搜尋人員"
+        },
+        "app.QXBvbGxv.action.c2VhcmNoLXBlb3BsZQ.option.b3JnYW5pemF0aW9uX2RvbWFpbnM.display_name": {
+          "source": "Organization Domains",
+          "message": "組織網域"
+        },
+        "app.QXBvbGxv.action.c2VhcmNoLXBlb3BsZQ.option.b3JnYW5pemF0aW9uX2RvbWFpbnM.short_desc": {
+          "source": "Filter by company domains",
+          "message": "依公司網域篩選"
+        },
+        "app.QXBvbGxv.action.c2VhcmNoLXBlb3BsZQ.option.cGFnZQ.display_name": {
+          "source": "Page",
+          "message": "頁碼"
+        },
+        "app.QXBvbGxv.action.c2VhcmNoLXBlb3BsZQ.option.cGFnZQ.short_desc": {
+          "source": "Page number",
+          "message": "頁碼"
+        },
+        "app.QXBvbGxv.action.c2VhcmNoLXBlb3BsZQ.option.cGVyX3BhZ2U.display_name": {
+          "source": "Per Page",
+          "message": "每頁"
+        },
+        "app.QXBvbGxv.action.c2VhcmNoLXBlb3BsZQ.option.cGVyX3BhZ2U.short_desc": {
+          "source": "Results per page (max 100)",
+          "message": "每頁結果數（上限 100）"
+        },
+        "app.QXBvbGxv.action.c2VhcmNoLXBlb3BsZQ.option.cGVyc29uX2xvY2F0aW9ucw.desc": {
+          "source": "List of locations to filter by",
+          "message": "用於篩選的地點清單"
+        },
+        "app.QXBvbGxv.action.c2VhcmNoLXBlb3BsZQ.option.cGVyc29uX2xvY2F0aW9ucw.display_name": {
+          "source": "Locations",
+          "message": "地點"
+        },
+        "app.QXBvbGxv.action.c2VhcmNoLXBlb3BsZQ.option.cGVyc29uX2xvY2F0aW9ucw.short_desc": {
+          "source": "Filter by locations",
+          "message": "依地點篩選"
+        },
+        "app.QXBvbGxv.action.c2VhcmNoLXBlb3BsZQ.option.cGVyc29uX3Nlbmlvcml0aWVz.desc": {
+          "source": "List of seniority levels (e.g., `senior`, `manager`)",
+          "message": "資歷級別清單（例如 `senior`、`manager`）"
+        },
+        "app.QXBvbGxv.action.c2VhcmNoLXBlb3BsZQ.option.cGVyc29uX3Nlbmlvcml0aWVz.display_name": {
+          "source": "Seniorities",
+          "message": "資歷級別"
+        },
+        "app.QXBvbGxv.action.c2VhcmNoLXBlb3BsZQ.option.cGVyc29uX3Nlbmlvcml0aWVz.short_desc": {
+          "source": "Filter by seniority levels",
+          "message": "依資歷級別篩選"
+        },
+        "app.QXBvbGxv.action.c2VhcmNoLXBlb3BsZQ.option.cGVyc29uX3RpdGxlcw.desc": {
+          "source": "List of job titles to search for",
+          "message": "要搜尋的職稱清單"
+        },
+        "app.QXBvbGxv.action.c2VhcmNoLXBlb3BsZQ.option.cGVyc29uX3RpdGxlcw.display_name": {
+          "source": "Job Titles",
+          "message": "職稱"
+        },
+        "app.QXBvbGxv.action.c2VhcmNoLXBlb3BsZQ.option.cGVyc29uX3RpdGxlcw.short_desc": {
+          "source": "Filter by job titles",
+          "message": "依職稱篩選"
+        },
+        "app.QXBvbGxv.action.c2VhcmNoLXBlb3BsZQ.option.cV9rZXl3b3Jkcw.display_name": {
+          "source": "Keywords",
+          "message": "關鍵字"
+        },
+        "app.QXBvbGxv.action.c2VhcmNoLXBlb3BsZQ.option.cV9rZXl3b3Jkcw.short_desc": {
+          "source": "Search keywords",
+          "message": "搜尋關鍵字"
+        },
+        "app.QXBvbGxv.action.c2VhcmNoLXBlb3BsZQ.short_desc": {
+          "source": "Search Apollo's people database",
+          "message": "搜尋 Apollo 的人員資料庫"
+        },
+        "app.QXBvbGxv.action.dXBkYXRlLWFjY291bnQ.desc": {
+          "source": "Update an existing account in Apollo",
+          "message": "更新 Apollo 中的現有帳戶"
+        },
+        "app.QXBvbGxv.action.dXBkYXRlLWFjY291bnQ.display_name": {
+          "source": "Update an Account",
+          "message": "更新帳戶"
+        },
+        "app.QXBvbGxv.action.dXBkYXRlLWFjY291bnQ.option.YWNjb3VudF9pZA.display_name": {
+          "source": "Account ID",
+          "message": "帳戶 ID"
+        },
+        "app.QXBvbGxv.action.dXBkYXRlLWFjY291bnQ.option.YWNjb3VudF9pZA.short_desc": {
+          "source": "The account to update",
+          "message": "要更新的帳戶"
+        },
+        "app.QXBvbGxv.action.dXBkYXRlLWFjY291bnQ.option.ZG9tYWlu.display_name": {
+          "source": "Domain",
+          "message": "網域"
+        },
+        "app.QXBvbGxv.action.dXBkYXRlLWFjY291bnQ.option.ZG9tYWlu.short_desc": {
+          "source": "Company domain",
+          "message": "公司網域"
+        },
+        "app.QXBvbGxv.action.dXBkYXRlLWFjY291bnQ.option.b3duZXJfaWQ.display_name": {
+          "source": "Owner ID",
+          "message": "擁有者 ID"
+        },
+        "app.QXBvbGxv.action.dXBkYXRlLWFjY291bnQ.option.b3duZXJfaWQ.short_desc": {
+          "source": "Owner user ID",
+          "message": "擁有者使用者 ID"
+        },
+        "app.QXBvbGxv.action.dXBkYXRlLWFjY291bnQ.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "名稱"
+        },
+        "app.QXBvbGxv.action.dXBkYXRlLWFjY291bnQ.option.bmFtZQ.short_desc": {
+          "source": "Account name",
+          "message": "帳戶名稱"
+        },
+        "app.QXBvbGxv.action.dXBkYXRlLWFjY291bnQ.option.cGhvbmU.display_name": {
+          "source": "Phone",
+          "message": "電話"
+        },
+        "app.QXBvbGxv.action.dXBkYXRlLWFjY291bnQ.option.cGhvbmU.short_desc": {
+          "source": "Company phone number",
+          "message": "公司電話號碼"
+        },
+        "app.QXBvbGxv.action.dXBkYXRlLWFjY291bnQ.option.d2Vic2l0ZV91cmw.display_name": {
+          "source": "Website URL",
+          "message": "網站 URL"
+        },
+        "app.QXBvbGxv.action.dXBkYXRlLWFjY291bnQ.option.d2Vic2l0ZV91cmw.short_desc": {
+          "source": "Company website URL",
+          "message": "公司網站 URL"
+        },
+        "app.QXBvbGxv.action.dXBkYXRlLWFjY291bnQ.short_desc": {
+          "source": "Update an existing account",
+          "message": "更新現有帳戶"
+        },
+        "app.QXBvbGxv.action.dXBkYXRlLWNvbnRhY3Q.desc": {
+          "source": "Update an existing contact in Apollo",
+          "message": "更新 Apollo 中的現有聯絡人"
+        },
+        "app.QXBvbGxv.action.dXBkYXRlLWNvbnRhY3Q.display_name": {
+          "source": "Update a Contact",
+          "message": "更新聯絡人"
+        },
+        "app.QXBvbGxv.action.dXBkYXRlLWNvbnRhY3Q.option.Y29udGFjdF9pZA.display_name": {
+          "source": "Contact ID",
+          "message": "聯絡人 ID"
+        },
+        "app.QXBvbGxv.action.dXBkYXRlLWNvbnRhY3Q.option.Y29udGFjdF9pZA.short_desc": {
+          "source": "The contact to update",
+          "message": "要更新的聯絡人"
+        },
+        "app.QXBvbGxv.action.dXBkYXRlLWNvbnRhY3Q.option.ZW1haWw.display_name": {
+          "source": "Email",
+          "message": "電子郵件"
+        },
+        "app.QXBvbGxv.action.dXBkYXRlLWNvbnRhY3Q.option.ZW1haWw.short_desc": {
+          "source": "Contact email address",
+          "message": "聯絡人電子郵件地址"
+        },
+        "app.QXBvbGxv.action.dXBkYXRlLWNvbnRhY3Q.option.Zmlyc3RfbmFtZQ.display_name": {
+          "source": "First Name",
+          "message": "名字"
+        },
+        "app.QXBvbGxv.action.dXBkYXRlLWNvbnRhY3Q.option.Zmlyc3RfbmFtZQ.short_desc": {
+          "source": "Contact first name",
+          "message": "聯絡人名字"
+        },
+        "app.QXBvbGxv.action.dXBkYXRlLWNvbnRhY3Q.option.b3JnYW5pemF0aW9uX25hbWU.display_name": {
+          "source": "Organization Name",
+          "message": "組織名稱"
+        },
+        "app.QXBvbGxv.action.dXBkYXRlLWNvbnRhY3Q.option.b3JnYW5pemF0aW9uX25hbWU.short_desc": {
+          "source": "The company name",
+          "message": "公司名稱"
+        },
+        "app.QXBvbGxv.action.dXBkYXRlLWNvbnRhY3Q.option.b3duZXJfaWQ.display_name": {
+          "source": "Owner ID",
+          "message": "擁有者 ID"
+        },
+        "app.QXBvbGxv.action.dXBkYXRlLWNvbnRhY3Q.option.b3duZXJfaWQ.short_desc": {
+          "source": "Owner user ID",
+          "message": "擁有者使用者 ID"
+        },
+        "app.QXBvbGxv.action.dXBkYXRlLWNvbnRhY3Q.option.bGFzdF9uYW1l.display_name": {
+          "source": "Last Name",
+          "message": "姓氏"
+        },
+        "app.QXBvbGxv.action.dXBkYXRlLWNvbnRhY3Q.option.bGFzdF9uYW1l.short_desc": {
+          "source": "Contact last name",
+          "message": "聯絡人姓氏"
+        },
+        "app.QXBvbGxv.action.dXBkYXRlLWNvbnRhY3Q.option.cGhvbmVfbnVtYmVy.display_name": {
+          "source": "Phone Number",
+          "message": "電話號碼"
+        },
+        "app.QXBvbGxv.action.dXBkYXRlLWNvbnRhY3Q.option.cGhvbmVfbnVtYmVy.short_desc": {
+          "source": "Contact phone number",
+          "message": "聯絡人電話號碼"
+        },
+        "app.QXBvbGxv.action.dXBkYXRlLWNvbnRhY3Q.option.cHJlc2VudF9yYXdfYWRkcmVzcw.display_name": {
+          "source": "Present Address",
+          "message": "目前地址"
+        },
+        "app.QXBvbGxv.action.dXBkYXRlLWNvbnRhY3Q.option.cHJlc2VudF9yYXdfYWRkcmVzcw.short_desc": {
+          "source": "Contact current location",
+          "message": "聯絡人目前所在地"
+        },
+        "app.QXBvbGxv.action.dXBkYXRlLWNvbnRhY3Q.option.dGl0bGU.display_name": {
+          "source": "Job Title",
+          "message": "職稱"
+        },
+        "app.QXBvbGxv.action.dXBkYXRlLWNvbnRhY3Q.option.dGl0bGU.short_desc": {
+          "source": "Contact job title",
+          "message": "聯絡人職稱"
+        },
+        "app.QXBvbGxv.action.dXBkYXRlLWNvbnRhY3Q.short_desc": {
+          "source": "Update an existing contact",
+          "message": "更新現有聯絡人"
+        },
+        "app.QXBvbGxv.action.dXBkYXRlLWRlYWw.desc": {
+          "source": "Update an existing deal (opportunity) in Apollo",
+          "message": "更新 Apollo 中的現有交易（商機）"
+        },
+        "app.QXBvbGxv.action.dXBkYXRlLWRlYWw.display_name": {
+          "source": "Update a Deal",
+          "message": "更新交易"
+        },
+        "app.QXBvbGxv.action.dXBkYXRlLWRlYWw.option.Y2xvc2VkX2RhdGU.display_name": {
+          "source": "Close Date",
+          "message": "關閉日期"
+        },
+        "app.QXBvbGxv.action.dXBkYXRlLWRlYWw.option.Y2xvc2VkX2RhdGU.short_desc": {
+          "source": "Expected close date",
+          "message": "預計關閉日期"
+        },
+        "app.QXBvbGxv.action.dXBkYXRlLWRlYWw.option.YW1vdW50.display_name": {
+          "source": "Amount",
+          "message": "數量"
+        },
+        "app.QXBvbGxv.action.dXBkYXRlLWRlYWw.option.YW1vdW50.short_desc": {
+          "source": "Deal amount",
+          "message": "交易金額"
+        },
+        "app.QXBvbGxv.action.dXBkYXRlLWRlYWw.option.ZGVhbF9pZA.display_name": {
+          "source": "Deal ID",
+          "message": "交易 ID"
+        },
+        "app.QXBvbGxv.action.dXBkYXRlLWRlYWw.option.ZGVhbF9pZA.short_desc": {
+          "source": "The deal to update",
+          "message": "要更新的交易"
+        },
+        "app.QXBvbGxv.action.dXBkYXRlLWRlYWw.option.b3duZXJfaWQ.display_name": {
+          "source": "Owner ID",
+          "message": "擁有者 ID"
+        },
+        "app.QXBvbGxv.action.dXBkYXRlLWRlYWw.option.b3duZXJfaWQ.short_desc": {
+          "source": "Owner user ID",
+          "message": "擁有者使用者 ID"
+        },
+        "app.QXBvbGxv.action.dXBkYXRlLWRlYWw.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "名稱"
+        },
+        "app.QXBvbGxv.action.dXBkYXRlLWRlYWw.option.bmFtZQ.short_desc": {
+          "source": "Deal name",
+          "message": "交易名稱"
+        },
+        "app.QXBvbGxv.action.dXBkYXRlLWRlYWw.option.c3RhZ2VfbmFtZQ.display_name": {
+          "source": "Stage",
+          "message": "階段"
+        },
+        "app.QXBvbGxv.action.dXBkYXRlLWRlYWw.option.c3RhZ2VfbmFtZQ.short_desc": {
+          "source": "Deal stage name",
+          "message": "交易階段名稱"
+        },
+        "app.QXBvbGxv.action.dXBkYXRlLWRlYWw.option.c3RhdHVz.display_name": {
+          "source": "Status",
+          "message": "狀態"
+        },
+        "app.QXBvbGxv.action.dXBkYXRlLWRlYWw.option.c3RhdHVz.short_desc": {
+          "source": "Deal status",
+          "message": "交易狀態"
+        },
+        "app.QXBvbGxv.action.dXBkYXRlLWRlYWw.short_desc": {
+          "source": "Update an existing deal",
+          "message": "更新現有交易"
+        },
+        "app.QXBvbGxv.desc": {
+          "source": "Apollo is a B2B sales intelligence and engagement platform providing access to 210M+ contacts and 35M+ companies for prospecting, enrichment, and deal management.\n\nThis integration supports CRUD operations on contacts, accounts, and deals, plus people and organization enrichment and search.",
+          "message": "Apollo 是一個 B2B 銷售情報與互動平台，提供超過 2.1 億個聯絡人與超過 3500 萬家公司的存取權限，可用於潛在客戶開發、資料擴充與交易管理。\n\n此整合支援對聯絡人、帳戶和交易的 CRUD 操作，以及人員與組織的擴充和搜尋。"
+        },
+        "app.QXBvbGxv.display_name": {
+          "source": "Apollo",
+          "message": "Apollo"
+        },
+        "app.QXBvbGxv.short_desc": {
+          "source": "Apollo B2B sales intelligence and engagement platform",
+          "message": "Apollo B2B 銷售情報與互動平台"
+        }
+      }
+    }
+  }
+}

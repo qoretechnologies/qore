@@ -839,9 +839,11 @@ static QoreStringNode* qore_sprintf_intern(ExceptionSink* xsink, const QoreStrin
     bool ignore_broken_sprintf = false) {
     SimpleRefHolder<QoreStringNode> buf(new QoreStringNode(fmt->getEncoding()));
 
-    bool broken_sprintf = ignore_broken_sprintf
-        ? false
-        : static_cast<bool>(getProgram()->getParseOptions() & PO_BROKEN_SPRINTF);
+    // the current program can be nullptr when formatting is performed on a native thread that never
+    // entered a program (ex: an async I/O thread rendering a log message); no program means no
+    // PO_BROKEN_SPRINTF
+    QoreProgram* pgm = ignore_broken_sprintf ? nullptr : getProgram();
+    bool broken_sprintf = pgm && static_cast<bool>(pgm->getParseOptions() & PO_BROKEN_SPRINTF);
 
     const char* pstr = fmt->c_str();
     size_t l = fmt->strlen();

@@ -1,0 +1,1253 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "sk": {
+      "messages": {
+        "app.U21hcnRzaGVldA.action.Y3JlYXRlLWZvbGRlcg.desc": {
+          "source": "Create a new folder in the home location",
+          "message": "Vytvoriť nový priečinok v domovskom umiestnení"
+        },
+        "app.U21hcnRzaGVldA.action.Y3JlYXRlLWZvbGRlcg.display_name": {
+          "source": "Create a Folder",
+          "message": "Vytvoriť priečinok"
+        },
+        "app.U21hcnRzaGVldA.action.Y3JlYXRlLWZvbGRlcg.option.bmFtZQ.desc": {
+          "source": "The name for the new folder",
+          "message": "Názov pre nový priečinok"
+        },
+        "app.U21hcnRzaGVldA.action.Y3JlYXRlLWZvbGRlcg.option.bmFtZQ.display_name": {
+          "source": "Folder Name",
+          "message": "Názov priečinka"
+        },
+        "app.U21hcnRzaGVldA.action.Y3JlYXRlLWZvbGRlcg.option.bmFtZQ.short_desc": {
+          "source": "Name for the new folder",
+          "message": "Názov nového priečinka"
+        },
+        "app.U21hcnRzaGVldA.action.Y3JlYXRlLWZvbGRlcg.short_desc": {
+          "source": "Create a new folder",
+          "message": "Vytvoriť nový priečinok"
+        },
+        "app.U21hcnRzaGVldA.action.Y3JlYXRlLWdyb3Vw.desc": {
+          "source": "Create a new Smartsheet group with optional initial members",
+          "message": "Vytvoriť novú skupinu Smartsheet s voliteľnými počiatočnými členmi"
+        },
+        "app.U21hcnRzaGVldA.action.Y3JlYXRlLWdyb3Vw.display_name": {
+          "source": "Create a Group",
+          "message": "Vytvoriť skupinu"
+        },
+        "app.U21hcnRzaGVldA.action.Y3JlYXRlLWdyb3Vw.option.ZGVzY3JpcHRpb24.desc": {
+          "source": "A description of the new group",
+          "message": "Popis novej skupiny"
+        },
+        "app.U21hcnRzaGVldA.action.Y3JlYXRlLWdyb3Vw.option.ZGVzY3JpcHRpb24.display_name": {
+          "source": "Description",
+          "message": "Popis"
+        },
+        "app.U21hcnRzaGVldA.action.Y3JlYXRlLWdyb3Vw.option.ZGVzY3JpcHRpb24.short_desc": {
+          "source": "Group description",
+          "message": "Popis skupiny"
+        },
+        "app.U21hcnRzaGVldA.action.Y3JlYXRlLWdyb3Vw.option.bWVtYmVycw.desc": {
+          "source": "A list of members to add to the group. Each member requires an `email` address",
+          "message": "Zoznam členov na pridanie do skupiny. Každý člen vyžaduje adresu `email`"
+        },
+        "app.U21hcnRzaGVldA.action.Y3JlYXRlLWdyb3Vw.option.bWVtYmVycw.display_name": {
+          "source": "Members",
+          "message": "Členovia"
+        },
+        "app.U21hcnRzaGVldA.action.Y3JlYXRlLWdyb3Vw.option.bWVtYmVycw.short_desc": {
+          "source": "Initial group members",
+          "message": "Počiatoční členovia skupiny"
+        },
+        "app.U21hcnRzaGVldA.action.Y3JlYXRlLWdyb3Vw.option.bmFtZQ.desc": {
+          "source": "The name for the new group",
+          "message": "Názov novej skupiny"
+        },
+        "app.U21hcnRzaGVldA.action.Y3JlYXRlLWdyb3Vw.option.bmFtZQ.display_name": {
+          "source": "Group Name",
+          "message": "Názov skupiny"
+        },
+        "app.U21hcnRzaGVldA.action.Y3JlYXRlLWdyb3Vw.option.bmFtZQ.short_desc": {
+          "source": "Name for the new group",
+          "message": "Názov novej skupiny"
+        },
+        "app.U21hcnRzaGVldA.action.Y3JlYXRlLWdyb3Vw.short_desc": {
+          "source": "Create a new group",
+          "message": "Vytvoriť novú skupinu"
+        },
+        "app.U21hcnRzaGVldA.action.Y3JlYXRlLXJvdw.desc": {
+          "source": "Create a new row in a Smartsheet sheet with values for the sheet's columns. Column fields are determined dynamically from the selected sheet's column definitions",
+          "message": "Vytvoriť nový riadok v hárku Smartsheet s hodnotami pre stĺpce hárka. Polia stĺpcov sa určujú dynamicky z definícií stĺpcov vybraného hárka"
+        },
+        "app.U21hcnRzaGVldA.action.Y3JlYXRlLXJvdw.display_name": {
+          "source": "Create Row",
+          "message": "Vytvoriť riadok"
+        },
+        "app.U21hcnRzaGVldA.action.Y3JlYXRlLXJvdw.option.c2hlZXQ.desc": {
+          "source": "Select the Smartsheet sheet where the new row will be created",
+          "message": "Vyberte hárok Smartsheet, v ktorom sa vytvorí nový riadok"
+        },
+        "app.U21hcnRzaGVldA.action.Y3JlYXRlLXJvdw.option.c2hlZXQ.display_name": {
+          "source": "Sheet",
+          "message": "Hárok"
+        },
+        "app.U21hcnRzaGVldA.action.Y3JlYXRlLXJvdw.option.c2hlZXQ.short_desc": {
+          "source": "The Smartsheet sheet to create a row in",
+          "message": "Hárok Smartsheet, v ktorom sa má vytvoriť riadok"
+        },
+        "app.U21hcnRzaGVldA.action.Y3JlYXRlLXJvdw.short_desc": {
+          "source": "Create a row in a sheet",
+          "message": "Vytvoriť riadok v hárku"
+        },
+        "app.U21hcnRzaGVldA.action.Y3JlYXRlLXNoZWV0.desc": {
+          "source": "Create a new Smartsheet sheet with the given name and column definitions",
+          "message": "Vytvoriť nový hárok Smartsheet so zadaným názvom a definíciami stĺpcov"
+        },
+        "app.U21hcnRzaGVldA.action.Y3JlYXRlLXNoZWV0.display_name": {
+          "source": "Create a Sheet",
+          "message": "Vytvoriť hárok"
+        },
+        "app.U21hcnRzaGVldA.action.Y3JlYXRlLXNoZWV0.option.Y29sdW1ucw.desc": {
+          "source": "A list of column definitions. Each column requires a `title` and `type`. The first column must be the primary column with `\"primary\": True`",
+          "message": "Zoznam definícií stĺpcov. Každý stĺpec vyžaduje `title` a `type`. Prvý stĺpec musí byť primárny stĺpec s `\"primary\": True`"
+        },
+        "app.U21hcnRzaGVldA.action.Y3JlYXRlLXNoZWV0.option.Y29sdW1ucw.display_name": {
+          "source": "Columns",
+          "message": "Stĺpce"
+        },
+        "app.U21hcnRzaGVldA.action.Y3JlYXRlLXNoZWV0.option.Y29sdW1ucw.short_desc": {
+          "source": "Column definitions",
+          "message": "Definície stĺpcov"
+        },
+        "app.U21hcnRzaGVldA.action.Y3JlYXRlLXNoZWV0.option.bmFtZQ.desc": {
+          "source": "The name for the new sheet",
+          "message": "Názov nového hárka"
+        },
+        "app.U21hcnRzaGVldA.action.Y3JlYXRlLXNoZWV0.option.bmFtZQ.display_name": {
+          "source": "Sheet Name",
+          "message": "Názov hárka"
+        },
+        "app.U21hcnRzaGVldA.action.Y3JlYXRlLXNoZWV0.option.bmFtZQ.short_desc": {
+          "source": "Name for the new sheet",
+          "message": "Názov nového hárka"
+        },
+        "app.U21hcnRzaGVldA.action.Y3JlYXRlLXNoZWV0.short_desc": {
+          "source": "Create a new sheet",
+          "message": "Vytvoriť nový hárok"
+        },
+        "app.U21hcnRzaGVldA.action.Y3JlYXRlLXVzZXI.desc": {
+          "source": "Add a new user to the Smartsheet organization",
+          "message": "Pridať nového používateľa do organizácie Smartsheet"
+        },
+        "app.U21hcnRzaGVldA.action.Y3JlYXRlLXVzZXI.display_name": {
+          "source": "Add a User",
+          "message": "Pridať používateľa"
+        },
+        "app.U21hcnRzaGVldA.action.Y3JlYXRlLXVzZXI.option.YWRtaW4.desc": {
+          "source": "Whether the user should be a system admin",
+          "message": "Či má byť používateľ systémovým správcom"
+        },
+        "app.U21hcnRzaGVldA.action.Y3JlYXRlLXVzZXI.option.YWRtaW4.display_name": {
+          "source": "Admin",
+          "message": "Správca"
+        },
+        "app.U21hcnRzaGVldA.action.Y3JlYXRlLXVzZXI.option.YWRtaW4.short_desc": {
+          "source": "Whether user is admin",
+          "message": "Či je používateľ správca"
+        },
+        "app.U21hcnRzaGVldA.action.Y3JlYXRlLXVzZXI.option.Z3JvdXBBZG1pbg.desc": {
+          "source": "Whether the user should be a group admin",
+          "message": "Či má byť používateľ správcom skupiny"
+        },
+        "app.U21hcnRzaGVldA.action.Y3JlYXRlLXVzZXI.option.Z3JvdXBBZG1pbg.display_name": {
+          "source": "Group Admin",
+          "message": "Správca skupiny"
+        },
+        "app.U21hcnRzaGVldA.action.Y3JlYXRlLXVzZXI.option.Z3JvdXBBZG1pbg.short_desc": {
+          "source": "Whether user is group admin",
+          "message": "Či je používateľ správca skupiny"
+        },
+        "app.U21hcnRzaGVldA.action.Y3JlYXRlLXVzZXI.option.ZW1haWw.desc": {
+          "source": "The email address for the new user",
+          "message": "E-mailová adresa nového používateľa"
+        },
+        "app.U21hcnRzaGVldA.action.Y3JlYXRlLXVzZXI.option.ZW1haWw.display_name": {
+          "source": "Email",
+          "message": "E-mail"
+        },
+        "app.U21hcnRzaGVldA.action.Y3JlYXRlLXVzZXI.option.ZW1haWw.short_desc": {
+          "source": "Email address",
+          "message": "E-mailová adresa"
+        },
+        "app.U21hcnRzaGVldA.action.Y3JlYXRlLXVzZXI.option.Zmlyc3ROYW1l.desc": {
+          "source": "The first name of the new user",
+          "message": "Meno nového používateľa"
+        },
+        "app.U21hcnRzaGVldA.action.Y3JlYXRlLXVzZXI.option.Zmlyc3ROYW1l.display_name": {
+          "source": "First Name",
+          "message": "Meno"
+        },
+        "app.U21hcnRzaGVldA.action.Y3JlYXRlLXVzZXI.option.Zmlyc3ROYW1l.short_desc": {
+          "source": "User's first name",
+          "message": "Meno používateľa"
+        },
+        "app.U21hcnRzaGVldA.action.Y3JlYXRlLXVzZXI.option.bGFzdE5hbWU.desc": {
+          "source": "The last name of the new user",
+          "message": "Priezvisko nového používateľa"
+        },
+        "app.U21hcnRzaGVldA.action.Y3JlYXRlLXVzZXI.option.bGFzdE5hbWU.display_name": {
+          "source": "Last Name",
+          "message": "Priezvisko"
+        },
+        "app.U21hcnRzaGVldA.action.Y3JlYXRlLXVzZXI.option.bGFzdE5hbWU.short_desc": {
+          "source": "User's last name",
+          "message": "Priezvisko používateľa"
+        },
+        "app.U21hcnRzaGVldA.action.Y3JlYXRlLXVzZXI.option.bGljZW5zZWRTaGVldENyZWF0b3I.desc": {
+          "source": "Whether the user should be a licensed sheet creator",
+          "message": "Či má byť používateľ licencovaným tvorcom hárkov"
+        },
+        "app.U21hcnRzaGVldA.action.Y3JlYXRlLXVzZXI.option.bGljZW5zZWRTaGVldENyZWF0b3I.display_name": {
+          "source": "Licensed Sheet Creator",
+          "message": "Licencovaný tvorca hárkov"
+        },
+        "app.U21hcnRzaGVldA.action.Y3JlYXRlLXVzZXI.option.bGljZW5zZWRTaGVldENyZWF0b3I.short_desc": {
+          "source": "Whether user can create sheets",
+          "message": "Či používateľ môže vytvárať hárky"
+        },
+        "app.U21hcnRzaGVldA.action.Y3JlYXRlLXVzZXI.option.cmVzb3VyY2VWaWV3ZXI.desc": {
+          "source": "Whether the user should be a resource viewer",
+          "message": "Či má byť používateľ prehliadačom zdrojov"
+        },
+        "app.U21hcnRzaGVldA.action.Y3JlYXRlLXVzZXI.option.cmVzb3VyY2VWaWV3ZXI.display_name": {
+          "source": "Resource Viewer",
+          "message": "Prehliadač zdrojov"
+        },
+        "app.U21hcnRzaGVldA.action.Y3JlYXRlLXVzZXI.option.cmVzb3VyY2VWaWV3ZXI.short_desc": {
+          "source": "Whether user is resource viewer",
+          "message": "Či je používateľ prehliadač zdrojov"
+        },
+        "app.U21hcnRzaGVldA.action.Y3JlYXRlLXVzZXI.short_desc": {
+          "source": "Add a user to the organization",
+          "message": "Pridať používateľa do organizácie"
+        },
+        "app.U21hcnRzaGVldA.action.Y3JlYXRlLXdvcmtzcGFjZQ.desc": {
+          "source": "Create a new Smartsheet workspace",
+          "message": "Vytvoriť nový pracovný priestor Smartsheet"
+        },
+        "app.U21hcnRzaGVldA.action.Y3JlYXRlLXdvcmtzcGFjZQ.display_name": {
+          "source": "Create a Workspace",
+          "message": "Vytvoriť pracovný priestor"
+        },
+        "app.U21hcnRzaGVldA.action.Y3JlYXRlLXdvcmtzcGFjZQ.option.bmFtZQ.desc": {
+          "source": "The name for the new workspace",
+          "message": "Názov nového pracovného priestoru"
+        },
+        "app.U21hcnRzaGVldA.action.Y3JlYXRlLXdvcmtzcGFjZQ.option.bmFtZQ.display_name": {
+          "source": "Workspace Name",
+          "message": "Názov pracovného priestoru"
+        },
+        "app.U21hcnRzaGVldA.action.Y3JlYXRlLXdvcmtzcGFjZQ.option.bmFtZQ.short_desc": {
+          "source": "Name for the new workspace",
+          "message": "Názov nového pracovného priestoru"
+        },
+        "app.U21hcnRzaGVldA.action.Y3JlYXRlLXdvcmtzcGFjZQ.short_desc": {
+          "source": "Create a new workspace",
+          "message": "Vytvoriť nový pracovný priestor"
+        },
+        "app.U21hcnRzaGVldA.action.ZGVsZXRlLWZvbGRlcg.desc": {
+          "source": "Permanently delete a Smartsheet folder",
+          "message": "Natrvalo odstrániť priečinok Smartsheet"
+        },
+        "app.U21hcnRzaGVldA.action.ZGVsZXRlLWZvbGRlcg.display_name": {
+          "source": "Delete a Folder",
+          "message": "Odstrániť priečinok"
+        },
+        "app.U21hcnRzaGVldA.action.ZGVsZXRlLWZvbGRlcg.option.Zm9sZGVySWQ.desc": {
+          "source": "The unique identifier of the folder to delete",
+          "message": "Jedinečný identifikátor priečinka, ktorý sa má odstrániť"
+        },
+        "app.U21hcnRzaGVldA.action.ZGVsZXRlLWZvbGRlcg.option.Zm9sZGVySWQ.display_name": {
+          "source": "Folder ID",
+          "message": "ID priečinka"
+        },
+        "app.U21hcnRzaGVldA.action.ZGVsZXRlLWZvbGRlcg.option.Zm9sZGVySWQ.short_desc": {
+          "source": "ID of the folder to delete",
+          "message": "ID priečinka, ktorý sa má odstrániť"
+        },
+        "app.U21hcnRzaGVldA.action.ZGVsZXRlLWZvbGRlcg.short_desc": {
+          "source": "Delete a folder",
+          "message": "Odstrániť priečinok"
+        },
+        "app.U21hcnRzaGVldA.action.ZGVsZXRlLWdyb3Vw.desc": {
+          "source": "Permanently delete a Smartsheet group",
+          "message": "Natrvalo odstrániť skupinu Smartsheet"
+        },
+        "app.U21hcnRzaGVldA.action.ZGVsZXRlLWdyb3Vw.display_name": {
+          "source": "Delete a Group",
+          "message": "Odstrániť skupinu"
+        },
+        "app.U21hcnRzaGVldA.action.ZGVsZXRlLWdyb3Vw.option.Z3JvdXBJZA.desc": {
+          "source": "The unique identifier of the group to delete",
+          "message": "Jedinečný identifikátor skupiny, ktorá sa má odstrániť"
+        },
+        "app.U21hcnRzaGVldA.action.ZGVsZXRlLWdyb3Vw.option.Z3JvdXBJZA.display_name": {
+          "source": "Group ID",
+          "message": "ID skupiny"
+        },
+        "app.U21hcnRzaGVldA.action.ZGVsZXRlLWdyb3Vw.option.Z3JvdXBJZA.short_desc": {
+          "source": "ID of the group to delete",
+          "message": "ID skupiny, ktorá sa má odstrániť"
+        },
+        "app.U21hcnRzaGVldA.action.ZGVsZXRlLWdyb3Vw.short_desc": {
+          "source": "Delete a group",
+          "message": "Odstrániť skupinu"
+        },
+        "app.U21hcnRzaGVldA.action.ZGVsZXRlLXJvd3M.desc": {
+          "source": "Delete matching rows from a Smartsheet sheet",
+          "message": "Odstrániť zodpovedajúce riadky z hárka Smartsheet"
+        },
+        "app.U21hcnRzaGVldA.action.ZGVsZXRlLXJvd3M.display_name": {
+          "source": "Delete Rows",
+          "message": "Odstrániť riadky"
+        },
+        "app.U21hcnRzaGVldA.action.ZGVsZXRlLXJvd3M.option.c2hlZXQ.desc": {
+          "source": "Select the Smartsheet sheet where rows will be deleted",
+          "message": "Vyberte hárok Smartsheet, z ktorého sa odstránia riadky"
+        },
+        "app.U21hcnRzaGVldA.action.ZGVsZXRlLXJvd3M.option.c2hlZXQ.display_name": {
+          "source": "Sheet",
+          "message": "Hárok"
+        },
+        "app.U21hcnRzaGVldA.action.ZGVsZXRlLXJvd3M.option.c2hlZXQ.short_desc": {
+          "source": "The Smartsheet sheet to delete rows from",
+          "message": "Hárok Smartsheet, z ktorého sa majú odstrániť riadky"
+        },
+        "app.U21hcnRzaGVldA.action.ZGVsZXRlLXJvd3M.short_desc": {
+          "source": "Delete rows from a sheet",
+          "message": "Odstrániť riadky z hárka"
+        },
+        "app.U21hcnRzaGVldA.action.ZGVsZXRlLXNoZWV0.desc": {
+          "source": "Permanently delete a Smartsheet sheet",
+          "message": "Trvalo odstrániť hárok Smartsheet"
+        },
+        "app.U21hcnRzaGVldA.action.ZGVsZXRlLXNoZWV0.display_name": {
+          "source": "Delete a Sheet",
+          "message": "Odstrániť hárok"
+        },
+        "app.U21hcnRzaGVldA.action.ZGVsZXRlLXNoZWV0.option.c2hlZXRJZA.desc": {
+          "source": "The unique identifier of the sheet to delete",
+          "message": "Jedinečný identifikátor hárka, ktorý sa má odstrániť"
+        },
+        "app.U21hcnRzaGVldA.action.ZGVsZXRlLXNoZWV0.option.c2hlZXRJZA.display_name": {
+          "source": "Sheet ID",
+          "message": "ID hárka"
+        },
+        "app.U21hcnRzaGVldA.action.ZGVsZXRlLXNoZWV0.option.c2hlZXRJZA.short_desc": {
+          "source": "ID of the sheet to delete",
+          "message": "ID hárka, ktorý sa má odstrániť"
+        },
+        "app.U21hcnRzaGVldA.action.ZGVsZXRlLXNoZWV0.short_desc": {
+          "source": "Delete a sheet",
+          "message": "Odstrániť hárok"
+        },
+        "app.U21hcnRzaGVldA.action.ZGVsZXRlLXVzZXI.desc": {
+          "source": "Remove a user from the Smartsheet organization",
+          "message": "Odstrániť používateľa z organizácie Smartsheet"
+        },
+        "app.U21hcnRzaGVldA.action.ZGVsZXRlLXVzZXI.display_name": {
+          "source": "Remove a User",
+          "message": "Odstrániť používateľa"
+        },
+        "app.U21hcnRzaGVldA.action.ZGVsZXRlLXVzZXI.option.cmVtb3ZlRnJvbVNoYXJpbmc.desc": {
+          "source": "If `True`, removes the user from your organization and revokes their access to all organization and plan assets",
+          "message": "Ak `True`, odstráni používateľa z vašej organizácie a odoberie mu prístup ku všetkým prostriedkom organizácie a plánu"
+        },
+        "app.U21hcnRzaGVldA.action.ZGVsZXRlLXVzZXI.option.cmVtb3ZlRnJvbVNoYXJpbmc.display_name": {
+          "source": "Remove From Sharing",
+          "message": "Odstrániť zo zdieľania"
+        },
+        "app.U21hcnRzaGVldA.action.ZGVsZXRlLXVzZXI.option.cmVtb3ZlRnJvbVNoYXJpbmc.short_desc": {
+          "source": "Revoke access to shared assets",
+          "message": "Odobrať prístup k zdieľaným prostriedkom"
+        },
+        "app.U21hcnRzaGVldA.action.ZGVsZXRlLXVzZXI.option.dHJhbnNmZXJTaGVldHM.desc": {
+          "source": "If `True`, transfers ownership of all the removed user's assets and groups to the user specified in `transferTo`",
+          "message": "Ak `True`, prevedie vlastníctvo všetkých prostriedkov a skupín odstráneného používateľa na používateľa zadaného v `transferTo`"
+        },
+        "app.U21hcnRzaGVldA.action.ZGVsZXRlLXVzZXI.option.dHJhbnNmZXJTaGVldHM.display_name": {
+          "source": "Transfer Sheets",
+          "message": "Previesť hárky"
+        },
+        "app.U21hcnRzaGVldA.action.ZGVsZXRlLXVzZXI.option.dHJhbnNmZXJTaGVldHM.short_desc": {
+          "source": "Transfer sheets to the target user",
+          "message": "Previesť hárky na cieľového používateľa"
+        },
+        "app.U21hcnRzaGVldA.action.ZGVsZXRlLXVzZXI.option.dHJhbnNmZXJUbw.desc": {
+          "source": "The ID of the user to whom ownership of groups (and optionally sheets) will be transferred. If omitted, group ownership is transferred to the organization's main contact",
+          "message": "ID používateľa, na ktorého sa prevedie vlastníctvo skupín (a voliteľne hárkov). Ak je vynechané, vlastníctvo skupiny sa prevedie na hlavný kontakt organizácie"
+        },
+        "app.U21hcnRzaGVldA.action.ZGVsZXRlLXVzZXI.option.dHJhbnNmZXJUbw.display_name": {
+          "source": "Transfer To",
+          "message": "Previesť na"
+        },
+        "app.U21hcnRzaGVldA.action.ZGVsZXRlLXVzZXI.option.dHJhbnNmZXJUbw.short_desc": {
+          "source": "User ID to transfer ownership to",
+          "message": "ID používateľa, na ktorého sa má previesť vlastníctvo"
+        },
+        "app.U21hcnRzaGVldA.action.ZGVsZXRlLXVzZXI.option.dXNlcklk.desc": {
+          "source": "The unique identifier of the user to delete",
+          "message": "Jedinečný identifikátor používateľa, ktorý sa má odstrániť"
+        },
+        "app.U21hcnRzaGVldA.action.ZGVsZXRlLXVzZXI.option.dXNlcklk.display_name": {
+          "source": "User ID",
+          "message": "ID používateľa"
+        },
+        "app.U21hcnRzaGVldA.action.ZGVsZXRlLXVzZXI.option.dXNlcklk.short_desc": {
+          "source": "ID of the user to delete",
+          "message": "ID používateľa, ktorý sa má odstrániť"
+        },
+        "app.U21hcnRzaGVldA.action.ZGVsZXRlLXVzZXI.short_desc": {
+          "source": "Remove a user from the organization",
+          "message": "Odstrániť používateľa z organizácie"
+        },
+        "app.U21hcnRzaGVldA.action.ZGVsZXRlLXdvcmtzcGFjZQ.desc": {
+          "source": "Permanently delete a Smartsheet workspace",
+          "message": "Trvalo odstrániť pracovný priestor Smartsheet"
+        },
+        "app.U21hcnRzaGVldA.action.ZGVsZXRlLXdvcmtzcGFjZQ.display_name": {
+          "source": "Delete a Workspace",
+          "message": "Odstrániť pracovný priestor"
+        },
+        "app.U21hcnRzaGVldA.action.ZGVsZXRlLXdvcmtzcGFjZQ.option.d29ya3NwYWNlSWQ.desc": {
+          "source": "The unique identifier of the workspace to delete",
+          "message": "Jedinečný identifikátor pracovného priestoru, ktorý sa má odstrániť"
+        },
+        "app.U21hcnRzaGVldA.action.ZGVsZXRlLXdvcmtzcGFjZQ.option.d29ya3NwYWNlSWQ.display_name": {
+          "source": "Workspace ID",
+          "message": "ID pracovného priestoru"
+        },
+        "app.U21hcnRzaGVldA.action.ZGVsZXRlLXdvcmtzcGFjZQ.option.d29ya3NwYWNlSWQ.short_desc": {
+          "source": "ID of the workspace to delete",
+          "message": "ID pracovného priestoru, ktorý sa má odstrániť"
+        },
+        "app.U21hcnRzaGVldA.action.ZGVsZXRlLXdvcmtzcGFjZQ.short_desc": {
+          "source": "Delete a workspace",
+          "message": "Odstrániť pracovný priestor"
+        },
+        "app.U21hcnRzaGVldA.action.ZmluZC1yb3dz.desc": {
+          "source": "Search for rows in a Smartsheet sheet by column values. Column fields are determined dynamically from the selected sheet's column definitions",
+          "message": "Hľadať riadky v hárku Smartsheet podľa hodnôt stĺpcov. Polia stĺpcov sa určujú dynamicky z definícií stĺpcov vybraného hárka"
+        },
+        "app.U21hcnRzaGVldA.action.ZmluZC1yb3dz.display_name": {
+          "source": "Find Rows",
+          "message": "Nájsť riadky"
+        },
+        "app.U21hcnRzaGVldA.action.ZmluZC1yb3dz.option.c2hlZXQ.desc": {
+          "source": "Select the Smartsheet sheet to search for rows",
+          "message": "Vyberte hárok Smartsheet, v ktorom sa majú hľadať riadky"
+        },
+        "app.U21hcnRzaGVldA.action.ZmluZC1yb3dz.option.c2hlZXQ.display_name": {
+          "source": "Sheet",
+          "message": "Hárok"
+        },
+        "app.U21hcnRzaGVldA.action.ZmluZC1yb3dz.option.c2hlZXQ.short_desc": {
+          "source": "The Smartsheet sheet to search",
+          "message": "Hárok Smartsheet na prehľadávanie"
+        },
+        "app.U21hcnRzaGVldA.action.ZmluZC1yb3dz.short_desc": {
+          "source": "Find rows in a sheet",
+          "message": "Nájsť riadky v hárku"
+        },
+        "app.U21hcnRzaGVldA.action.bGlzdC11c2Vycw.desc": {
+          "source": "List all users in the Smartsheet organization",
+          "message": "Zoznam všetkých používateľov v organizácii Smartsheet"
+        },
+        "app.U21hcnRzaGVldA.action.bGlzdC11c2Vycw.display_name": {
+          "source": "List Users",
+          "message": "Zoznam používateľov"
+        },
+        "app.U21hcnRzaGVldA.action.bGlzdC11c2Vycw.option.ZW1haWw.display_name": {
+          "source": "Email",
+          "message": "E-mail"
+        },
+        "app.U21hcnRzaGVldA.action.bGlzdC11c2Vycw.option.ZW1haWw.short_desc": {
+          "source": "Filter by email",
+          "message": "Filtrovať podľa e-mailu"
+        },
+        "app.U21hcnRzaGVldA.action.bGlzdC11c2Vycw.option.dXNlcklk.display_name": {
+          "source": "User ID",
+          "message": "ID používateľa"
+        },
+        "app.U21hcnRzaGVldA.action.bGlzdC11c2Vycw.option.dXNlcklk.short_desc": {
+          "source": "Get a specific user",
+          "message": "Získať konkrétneho používateľa"
+        },
+        "app.U21hcnRzaGVldA.action.bGlzdC11c2Vycw.short_desc": {
+          "source": "List all users",
+          "message": "Zoznam všetkých používateľov"
+        },
+        "app.U21hcnRzaGVldA.action.bGlzdC13b3Jrc3BhY2Vz.desc": {
+          "source": "List all workspaces accessible to the authenticated user",
+          "message": "Zoznam všetkých pracovných priestorov prístupných overenému používateľovi"
+        },
+        "app.U21hcnRzaGVldA.action.bGlzdC13b3Jrc3BhY2Vz.display_name": {
+          "source": "List Workspaces",
+          "message": "Zoznam pracovných priestorov"
+        },
+        "app.U21hcnRzaGVldA.action.bGlzdC13b3Jrc3BhY2Vz.option.d29ya3NwYWNlSWQ.display_name": {
+          "source": "Workspace ID",
+          "message": "ID pracovného priestoru"
+        },
+        "app.U21hcnRzaGVldA.action.bGlzdC13b3Jrc3BhY2Vz.option.d29ya3NwYWNlSWQ.short_desc": {
+          "source": "Get a specific workspace",
+          "message": "Získať konkrétny pracovný priestor"
+        },
+        "app.U21hcnRzaGVldA.action.bGlzdC13b3Jrc3BhY2Vz.short_desc": {
+          "source": "List all workspaces",
+          "message": "Zoznam všetkých pracovných priestorov"
+        },
+        "app.U21hcnRzaGVldA.action.bGlzdC1mb2xkZXJz.desc": {
+          "source": "List all folders in the home location",
+          "message": "Zoznam všetkých priečinkov v domovskom umiestnení"
+        },
+        "app.U21hcnRzaGVldA.action.bGlzdC1mb2xkZXJz.display_name": {
+          "source": "List Folders",
+          "message": "Zoznam priečinkov"
+        },
+        "app.U21hcnRzaGVldA.action.bGlzdC1mb2xkZXJz.option.Zm9sZGVySWQ.display_name": {
+          "source": "Folder ID",
+          "message": "ID priečinka"
+        },
+        "app.U21hcnRzaGVldA.action.bGlzdC1mb2xkZXJz.option.Zm9sZGVySWQ.short_desc": {
+          "source": "Get a specific folder",
+          "message": "Získať konkrétny priečinok"
+        },
+        "app.U21hcnRzaGVldA.action.bGlzdC1mb2xkZXJz.short_desc": {
+          "source": "List home folders",
+          "message": "Zoznam domovských priečinkov"
+        },
+        "app.U21hcnRzaGVldA.action.bGlzdC1ncm91cHM.desc": {
+          "source": "List all groups in the Smartsheet organization",
+          "message": "Zoznam všetkých skupín v organizácii Smartsheet"
+        },
+        "app.U21hcnRzaGVldA.action.bGlzdC1ncm91cHM.display_name": {
+          "source": "List Groups",
+          "message": "Zobraziť skupiny"
+        },
+        "app.U21hcnRzaGVldA.action.bGlzdC1ncm91cHM.option.Z3JvdXBJZA.display_name": {
+          "source": "Group ID",
+          "message": "ID skupiny"
+        },
+        "app.U21hcnRzaGVldA.action.bGlzdC1ncm91cHM.option.Z3JvdXBJZA.short_desc": {
+          "source": "Get a specific group",
+          "message": "Získať konkrétnu skupinu"
+        },
+        "app.U21hcnRzaGVldA.action.bGlzdC1ncm91cHM.short_desc": {
+          "source": "List all groups",
+          "message": "Zoznam všetkých skupín"
+        },
+        "app.U21hcnRzaGVldA.action.bGlzdC1yZXBvcnRz.desc": {
+          "source": "List all reports accessible to the authenticated user (read-only)",
+          "message": "Zoznam všetkých prehľadov prístupných overenému používateľovi (iba na čítanie)"
+        },
+        "app.U21hcnRzaGVldA.action.bGlzdC1yZXBvcnRz.display_name": {
+          "source": "List Reports",
+          "message": "Zoznam reportov"
+        },
+        "app.U21hcnRzaGVldA.action.bGlzdC1yZXBvcnRz.option.cmVwb3J0SWQ.display_name": {
+          "source": "Report ID",
+          "message": "ID správy"
+        },
+        "app.U21hcnRzaGVldA.action.bGlzdC1yZXBvcnRz.option.cmVwb3J0SWQ.short_desc": {
+          "source": "Get a specific report",
+          "message": "Získať konkrétny prehľad"
+        },
+        "app.U21hcnRzaGVldA.action.bGlzdC1yZXBvcnRz.short_desc": {
+          "source": "List all reports",
+          "message": "Zoznam všetkých prehľadov"
+        },
+        "app.U21hcnRzaGVldA.action.bGlzdC1zaGVldHM.desc": {
+          "source": "List all sheets accessible to the authenticated user",
+          "message": "Zoznam všetkých hárkov prístupných overenému používateľovi"
+        },
+        "app.U21hcnRzaGVldA.action.bGlzdC1zaGVldHM.display_name": {
+          "source": "List Sheets",
+          "message": "Zoznam hárkov"
+        },
+        "app.U21hcnRzaGVldA.action.bGlzdC1zaGVldHM.option.c2hlZXRJZA.display_name": {
+          "source": "Sheet ID",
+          "message": "ID hárka"
+        },
+        "app.U21hcnRzaGVldA.action.bGlzdC1zaGVldHM.option.c2hlZXRJZA.short_desc": {
+          "source": "Get a specific sheet",
+          "message": "Získať konkrétny hárok"
+        },
+        "app.U21hcnRzaGVldA.action.bGlzdC1zaGVldHM.short_desc": {
+          "source": "List all sheets",
+          "message": "Zoznam všetkých hárkov"
+        },
+        "app.U21hcnRzaGVldA.action.bWFrZS1hcGktY2FsbA.desc": {
+          "source": "Make a custom HTTP / REST API call to **Smartsheet** using the configured connection's authentication.\n\nSpecify the HTTP method, the URI path (relative to the connection's API base URL), optional query parameters, headers, and request body. The response is returned as a hash containing the status code, response headers, and response body.\n\nUse this action for endpoints that are not yet exposed as first-class actions on this app.",
+          "message": "Vykonajte vlastné volanie HTTP / REST API do **Smartsheet** pomocou autentifikácie nakonfigurovaného pripojenia.\n\nZadajte metódu HTTP, cestu URI (relatívnu k základnej adrese URL rozhrania API pripojenia), voliteľné parametre dopytu, hlavičky a telo požiadavky. Odpoveď sa vráti ako hash obsahujúci stavový kód, hlavičky odpovede a telo odpovede.\n\nTúto akciu použite pre koncové body, ktoré ešte nie sú sprístupnené ako prvotriedne akcie v tejto aplikácii."
+        },
+        "app.U21hcnRzaGVldA.action.bWFrZS1hcGktY2FsbA.display_name": {
+          "source": "Make an API call",
+          "message": "Urobiť volanie API"
+        },
+        "app.U21hcnRzaGVldA.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.desc": {
+          "source": "The request body. The effective type depends on `body_type`: JSON/form/YAML expect a hash, XML/text expect a string, multipart expects a file structure, binary expects raw bytes.",
+          "message": "Telo požiadavky. Efektívny typ závisí od `body_type`: JSON/formulár/YAML očakávajú hash, XML/text očakávajú reťazec, multipart očakáva štruktúru súboru, binárny typ očakáva neopracované bajty."
+        },
+        "app.U21hcnRzaGVldA.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.display_name": {
+          "source": "Body",
+          "message": "Telo"
+        },
+        "app.U21hcnRzaGVldA.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.short_desc": {
+          "source": "The request body",
+          "message": "Telo požiadavky"
+        },
+        "app.U21hcnRzaGVldA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.desc": {
+          "source": "Upload a file using `multipart/form-data`. The body must be a @ref DataProvider::FileDataType \"FileDataType\" structure (filename + content + mime_type). The framework builds the multipart envelope and sets the boundary header.",
+          "message": "Odoslať súbor pomocou `multipart/form-data`. Telo musí byť štruktúra @ref DataProvider::FileDataType \"FileDataType\" (filename + content + mime_type). Rámec vytvorí obálku multipart a nastaví hlavičku boundary."
+        },
+        "app.U21hcnRzaGVldA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.display_name": {
+          "source": "Multipart Form",
+          "message": "Multipart formulár"
+        },
+        "app.U21hcnRzaGVldA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.short_desc": {
+          "source": "Upload a file using multipart/form-data",
+          "message": "Odoslať súbor pomocou multipart/form-data"
+        },
+        "app.U21hcnRzaGVldA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.desc": {
+          "source": "Pass the body to the REST client unchanged; the client decides serialization based on its configured `data` option and the value type",
+          "message": "Odovzdať telo klientovi REST bez zmeny; klient rozhodne o serializácii na základe svojej konfigurovanej možnosti `data` a typu hodnoty"
+        },
+        "app.U21hcnRzaGVldA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.display_name": {
+          "source": "Auto",
+          "message": "Auto"
+        },
+        "app.U21hcnRzaGVldA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.short_desc": {
+          "source": "Pass-through; use connection serialization and let the REST client decide",
+          "message": "Priamy prechod; použiť serializáciu spojenia a nechať rozhodnúť klienta REST"
+        },
+        "app.U21hcnRzaGVldA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.desc": {
+          "source": "Send the body as raw bytes. The body must be a binary value. Sets `Content-Type: application/octet-stream` unless overridden by `hdr`.",
+          "message": "Odoslať telo ako neopracované bajty. Telo musí byť binárna hodnota. Nastavuje `Content-Type: application/octet-stream`, pokiaľ nie je prepísané pomocou `hdr`."
+        },
+        "app.U21hcnRzaGVldA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.display_name": {
+          "source": "Raw Binary",
+          "message": "Surové binárne dáta"
+        },
+        "app.U21hcnRzaGVldA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.short_desc": {
+          "source": "Send body as raw bytes",
+          "message": "Odoslať telo ako neopracované bajty"
+        },
+        "app.U21hcnRzaGVldA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.desc": {
+          "source": "Serialize a hash of form fields as `application/x-www-form-urlencoded`. The body must be a hash whose values are scalars (strings/numbers/booleans).",
+          "message": "Serializovať hash polí formulára ako `application/x-www-form-urlencoded`. Telo musí byť hash, ktorého hodnoty sú skaláre (reťazce/čísla/booleovské hodnoty)."
+        },
+        "app.U21hcnRzaGVldA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.display_name": {
+          "source": "Form (URL-encoded)",
+          "message": "Formulár (kódovaný v URL)"
+        },
+        "app.U21hcnRzaGVldA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.short_desc": {
+          "source": "Serialize body as application/x-www-form-urlencoded form fields",
+          "message": "Serializovať telo ako polia formulára application/x-www-form-urlencoded"
+        },
+        "app.U21hcnRzaGVldA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.desc": {
+          "source": "Serialize the body as JSON; sets `Content-Type: application/json`. The body should be a hash, list, or scalar value.",
+          "message": "Serializovať telo ako JSON; nastavuje `Content-Type: application/json`. Telo by malo byť hash, zoznam alebo skalárna hodnota."
+        },
+        "app.U21hcnRzaGVldA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.display_name": {
+          "source": "JSON",
+          "message": "JSON"
+        },
+        "app.U21hcnRzaGVldA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.short_desc": {
+          "source": "Serialize body as JSON",
+          "message": "Serializovať telo ako JSON"
+        },
+        "app.U21hcnRzaGVldA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.desc": {
+          "source": "Send the body as plain text. The body must be a string. Sets `Content-Type: text/plain`.",
+          "message": "Odoslať telo ako čistý text. Telo musí byť reťazec. Nastavuje `Content-Type: text/plain`."
+        },
+        "app.U21hcnRzaGVldA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.display_name": {
+          "source": "Plain Text",
+          "message": "Čistý text"
+        },
+        "app.U21hcnRzaGVldA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.short_desc": {
+          "source": "Send body as text/plain",
+          "message": "Odoslať telo ako text/plain"
+        },
+        "app.U21hcnRzaGVldA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.desc": {
+          "source": "Send the body as XML. If the body is a hash it is serialized to XML; if it is a string it is sent verbatim. Sets `Content-Type: application/xml`.",
+          "message": "Odoslať telo ako XML. Ak je telo hash, serializuje sa do XML; ak je to reťazec, odosiela sa doslovne. Nastavuje `Content-Type: application/xml`."
+        },
+        "app.U21hcnRzaGVldA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.display_name": {
+          "source": "XML",
+          "message": "XML"
+        },
+        "app.U21hcnRzaGVldA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.short_desc": {
+          "source": "Send body as XML",
+          "message": "Odoslať telo ako XML"
+        },
+        "app.U21hcnRzaGVldA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.desc": {
+          "source": "Send the body as YAML. If the body is a hash it is serialized to YAML; if it is a string it is sent verbatim. Sets `Content-Type: application/x-yaml`.",
+          "message": "Odoslať telo ako YAML. Ak je telo hash, serializuje sa do YAML; ak je to reťazec, odosiela sa doslovne. Nastavuje `Content-Type: application/x-yaml`."
+        },
+        "app.U21hcnRzaGVldA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.display_name": {
+          "source": "YAML",
+          "message": "YAML"
+        },
+        "app.U21hcnRzaGVldA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.short_desc": {
+          "source": "Send body as YAML",
+          "message": "Odoslať telo ako YAML"
+        },
+        "app.U21hcnRzaGVldA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.desc": {
+          "source": "Selects the body serialization mode and the corresponding `Content-Type` header. Changing this field reshapes the `body` editor - selecting JSON exposes a JSON editor, selecting Multipart Form exposes a file picker, and so on.",
+          "message": "Vyberie režim serializácie tela a zodpovedajúcu hlavičku `Content-Type`. Zmena tohto poľa zmení editor `body` - výber JSON zobrazí editor JSON, výber Multipart Form zobrazí výber súborov a podobne."
+        },
+        "app.U21hcnRzaGVldA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.display_name": {
+          "source": "Body Type",
+          "message": "Typ tela"
+        },
+        "app.U21hcnRzaGVldA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.short_desc": {
+          "source": "How the body is serialized and what Content-Type is sent",
+          "message": "Ako sa telo serializuje a aký Content-Type sa odosiela"
+        },
+        "app.U21hcnRzaGVldA.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.desc": {
+          "source": "If `True`, non-2xx HTTP responses return as the normal response hash (with the actual status code) instead of raising `REST-RESPONSE-ERROR`. Useful for handling 4xx/5xx as data - e.g. checking whether a resource exists. Overrides the connection's `error_passthru` setting for this call only.",
+          "message": "Ak je `True`, odpovede HTTP iné ako 2xx sa vrátia ako normálny hash odpovede (s reálnym stavovým kódom) namiesto vyvolania `REST-RESPONSE-ERROR`. Užitočné na spracovanie 4xx/5xx ako dát – napr. kontrola, či zdroj existuje. Prepíše nastavenie `error_passthru` spojenia len pre toto volanie."
+        },
+        "app.U21hcnRzaGVldA.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.display_name": {
+          "source": "Return Errors as Data",
+          "message": "Vrátiť chyby ako dáta"
+        },
+        "app.U21hcnRzaGVldA.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.short_desc": {
+          "source": "Return non-2xx responses normally instead of throwing",
+          "message": "Vrátiť odpovede iné ako 2xx normálne namiesto vyvolania výnimky"
+        },
+        "app.U21hcnRzaGVldA.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.desc": {
+          "source": "Optional list of HTTP status codes treated as success. If set and the response status is not in this list, the action throws `REST-STATUS-ERROR`. When unset, the REST client's default behavior applies (typically: 2xx is success, non-2xx throws).",
+          "message": "Voliteľný zoznam stavových kódov HTTP považovaných za úspech. Ak je nastavený a stav odpovede nie je v tomto zozname, akcia vyvolá `REST-STATUS-ERROR`. Ak nie je nastavený, uplatní sa predvolené správanie klienta REST (zvyčajne: 2xx je úspech, iné ako 2xx vyvolá výnimku)."
+        },
+        "app.U21hcnRzaGVldA.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.display_name": {
+          "source": "Expected Status Codes",
+          "message": "Očakávané stavové kódy"
+        },
+        "app.U21hcnRzaGVldA.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.short_desc": {
+          "source": "Response status codes treated as success",
+          "message": "Stavové kódy odpovede považované za úspech"
+        },
+        "app.U21hcnRzaGVldA.action.bWFrZS1hcGktY2FsbA.option.aGRy.desc": {
+          "source": "Hash of custom headers added to the request. These override any default headers set by `body_type` (e.g. supplying `Content-Type` here wins over the body-type default).",
+          "message": "Hash vlastných hlavičiek pridaných k požiadavke. Tie prepíšu akékoľvek predvolené hlavičky nastavené pomocou `body_type` (napr. zadanie `Content-Type` na tomto mieste má prednosť pred predvolenou hodnotou typu tela)."
+        },
+        "app.U21hcnRzaGVldA.action.bWFrZS1hcGktY2FsbA.option.aGRy.display_name": {
+          "source": "Custom Headers",
+          "message": "Vlastné hlavičky"
+        },
+        "app.U21hcnRzaGVldA.action.bWFrZS1hcGktY2FsbA.option.aGRy.short_desc": {
+          "source": "Extra request headers",
+          "message": "Dodatočné hlavičky požiadavky"
+        },
+        "app.U21hcnRzaGVldA.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.desc": {
+          "source": "If `True`, the response hash includes a `debug` sub-hash containing the request method/URL/headers (with sensitive values redacted), request and response sizes, and round-trip duration. Useful when investigating slow or failing calls. Off by default to keep responses lean.",
+          "message": "Ak je `True`, hash odpovede obsahuje pod-hash `debug` obsahujúci metódu/URL/hlavičky požiadavky (so skrytými citlivými hodnotami), veľkosti požiadavky a odpovede a trvanie celého cyklu. Užitočné pri vyšetrovaní pomalých alebo zlyhávajúcich volaní. Predvolene vypnuté, aby odpovede zostali stručné."
+        },
+        "app.U21hcnRzaGVldA.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.display_name": {
+          "source": "Include Debug Info",
+          "message": "Zahrnúť ladiace informácie"
+        },
+        "app.U21hcnRzaGVldA.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.short_desc": {
+          "source": "Include request/timing/size debug info in the response",
+          "message": "Zahrnúť ladiace informácie o požiadavke/časovaní/veľkosti do odpovede"
+        },
+        "app.U21hcnRzaGVldA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.desc": {
+          "source": "HTTP `OPTIONS`",
+          "message": "HTTP `OPTIONS`"
+        },
+        "app.U21hcnRzaGVldA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.display_name": {
+          "source": "OPTIONS",
+          "message": "OPTIONS"
+        },
+        "app.U21hcnRzaGVldA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.short_desc": {
+          "source": "HTTP OPTIONS",
+          "message": "HTTP OPTIONS"
+        },
+        "app.U21hcnRzaGVldA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.desc": {
+          "source": "HTTP `DELETE`",
+          "message": "HTTP `DELETE`"
+        },
+        "app.U21hcnRzaGVldA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.display_name": {
+          "source": "DELETE",
+          "message": "DELETE"
+        },
+        "app.U21hcnRzaGVldA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.short_desc": {
+          "source": "HTTP DELETE",
+          "message": "HTTP DELETE"
+        },
+        "app.U21hcnRzaGVldA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.desc": {
+          "source": "HTTP `GET`",
+          "message": "HTTP `GET`"
+        },
+        "app.U21hcnRzaGVldA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.display_name": {
+          "source": "GET",
+          "message": "GET"
+        },
+        "app.U21hcnRzaGVldA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.short_desc": {
+          "source": "HTTP GET",
+          "message": "HTTP GET"
+        },
+        "app.U21hcnRzaGVldA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.desc": {
+          "source": "HTTP `HEAD`",
+          "message": "HTTP `HEAD`"
+        },
+        "app.U21hcnRzaGVldA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.display_name": {
+          "source": "HEAD",
+          "message": "HEAD"
+        },
+        "app.U21hcnRzaGVldA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.short_desc": {
+          "source": "HTTP HEAD",
+          "message": "HTTP HEAD"
+        },
+        "app.U21hcnRzaGVldA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.desc": {
+          "source": "HTTP `PATCH`",
+          "message": "HTTP `PATCH`"
+        },
+        "app.U21hcnRzaGVldA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.display_name": {
+          "source": "PATCH",
+          "message": "PATCH"
+        },
+        "app.U21hcnRzaGVldA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.short_desc": {
+          "source": "HTTP PATCH",
+          "message": "HTTP PATCH"
+        },
+        "app.U21hcnRzaGVldA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.desc": {
+          "source": "HTTP `POST`",
+          "message": "HTTP `POST`"
+        },
+        "app.U21hcnRzaGVldA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.display_name": {
+          "source": "POST",
+          "message": "POST"
+        },
+        "app.U21hcnRzaGVldA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.short_desc": {
+          "source": "HTTP POST",
+          "message": "HTTP POST"
+        },
+        "app.U21hcnRzaGVldA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.desc": {
+          "source": "HTTP `PUT`",
+          "message": "HTTP `PUT`"
+        },
+        "app.U21hcnRzaGVldA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.display_name": {
+          "source": "PUT",
+          "message": "PUT"
+        },
+        "app.U21hcnRzaGVldA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.short_desc": {
+          "source": "HTTP PUT",
+          "message": "HTTP PUT"
+        },
+        "app.U21hcnRzaGVldA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.desc": {
+          "source": "HTTP `TRACE`",
+          "message": "HTTP `TRACE`"
+        },
+        "app.U21hcnRzaGVldA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.display_name": {
+          "source": "TRACE",
+          "message": "TRACE"
+        },
+        "app.U21hcnRzaGVldA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.short_desc": {
+          "source": "HTTP TRACE",
+          "message": "HTTP TRACE"
+        },
+        "app.U21hcnRzaGVldA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "Metóda HTTP, ktorá sa má použiť pre požiadavku"
+        },
+        "app.U21hcnRzaGVldA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.display_name": {
+          "source": "HTTP Method",
+          "message": "Metóda HTTP"
+        },
+        "app.U21hcnRzaGVldA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.short_desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "Metóda HTTP, ktorá sa má použiť pre požiadavku"
+        },
+        "app.U21hcnRzaGVldA.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain `{name}` placeholders that are replaced from `path_vars`. Example: `/users/{id}/comments`.",
+          "message": "Cesta URI relatívna k základnej adrese URL API spojenia. Môže obsahovať žolíky `{name}`, ktoré sú nahradené z `path_vars`. Príklad: `/users/{id}/comments`."
+        },
+        "app.U21hcnRzaGVldA.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.display_name": {
+          "source": "URI Path",
+          "message": "Cesta URI"
+        },
+        "app.U21hcnRzaGVldA.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.short_desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain '{name}' placeholders that are replaced from 'path_vars'. Example: '/users/{id}/comments'",
+          "message": "Cesta URI relatívna k základnej URL adrese API pripojenia. Môže obsahovať zastupiteľné objekty '{name}', ktoré sa nahradia z 'path_vars'. Príklad: '/users/{id}/comments'"
+        },
+        "app.U21hcnRzaGVldA.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.desc": {
+          "source": "Hash of values substituted into `{name}` placeholders in the URI path. Example: with `path = /users/{id}` and `path_vars = {id: 123}` the framework sends `/users/123`. Values are URL-encoded.",
+          "message": "Hash hodnôt nahradených do zastupiteľných objektov `{name}` v ceste URI. Príklad: s `path = /users/{id}` a `path_vars = {id: 123}` rozhranie odosiela `/users/123`. Hodnoty sú zakódované v URL."
+        },
+        "app.U21hcnRzaGVldA.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.display_name": {
+          "source": "Path Variables",
+          "message": "Premenné cesty"
+        },
+        "app.U21hcnRzaGVldA.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.short_desc": {
+          "source": "Values for {name} placeholders in path",
+          "message": "Hodnoty pre zastupiteľné objekty {name} v ceste"
+        },
+        "app.U21hcnRzaGVldA.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.desc": {
+          "source": "Hash of query string parameters to append to the URI path. Values are URL-encoded; list values are joined with `,`.",
+          "message": "Hash parametrov reťazca dopytu na pripojenie k ceste URI. Hodnoty sú zakódované v URL; hodnoty zoznamu sú spojené pomocou `,`."
+        },
+        "app.U21hcnRzaGVldA.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.display_name": {
+          "source": "Query Arguments",
+          "message": "Argumenty dopytu"
+        },
+        "app.U21hcnRzaGVldA.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.short_desc": {
+          "source": "Query string parameters",
+          "message": "Parametre reťazca dopytu"
+        },
+        "app.U21hcnRzaGVldA.action.bWFrZS1hcGktY2FsbA.short_desc": {
+          "source": "Make a custom API call to Smartsheet",
+          "message": "Vykonať vlastné volanie API do Smartsheet"
+        },
+        "app.U21hcnRzaGVldA.action.c2hlZXQtdXBkYXRlZA.desc": {
+          "source": "Fires when a sheet is updated in the Smartsheet account",
+          "message": "Spustí sa pri aktualizácii hárka v účte Smartsheet"
+        },
+        "app.U21hcnRzaGVldA.action.c2hlZXQtdXBkYXRlZA.display_name": {
+          "source": "Sheet Updated",
+          "message": "Hárok aktualizovaný"
+        },
+        "app.U21hcnRzaGVldA.action.c2hlZXQtdXBkYXRlZA.short_desc": {
+          "source": "Trigger when a sheet is updated",
+          "message": "Spustiť pri aktualizácii hárka"
+        },
+        "app.U21hcnRzaGVldA.action.cm93LWNyZWF0ZWQ.desc": {
+          "source": "Fires when a new row is created in a Smartsheet sheet",
+          "message": "Spustí sa pri vytvorení nového riadka v hárku Smartsheet"
+        },
+        "app.U21hcnRzaGVldA.action.cm93LWNyZWF0ZWQ.display_name": {
+          "source": "Row Created",
+          "message": "Riadok vytvorený"
+        },
+        "app.U21hcnRzaGVldA.action.cm93LWNyZWF0ZWQ.short_desc": {
+          "source": "Trigger when a new row is created",
+          "message": "Spustiť pri vytvorení nového riadka"
+        },
+        "app.U21hcnRzaGVldA.action.cm93LWRlbGV0ZWQ.desc": {
+          "source": "Fires when a row is deleted from a Smartsheet sheet",
+          "message": "Spustí sa pri odstránení riadka z hárka Smartsheet"
+        },
+        "app.U21hcnRzaGVldA.action.cm93LWRlbGV0ZWQ.display_name": {
+          "source": "Row Deleted",
+          "message": "Riadok odstránený"
+        },
+        "app.U21hcnRzaGVldA.action.cm93LWRlbGV0ZWQ.short_desc": {
+          "source": "Trigger when a row is deleted",
+          "message": "Spustiť pri odstránení riadka"
+        },
+        "app.U21hcnRzaGVldA.action.cm93LXVwZGF0ZWQ.desc": {
+          "source": "Fires when a row is updated in a Smartsheet sheet",
+          "message": "Spustí sa pri aktualizácii riadka v hárku Smartsheet"
+        },
+        "app.U21hcnRzaGVldA.action.cm93LXVwZGF0ZWQ.display_name": {
+          "source": "Row Updated",
+          "message": "Riadok bol aktualizovaný"
+        },
+        "app.U21hcnRzaGVldA.action.cm93LXVwZGF0ZWQ.short_desc": {
+          "source": "Trigger when a row is updated",
+          "message": "Spustiť pri aktualizácii riadka"
+        },
+        "app.U21hcnRzaGVldA.action.dXBkYXRlLWZvbGRlcg.desc": {
+          "source": "Update a Smartsheet folder's name",
+          "message": "Aktualizovať názov priečinka Smartsheet"
+        },
+        "app.U21hcnRzaGVldA.action.dXBkYXRlLWZvbGRlcg.display_name": {
+          "source": "Update a Folder",
+          "message": "Aktualizovať priečinok"
+        },
+        "app.U21hcnRzaGVldA.action.dXBkYXRlLWZvbGRlcg.option.Zm9sZGVySWQ.desc": {
+          "source": "The unique identifier of the folder to update",
+          "message": "Jedinečný identifikátor priečinka, ktorý sa má aktualizovať"
+        },
+        "app.U21hcnRzaGVldA.action.dXBkYXRlLWZvbGRlcg.option.Zm9sZGVySWQ.display_name": {
+          "source": "Folder ID",
+          "message": "ID priečinka"
+        },
+        "app.U21hcnRzaGVldA.action.dXBkYXRlLWZvbGRlcg.option.Zm9sZGVySWQ.short_desc": {
+          "source": "ID of the folder to update",
+          "message": "ID priečinka, ktorý sa má aktualizovať"
+        },
+        "app.U21hcnRzaGVldA.action.dXBkYXRlLWZvbGRlcg.option.bmFtZQ.desc": {
+          "source": "The new name for the folder",
+          "message": "Nový názov pre priečinok"
+        },
+        "app.U21hcnRzaGVldA.action.dXBkYXRlLWZvbGRlcg.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "Názov"
+        },
+        "app.U21hcnRzaGVldA.action.dXBkYXRlLWZvbGRlcg.option.bmFtZQ.short_desc": {
+          "source": "New folder name",
+          "message": "Nový názov priečinka"
+        },
+        "app.U21hcnRzaGVldA.action.dXBkYXRlLWZvbGRlcg.short_desc": {
+          "source": "Update a folder",
+          "message": "Aktualizovať priečinok"
+        },
+        "app.U21hcnRzaGVldA.action.dXBkYXRlLWdyb3Vw.desc": {
+          "source": "Update a Smartsheet group's name or description",
+          "message": "Aktualizovať názov alebo popis skupiny Smartsheet"
+        },
+        "app.U21hcnRzaGVldA.action.dXBkYXRlLWdyb3Vw.display_name": {
+          "source": "Update a Group",
+          "message": "Aktualizovať skupinu"
+        },
+        "app.U21hcnRzaGVldA.action.dXBkYXRlLWdyb3Vw.option.Z3JvdXBJZA.desc": {
+          "source": "The unique identifier of the group to update",
+          "message": "Jedinečný identifikátor skupiny, ktorá sa má aktualizovať"
+        },
+        "app.U21hcnRzaGVldA.action.dXBkYXRlLWdyb3Vw.option.Z3JvdXBJZA.display_name": {
+          "source": "Group ID",
+          "message": "ID skupiny"
+        },
+        "app.U21hcnRzaGVldA.action.dXBkYXRlLWdyb3Vw.option.Z3JvdXBJZA.short_desc": {
+          "source": "ID of the group to update",
+          "message": "ID skupiny, ktorá sa má aktualizovať"
+        },
+        "app.U21hcnRzaGVldA.action.dXBkYXRlLWdyb3Vw.option.ZGVzY3JpcHRpb24.desc": {
+          "source": "The new description for the group",
+          "message": "Nový popis pre skupinu"
+        },
+        "app.U21hcnRzaGVldA.action.dXBkYXRlLWdyb3Vw.option.ZGVzY3JpcHRpb24.display_name": {
+          "source": "Description",
+          "message": "Popis"
+        },
+        "app.U21hcnRzaGVldA.action.dXBkYXRlLWdyb3Vw.option.ZGVzY3JpcHRpb24.short_desc": {
+          "source": "New group description",
+          "message": "Nový popis skupiny"
+        },
+        "app.U21hcnRzaGVldA.action.dXBkYXRlLWdyb3Vw.option.bmFtZQ.desc": {
+          "source": "The new name for the group",
+          "message": "Nový názov pre skupinu"
+        },
+        "app.U21hcnRzaGVldA.action.dXBkYXRlLWdyb3Vw.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "Názov"
+        },
+        "app.U21hcnRzaGVldA.action.dXBkYXRlLWdyb3Vw.option.bmFtZQ.short_desc": {
+          "source": "New group name",
+          "message": "Nový názov skupiny"
+        },
+        "app.U21hcnRzaGVldA.action.dXBkYXRlLWdyb3Vw.short_desc": {
+          "source": "Update a group",
+          "message": "Aktualizovať skupinu"
+        },
+        "app.U21hcnRzaGVldA.action.dXBkYXRlLXJvd3M.desc": {
+          "source": "Update matching rows in a Smartsheet sheet with new column values. Column fields are determined dynamically from the selected sheet's column definitions",
+          "message": "Aktualizovať zodpovedajúce riadky v hárku Smartsheet novými hodnotami stĺpcov. Polia stĺpcov sa určujú dynamicky z definícií stĺpcov vybraného hárka"
+        },
+        "app.U21hcnRzaGVldA.action.dXBkYXRlLXJvd3M.display_name": {
+          "source": "Update Rows",
+          "message": "Aktualizovať riadky"
+        },
+        "app.U21hcnRzaGVldA.action.dXBkYXRlLXJvd3M.option.c2hlZXQ.desc": {
+          "source": "Select the Smartsheet sheet where rows will be updated",
+          "message": "Vyberte hárok Smartsheet, v ktorom sa budú aktualizovať riadky"
+        },
+        "app.U21hcnRzaGVldA.action.dXBkYXRlLXJvd3M.option.c2hlZXQ.display_name": {
+          "source": "Sheet",
+          "message": "Hárok"
+        },
+        "app.U21hcnRzaGVldA.action.dXBkYXRlLXJvd3M.option.c2hlZXQ.short_desc": {
+          "source": "The Smartsheet sheet to update rows in",
+          "message": "Hárok Smartsheet, v ktorom sa majú aktualizovať riadky"
+        },
+        "app.U21hcnRzaGVldA.action.dXBkYXRlLXJvd3M.short_desc": {
+          "source": "Update rows in a sheet",
+          "message": "Aktualizovať riadky v hárku"
+        },
+        "app.U21hcnRzaGVldA.action.dXBkYXRlLXNoZWV0.desc": {
+          "source": "Update a Smartsheet sheet's properties such as its name",
+          "message": "Aktualizovať vlastnosti hárka Smartsheet, napríklad jeho názov"
+        },
+        "app.U21hcnRzaGVldA.action.dXBkYXRlLXNoZWV0.display_name": {
+          "source": "Update a Sheet",
+          "message": "Aktualizovať hárok"
+        },
+        "app.U21hcnRzaGVldA.action.dXBkYXRlLXNoZWV0.option.bmFtZQ.desc": {
+          "source": "The new name for the sheet",
+          "message": "Nový názov pre hárok"
+        },
+        "app.U21hcnRzaGVldA.action.dXBkYXRlLXNoZWV0.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "Názov"
+        },
+        "app.U21hcnRzaGVldA.action.dXBkYXRlLXNoZWV0.option.bmFtZQ.short_desc": {
+          "source": "New sheet name",
+          "message": "Nový názov hárka"
+        },
+        "app.U21hcnRzaGVldA.action.dXBkYXRlLXNoZWV0.option.c2hlZXRJZA.desc": {
+          "source": "The unique identifier of the sheet to update",
+          "message": "Jedinečný identifikátor hárka, ktorý sa má aktualizovať"
+        },
+        "app.U21hcnRzaGVldA.action.dXBkYXRlLXNoZWV0.option.c2hlZXRJZA.display_name": {
+          "source": "Sheet ID",
+          "message": "ID hárka"
+        },
+        "app.U21hcnRzaGVldA.action.dXBkYXRlLXNoZWV0.option.c2hlZXRJZA.short_desc": {
+          "source": "ID of the sheet to update",
+          "message": "ID hárka, ktorý sa má aktualizovať"
+        },
+        "app.U21hcnRzaGVldA.action.dXBkYXRlLXNoZWV0.short_desc": {
+          "source": "Update a sheet's properties",
+          "message": "Aktualizovať vlastnosti hárka"
+        },
+        "app.U21hcnRzaGVldA.action.dXBkYXRlLXVzZXI.desc": {
+          "source": "Update a Smartsheet user's account settings",
+          "message": "Aktualizovať nastavenia účtu používateľa Smartsheet"
+        },
+        "app.U21hcnRzaGVldA.action.dXBkYXRlLXVzZXI.display_name": {
+          "source": "Update a User",
+          "message": "Aktualizovať používateľa"
+        },
+        "app.U21hcnRzaGVldA.action.dXBkYXRlLXVzZXI.option.YWRtaW4.desc": {
+          "source": "Whether the user should be a system admin",
+          "message": "Či má byť používateľ systémovým správcom"
+        },
+        "app.U21hcnRzaGVldA.action.dXBkYXRlLXVzZXI.option.YWRtaW4.display_name": {
+          "source": "Admin",
+          "message": "Správca"
+        },
+        "app.U21hcnRzaGVldA.action.dXBkYXRlLXVzZXI.option.YWRtaW4.short_desc": {
+          "source": "Whether user is admin",
+          "message": "Či je používateľ správca"
+        },
+        "app.U21hcnRzaGVldA.action.dXBkYXRlLXVzZXI.option.Z3JvdXBBZG1pbg.desc": {
+          "source": "Whether the user should be a group admin",
+          "message": "Či má byť používateľ správcom skupiny"
+        },
+        "app.U21hcnRzaGVldA.action.dXBkYXRlLXVzZXI.option.Z3JvdXBBZG1pbg.display_name": {
+          "source": "Group Admin",
+          "message": "Správca skupiny"
+        },
+        "app.U21hcnRzaGVldA.action.dXBkYXRlLXVzZXI.option.Z3JvdXBBZG1pbg.short_desc": {
+          "source": "Whether user is group admin",
+          "message": "Či je používateľ správca skupiny"
+        },
+        "app.U21hcnRzaGVldA.action.dXBkYXRlLXVzZXI.option.Zmlyc3ROYW1l.desc": {
+          "source": "The new first name for the user",
+          "message": "Nové krstné meno používateľa"
+        },
+        "app.U21hcnRzaGVldA.action.dXBkYXRlLXVzZXI.option.Zmlyc3ROYW1l.display_name": {
+          "source": "First Name",
+          "message": "Meno"
+        },
+        "app.U21hcnRzaGVldA.action.dXBkYXRlLXVzZXI.option.Zmlyc3ROYW1l.short_desc": {
+          "source": "User's first name",
+          "message": "Meno používateľa"
+        },
+        "app.U21hcnRzaGVldA.action.dXBkYXRlLXVzZXI.option.bGFzdE5hbWU.desc": {
+          "source": "The new last name for the user",
+          "message": "Nové priezvisko používateľa"
+        },
+        "app.U21hcnRzaGVldA.action.dXBkYXRlLXVzZXI.option.bGFzdE5hbWU.display_name": {
+          "source": "Last Name",
+          "message": "Priezvisko"
+        },
+        "app.U21hcnRzaGVldA.action.dXBkYXRlLXVzZXI.option.bGFzdE5hbWU.short_desc": {
+          "source": "User's last name",
+          "message": "Priezvisko používateľa"
+        },
+        "app.U21hcnRzaGVldA.action.dXBkYXRlLXVzZXI.option.bGljZW5zZWRTaGVldENyZWF0b3I.desc": {
+          "source": "Whether the user should be a licensed sheet creator",
+          "message": "Či má byť používateľ licencovaným tvorcom hárkov"
+        },
+        "app.U21hcnRzaGVldA.action.dXBkYXRlLXVzZXI.option.bGljZW5zZWRTaGVldENyZWF0b3I.display_name": {
+          "source": "Licensed Sheet Creator",
+          "message": "Licencovaný tvorca hárkov"
+        },
+        "app.U21hcnRzaGVldA.action.dXBkYXRlLXVzZXI.option.bGljZW5zZWRTaGVldENyZWF0b3I.short_desc": {
+          "source": "Whether user can create sheets",
+          "message": "Či používateľ môže vytvárať hárky"
+        },
+        "app.U21hcnRzaGVldA.action.dXBkYXRlLXVzZXI.option.cmVzb3VyY2VWaWV3ZXI.desc": {
+          "source": "Whether the user should be a resource viewer",
+          "message": "Či má byť používateľ prehliadačom zdrojov"
+        },
+        "app.U21hcnRzaGVldA.action.dXBkYXRlLXVzZXI.option.cmVzb3VyY2VWaWV3ZXI.display_name": {
+          "source": "Resource Viewer",
+          "message": "Prehliadač zdrojov"
+        },
+        "app.U21hcnRzaGVldA.action.dXBkYXRlLXVzZXI.option.cmVzb3VyY2VWaWV3ZXI.short_desc": {
+          "source": "Whether user is resource viewer",
+          "message": "Či je používateľ prehliadač zdrojov"
+        },
+        "app.U21hcnRzaGVldA.action.dXBkYXRlLXVzZXI.option.dXNlcklk.desc": {
+          "source": "The unique identifier of the user to update",
+          "message": "Jedinečný identifikátor používateľa, ktorý sa má aktualizovať"
+        },
+        "app.U21hcnRzaGVldA.action.dXBkYXRlLXVzZXI.option.dXNlcklk.display_name": {
+          "source": "User ID",
+          "message": "ID používateľa"
+        },
+        "app.U21hcnRzaGVldA.action.dXBkYXRlLXVzZXI.option.dXNlcklk.short_desc": {
+          "source": "ID of the user to update",
+          "message": "ID používateľa, ktorý sa má aktualizovať"
+        },
+        "app.U21hcnRzaGVldA.action.dXBkYXRlLXVzZXI.short_desc": {
+          "source": "Update a user's settings",
+          "message": "Aktualizovať nastavenia používateľa"
+        },
+        "app.U21hcnRzaGVldA.action.dXBkYXRlLXdvcmtzcGFjZQ.desc": {
+          "source": "Update a Smartsheet workspace's properties",
+          "message": "Aktualizovať vlastnosti pracovného priestoru Smartsheet"
+        },
+        "app.U21hcnRzaGVldA.action.dXBkYXRlLXdvcmtzcGFjZQ.display_name": {
+          "source": "Update a Workspace",
+          "message": "Aktualizovať pracovný priestor"
+        },
+        "app.U21hcnRzaGVldA.action.dXBkYXRlLXdvcmtzcGFjZQ.option.bmFtZQ.desc": {
+          "source": "The new name for the workspace",
+          "message": "Nový názov pracovného priestoru"
+        },
+        "app.U21hcnRzaGVldA.action.dXBkYXRlLXdvcmtzcGFjZQ.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "Názov"
+        },
+        "app.U21hcnRzaGVldA.action.dXBkYXRlLXdvcmtzcGFjZQ.option.bmFtZQ.short_desc": {
+          "source": "New workspace name",
+          "message": "Nový názov pracovného priestoru"
+        },
+        "app.U21hcnRzaGVldA.action.dXBkYXRlLXdvcmtzcGFjZQ.option.d29ya3NwYWNlSWQ.desc": {
+          "source": "The unique identifier of the workspace to update",
+          "message": "Jedinečný identifikátor pracovného priestoru, ktorý sa má aktualizovať"
+        },
+        "app.U21hcnRzaGVldA.action.dXBkYXRlLXdvcmtzcGFjZQ.option.d29ya3NwYWNlSWQ.display_name": {
+          "source": "Workspace ID",
+          "message": "ID pracovného priestoru"
+        },
+        "app.U21hcnRzaGVldA.action.dXBkYXRlLXdvcmtzcGFjZQ.option.d29ya3NwYWNlSWQ.short_desc": {
+          "source": "ID of the workspace to update",
+          "message": "ID pracovného priestoru, ktorý sa má aktualizovať"
+        },
+        "app.U21hcnRzaGVldA.action.dXBkYXRlLXdvcmtzcGFjZQ.short_desc": {
+          "source": "Update a workspace",
+          "message": "Aktualizovať pracovný priestor"
+        },
+        "app.U21hcnRzaGVldA.desc": {
+          "source": "Smartsheet is a platform for work execution, providing spreadsheet-like interfaces for managing projects, tasks, and data.\n\nThis integration supports managing sheets, rows, columns, workspaces, folders, reports, users, and groups. Sheets are modeled as dynamic tables with typed columns for structured data access",
+          "message": "Smartsheet je platforma na realizáciu práce, ktorá poskytuje tabuľkové rozhrania na správu projektov, úloh a údajov.\n\nTáto integrácia podporuje správu hárkov, riadkov, stĺpcov, pracovných priestorov, priečinkov, prehľadov, používateľov a skupín. Hárky sú modelované ako dynamické tabuľky s typovými stĺpcami pre štruktúrovaný prístup k údajom"
+        },
+        "app.U21hcnRzaGVldA.display_name": {
+          "source": "Smartsheet",
+          "message": "Smartsheet"
+        },
+        "app.U21hcnRzaGVldA.short_desc": {
+          "source": "Smartsheet spreadsheet and work management platform",
+          "message": "Platforma Smartsheet na správu tabuliek a práce"
+        }
+      }
+    }
+  }
+}

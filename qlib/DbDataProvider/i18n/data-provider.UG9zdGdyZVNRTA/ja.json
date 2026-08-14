@@ -1,0 +1,21 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "ja": {
+      "messages": {
+        "app.UG9zdGdyZVNRTA.desc": {
+          "source": "Create and manage connections to a PostgreSQL database server",
+          "message": "PostgreSQL データベースサーバーへの接続を作成および管理します"
+        },
+        "app.UG9zdGdyZVNRTA.display_name": {
+          "source": "PostgreSQL",
+          "message": "PostgreSQL"
+        },
+        "app.UG9zdGdyZVNRTA.short_desc": {
+          "source": "PostgreSQL database server",
+          "message": "PostgreSQL データベースサーバー"
+        }
+      }
+    }
+  }
+}

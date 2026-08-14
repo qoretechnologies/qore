@@ -1,0 +1,3237 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "uk": {
+      "messages": {
+        "app.QmFzZUxpbmtlcg.action.YWRkLW9yZGVy.desc": {
+          "source": "Create a new order in BaseLinker via `addOrder`. Returns the new `order_id` on success.",
+          "message": "Створити нове замовлення в BaseLinker через `addOrder`. Повертає новий `order_id` у разі успіху."
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLW9yZGVy.display_name": {
+          "source": "Add Order",
+          "message": "Додати замовлення"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLW9yZGVy.option.Y3VycmVuY3k.desc": {
+          "source": "ISO 4217 currency code, e.g. `PLN`, `EUR`, `USD`.",
+          "message": "Код валюти ISO 4217, наприклад `PLN`, `EUR`, `USD`."
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLW9yZGVy.option.Y3VycmVuY3k.display_name": {
+          "source": "Currency",
+          "message": "Валюта"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLW9yZGVy.option.Y3VycmVuY3k.short_desc": {
+          "source": "3-letter ISO 4217 currency code",
+          "message": "3-літерний код валюти ISO 4217"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLW9yZGVy.option.Y3VzdG9tX2V4dHJhX2ZpZWxkcw.desc": {
+          "source": "Map of `{\"<extra_field_id>\": <value>}`. Text fields take strings; file fields take a `{\"title\": \"<filename>\", \"file\": \"<base64>\"}` hash where the base64-encoded file must not exceed 2 MB.",
+          "message": "Зіставлення `{\"<extra_field_id>\": <value>}`. Текстові поля приймають рядки; файлові поля приймають хеш `{\"title\": \"<filename>\", \"file\": \"<base64>\"}`, де розмір файлу у форматі base64 не повинен перевищувати 2 МБ."
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLW9yZGVy.option.Y3VzdG9tX2V4dHJhX2ZpZWxkcw.display_name": {
+          "source": "Custom Extra Fields",
+          "message": "Користувацькі додаткові поля"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLW9yZGVy.option.Y3VzdG9tX2V4dHJhX2ZpZWxkcw.short_desc": {
+          "source": "Map of custom extra field ID to value",
+          "message": "Зіставлення ID користувацького додаткового поля зі значенням"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLW9yZGVy.option.Y3VzdG9tX3NvdXJjZV9pZA.desc": {
+          "source": "Identifier of a custom personal order source (see `list-order-sources`).",
+          "message": "Ідентифікатор власного джерела замовлення (див. `list-order-sources`)."
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLW9yZGVy.option.Y3VzdG9tX3NvdXJjZV9pZA.display_name": {
+          "source": "Custom Source ID",
+          "message": "ID власного джерела"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLW9yZGVy.option.Y3VzdG9tX3NvdXJjZV9pZA.short_desc": {
+          "source": "Custom personal source ID",
+          "message": "ID власного джерела замовлення"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLW9yZGVy.option.YWRtaW5fY29tbWVudHM.display_name": {
+          "source": "Admin Comments",
+          "message": "Коментарі адміністратора"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLW9yZGVy.option.YWRtaW5fY29tbWVudHM.short_desc": {
+          "source": "Internal admin comments",
+          "message": "Внутрішні коментарі адміністратора"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLW9yZGVy.option.ZGF0ZV9hZGQ.desc": {
+          "source": "When the order was created. Sent to the BaseLinker `addOrder` API as Unix seconds (the conversion is performed inside `doRequestImpl()`); the field is exposed as a date so the UI can render a date/time picker rather than asking the user for a raw epoch number.",
+          "message": "Час створення замовлення. Відправляється в API BaseLinker `addOrder` як секунди Unix (конвертація виконується всередині `doRequestImpl()`); поле представлене як дата, щоб інтерфейс міг відображати вікно вибору дати/часу замість запиту в користувача значення epoch."
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLW9yZGVy.option.ZGF0ZV9hZGQ.display_name": {
+          "source": "Date Added",
+          "message": "Дата додавання"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLW9yZGVy.option.ZGF0ZV9hZGQ.short_desc": {
+          "source": "Order creation timestamp",
+          "message": "Часова мітка створення замовлення"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLW9yZGVy.option.ZGVsaXZlcnlfY291bnRyeV9jb2Rl.desc": {
+          "source": "ISO 3166-1 alpha-2 country code (e.g. `PL`, `DE`, `US`).",
+          "message": "Дволітерний код країни ISO 3166-1 alpha-2 (наприклад, `PL`, `DE`, `US`)."
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLW9yZGVy.option.ZGVsaXZlcnlfY291bnRyeV9jb2Rl.display_name": {
+          "source": "Delivery Country Code",
+          "message": "Код країни доставки"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLW9yZGVy.option.ZGVsaXZlcnlfY291bnRyeV9jb2Rl.short_desc": {
+          "source": "2-letter ISO country code",
+          "message": "2-літерний код країни ISO"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLW9yZGVy.option.ZGVsaXZlcnlfY29tcGFueQ.display_name": {
+          "source": "Delivery Company",
+          "message": "Компанія для доставки"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLW9yZGVy.option.ZGVsaXZlcnlfY29tcGFueQ.short_desc": {
+          "source": "Recipient company name",
+          "message": "Назва компанії одержувача"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLW9yZGVy.option.ZGVsaXZlcnlfY2l0eQ.display_name": {
+          "source": "Delivery City",
+          "message": "Місто доставки"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLW9yZGVy.option.ZGVsaXZlcnlfY2l0eQ.short_desc": {
+          "source": "City",
+          "message": "Місто"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLW9yZGVy.option.ZGVsaXZlcnlfYWRkcmVzcw.display_name": {
+          "source": "Delivery Address",
+          "message": "Адреса доставки"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLW9yZGVy.option.ZGVsaXZlcnlfYWRkcmVzcw.short_desc": {
+          "source": "Street address",
+          "message": "Адреса (вулиця)"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLW9yZGVy.option.ZGVsaXZlcnlfZnVsbG5hbWU.display_name": {
+          "source": "Delivery Full Name",
+          "message": "Повне ім'я для доставки"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLW9yZGVy.option.ZGVsaXZlcnlfZnVsbG5hbWU.short_desc": {
+          "source": "Recipient full name",
+          "message": "Повне ім'я одержувача"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLW9yZGVy.option.ZGVsaXZlcnlfbWV0aG9k.display_name": {
+          "source": "Delivery Method",
+          "message": "Спосіб доставки"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLW9yZGVy.option.ZGVsaXZlcnlfbWV0aG9k.short_desc": {
+          "source": "Shipping method name",
+          "message": "Назва способу доставки"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLW9yZGVy.option.ZGVsaXZlcnlfc3RhdGU.display_name": {
+          "source": "Delivery State/Province",
+          "message": "Область/штат доставки"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLW9yZGVy.option.ZGVsaXZlcnlfc3RhdGU.short_desc": {
+          "source": "State or province",
+          "message": "Штат або область"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLW9yZGVy.option.ZGVsaXZlcnlfcG9pbnRfY2l0eQ.display_name": {
+          "source": "Delivery Point City",
+          "message": "Місто пункту видачі"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLW9yZGVy.option.ZGVsaXZlcnlfcG9pbnRfY2l0eQ.short_desc": {
+          "source": "Pickup-point city",
+          "message": "Місто пункту видачі"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLW9yZGVy.option.ZGVsaXZlcnlfcG9pbnRfYWRkcmVzcw.display_name": {
+          "source": "Delivery Point Address",
+          "message": "Адреса пункту видачі"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLW9yZGVy.option.ZGVsaXZlcnlfcG9pbnRfYWRkcmVzcw.short_desc": {
+          "source": "Pickup-point street address",
+          "message": "Вулиця та номер будинку пункту видачі"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLW9yZGVy.option.ZGVsaXZlcnlfcG9pbnRfaWQ.desc": {
+          "source": "Identifier of the pickup point / parcel locker (e.g. InPost locker code).",
+          "message": "Ідентифікатор пункту видачі / поштомату (наприклад, код поштомату InPost)."
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLW9yZGVy.option.ZGVsaXZlcnlfcG9pbnRfaWQ.display_name": {
+          "source": "Delivery Point ID",
+          "message": "ID пункту видачі"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLW9yZGVy.option.ZGVsaXZlcnlfcG9pbnRfaWQ.short_desc": {
+          "source": "Pickup-point identifier",
+          "message": "Ідентифікатор пункту видачі"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLW9yZGVy.option.ZGVsaXZlcnlfcG9pbnRfbmFtZQ.display_name": {
+          "source": "Delivery Point Name",
+          "message": "Назва пункту видачі"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLW9yZGVy.option.ZGVsaXZlcnlfcG9pbnRfbmFtZQ.short_desc": {
+          "source": "Pickup-point display name",
+          "message": "Відображувана назва пункту видачі"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLW9yZGVy.option.ZGVsaXZlcnlfcG9pbnRfcG9zdGNvZGU.display_name": {
+          "source": "Delivery Point Postcode",
+          "message": "Поштовий індекс пункту видачі"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLW9yZGVy.option.ZGVsaXZlcnlfcG9pbnRfcG9zdGNvZGU.short_desc": {
+          "source": "Pickup-point postal code",
+          "message": "Поштовий індекс пункту видачі"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLW9yZGVy.option.ZGVsaXZlcnlfcG9zdGNvZGU.display_name": {
+          "source": "Delivery Postcode",
+          "message": "Поштовий індекс доставки"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLW9yZGVy.option.ZGVsaXZlcnlfcG9zdGNvZGU.short_desc": {
+          "source": "Postal code",
+          "message": "Поштовий індекс"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLW9yZGVy.option.ZGVsaXZlcnlfcHJpY2U.display_name": {
+          "source": "Delivery Price",
+          "message": "Вартість доставки"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLW9yZGVy.option.ZGVsaXZlcnlfcHJpY2U.short_desc": {
+          "source": "Shipping cost (gross)",
+          "message": "Вартість доставки (брутто)"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLW9yZGVy.option.ZW1haWw.display_name": {
+          "source": "Email",
+          "message": "Електронна пошта"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLW9yZGVy.option.ZW1haWw.short_desc": {
+          "source": "Customer email address",
+          "message": "Адреса електронної пошти клієнта"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLW9yZGVy.option.ZXh0cmFfZmllbGRfMQ.display_name": {
+          "source": "Extra Field 1",
+          "message": "Додаткове поле 1"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLW9yZGVy.option.ZXh0cmFfZmllbGRfMQ.short_desc": {
+          "source": "Free-form extra field",
+          "message": "Додаткове поле вільної форми"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLW9yZGVy.option.ZXh0cmFfZmllbGRfMg.display_name": {
+          "source": "Extra Field 2",
+          "message": "Додаткове поле 2"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLW9yZGVy.option.ZXh0cmFfZmllbGRfMg.short_desc": {
+          "source": "Free-form extra field",
+          "message": "Додаткове поле вільної форми"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLW9yZGVy.option.aW52b2ljZV9hZGRyZXNz.display_name": {
+          "source": "Invoice Address",
+          "message": "Адреса для рахунку-фактури"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLW9yZGVy.option.aW52b2ljZV9hZGRyZXNz.short_desc": {
+          "source": "Billing street address",
+          "message": "Вулиця для виставлення рахунку"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLW9yZGVy.option.aW52b2ljZV9jaXR5.display_name": {
+          "source": "Invoice City",
+          "message": "Місто в рахунку"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLW9yZGVy.option.aW52b2ljZV9jaXR5.short_desc": {
+          "source": "Billing city",
+          "message": "Місто для виставлення рахунку"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLW9yZGVy.option.aW52b2ljZV9jb21wYW55.display_name": {
+          "source": "Invoice Company",
+          "message": "Компанія в рахунку"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLW9yZGVy.option.aW52b2ljZV9jb21wYW55.short_desc": {
+          "source": "Billing company name",
+          "message": "Назва компанії для виставлення рахунку"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLW9yZGVy.option.aW52b2ljZV9jb3VudHJ5X2NvZGU.display_name": {
+          "source": "Invoice Country Code",
+          "message": "Код країни в рахунку"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLW9yZGVy.option.aW52b2ljZV9jb3VudHJ5X2NvZGU.short_desc": {
+          "source": "Billing 2-letter ISO country code",
+          "message": "2-літерний код країни ISO для виставлення рахунку"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLW9yZGVy.option.aW52b2ljZV9mdWxsbmFtZQ.display_name": {
+          "source": "Invoice Full Name",
+          "message": "Повне ім'я в рахунку"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLW9yZGVy.option.aW52b2ljZV9mdWxsbmFtZQ.short_desc": {
+          "source": "Billing recipient full name",
+          "message": "Повне ім'я одержувача рахунку"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLW9yZGVy.option.aW52b2ljZV9uaXA.display_name": {
+          "source": "Invoice Tax ID",
+          "message": "Податковий номер у рахунку"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLW9yZGVy.option.aW52b2ljZV9uaXA.short_desc": {
+          "source": "NIP / VAT / tax identifier",
+          "message": "NIP / ПДВ / податковий ідентифікатор"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLW9yZGVy.option.aW52b2ljZV9wb3N0Y29kZQ.display_name": {
+          "source": "Invoice Postcode",
+          "message": "Поштовий індекс у рахунку"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLW9yZGVy.option.aW52b2ljZV9wb3N0Y29kZQ.short_desc": {
+          "source": "Billing postal code",
+          "message": "Поштовий індекс для виставлення рахунку"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLW9yZGVy.option.aW52b2ljZV9zdGF0ZQ.display_name": {
+          "source": "Invoice State/Province",
+          "message": "Штат/область у рахунку"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLW9yZGVy.option.aW52b2ljZV9zdGF0ZQ.short_desc": {
+          "source": "Billing state or province",
+          "message": "Штат або область для виставлення рахунку"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLW9yZGVy.option.b3JkZXJfc3RhdHVzX2lk.desc": {
+          "source": "Initial order status; see `list-order-statuses`.",
+          "message": "Початковий статус замовлення; див. `list-order-statuses`."
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLW9yZGVy.option.b3JkZXJfc3RhdHVzX2lk.display_name": {
+          "source": "Order Status ID",
+          "message": "Ідентифікатор статусу замовлення"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLW9yZGVy.option.b3JkZXJfc3RhdHVzX2lk.short_desc": {
+          "source": "Initial order status identifier",
+          "message": "Ідентифікатор початкового статусу замовлення"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLW9yZGVy.option.cGF5bWVudF9tZXRob2Q.display_name": {
+          "source": "Payment Method",
+          "message": "Спосіб оплати"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLW9yZGVy.option.cGF5bWVudF9tZXRob2Q.short_desc": {
+          "source": "Payment method description",
+          "message": "Опис способу оплати"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLW9yZGVy.option.cGF5bWVudF9tZXRob2RfY29k.desc": {
+          "source": "`True` marks the order as cash-on-delivery.",
+          "message": "`True` позначає замовлення як оплату післяплатою."
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLW9yZGVy.option.cGF5bWVudF9tZXRob2RfY29k.display_name": {
+          "source": "Cash On Delivery",
+          "message": "Післяплата"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLW9yZGVy.option.cGF5bWVudF9tZXRob2RfY29k.short_desc": {
+          "source": "Whether this is a COD order",
+          "message": "Чи це замовлення з післяплатою"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLW9yZGVy.option.cGFpZA.desc": {
+          "source": "`True` marks the order as paid in full at creation time.",
+          "message": "`True` позначає замовлення як повністю оплачене під час створення."
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLW9yZGVy.option.cGFpZA.display_name": {
+          "source": "Paid",
+          "message": "Оплачено"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLW9yZGVy.option.cGFpZA.short_desc": {
+          "source": "Whether the order is fully paid",
+          "message": "Чи замовлення повністю оплачене"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLW9yZGVy.option.cGhvbmU.display_name": {
+          "source": "Phone",
+          "message": "Телефон"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLW9yZGVy.option.cGhvbmU.short_desc": {
+          "source": "Customer phone number",
+          "message": "Номер телефону клієнта"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLW9yZGVy.option.cHJvZHVjdHM.desc": {
+          "source": "Line items on the order.",
+          "message": "Позиції в замовленні."
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLW9yZGVy.option.cHJvZHVjdHM.display_name": {
+          "source": "Products",
+          "message": "Товари"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLW9yZGVy.option.cHJvZHVjdHM.short_desc": {
+          "source": "Ordered line items",
+          "message": "Замовлені позиції"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLW9yZGVy.option.d2FudF9pbnZvaWNl.display_name": {
+          "source": "Wants Invoice",
+          "message": "Потрібен рахунок"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLW9yZGVy.option.d2FudF9pbnZvaWNl.short_desc": {
+          "source": "Whether the customer requested an invoice",
+          "message": "Чи клієнт запросив рахунок"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLW9yZGVy.option.dXNlcl9jb21tZW50cw.display_name": {
+          "source": "Customer Comments",
+          "message": "Коментарі клієнта"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLW9yZGVy.option.dXNlcl9jb21tZW50cw.short_desc": {
+          "source": "Free-text comments from the buyer",
+          "message": "Текстові коментарі від покупця"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLW9yZGVy.option.dXNlcl9sb2dpbg.display_name": {
+          "source": "User Login",
+          "message": "Логін користувача"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLW9yZGVy.option.dXNlcl9sb2dpbg.short_desc": {
+          "source": "Customer login (marketplace username)",
+          "message": "Логін клієнта (ім'я користувача на маркетплейсі)"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLW9yZGVy.short_desc": {
+          "source": "Create a new order",
+          "message": "Створити нове замовлення"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLW9yZGVyLXByb2R1Y3Q.desc": {
+          "source": "Add a product line item to an existing BaseLinker order via `addOrderProduct`.",
+          "message": "Додати позицію товару до наявного замовлення BaseLinker через `addOrderProduct`."
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLW9yZGVyLXByb2R1Y3Q.display_name": {
+          "source": "Add Order Product",
+          "message": "Додати товар до замовлення"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLW9yZGVyLXByb2R1Y3Q.option.YXR0cmlidXRlcw.desc": {
+          "source": "Comma-separated list of variant attributes, e.g. `Size: L, Color: Red`.",
+          "message": "Список атрибутів варіанта через кому, наприклад `Size: L, Color: Red`."
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLW9yZGVyLXByb2R1Y3Q.option.YXR0cmlidXRlcw.display_name": {
+          "source": "Attributes",
+          "message": "Атрибути"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLW9yZGVyLXByb2R1Y3Q.option.YXR0cmlidXRlcw.short_desc": {
+          "source": "Free-text variant attributes",
+          "message": "Текстові атрибути варіанта"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLW9yZGVyLXByb2R1Y3Q.option.YXVjdGlvbl9pZA.desc": {
+          "source": "Marketplace auction or listing ID (eBay, Allegro, Amazon, etc.).",
+          "message": "Ідентифікатор аукціону або лістингу на маркетплейсі (eBay, Allegro, Amazon тощо)."
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLW9yZGVyLXByb2R1Y3Q.option.YXVjdGlvbl9pZA.display_name": {
+          "source": "Marketplace Listing ID",
+          "message": "Ідентифікатор лістингу на маркетплейсі"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLW9yZGVyLXByb2R1Y3Q.option.YXVjdGlvbl9pZA.short_desc": {
+          "source": "Marketplace auction/listing ID",
+          "message": "Ідентифікатор аукціону/лістингу на маркетплейсі"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLW9yZGVyLXByb2R1Y3Q.option.ZWFu.desc": {
+          "source": "Product EAN (barcode).",
+          "message": "EAN товару (штрихкод)."
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLW9yZGVyLXByb2R1Y3Q.option.ZWFu.display_name": {
+          "source": "EAN",
+          "message": "EAN"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLW9yZGVyLXByb2R1Y3Q.option.ZWFu.short_desc": {
+          "source": "EAN / barcode",
+          "message": "EAN / штрихкод"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLW9yZGVyLXByb2R1Y3Q.option.b3JkZXJfaWQ.display_name": {
+          "source": "Order ID",
+          "message": "Ідентифікатор замовлення"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLW9yZGVyLXByb2R1Y3Q.option.b3JkZXJfaWQ.short_desc": {
+          "source": "Order to append the product to",
+          "message": "Замовлення, до якого слід додати товар"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLW9yZGVyLXByb2R1Y3Q.option.bG9jYXRpb24.desc": {
+          "source": "Warehouse location code.",
+          "message": "Код розташування на складі."
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLW9yZGVyLXByb2R1Y3Q.option.bG9jYXRpb24.display_name": {
+          "source": "Warehouse Location",
+          "message": "Розташування на складі"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLW9yZGVyLXByb2R1Y3Q.option.bG9jYXRpb24.short_desc": {
+          "source": "Storage location identifier",
+          "message": "Ідентифікатор місця зберігання"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLW9yZGVyLXByb2R1Y3Q.option.bmFtZQ.desc": {
+          "source": "Product name shown on the order line.",
+          "message": "Назва товару, що відображається в рядку замовлення."
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLW9yZGVyLXByb2R1Y3Q.option.bmFtZQ.display_name": {
+          "source": "Product Name",
+          "message": "Назва товару"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLW9yZGVyLXByb2R1Y3Q.option.bmFtZQ.short_desc": {
+          "source": "Name of the product",
+          "message": "Назва товару"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLW9yZGVyLXByb2R1Y3Q.option.c2t1.desc": {
+          "source": "Product SKU.",
+          "message": "SKU товару."
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLW9yZGVyLXByb2R1Y3Q.option.c2t1.display_name": {
+          "source": "SKU",
+          "message": "SKU"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLW9yZGVyLXByb2R1Y3Q.option.c2t1.short_desc": {
+          "source": "Stock-keeping unit",
+          "message": "Одиниця складського обліку (SKU)"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLW9yZGVyLXByb2R1Y3Q.option.c3RvcmFnZQ.allowed-value.c3RyaW5nOmRi.display_name": {
+          "source": "BaseLinker Inventory",
+          "message": "Інвентар BaseLinker"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLW9yZGVyLXByb2R1Y3Q.option.c3RvcmFnZQ.allowed-value.c3RyaW5nOnNob3A.display_name": {
+          "source": "External Shop",
+          "message": "Зовнішній магазин"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLW9yZGVyLXByb2R1Y3Q.option.c3RvcmFnZQ.allowed-value.c3RyaW5nOndhcmVob3VzZQ.display_name": {
+          "source": "Legacy Warehouse",
+          "message": "Застарілий склад"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLW9yZGVyLXByb2R1Y3Q.option.c3RvcmFnZQ.desc": {
+          "source": "The storage the product originates from. One of `db`, `shop`, `warehouse`.",
+          "message": "Сховище, з якого походить товар. Одне з: `db`, `shop`, `warehouse`."
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLW9yZGVyLXByb2R1Y3Q.option.c3RvcmFnZQ.display_name": {
+          "source": "Storage",
+          "message": "Сховище"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLW9yZGVyLXByb2R1Y3Q.option.c3RvcmFnZQ.short_desc": {
+          "source": "Storage identifier for product origin",
+          "message": "Ідентифікатор сховища для походження товару"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLW9yZGVyLXByb2R1Y3Q.option.c3RvcmFnZV9pZA.desc": {
+          "source": "Identifier of the storage (inventory ID for `db`, shop ID for `shop`, warehouse ID for `warehouse`).",
+          "message": "Ідентифікатор сховища (ID інвентарю для `db`, ID магазину для `shop`, ID складу для `warehouse`)."
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLW9yZGVyLXByb2R1Y3Q.option.c3RvcmFnZV9pZA.display_name": {
+          "source": "Storage ID",
+          "message": "Ідентифікатор сховища"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLW9yZGVyLXByb2R1Y3Q.option.c3RvcmFnZV9pZA.short_desc": {
+          "source": "Storage-specific ID (inventory/shop/warehouse ID)",
+          "message": "Специфічний ID сховища (ID інвентарю/магазину/складу)"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLW9yZGVyLXByb2R1Y3Q.option.cHJpY2VfYnJ1dHRv.desc": {
+          "source": "Unit price (gross, including tax).",
+          "message": "Ціна за одиницю (брутто, з урахуванням податку)."
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLW9yZGVyLXByb2R1Y3Q.option.cHJpY2VfYnJ1dHRv.display_name": {
+          "source": "Price (Gross)",
+          "message": "Ціна (брутто)"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLW9yZGVyLXByb2R1Y3Q.option.cHJpY2VfYnJ1dHRv.short_desc": {
+          "source": "Unit price including tax",
+          "message": "Ціна за одиницю з податком"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLW9yZGVyLXByb2R1Y3Q.option.cHJvZHVjdF9pZA.desc": {
+          "source": "Product identifier inside the chosen `storage`.",
+          "message": "Ідентифікатор товару в обраному `storage`."
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLW9yZGVyLXByb2R1Y3Q.option.cHJvZHVjdF9pZA.display_name": {
+          "source": "Product ID",
+          "message": "ID товару"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLW9yZGVyLXByb2R1Y3Q.option.cHJvZHVjdF9pZA.short_desc": {
+          "source": "Product identifier in the chosen storage",
+          "message": "Ідентифікатор товару в обраному сховищі"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLW9yZGVyLXByb2R1Y3Q.option.cXVhbnRpdHk.desc": {
+          "source": "Quantity of the product on the order line.",
+          "message": "Кількість товару в позиції замовлення."
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLW9yZGVyLXByb2R1Y3Q.option.cXVhbnRpdHk.display_name": {
+          "source": "Quantity",
+          "message": "Кількість"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLW9yZGVyLXByb2R1Y3Q.option.cXVhbnRpdHk.short_desc": {
+          "source": "Number of units",
+          "message": "Кількість одиниць"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLW9yZGVyLXByb2R1Y3Q.option.d2FyZWhvdXNlX2lk.desc": {
+          "source": "BaseLinker warehouse ID from which this item is shipped.",
+          "message": "Ідентифікатор складу BaseLinker, з якого відправляється цей товар."
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLW9yZGVyLXByb2R1Y3Q.option.d2FyZWhvdXNlX2lk.display_name": {
+          "source": "Warehouse ID",
+          "message": "Ідентифікатор складу"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLW9yZGVyLXByb2R1Y3Q.option.d2FyZWhvdXNlX2lk.short_desc": {
+          "source": "BaseLinker warehouse ID",
+          "message": "Ідентифікатор складу BaseLinker"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLW9yZGVyLXByb2R1Y3Q.option.d2VpZ2h0.desc": {
+          "source": "Weight per unit in kilograms.",
+          "message": "Вага одиниці в кілограмах."
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLW9yZGVyLXByb2R1Y3Q.option.d2VpZ2h0.display_name": {
+          "source": "Weight",
+          "message": "Вага"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLW9yZGVyLXByb2R1Y3Q.option.d2VpZ2h0.short_desc": {
+          "source": "Unit weight (kg)",
+          "message": "Вага одиниці (кг)"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLW9yZGVyLXByb2R1Y3Q.option.dGF4X3JhdGU.desc": {
+          "source": "Tax rate as a percentage (e.g. `23` for 23%). Special values: `-1` = tax exempt, `-0.02` = 0% reverse charge, `-0.03` = 0% VAT-OSS.",
+          "message": "Ставка податку у відсотках (наприклад, `23` для 23%). Спеціальні значення: `-1` = звільнено від сплати податку, `-0.02` = 0% зворотне нарахування, `-0.03` = 0% VAT-OSS."
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLW9yZGVyLXByb2R1Y3Q.option.dGF4X3JhdGU.display_name": {
+          "source": "Tax Rate",
+          "message": "Ставка податку"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLW9yZGVyLXByb2R1Y3Q.option.dGF4X3JhdGU.short_desc": {
+          "source": "Tax percentage",
+          "message": "Відсоток податку"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLW9yZGVyLXByb2R1Y3Q.option.dmFyaWFudF9pZA.desc": {
+          "source": "Optional product-variant identifier.",
+          "message": "Необов’язковий ідентифікатор варіанта товару."
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLW9yZGVyLXByb2R1Y3Q.option.dmFyaWFudF9pZA.display_name": {
+          "source": "Variant ID",
+          "message": "ID варіанта"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLW9yZGVyLXByb2R1Y3Q.option.dmFyaWFudF9pZA.short_desc": {
+          "source": "Variant identifier",
+          "message": "Ідентифікатор варіанта"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLW9yZGVyLXByb2R1Y3Q.short_desc": {
+          "source": "Add a product line to an order",
+          "message": "Додати товарну позицію до замовлення"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLW9yZGVyLXJldHVybg.desc": {
+          "source": "Create a new BaseLinker order return via `addOrderReturn`. Returns the new `return_id` on success.",
+          "message": "Створити нове повернення замовлення BaseLinker через `addOrderReturn`. У разі успішного виконання повертає новий `return_id`."
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLW9yZGVyLXJldHVybg.display_name": {
+          "source": "Add Order Return",
+          "message": "Додати повернення замовлення"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLW9yZGVyLXJldHVybg.option.Y3VycmVuY3k.desc": {
+          "source": "ISO 4217 currency code, e.g. `PLN`, `EUR`, `USD`.",
+          "message": "Код валюти ISO 4217, наприклад `PLN`, `EUR`, `USD`."
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLW9yZGVyLXJldHVybg.option.Y3VycmVuY3k.display_name": {
+          "source": "Currency",
+          "message": "Валюта"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLW9yZGVyLXJldHVybg.option.Y3VycmVuY3k.short_desc": {
+          "source": "3-letter ISO 4217 currency code",
+          "message": "3-літерний код валюти ISO 4217"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLW9yZGVyLXJldHVybg.option.Y3VzdG9tX2V4dHJhX2ZpZWxkcw.desc": {
+          "source": "Map of `{\"<extra_field_id>\": <value>}` for custom order-return extra fields configured in BaseLinker. Text fields take strings; file fields take a `{\"title\": \"<filename>\", \"file\": \"<base64>\"}` hash where the base64-encoded file must not exceed 2 MB.",
+          "message": "Зіставлення `{\"<extra_field_id>\": <value>}` для додаткових полів повернення замовлення, налаштованих у BaseLinker. Текстові поля приймають рядки; файлові поля приймають хеш `{\"title\": \"<filename>\", \"file\": \"<base64>\"}`, де файл у кодуванні base64 не повинен перевищувати 2 МБ."
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLW9yZGVyLXJldHVybg.option.Y3VzdG9tX2V4dHJhX2ZpZWxkcw.display_name": {
+          "source": "Custom Extra Fields",
+          "message": "Користувацькі додаткові поля"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLW9yZGVyLXJldHVybg.option.Y3VzdG9tX2V4dHJhX2ZpZWxkcw.short_desc": {
+          "source": "Map of custom extra field ID to value",
+          "message": "Зіставлення ID користувацького додаткового поля зі значенням"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLW9yZGVyLXJldHVybg.option.Y3VzdG9tX3NvdXJjZV9pZA.desc": {
+          "source": "Identifier of a custom personal order source (see `list-order-sources`).",
+          "message": "Ідентифікатор власного джерела замовлення (див. `list-order-sources`)."
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLW9yZGVyLXJldHVybg.option.Y3VzdG9tX3NvdXJjZV9pZA.display_name": {
+          "source": "Custom Source ID",
+          "message": "ID власного джерела"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLW9yZGVyLXJldHVybg.option.Y3VzdG9tX3NvdXJjZV9pZA.short_desc": {
+          "source": "Custom personal source ID",
+          "message": "ID власного джерела замовлення"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLW9yZGVyLXJldHVybg.option.YWRtaW5fY29tbWVudHM.display_name": {
+          "source": "Admin Comments",
+          "message": "Коментарі адміністратора"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLW9yZGVyLXJldHVybg.option.YWRtaW5fY29tbWVudHM.short_desc": {
+          "source": "Internal admin comments",
+          "message": "Внутрішні коментарі адміністратора"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLW9yZGVyLXJldHVybg.option.ZGF0ZV9hZGQ.desc": {
+          "source": "When the return was created. Sent to the BaseLinker `addOrderReturn` API as Unix seconds (the conversion is performed inside `doRequestImpl()`); the field is exposed as a date so the UI can render a date/time picker rather than asking the user for a raw epoch number.",
+          "message": "Час створення повернення. Надсилається до API BaseLinker `addOrderReturn` як секунди Unix (перетворення виконується всередині `doRequestImpl()`); поле представлене як дата, щоб інтерфейс міг відображати засіб вибору дати/часу замість запиту в користувача необробленого числа епохи."
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLW9yZGVyLXJldHVybg.option.ZGF0ZV9hZGQ.display_name": {
+          "source": "Date Added",
+          "message": "Дата додавання"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLW9yZGVyLXJldHVybg.option.ZGF0ZV9hZGQ.short_desc": {
+          "source": "Return creation timestamp",
+          "message": "Часова позначка створення повернення"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLW9yZGVyLXJldHVybg.option.ZGVsaXZlcnlfY291bnRyeV9jb2Rl.desc": {
+          "source": "ISO 3166-1 alpha-2 country code (e.g. `PL`, `DE`, `US`).",
+          "message": "Дволітерний код країни ISO 3166-1 alpha-2 (наприклад, `PL`, `DE`, `US`)."
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLW9yZGVyLXJldHVybg.option.ZGVsaXZlcnlfY291bnRyeV9jb2Rl.display_name": {
+          "source": "Delivery Country Code",
+          "message": "Код країни доставки"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLW9yZGVyLXJldHVybg.option.ZGVsaXZlcnlfY291bnRyeV9jb2Rl.short_desc": {
+          "source": "2-letter ISO country code",
+          "message": "2-літерний код країни ISO"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLW9yZGVyLXJldHVybg.option.ZGVsaXZlcnlfY29tcGFueQ.display_name": {
+          "source": "Delivery Company",
+          "message": "Компанія для доставки"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLW9yZGVyLXJldHVybg.option.ZGVsaXZlcnlfY29tcGFueQ.short_desc": {
+          "source": "Sender company name",
+          "message": "Назва компанії відправника"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLW9yZGVyLXJldHVybg.option.ZGVsaXZlcnlfY2l0eQ.display_name": {
+          "source": "Delivery City",
+          "message": "Місто доставки"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLW9yZGVyLXJldHVybg.option.ZGVsaXZlcnlfY2l0eQ.short_desc": {
+          "source": "City",
+          "message": "Місто"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLW9yZGVyLXJldHVybg.option.ZGVsaXZlcnlfYWRkcmVzcw.display_name": {
+          "source": "Delivery Address",
+          "message": "Адреса доставки"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLW9yZGVyLXJldHVybg.option.ZGVsaXZlcnlfYWRkcmVzcw.short_desc": {
+          "source": "Street address",
+          "message": "Адреса (вулиця)"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLW9yZGVyLXJldHVybg.option.ZGVsaXZlcnlfZnVsbG5hbWU.display_name": {
+          "source": "Delivery Full Name",
+          "message": "Повне ім'я для доставки"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLW9yZGVyLXJldHVybg.option.ZGVsaXZlcnlfZnVsbG5hbWU.short_desc": {
+          "source": "Sender full name",
+          "message": "Повне ім'я відправника"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLW9yZGVyLXJldHVybg.option.ZGVsaXZlcnlfc3RhdGU.display_name": {
+          "source": "Delivery State/Province",
+          "message": "Область/штат доставки"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLW9yZGVyLXJldHVybg.option.ZGVsaXZlcnlfc3RhdGU.short_desc": {
+          "source": "State or province",
+          "message": "Штат або область"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLW9yZGVyLXJldHVybg.option.ZGVsaXZlcnlfcG9zdGNvZGU.display_name": {
+          "source": "Delivery Postcode",
+          "message": "Поштовий індекс доставки"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLW9yZGVyLXJldHVybg.option.ZGVsaXZlcnlfcG9zdGNvZGU.short_desc": {
+          "source": "Postal code",
+          "message": "Поштовий індекс"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLW9yZGVyLXJldHVybg.option.ZGVsaXZlcnlfcHJpY2U.display_name": {
+          "source": "Delivery Price",
+          "message": "Вартість доставки"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLW9yZGVyLXJldHVybg.option.ZGVsaXZlcnlfcHJpY2U.short_desc": {
+          "source": "Return shipping cost",
+          "message": "Вартість доставки повернення"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLW9yZGVyLXJldHVybg.option.ZW1haWw.display_name": {
+          "source": "Email",
+          "message": "Електронна пошта"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLW9yZGVyLXJldHVybg.option.ZW1haWw.short_desc": {
+          "source": "Customer email address",
+          "message": "Адреса електронної пошти клієнта"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLW9yZGVyLXJldHVybg.option.ZXh0cmFfZmllbGRfMQ.display_name": {
+          "source": "Extra Field 1",
+          "message": "Додаткове поле 1"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLW9yZGVyLXJldHVybg.option.ZXh0cmFfZmllbGRfMQ.short_desc": {
+          "source": "Free-form extra field",
+          "message": "Додаткове поле вільної форми"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLW9yZGVyLXJldHVybg.option.ZXh0cmFfZmllbGRfMg.display_name": {
+          "source": "Extra Field 2",
+          "message": "Додаткове поле 2"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLW9yZGVyLXJldHVybg.option.ZXh0cmFfZmllbGRfMg.short_desc": {
+          "source": "Free-form extra field",
+          "message": "Додаткове поле вільної форми"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLW9yZGVyLXJldHVybg.option.b3JkZXJfaWQ.desc": {
+          "source": "Identifier of the original order this return is associated with.",
+          "message": "Ідентифікатор початкового замовлення, з яким пов'язане це повернення."
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLW9yZGVyLXJldHVybg.option.b3JkZXJfaWQ.display_name": {
+          "source": "Source Order ID",
+          "message": "Ідентифікатор вихідного замовлення"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLW9yZGVyLXJldHVybg.option.b3JkZXJfaWQ.short_desc": {
+          "source": "Original order being returned (if any)",
+          "message": "Початкове замовлення, що повертається (якщо є)"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLW9yZGVyLXJldHVybg.option.c3RhdHVzX2lk.desc": {
+          "source": "Return status identifier; values are drawn from BaseLinker's `getOrderReturnStatusList` endpoint and surfaced via the `order_return_statuses` reference data.",
+          "message": "Ідентифікатор статусу повернення; значення отримуються з кінцевої точки BaseLinker `getOrderReturnStatusList` і надаються через довідкові дані `order_return_statuses`."
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLW9yZGVyLXJldHVybg.option.c3RhdHVzX2lk.display_name": {
+          "source": "Return Status ID",
+          "message": "Ідентифікатор статусу повернення"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLW9yZGVyLXJldHVybg.option.c3RhdHVzX2lk.short_desc": {
+          "source": "Initial return status",
+          "message": "Початковий статус повернення"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLW9yZGVyLXJldHVybg.option.cGhvbmU.display_name": {
+          "source": "Phone",
+          "message": "Телефон"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLW9yZGVyLXJldHVybg.option.cGhvbmU.short_desc": {
+          "source": "Customer phone number",
+          "message": "Номер телефону клієнта"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLW9yZGVyLXJldHVybg.option.cHJvZHVjdHM.desc": {
+          "source": "Line items being returned.",
+          "message": "Товарні позиції, що повертаються."
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLW9yZGVyLXJldHVybg.option.cHJvZHVjdHM.display_name": {
+          "source": "Products",
+          "message": "Товари"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLW9yZGVyLXJldHVybg.option.cHJvZHVjdHM.short_desc": {
+          "source": "Returned line items",
+          "message": "Повернені товарні позиції"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLW9yZGVyLXJldHVybg.option.cmVmZXJlbmNlX251bWJlcg.display_name": {
+          "source": "Reference Number",
+          "message": "Номер посилання"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLW9yZGVyLXJldHVybg.option.cmVmZXJlbmNlX251bWJlcg.short_desc": {
+          "source": "External reference number for the return",
+          "message": "Зовнішній номер посилання для повернення"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLW9yZGVyLXJldHVybg.option.cmVmdW5kX2FjY291bnRfbnVtYmVy.display_name": {
+          "source": "Refund Account Number",
+          "message": "Номер рахунку для відшкодування"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLW9yZGVyLXJldHVybg.option.cmVmdW5kX2FjY291bnRfbnVtYmVy.short_desc": {
+          "source": "Bank account for the refund",
+          "message": "Банківський рахунок для повернення коштів"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLW9yZGVyLXJldHVybg.option.cmVmdW5kX2liYW4.display_name": {
+          "source": "Refund IBAN",
+          "message": "IBAN для відшкодування"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLW9yZGVyLXJldHVybg.option.cmVmdW5kX2liYW4.short_desc": {
+          "source": "IBAN for the refund",
+          "message": "IBAN для повернення коштів"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLW9yZGVyLXJldHVybg.option.cmVmdW5kX3N3aWZ0.display_name": {
+          "source": "Refund SWIFT",
+          "message": "SWIFT для відшкодування"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLW9yZGVyLXJldHVybg.option.cmVmdW5kX3N3aWZ0.short_desc": {
+          "source": "SWIFT/BIC code for the refund",
+          "message": "Код SWIFT/BIC для повернення коштів"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLW9yZGVyLXJldHVybg.option.cmVmdW5kZWQ.desc": {
+          "source": "`True` marks the return as refunded.",
+          "message": "`True` позначає повернення як відшкодоване."
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLW9yZGVyLXJldHVybg.option.cmVmdW5kZWQ.display_name": {
+          "source": "Refunded",
+          "message": "Повернено"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLW9yZGVyLXJldHVybg.option.cmVmdW5kZWQ.short_desc": {
+          "source": "Whether the return has been refunded",
+          "message": "Чи було повернено кошти за повернення"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLW9yZGVyLXJldHVybg.option.dXNlcl9sb2dpbg.display_name": {
+          "source": "User Login",
+          "message": "Логін користувача"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLW9yZGVyLXJldHVybg.option.dXNlcl9sb2dpbg.short_desc": {
+          "source": "Customer login (marketplace username)",
+          "message": "Логін клієнта (ім'я користувача на маркетплейсі)"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLW9yZGVyLXJldHVybg.short_desc": {
+          "source": "Create a new order return",
+          "message": "Створити нове повернення замовлення"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLWludmVudG9yeS1wcm9kdWN0.desc": {
+          "source": "Upsert a BaseLinker inventory product via `addInventoryProduct`. Omit `product_id` to create a new product; supply it (together with `inventory_id`) to update an existing product.",
+          "message": "Створити або оновити складський товар BaseLinker через `addInventoryProduct`. Пропустіть `product_id`, щоб створити новий товар; укажіть його (разом із `inventory_id`), щоб оновити наявний товар."
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLWludmVudG9yeS1wcm9kdWN0.display_name": {
+          "source": "Add / Update Inventory Product",
+          "message": "Додати / оновити товар на складі"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLWludmVudG9yeS1wcm9kdWN0.option.Y2F0ZWdvcnlfaWQ.desc": {
+          "source": "Category identifier; see `list-inventory-categories`. Scoped to the selected `inventory_id`.",
+          "message": "Ідентифікатор категорії; див. `list-inventory-categories`. Обмежено вибраним `inventory_id`."
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLWludmVudG9yeS1wcm9kdWN0.option.Y2F0ZWdvcnlfaWQ.display_name": {
+          "source": "Category ID",
+          "message": "Ідентифікатор категорії"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLWludmVudG9yeS1wcm9kdWN0.option.Y2F0ZWdvcnlfaWQ.short_desc": {
+          "source": "Category identifier",
+          "message": "Ідентифікатор категорії"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLWludmVudG9yeS1wcm9kdWN0.option.YXNpbg.display_name": {
+          "source": "ASIN",
+          "message": "ASIN"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLWludmVudG9yeS1wcm9kdWN0.option.YXNpbg.short_desc": {
+          "source": "Amazon Standard Identification Number",
+          "message": "Amazon Standard Identification Number"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLWludmVudG9yeS1wcm9kdWN0.option.YXZlcmFnZV9jb3N0.display_name": {
+          "source": "Average Cost",
+          "message": "Середня собівартість"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLWludmVudG9yeS1wcm9kdWN0.option.YXZlcmFnZV9jb3N0.short_desc": {
+          "source": "Average purchase cost",
+          "message": "Середня вартість закупівлі"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLWludmVudG9yeS1wcm9kdWN0.option.YnVuZGxlX3Byb2R1Y3Rz.desc": {
+          "source": "Map of `{\"<product_id>\": <quantity>}` where each key is the identifier of a product included in this bundle and the value is the number of pieces.",
+          "message": "Зіставлення `{\"<product_id>\": <quantity>}`, де кожен ключ є ідентифікатором товару, включеного до цього комплекту, а значення — кількістю штук."
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLWludmVudG9yeS1wcm9kdWN0.option.YnVuZGxlX3Byb2R1Y3Rz.display_name": {
+          "source": "Bundle Products",
+          "message": "Товари в комплекті"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLWludmVudG9yeS1wcm9kdWN0.option.YnVuZGxlX3Byb2R1Y3Rz.short_desc": {
+          "source": "Products included in this bundle",
+          "message": "Товари, включені до цього комплекту"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLWludmVudG9yeS1wcm9kdWN0.option.ZWFu.display_name": {
+          "source": "EAN",
+          "message": "EAN"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLWludmVudG9yeS1wcm9kdWN0.option.ZWFu.short_desc": {
+          "source": "EAN / barcode",
+          "message": "EAN / штрихкод"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLWludmVudG9yeS1wcm9kdWN0.option.ZWFuX2FkZGl0aW9uYWw.desc": {
+          "source": "List of additional EANs. Each entry is a hash `{\"ean\": \"<ean>\", \"quantity\": <n>}`.",
+          "message": "Список додаткових EAN. Кожен запис є хешем `{\"ean\": \"<ean>\", \"quantity\": <n>}`."
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLWludmVudG9yeS1wcm9kdWN0.option.ZWFuX2FkZGl0aW9uYWw.display_name": {
+          "source": "Additional EANs",
+          "message": "Додаткові коди EAN"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLWludmVudG9yeS1wcm9kdWN0.option.ZWFuX2FkZGl0aW9uYWw.short_desc": {
+          "source": "List of additional EANs with quantities",
+          "message": "Список додаткових EAN із кількістю"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLWludmVudG9yeS1wcm9kdWN0.option.aGVpZ2h0.display_name": {
+          "source": "Height (cm)",
+          "message": "Висота (см)"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLWludmVudG9yeS1wcm9kdWN0.option.aGVpZ2h0.short_desc": {
+          "source": "Product height",
+          "message": "Висота товару"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLWludmVudG9yeS1wcm9kdWN0.option.aW1hZ2Vz.desc": {
+          "source": "Map keyed by slot index (`0`-`15`) to slot value. Values: `url:<https-url>`, `data:<base64>`, or empty string to clear.",
+          "message": "Зіставлення з ключем за індексом слота (`0`-`15`) зі значенням слота. Значення: `url:<https-url>`, `data:<base64>` або порожній рядок для очищення."
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLWludmVudG9yeS1wcm9kdWN0.option.aW1hZ2Vz.display_name": {
+          "source": "Images",
+          "message": "Зображення"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLWludmVudG9yeS1wcm9kdWN0.option.aW1hZ2Vz.short_desc": {
+          "source": "Image slots (0-15)",
+          "message": "Слоти для зображень (0-15)"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLWludmVudG9yeS1wcm9kdWN0.option.aW52ZW50b3J5X2lk.desc": {
+          "source": "Identifier of the inventory (catalog); see `list-inventories`.",
+          "message": "Ідентифікатор інвентарю (каталогу); див. `list-inventories`."
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLWludmVudG9yeS1wcm9kdWN0.option.aW52ZW50b3J5X2lk.display_name": {
+          "source": "Inventory ID",
+          "message": "ID інвентарю"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLWludmVudG9yeS1wcm9kdWN0.option.aW52ZW50b3J5X2lk.short_desc": {
+          "source": "Target inventory (catalog)",
+          "message": "Цільовий інвентар (каталог)"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLWludmVudG9yeS1wcm9kdWN0.option.aXNfYnVuZGxl.display_name": {
+          "source": "Is Bundle",
+          "message": "Є комплектом"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLWludmVudG9yeS1wcm9kdWN0.option.aXNfYnVuZGxl.short_desc": {
+          "source": "Whether this product is a bundle",
+          "message": "Чи є цей товар комплектом"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLWludmVudG9yeS1wcm9kdWN0.option.bG9jYXRpb25z.desc": {
+          "source": "Map of `{\"<warehouse_id>\": \"<location>\"}`.",
+          "message": "Зіставлення `{\"<warehouse_id>\": \"<location>\"}`."
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLWludmVudG9yeS1wcm9kdWN0.option.bG9jYXRpb25z.display_name": {
+          "source": "Locations",
+          "message": "Розташування"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLWludmVudG9yeS1wcm9kdWN0.option.bG9jYXRpb25z.short_desc": {
+          "source": "Per-warehouse location codes",
+          "message": "Коди розташування за складами"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLWludmVudG9yeS1wcm9kdWN0.option.bGVuZ3Ro.display_name": {
+          "source": "Length (cm)",
+          "message": "Довжина (см)"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLWludmVudG9yeS1wcm9kdWN0.option.bGVuZ3Ro.short_desc": {
+          "source": "Product length",
+          "message": "Довжина товару"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLWludmVudG9yeS1wcm9kdWN0.option.bGlua3M.desc": {
+          "source": "Map of external-system product links. Keys are of the form `<type>_<id>` (where `<type>` identifies the external system, e.g. `shop`, `amazon`, and `<id>` is the BaseLinker-side identifier of that system). Each value is a hash `{\"product_id\": \"<external-id>\", \"variant_id\": \"<external-variant-id>\"}` where `variant_id` is optional.",
+          "message": "Зіставлення посилань на товар у зовнішніх системах. Ключі мають вигляд `<type>_<id>` (де `<type>` ідентифікує зовнішню систему, наприклад `shop`, `amazon`, а `<id>` — ідентифікатор цієї системи з боку BaseLinker). Кожне значення — це хеш `{\"product_id\": \"<external-id>\", \"variant_id\": \"<external-variant-id>\"}`, де `variant_id` є необов’язковим."
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLWludmVudG9yeS1wcm9kdWN0.option.bGlua3M.display_name": {
+          "source": "Links",
+          "message": "Посилання"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLWludmVudG9yeS1wcm9kdWN0.option.bGlua3M.short_desc": {
+          "source": "External-system product links",
+          "message": "Посилання на товар у зовнішніх системах"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLWludmVudG9yeS1wcm9kdWN0.option.bWFudWZhY3R1cmVyX2lk.desc": {
+          "source": "Manufacturer identifier; see `list-inventory-manufacturers`.",
+          "message": "Ідентифікатор виробника; див. `list-inventory-manufacturers`."
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLWludmVudG9yeS1wcm9kdWN0.option.bWFudWZhY3R1cmVyX2lk.display_name": {
+          "source": "Manufacturer ID",
+          "message": "ID виробника"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLWludmVudG9yeS1wcm9kdWN0.option.bWFudWZhY3R1cmVyX2lk.short_desc": {
+          "source": "Manufacturer identifier",
+          "message": "Ідентифікатор виробника"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLWludmVudG9yeS1wcm9kdWN0.option.c2t1.display_name": {
+          "source": "SKU",
+          "message": "SKU"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLWludmVudG9yeS1wcm9kdWN0.option.c2t1.short_desc": {
+          "source": "Stock-keeping unit",
+          "message": "Одиниця складського обліку (SKU)"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLWludmVudG9yeS1wcm9kdWN0.option.c3Rhcg.allowed-value.aW50OjA.display_name": {
+          "source": "No Rating",
+          "message": "Без оцінки"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLWludmVudG9yeS1wcm9kdWN0.option.c3Rhcg.allowed-value.aW50OjE.display_name": {
+          "source": "1 Star",
+          "message": "1 зірка"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLWludmVudG9yeS1wcm9kdWN0.option.c3Rhcg.allowed-value.aW50OjI.display_name": {
+          "source": "2 Stars",
+          "message": "2 зірки"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLWludmVudG9yeS1wcm9kdWN0.option.c3Rhcg.allowed-value.aW50OjM.display_name": {
+          "source": "3 Stars",
+          "message": "3 зірки"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLWludmVudG9yeS1wcm9kdWN0.option.c3Rhcg.allowed-value.aW50OjQ.display_name": {
+          "source": "4 Stars",
+          "message": "4 зірки"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLWludmVudG9yeS1wcm9kdWN0.option.c3Rhcg.allowed-value.aW50OjU.display_name": {
+          "source": "5 Stars",
+          "message": "5 зірок"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLWludmVudG9yeS1wcm9kdWN0.option.c3Rhcg.desc": {
+          "source": "Internal product rating in the range `0`-`5`, where `0` means no rating.",
+          "message": "Внутрішній рейтинг товару в діапазоні `0`-`5`, де `0` означає відсутність оцінки."
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLWludmVudG9yeS1wcm9kdWN0.option.c3Rhcg.display_name": {
+          "source": "Rating",
+          "message": "Рейтинг"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLWludmVudG9yeS1wcm9kdWN0.option.c3Rhcg.short_desc": {
+          "source": "Internal 0-5 rating",
+          "message": "Внутрішній рейтинг 0-5"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLWludmVudG9yeS1wcm9kdWN0.option.c3RvY2s.desc": {
+          "source": "Map of `{\"<warehouse_id>\": <qty>}` (warehouse IDs use prefixes like `bl_<id>` for BaseLinker warehouses or `shop_<id>` for shops).",
+          "message": "Зіставлення `{\"<warehouse_id>\": <qty>}` (ID складів використовують префікси на кшталт `bl_<id>` для складів BaseLinker або `shop_<id>` для магазинів)."
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLWludmVudG9yeS1wcm9kdWN0.option.c3RvY2s.display_name": {
+          "source": "Stock",
+          "message": "Залишки"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLWludmVudG9yeS1wcm9kdWN0.option.c3RvY2s.short_desc": {
+          "source": "Per-warehouse stock quantities",
+          "message": "Кількість залишків за складами"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLWludmVudG9yeS1wcm9kdWN0.option.cGFyZW50X2lk.desc": {
+          "source": "Identifier of the parent product when this product is a variant or bundle component.",
+          "message": "Ідентифікатор батьківського товару, якщо цей товар є варіантом або компонентом комплекту."
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLWludmVudG9yeS1wcm9kdWN0.option.cGFyZW50X2lk.display_name": {
+          "source": "Parent Product ID",
+          "message": "ID батьківського товару"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLWludmVudG9yeS1wcm9kdWN0.option.cGFyZW50X2lk.short_desc": {
+          "source": "Parent product (for bundles / variants)",
+          "message": "Батьківський товар (для комплектів / варіантів)"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLWludmVudG9yeS1wcm9kdWN0.option.cHJpY2Vz.desc": {
+          "source": "Map of `{\"<price_group_id>\": <price>}`; keys are the IDs of price groups configured in BaseLinker.",
+          "message": "Зіставлення `{\"<price_group_id>\": <price>}`; ключами є ID цінових груп, налаштованих у BaseLinker."
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLWludmVudG9yeS1wcm9kdWN0.option.cHJpY2Vz.display_name": {
+          "source": "Prices",
+          "message": "Ціни"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLWludmVudG9yeS1wcm9kdWN0.option.cHJpY2Vz.short_desc": {
+          "source": "Per-price-group prices",
+          "message": "Ціни за ціновими групами"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLWludmVudG9yeS1wcm9kdWN0.option.cHJvZHVjdF9pZA.desc": {
+          "source": "If omitted, a new product is created. If provided, the existing product is updated in place.",
+          "message": "Якщо пропущено, створюється новий товар. Якщо вказано, наявний товар оновлюється на місці."
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLWludmVudG9yeS1wcm9kdWN0.option.cHJvZHVjdF9pZA.display_name": {
+          "source": "Product ID",
+          "message": "ID товару"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLWludmVudG9yeS1wcm9kdWN0.option.cHJvZHVjdF9pZA.short_desc": {
+          "source": "Existing product ID (omit to create new)",
+          "message": "ID наявного товару (пропустіть, щоб створити новий)"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLWludmVudG9yeS1wcm9kdWN0.option.d2VpZ2h0.display_name": {
+          "source": "Weight (kg)",
+          "message": "Вага (кг)"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLWludmVudG9yeS1wcm9kdWN0.option.d2VpZ2h0.short_desc": {
+          "source": "Product weight",
+          "message": "Вага товару"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLWludmVudG9yeS1wcm9kdWN0.option.d2lkdGg.display_name": {
+          "source": "Width (cm)",
+          "message": "Ширина (см)"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLWludmVudG9yeS1wcm9kdWN0.option.d2lkdGg.short_desc": {
+          "source": "Product width",
+          "message": "Ширина товару"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLWludmVudG9yeS1wcm9kdWN0.option.dGF4X3JhdGU.desc": {
+          "source": "Tax rate as a percentage (e.g. `23` for 23%). Special values: `-1` = tax exempt, `-0.02` = 0% reverse charge, `-0.03` = 0% VAT-OSS.",
+          "message": "Ставка податку у відсотках (наприклад, `23` для 23%). Спеціальні значення: `-1` = звільнено від сплати податку, `-0.02` = 0% зворотне нарахування, `-0.03` = 0% VAT-OSS."
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLWludmVudG9yeS1wcm9kdWN0.option.dGF4X3JhdGU.display_name": {
+          "source": "Tax Rate",
+          "message": "Ставка податку"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLWludmVudG9yeS1wcm9kdWN0.option.dGF4X3JhdGU.short_desc": {
+          "source": "Tax percentage",
+          "message": "Відсоток податку"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLWludmVudG9yeS1wcm9kdWN0.option.dGFncw.desc": {
+          "source": "List of tag names (strings) to associate with this product.",
+          "message": "Список назв тегів (рядків) для пов’язування з цим товаром."
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLWludmVudG9yeS1wcm9kdWN0.option.dGFncw.display_name": {
+          "source": "Tags",
+          "message": "Теги"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLWludmVudG9yeS1wcm9kdWN0.option.dGFncw.short_desc": {
+          "source": "List of tag names",
+          "message": "Список назв тегів"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLWludmVudG9yeS1wcm9kdWN0.option.dGV4dF9maWVsZHM.desc": {
+          "source": "Multilang text fields keyed as `<field>|<lang>|<source_id>` (e.g. `name`, `name|en`, `description|de|0`). The special key `features` holds a hash of `{param_name: param_value}`.",
+          "message": "Багатомовні текстові поля з ключами у вигляді `<field>|<lang>|<source_id>` (наприклад, `name`, `name|en`, `description|de|0`). Спеціальний ключ `features` містить хеш `{param_name: param_value}`."
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLWludmVudG9yeS1wcm9kdWN0.option.dGV4dF9maWVsZHM.display_name": {
+          "source": "Text Fields",
+          "message": "Текстові поля"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLWludmVudG9yeS1wcm9kdWN0.option.dGV4dF9maWVsZHM.short_desc": {
+          "source": "Multilang text fields",
+          "message": "Багатомовні текстові поля"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLWludmVudG9yeS1wcm9kdWN0.short_desc": {
+          "source": "Create or update a BaseLinker inventory product",
+          "message": "Створити або оновити товар інвентарю BaseLinker"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLXBhY2thZ2U.desc": {
+          "source": "Create a courier package for a BaseLinker order via `createPackage`. Returns the courier package identifier on success.",
+          "message": "Створити кур’єрську посилку для замовлення BaseLinker через `createPackage`. У разі успіху повертає ідентифікатор кур’єрської посилки."
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLXBhY2thZ2U.display_name": {
+          "source": "Add Courier Package",
+          "message": "Додати кур’єрську посилку"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLXBhY2thZ2U.option.Y291cmllcl9jb2Rl.desc": {
+          "source": "Courier identifier code; see `list-couriers`.",
+          "message": "Код ідентифікатора кур’єра; див. `list-couriers`."
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLXBhY2thZ2U.option.Y291cmllcl9jb2Rl.display_name": {
+          "source": "Courier Code",
+          "message": "Код кур'єра"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLXBhY2thZ2U.option.Y291cmllcl9jb2Rl.short_desc": {
+          "source": "Courier to use",
+          "message": "Кур’єр для використання"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLXBhY2thZ2U.option.YWNjb3VudF9pZA.desc": {
+          "source": "Courier account identifier; see `list-courier-accounts`.",
+          "message": "Ідентифікатор облікового запису кур’єра; див. `list-courier-accounts`."
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLXBhY2thZ2U.option.YWNjb3VudF9pZA.display_name": {
+          "source": "Account ID",
+          "message": "ID облікового запису"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLXBhY2thZ2U.option.YWNjb3VudF9pZA.short_desc": {
+          "source": "Courier account to charge",
+          "message": "Обліковий запис кур’єра для списання"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLXBhY2thZ2U.option.ZmllbGRz.desc": {
+          "source": "Courier-specific field values; see `list-courier-fields` for definitions. Omit or pass an empty list (`[]`) if the selected courier has no form fields.",
+          "message": "Значення полів, специфічних для кур’єра; див. визначення у `list-courier-fields`. Пропустіть або передайте порожній список (`[]`), якщо вибраний кур’єр не має полів форми."
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLXBhY2thZ2U.option.ZmllbGRz.display_name": {
+          "source": "Courier Fields",
+          "message": "Поля кур’єра"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLXBhY2thZ2U.option.ZmllbGRz.short_desc": {
+          "source": "Courier-specific field values",
+          "message": "Значення полів, специфічних для кур’єра"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLXBhY2thZ2U.option.b3JkZXJfaWQ.display_name": {
+          "source": "Order ID",
+          "message": "Ідентифікатор замовлення"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLXBhY2thZ2U.option.b3JkZXJfaWQ.short_desc": {
+          "source": "Order to ship",
+          "message": "Замовлення для відправлення"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLXBhY2thZ2U.option.cGFja2FnZXM.desc": {
+          "source": "One entry per physical parcel being shipped.",
+          "message": "Один запис на кожну фізичну посилку, що відправляється."
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLXBhY2thZ2U.option.cGFja2FnZXM.display_name": {
+          "source": "Packages",
+          "message": "Посилки"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLXBhY2thZ2U.option.cGFja2FnZXM.short_desc": {
+          "source": "Parcel dimensions / insurance",
+          "message": "Габарити / страхування посилки"
+        },
+        "app.QmFzZUxpbmtlcg.action.YWRkLXBhY2thZ2U.short_desc": {
+          "source": "Create a courier package (shipment)",
+          "message": "Створити кур’єрську посилку (відправлення)"
+        },
+        "app.QmFzZUxpbmtlcg.action.YmxhY2tsaXN0LWFkZGVk.desc": {
+          "source": "Fires when a buyer is added to the blacklist. (Polled from `getJournalList` `log_type` 15.)",
+          "message": "Спрацьовує, коли покупця додають до чорного списку. (Опитується з `getJournalList` `log_type` 15.)"
+        },
+        "app.QmFzZUxpbmtlcg.action.YmxhY2tsaXN0LWFkZGVk.display_name": {
+          "source": "Blacklist Entry Added",
+          "message": "Запис додано до чорного списку"
+        },
+        "app.QmFzZUxpbmtlcg.action.YmxhY2tsaXN0LWFkZGVk.short_desc": {
+          "source": "Trigger when a buyer is added to the blacklist",
+          "message": "Спрацьовувати, коли покупця додають до чорного списку"
+        },
+        "app.QmFzZUxpbmtlcg.action.Z2V0LW9yZGVy.desc": {
+          "source": "Retrieve a single BaseLinker order by its `order_id` via `getOrders`.",
+          "message": "Отримати одне замовлення BaseLinker за його `order_id` через `getOrders`."
+        },
+        "app.QmFzZUxpbmtlcg.action.Z2V0LW9yZGVy.display_name": {
+          "source": "Get Order",
+          "message": "Отримати замовлення"
+        },
+        "app.QmFzZUxpbmtlcg.action.Z2V0LW9yZGVy.option.b3JkZXJfaWQ.display_name": {
+          "source": "Order ID",
+          "message": "Ідентифікатор замовлення"
+        },
+        "app.QmFzZUxpbmtlcg.action.Z2V0LW9yZGVy.option.b3JkZXJfaWQ.short_desc": {
+          "source": "BaseLinker order identifier",
+          "message": "Ідентифікатор замовлення BaseLinker"
+        },
+        "app.QmFzZUxpbmtlcg.action.Z2V0LW9yZGVy.short_desc": {
+          "source": "Get a single order by ID",
+          "message": "Отримати одне замовлення за ID"
+        },
+        "app.QmFzZUxpbmtlcg.action.Z2V0LW9yZGVyLXJldHVybg.desc": {
+          "source": "Retrieve a single BaseLinker order return by its `return_id`.",
+          "message": "Отримати одне повернення замовлення BaseLinker за його `return_id`."
+        },
+        "app.QmFzZUxpbmtlcg.action.Z2V0LW9yZGVyLXJldHVybg.display_name": {
+          "source": "Get Order Return",
+          "message": "Отримати повернення замовлення"
+        },
+        "app.QmFzZUxpbmtlcg.action.Z2V0LW9yZGVyLXJldHVybg.option.cmV0dXJuX2lk.display_name": {
+          "source": "Return ID",
+          "message": "Ідентифікатор повернення"
+        },
+        "app.QmFzZUxpbmtlcg.action.Z2V0LW9yZGVyLXJldHVybg.option.cmV0dXJuX2lk.short_desc": {
+          "source": "BaseLinker order return identifier",
+          "message": "Ідентифікатор повернення замовлення BaseLinker"
+        },
+        "app.QmFzZUxpbmtlcg.action.Z2V0LW9yZGVyLXJldHVybg.short_desc": {
+          "source": "Get a single order return by ID",
+          "message": "Отримати одне повернення замовлення за ID"
+        },
+        "app.QmFzZUxpbmtlcg.action.Z2V0LWludmVudG9yeS1wcm9kdWN0.desc": {
+          "source": "Retrieve a single BaseLinker inventory product by its `product_id`.",
+          "message": "Отримати один товар зі складу BaseLinker за його `product_id`."
+        },
+        "app.QmFzZUxpbmtlcg.action.Z2V0LWludmVudG9yeS1wcm9kdWN0.display_name": {
+          "source": "Get Inventory Product",
+          "message": "Отримати товар зі складу"
+        },
+        "app.QmFzZUxpbmtlcg.action.Z2V0LWludmVudG9yeS1wcm9kdWN0.option.aW52ZW50b3J5X2lk.display_name": {
+          "source": "Inventory ID",
+          "message": "ID інвентарю"
+        },
+        "app.QmFzZUxpbmtlcg.action.Z2V0LWludmVudG9yeS1wcm9kdWN0.option.aW52ZW50b3J5X2lk.short_desc": {
+          "source": "BaseLinker inventory identifier",
+          "message": "Ідентифікатор складу BaseLinker"
+        },
+        "app.QmFzZUxpbmtlcg.action.Z2V0LWludmVudG9yeS1wcm9kdWN0.option.cHJvZHVjdF9pZA.display_name": {
+          "source": "Product ID",
+          "message": "ID товару"
+        },
+        "app.QmFzZUxpbmtlcg.action.Z2V0LWludmVudG9yeS1wcm9kdWN0.option.cHJvZHVjdF9pZA.short_desc": {
+          "source": "BaseLinker inventory product identifier",
+          "message": "Ідентифікатор товару на складі BaseLinker"
+        },
+        "app.QmFzZUxpbmtlcg.action.Z2V0LWludmVudG9yeS1wcm9kdWN0.short_desc": {
+          "source": "Get a single inventory product by ID",
+          "message": "Отримати один товар зі складу за ID"
+        },
+        "app.QmFzZUxpbmtlcg.action.Z2V0LWxhYmVs.desc": {
+          "source": "Retrieve a shipping label for a courier package via `getLabel`. The label is returned as a base64-encoded blob (typically a PDF).",
+          "message": "Отримати транспортну етикетку для кур'єрського відправлення через `getLabel`. Етикетка повертається як двійковий об'єкт base64 (зазвичай PDF)."
+        },
+        "app.QmFzZUxpbmtlcg.action.Z2V0LWxhYmVs.display_name": {
+          "source": "Get Courier Label",
+          "message": "Отримати кур'єрську етикетку"
+        },
+        "app.QmFzZUxpbmtlcg.action.Z2V0LWxhYmVs.option.Y291cmllcl9jb2Rl.display_name": {
+          "source": "Courier Code",
+          "message": "Код кур'єра"
+        },
+        "app.QmFzZUxpbmtlcg.action.Z2V0LWxhYmVs.option.Y291cmllcl9jb2Rl.short_desc": {
+          "source": "Courier issuing the label",
+          "message": "Кур'єрська служба, яка створює етикетку"
+        },
+        "app.QmFzZUxpbmtlcg.action.Z2V0LWxhYmVs.option.cGFja2FnZV9pZA.desc": {
+          "source": "Internal BaseLinker package ID. Supply either this or `package_number`.",
+          "message": "Внутрішній ID відправлення BaseLinker. Укажіть або це значення, або `package_number`."
+        },
+        "app.QmFzZUxpbmtlcg.action.Z2V0LWxhYmVs.option.cGFja2FnZV9pZA.display_name": {
+          "source": "Package ID",
+          "message": "ID відправлення"
+        },
+        "app.QmFzZUxpbmtlcg.action.Z2V0LWxhYmVs.option.cGFja2FnZV9pZA.short_desc": {
+          "source": "BaseLinker package ID (alternative to package number)",
+          "message": "ID відправлення BaseLinker (альтернатива номеру відправлення)"
+        },
+        "app.QmFzZUxpbmtlcg.action.Z2V0LWxhYmVs.option.cGFja2FnZV9udW1iZXI.desc": {
+          "source": "Carrier-assigned tracking/package number. Supply either this or `package_id`.",
+          "message": "Номер відстеження/відправлення, присвоєний перевізником. Укажіть або це значення, або `package_id`."
+        },
+        "app.QmFzZUxpbmtlcg.action.Z2V0LWxhYmVs.option.cGFja2FnZV9udW1iZXI.display_name": {
+          "source": "Package Number",
+          "message": "Номер відправлення"
+        },
+        "app.QmFzZUxpbmtlcg.action.Z2V0LWxhYmVs.option.cGFja2FnZV9udW1iZXI.short_desc": {
+          "source": "Carrier-assigned tracking number (alternative to package ID)",
+          "message": "Номер відстеження, присвоєний перевізником (альтернатива ID відправлення)"
+        },
+        "app.QmFzZUxpbmtlcg.action.Z2V0LWxhYmVs.short_desc": {
+          "source": "Retrieve a shipping label",
+          "message": "Отримати транспортну етикетку"
+        },
+        "app.QmFzZUxpbmtlcg.action.ZGVsZXRlLW9yZGVy.desc": {
+          "source": "Delete a BaseLinker order (or list of orders) via `deleteOrders`.",
+          "message": "Видалити замовлення BaseLinker (або список замовлень) через `deleteOrders`."
+        },
+        "app.QmFzZUxpbmtlcg.action.ZGVsZXRlLW9yZGVy.display_name": {
+          "source": "Delete Order",
+          "message": "Видалити замовлення"
+        },
+        "app.QmFzZUxpbmtlcg.action.ZGVsZXRlLW9yZGVy.option.b3JkZXJfaWRz.desc": {
+          "source": "Array of BaseLinker order IDs to delete (up to 1000 per call).",
+          "message": "Масив ID замовлень BaseLinker для видалення (до 1000 за виклик)."
+        },
+        "app.QmFzZUxpbmtlcg.action.ZGVsZXRlLW9yZGVy.option.b3JkZXJfaWRz.display_name": {
+          "source": "Order IDs",
+          "message": "ID замовлень"
+        },
+        "app.QmFzZUxpbmtlcg.action.ZGVsZXRlLW9yZGVy.option.b3JkZXJfaWRz.short_desc": {
+          "source": "Orders to delete (max 1000 per call)",
+          "message": "Замовлення для видалення (максимум 1000 за виклик)"
+        },
+        "app.QmFzZUxpbmtlcg.action.ZGVsZXRlLW9yZGVy.short_desc": {
+          "source": "Delete one or more orders",
+          "message": "Видалити одне або декілька замовлень"
+        },
+        "app.QmFzZUxpbmtlcg.action.ZGVsZXRlLW9yZGVyLXByb2R1Y3Q.desc": {
+          "source": "Remove a product line from a BaseLinker order via `deleteOrderProduct`.",
+          "message": "Видалити позицію товару із замовлення BaseLinker через `deleteOrderProduct`."
+        },
+        "app.QmFzZUxpbmtlcg.action.ZGVsZXRlLW9yZGVyLXByb2R1Y3Q.display_name": {
+          "source": "Delete Order Product",
+          "message": "Видалити товар із замовлення"
+        },
+        "app.QmFzZUxpbmtlcg.action.ZGVsZXRlLW9yZGVyLXByb2R1Y3Q.option.b3JkZXJfaWQ.display_name": {
+          "source": "Order ID",
+          "message": "Ідентифікатор замовлення"
+        },
+        "app.QmFzZUxpbmtlcg.action.ZGVsZXRlLW9yZGVyLXByb2R1Y3Q.option.b3JkZXJfaWQ.short_desc": {
+          "source": "Order containing the line item",
+          "message": "Замовлення, що містить позицію товару"
+        },
+        "app.QmFzZUxpbmtlcg.action.ZGVsZXRlLW9yZGVyLXByb2R1Y3Q.option.b3JkZXJfcHJvZHVjdF9pZA.display_name": {
+          "source": "Order Product ID",
+          "message": "ID товару в замовленні"
+        },
+        "app.QmFzZUxpbmtlcg.action.ZGVsZXRlLW9yZGVyLXByb2R1Y3Q.option.b3JkZXJfcHJvZHVjdF9pZA.short_desc": {
+          "source": "Line-item identifier to delete",
+          "message": "Ідентифікатор позиції товару для видалення"
+        },
+        "app.QmFzZUxpbmtlcg.action.ZGVsZXRlLW9yZGVyLXByb2R1Y3Q.short_desc": {
+          "source": "Remove a product line from an order",
+          "message": "Видалити позицію товару із замовлення"
+        },
+        "app.QmFzZUxpbmtlcg.action.ZGVsZXRlLWNvdXJpZXItcGFja2FnZQ.desc": {
+          "source": "Delete a courier package (shipment) via `deleteCourierPackage`.",
+          "message": "Видалити кур'єрське відправлення через `deleteCourierPackage`."
+        },
+        "app.QmFzZUxpbmtlcg.action.ZGVsZXRlLWNvdXJpZXItcGFja2FnZQ.display_name": {
+          "source": "Delete Courier Package",
+          "message": "Видалити кур'єрське відправлення"
+        },
+        "app.QmFzZUxpbmtlcg.action.ZGVsZXRlLWNvdXJpZXItcGFja2FnZQ.option.Y291cmllcl9jb2Rl.display_name": {
+          "source": "Courier Code",
+          "message": "Код кур'єра"
+        },
+        "app.QmFzZUxpbmtlcg.action.ZGVsZXRlLWNvdXJpZXItcGFja2FnZQ.option.Y291cmllcl9jb2Rl.short_desc": {
+          "source": "Courier that owns the package",
+          "message": "Кур'єрська служба відправлення"
+        },
+        "app.QmFzZUxpbmtlcg.action.ZGVsZXRlLWNvdXJpZXItcGFja2FnZQ.option.Zm9yY2VfZGVsZXRl.desc": {
+          "source": "When `True`, removes the package from BaseLinker even if the carrier refuses the cancellation.",
+          "message": "Якщо `True`, видаляє відправлення з BaseLinker, навіть якщо перевізник відхиляє скасування."
+        },
+        "app.QmFzZUxpbmtlcg.action.ZGVsZXRlLWNvdXJpZXItcGFja2FnZQ.option.Zm9yY2VfZGVsZXRl.display_name": {
+          "source": "Force Delete",
+          "message": "Примусове видалення"
+        },
+        "app.QmFzZUxpbmtlcg.action.ZGVsZXRlLWNvdXJpZXItcGFja2FnZQ.option.Zm9yY2VfZGVsZXRl.short_desc": {
+          "source": "Delete locally even if the carrier call fails",
+          "message": "Видалити локально, навіть якщо виклик до перевізника завершився помилкою"
+        },
+        "app.QmFzZUxpbmtlcg.action.ZGVsZXRlLWNvdXJpZXItcGFja2FnZQ.option.cGFja2FnZV9pZA.desc": {
+          "source": "Internal BaseLinker package ID. Supply either this or `package_number`.",
+          "message": "Внутрішній ID відправлення BaseLinker. Укажіть або це значення, або `package_number`."
+        },
+        "app.QmFzZUxpbmtlcg.action.ZGVsZXRlLWNvdXJpZXItcGFja2FnZQ.option.cGFja2FnZV9pZA.display_name": {
+          "source": "Package ID",
+          "message": "ID відправлення"
+        },
+        "app.QmFzZUxpbmtlcg.action.ZGVsZXRlLWNvdXJpZXItcGFja2FnZQ.option.cGFja2FnZV9pZA.short_desc": {
+          "source": "BaseLinker package ID (alternative to package number)",
+          "message": "ID відправлення BaseLinker (альтернатива номеру відправлення)"
+        },
+        "app.QmFzZUxpbmtlcg.action.ZGVsZXRlLWNvdXJpZXItcGFja2FnZQ.option.cGFja2FnZV9udW1iZXI.desc": {
+          "source": "Carrier-assigned tracking/package number. Supply either this or `package_id`.",
+          "message": "Номер відстеження/відправлення, присвоєний перевізником. Укажіть або це значення, або `package_id`."
+        },
+        "app.QmFzZUxpbmtlcg.action.ZGVsZXRlLWNvdXJpZXItcGFja2FnZQ.option.cGFja2FnZV9udW1iZXI.display_name": {
+          "source": "Package Number",
+          "message": "Номер відправлення"
+        },
+        "app.QmFzZUxpbmtlcg.action.ZGVsZXRlLWNvdXJpZXItcGFja2FnZQ.option.cGFja2FnZV9udW1iZXI.short_desc": {
+          "source": "Carrier-assigned tracking number (alternative to package ID)",
+          "message": "Номер відстеження, присвоєний перевізником (альтернатива ID відправлення)"
+        },
+        "app.QmFzZUxpbmtlcg.action.ZGVsZXRlLWNvdXJpZXItcGFja2FnZQ.short_desc": {
+          "source": "Delete a courier package",
+          "message": "Видалити кур'єрське відправлення"
+        },
+        "app.QmFzZUxpbmtlcg.action.ZGVsZXRlLWludmVudG9yeS1wcm9kdWN0.desc": {
+          "source": "Delete a BaseLinker inventory product via `deleteInventoryProduct`.",
+          "message": "Видалити товар зі складу BaseLinker через `deleteInventoryProduct`."
+        },
+        "app.QmFzZUxpbmtlcg.action.ZGVsZXRlLWludmVudG9yeS1wcm9kdWN0.display_name": {
+          "source": "Delete Inventory Product",
+          "message": "Видалити товар зі складу"
+        },
+        "app.QmFzZUxpbmtlcg.action.ZGVsZXRlLWludmVudG9yeS1wcm9kdWN0.option.aW52ZW50b3J5X2lk.display_name": {
+          "source": "Inventory ID",
+          "message": "ID інвентарю"
+        },
+        "app.QmFzZUxpbmtlcg.action.ZGVsZXRlLWludmVudG9yeS1wcm9kdWN0.option.aW52ZW50b3J5X2lk.short_desc": {
+          "source": "Inventory containing the product",
+          "message": "Склад, що містить товар"
+        },
+        "app.QmFzZUxpbmtlcg.action.ZGVsZXRlLWludmVudG9yeS1wcm9kdWN0.option.cHJvZHVjdF9pZA.display_name": {
+          "source": "Product ID",
+          "message": "ID товару"
+        },
+        "app.QmFzZUxpbmtlcg.action.ZGVsZXRlLWludmVudG9yeS1wcm9kdWN0.option.cHJvZHVjdF9pZA.short_desc": {
+          "source": "Product to delete",
+          "message": "Товар для видалення"
+        },
+        "app.QmFzZUxpbmtlcg.action.ZGVsZXRlLWludmVudG9yeS1wcm9kdWN0.short_desc": {
+          "source": "Delete a BaseLinker inventory product",
+          "message": "Видалити товар зі складу BaseLinker"
+        },
+        "app.QmFzZUxpbmtlcg.action.ZGVsaXZlcnktZGF0YS1lZGl0ZWQ.desc": {
+          "source": "Fires when delivery data on an order is edited. (Polled from `getJournalList` `log_type` 11.)",
+          "message": "Спрацьовує при зміні даних доставки в замовленні. (Опитується з `getJournalList` `log_type` 11.)"
+        },
+        "app.QmFzZUxpbmtlcg.action.ZGVsaXZlcnktZGF0YS1lZGl0ZWQ.display_name": {
+          "source": "Delivery Data Edited",
+          "message": "Дані доставки змінено"
+        },
+        "app.QmFzZUxpbmtlcg.action.ZGVsaXZlcnktZGF0YS1lZGl0ZWQ.short_desc": {
+          "source": "Trigger when delivery data on an order is edited",
+          "message": "Спрацьовувати при зміні даних доставки в замовленні"
+        },
+        "app.QmFzZUxpbmtlcg.action.aW52b2ljZS1kZWxldGVk.desc": {
+          "source": "Fires when an invoice is deleted. (Polled from `getJournalList` `log_type` 19.)",
+          "message": "Спрацьовує при видаленні рахунка-фактури. (Опитується з `getJournalList` `log_type` 19.)"
+        },
+        "app.QmFzZUxpbmtlcg.action.aW52b2ljZS1kZWxldGVk.display_name": {
+          "source": "Invoice Deleted",
+          "message": "Рахунок-фактуру видалено"
+        },
+        "app.QmFzZUxpbmtlcg.action.aW52b2ljZS1kZWxldGVk.short_desc": {
+          "source": "Trigger when an invoice is deleted",
+          "message": "Спрацьовувати при видаленні рахунка-фактури"
+        },
+        "app.QmFzZUxpbmtlcg.action.aW52b2ljZS1lZGl0ZWQ.desc": {
+          "source": "Fires when an invoice is edited. (Polled from `getJournalList` `log_type` 21.)",
+          "message": "Спрацьовує при зміні рахунка-фактури. (Опитується з `getJournalList` `log_type` 21.)"
+        },
+        "app.QmFzZUxpbmtlcg.action.aW52b2ljZS1lZGl0ZWQ.display_name": {
+          "source": "Invoice Edited",
+          "message": "Рахунок-фактуру змінено"
+        },
+        "app.QmFzZUxpbmtlcg.action.aW52b2ljZS1lZGl0ZWQ.short_desc": {
+          "source": "Trigger when an invoice is edited",
+          "message": "Спрацьовувати при зміні рахунка-фактури"
+        },
+        "app.QmFzZUxpbmtlcg.action.aW52b2ljZS1pc3N1ZWQ.desc": {
+          "source": "Fires when an invoice is issued. (Polled from `getJournalList` `log_type` 7.)",
+          "message": "Спрацьовує при виставленні рахунка-фактури. (Опитується з `getJournalList` `log_type` 7.)"
+        },
+        "app.QmFzZUxpbmtlcg.action.aW52b2ljZS1pc3N1ZWQ.display_name": {
+          "source": "Invoice Issued",
+          "message": "Рахунок-фактуру виставлено"
+        },
+        "app.QmFzZUxpbmtlcg.action.aW52b2ljZS1pc3N1ZWQ.short_desc": {
+          "source": "Trigger when an invoice is issued",
+          "message": "Спрацьовувати при виставленні рахунка-фактури"
+        },
+        "app.QmFzZUxpbmtlcg.action.b3JkZXItY29waWVk.desc": {
+          "source": "Fires when an order is copied. (Polled from `getJournalList` `log_type` 17.)",
+          "message": "Спрацьовує при копіюванні замовлення. (Опитується з `getJournalList` `log_type` 17.)"
+        },
+        "app.QmFzZUxpbmtlcg.action.b3JkZXItY29waWVk.display_name": {
+          "source": "Order Copied",
+          "message": "Замовлення скопійовано"
+        },
+        "app.QmFzZUxpbmtlcg.action.b3JkZXItY29waWVk.short_desc": {
+          "source": "Trigger when an order is copied",
+          "message": "Спрацьовувати при копіюванні замовлення"
+        },
+        "app.QmFzZUxpbmtlcg.action.b3JkZXItY3JlYXRlZA.desc": {
+          "source": "Fires when a new order is created in BaseLinker. (Polled from `getJournalList` `log_type` 1.)",
+          "message": "Спрацьовує при створенні нового замовлення в BaseLinker. (Опитується з `getJournalList` `log_type` 1.)"
+        },
+        "app.QmFzZUxpbmtlcg.action.b3JkZXItY3JlYXRlZA.display_name": {
+          "source": "Order Created",
+          "message": "Замовлення створено"
+        },
+        "app.QmFzZUxpbmtlcg.action.b3JkZXItY3JlYXRlZA.short_desc": {
+          "source": "Trigger when a new order is created",
+          "message": "Спрацьовувати при створенні нового замовлення"
+        },
+        "app.QmFzZUxpbmtlcg.action.b3JkZXItZG93bmxvYWRlZA.desc": {
+          "source": "Fires when an order is downloaded from a connected shop. (Polled from `getJournalList` `log_type` 2.)",
+          "message": "Спрацьовує при завантаженні замовлення з підключеного магазину. (Опитується з `getJournalList` `log_type` 2.)"
+        },
+        "app.QmFzZUxpbmtlcg.action.b3JkZXItZG93bmxvYWRlZA.display_name": {
+          "source": "Order Downloaded",
+          "message": "Замовлення завантажено"
+        },
+        "app.QmFzZUxpbmtlcg.action.b3JkZXItZG93bmxvYWRlZA.short_desc": {
+          "source": "Trigger when an order is downloaded from a shop",
+          "message": "Спрацьовувати при завантаженні замовлення з магазину"
+        },
+        "app.QmFzZUxpbmtlcg.action.b3JkZXItZGF0YS1lZGl0ZWQ.desc": {
+          "source": "Fires when general order data is edited. (Polled from `getJournalList` `log_type` 16.)",
+          "message": "Спрацьовує при зміні основних даних замовлення. (Опитується з `getJournalList` `log_type` 16.)"
+        },
+        "app.QmFzZUxpbmtlcg.action.b3JkZXItZGF0YS1lZGl0ZWQ.display_name": {
+          "source": "Order Data Edited",
+          "message": "Дані замовлення змінено"
+        },
+        "app.QmFzZUxpbmtlcg.action.b3JkZXItZGF0YS1lZGl0ZWQ.short_desc": {
+          "source": "Trigger when general order data is edited",
+          "message": "Спрацьовує, коли змінюються загальні дані замовлення"
+        },
+        "app.QmFzZUxpbmtlcg.action.b3JkZXItc3BsaXQ.desc": {
+          "source": "Fires when an order is split. (Polled from `getJournalList` `log_type` 6.)",
+          "message": "Спрацьовує, коли замовлення розділено. (Отримано з `getJournalList` `log_type` 6.)"
+        },
+        "app.QmFzZUxpbmtlcg.action.b3JkZXItc3BsaXQ.display_name": {
+          "source": "Order Split",
+          "message": "Замовлення розділено"
+        },
+        "app.QmFzZUxpbmtlcg.action.b3JkZXItc3BsaXQ.short_desc": {
+          "source": "Trigger when an order is split",
+          "message": "Спрацьовує, коли замовлення розділено"
+        },
+        "app.QmFzZUxpbmtlcg.action.b3JkZXItc3RhdHVzLWNoYW5nZWQ.desc": {
+          "source": "Fires when an order's status changes. (Polled from `getJournalList` `log_type` 18.)",
+          "message": "Спрацьовує, коли змінюється статус замовлення. (Отримано з `getJournalList` `log_type` 18.)"
+        },
+        "app.QmFzZUxpbmtlcg.action.b3JkZXItc3RhdHVzLWNoYW5nZWQ.display_name": {
+          "source": "Order Status Changed",
+          "message": "Статус замовлення змінено"
+        },
+        "app.QmFzZUxpbmtlcg.action.b3JkZXItc3RhdHVzLWNoYW5nZWQ.short_desc": {
+          "source": "Trigger when the status of an order changes",
+          "message": "Спрацьовує, коли змінюється статус замовлення"
+        },
+        "app.QmFzZUxpbmtlcg.action.b3JkZXItcGFpZA.desc": {
+          "source": "Fires when an order is marked paid. (Polled from `getJournalList` `log_type` 3.)",
+          "message": "Спрацьовує, коли замовлення позначається як оплачене. (Отримано з `getJournalList` `log_type` 3.)"
+        },
+        "app.QmFzZUxpbmtlcg.action.b3JkZXItcGFpZA.display_name": {
+          "source": "Order Paid",
+          "message": "Замовлення оплачено"
+        },
+        "app.QmFzZUxpbmtlcg.action.b3JkZXItcGFpZA.short_desc": {
+          "source": "Trigger when an order is paid",
+          "message": "Спрацьовує, коли замовлення оплачено"
+        },
+        "app.QmFzZUxpbmtlcg.action.b3JkZXItcHJvZHVjdC1hZGRlZA.desc": {
+          "source": "Fires when a product is added to an order. (Polled from `getJournalList` `log_type` 12.)",
+          "message": "Спрацьовує, коли товар додається до замовлення. (Отримано з `getJournalList` `log_type` 12.)"
+        },
+        "app.QmFzZUxpbmtlcg.action.b3JkZXItcHJvZHVjdC1hZGRlZA.display_name": {
+          "source": "Order Product Added",
+          "message": "Товар додано до замовлення"
+        },
+        "app.QmFzZUxpbmtlcg.action.b3JkZXItcHJvZHVjdC1hZGRlZA.short_desc": {
+          "source": "Trigger when a product is added to an order",
+          "message": "Спрацьовує, коли товар додається до замовлення"
+        },
+        "app.QmFzZUxpbmtlcg.action.b3JkZXItcHJvZHVjdC1lZGl0ZWQ.desc": {
+          "source": "Fires when a product line on an order is edited. (Polled from `getJournalList` `log_type` 13.)",
+          "message": "Спрацьовує, коли позицію товару в замовленні змінено. (Отримано з `getJournalList` `log_type` 13.)"
+        },
+        "app.QmFzZUxpbmtlcg.action.b3JkZXItcHJvZHVjdC1lZGl0ZWQ.display_name": {
+          "source": "Order Product Edited",
+          "message": "Товар у замовленні змінено"
+        },
+        "app.QmFzZUxpbmtlcg.action.b3JkZXItcHJvZHVjdC1lZGl0ZWQ.short_desc": {
+          "source": "Trigger when an order product is edited",
+          "message": "Спрацьовує, коли товар у замовленні змінено"
+        },
+        "app.QmFzZUxpbmtlcg.action.b3JkZXItcHJvZHVjdC1yZW1vdmVk.desc": {
+          "source": "Fires when a product line is removed from an order. (Polled from `getJournalList` `log_type` 14.)",
+          "message": "Спрацьовує, коли позицію товару видалено із замовлення. (Отримано з `getJournalList` `log_type` 14.)"
+        },
+        "app.QmFzZUxpbmtlcg.action.b3JkZXItcHJvZHVjdC1yZW1vdmVk.display_name": {
+          "source": "Order Product Removed",
+          "message": "Товар видалено із замовлення"
+        },
+        "app.QmFzZUxpbmtlcg.action.b3JkZXItcHJvZHVjdC1yZW1vdmVk.short_desc": {
+          "source": "Trigger when a product is removed from an order",
+          "message": "Спрацьовує, коли товар видаляється із замовлення"
+        },
+        "app.QmFzZUxpbmtlcg.action.b3JkZXItcmVtb3ZlZA.desc": {
+          "source": "Fires when an order is removed. (Polled from `getJournalList` `log_type` 4.)",
+          "message": "Спрацьовує, коли замовлення видалено. (Отримано з `getJournalList` `log_type` 4.)"
+        },
+        "app.QmFzZUxpbmtlcg.action.b3JkZXItcmVtb3ZlZA.display_name": {
+          "source": "Order Removed",
+          "message": "Замовлення видалено"
+        },
+        "app.QmFzZUxpbmtlcg.action.b3JkZXItcmVtb3ZlZA.short_desc": {
+          "source": "Trigger when an order is removed",
+          "message": "Спрацьовує, коли замовлення видаляється"
+        },
+        "app.QmFzZUxpbmtlcg.action.b3JkZXJzLW1lcmdlZA.desc": {
+          "source": "Fires when two or more orders are merged. (Polled from `getJournalList` `log_type` 5.)",
+          "message": "Спрацьовує, коли об'єднуються два або більше замовлень. (Отримано з `getJournalList` `log_type` 5.)"
+        },
+        "app.QmFzZUxpbmtlcg.action.b3JkZXJzLW1lcmdlZA.display_name": {
+          "source": "Orders Merged",
+          "message": "Замовлення об'єднано"
+        },
+        "app.QmFzZUxpbmtlcg.action.b3JkZXJzLW1lcmdlZA.short_desc": {
+          "source": "Trigger when two or more orders are merged",
+          "message": "Спрацьовує, коли об'єднуються два або більше замовлень"
+        },
+        "app.QmFzZUxpbmtlcg.action.bGlzdC1jb3VyaWVyLWFjY291bnRz.desc": {
+          "source": "List the courier-account credentials configured for a given courier via `getCourierAccounts`.",
+          "message": "Перелічити облікові дані акаунта кур'єра, налаштовані для вказаного кур'єра через `getCourierAccounts`."
+        },
+        "app.QmFzZUxpbmtlcg.action.bGlzdC1jb3VyaWVyLWFjY291bnRz.display_name": {
+          "source": "List Courier Accounts",
+          "message": "Перелічити акаунти кур'єрів"
+        },
+        "app.QmFzZUxpbmtlcg.action.bGlzdC1jb3VyaWVyLWFjY291bnRz.short_desc": {
+          "source": "List courier-account credentials",
+          "message": "Перелічити облікові дані акаунтів кур'єрів"
+        },
+        "app.QmFzZUxpbmtlcg.action.bGlzdC1jb3VyaWVyLWZpZWxkcw.desc": {
+          "source": "List the custom-field schema (required/optional inputs) for a given courier via `getCourierFields`. Useful when programmatically constructing `createPackage` payloads.",
+          "message": "Перелічити схему користувацьких полів (обов'язкові/необов'язкові поля вводу) для вказаного кур'єра через `getCourierFields`. Корисно для програмного формування корисних навантажень `createPackage`."
+        },
+        "app.QmFzZUxpbmtlcg.action.bGlzdC1jb3VyaWVyLWZpZWxkcw.display_name": {
+          "source": "List Courier Fields",
+          "message": "Перелічити поля кур'єра"
+        },
+        "app.QmFzZUxpbmtlcg.action.bGlzdC1jb3VyaWVyLWZpZWxkcw.short_desc": {
+          "source": "List the custom-field schema for a courier",
+          "message": "Перелічити схему користувацьких полів для кур'єра"
+        },
+        "app.QmFzZUxpbmtlcg.action.bGlzdC1jb3VyaWVyLXNlcnZpY2Vz.desc": {
+          "source": "List available services (product/tier options) for a given courier via `getCourierServices`.",
+          "message": "Перелічити доступні послуги (варіанти продуктів/тарифів) для вказаного кур'єра через `getCourierServices`."
+        },
+        "app.QmFzZUxpbmtlcg.action.bGlzdC1jb3VyaWVyLXNlcnZpY2Vz.display_name": {
+          "source": "List Courier Services",
+          "message": "Перелічити послуги кур'єра"
+        },
+        "app.QmFzZUxpbmtlcg.action.bGlzdC1jb3VyaWVyLXNlcnZpY2Vz.short_desc": {
+          "source": "List services for a courier",
+          "message": "Перелічити послуги для кур'єра"
+        },
+        "app.QmFzZUxpbmtlcg.action.bGlzdC1jb3VyaWVycw.desc": {
+          "source": "List the couriers configured for this BaseLinker account via `getCouriersList`.",
+          "message": "Перелічити кур'єрів, налаштованих для цього акаунта BaseLinker, через `getCouriersList`."
+        },
+        "app.QmFzZUxpbmtlcg.action.bGlzdC1jb3VyaWVycw.display_name": {
+          "source": "List Couriers",
+          "message": "Список кур'єрів"
+        },
+        "app.QmFzZUxpbmtlcg.action.bGlzdC1jb3VyaWVycw.short_desc": {
+          "source": "List configured couriers",
+          "message": "Перелічити налаштованих кур'єрів"
+        },
+        "app.QmFzZUxpbmtlcg.action.bGlzdC1pbnZlbnRvcmllcw.desc": {
+          "source": "List all BaseLinker inventories (catalogs) via `getInventories`.",
+          "message": "Перелічити всі інвентарі (каталоги) BaseLinker через `getInventories`."
+        },
+        "app.QmFzZUxpbmtlcg.action.bGlzdC1pbnZlbnRvcmllcw.display_name": {
+          "source": "List Inventories",
+          "message": "Перелічити інвентарі"
+        },
+        "app.QmFzZUxpbmtlcg.action.bGlzdC1pbnZlbnRvcmllcw.short_desc": {
+          "source": "List BaseLinker inventories (catalogs)",
+          "message": "Перелічити інвентарі (каталоги) BaseLinker"
+        },
+        "app.QmFzZUxpbmtlcg.action.bGlzdC1pbnZlbnRvcnktY2F0ZWdvcmllcw.desc": {
+          "source": "List BaseLinker inventory categories via `getInventoryCategories`. When `inventory_id` is supplied, results are scoped to that catalog.",
+          "message": "Перелічити категорії інвентарю BaseLinker через `getInventoryCategories`. Якщо вказано `inventory_id`, результати обмежуються цим каталогом."
+        },
+        "app.QmFzZUxpbmtlcg.action.bGlzdC1pbnZlbnRvcnktY2F0ZWdvcmllcw.display_name": {
+          "source": "List Inventory Categories",
+          "message": "Перелічити категорії інвентарю"
+        },
+        "app.QmFzZUxpbmtlcg.action.bGlzdC1pbnZlbnRvcnktY2F0ZWdvcmllcw.short_desc": {
+          "source": "List inventory categories",
+          "message": "Перелічити категорії інвентарю"
+        },
+        "app.QmFzZUxpbmtlcg.action.bGlzdC1pbnZlbnRvcnktbWFudWZhY3R1cmVycw.desc": {
+          "source": "List BaseLinker inventory manufacturers via `getInventoryManufacturers`.",
+          "message": "Перелічити виробників інвентарю BaseLinker через `getInventoryManufacturers`."
+        },
+        "app.QmFzZUxpbmtlcg.action.bGlzdC1pbnZlbnRvcnktbWFudWZhY3R1cmVycw.display_name": {
+          "source": "List Inventory Manufacturers",
+          "message": "Перелічити виробників інвентарю"
+        },
+        "app.QmFzZUxpbmtlcg.action.bGlzdC1pbnZlbnRvcnktbWFudWZhY3R1cmVycw.short_desc": {
+          "source": "List inventory manufacturers",
+          "message": "Перелічити виробників інвентарю"
+        },
+        "app.QmFzZUxpbmtlcg.action.bGlzdC1pbnZlbnRvcnktc3RvY2s.desc": {
+          "source": "List BaseLinker inventory product stock levels via `getInventoryProductsStock`. Each row contains a `product_id` keyed hash of warehouse → quantity.",
+          "message": "Перелічити залишки товарів на складі в інвентарі BaseLinker через `getInventoryProductsStock`. Кожен рядок містить хеш `product_id` у форматі склад → кількість."
+        },
+        "app.QmFzZUxpbmtlcg.action.bGlzdC1pbnZlbnRvcnktc3RvY2s.display_name": {
+          "source": "List Inventory Stock",
+          "message": "Перелічити залишки інвентарю"
+        },
+        "app.QmFzZUxpbmtlcg.action.bGlzdC1pbnZlbnRvcnktc3RvY2s.short_desc": {
+          "source": "List stock levels for inventory products",
+          "message": "Перелічити залишки на складі для товарів інвентарю"
+        },
+        "app.QmFzZUxpbmtlcg.action.bGlzdC1pbnZlbnRvcnktcHJpY2Vz.desc": {
+          "source": "List BaseLinker inventory product prices via `getInventoryProductsPrices`. Each row contains a `product_id` keyed hash of price-group → price.",
+          "message": "Перелічити ціни на товари інвентарю BaseLinker через `getInventoryProductsPrices`. Кожен рядок містить хеш `product_id` у форматі цінова група → ціна."
+        },
+        "app.QmFzZUxpbmtlcg.action.bGlzdC1pbnZlbnRvcnktcHJpY2Vz.display_name": {
+          "source": "List Inventory Prices",
+          "message": "Перелічити ціни інвентарю"
+        },
+        "app.QmFzZUxpbmtlcg.action.bGlzdC1pbnZlbnRvcnktcHJpY2Vz.short_desc": {
+          "source": "List prices for inventory products",
+          "message": "Перелічити ціни на товари інвентарю"
+        },
+        "app.QmFzZUxpbmtlcg.action.bGlzdC1pbnZlbnRvcnktcHJvZHVjdHM.desc": {
+          "source": "List products in a BaseLinker inventory via `getInventoryProductsList`. Supports page-number pagination and filters by category, EAN, SKU, name, price range, and stock range.",
+          "message": "Перелічити товари в інвентарі BaseLinker через `getInventoryProductsList`. Підтримує пагінацію за номерами сторінок і фільтри за категорією, EAN, SKU, назвою, діапазоном цін і діапазоном залишків."
+        },
+        "app.QmFzZUxpbmtlcg.action.bGlzdC1pbnZlbnRvcnktcHJvZHVjdHM.display_name": {
+          "source": "List Inventory Products",
+          "message": "Перелічити товари інвентарю"
+        },
+        "app.QmFzZUxpbmtlcg.action.bGlzdC1pbnZlbnRvcnktcHJvZHVjdHM.short_desc": {
+          "source": "List products in a BaseLinker inventory",
+          "message": "Перелічити товари в інвентарі BaseLinker"
+        },
+        "app.QmFzZUxpbmtlcg.action.bGlzdC1vcmRlci1wYWNrYWdlcw.desc": {
+          "source": "List courier packages (shipments) associated with a BaseLinker order via `getOrderPackages`.",
+          "message": "Перелічити кур'єрські посилки (відправлення), пов'язані із замовленням BaseLinker, через `getOrderPackages`."
+        },
+        "app.QmFzZUxpbmtlcg.action.bGlzdC1vcmRlci1wYWNrYWdlcw.display_name": {
+          "source": "List Order Packages",
+          "message": "Перелічити посилки замовлення"
+        },
+        "app.QmFzZUxpbmtlcg.action.bGlzdC1vcmRlci1wYWNrYWdlcw.short_desc": {
+          "source": "List courier packages for an order",
+          "message": "Перелічити кур'єрські посилки для замовлення"
+        },
+        "app.QmFzZUxpbmtlcg.action.bGlzdC1vcmRlci1yZXR1cm5z.desc": {
+          "source": "Returns a stream of BaseLinker order returns via `getOrderReturns`. Supports cursor pagination through `id_from` and filters by status and confirmation date.",
+          "message": "Повертає потік повернень замовлень BaseLinker через `getOrderReturns`. Підтримує курсорну пагінацію за допомогою `id_from` і фільтри за статусом та датою підтвердження."
+        },
+        "app.QmFzZUxpbmtlcg.action.bGlzdC1vcmRlci1yZXR1cm5z.display_name": {
+          "source": "List Order Returns",
+          "message": "Перелічити повернення замовлень"
+        },
+        "app.QmFzZUxpbmtlcg.action.bGlzdC1vcmRlci1yZXR1cm5z.short_desc": {
+          "source": "List BaseLinker order returns",
+          "message": "Перелічити повернення замовлень BaseLinker"
+        },
+        "app.QmFzZUxpbmtlcg.action.bGlzdC1vcmRlci1zb3VyY2Vz.desc": {
+          "source": "List the order sources (marketplaces/shops) configured in BaseLinker via `getOrderSources`.",
+          "message": "Перелічити джерела замовлень (маркетплейси/магазини), налаштовані в BaseLinker, через `getOrderSources`."
+        },
+        "app.QmFzZUxpbmtlcg.action.bGlzdC1vcmRlci1zb3VyY2Vz.display_name": {
+          "source": "List Order Sources",
+          "message": "Перелічити джерела замовлень"
+        },
+        "app.QmFzZUxpbmtlcg.action.bGlzdC1vcmRlci1zb3VyY2Vz.short_desc": {
+          "source": "List BaseLinker order sources",
+          "message": "Перелічити джерела замовлень BaseLinker"
+        },
+        "app.QmFzZUxpbmtlcg.action.bGlzdC1vcmRlci1zdGF0dXNlcw.desc": {
+          "source": "List the order statuses configured in BaseLinker via `getOrderStatusList`.",
+          "message": "Отримати список статусів замовлень, налаштованих у BaseLinker, через `getOrderStatusList`."
+        },
+        "app.QmFzZUxpbmtlcg.action.bGlzdC1vcmRlci1zdGF0dXNlcw.display_name": {
+          "source": "List Order Statuses",
+          "message": "Отримати список статусів замовлень"
+        },
+        "app.QmFzZUxpbmtlcg.action.bGlzdC1vcmRlci1zdGF0dXNlcw.short_desc": {
+          "source": "List BaseLinker order statuses",
+          "message": "Отримати список статусів замовлень BaseLinker"
+        },
+        "app.QmFzZUxpbmtlcg.action.bGlzdC1vcmRlcnM.desc": {
+          "source": "Returns a stream of BaseLinker orders via `getOrders`. Supports cursor pagination through `id_from`/`date_from` and filters by status, email, and source channel. Page size is fixed by BaseLinker at 100 orders per call.",
+          "message": "Повертає потік замовлень BaseLinker через `getOrders`. Підтримує курсорну пагінацію через `id_from`/`date_from` і фільтрацію за статусом, електронною поштою та каналом джерела. Розмір сторінки фіксований BaseLinker на рівні 100 замовлень на виклик."
+        },
+        "app.QmFzZUxpbmtlcg.action.bGlzdC1vcmRlcnM.display_name": {
+          "source": "List Orders",
+          "message": "Список замовлень"
+        },
+        "app.QmFzZUxpbmtlcg.action.bGlzdC1vcmRlcnM.short_desc": {
+          "source": "List BaseLinker orders with cursor pagination",
+          "message": "Отримати список замовлень BaseLinker із курсорною пагінацією"
+        },
+        "app.QmFzZUxpbmtlcg.action.bWFrZS1hcGktY2FsbA.desc": {
+          "source": "Make a custom HTTP / REST API call to **BaseLinker (Base.com)** using the configured connection's authentication.\n\nSpecify the HTTP method, the URI path (relative to the connection's API base URL), optional query parameters, headers, and request body. The response is returned as a hash containing the status code, response headers, and response body.\n\nUse this action for endpoints that are not yet exposed as first-class actions on this app.",
+          "message": "Виконати користувацький виклик HTTP / REST API до **BaseLinker (Base.com)** за допомогою автентифікації налаштованого з'єднання.\n\nВкажіть HTTP-метод, шлях URI (відносно базової URL-адреси API з'єднання), необов'язкові параметри запиту, заголовки та тіло запиту. Відповідь повертається у вигляді хешу, що містить код стану, заголовки відповіді та тіло відповіді.\n\nВикористовуйте цю дію для кінцевих точок, які ще не представлені як окремі дії в цьому додатку."
+        },
+        "app.QmFzZUxpbmtlcg.action.bWFrZS1hcGktY2FsbA.display_name": {
+          "source": "Make an API call",
+          "message": "Зробити виклик API"
+        },
+        "app.QmFzZUxpbmtlcg.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.desc": {
+          "source": "The request body. The effective type depends on `body_type`: JSON/form/YAML expect a hash, XML/text expect a string, multipart expects a file structure, binary expects raw bytes.",
+          "message": "Тіло запиту. Ефективний тип залежить від `body_type`: JSON/form/YAML очікують хеш, XML/text очікують рядок, multipart очікує структуру файлу, binary очікує необроблені байти."
+        },
+        "app.QmFzZUxpbmtlcg.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.display_name": {
+          "source": "Body",
+          "message": "Тіло"
+        },
+        "app.QmFzZUxpbmtlcg.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.short_desc": {
+          "source": "The request body",
+          "message": "Тіло запиту"
+        },
+        "app.QmFzZUxpbmtlcg.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.desc": {
+          "source": "Upload a file using `multipart/form-data`. The body must be a @ref DataProvider::FileDataType \"FileDataType\" structure (filename + content + mime_type). The framework builds the multipart envelope and sets the boundary header.",
+          "message": "Завантажити файл за допомогою `multipart/form-data`. Тіло має бути структурою @ref DataProvider::FileDataType \"FileDataType\" (filename + content + mime_type). Фреймворк створює конверт multipart і встановлює заголовок boundary."
+        },
+        "app.QmFzZUxpbmtlcg.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.display_name": {
+          "source": "Multipart Form",
+          "message": "Форма Multipart"
+        },
+        "app.QmFzZUxpbmtlcg.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.short_desc": {
+          "source": "Upload a file using multipart/form-data",
+          "message": "Завантажити файл за допомогою multipart/form-data"
+        },
+        "app.QmFzZUxpbmtlcg.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.desc": {
+          "source": "Pass the body to the REST client unchanged; the client decides serialization based on its configured `data` option and the value type",
+          "message": "Передати тіло REST-клієнту без змін; клієнт визначає серіалізацію на основі налаштованого параметра `data` та типу значення"
+        },
+        "app.QmFzZUxpbmtlcg.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.display_name": {
+          "source": "Auto",
+          "message": "Авто"
+        },
+        "app.QmFzZUxpbmtlcg.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.short_desc": {
+          "source": "Pass-through; use connection serialization and let the REST client decide",
+          "message": "Пряма передача; використовувати серіалізацію з'єднання та дозволити REST-клієнту приймати рішення"
+        },
+        "app.QmFzZUxpbmtlcg.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.desc": {
+          "source": "Send the body as raw bytes. The body must be a binary value. Sets `Content-Type: application/octet-stream` unless overridden by `hdr`.",
+          "message": "Надіслати тіло як необроблені байти. Тіло має бути бінарним значенням. Установлює `Content-Type: application/octet-stream`, якщо не перевизначено через `hdr`."
+        },
+        "app.QmFzZUxpbmtlcg.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.display_name": {
+          "source": "Raw Binary",
+          "message": "Необроблені бінарні дані"
+        },
+        "app.QmFzZUxpbmtlcg.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.short_desc": {
+          "source": "Send body as raw bytes",
+          "message": "Надіслати тіло як необроблені байти"
+        },
+        "app.QmFzZUxpbmtlcg.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.desc": {
+          "source": "Serialize a hash of form fields as `application/x-www-form-urlencoded`. The body must be a hash whose values are scalars (strings/numbers/booleans).",
+          "message": "Серіалізувати хеш полів форми як `application/x-www-form-urlencoded`. Тіло має бути хешем, значеннями якого є скаляри (рядки/числа/булеві значення)."
+        },
+        "app.QmFzZUxpbmtlcg.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.display_name": {
+          "source": "Form (URL-encoded)",
+          "message": "Форма (URL-encoded)"
+        },
+        "app.QmFzZUxpbmtlcg.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.short_desc": {
+          "source": "Serialize body as application/x-www-form-urlencoded form fields",
+          "message": "Серіалізувати тіло як поля форми application/x-www-form-urlencoded"
+        },
+        "app.QmFzZUxpbmtlcg.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.desc": {
+          "source": "Serialize the body as JSON; sets `Content-Type: application/json`. The body should be a hash, list, or scalar value.",
+          "message": "Серіалізувати тіло як JSON; встановлює `Content-Type: application/json`. Тіло має бути хешем, списком або скалярним значенням."
+        },
+        "app.QmFzZUxpbmtlcg.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.display_name": {
+          "source": "JSON",
+          "message": "JSON"
+        },
+        "app.QmFzZUxpbmtlcg.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.short_desc": {
+          "source": "Serialize body as JSON",
+          "message": "Серіалізувати тіло як JSON"
+        },
+        "app.QmFzZUxpbmtlcg.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.desc": {
+          "source": "Send the body as plain text. The body must be a string. Sets `Content-Type: text/plain`.",
+          "message": "Надіслати тіло як простий текст. Тіло має бути рядком. Установлює `Content-Type: text/plain`."
+        },
+        "app.QmFzZUxpbmtlcg.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.display_name": {
+          "source": "Plain Text",
+          "message": "Простий текст"
+        },
+        "app.QmFzZUxpbmtlcg.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.short_desc": {
+          "source": "Send body as text/plain",
+          "message": "Надіслати тіло як text/plain"
+        },
+        "app.QmFzZUxpbmtlcg.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.desc": {
+          "source": "Send the body as XML. If the body is a hash it is serialized to XML; if it is a string it is sent verbatim. Sets `Content-Type: application/xml`.",
+          "message": "Надіслати тіло як XML. Якщо тіло є хешем, воно серіалізується в XML; якщо це рядок, воно надсилається без змін. Установлює `Content-Type: application/xml`."
+        },
+        "app.QmFzZUxpbmtlcg.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.display_name": {
+          "source": "XML",
+          "message": "XML"
+        },
+        "app.QmFzZUxpbmtlcg.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.short_desc": {
+          "source": "Send body as XML",
+          "message": "Надіслати тіло як XML"
+        },
+        "app.QmFzZUxpbmtlcg.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.desc": {
+          "source": "Send the body as YAML. If the body is a hash it is serialized to YAML; if it is a string it is sent verbatim. Sets `Content-Type: application/x-yaml`.",
+          "message": "Надіслати тіло як YAML. Якщо тіло є хешем, воно серіалізується в YAML; якщо це рядок, воно надсилається без змін. Установлює `Content-Type: application/x-yaml`."
+        },
+        "app.QmFzZUxpbmtlcg.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.display_name": {
+          "source": "YAML",
+          "message": "YAML"
+        },
+        "app.QmFzZUxpbmtlcg.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.short_desc": {
+          "source": "Send body as YAML",
+          "message": "Надіслати тіло як YAML"
+        },
+        "app.QmFzZUxpbmtlcg.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.desc": {
+          "source": "Selects the body serialization mode and the corresponding `Content-Type` header. Changing this field reshapes the `body` editor - selecting JSON exposes a JSON editor, selecting Multipart Form exposes a file picker, and so on.",
+          "message": "Вибирає режим серіалізації тіла та відповідний заголовок `Content-Type`. Зміна цього поля змінює вигляд редактора `body` — вибір JSON відкриває редактор JSON, вибір Multipart Form відкриває вибір файлу тощо."
+        },
+        "app.QmFzZUxpbmtlcg.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.display_name": {
+          "source": "Body Type",
+          "message": "Тип тіла"
+        },
+        "app.QmFzZUxpbmtlcg.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.short_desc": {
+          "source": "How the body is serialized and what Content-Type is sent",
+          "message": "Як серіалізується тіло та який Content-Type надсилається"
+        },
+        "app.QmFzZUxpbmtlcg.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.desc": {
+          "source": "If `True`, non-2xx HTTP responses return as the normal response hash (with the actual status code) instead of raising `REST-RESPONSE-ERROR`. Useful for handling 4xx/5xx as data - e.g. checking whether a resource exists. Overrides the connection's `error_passthru` setting for this call only.",
+          "message": "Якщо `True`, HTTP-відповіді з кодом, відмінним від 2xx, повертаються як звичайний хеш відповіді (з фактичним кодом стану) замість генерації `REST-RESPONSE-ERROR`. Корисно для обробки 4xx/5xx як даних — наприклад, перевірки існування ресурсу. Перевизначає налаштування `error_passthru` з'єднання лише для цього виклику."
+        },
+        "app.QmFzZUxpbmtlcg.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.display_name": {
+          "source": "Return Errors as Data",
+          "message": "Повертати помилки як дані"
+        },
+        "app.QmFzZUxpbmtlcg.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.short_desc": {
+          "source": "Return non-2xx responses normally instead of throwing",
+          "message": "Повертати відповіді з кодом, відмінним від 2xx, у звичайному режимі замість генерації помилки"
+        },
+        "app.QmFzZUxpbmtlcg.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.desc": {
+          "source": "Optional list of HTTP status codes treated as success. If set and the response status is not in this list, the action throws `REST-STATUS-ERROR`. When unset, the REST client's default behavior applies (typically: 2xx is success, non-2xx throws).",
+          "message": "Необов'язковий список кодів стану HTTP, які вважаються успішними. Якщо задано і код стану відповіді відсутній у цьому списку, дія генерує `REST-STATUS-ERROR`. Якщо не задано, застосовується поведінка REST-клієнта за замовчуванням (зазвичай: 2xx — успіх, не-2xx генерує помилку)."
+        },
+        "app.QmFzZUxpbmtlcg.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.display_name": {
+          "source": "Expected Status Codes",
+          "message": "Очікувані коди стану"
+        },
+        "app.QmFzZUxpbmtlcg.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.short_desc": {
+          "source": "Response status codes treated as success",
+          "message": "Коди стану відповіді, які вважаються успішними"
+        },
+        "app.QmFzZUxpbmtlcg.action.bWFrZS1hcGktY2FsbA.option.aGRy.desc": {
+          "source": "Hash of custom headers added to the request. These override any default headers set by `body_type` (e.g. supplying `Content-Type` here wins over the body-type default).",
+          "message": "Хеш користувацьких заголовків, доданих до запиту. Вони перевизначають будь-які заголовки за замовчуванням, встановлені `body_type` (наприклад, передання `Content-Type` тут має перевагу над замовчуваним значенням для типу тіла)."
+        },
+        "app.QmFzZUxpbmtlcg.action.bWFrZS1hcGktY2FsbA.option.aGRy.display_name": {
+          "source": "Custom Headers",
+          "message": "Користувацькі заголовки"
+        },
+        "app.QmFzZUxpbmtlcg.action.bWFrZS1hcGktY2FsbA.option.aGRy.short_desc": {
+          "source": "Extra request headers",
+          "message": "Додаткові заголовки запиту"
+        },
+        "app.QmFzZUxpbmtlcg.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.desc": {
+          "source": "If `True`, the response hash includes a `debug` sub-hash containing the request method/URL/headers (with sensitive values redacted), request and response sizes, and round-trip duration. Useful when investigating slow or failing calls. Off by default to keep responses lean.",
+          "message": "Якщо `True`, хеш відповіді містить підхеш `debug`, що містить метод/URL/заголовки запиту (з відредагованими конфіденційними значеннями), розміри запиту та відповіді, а також тривалість виконання. Корисно під час дослідження повільних або невдалих викликів. Вимкнено за замовчуванням для зменшення обсягу відповідей."
+        },
+        "app.QmFzZUxpbmtlcg.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.display_name": {
+          "source": "Include Debug Info",
+          "message": "Включати зневаджувальну інформацію"
+        },
+        "app.QmFzZUxpbmtlcg.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.short_desc": {
+          "source": "Include request/timing/size debug info in the response",
+          "message": "Включати зневаджувальну інформацію про запит/час/розмір у відповідь"
+        },
+        "app.QmFzZUxpbmtlcg.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.desc": {
+          "source": "HTTP `OPTIONS`",
+          "message": "HTTP `OPTIONS`"
+        },
+        "app.QmFzZUxpbmtlcg.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.display_name": {
+          "source": "OPTIONS",
+          "message": "OPTIONS"
+        },
+        "app.QmFzZUxpbmtlcg.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.short_desc": {
+          "source": "HTTP OPTIONS",
+          "message": "HTTP OPTIONS"
+        },
+        "app.QmFzZUxpbmtlcg.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.desc": {
+          "source": "HTTP `DELETE`",
+          "message": "HTTP `DELETE`"
+        },
+        "app.QmFzZUxpbmtlcg.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.display_name": {
+          "source": "DELETE",
+          "message": "DELETE"
+        },
+        "app.QmFzZUxpbmtlcg.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.short_desc": {
+          "source": "HTTP DELETE",
+          "message": "HTTP DELETE"
+        },
+        "app.QmFzZUxpbmtlcg.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.desc": {
+          "source": "HTTP `GET`",
+          "message": "HTTP `GET`"
+        },
+        "app.QmFzZUxpbmtlcg.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.display_name": {
+          "source": "GET",
+          "message": "GET"
+        },
+        "app.QmFzZUxpbmtlcg.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.short_desc": {
+          "source": "HTTP GET",
+          "message": "HTTP GET"
+        },
+        "app.QmFzZUxpbmtlcg.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.desc": {
+          "source": "HTTP `HEAD`",
+          "message": "HTTP `HEAD`"
+        },
+        "app.QmFzZUxpbmtlcg.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.display_name": {
+          "source": "HEAD",
+          "message": "HEAD"
+        },
+        "app.QmFzZUxpbmtlcg.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.short_desc": {
+          "source": "HTTP HEAD",
+          "message": "HTTP HEAD"
+        },
+        "app.QmFzZUxpbmtlcg.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.desc": {
+          "source": "HTTP `PATCH`",
+          "message": "HTTP `PATCH`"
+        },
+        "app.QmFzZUxpbmtlcg.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.display_name": {
+          "source": "PATCH",
+          "message": "PATCH"
+        },
+        "app.QmFzZUxpbmtlcg.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.short_desc": {
+          "source": "HTTP PATCH",
+          "message": "HTTP PATCH"
+        },
+        "app.QmFzZUxpbmtlcg.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.desc": {
+          "source": "HTTP `POST`",
+          "message": "HTTP `POST`"
+        },
+        "app.QmFzZUxpbmtlcg.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.display_name": {
+          "source": "POST",
+          "message": "POST"
+        },
+        "app.QmFzZUxpbmtlcg.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.short_desc": {
+          "source": "HTTP POST",
+          "message": "HTTP POST"
+        },
+        "app.QmFzZUxpbmtlcg.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.desc": {
+          "source": "HTTP `PUT`",
+          "message": "HTTP `PUT`"
+        },
+        "app.QmFzZUxpbmtlcg.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.display_name": {
+          "source": "PUT",
+          "message": "PUT"
+        },
+        "app.QmFzZUxpbmtlcg.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.short_desc": {
+          "source": "HTTP PUT",
+          "message": "HTTP PUT"
+        },
+        "app.QmFzZUxpbmtlcg.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.desc": {
+          "source": "HTTP `TRACE`",
+          "message": "HTTP `TRACE`"
+        },
+        "app.QmFzZUxpbmtlcg.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.display_name": {
+          "source": "TRACE",
+          "message": "TRACE"
+        },
+        "app.QmFzZUxpbmtlcg.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.short_desc": {
+          "source": "HTTP TRACE",
+          "message": "HTTP TRACE"
+        },
+        "app.QmFzZUxpbmtlcg.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "Метод HTTP для використання в запиті"
+        },
+        "app.QmFzZUxpbmtlcg.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.display_name": {
+          "source": "HTTP Method",
+          "message": "Метод HTTP"
+        },
+        "app.QmFzZUxpbmtlcg.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.short_desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "Метод HTTP для використання в запиті"
+        },
+        "app.QmFzZUxpbmtlcg.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain `{name}` placeholders that are replaced from `path_vars`. Example: `/users/{id}/comments`.",
+          "message": "Шлях URI відносно базового URL API з'єднання. Може містити заповнювачі `{name}`, які замінюються з `path_vars`. Приклад: `/users/{id}/comments`."
+        },
+        "app.QmFzZUxpbmtlcg.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.display_name": {
+          "source": "URI Path",
+          "message": "Шлях URI"
+        },
+        "app.QmFzZUxpbmtlcg.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.short_desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain '{name}' placeholders that are replaced from 'path_vars'. Example: '/users/{id}/comments'",
+          "message": "Шлях URI відносно базового URL API підключення. Може містити заповнювачі '{name}', які замінюються з 'path_vars'. Приклад: '/users/{id}/comments'"
+        },
+        "app.QmFzZUxpbmtlcg.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.desc": {
+          "source": "Hash of values substituted into `{name}` placeholders in the URI path. Example: with `path = /users/{id}` and `path_vars = {id: 123}` the framework sends `/users/123`. Values are URL-encoded.",
+          "message": "Хеш значень, що підставляються замість заповнювачів `{name}` у шляху URI. Приклад: із `path = /users/{id}` та `path_vars = {id: 123}` фреймворк надсилає `/users/123`. Значення кодуються у форматі URL."
+        },
+        "app.QmFzZUxpbmtlcg.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.display_name": {
+          "source": "Path Variables",
+          "message": "Змінні шляху"
+        },
+        "app.QmFzZUxpbmtlcg.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.short_desc": {
+          "source": "Values for {name} placeholders in path",
+          "message": "Значення для заповнювачів {name} у шляху"
+        },
+        "app.QmFzZUxpbmtlcg.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.desc": {
+          "source": "Hash of query string parameters to append to the URI path. Values are URL-encoded; list values are joined with `,`.",
+          "message": "Хеш параметрів рядка запиту для додавання до шляху URI. Значення кодуються у форматі URL; значення списку об'єднуються за допомогою `,`."
+        },
+        "app.QmFzZUxpbmtlcg.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.display_name": {
+          "source": "Query Arguments",
+          "message": "Аргументи запиту"
+        },
+        "app.QmFzZUxpbmtlcg.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.short_desc": {
+          "source": "Query string parameters",
+          "message": "Параметри рядка запиту"
+        },
+        "app.QmFzZUxpbmtlcg.action.bWFrZS1hcGktY2FsbA.short_desc": {
+          "source": "Make a custom API call to BaseLinker (Base.com)",
+          "message": "Виконати користувацький виклик API до BaseLinker (Base.com)"
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLWZpZWxkcw.desc": {
+          "source": "Update one or more fields on an existing BaseLinker order via `setOrderFields`. Only supplied fields are modified.",
+          "message": "Оновити одне або кілька полів для наявного замовлення BaseLinker через `setOrderFields`. Змінюються лише надані поля."
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLWZpZWxkcw.display_name": {
+          "source": "Set Order Fields",
+          "message": "Встановити поля замовлення"
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLWZpZWxkcw.option.Y3VzdG9tX2V4dHJhX2ZpZWxkcw.desc": {
+          "source": "Map of `{\"<extra_field_id>\": <value>}`. Text fields take strings; file fields take a `{\"title\": \"<filename>\", \"file\": \"<base64>\"}` hash where the base64-encoded file must not exceed 2 MB.",
+          "message": "Зіставлення `{\"<extra_field_id>\": <value>}`. Текстові поля приймають рядки; файлові поля приймають хеш `{\"title\": \"<filename>\", \"file\": \"<base64>\"}`, де розмір файлу у форматі base64 не повинен перевищувати 2 МБ."
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLWZpZWxkcw.option.Y3VzdG9tX2V4dHJhX2ZpZWxkcw.display_name": {
+          "source": "Custom Extra Fields",
+          "message": "Користувацькі додаткові поля"
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLWZpZWxkcw.option.Y3VzdG9tX2V4dHJhX2ZpZWxkcw.short_desc": {
+          "source": "Map of custom extra field ID to value",
+          "message": "Зіставлення ID користувацького додаткового поля зі значенням"
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLWZpZWxkcw.option.YWRtaW5fY29tbWVudHM.display_name": {
+          "source": "Admin Comments",
+          "message": "Коментарі адміністратора"
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLWZpZWxkcw.option.YWRtaW5fY29tbWVudHM.short_desc": {
+          "source": "Internal admin comments",
+          "message": "Внутрішні коментарі адміністратора"
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLWZpZWxkcw.option.ZGVsaXZlcnlfY291bnRyeV9jb2Rl.desc": {
+          "source": "ISO 3166-1 alpha-2 country code (e.g. `PL`, `DE`, `US`).",
+          "message": "Дволітерний код країни ISO 3166-1 alpha-2 (наприклад, `PL`, `DE`, `US`)."
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLWZpZWxkcw.option.ZGVsaXZlcnlfY291bnRyeV9jb2Rl.display_name": {
+          "source": "Delivery Country Code",
+          "message": "Код країни доставки"
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLWZpZWxkcw.option.ZGVsaXZlcnlfY291bnRyeV9jb2Rl.short_desc": {
+          "source": "2-letter ISO country code",
+          "message": "2-літерний код країни ISO"
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLWZpZWxkcw.option.ZGVsaXZlcnlfY29tcGFueQ.display_name": {
+          "source": "Delivery Company",
+          "message": "Компанія для доставки"
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLWZpZWxkcw.option.ZGVsaXZlcnlfY29tcGFueQ.short_desc": {
+          "source": "Recipient company name",
+          "message": "Назва компанії одержувача"
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLWZpZWxkcw.option.ZGVsaXZlcnlfY2l0eQ.display_name": {
+          "source": "Delivery City",
+          "message": "Місто доставки"
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLWZpZWxkcw.option.ZGVsaXZlcnlfY2l0eQ.short_desc": {
+          "source": "City",
+          "message": "Місто"
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLWZpZWxkcw.option.ZGVsaXZlcnlfYWRkcmVzcw.display_name": {
+          "source": "Delivery Address",
+          "message": "Адреса доставки"
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLWZpZWxkcw.option.ZGVsaXZlcnlfYWRkcmVzcw.short_desc": {
+          "source": "Street address",
+          "message": "Адреса (вулиця)"
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLWZpZWxkcw.option.ZGVsaXZlcnlfZnVsbG5hbWU.display_name": {
+          "source": "Delivery Full Name",
+          "message": "Повне ім'я для доставки"
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLWZpZWxkcw.option.ZGVsaXZlcnlfZnVsbG5hbWU.short_desc": {
+          "source": "Recipient full name",
+          "message": "Повне ім'я одержувача"
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLWZpZWxkcw.option.ZGVsaXZlcnlfbWV0aG9k.display_name": {
+          "source": "Delivery Method",
+          "message": "Спосіб доставки"
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLWZpZWxkcw.option.ZGVsaXZlcnlfbWV0aG9k.short_desc": {
+          "source": "Shipping method name",
+          "message": "Назва способу доставки"
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLWZpZWxkcw.option.ZGVsaXZlcnlfc3RhdGU.display_name": {
+          "source": "Delivery State/Province",
+          "message": "Область/штат доставки"
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLWZpZWxkcw.option.ZGVsaXZlcnlfc3RhdGU.short_desc": {
+          "source": "State or province",
+          "message": "Штат або область"
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLWZpZWxkcw.option.ZGVsaXZlcnlfcG9pbnRfY2l0eQ.display_name": {
+          "source": "Delivery Point City",
+          "message": "Місто пункту видачі"
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLWZpZWxkcw.option.ZGVsaXZlcnlfcG9pbnRfY2l0eQ.short_desc": {
+          "source": "Pickup-point city",
+          "message": "Місто пункту видачі"
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLWZpZWxkcw.option.ZGVsaXZlcnlfcG9pbnRfYWRkcmVzcw.display_name": {
+          "source": "Delivery Point Address",
+          "message": "Адреса пункту видачі"
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLWZpZWxkcw.option.ZGVsaXZlcnlfcG9pbnRfYWRkcmVzcw.short_desc": {
+          "source": "Pickup-point street address",
+          "message": "Вулиця та номер будинку пункту видачі"
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLWZpZWxkcw.option.ZGVsaXZlcnlfcG9pbnRfaWQ.desc": {
+          "source": "Identifier of the pickup point / parcel locker (e.g. InPost locker code).",
+          "message": "Ідентифікатор пункту видачі / поштомату (наприклад, код поштомату InPost)."
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLWZpZWxkcw.option.ZGVsaXZlcnlfcG9pbnRfaWQ.display_name": {
+          "source": "Delivery Point ID",
+          "message": "ID пункту видачі"
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLWZpZWxkcw.option.ZGVsaXZlcnlfcG9pbnRfaWQ.short_desc": {
+          "source": "Pickup-point identifier",
+          "message": "Ідентифікатор пункту видачі"
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLWZpZWxkcw.option.ZGVsaXZlcnlfcG9pbnRfbmFtZQ.display_name": {
+          "source": "Delivery Point Name",
+          "message": "Назва пункту видачі"
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLWZpZWxkcw.option.ZGVsaXZlcnlfcG9pbnRfbmFtZQ.short_desc": {
+          "source": "Pickup-point display name",
+          "message": "Відображувана назва пункту видачі"
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLWZpZWxkcw.option.ZGVsaXZlcnlfcG9pbnRfcG9zdGNvZGU.display_name": {
+          "source": "Delivery Point Postcode",
+          "message": "Поштовий індекс пункту видачі"
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLWZpZWxkcw.option.ZGVsaXZlcnlfcG9pbnRfcG9zdGNvZGU.short_desc": {
+          "source": "Pickup-point postal code",
+          "message": "Поштовий індекс пункту видачі"
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLWZpZWxkcw.option.ZGVsaXZlcnlfcG9zdGNvZGU.display_name": {
+          "source": "Delivery Postcode",
+          "message": "Поштовий індекс доставки"
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLWZpZWxkcw.option.ZGVsaXZlcnlfcG9zdGNvZGU.short_desc": {
+          "source": "Postal code",
+          "message": "Поштовий індекс"
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLWZpZWxkcw.option.ZGVsaXZlcnlfcHJpY2U.display_name": {
+          "source": "Delivery Price",
+          "message": "Вартість доставки"
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLWZpZWxkcw.option.ZGVsaXZlcnlfcHJpY2U.short_desc": {
+          "source": "Shipping cost (gross)",
+          "message": "Вартість доставки (брутто)"
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLWZpZWxkcw.option.ZW1haWw.display_name": {
+          "source": "Email",
+          "message": "Електронна пошта"
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLWZpZWxkcw.option.ZW1haWw.short_desc": {
+          "source": "Customer email address",
+          "message": "Адреса електронної пошти клієнта"
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLWZpZWxkcw.option.ZXh0cmFfZmllbGRfMQ.display_name": {
+          "source": "Extra Field 1",
+          "message": "Додаткове поле 1"
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLWZpZWxkcw.option.ZXh0cmFfZmllbGRfMQ.short_desc": {
+          "source": "Free-form extra field",
+          "message": "Додаткове поле вільної форми"
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLWZpZWxkcw.option.ZXh0cmFfZmllbGRfMg.display_name": {
+          "source": "Extra Field 2",
+          "message": "Додаткове поле 2"
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLWZpZWxkcw.option.ZXh0cmFfZmllbGRfMg.short_desc": {
+          "source": "Free-form extra field",
+          "message": "Додаткове поле вільної форми"
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLWZpZWxkcw.option.aW52b2ljZV9hZGRyZXNz.display_name": {
+          "source": "Invoice Address",
+          "message": "Адреса для рахунку-фактури"
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLWZpZWxkcw.option.aW52b2ljZV9hZGRyZXNz.short_desc": {
+          "source": "Billing street address",
+          "message": "Вулиця для виставлення рахунку"
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLWZpZWxkcw.option.aW52b2ljZV9jaXR5.display_name": {
+          "source": "Invoice City",
+          "message": "Місто в рахунку"
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLWZpZWxkcw.option.aW52b2ljZV9jaXR5.short_desc": {
+          "source": "Billing city",
+          "message": "Місто для виставлення рахунку"
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLWZpZWxkcw.option.aW52b2ljZV9jb21wYW55.display_name": {
+          "source": "Invoice Company",
+          "message": "Компанія в рахунку"
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLWZpZWxkcw.option.aW52b2ljZV9jb21wYW55.short_desc": {
+          "source": "Billing company name",
+          "message": "Назва компанії для виставлення рахунку"
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLWZpZWxkcw.option.aW52b2ljZV9jb3VudHJ5X2NvZGU.display_name": {
+          "source": "Invoice Country Code",
+          "message": "Код країни в рахунку"
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLWZpZWxkcw.option.aW52b2ljZV9jb3VudHJ5X2NvZGU.short_desc": {
+          "source": "Billing 2-letter ISO country code",
+          "message": "2-літерний код країни ISO для виставлення рахунку"
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLWZpZWxkcw.option.aW52b2ljZV9mdWxsbmFtZQ.display_name": {
+          "source": "Invoice Full Name",
+          "message": "Повне ім'я в рахунку"
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLWZpZWxkcw.option.aW52b2ljZV9mdWxsbmFtZQ.short_desc": {
+          "source": "Billing recipient full name",
+          "message": "Повне ім'я одержувача рахунку"
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLWZpZWxkcw.option.aW52b2ljZV9uaXA.display_name": {
+          "source": "Invoice Tax ID",
+          "message": "Податковий номер у рахунку"
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLWZpZWxkcw.option.aW52b2ljZV9uaXA.short_desc": {
+          "source": "NIP / VAT / tax identifier",
+          "message": "NIP / ПДВ / податковий ідентифікатор"
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLWZpZWxkcw.option.aW52b2ljZV9wb3N0Y29kZQ.display_name": {
+          "source": "Invoice Postcode",
+          "message": "Поштовий індекс у рахунку"
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLWZpZWxkcw.option.aW52b2ljZV9wb3N0Y29kZQ.short_desc": {
+          "source": "Billing postal code",
+          "message": "Поштовий індекс для виставлення рахунку"
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLWZpZWxkcw.option.aW52b2ljZV9zdGF0ZQ.display_name": {
+          "source": "Invoice State/Province",
+          "message": "Штат/область у рахунку"
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLWZpZWxkcw.option.aW52b2ljZV9zdGF0ZQ.short_desc": {
+          "source": "Billing state or province",
+          "message": "Штат або область для виставлення рахунку"
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLWZpZWxkcw.option.b3JkZXJfaWQ.desc": {
+          "source": "Identifier of the order to update.",
+          "message": "Ідентифікатор замовлення для оновлення."
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLWZpZWxkcw.option.b3JkZXJfaWQ.display_name": {
+          "source": "Order ID",
+          "message": "Ідентифікатор замовлення"
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLWZpZWxkcw.option.b3JkZXJfaWQ.short_desc": {
+          "source": "Order to update",
+          "message": "Замовлення для оновлення"
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLWZpZWxkcw.option.c3Rhcg.allowed-value.aW50OjA.display_name": {
+          "source": "No Star",
+          "message": "Без зірочки"
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLWZpZWxkcw.option.c3Rhcg.allowed-value.aW50OjE.display_name": {
+          "source": "1 Star",
+          "message": "1 зірка"
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLWZpZWxkcw.option.c3Rhcg.allowed-value.aW50OjI.display_name": {
+          "source": "2 Stars",
+          "message": "2 зірки"
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLWZpZWxkcw.option.c3Rhcg.allowed-value.aW50OjM.display_name": {
+          "source": "3 Stars",
+          "message": "3 зірки"
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLWZpZWxkcw.option.c3Rhcg.allowed-value.aW50OjQ.display_name": {
+          "source": "4 Stars",
+          "message": "4 зірки"
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLWZpZWxkcw.option.c3Rhcg.allowed-value.aW50OjU.display_name": {
+          "source": "5 Stars",
+          "message": "5 зірок"
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLWZpZWxkcw.option.c3Rhcg.desc": {
+          "source": "Star rating in the range `0`-`5`, where `0` means no star.",
+          "message": "Оцінка зірочками в діапазоні `0`–`5`, де `0` означає відсутність зірочки."
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLWZpZWxkcw.option.c3Rhcg.display_name": {
+          "source": "Star Rating",
+          "message": "Оцінка зірочками"
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLWZpZWxkcw.option.c3Rhcg.short_desc": {
+          "source": "Star rating (0-5)",
+          "message": "Оцінка зірочками (0-5)"
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLWZpZWxkcw.option.cGF5bWVudF9tZXRob2Q.display_name": {
+          "source": "Payment Method",
+          "message": "Спосіб оплати"
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLWZpZWxkcw.option.cGF5bWVudF9tZXRob2Q.short_desc": {
+          "source": "Payment method description",
+          "message": "Опис способу оплати"
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLWZpZWxkcw.option.cGF5bWVudF9tZXRob2RfY29k.desc": {
+          "source": "`True` marks the order as cash-on-delivery.",
+          "message": "`True` позначає замовлення як оплату післяплатою."
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLWZpZWxkcw.option.cGF5bWVudF9tZXRob2RfY29k.display_name": {
+          "source": "Cash On Delivery",
+          "message": "Післяплата"
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLWZpZWxkcw.option.cGF5bWVudF9tZXRob2RfY29k.short_desc": {
+          "source": "Whether this is a COD order",
+          "message": "Чи це замовлення з післяплатою"
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLWZpZWxkcw.option.cGFja19zdGF0ZQ.allowed-value.aW50OjA.display_name": {
+          "source": "Not Packed",
+          "message": "Не упаковано"
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLWZpZWxkcw.option.cGFja19zdGF0ZQ.allowed-value.aW50OjE.display_name": {
+          "source": "Packed",
+          "message": "Упаковано"
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLWZpZWxkcw.option.cGFja19zdGF0ZQ.desc": {
+          "source": "Product-packing workflow flag. `0` = not all products packed; `1` = all products packed.",
+          "message": "Прапорець процесу пакування товарів. `0` = не всі товари упаковано; `1` = усі товари упаковано."
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLWZpZWxkcw.option.cGFja19zdGF0ZQ.display_name": {
+          "source": "Pack State",
+          "message": "Стан пакування"
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLWZpZWxkcw.option.cGFja19zdGF0ZQ.short_desc": {
+          "source": "Product-packing workflow flag",
+          "message": "Прапорець процесу пакування товарів"
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLWZpZWxkcw.option.cGhvbmU.display_name": {
+          "source": "Phone",
+          "message": "Телефон"
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLWZpZWxkcw.option.cGhvbmU.short_desc": {
+          "source": "Customer phone number",
+          "message": "Номер телефону клієнта"
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLWZpZWxkcw.option.cGlja19zdGF0ZQ.allowed-value.aW50OjA.display_name": {
+          "source": "Not Collected",
+          "message": "Не зібрано"
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLWZpZWxkcw.option.cGlja19zdGF0ZQ.allowed-value.aW50OjE.display_name": {
+          "source": "Collected",
+          "message": "Зібрано"
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLWZpZWxkcw.option.cGlja19zdGF0ZQ.desc": {
+          "source": "Product-collection (picking) workflow flag. `0` = not all products collected; `1` = all products collected.",
+          "message": "Прапорець процесу комплектування (збору) товарів. `0` = не всі товари зібрано; `1` = усі товари зібрано."
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLWZpZWxkcw.option.cGlja19zdGF0ZQ.display_name": {
+          "source": "Pick State",
+          "message": "Стан комплектування"
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLWZpZWxkcw.option.cGlja19zdGF0ZQ.short_desc": {
+          "source": "Product-collection workflow flag",
+          "message": "Прапорець процесу комплектування товарів"
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLWZpZWxkcw.option.d2FudF9pbnZvaWNl.display_name": {
+          "source": "Wants Invoice",
+          "message": "Потрібен рахунок"
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLWZpZWxkcw.option.d2FudF9pbnZvaWNl.short_desc": {
+          "source": "Whether the customer requested an invoice",
+          "message": "Чи клієнт запросив рахунок"
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLWZpZWxkcw.option.dXNlcl9jb21tZW50cw.display_name": {
+          "source": "Customer Comments",
+          "message": "Коментарі клієнта"
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLWZpZWxkcw.option.dXNlcl9jb21tZW50cw.short_desc": {
+          "source": "Free-text comments from the buyer",
+          "message": "Текстові коментарі від покупця"
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLWZpZWxkcw.option.dXNlcl9sb2dpbg.display_name": {
+          "source": "User Login",
+          "message": "Логін користувача"
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLWZpZWxkcw.option.dXNlcl9sb2dpbg.short_desc": {
+          "source": "Customer login (marketplace username)",
+          "message": "Логін клієнта (ім'я користувача на маркетплейсі)"
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLWZpZWxkcw.short_desc": {
+          "source": "Update fields on an existing order",
+          "message": "Оновити поля для наявного замовлення"
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLXBheW1lbnQ.desc": {
+          "source": "Record a payment for a BaseLinker order via `setOrderPayment`.",
+          "message": "Зафіксувати платіж для замовлення BaseLinker через `setOrderPayment`."
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLXBheW1lbnQ.display_name": {
+          "source": "Set Order Payment",
+          "message": "Встановити оплату замовлення"
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLXBheW1lbnQ.option.ZXh0ZXJuYWxfcGF5bWVudF9pZA.display_name": {
+          "source": "External Payment ID",
+          "message": "Зовнішній ID платежу"
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLXBheW1lbnQ.option.ZXh0ZXJuYWxfcGF5bWVudF9pZA.short_desc": {
+          "source": "Identifier assigned by the payment gateway",
+          "message": "Ідентифікатор, призначений платіжним шлюзом"
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLXBheW1lbnQ.option.b3JkZXJfaWQ.display_name": {
+          "source": "Order ID",
+          "message": "Ідентифікатор замовлення"
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLXBheW1lbnQ.option.b3JkZXJfaWQ.short_desc": {
+          "source": "Order whose payment is being recorded",
+          "message": "Замовлення, платіж для якого фіксується"
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLXBheW1lbnQ.option.cGF5bWVudF9jb21tZW50.display_name": {
+          "source": "Payment Comment",
+          "message": "Коментар до платежу"
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLXBheW1lbnQ.option.cGF5bWVudF9jb21tZW50.short_desc": {
+          "source": "Free-text payment note",
+          "message": "Текстова примітка до платежу"
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLXBheW1lbnQ.option.cGF5bWVudF9kYXRl.desc": {
+          "source": "When the payment was received. Sent to the BaseLinker `setOrderPayment` API as Unix seconds (the conversion is performed inside `doRequestImpl()`); the field is exposed as a date so the UI can render a date/time picker rather than asking the user for a raw epoch number.",
+          "message": "Час отримання платежу. Надсилається до API BaseLinker `setOrderPayment` як секунди Unix (перетворення виконується всередині `doRequestImpl()`); поле представлене як дата, щоб інтерфейс користувача міг відображати засіб вибору дати/часу замість запиту в користувача значення epoch."
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLXBheW1lbnQ.option.cGF5bWVudF9kYXRl.display_name": {
+          "source": "Payment Date",
+          "message": "Дата платежу"
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLXBheW1lbnQ.option.cGF5bWVudF9kYXRl.short_desc": {
+          "source": "Payment timestamp",
+          "message": "Мітка часу платежу"
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLXBheW1lbnQ.option.cGF5bWVudF9kb25l.desc": {
+          "source": "Cumulative amount paid so far in the order's currency.",
+          "message": "Сукупна сума, сплачена на цей момент у валюті замовлення."
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLXBheW1lbnQ.option.cGF5bWVudF9kb25l.display_name": {
+          "source": "Amount Paid",
+          "message": "Сплачена сума"
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLXBheW1lbnQ.option.cGF5bWVudF9kb25l.short_desc": {
+          "source": "Total amount paid (order currency)",
+          "message": "Загальна сплачена сума (валюта замовлення)"
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLXBheW1lbnQ.short_desc": {
+          "source": "Record a payment against an order",
+          "message": "Зафіксувати платіж за замовленням"
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLXByb2R1Y3QtZmllbGRz.desc": {
+          "source": "Update fields on a specific product line of a BaseLinker order via `setOrderProductFields`.",
+          "message": "Оновити поля для конкретної позиції товару в замовленні BaseLinker через `setOrderProductFields`."
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLXByb2R1Y3QtZmllbGRz.display_name": {
+          "source": "Set Order Product Fields",
+          "message": "Встановити поля товару замовлення"
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLXByb2R1Y3QtZmllbGRz.option.YXR0cmlidXRlcw.desc": {
+          "source": "Comma-separated list of variant attributes, e.g. `Size: L, Color: Red`.",
+          "message": "Список атрибутів варіанта через кому, наприклад `Size: L, Color: Red`."
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLXByb2R1Y3QtZmllbGRz.option.YXR0cmlidXRlcw.display_name": {
+          "source": "Attributes",
+          "message": "Атрибути"
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLXByb2R1Y3QtZmllbGRz.option.YXR0cmlidXRlcw.short_desc": {
+          "source": "Free-text variant attributes",
+          "message": "Текстові атрибути варіанта"
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLXByb2R1Y3QtZmllbGRz.option.YXVjdGlvbl9pZA.desc": {
+          "source": "Marketplace auction or listing ID (eBay, Allegro, Amazon, etc.).",
+          "message": "Ідентифікатор аукціону або лістингу на маркетплейсі (eBay, Allegro, Amazon тощо)."
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLXByb2R1Y3QtZmllbGRz.option.YXVjdGlvbl9pZA.display_name": {
+          "source": "Marketplace Listing ID",
+          "message": "Ідентифікатор лістингу на маркетплейсі"
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLXByb2R1Y3QtZmllbGRz.option.YXVjdGlvbl9pZA.short_desc": {
+          "source": "Marketplace auction/listing ID",
+          "message": "Ідентифікатор аукціону/лістингу на маркетплейсі"
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLXByb2R1Y3QtZmllbGRz.option.ZWFu.desc": {
+          "source": "Product EAN (barcode).",
+          "message": "EAN товару (штрихкод)."
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLXByb2R1Y3QtZmllbGRz.option.ZWFu.display_name": {
+          "source": "EAN",
+          "message": "EAN"
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLXByb2R1Y3QtZmllbGRz.option.ZWFu.short_desc": {
+          "source": "EAN / barcode",
+          "message": "EAN / штрихкод"
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLXByb2R1Y3QtZmllbGRz.option.b3JkZXJfaWQ.display_name": {
+          "source": "Order ID",
+          "message": "Ідентифікатор замовлення"
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLXByb2R1Y3QtZmllbGRz.option.b3JkZXJfaWQ.short_desc": {
+          "source": "Order containing the line item",
+          "message": "Замовлення, що містить позицію товару"
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLXByb2R1Y3QtZmllbGRz.option.b3JkZXJfcHJvZHVjdF9pZA.display_name": {
+          "source": "Order Product ID",
+          "message": "ID товару в замовленні"
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLXByb2R1Y3QtZmllbGRz.option.b3JkZXJfcHJvZHVjdF9pZA.short_desc": {
+          "source": "Line-item identifier to update",
+          "message": "Ідентифікатор позиції для оновлення"
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLXByb2R1Y3QtZmllbGRz.option.bG9jYXRpb24.desc": {
+          "source": "Warehouse location code.",
+          "message": "Код розташування на складі."
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLXByb2R1Y3QtZmllbGRz.option.bG9jYXRpb24.display_name": {
+          "source": "Warehouse Location",
+          "message": "Розташування на складі"
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLXByb2R1Y3QtZmllbGRz.option.bG9jYXRpb24.short_desc": {
+          "source": "Storage location identifier",
+          "message": "Ідентифікатор місця зберігання"
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLXByb2R1Y3QtZmllbGRz.option.bmFtZQ.desc": {
+          "source": "Product name shown on the order line.",
+          "message": "Назва товару, що відображається в рядку замовлення."
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLXByb2R1Y3QtZmllbGRz.option.bmFtZQ.display_name": {
+          "source": "Product Name",
+          "message": "Назва товару"
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLXByb2R1Y3QtZmllbGRz.option.bmFtZQ.short_desc": {
+          "source": "Name of the product",
+          "message": "Назва товару"
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLXByb2R1Y3QtZmllbGRz.option.c2t1.desc": {
+          "source": "Product SKU.",
+          "message": "SKU товару."
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLXByb2R1Y3QtZmllbGRz.option.c2t1.display_name": {
+          "source": "SKU",
+          "message": "SKU"
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLXByb2R1Y3QtZmllbGRz.option.c2t1.short_desc": {
+          "source": "Stock-keeping unit",
+          "message": "Одиниця складського обліку (SKU)"
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLXByb2R1Y3QtZmllbGRz.option.c3RvcmFnZQ.allowed-value.c3RyaW5nOmRi.display_name": {
+          "source": "BaseLinker Inventory",
+          "message": "Інвентар BaseLinker"
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLXByb2R1Y3QtZmllbGRz.option.c3RvcmFnZQ.allowed-value.c3RyaW5nOnNob3A.display_name": {
+          "source": "External Shop",
+          "message": "Зовнішній магазин"
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLXByb2R1Y3QtZmllbGRz.option.c3RvcmFnZQ.allowed-value.c3RyaW5nOndhcmVob3VzZQ.display_name": {
+          "source": "Legacy Warehouse",
+          "message": "Застарілий склад"
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLXByb2R1Y3QtZmllbGRz.option.c3RvcmFnZQ.desc": {
+          "source": "The storage the product originates from. One of `db`, `shop`, `warehouse`.",
+          "message": "Сховище, з якого походить товар. Одне з: `db`, `shop`, `warehouse`."
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLXByb2R1Y3QtZmllbGRz.option.c3RvcmFnZQ.display_name": {
+          "source": "Storage",
+          "message": "Сховище"
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLXByb2R1Y3QtZmllbGRz.option.c3RvcmFnZQ.short_desc": {
+          "source": "Storage identifier for product origin",
+          "message": "Ідентифікатор сховища для походження товару"
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLXByb2R1Y3QtZmllbGRz.option.c3RvcmFnZV9pZA.desc": {
+          "source": "Identifier of the storage (inventory ID for `db`, shop ID for `shop`, warehouse ID for `warehouse`).",
+          "message": "Ідентифікатор сховища (ID інвентарю для `db`, ID магазину для `shop`, ID складу для `warehouse`)."
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLXByb2R1Y3QtZmllbGRz.option.c3RvcmFnZV9pZA.display_name": {
+          "source": "Storage ID",
+          "message": "Ідентифікатор сховища"
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLXByb2R1Y3QtZmllbGRz.option.c3RvcmFnZV9pZA.short_desc": {
+          "source": "Storage-specific ID (inventory/shop/warehouse ID)",
+          "message": "Специфічний ID сховища (ID інвентарю/магазину/складу)"
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLXByb2R1Y3QtZmllbGRz.option.cHJpY2VfYnJ1dHRv.desc": {
+          "source": "Unit price (gross, including tax).",
+          "message": "Ціна за одиницю (брутто, з урахуванням податку)."
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLXByb2R1Y3QtZmllbGRz.option.cHJpY2VfYnJ1dHRv.display_name": {
+          "source": "Price (Gross)",
+          "message": "Ціна (брутто)"
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLXByb2R1Y3QtZmllbGRz.option.cHJpY2VfYnJ1dHRv.short_desc": {
+          "source": "Unit price including tax",
+          "message": "Ціна за одиницю з податком"
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLXByb2R1Y3QtZmllbGRz.option.cHJvZHVjdF9pZA.desc": {
+          "source": "Product identifier inside the chosen `storage`.",
+          "message": "Ідентифікатор товару в обраному `storage`."
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLXByb2R1Y3QtZmllbGRz.option.cHJvZHVjdF9pZA.display_name": {
+          "source": "Product ID",
+          "message": "ID товару"
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLXByb2R1Y3QtZmllbGRz.option.cHJvZHVjdF9pZA.short_desc": {
+          "source": "Product identifier in the chosen storage",
+          "message": "Ідентифікатор товару в обраному сховищі"
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLXByb2R1Y3QtZmllbGRz.option.cXVhbnRpdHk.desc": {
+          "source": "Quantity of the product on the order line.",
+          "message": "Кількість товару в позиції замовлення."
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLXByb2R1Y3QtZmllbGRz.option.cXVhbnRpdHk.display_name": {
+          "source": "Quantity",
+          "message": "Кількість"
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLXByb2R1Y3QtZmllbGRz.option.cXVhbnRpdHk.short_desc": {
+          "source": "Number of units",
+          "message": "Кількість одиниць"
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLXByb2R1Y3QtZmllbGRz.option.d2FyZWhvdXNlX2lk.desc": {
+          "source": "BaseLinker warehouse ID from which this item is shipped.",
+          "message": "Ідентифікатор складу BaseLinker, з якого відправляється цей товар."
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLXByb2R1Y3QtZmllbGRz.option.d2FyZWhvdXNlX2lk.display_name": {
+          "source": "Warehouse ID",
+          "message": "Ідентифікатор складу"
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLXByb2R1Y3QtZmllbGRz.option.d2FyZWhvdXNlX2lk.short_desc": {
+          "source": "BaseLinker warehouse ID",
+          "message": "Ідентифікатор складу BaseLinker"
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLXByb2R1Y3QtZmllbGRz.option.d2VpZ2h0.desc": {
+          "source": "Weight per unit in kilograms.",
+          "message": "Вага одиниці в кілограмах."
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLXByb2R1Y3QtZmllbGRz.option.d2VpZ2h0.display_name": {
+          "source": "Weight",
+          "message": "Вага"
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLXByb2R1Y3QtZmllbGRz.option.d2VpZ2h0.short_desc": {
+          "source": "Unit weight (kg)",
+          "message": "Вага одиниці (кг)"
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLXByb2R1Y3QtZmllbGRz.option.dGF4X3JhdGU.desc": {
+          "source": "Tax rate as a percentage (e.g. `23` for 23%). Special values: `-1` = tax exempt, `-0.02` = 0% reverse charge, `-0.03` = 0% VAT-OSS.",
+          "message": "Ставка податку у відсотках (наприклад, `23` для 23%). Спеціальні значення: `-1` = звільнено від сплати податку, `-0.02` = 0% зворотне нарахування, `-0.03` = 0% VAT-OSS."
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLXByb2R1Y3QtZmllbGRz.option.dGF4X3JhdGU.display_name": {
+          "source": "Tax Rate",
+          "message": "Ставка податку"
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLXByb2R1Y3QtZmllbGRz.option.dGF4X3JhdGU.short_desc": {
+          "source": "Tax percentage",
+          "message": "Відсоток податку"
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLXByb2R1Y3QtZmllbGRz.option.dmFyaWFudF9pZA.desc": {
+          "source": "Optional product-variant identifier.",
+          "message": "Необов’язковий ідентифікатор варіанта товару."
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLXByb2R1Y3QtZmllbGRz.option.dmFyaWFudF9pZA.display_name": {
+          "source": "Variant ID",
+          "message": "ID варіанта"
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLXByb2R1Y3QtZmllbGRz.option.dmFyaWFudF9pZA.short_desc": {
+          "source": "Variant identifier",
+          "message": "Ідентифікатор варіанта"
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLXByb2R1Y3QtZmllbGRz.short_desc": {
+          "source": "Update a product line on an order",
+          "message": "Оновити позицію товару в замовленні"
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLXJldHVybi1maWVsZHM.desc": {
+          "source": "Update one or more fields on a BaseLinker order return via `setOrderReturnFields`.",
+          "message": "Оновити одне або кілька полів для повернення замовлення BaseLinker через `setOrderReturnFields`."
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLXJldHVybi1maWVsZHM.display_name": {
+          "source": "Set Order Return Fields",
+          "message": "Встановити поля повернення замовлення"
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLXJldHVybi1maWVsZHM.option.Y3VzdG9tX2V4dHJhX2ZpZWxkcw.desc": {
+          "source": "Map of `{\"<extra_field_id>\": <value>}` for custom order-return extra fields configured in BaseLinker. Text fields take strings; file fields take a `{\"title\": \"<filename>\", \"file\": \"<base64>\"}` hash where the base64-encoded file must not exceed 2 MB.",
+          "message": "Зіставлення `{\"<extra_field_id>\": <value>}` для додаткових полів повернення замовлення, налаштованих у BaseLinker. Текстові поля приймають рядки; файлові поля приймають хеш `{\"title\": \"<filename>\", \"file\": \"<base64>\"}`, де файл у кодуванні base64 не повинен перевищувати 2 МБ."
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLXJldHVybi1maWVsZHM.option.Y3VzdG9tX2V4dHJhX2ZpZWxkcw.display_name": {
+          "source": "Custom Extra Fields",
+          "message": "Користувацькі додаткові поля"
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLXJldHVybi1maWVsZHM.option.Y3VzdG9tX2V4dHJhX2ZpZWxkcw.short_desc": {
+          "source": "Map of custom extra field ID to value",
+          "message": "Зіставлення ID користувацького додаткового поля зі значенням"
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLXJldHVybi1maWVsZHM.option.YWRtaW5fY29tbWVudHM.display_name": {
+          "source": "Admin Comments",
+          "message": "Коментарі адміністратора"
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLXJldHVybi1maWVsZHM.option.YWRtaW5fY29tbWVudHM.short_desc": {
+          "source": "Internal admin comments",
+          "message": "Внутрішні коментарі адміністратора"
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLXJldHVybi1maWVsZHM.option.ZGVsaXZlcnlfY291bnRyeV9jb2Rl.desc": {
+          "source": "ISO 3166-1 alpha-2 country code (e.g. `PL`, `DE`, `US`).",
+          "message": "Дволітерний код країни ISO 3166-1 alpha-2 (наприклад, `PL`, `DE`, `US`)."
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLXJldHVybi1maWVsZHM.option.ZGVsaXZlcnlfY291bnRyeV9jb2Rl.display_name": {
+          "source": "Delivery Country Code",
+          "message": "Код країни доставки"
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLXJldHVybi1maWVsZHM.option.ZGVsaXZlcnlfY291bnRyeV9jb2Rl.short_desc": {
+          "source": "2-letter ISO country code",
+          "message": "2-літерний код країни ISO"
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLXJldHVybi1maWVsZHM.option.ZGVsaXZlcnlfY29tcGFueQ.display_name": {
+          "source": "Delivery Company",
+          "message": "Компанія для доставки"
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLXJldHVybi1maWVsZHM.option.ZGVsaXZlcnlfY29tcGFueQ.short_desc": {
+          "source": "Sender company name",
+          "message": "Назва компанії відправника"
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLXJldHVybi1maWVsZHM.option.ZGVsaXZlcnlfY2l0eQ.display_name": {
+          "source": "Delivery City",
+          "message": "Місто доставки"
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLXJldHVybi1maWVsZHM.option.ZGVsaXZlcnlfY2l0eQ.short_desc": {
+          "source": "City",
+          "message": "Місто"
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLXJldHVybi1maWVsZHM.option.ZGVsaXZlcnlfYWRkcmVzcw.display_name": {
+          "source": "Delivery Address",
+          "message": "Адреса доставки"
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLXJldHVybi1maWVsZHM.option.ZGVsaXZlcnlfYWRkcmVzcw.short_desc": {
+          "source": "Street address",
+          "message": "Адреса (вулиця)"
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLXJldHVybi1maWVsZHM.option.ZGVsaXZlcnlfZnVsbG5hbWU.display_name": {
+          "source": "Delivery Full Name",
+          "message": "Повне ім'я для доставки"
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLXJldHVybi1maWVsZHM.option.ZGVsaXZlcnlfZnVsbG5hbWU.short_desc": {
+          "source": "Sender full name",
+          "message": "Повне ім'я відправника"
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLXJldHVybi1maWVsZHM.option.ZGVsaXZlcnlfc3RhdGU.display_name": {
+          "source": "Delivery State/Province",
+          "message": "Область/штат доставки"
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLXJldHVybi1maWVsZHM.option.ZGVsaXZlcnlfc3RhdGU.short_desc": {
+          "source": "State or province",
+          "message": "Штат або область"
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLXJldHVybi1maWVsZHM.option.ZGVsaXZlcnlfcG9zdGNvZGU.display_name": {
+          "source": "Delivery Postcode",
+          "message": "Поштовий індекс доставки"
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLXJldHVybi1maWVsZHM.option.ZGVsaXZlcnlfcG9zdGNvZGU.short_desc": {
+          "source": "Postal code",
+          "message": "Поштовий індекс"
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLXJldHVybi1maWVsZHM.option.ZGVsaXZlcnlfcHJpY2U.display_name": {
+          "source": "Delivery Price",
+          "message": "Вартість доставки"
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLXJldHVybi1maWVsZHM.option.ZGVsaXZlcnlfcHJpY2U.short_desc": {
+          "source": "Return shipping cost",
+          "message": "Вартість доставки повернення"
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLXJldHVybi1maWVsZHM.option.ZW1haWw.display_name": {
+          "source": "Email",
+          "message": "Електронна пошта"
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLXJldHVybi1maWVsZHM.option.ZW1haWw.short_desc": {
+          "source": "Customer email address",
+          "message": "Адреса електронної пошти клієнта"
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLXJldHVybi1maWVsZHM.option.ZXh0cmFfZmllbGRfMQ.display_name": {
+          "source": "Extra Field 1",
+          "message": "Додаткове поле 1"
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLXJldHVybi1maWVsZHM.option.ZXh0cmFfZmllbGRfMQ.short_desc": {
+          "source": "Free-form extra field",
+          "message": "Додаткове поле вільної форми"
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLXJldHVybi1maWVsZHM.option.ZXh0cmFfZmllbGRfMg.display_name": {
+          "source": "Extra Field 2",
+          "message": "Додаткове поле 2"
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLXJldHVybi1maWVsZHM.option.ZXh0cmFfZmllbGRfMg.short_desc": {
+          "source": "Free-form extra field",
+          "message": "Додаткове поле вільної форми"
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLXJldHVybi1maWVsZHM.option.cGhvbmU.display_name": {
+          "source": "Phone",
+          "message": "Телефон"
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLXJldHVybi1maWVsZHM.option.cGhvbmU.short_desc": {
+          "source": "Customer phone number",
+          "message": "Номер телефону клієнта"
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLXJldHVybi1maWVsZHM.option.cmV0dXJuX2lk.display_name": {
+          "source": "Return ID",
+          "message": "Ідентифікатор повернення"
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLXJldHVybi1maWVsZHM.option.cmV0dXJuX2lk.short_desc": {
+          "source": "Return to update",
+          "message": "Повернення для оновлення"
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLXJldHVybi1maWVsZHM.option.dXNlcl9sb2dpbg.display_name": {
+          "source": "User Login",
+          "message": "Логін користувача"
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLXJldHVybi1maWVsZHM.option.dXNlcl9sb2dpbg.short_desc": {
+          "source": "Customer login (marketplace username)",
+          "message": "Логін клієнта (ім'я користувача на маркетплейсі)"
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLXJldHVybi1maWVsZHM.short_desc": {
+          "source": "Update fields on an existing order return",
+          "message": "Оновити поля для наявного повернення замовлення"
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLXJldHVybi1yZWZ1bmQ.desc": {
+          "source": "Record a refund on a BaseLinker order return via `setOrderReturnRefund`.",
+          "message": "Зафіксувати відшкодування для повернення замовлення BaseLinker через `setOrderReturnRefund`."
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLXJldHVybi1yZWZ1bmQ.display_name": {
+          "source": "Set Order Return Refund",
+          "message": "Встановити відшкодування повернення замовлення"
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLXJldHVybi1yZWZ1bmQ.option.ZXh0ZXJuYWxfcmVmdW5kX2lk.display_name": {
+          "source": "External Refund ID",
+          "message": "Зовнішній ID відшкодування"
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLXJldHVybi1yZWZ1bmQ.option.ZXh0ZXJuYWxfcmVmdW5kX2lk.short_desc": {
+          "source": "Identifier assigned by the refund provider",
+          "message": "Ідентифікатор, призначений провайдером відшкодування"
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLXJldHVybi1yZWZ1bmQ.option.b3JkZXJfcmVmdW5kX2RvbmU.desc": {
+          "source": "Cumulative refunded amount in the return's currency. Replaces the current refund value (not added to it).",
+          "message": "Сукупна відшкодована сума у валюті повернення. Замінює поточне значення відшкодування (не додається до нього)."
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLXJldHVybi1yZWZ1bmQ.option.b3JkZXJfcmVmdW5kX2RvbmU.display_name": {
+          "source": "Refund Amount",
+          "message": "Сума повернення"
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLXJldHVybi1yZWZ1bmQ.option.b3JkZXJfcmVmdW5kX2RvbmU.short_desc": {
+          "source": "Total amount refunded (return currency)",
+          "message": "Загальна відшкодована сума (валюта повернення)"
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLXJldHVybi1yZWZ1bmQ.option.cmV0dXJuX2lk.display_name": {
+          "source": "Return ID",
+          "message": "Ідентифікатор повернення"
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLXJldHVybi1yZWZ1bmQ.option.cmV0dXJuX2lk.short_desc": {
+          "source": "Return being refunded",
+          "message": "Повернення, за яким здійснюється відшкодування"
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLXJldHVybi1yZWZ1bmQ.option.cmVmdW5kX2NvbW1lbnQ.desc": {
+          "source": "Short free-text comment attached to the refund (max 50 characters).",
+          "message": "Короткий довільний текстовий коментар до відшкодування (макс. 50 символів)."
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLXJldHVybi1yZWZ1bmQ.option.cmVmdW5kX2NvbW1lbnQ.display_name": {
+          "source": "Refund Comment",
+          "message": "Коментар до відшкодування"
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLXJldHVybi1yZWZ1bmQ.option.cmVmdW5kX2NvbW1lbnQ.short_desc": {
+          "source": "Short comment for the refund",
+          "message": "Короткий коментар до відшкодування"
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLXJldHVybi1yZWZ1bmQ.option.cmVmdW5kX2RhdGU.desc": {
+          "source": "When the refund was issued. Sent to the BaseLinker `setOrderReturnRefund` API as Unix seconds (the conversion is performed inside `doRequestImpl()`); the field is exposed as a date so the UI can render a date/time picker rather than asking the user for a raw epoch number.",
+          "message": "Час оформлення відшкодування. Надсилається до API BaseLinker `setOrderReturnRefund` як секунди Unix (перетворення виконується всередині `doRequestImpl()`); поле представлене як дата, щоб інтерфейс користувача міг відображати засіб вибору дати/часу замість запиту в користувача значення epoch."
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLXJldHVybi1yZWZ1bmQ.option.cmVmdW5kX2RhdGU.display_name": {
+          "source": "Refund Date",
+          "message": "Дата відшкодування"
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLXJldHVybi1yZWZ1bmQ.option.cmVmdW5kX2RhdGU.short_desc": {
+          "source": "Refund timestamp",
+          "message": "Мітка часу відшкодування"
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLXJldHVybi1yZWZ1bmQ.short_desc": {
+          "source": "Record a refund against an order return",
+          "message": "Зафіксувати відшкодування за поверненням замовлення"
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLXJldHVybi1zdGF0dXM.desc": {
+          "source": "Change the status of a BaseLinker order return via `setOrderReturnStatus`.",
+          "message": "Змінити статус повернення замовлення BaseLinker через `setOrderReturnStatus`."
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLXJldHVybi1zdGF0dXM.display_name": {
+          "source": "Set Order Return Status",
+          "message": "Встановити статус повернення замовлення"
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLXJldHVybi1zdGF0dXM.option.c3RhdHVzX2lk.desc": {
+          "source": "Target return status identifier; values are drawn from BaseLinker's `getOrderReturnStatusList` endpoint and surfaced via the `order_return_statuses` reference data.",
+          "message": "Ідентифікатор цільового статусу повернення; значення беруться з кінцевої точки BaseLinker `getOrderReturnStatusList` і надаються через довідкові дані `order_return_statuses`."
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLXJldHVybi1zdGF0dXM.option.c3RhdHVzX2lk.display_name": {
+          "source": "Return Status ID",
+          "message": "Ідентифікатор статусу повернення"
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLXJldHVybi1zdGF0dXM.option.c3RhdHVzX2lk.short_desc": {
+          "source": "Target return status",
+          "message": "Цільовий статус повернення"
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLXJldHVybi1zdGF0dXM.option.cmV0dXJuX2lk.display_name": {
+          "source": "Return ID",
+          "message": "Ідентифікатор повернення"
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLXJldHVybi1zdGF0dXM.option.cmV0dXJuX2lk.short_desc": {
+          "source": "Return to transition",
+          "message": "Повернення для зміни статусу"
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLXJldHVybi1zdGF0dXM.short_desc": {
+          "source": "Change the status of an order return",
+          "message": "Змінити статус повернення замовлення"
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLXN0YXR1cw.desc": {
+          "source": "Change the status of a BaseLinker order via `setOrderStatus`. The new `status_id` must be one of the statuses configured in BaseLinker.",
+          "message": "Змінити статус замовлення BaseLinker через `setOrderStatus`. Новий `status_id` має бути одним зі статусів, налаштованих у BaseLinker."
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLXN0YXR1cw.display_name": {
+          "source": "Set Order Status",
+          "message": "Встановити статус замовлення"
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLXN0YXR1cw.option.b3JkZXJfaWQ.display_name": {
+          "source": "Order ID",
+          "message": "Ідентифікатор замовлення"
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLXN0YXR1cw.option.b3JkZXJfaWQ.short_desc": {
+          "source": "Order to transition",
+          "message": "Замовлення для зміни статусу"
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLXN0YXR1cw.option.c3RhdHVzX2lk.desc": {
+          "source": "New order status identifier; see `list-order-statuses`.",
+          "message": "Ідентифікатор нового статусу замовлення; див. `list-order-statuses`."
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLXN0YXR1cw.option.c3RhdHVzX2lk.display_name": {
+          "source": "Status ID",
+          "message": "ID статусу"
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLXN0YXR1cw.option.c3RhdHVzX2lk.short_desc": {
+          "source": "Target order status",
+          "message": "Цільовий статус замовлення"
+        },
+        "app.QmFzZUxpbmtlcg.action.c2V0LW9yZGVyLXN0YXR1cw.short_desc": {
+          "source": "Change the status of an order",
+          "message": "Змінити статус замовлення"
+        },
+        "app.QmFzZUxpbmtlcg.action.cGFja2FnZS1jcmVhdGVk.desc": {
+          "source": "Fires when a courier package is created. (Polled from `getJournalList` `log_type` 9.)",
+          "message": "Спрацьовує під час створення кур'єрського відправлення. (Опитування з `getJournalList` `log_type` 9.)"
+        },
+        "app.QmFzZUxpbmtlcg.action.cGFja2FnZS1jcmVhdGVk.display_name": {
+          "source": "Package Created",
+          "message": "Відправлення створено"
+        },
+        "app.QmFzZUxpbmtlcg.action.cGFja2FnZS1jcmVhdGVk.short_desc": {
+          "source": "Trigger when a courier package is created",
+          "message": "Запускати під час створення кур'єрського відправлення"
+        },
+        "app.QmFzZUxpbmtlcg.action.cGFja2FnZS1kZWxldGVk.desc": {
+          "source": "Fires when a courier package is deleted. (Polled from `getJournalList` `log_type` 10.)",
+          "message": "Спрацьовує під час видалення кур'єрського відправлення. (Опитування з `getJournalList` `log_type` 10.)"
+        },
+        "app.QmFzZUxpbmtlcg.action.cGFja2FnZS1kZWxldGVk.display_name": {
+          "source": "Package Deleted",
+          "message": "Відправлення видалено"
+        },
+        "app.QmFzZUxpbmtlcg.action.cGFja2FnZS1kZWxldGVk.short_desc": {
+          "source": "Trigger when a courier package is deleted",
+          "message": "Запускати під час видалення кур'єрського відправлення"
+        },
+        "app.QmFzZUxpbmtlcg.action.cGFja2FnZS1zdGF0dXMtY2hhbmdlZA.desc": {
+          "source": "Fires when a courier package's status changes. (Polled from `getJournalList` `log_type` 22.)",
+          "message": "Спрацьовує під час зміни статусу кур'єрського відправлення. (Опитування з `getJournalList` `log_type` 22.)"
+        },
+        "app.QmFzZUxpbmtlcg.action.cGFja2FnZS1zdGF0dXMtY2hhbmdlZA.display_name": {
+          "source": "Package Status Changed",
+          "message": "Статус відправлення змінено"
+        },
+        "app.QmFzZUxpbmtlcg.action.cGFja2FnZS1zdGF0dXMtY2hhbmdlZA.short_desc": {
+          "source": "Trigger when a courier package status changes",
+          "message": "Запускати під час зміни статусу кур'єрського відправлення"
+        },
+        "app.QmFzZUxpbmtlcg.action.cmVjZWlwdC1kZWxldGVk.desc": {
+          "source": "Fires when a receipt is deleted. (Polled from `getJournalList` `log_type` 20.)",
+          "message": "Спрацьовує під час видалення чека. (Опитування з `getJournalList` `log_type` 20.)"
+        },
+        "app.QmFzZUxpbmtlcg.action.cmVjZWlwdC1kZWxldGVk.display_name": {
+          "source": "Receipt Deleted",
+          "message": "Чек видалено"
+        },
+        "app.QmFzZUxpbmtlcg.action.cmVjZWlwdC1kZWxldGVk.short_desc": {
+          "source": "Trigger when a receipt is deleted",
+          "message": "Запускати під час видалення чека"
+        },
+        "app.QmFzZUxpbmtlcg.action.cmVjZWlwdC1pc3N1ZWQ.desc": {
+          "source": "Fires when a receipt is issued. (Polled from `getJournalList` `log_type` 8.)",
+          "message": "Спрацьовує під час видачі чека. (Опитування з `getJournalList` `log_type` 8.)"
+        },
+        "app.QmFzZUxpbmtlcg.action.cmVjZWlwdC1pc3N1ZWQ.display_name": {
+          "source": "Receipt Issued",
+          "message": "Чек видано"
+        },
+        "app.QmFzZUxpbmtlcg.action.cmVjZWlwdC1pc3N1ZWQ.short_desc": {
+          "source": "Trigger when a receipt is issued",
+          "message": "Запускати під час видачі чека"
+        },
+        "app.QmFzZUxpbmtlcg.action.dXBkYXRlLWludmVudG9yeS1wcmljZXM.desc": {
+          "source": "Bulk-update BaseLinker inventory prices via `updateInventoryProductsPrices`. Accepts up to 1000 product entries per call.",
+          "message": "Масово оновлюйте ціни на товари BaseLinker через `updateInventoryProductsPrices`. Приймає до 1000 записів товарів за один виклик."
+        },
+        "app.QmFzZUxpbmtlcg.action.dXBkYXRlLWludmVudG9yeS1wcmljZXM.display_name": {
+          "source": "Update Inventory Prices",
+          "message": "Оновити ціни інвентарю"
+        },
+        "app.QmFzZUxpbmtlcg.action.dXBkYXRlLWludmVudG9yeS1wcmljZXM.option.aW52ZW50b3J5X2lk.display_name": {
+          "source": "Inventory ID",
+          "message": "ID інвентарю"
+        },
+        "app.QmFzZUxpbmtlcg.action.dXBkYXRlLWludmVudG9yeS1wcmljZXM.option.aW52ZW50b3J5X2lk.short_desc": {
+          "source": "Target inventory",
+          "message": "Цільовий інвентар"
+        },
+        "app.QmFzZUxpbmtlcg.action.dXBkYXRlLWludmVudG9yeS1wcmljZXM.option.cHJvZHVjdHM.desc": {
+          "source": "Nested map of the shape `{\"<product_id>\": {\"<price_group_id>\": <price>}}`. Up to 1000 products per call.",
+          "message": "Вкладений map у форматі `{\"<product_id>\": {\"<price_group_id>\": <price>}}`. До 1000 товарів за виклик."
+        },
+        "app.QmFzZUxpbmtlcg.action.dXBkYXRlLWludmVudG9yeS1wcmljZXM.option.cHJvZHVjdHM.display_name": {
+          "source": "Products",
+          "message": "Товари"
+        },
+        "app.QmFzZUxpbmtlcg.action.dXBkYXRlLWludmVudG9yeS1wcmljZXM.option.cHJvZHVjdHM.short_desc": {
+          "source": "Per-product price updates (max 1000 products)",
+          "message": "Оновлення цін для кожного товару (макс. 1000 товарів)"
+        },
+        "app.QmFzZUxpbmtlcg.action.dXBkYXRlLWludmVudG9yeS1wcmljZXM.short_desc": {
+          "source": "Bulk update prices (up to 1000 products per call)",
+          "message": "Масове оновлення цін (до 1000 товарів за виклик)"
+        },
+        "app.QmFzZUxpbmtlcg.action.dXBkYXRlLWludmVudG9yeS1zdG9jaw.desc": {
+          "source": "Bulk-update BaseLinker inventory stock via `updateInventoryProductsStock`. Accepts up to 1000 product entries per call.",
+          "message": "Масово оновлюйте залишки інвентарю BaseLinker через `updateInventoryProductsStock`. Приймає до 1000 записів товарів за один виклик."
+        },
+        "app.QmFzZUxpbmtlcg.action.dXBkYXRlLWludmVudG9yeS1zdG9jaw.display_name": {
+          "source": "Update Inventory Stock",
+          "message": "Оновити залишки інвентарю"
+        },
+        "app.QmFzZUxpbmtlcg.action.dXBkYXRlLWludmVudG9yeS1zdG9jaw.option.aW52ZW50b3J5X2lk.display_name": {
+          "source": "Inventory ID",
+          "message": "ID інвентарю"
+        },
+        "app.QmFzZUxpbmtlcg.action.dXBkYXRlLWludmVudG9yeS1zdG9jaw.option.aW52ZW50b3J5X2lk.short_desc": {
+          "source": "Target inventory",
+          "message": "Цільовий інвентар"
+        },
+        "app.QmFzZUxpbmtlcg.action.dXBkYXRlLWludmVudG9yeS1zdG9jaw.option.cHJvZHVjdHM.desc": {
+          "source": "Nested map of the shape `{\"<product_id>\": {\"<variant_id>|bl_<warehouse_id>\": <qty>}}`. For non-variant products use the product ID as the inner key prefix (e.g. `0|bl_123`). Up to 1000 products per call.",
+          "message": "Вкладений map у форматі `{\"<product_id>\": {\"<variant_id>|bl_<warehouse_id>\": <qty>}}`. Для товарів без варіантів використовуйте ID товару як префікс внутрішнього ключа (напр., `0|bl_123`). До 1000 товарів за виклик."
+        },
+        "app.QmFzZUxpbmtlcg.action.dXBkYXRlLWludmVudG9yeS1zdG9jaw.option.cHJvZHVjdHM.display_name": {
+          "source": "Products",
+          "message": "Товари"
+        },
+        "app.QmFzZUxpbmtlcg.action.dXBkYXRlLWludmVudG9yeS1zdG9jaw.option.cHJvZHVjdHM.short_desc": {
+          "source": "Per-product stock updates (max 1000 products)",
+          "message": "Оновлення залишків для кожного товару (макс. 1000 товарів)"
+        },
+        "app.QmFzZUxpbmtlcg.action.dXBkYXRlLWludmVudG9yeS1zdG9jaw.short_desc": {
+          "source": "Bulk update stock levels (up to 1000 products per call)",
+          "message": "Масове оновлення рівнів залишків (до 1000 товарів за виклик)"
+        },
+        "app.QmFzZUxpbmtlcg.desc": {
+          "source": "BaseLinker is a Polish multichannel e-commerce platform that unifies orders, inventory, shipping labels, and courier packages across marketplaces such as Allegro, Amazon, eBay, and Shopify.\n\n**Features:**\n- Manage orders across all connected marketplaces and shops\n- Update order statuses, payments, and line items\n- Handle order returns with refunds\n- Maintain inventory catalogs, products, stock levels, and prices\n- Create courier packages and retrieve shipping labels\n- Poll BaseLinker's journal for event-based workflow triggers\n\n**Authentication:**\nBaseLinker uses a static API token passed in the `X-BLToken` HTTP header. Tokens can be generated in the BaseLinker panel under *My Account → API → Generate a new token*.\n\n**Rate limit:** 100 requests per minute per token. The module retries rate-limited calls with exponential backoff (up to 3 attempts).",
+          "message": "BaseLinker — це польська багатоканальна платформа електронної комерції, яка об'єднує замовлення, складські залишки, транспортні накладні та кур'єрські відправлення з таких маркетплейсів, як Allegro, Amazon, eBay та Shopify.\n\n**Можливості:**\n- Керування замовленнями на всіх підключених маркетплейсах і магазинах\n- Оновлення статусів замовлень, платежів та позицій\n- Обробка повернень замовлень із відшкодуванням коштів\n- Ведення каталогів товарів, залишків і цін\n- Створення кур'єрських відправлень та отримання транспортних накладних\n- Опитування журналу BaseLinker для тригерів робочих процесів на основі подій\n\n**Автентифікація:**\nBaseLinker використовує статичний API-токен, що передається в HTTP-заголовку `X-BLToken`. Токени можна згенерувати в панелі BaseLinker у розділі *Мій акаунт → API → Створити новий токен*.\n\n**Ліміт запитів:** 100 запитів на хвилину для кожного токена. Модуль повторює запити з обмеженням швидкості з експоненційним відкладенням (до 3 спроб)."
+        },
+        "app.QmFzZUxpbmtlcg.display_name": {
+          "source": "BaseLinker (Base.com)",
+          "message": "BaseLinker (Base.com)"
+        },
+        "app.QmFzZUxpbmtlcg.short_desc": {
+          "source": "BaseLinker multichannel e-commerce integration",
+          "message": "Багатоканальна інтеграція електронної комерції BaseLinker"
+        }
+      }
+    }
+  }
+}

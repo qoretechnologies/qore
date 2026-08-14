@@ -1,0 +1,3597 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "cs": {
+      "messages": {
+        "app.RWFzeVBvc3Q.action.Y2FuY2VsLXBpY2t1cA.desc": {
+          "source": "Cancel a scheduled pickup.",
+          "message": "Zrušit naplánované vyzvednutí."
+        },
+        "app.RWFzeVBvc3Q.action.Y2FuY2VsLXBpY2t1cA.display_name": {
+          "source": "Cancel Pickup",
+          "message": "Zrušit vyzvednutí"
+        },
+        "app.RWFzeVBvc3Q.action.Y2FuY2VsLXBpY2t1cA.option.cGlja3VwX2lk.desc": {
+          "source": "Pickup to cancel",
+          "message": "Vyzvednutí ke zrušení"
+        },
+        "app.RWFzeVBvc3Q.action.Y2FuY2VsLXBpY2t1cA.option.cGlja3VwX2lk.display_name": {
+          "source": "Pickup ID",
+          "message": "ID vyzvednutí"
+        },
+        "app.RWFzeVBvc3Q.action.Y2FuY2VsLXBpY2t1cA.option.cGlja3VwX2lk.short_desc": {
+          "source": "Pickup ID (pickup_xxx)",
+          "message": "ID vyzvednutí (pickup_xxx)"
+        },
+        "app.RWFzeVBvc3Q.action.Y2FuY2VsLXBpY2t1cA.short_desc": {
+          "source": "Cancel a pickup",
+          "message": "Zrušit vyzvednutí"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLW9yZGVy.desc": {
+          "source": "Create a new multi-shipment order.",
+          "message": "Vytvořit novou objednávku s více zásilkami."
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLW9yZGVy.display_name": {
+          "source": "Create Order",
+          "message": "Vytvořit objednávku"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLW9yZGVy.option.Y2Fycmllcg.desc": {
+          "source": "Carrier name",
+          "message": "Název přepravce"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLW9yZGVy.option.Y2Fycmllcg.display_name": {
+          "source": "Carrier",
+          "message": "Dopravce"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLW9yZGVy.option.Y2Fycmllcg.short_desc": {
+          "source": "Carrier name",
+          "message": "Název přepravce"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLW9yZGVy.option.Y2Fycmllcl9hY2NvdW50cw.desc": {
+          "source": "Carrier account IDs to use for rating",
+          "message": "ID účtů přepravce pro výpočet ceny"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLW9yZGVy.option.Y2Fycmllcl9hY2NvdW50cw.display_name": {
+          "source": "Carrier Accounts",
+          "message": "Účty přepravce"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLW9yZGVy.option.Y2Fycmllcl9hY2NvdW50cw.short_desc": {
+          "source": "Carrier accounts",
+          "message": "Účty přepravce"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLW9yZGVy.option.YnV5ZXJfYWRkcmVzcw.desc": {
+          "source": "Buyer address (when different from `to_address`)",
+          "message": "Adresa kupujícího (pokud se liší od `to_address`)"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLW9yZGVy.option.YnV5ZXJfYWRkcmVzcw.display_name": {
+          "source": "Buyer Address",
+          "message": "Adresa kupujícího"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLW9yZGVy.option.YnV5ZXJfYWRkcmVzcw.short_desc": {
+          "source": "Buyer address",
+          "message": "Adresa kupujícího"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLW9yZGVy.option.ZnJvbV9hZGRyZXNz.desc": {
+          "source": "Origin address (or `{id: adr_xxx}`)",
+          "message": "Výchozí adresa (nebo `{id: adr_xxx}`)"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLW9yZGVy.option.ZnJvbV9hZGRyZXNz.display_name": {
+          "source": "From Address",
+          "message": "Adresa odesílatele"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLW9yZGVy.option.ZnJvbV9hZGRyZXNz.short_desc": {
+          "source": "Origin address",
+          "message": "Výchozí adresa"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLW9yZGVy.option.aXNfcmV0dXJu.desc": {
+          "source": "Set to `True` if this is a return order",
+          "message": "Nastavte na `True`, pokud se jedná o vratnou objednávku"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLW9yZGVy.option.aXNfcmV0dXJu.display_name": {
+          "source": "Is Return",
+          "message": "Je vratka"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLW9yZGVy.option.aXNfcmV0dXJu.short_desc": {
+          "source": "Mark as return order",
+          "message": "Označit jako vratnou objednávku"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLW9yZGVy.option.c2VydmljZQ.desc": {
+          "source": "Carrier service code",
+          "message": "Kód služby přepravce"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLW9yZGVy.option.c2VydmljZQ.display_name": {
+          "source": "Service",
+          "message": "Služba"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLW9yZGVy.option.c2VydmljZQ.short_desc": {
+          "source": "Carrier service",
+          "message": "Služba dopravce"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLW9yZGVy.option.c2hpcG1lbnRz.desc": {
+          "source": "List of shipments to include in the order (each contains a parcel, etc.)",
+          "message": "Seznam zásilek, které mají být zahrnuty do objednávky (každá obsahuje balík atd.)"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLW9yZGVy.option.c2hpcG1lbnRz.display_name": {
+          "source": "Shipments",
+          "message": "Zásilky"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLW9yZGVy.option.c2hpcG1lbnRz.short_desc": {
+          "source": "Shipments in the order",
+          "message": "Zásilky v objednávce"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLW9yZGVy.option.cmV0dXJuX2FkZHJlc3M.desc": {
+          "source": "Return address",
+          "message": "Zpáteční adresa"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLW9yZGVy.option.cmV0dXJuX2FkZHJlc3M.display_name": {
+          "source": "Return Address",
+          "message": "Zpáteční adresa"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLW9yZGVy.option.cmV0dXJuX2FkZHJlc3M.short_desc": {
+          "source": "Return address",
+          "message": "Zpáteční adresa"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLW9yZGVy.option.cmVmZXJlbmNl.desc": {
+          "source": "Caller-supplied reference",
+          "message": "Reference zadaná volajícím"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLW9yZGVy.option.cmVmZXJlbmNl.display_name": {
+          "source": "Reference",
+          "message": "Reference"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLW9yZGVy.option.cmVmZXJlbmNl.short_desc": {
+          "source": "Caller-supplied reference",
+          "message": "Reference zadaná volajícím"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLW9yZGVy.option.dG9fYWRkcmVzcw.desc": {
+          "source": "Destination address (or `{id: adr_xxx}`)",
+          "message": "Cílová adresa (nebo `{id: adr_xxx}`)"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLW9yZGVy.option.dG9fYWRkcmVzcw.display_name": {
+          "source": "To Address",
+          "message": "Cílová adresa"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLW9yZGVy.option.dG9fYWRkcmVzcw.short_desc": {
+          "source": "Destination address",
+          "message": "Cílová adresa"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLW9yZGVy.short_desc": {
+          "source": "Create a multi-shipment order",
+          "message": "Vytvořit objednávku s více zásilkami"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWFkZHJlc3M.desc": {
+          "source": "Create a new address. Optionally request lenient or strict verification of the address.",
+          "message": "Vytvořit novou adresu. Volitelně lze vyžádat mírné nebo přísné ověření adresy."
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWFkZHJlc3M.display_name": {
+          "source": "Create Address",
+          "message": "Vytvořit adresu"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWFkZHJlc3M.option.Y291bnRyeQ.desc": {
+          "source": "ISO 2-letter country code (e.g. `US`, `GB`). Defaults to `US`.",
+          "message": "Dvoupísmenný kód země ISO (např. `US`, `GB`). Výchozí hodnota je `US`."
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWFkZHJlc3M.option.Y291bnRyeQ.display_name": {
+          "source": "Country",
+          "message": "Země"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWFkZHJlc3M.option.Y291bnRyeQ.short_desc": {
+          "source": "ISO 2-letter country code",
+          "message": "Dvoupísmenný kód země ISO"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWFkZHJlc3M.option.Y29tcGFueQ.desc": {
+          "source": "Company name",
+          "message": "Název společnosti"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWFkZHJlc3M.option.Y29tcGFueQ.display_name": {
+          "source": "Company",
+          "message": "Společnost"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWFkZHJlc3M.option.Y29tcGFueQ.short_desc": {
+          "source": "Company name",
+          "message": "Název společnosti"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWFkZHJlc3M.option.Y2Fycmllcl9mYWNpbGl0eQ.desc": {
+          "source": "Optional carrier facility identifier",
+          "message": "Volitelný identifikátor provozovny dopravce"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWFkZHJlc3M.option.Y2Fycmllcl9mYWNpbGl0eQ.display_name": {
+          "source": "Carrier Facility",
+          "message": "Provozovna dopravce"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWFkZHJlc3M.option.Y2Fycmllcl9mYWNpbGl0eQ.short_desc": {
+          "source": "Carrier facility name",
+          "message": "Název provozovny dopravce"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWFkZHJlc3M.option.Y2l0eQ.desc": {
+          "source": "City name",
+          "message": "Název města"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWFkZHJlc3M.option.Y2l0eQ.display_name": {
+          "source": "City",
+          "message": "Město"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWFkZHJlc3M.option.Y2l0eQ.short_desc": {
+          "source": "City",
+          "message": "Město"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWFkZHJlc3M.option.ZW1haWw.desc": {
+          "source": "Email address",
+          "message": "E-mailová adresa"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWFkZHJlc3M.option.ZW1haWw.display_name": {
+          "source": "Email",
+          "message": "E-mail"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWFkZHJlc3M.option.ZW1haWw.short_desc": {
+          "source": "Email address",
+          "message": "E-mailová adresa"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWFkZHJlc3M.option.ZmVkZXJhbF90YXhfaWQ.desc": {
+          "source": "Federal tax identifier",
+          "message": "Federální daňový identifikátor"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWFkZHJlc3M.option.ZmVkZXJhbF90YXhfaWQ.display_name": {
+          "source": "Federal Tax ID",
+          "message": "Federální DIČ"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWFkZHJlc3M.option.ZmVkZXJhbF90YXhfaWQ.short_desc": {
+          "source": "Federal tax identifier",
+          "message": "Federální daňový identifikátor"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWFkZHJlc3M.option.bmFtZQ.desc": {
+          "source": "Recipient name",
+          "message": "Jméno příjemce"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWFkZHJlc3M.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "Název"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWFkZHJlc3M.option.bmFtZQ.short_desc": {
+          "source": "Recipient name",
+          "message": "Jméno příjemce"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWFkZHJlc3M.option.c3RhdGU.desc": {
+          "source": "State or province code (e.g. `CA`, `NY`)",
+          "message": "Kód státu nebo provincie (např. `CA`, `NY`)"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWFkZHJlc3M.option.c3RhdGU.display_name": {
+          "source": "State",
+          "message": "Stát"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWFkZHJlc3M.option.c3RhdGU.short_desc": {
+          "source": "State or province code",
+          "message": "Kód státu nebo provincie"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWFkZHJlc3M.option.c3RhdGVfdGF4X2lk.desc": {
+          "source": "State tax identifier",
+          "message": "Státní daňový identifikátor"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWFkZHJlc3M.option.c3RhdGVfdGF4X2lk.display_name": {
+          "source": "State Tax ID",
+          "message": "Státní DIČ"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWFkZHJlc3M.option.c3RhdGVfdGF4X2lk.short_desc": {
+          "source": "State tax identifier",
+          "message": "Státní daňový identifikátor"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWFkZHJlc3M.option.c3RyZWV0MQ.desc": {
+          "source": "First line of the street address",
+          "message": "První řádek adresy ulice"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWFkZHJlc3M.option.c3RyZWV0MQ.display_name": {
+          "source": "Street 1",
+          "message": "Ulice 1"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWFkZHJlc3M.option.c3RyZWV0MQ.short_desc": {
+          "source": "First line of the street address",
+          "message": "První řádek adresy ulice"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWFkZHJlc3M.option.c3RyZWV0Mg.desc": {
+          "source": "Second line of the street address (apartment, suite, etc.)",
+          "message": "Druhý řádek adresy (byt, apartmán atd.)"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWFkZHJlc3M.option.c3RyZWV0Mg.display_name": {
+          "source": "Street 2",
+          "message": "Ulice 2"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWFkZHJlc3M.option.c3RyZWV0Mg.short_desc": {
+          "source": "Second line of the street address",
+          "message": "Druhý řádek adresy ulice"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWFkZHJlc3M.option.cGhvbmU.desc": {
+          "source": "Phone number",
+          "message": "Telefonní číslo"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWFkZHJlc3M.option.cGhvbmU.display_name": {
+          "source": "Phone",
+          "message": "Telefon"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWFkZHJlc3M.option.cGhvbmU.short_desc": {
+          "source": "Phone number",
+          "message": "Telefonní číslo"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWFkZHJlc3M.option.cmVzaWRlbnRpYWw.desc": {
+          "source": "Set to `True` if the address is residential",
+          "message": "Nastavte na `True`, pokud je adresa rezidenční"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWFkZHJlc3M.option.cmVzaWRlbnRpYWw.display_name": {
+          "source": "Residential",
+          "message": "Rezidenční"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWFkZHJlc3M.option.cmVzaWRlbnRpYWw.short_desc": {
+          "source": "Whether the address is residential",
+          "message": "Zda je adresa rezidenční"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWFkZHJlc3M.option.dmVyaWZ5.allowed-value.c3RyaW5nOmRlbGl2ZXJ5.desc": {
+          "source": "Delivery verification",
+          "message": "Ověření doručení"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWFkZHJlc3M.option.dmVyaWZ5.allowed-value.c3RyaW5nOnppcDQ.desc": {
+          "source": "ZIP+4 verification (USPS)",
+          "message": "Ověření ZIP+4 (USPS)"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWFkZHJlc3M.option.dmVyaWZ5.desc": {
+          "source": "Verifications to perform; the API still creates the address even if verification fails. Allowed entries: `delivery`, `zip4`.",
+          "message": "Ověření, která se mají provést; API adresu vytvoří i v případě, že ověření selže. Povolené položky: `delivery`, `zip4`."
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWFkZHJlc3M.option.dmVyaWZ5.display_name": {
+          "source": "Verify",
+          "message": "Ověřit"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWFkZHJlc3M.option.dmVyaWZ5.short_desc": {
+          "source": "Verifications to perform (lenient)",
+          "message": "Ověření k provedení (mírná)"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWFkZHJlc3M.option.dmVyaWZ5X2NhcnJpZXI.allowed-value.c3RyaW5nOmZlZGV4.desc": {
+          "source": "FedEx",
+          "message": "FedEx"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWFkZHJlc3M.option.dmVyaWZ5X2NhcnJpZXI.allowed-value.c3RyaW5nOnVwcw.desc": {
+          "source": "UPS",
+          "message": "UPS"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWFkZHJlc3M.option.dmVyaWZ5X2NhcnJpZXI.desc": {
+          "source": "Optional carrier name for carrier-specific verification",
+          "message": "Volitelný název dopravce pro ověření specifické pro dopravce"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWFkZHJlc3M.option.dmVyaWZ5X2NhcnJpZXI.display_name": {
+          "source": "Verify Carrier",
+          "message": "Ověřit dopravce"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWFkZHJlc3M.option.dmVyaWZ5X2NhcnJpZXI.short_desc": {
+          "source": "Carrier-specific address verification",
+          "message": "Ověření adresy specifické pro dopravce"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWFkZHJlc3M.option.dmVyaWZ5X3N0cmljdA.allowed-value.c3RyaW5nOmRlbGl2ZXJ5.desc": {
+          "source": "Delivery verification",
+          "message": "Ověření doručení"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWFkZHJlc3M.option.dmVyaWZ5X3N0cmljdA.allowed-value.c3RyaW5nOnppcDQ.desc": {
+          "source": "ZIP+4 verification (USPS)",
+          "message": "Ověření ZIP+4 (USPS)"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWFkZHJlc3M.option.dmVyaWZ5X3N0cmljdA.desc": {
+          "source": "Verifications to perform; the API rejects the request if any strict verification fails. Allowed entries: `delivery`, `zip4`.",
+          "message": "Ověření, která se mají provést; API požadavek odmítne, pokud jakékoli přísné ověření selže. Povolené položky: `delivery`, `zip4`."
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWFkZHJlc3M.option.dmVyaWZ5X3N0cmljdA.display_name": {
+          "source": "Verify Strict",
+          "message": "Přísné ověření"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWFkZHJlc3M.option.dmVyaWZ5X3N0cmljdA.short_desc": {
+          "source": "Verifications to perform (strict)",
+          "message": "Ověření k provedení (přísná)"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWFkZHJlc3M.option.emlw.desc": {
+          "source": "ZIP / postal code",
+          "message": "PSČ / poštovní směrovací číslo"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWFkZHJlc3M.option.emlw.display_name": {
+          "source": "ZIP / Postal Code",
+          "message": "PSČ / Poštovní směrovací číslo"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWFkZHJlc3M.option.emlw.short_desc": {
+          "source": "ZIP or postal code",
+          "message": "PSČ nebo poštovní směrovací číslo"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWFkZHJlc3M.short_desc": {
+          "source": "Create a new EasyPost address",
+          "message": "Vytvořit novou adresu EasyPost"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWFuZC12ZXJpZnktYWRkcmVzcw.desc": {
+          "source": "Create a new address and verify it in a single API call.",
+          "message": "Vytvořit novou adresu a ověřit ji v rámci jednoho volání API."
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWFuZC12ZXJpZnktYWRkcmVzcw.display_name": {
+          "source": "Create and Verify Address",
+          "message": "Vytvořit a ověřit adresu"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWFuZC12ZXJpZnktYWRkcmVzcw.option.Y291bnRyeQ.desc": {
+          "source": "ISO 2-letter country code (e.g. `US`, `GB`). Defaults to `US`.",
+          "message": "Dvoupísmenný kód země ISO (např. `US`, `GB`). Výchozí hodnota je `US`."
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWFuZC12ZXJpZnktYWRkcmVzcw.option.Y291bnRyeQ.display_name": {
+          "source": "Country",
+          "message": "Země"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWFuZC12ZXJpZnktYWRkcmVzcw.option.Y291bnRyeQ.short_desc": {
+          "source": "ISO 2-letter country code",
+          "message": "Dvoupísmenný kód země ISO"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWFuZC12ZXJpZnktYWRkcmVzcw.option.Y29tcGFueQ.desc": {
+          "source": "Company name",
+          "message": "Název společnosti"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWFuZC12ZXJpZnktYWRkcmVzcw.option.Y29tcGFueQ.display_name": {
+          "source": "Company",
+          "message": "Společnost"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWFuZC12ZXJpZnktYWRkcmVzcw.option.Y29tcGFueQ.short_desc": {
+          "source": "Company name",
+          "message": "Název společnosti"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWFuZC12ZXJpZnktYWRkcmVzcw.option.Y2Fycmllcl9mYWNpbGl0eQ.desc": {
+          "source": "Optional carrier facility identifier",
+          "message": "Volitelný identifikátor provozovny dopravce"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWFuZC12ZXJpZnktYWRkcmVzcw.option.Y2Fycmllcl9mYWNpbGl0eQ.display_name": {
+          "source": "Carrier Facility",
+          "message": "Provozovna dopravce"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWFuZC12ZXJpZnktYWRkcmVzcw.option.Y2Fycmllcl9mYWNpbGl0eQ.short_desc": {
+          "source": "Carrier facility name",
+          "message": "Název provozovny dopravce"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWFuZC12ZXJpZnktYWRkcmVzcw.option.Y2l0eQ.desc": {
+          "source": "City name",
+          "message": "Název města"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWFuZC12ZXJpZnktYWRkcmVzcw.option.Y2l0eQ.display_name": {
+          "source": "City",
+          "message": "Město"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWFuZC12ZXJpZnktYWRkcmVzcw.option.Y2l0eQ.short_desc": {
+          "source": "City",
+          "message": "Město"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWFuZC12ZXJpZnktYWRkcmVzcw.option.ZW1haWw.desc": {
+          "source": "Email address",
+          "message": "E-mailová adresa"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWFuZC12ZXJpZnktYWRkcmVzcw.option.ZW1haWw.display_name": {
+          "source": "Email",
+          "message": "E-mail"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWFuZC12ZXJpZnktYWRkcmVzcw.option.ZW1haWw.short_desc": {
+          "source": "Email address",
+          "message": "E-mailová adresa"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWFuZC12ZXJpZnktYWRkcmVzcw.option.ZmVkZXJhbF90YXhfaWQ.desc": {
+          "source": "Federal tax identifier",
+          "message": "Federální daňový identifikátor"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWFuZC12ZXJpZnktYWRkcmVzcw.option.ZmVkZXJhbF90YXhfaWQ.display_name": {
+          "source": "Federal Tax ID",
+          "message": "Federální DIČ"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWFuZC12ZXJpZnktYWRkcmVzcw.option.ZmVkZXJhbF90YXhfaWQ.short_desc": {
+          "source": "Federal tax identifier",
+          "message": "Federální daňový identifikátor"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWFuZC12ZXJpZnktYWRkcmVzcw.option.bmFtZQ.desc": {
+          "source": "Recipient name",
+          "message": "Jméno příjemce"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWFuZC12ZXJpZnktYWRkcmVzcw.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "Název"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWFuZC12ZXJpZnktYWRkcmVzcw.option.bmFtZQ.short_desc": {
+          "source": "Recipient name",
+          "message": "Jméno příjemce"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWFuZC12ZXJpZnktYWRkcmVzcw.option.c3RhdGU.desc": {
+          "source": "State or province code (e.g. `CA`, `NY`)",
+          "message": "Kód státu nebo provincie (např. `CA`, `NY`)"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWFuZC12ZXJpZnktYWRkcmVzcw.option.c3RhdGU.display_name": {
+          "source": "State",
+          "message": "Stát"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWFuZC12ZXJpZnktYWRkcmVzcw.option.c3RhdGU.short_desc": {
+          "source": "State or province code",
+          "message": "Kód státu nebo provincie"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWFuZC12ZXJpZnktYWRkcmVzcw.option.c3RhdGVfdGF4X2lk.desc": {
+          "source": "State tax identifier",
+          "message": "Státní daňový identifikátor"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWFuZC12ZXJpZnktYWRkcmVzcw.option.c3RhdGVfdGF4X2lk.display_name": {
+          "source": "State Tax ID",
+          "message": "Státní DIČ"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWFuZC12ZXJpZnktYWRkcmVzcw.option.c3RhdGVfdGF4X2lk.short_desc": {
+          "source": "State tax identifier",
+          "message": "Státní daňový identifikátor"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWFuZC12ZXJpZnktYWRkcmVzcw.option.c3RyZWV0MQ.desc": {
+          "source": "First line of the street address",
+          "message": "První řádek adresy ulice"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWFuZC12ZXJpZnktYWRkcmVzcw.option.c3RyZWV0MQ.display_name": {
+          "source": "Street 1",
+          "message": "Ulice 1"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWFuZC12ZXJpZnktYWRkcmVzcw.option.c3RyZWV0MQ.short_desc": {
+          "source": "First line of the street address",
+          "message": "První řádek adresy ulice"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWFuZC12ZXJpZnktYWRkcmVzcw.option.c3RyZWV0Mg.desc": {
+          "source": "Second line of the street address (apartment, suite, etc.)",
+          "message": "Druhý řádek adresy (byt, apartmán atd.)"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWFuZC12ZXJpZnktYWRkcmVzcw.option.c3RyZWV0Mg.display_name": {
+          "source": "Street 2",
+          "message": "Ulice 2"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWFuZC12ZXJpZnktYWRkcmVzcw.option.c3RyZWV0Mg.short_desc": {
+          "source": "Second line of the street address",
+          "message": "Druhý řádek adresy ulice"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWFuZC12ZXJpZnktYWRkcmVzcw.option.cGhvbmU.desc": {
+          "source": "Phone number",
+          "message": "Telefonní číslo"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWFuZC12ZXJpZnktYWRkcmVzcw.option.cGhvbmU.display_name": {
+          "source": "Phone",
+          "message": "Telefon"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWFuZC12ZXJpZnktYWRkcmVzcw.option.cGhvbmU.short_desc": {
+          "source": "Phone number",
+          "message": "Telefonní číslo"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWFuZC12ZXJpZnktYWRkcmVzcw.option.cmVzaWRlbnRpYWw.desc": {
+          "source": "Set to `True` if the address is residential",
+          "message": "Nastavte na `True`, pokud je adresa rezidenční"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWFuZC12ZXJpZnktYWRkcmVzcw.option.cmVzaWRlbnRpYWw.display_name": {
+          "source": "Residential",
+          "message": "Rezidenční"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWFuZC12ZXJpZnktYWRkcmVzcw.option.cmVzaWRlbnRpYWw.short_desc": {
+          "source": "Whether the address is residential",
+          "message": "Zda je adresa rezidenční"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWFuZC12ZXJpZnktYWRkcmVzcw.option.dmVyaWZ5.allowed-value.c3RyaW5nOmRlbGl2ZXJ5.desc": {
+          "source": "Delivery verification",
+          "message": "Ověření doručení"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWFuZC12ZXJpZnktYWRkcmVzcw.option.dmVyaWZ5.allowed-value.c3RyaW5nOnppcDQ.desc": {
+          "source": "ZIP+4 verification (USPS)",
+          "message": "Ověření ZIP+4 (USPS)"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWFuZC12ZXJpZnktYWRkcmVzcw.option.dmVyaWZ5.desc": {
+          "source": "Verifications to perform; the API still creates the address even if verification fails. Allowed entries: `delivery`, `zip4`.",
+          "message": "Ověření, která se mají provést; API adresu vytvoří i v případě, že ověření selže. Povolené položky: `delivery`, `zip4`."
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWFuZC12ZXJpZnktYWRkcmVzcw.option.dmVyaWZ5.display_name": {
+          "source": "Verify",
+          "message": "Ověřit"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWFuZC12ZXJpZnktYWRkcmVzcw.option.dmVyaWZ5.short_desc": {
+          "source": "Verifications to perform (lenient)",
+          "message": "Ověření k provedení (mírná)"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWFuZC12ZXJpZnktYWRkcmVzcw.option.dmVyaWZ5X2NhcnJpZXI.allowed-value.c3RyaW5nOmZlZGV4.desc": {
+          "source": "FedEx",
+          "message": "FedEx"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWFuZC12ZXJpZnktYWRkcmVzcw.option.dmVyaWZ5X2NhcnJpZXI.allowed-value.c3RyaW5nOnVwcw.desc": {
+          "source": "UPS",
+          "message": "UPS"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWFuZC12ZXJpZnktYWRkcmVzcw.option.dmVyaWZ5X2NhcnJpZXI.desc": {
+          "source": "Optional carrier name for carrier-specific verification",
+          "message": "Volitelný název dopravce pro ověření specifické pro dopravce"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWFuZC12ZXJpZnktYWRkcmVzcw.option.dmVyaWZ5X2NhcnJpZXI.display_name": {
+          "source": "Verify Carrier",
+          "message": "Ověřit dopravce"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWFuZC12ZXJpZnktYWRkcmVzcw.option.dmVyaWZ5X2NhcnJpZXI.short_desc": {
+          "source": "Carrier-specific address verification",
+          "message": "Ověření adresy specifické pro dopravce"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWFuZC12ZXJpZnktYWRkcmVzcw.option.dmVyaWZ5X3N0cmljdA.allowed-value.c3RyaW5nOmRlbGl2ZXJ5.desc": {
+          "source": "Delivery verification",
+          "message": "Ověření doručení"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWFuZC12ZXJpZnktYWRkcmVzcw.option.dmVyaWZ5X3N0cmljdA.allowed-value.c3RyaW5nOnppcDQ.desc": {
+          "source": "ZIP+4 verification (USPS)",
+          "message": "Ověření ZIP+4 (USPS)"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWFuZC12ZXJpZnktYWRkcmVzcw.option.dmVyaWZ5X3N0cmljdA.desc": {
+          "source": "Verifications to perform; the API rejects the request if any strict verification fails. Allowed entries: `delivery`, `zip4`.",
+          "message": "Ověření, která se mají provést; API požadavek odmítne, pokud jakékoli přísné ověření selže. Povolené položky: `delivery`, `zip4`."
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWFuZC12ZXJpZnktYWRkcmVzcw.option.dmVyaWZ5X3N0cmljdA.display_name": {
+          "source": "Verify Strict",
+          "message": "Přísné ověření"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWFuZC12ZXJpZnktYWRkcmVzcw.option.dmVyaWZ5X3N0cmljdA.short_desc": {
+          "source": "Verifications to perform (strict)",
+          "message": "Ověření k provedení (přísná)"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWFuZC12ZXJpZnktYWRkcmVzcw.option.emlw.desc": {
+          "source": "ZIP / postal code",
+          "message": "PSČ / poštovní směrovací číslo"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWFuZC12ZXJpZnktYWRkcmVzcw.option.emlw.display_name": {
+          "source": "ZIP / Postal Code",
+          "message": "PSČ / Poštovní směrovací číslo"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWFuZC12ZXJpZnktYWRkcmVzcw.option.emlw.short_desc": {
+          "source": "ZIP or postal code",
+          "message": "PSČ nebo poštovní směrovací číslo"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWFuZC12ZXJpZnktYWRkcmVzcw.short_desc": {
+          "source": "Create and verify an address in one call",
+          "message": "Vytvořit a ověřit adresu v jednom volání"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWJhdGNo.desc": {
+          "source": "Create a new batch of shipments.",
+          "message": "Vytvořit novou dávku zásilek."
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWJhdGNo.display_name": {
+          "source": "Create Batch",
+          "message": "Vytvořit dávku"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWJhdGNo.option.c2hpcG1lbnRz.desc": {
+          "source": "List of shipment references (each `{id: shp_xxx}`) to include in the new batch",
+          "message": "Seznam referencí zásilek (každá `{id: shp_xxx}`), které mají být zahrnuty do nové dávky"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWJhdGNo.option.c2hpcG1lbnRz.display_name": {
+          "source": "Shipments",
+          "message": "Zásilky"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWJhdGNo.option.c2hpcG1lbnRz.short_desc": {
+          "source": "Shipments to include in the batch",
+          "message": "Zásilky k zahrnutí do dávky"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWJhdGNo.option.cmVmZXJlbmNl.desc": {
+          "source": "Caller-supplied reference",
+          "message": "Reference zadaná volajícím"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWJhdGNo.option.cmVmZXJlbmNl.display_name": {
+          "source": "Reference",
+          "message": "Reference"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWJhdGNo.option.cmVmZXJlbmNl.short_desc": {
+          "source": "Caller-supplied reference",
+          "message": "Reference zadaná volajícím"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWJhdGNo.short_desc": {
+          "source": "Create a batch",
+          "message": "Vytvořit dávku"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWN1c3RvbXMtaW5mbw.desc": {
+          "source": "Create a customs info object for use with international shipments.",
+          "message": "Vytvořit objekt celních informací pro použití s mezinárodními zásilkami."
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWN1c3RvbXMtaW5mbw.display_name": {
+          "source": "Create Customs Info",
+          "message": "Vytvořit celní informace"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWN1c3RvbXMtaW5mbw.option.Y29udGVudHNfZXhwbGFuYXRpb24.desc": {
+          "source": "Free-text explanation of contents (required when `contents_type` is `other`)",
+          "message": "Volný text popisu obsahu (vyžadováno, pokud je `contents_type` nastaveno na `other`)"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWN1c3RvbXMtaW5mbw.option.Y29udGVudHNfZXhwbGFuYXRpb24.display_name": {
+          "source": "Contents Explanation",
+          "message": "Popis obsahu"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWN1c3RvbXMtaW5mbw.option.Y29udGVudHNfZXhwbGFuYXRpb24.short_desc": {
+          "source": "Required if contents_type is other",
+          "message": "Vyžadováno, pokud je contents_type nastaveno na other"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWN1c3RvbXMtaW5mbw.option.Y29udGVudHNfdHlwZQ.allowed-value.c3RyaW5nOm1lcmNoYW5kaXNl.desc": {
+          "source": "Merchandise",
+          "message": "Zboží"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWN1c3RvbXMtaW5mbw.option.Y29udGVudHNfdHlwZQ.allowed-value.c3RyaW5nOm90aGVy.desc": {
+          "source": "Other (requires `contents_explanation`)",
+          "message": "Jiné (vyžaduje `contents_explanation`)"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWN1c3RvbXMtaW5mbw.option.Y29udGVudHNfdHlwZQ.allowed-value.c3RyaW5nOmRhbmdlcm91c19nb29kcw.desc": {
+          "source": "Dangerous goods",
+          "message": "Nebezpečné zboží"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWN1c3RvbXMtaW5mbw.option.Y29udGVudHNfdHlwZQ.allowed-value.c3RyaW5nOmRvY3VtZW50cw.desc": {
+          "source": "Documents",
+          "message": "Dokumenty"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWN1c3RvbXMtaW5mbw.option.Y29udGVudHNfdHlwZQ.allowed-value.c3RyaW5nOmdpZnQ.desc": {
+          "source": "Gift",
+          "message": "Dárek"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWN1c3RvbXMtaW5mbw.option.Y29udGVudHNfdHlwZQ.allowed-value.c3RyaW5nOmh1bWFuaXRhcmlhbl9kb25hdGlvbg.desc": {
+          "source": "Humanitarian donation",
+          "message": "Humanitární dar"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWN1c3RvbXMtaW5mbw.option.Y29udGVudHNfdHlwZQ.allowed-value.c3RyaW5nOnJldHVybmVkX2dvb2Rz.desc": {
+          "source": "Returned goods",
+          "message": "Vrácené zboží"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWN1c3RvbXMtaW5mbw.option.Y29udGVudHNfdHlwZQ.allowed-value.c3RyaW5nOnNhbXBsZQ.desc": {
+          "source": "Sample",
+          "message": "Vzorek"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWN1c3RvbXMtaW5mbw.option.Y29udGVudHNfdHlwZQ.desc": {
+          "source": "Type of contents being shipped",
+          "message": "Typ přepravovaného obsahu"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWN1c3RvbXMtaW5mbw.option.Y29udGVudHNfdHlwZQ.display_name": {
+          "source": "Contents Type",
+          "message": "Typ obsahu"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWN1c3RvbXMtaW5mbw.option.Y29udGVudHNfdHlwZQ.short_desc": {
+          "source": "Type of contents",
+          "message": "Typ obsahu"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWN1c3RvbXMtaW5mbw.option.Y3VzdG9tc19jZXJ0aWZ5.desc": {
+          "source": "Set to `True` to certify the customs declarations",
+          "message": "Nastavte na `True` pro potvrzení celních prohlášení"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWN1c3RvbXMtaW5mbw.option.Y3VzdG9tc19jZXJ0aWZ5.display_name": {
+          "source": "Customs Certify",
+          "message": "Celní potvrzení"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWN1c3RvbXMtaW5mbw.option.Y3VzdG9tc19jZXJ0aWZ5.short_desc": {
+          "source": "Certify customs",
+          "message": "Potvrdit celní prohlášení"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWN1c3RvbXMtaW5mbw.option.Y3VzdG9tc19pdGVtcw.desc": {
+          "source": "List of customs items in the shipment",
+          "message": "Seznam celních položek v zásilce"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWN1c3RvbXMtaW5mbw.option.Y3VzdG9tc19pdGVtcw.display_name": {
+          "source": "Customs Items",
+          "message": "Celní položky"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWN1c3RvbXMtaW5mbw.option.Y3VzdG9tc19pdGVtcw.short_desc": {
+          "source": "List of items in the shipment",
+          "message": "Seznam položek v zásilce"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWN1c3RvbXMtaW5mbw.option.Y3VzdG9tc19zaWduZXI.desc": {
+          "source": "Name of the person certifying the customs declarations",
+          "message": "Jméno osoby potvrzující celní prohlášení"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWN1c3RvbXMtaW5mbw.option.Y3VzdG9tc19zaWduZXI.display_name": {
+          "source": "Customs Signer",
+          "message": "Podepisující osoba celního prohlášení"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWN1c3RvbXMtaW5mbw.option.Y3VzdG9tc19zaWduZXI.short_desc": {
+          "source": "Signer name",
+          "message": "Jméno podepisující osoby"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWN1c3RvbXMtaW5mbw.option.ZGVjbGFyYXRpb24.desc": {
+          "source": "Free-form customs declaration text",
+          "message": "Volný text celního prohlášení"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWN1c3RvbXMtaW5mbw.option.ZGVjbGFyYXRpb24.display_name": {
+          "source": "Declaration",
+          "message": "Prohlášení"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWN1c3RvbXMtaW5mbw.option.ZGVjbGFyYXRpb24.short_desc": {
+          "source": "Free-form declaration text",
+          "message": "Volný text prohlášení"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWN1c3RvbXMtaW5mbw.option.ZWVsX3BmYw.desc": {
+          "source": "Either an EEL code or a Proof of Filing Citation. Use `NOEEI 30.37(a)` for shipments under USD $2,500.",
+          "message": "Kód EEL nebo Proof of Filing Citation. Pro zásilky do 2 500 USD použijte `NOEEI 30.37(a)`."
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWN1c3RvbXMtaW5mbw.option.ZWVsX3BmYw.display_name": {
+          "source": "EEL/PFC",
+          "message": "EEL/PFC"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWN1c3RvbXMtaW5mbw.option.ZWVsX3BmYw.short_desc": {
+          "source": "EEL or PFC value",
+          "message": "Hodnota EEL nebo PFC"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWN1c3RvbXMtaW5mbw.option.bm9uX2RlbGl2ZXJ5X29wdGlvbg.allowed-value.c3RyaW5nOmFiYW5kb24.desc": {
+          "source": "Abandon",
+          "message": "Zanechat"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWN1c3RvbXMtaW5mbw.option.bm9uX2RlbGl2ZXJ5X29wdGlvbg.allowed-value.c3RyaW5nOnJldHVybg.desc": {
+          "source": "Return to sender",
+          "message": "Vrátit odesílateli"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWN1c3RvbXMtaW5mbw.option.bm9uX2RlbGl2ZXJ5X29wdGlvbg.desc": {
+          "source": "Action to take if the shipment cannot be delivered. Defaults to `return` if not specified.",
+          "message": "Akce, která se má provést, pokud zásilku nelze doručit. Pokud není uvedeno, použije se výchozí hodnota `return`."
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWN1c3RvbXMtaW5mbw.option.bm9uX2RlbGl2ZXJ5X29wdGlvbg.display_name": {
+          "source": "Non-Delivery Option",
+          "message": "Možnost při nedoručení"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWN1c3RvbXMtaW5mbw.option.bm9uX2RlbGl2ZXJ5X29wdGlvbg.short_desc": {
+          "source": "What to do if delivery fails",
+          "message": "Co dělat při neúspěšném doručení"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWN1c3RvbXMtaW5mbw.option.cmVzdHJpY3Rpb25fY29tbWVudHM.desc": {
+          "source": "Comments on the restriction (required when `restriction_type` is not `none`)",
+          "message": "Komentáře k omezení (vyžadováno, pokud `restriction_type` není `none`)"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWN1c3RvbXMtaW5mbw.option.cmVzdHJpY3Rpb25fY29tbWVudHM.display_name": {
+          "source": "Restriction Comments",
+          "message": "Komentáře k omezení"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWN1c3RvbXMtaW5mbw.option.cmVzdHJpY3Rpb25fY29tbWVudHM.short_desc": {
+          "source": "Comments on the restriction",
+          "message": "Komentáře k omezení"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWN1c3RvbXMtaW5mbw.option.cmVzdHJpY3Rpb25fdHlwZQ.allowed-value.c3RyaW5nOm5vbmU.desc": {
+          "source": "None",
+          "message": "Žádné"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWN1c3RvbXMtaW5mbw.option.cmVzdHJpY3Rpb25fdHlwZQ.allowed-value.c3RyaW5nOm90aGVy.desc": {
+          "source": "Other",
+          "message": "Ostatní"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWN1c3RvbXMtaW5mbw.option.cmVzdHJpY3Rpb25fdHlwZQ.allowed-value.c3RyaW5nOnF1YXJhbnRpbmU.desc": {
+          "source": "Quarantine",
+          "message": "Karanténa"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWN1c3RvbXMtaW5mbw.option.cmVzdHJpY3Rpb25fdHlwZQ.allowed-value.c3RyaW5nOnNhbml0YXJ5X3BoeXRvc2FuaXRhcnlfaW5zcGVjdGlvbg.desc": {
+          "source": "Sanitary / phytosanitary inspection",
+          "message": "Sanitární / fytosanitární kontrola"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWN1c3RvbXMtaW5mbw.option.cmVzdHJpY3Rpb25fdHlwZQ.desc": {
+          "source": "Type of customs restriction",
+          "message": "Typ celního omezení"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWN1c3RvbXMtaW5mbw.option.cmVzdHJpY3Rpb25fdHlwZQ.display_name": {
+          "source": "Restriction Type",
+          "message": "Typ omezení"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWN1c3RvbXMtaW5mbw.option.cmVzdHJpY3Rpb25fdHlwZQ.short_desc": {
+          "source": "Restriction category",
+          "message": "Kategorie omezení"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWN1c3RvbXMtaW5mbw.short_desc": {
+          "source": "Create a customs info object",
+          "message": "Vytvořit objekt celních informací"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWN1c3RvbXMtaXRlbQ.desc": {
+          "source": "Create a customs item for use in customs info objects.",
+          "message": "Vytvoří celní položku pro použití v objektech celních informací."
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWN1c3RvbXMtaXRlbQ.display_name": {
+          "source": "Create Customs Item",
+          "message": "Vytvořit celní položku"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWN1c3RvbXMtaXRlbQ.option.Y29kZQ.desc": {
+          "source": "Internal reference code",
+          "message": "Interní referenční kód"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWN1c3RvbXMtaXRlbQ.option.Y29kZQ.display_name": {
+          "source": "Code",
+          "message": "Kód"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWN1c3RvbXMtaXRlbQ.option.Y29kZQ.short_desc": {
+          "source": "Internal item code",
+          "message": "Interní kód položky"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWN1c3RvbXMtaXRlbQ.option.Y3VycmVuY3k.desc": {
+          "source": "ISO 4217 currency code",
+          "message": "Kód měny ISO 4217"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWN1c3RvbXMtaXRlbQ.option.Y3VycmVuY3k.display_name": {
+          "source": "Currency",
+          "message": "Měna"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWN1c3RvbXMtaXRlbQ.option.Y3VycmVuY3k.short_desc": {
+          "source": "ISO currency code",
+          "message": "Kód měny ISO"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWN1c3RvbXMtaXRlbQ.option.ZGVzY3JpcHRpb24.desc": {
+          "source": "Description of the item being shipped",
+          "message": "Popis přepravované položky"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWN1c3RvbXMtaXRlbQ.option.ZGVzY3JpcHRpb24.display_name": {
+          "source": "Description",
+          "message": "Popis"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWN1c3RvbXMtaXRlbQ.option.ZGVzY3JpcHRpb24.short_desc": {
+          "source": "Item description",
+          "message": "Popis položky"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWN1c3RvbXMtaXRlbQ.option.ZWNjbg.desc": {
+          "source": "Export Control Classification Number",
+          "message": "Export Control Classification Number"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWN1c3RvbXMtaXRlbQ.option.ZWNjbg.display_name": {
+          "source": "ECCN",
+          "message": "ECCN"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWN1c3RvbXMtaXRlbQ.option.ZWNjbg.short_desc": {
+          "source": "Export Control Classification Number",
+          "message": "Export Control Classification Number"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWN1c3RvbXMtaXRlbQ.option.aHNfdGFyaWZmX251bWJlcg.desc": {
+          "source": "Six-digit Harmonized System tariff number",
+          "message": "Šestimístné tarifní číslo harmonizovaného systému"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWN1c3RvbXMtaXRlbQ.option.aHNfdGFyaWZmX251bWJlcg.display_name": {
+          "source": "HS Tariff Number",
+          "message": "Číslo celního sazebníku HS"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWN1c3RvbXMtaXRlbQ.option.aHNfdGFyaWZmX251bWJlcg.short_desc": {
+          "source": "HS tariff number",
+          "message": "Číslo celního sazebníku HS"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWN1c3RvbXMtaXRlbQ.option.b3JpZ2luX2NvdW50cnk.desc": {
+          "source": "ISO 2-letter country code of origin",
+          "message": "Dvoupísmenný ISO kód země původu"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWN1c3RvbXMtaXRlbQ.option.b3JpZ2luX2NvdW50cnk.display_name": {
+          "source": "Origin Country",
+          "message": "Země odeslání"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWN1c3RvbXMtaXRlbQ.option.b3JpZ2luX2NvdW50cnk.short_desc": {
+          "source": "ISO 2-letter origin country",
+          "message": "Dvoupísmenný ISO kód země původu"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWN1c3RvbXMtaXRlbQ.option.bWFudWZhY3R1cmVy.desc": {
+          "source": "Manufacturer of the item",
+          "message": "Výrobce položky"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWN1c3RvbXMtaXRlbQ.option.bWFudWZhY3R1cmVy.display_name": {
+          "source": "Manufacturer",
+          "message": "Výrobce"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWN1c3RvbXMtaXRlbQ.option.bWFudWZhY3R1cmVy.short_desc": {
+          "source": "Manufacturer name",
+          "message": "Název výrobce"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWN1c3RvbXMtaXRlbQ.option.cHJpbnRlZF9jb21tb2RpdHlfaWRlbnRpZmllcg.desc": {
+          "source": "Optional identifier printed on customs forms",
+          "message": "Volitelný identifikátor vytištěný na celních formulářích"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWN1c3RvbXMtaXRlbQ.option.cHJpbnRlZF9jb21tb2RpdHlfaWRlbnRpZmllcg.display_name": {
+          "source": "Printed Commodity Identifier",
+          "message": "Vytištěný identifikátor zboží"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWN1c3RvbXMtaXRlbQ.option.cHJpbnRlZF9jb21tb2RpdHlfaWRlbnRpZmllcg.short_desc": {
+          "source": "Identifier printed on label",
+          "message": "Identifikátor vytištěný na štítku"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWN1c3RvbXMtaXRlbQ.option.cXVhbnRpdHk.desc": {
+          "source": "Number of units being shipped",
+          "message": "Počet přepravovaných kusů"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWN1c3RvbXMtaXRlbQ.option.cXVhbnRpdHk.display_name": {
+          "source": "Quantity",
+          "message": "Množství"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWN1c3RvbXMtaXRlbQ.option.cXVhbnRpdHk.short_desc": {
+          "source": "Number of units",
+          "message": "Počet kusů"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWN1c3RvbXMtaXRlbQ.option.d2VpZ2h0.desc": {
+          "source": "Total weight in ounces",
+          "message": "Celková hmotnost v uncích"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWN1c3RvbXMtaXRlbQ.option.d2VpZ2h0.display_name": {
+          "source": "Weight",
+          "message": "Hmotnost"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWN1c3RvbXMtaXRlbQ.option.d2VpZ2h0.short_desc": {
+          "source": "Weight in ounces",
+          "message": "Hmotnost v uncích"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWN1c3RvbXMtaXRlbQ.option.dmFsdWU.desc": {
+          "source": "Total value of all items as a string (e.g. `\"12.50\"`)",
+          "message": "Celková hodnota všech položek jako řetězec (např. `\"12.50\"`)"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWN1c3RvbXMtaXRlbQ.option.dmFsdWU.display_name": {
+          "source": "Value",
+          "message": "Hodnota"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWN1c3RvbXMtaXRlbQ.option.dmFsdWU.short_desc": {
+          "source": "Total value as a string",
+          "message": "Celková hodnota jako řetězec"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWN1c3RvbXMtaXRlbQ.short_desc": {
+          "source": "Create a customs item",
+          "message": "Vytvořit celní položku"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWNhcnJpZXItYWNjb3VudA.desc": {
+          "source": "Create a new carrier account. Selecting a carrier type populates the `credentials` and `test_credentials` fields with that carrier's specific schema.",
+          "message": "Vytvořit nový účet dopravce. Výběrem typu dopravce se pole `credentials` a `test_credentials` vyplní schématem specifickým pro daného dopravce."
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWNhcnJpZXItYWNjb3VudA.display_name": {
+          "source": "Create Carrier Account",
+          "message": "Vytvořit účet dopravce"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWNhcnJpZXItYWNjb3VudA.option.Y3JlZGVudGlhbHM.desc": {
+          "source": "Carrier-specific credentials hash for production. Required for most carrier types (except `custom_workflow`). The shape varies per carrier - select a `type` to populate this field with the carrier's specific schema.\n\n**Example (UPS)**: `{\"account_number\": \"...\", \"user_id\": \"...\", \"password\": \"...\"}`",
+          "message": "Hash přihlašovacích údajů specifických pro dopravce pro produkční prostředí. Vyžadováno pro většinu typů dopravců (kromě `custom_workflow`). Struktura se liší podle dopravce – výběrem `type` toto pole vyplníte schématem specifickým pro daného dopravce.\n\n**Příklad (UPS)**: `{\"account_number\": \"...\", \"user_id\": \"...\", \"password\": \"...\"}`"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWNhcnJpZXItYWNjb3VudA.option.Y3JlZGVudGlhbHM.display_name": {
+          "source": "Credentials",
+          "message": "Přihlašovací údaje"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWNhcnJpZXItYWNjb3VudA.option.Y3JlZGVudGlhbHM.short_desc": {
+          "source": "Production credentials hash",
+          "message": "Hash produkčních přihlašovacích údajů"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWNhcnJpZXItYWNjb3VudA.option.ZGVzY3JpcHRpb24.desc": {
+          "source": "Human-readable description for this account",
+          "message": "Čitelný popis tohoto účtu"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWNhcnJpZXItYWNjb3VudA.option.ZGVzY3JpcHRpb24.display_name": {
+          "source": "Description",
+          "message": "Popis"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWNhcnJpZXItYWNjb3VudA.option.ZGVzY3JpcHRpb24.short_desc": {
+          "source": "Account description",
+          "message": "Popis účtu"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWNhcnJpZXItYWNjb3VudA.option.cmVmZXJlbmNl.desc": {
+          "source": "Caller-supplied reference",
+          "message": "Reference zadaná volajícím"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWNhcnJpZXItYWNjb3VudA.option.cmVmZXJlbmNl.display_name": {
+          "source": "Reference",
+          "message": "Reference"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWNhcnJpZXItYWNjb3VudA.option.cmVmZXJlbmNl.short_desc": {
+          "source": "Caller-supplied reference",
+          "message": "Reference zadaná volajícím"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWNhcnJpZXItYWNjb3VudA.option.dGVzdF9jcmVkZW50aWFscw.desc": {
+          "source": "Carrier-specific credentials hash for the test environment. Same shape as `credentials` - select a `type` to populate this field with the carrier's specific schema.",
+          "message": "Hash přihlašovacích údajů specifických pro dopravce pro testovací prostředí. Stejná struktura jako `credentials` – výběrem `type` toto pole vyplníte konkrétním schématem dopravce."
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWNhcnJpZXItYWNjb3VudA.option.dGVzdF9jcmVkZW50aWFscw.display_name": {
+          "source": "Test Credentials",
+          "message": "Testovací přihlašovací údaje"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWNhcnJpZXItYWNjb3VudA.option.dGVzdF9jcmVkZW50aWFscw.short_desc": {
+          "source": "Test credentials hash",
+          "message": "Hash testovacích přihlašovacích údajů"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWNhcnJpZXItYWNjb3VudA.option.dHlwZQ.desc": {
+          "source": "Carrier account type (e.g. `UpsAccount`, `FedExAccount`, `DhlExpressAccount`). Selecting a carrier type updates the `credentials` and `test_credentials` fields to match that carrier's schema. See [carrier types](https://docs.easypost.com/docs/carrier-types) for the full list.",
+          "message": "Typ účtu dopravce (např. `UpsAccount`, `FedExAccount`, `DhlExpressAccount`). Výběr typu dopravce aktualizuje pole `credentials` a `test_credentials` tak, aby odpovídala schématu daného dopravce. Úplný seznam naleznete v části [carrier types](https://docs.easypost.com/docs/carrier-types)."
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWNhcnJpZXItYWNjb3VudA.option.dHlwZQ.display_name": {
+          "source": "Type",
+          "message": "Typ"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWNhcnJpZXItYWNjb3VudA.option.dHlwZQ.short_desc": {
+          "source": "Carrier account type",
+          "message": "Typ účtu dopravce"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWNhcnJpZXItYWNjb3VudA.short_desc": {
+          "source": "Create a carrier account",
+          "message": "Vytvořit účet dopravce"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWluc3VyYW5jZQ.desc": {
+          "source": "Create a standalone insurance record for a tracking code.",
+          "message": "Vytvořit samostatný záznam o pojištění pro sledovací kód."
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWluc3VyYW5jZQ.display_name": {
+          "source": "Create Insurance",
+          "message": "Vytvořit pojištění"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWluc3VyYW5jZQ.option.Y2Fycmllcg.desc": {
+          "source": "Carrier name (e.g. `USPS`, `UPS`, `FedEx`). EasyPost will auto-detect from `tracking_code` when omitted.",
+          "message": "Název dopravce (např. `USPS`, `UPS`, `FedEx`). Pokud je vynecháno, EasyPost jej automaticky rozpozná z `tracking_code`."
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWluc3VyYW5jZQ.option.Y2Fycmllcg.display_name": {
+          "source": "Carrier",
+          "message": "Dopravce"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWluc3VyYW5jZQ.option.Y2Fycmllcg.short_desc": {
+          "source": "Carrier name",
+          "message": "Název přepravce"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWluc3VyYW5jZQ.option.YW1vdW50.desc": {
+          "source": "Amount to insure as a string (e.g. `\"100.00\"`)",
+          "message": "Pojistná částka jako řetězec (např. `\"100.00\"`)"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWluc3VyYW5jZQ.option.YW1vdW50.display_name": {
+          "source": "Amount",
+          "message": "Množství"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWluc3VyYW5jZQ.option.YW1vdW50.short_desc": {
+          "source": "Amount to insure (string)",
+          "message": "Pojistná částka (řetězec)"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWluc3VyYW5jZQ.option.ZnJvbV9hZGRyZXNz.desc": {
+          "source": "Origin address (or `{id: adr_xxx}`)",
+          "message": "Výchozí adresa (nebo `{id: adr_xxx}`)"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWluc3VyYW5jZQ.option.ZnJvbV9hZGRyZXNz.display_name": {
+          "source": "From Address",
+          "message": "Adresa odesílatele"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWluc3VyYW5jZQ.option.ZnJvbV9hZGRyZXNz.short_desc": {
+          "source": "Origin address",
+          "message": "Výchozí adresa"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWluc3VyYW5jZQ.option.cmVmZXJlbmNl.desc": {
+          "source": "Caller-supplied reference",
+          "message": "Reference zadaná volajícím"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWluc3VyYW5jZQ.option.cmVmZXJlbmNl.display_name": {
+          "source": "Reference",
+          "message": "Reference"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWluc3VyYW5jZQ.option.cmVmZXJlbmNl.short_desc": {
+          "source": "Caller-supplied reference",
+          "message": "Reference zadaná volajícím"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWluc3VyYW5jZQ.option.dG9fYWRkcmVzcw.desc": {
+          "source": "Destination address (or `{id: adr_xxx}`)",
+          "message": "Cílová adresa (nebo `{id: adr_xxx}`)"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWluc3VyYW5jZQ.option.dG9fYWRkcmVzcw.display_name": {
+          "source": "To Address",
+          "message": "Cílová adresa"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWluc3VyYW5jZQ.option.dG9fYWRkcmVzcw.short_desc": {
+          "source": "Destination address",
+          "message": "Cílová adresa"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWluc3VyYW5jZQ.option.dHJhY2tpbmdfY29kZQ.desc": {
+          "source": "Carrier tracking code for the shipment being insured",
+          "message": "Sledovací kód dopravce pro pojišťovanou zásilku"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWluc3VyYW5jZQ.option.dHJhY2tpbmdfY29kZQ.display_name": {
+          "source": "Tracking Code",
+          "message": "Sledovací kód"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWluc3VyYW5jZQ.option.dHJhY2tpbmdfY29kZQ.short_desc": {
+          "source": "Carrier tracking code",
+          "message": "Sledovací kód dopravce"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWluc3VyYW5jZQ.short_desc": {
+          "source": "Create a standalone insurance record",
+          "message": "Vytvořit samostatný záznam o pojištění"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXBhcmNlbA.desc": {
+          "source": "Create a new EasyPost parcel by dimensions and weight, or with a `predefined_package`.",
+          "message": "Vytvořit nový balík EasyPost podle rozměrů a hmotnosti nebo pomocí `predefined_package`."
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXBhcmNlbA.display_name": {
+          "source": "Create Parcel",
+          "message": "Vytvořit balík"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXBhcmNlbA.option.aGVpZ2h0.desc": {
+          "source": "Parcel height in inches",
+          "message": "Výška balíku v palcích"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXBhcmNlbA.option.aGVpZ2h0.display_name": {
+          "source": "Height",
+          "message": "Výška"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXBhcmNlbA.option.aGVpZ2h0.short_desc": {
+          "source": "Height in inches",
+          "message": "Výška v palcích"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXBhcmNlbA.option.bGVuZ3Ro.desc": {
+          "source": "Parcel length in inches",
+          "message": "Délka balíku v palcích"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXBhcmNlbA.option.bGVuZ3Ro.display_name": {
+          "source": "Length",
+          "message": "Délka"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXBhcmNlbA.option.bGVuZ3Ro.short_desc": {
+          "source": "Length in inches",
+          "message": "Délka v palcích"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXBhcmNlbA.option.cHJlZGVmaW5lZF9wYWNrYWdl.allowed-value.c3RyaW5nOk1lZGl1bUV4cHJlc3NCb3g.desc": {
+          "source": "Medium Express Box",
+          "message": "Medium Express Box"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXBhcmNlbA.option.cHJlZGVmaW5lZF9wYWNrYWdl.allowed-value.c3RyaW5nOk1lZGl1bUZsYXRSYXRlQm94.desc": {
+          "source": "USPS Medium Flat Rate Box",
+          "message": "USPS Medium Flat Rate Box"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXBhcmNlbA.option.cHJlZGVmaW5lZF9wYWNrYWdl.allowed-value.c3RyaW5nOk1lZGl1bVBhY2thZ2U.desc": {
+          "source": "Medium Package",
+          "message": "Medium Package"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXBhcmNlbA.option.cHJlZGVmaW5lZF9wYWNrYWdl.allowed-value.c3RyaW5nOkNhcmQ.desc": {
+          "source": "Card",
+          "message": "Karta"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXBhcmNlbA.option.cHJlZGVmaW5lZF9wYWNrYWdl.allowed-value.c3RyaW5nOkRITEV4cHJlc3NFbnZlbG9wZQ.desc": {
+          "source": "DHL Express Envelope",
+          "message": "DHL Express Envelope"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXBhcmNlbA.option.cHJlZGVmaW5lZF9wYWNrYWdl.allowed-value.c3RyaW5nOkRITEZseWVy.desc": {
+          "source": "DHL Flyer",
+          "message": "DHL Flyer"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXBhcmNlbA.option.cHJlZGVmaW5lZF9wYWNrYWdl.allowed-value.c3RyaW5nOkRvY3VtZW50.desc": {
+          "source": "Document",
+          "message": "Dokument"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXBhcmNlbA.option.cHJlZGVmaW5lZF9wYWNrYWdl.allowed-value.c3RyaW5nOkRvbWVzdGlj.desc": {
+          "source": "Domestic",
+          "message": "Domestic"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXBhcmNlbA.option.cHJlZGVmaW5lZF9wYWNrYWdl.allowed-value.c3RyaW5nOkV4cHJlc3NEb2N1bWVudA.desc": {
+          "source": "Express Document",
+          "message": "Express Document"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXBhcmNlbA.option.cHJlZGVmaW5lZF9wYWNrYWdl.allowed-value.c3RyaW5nOkZlZEV4MTBrZ0JveA.desc": {
+          "source": "FedEx 10kg Box",
+          "message": "FedEx 10kg Box"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXBhcmNlbA.option.cHJlZGVmaW5lZF9wYWNrYWdl.allowed-value.c3RyaW5nOkZlZEV4MjVrZ0JveA.desc": {
+          "source": "FedEx 25kg Box",
+          "message": "FedEx 25kg Box"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXBhcmNlbA.option.cHJlZGVmaW5lZF9wYWNrYWdl.allowed-value.c3RyaW5nOkZlZEV4Qm94.desc": {
+          "source": "FedEx Box",
+          "message": "FedEx Box"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXBhcmNlbA.option.cHJlZGVmaW5lZF9wYWNrYWdl.allowed-value.c3RyaW5nOkZlZEV4RW52ZWxvcGU.desc": {
+          "source": "FedEx Envelope",
+          "message": "FedEx Envelope"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXBhcmNlbA.option.cHJlZGVmaW5lZF9wYWNrYWdl.allowed-value.c3RyaW5nOkZlZEV4TGFyZ2VCb3g.desc": {
+          "source": "FedEx Large Box",
+          "message": "FedEx Large Box"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXBhcmNlbA.option.cHJlZGVmaW5lZF9wYWNrYWdl.allowed-value.c3RyaW5nOkZlZEV4TWVkaXVtQm94.desc": {
+          "source": "FedEx Medium Box",
+          "message": "FedEx Medium Box"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXBhcmNlbA.option.cHJlZGVmaW5lZF9wYWNrYWdl.allowed-value.c3RyaW5nOkZlZEV4U21hbGxCb3g.desc": {
+          "source": "FedEx Small Box",
+          "message": "FedEx Small Box"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXBhcmNlbA.option.cHJlZGVmaW5lZF9wYWNrYWdl.allowed-value.c3RyaW5nOkZlZEV4UGFr.desc": {
+          "source": "FedEx Pak",
+          "message": "FedEx Pak"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXBhcmNlbA.option.cHJlZGVmaW5lZF9wYWNrYWdl.allowed-value.c3RyaW5nOkZlZEV4VHViZQ.desc": {
+          "source": "FedEx Tube",
+          "message": "FedEx Tube"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXBhcmNlbA.option.cHJlZGVmaW5lZF9wYWNrYWdl.allowed-value.c3RyaW5nOkZsYXQ.desc": {
+          "source": "Flat",
+          "message": "Flat"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXBhcmNlbA.option.cHJlZGVmaW5lZF9wYWNrYWdl.allowed-value.c3RyaW5nOkZsYXRSYXRlRW52ZWxvcGU.desc": {
+          "source": "USPS Flat Rate Envelope",
+          "message": "USPS Flat Rate Envelope"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXBhcmNlbA.option.cHJlZGVmaW5lZF9wYWNrYWdl.allowed-value.c3RyaW5nOkp1bWJvRG9jdW1lbnQ.desc": {
+          "source": "Jumbo Document",
+          "message": "Jumbo Document"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXBhcmNlbA.option.cHJlZGVmaW5lZF9wYWNrYWdl.allowed-value.c3RyaW5nOkp1bWJvUGFyY2Vs.desc": {
+          "source": "Jumbo Parcel",
+          "message": "Jumbo Parcel"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXBhcmNlbA.option.cHJlZGVmaW5lZF9wYWNrYWdl.allowed-value.c3RyaW5nOkxhcmdlRXhwcmVzc0JveA.desc": {
+          "source": "Large Express Box",
+          "message": "Large Express Box"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXBhcmNlbA.option.cHJlZGVmaW5lZF9wYWNrYWdl.allowed-value.c3RyaW5nOkxhcmdlRmxhdFJhdGVCb3g.desc": {
+          "source": "USPS Large Flat Rate Box",
+          "message": "USPS Large Flat Rate Box"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXBhcmNlbA.option.cHJlZGVmaW5lZF9wYWNrYWdl.allowed-value.c3RyaW5nOkxhcmdlUGFja2FnZQ.desc": {
+          "source": "Large Package",
+          "message": "Large Package"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXBhcmNlbA.option.cHJlZGVmaW5lZF9wYWNrYWdl.allowed-value.c3RyaW5nOkxlZ2FsRmxhdFJhdGVFbnZlbG9wZQ.desc": {
+          "source": "USPS Legal Flat Rate Envelope",
+          "message": "USPS Legal Flat Rate Envelope"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXBhcmNlbA.option.cHJlZGVmaW5lZF9wYWNrYWdl.allowed-value.c3RyaW5nOkxldHRlcg.desc": {
+          "source": "Letter",
+          "message": "Letter"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXBhcmNlbA.option.cHJlZGVmaW5lZF9wYWNrYWdl.allowed-value.c3RyaW5nOlBhZGRlZEZsYXRSYXRlRW52ZWxvcGU.desc": {
+          "source": "USPS Padded Flat Rate Envelope",
+          "message": "USPS Padded Flat Rate Envelope"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXBhcmNlbA.option.cHJlZGVmaW5lZF9wYWNrYWdl.allowed-value.c3RyaW5nOlBhaw.desc": {
+          "source": "Pak",
+          "message": "Pak"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXBhcmNlbA.option.cHJlZGVmaW5lZF9wYWNrYWdl.allowed-value.c3RyaW5nOlBhcmNlbA.desc": {
+          "source": "Generic Parcel",
+          "message": "Obecný balík"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXBhcmNlbA.option.cHJlZGVmaW5lZF9wYWNrYWdl.allowed-value.c3RyaW5nOlJlZ2lvbmFsUmF0ZUJveEE.desc": {
+          "source": "USPS Regional Rate Box A",
+          "message": "USPS Regional Rate Box A"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXBhcmNlbA.option.cHJlZGVmaW5lZF9wYWNrYWdl.allowed-value.c3RyaW5nOlJlZ2lvbmFsUmF0ZUJveEI.desc": {
+          "source": "USPS Regional Rate Box B",
+          "message": "USPS Regional Rate Box B"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXBhcmNlbA.option.cHJlZGVmaW5lZF9wYWNrYWdl.allowed-value.c3RyaW5nOlNtYWxsRXhwcmVzc0JveA.desc": {
+          "source": "Small Express Box",
+          "message": "Small Express Box"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXBhcmNlbA.option.cHJlZGVmaW5lZF9wYWNrYWdl.allowed-value.c3RyaW5nOlNtYWxsRmxhdFJhdGVCb3g.desc": {
+          "source": "USPS Small Flat Rate Box",
+          "message": "USPS Small Flat Rate Box"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXBhcmNlbA.option.cHJlZGVmaW5lZF9wYWNrYWdl.allowed-value.c3RyaW5nOlNtYWxsUGFja2FnZQ.desc": {
+          "source": "Small Package",
+          "message": "Small Package"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXBhcmNlbA.option.cHJlZGVmaW5lZF9wYWNrYWdl.allowed-value.c3RyaW5nOlNvZnRQYWNr.desc": {
+          "source": "Soft Pack",
+          "message": "Soft Pack"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXBhcmNlbA.option.cHJlZGVmaW5lZF9wYWNrYWdl.allowed-value.c3RyaW5nOlR1YmU.desc": {
+          "source": "Tube",
+          "message": "Tube"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXBhcmNlbA.option.cHJlZGVmaW5lZF9wYWNrYWdl.allowed-value.c3RyaW5nOlVQU0V4cHJlc3NCb3g.desc": {
+          "source": "UPS Express Box",
+          "message": "UPS Express Box"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXBhcmNlbA.option.cHJlZGVmaW5lZF9wYWNrYWdl.allowed-value.c3RyaW5nOlVQU0xldHRlcg.desc": {
+          "source": "UPS Letter",
+          "message": "UPS Letter"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXBhcmNlbA.option.cHJlZGVmaW5lZF9wYWNrYWdl.desc": {
+          "source": "Carrier-specific predefined package identifier",
+          "message": "Předdefinovaný identifikátor balíku specifický pro dopravce"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXBhcmNlbA.option.cHJlZGVmaW5lZF9wYWNrYWdl.display_name": {
+          "source": "Predefined Package",
+          "message": "Předdefinovaný balík"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXBhcmNlbA.option.cHJlZGVmaW5lZF9wYWNrYWdl.short_desc": {
+          "source": "Carrier-defined package code",
+          "message": "Kód balíku definovaný dopravcem"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXBhcmNlbA.option.d2VpZ2h0.desc": {
+          "source": "Parcel weight in ounces",
+          "message": "Hmotnost zásilky v uncích"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXBhcmNlbA.option.d2VpZ2h0.display_name": {
+          "source": "Weight",
+          "message": "Hmotnost"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXBhcmNlbA.option.d2VpZ2h0.short_desc": {
+          "source": "Weight in ounces",
+          "message": "Hmotnost v uncích"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXBhcmNlbA.option.d2lkdGg.desc": {
+          "source": "Parcel width in inches",
+          "message": "Šířka zásilky v palcích"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXBhcmNlbA.option.d2lkdGg.display_name": {
+          "source": "Width",
+          "message": "Šířka"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXBhcmNlbA.option.d2lkdGg.short_desc": {
+          "source": "Width in inches",
+          "message": "Šířka v palcích"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXBhcmNlbA.short_desc": {
+          "source": "Create a new parcel",
+          "message": "Vytvořit nový balík"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXBpY2t1cA.desc": {
+          "source": "Schedule a new pickup for a shipment.",
+          "message": "Naplánovat nové vyzvednutí zásilky."
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXBpY2t1cA.display_name": {
+          "source": "Create Pickup",
+          "message": "Vytvořit vyzvednutí"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXBpY2t1cA.option.Y2Fycmllcl9hY2NvdW50cw.desc": {
+          "source": "Carrier account IDs to use for rating the pickup",
+          "message": "ID účtů dopravce použitá pro nacenění vyzvednutí"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXBpY2t1cA.option.Y2Fycmllcl9hY2NvdW50cw.display_name": {
+          "source": "Carrier Accounts",
+          "message": "Účty přepravce"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXBpY2t1cA.option.Y2Fycmllcl9hY2NvdW50cw.short_desc": {
+          "source": "Carrier account IDs",
+          "message": "ID účtů dopravce"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXBpY2t1cA.option.YWRkcmVzcw.desc": {
+          "source": "Pickup address - full address or address reference",
+          "message": "Adresa vyzvednutí – úplná adresa nebo reference adresy"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXBpY2t1cA.option.YWRkcmVzcw.display_name": {
+          "source": "Pickup Address",
+          "message": "Adresa vyzvednutí"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXBpY2t1cA.option.YWRkcmVzcw.short_desc": {
+          "source": "Pickup address (or {id: adr_xxx})",
+          "message": "Adresa vyzvednutí (nebo {id: adr_xxx})"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXBpY2t1cA.option.YmF0Y2g.desc": {
+          "source": "Fully-purchased batch to pick up - reference by `id`. Provide either `shipment` or `batch`, but not both.",
+          "message": "Plně zakoupená dávka k vyzvednutí – reference pomocí `id`. Zadejte buď `shipment`, nebo `batch`, ale ne obojí."
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXBpY2t1cA.option.YmF0Y2g.display_name": {
+          "source": "Batch",
+          "message": "Dávka"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXBpY2t1cA.option.YmF0Y2g.short_desc": {
+          "source": "Batch to pick up ({id: batch_xxx})",
+          "message": "Dávka k vyzvednutí ({id: batch_xxx})"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXBpY2t1cA.option.aW5zdHJ1Y3Rpb25z.desc": {
+          "source": "Special pickup instructions for the carrier",
+          "message": "Zvláštní pokyny k vyzvednutí pro dopravce"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXBpY2t1cA.option.aW5zdHJ1Y3Rpb25z.display_name": {
+          "source": "Instructions",
+          "message": "Pokyny"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXBpY2t1cA.option.aW5zdHJ1Y3Rpb25z.short_desc": {
+          "source": "Pickup instructions",
+          "message": "Pokyny k vyzvednutí"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXBpY2t1cA.option.aXNfYWNjb3VudF9hZGRyZXNz.desc": {
+          "source": "Set to `True` if the pickup address matches the EasyPost account address",
+          "message": "Nastavte na `True`, pokud se adresa vyzvednutí shoduje s adresou účtu EasyPost"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXBpY2t1cA.option.aXNfYWNjb3VudF9hZGRyZXNz.display_name": {
+          "source": "Is Account Address",
+          "message": "Je adresa účtu"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXBpY2t1cA.option.aXNfYWNjb3VudF9hZGRyZXNz.short_desc": {
+          "source": "Pickup at the account address",
+          "message": "Vyzvednutí na adrese účtu"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXBpY2t1cA.option.bWF4X2RhdGV0aW1l.desc": {
+          "source": "Latest acceptable pickup datetime (ISO 8601)",
+          "message": "Nejzazší přijatelný datum a čas vyzvednutí (ISO 8601)"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXBpY2t1cA.option.bWF4X2RhdGV0aW1l.display_name": {
+          "source": "Max Datetime",
+          "message": "Max. datum a čas"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXBpY2t1cA.option.bWF4X2RhdGV0aW1l.short_desc": {
+          "source": "Latest pickup datetime",
+          "message": "Nejzazší datum a čas vyzvednutí"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXBpY2t1cA.option.bWluX2RhdGV0aW1l.desc": {
+          "source": "Earliest acceptable pickup datetime (ISO 8601)",
+          "message": "Nejdřívější přijatelný datum a čas vyzvednutí (ISO 8601)"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXBpY2t1cA.option.bWluX2RhdGV0aW1l.display_name": {
+          "source": "Min Datetime",
+          "message": "Min. datum a čas"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXBpY2t1cA.option.bWluX2RhdGV0aW1l.short_desc": {
+          "source": "Earliest pickup datetime",
+          "message": "Nejdřívější datum a čas vyzvednutí"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXBpY2t1cA.option.c2hpcG1lbnQ.desc": {
+          "source": "Shipment to pick up - reference by `id`. Provide either `shipment` or `batch`, but not both.",
+          "message": "Zásilka k vyzvednutí – reference pomocí `id`. Zadejte buď `shipment`, nebo `batch`, ale ne obojí."
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXBpY2t1cA.option.c2hpcG1lbnQ.display_name": {
+          "source": "Shipment",
+          "message": "Zásilka"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXBpY2t1cA.option.c2hpcG1lbnQ.short_desc": {
+          "source": "Shipment to pick up ({id: shp_xxx})",
+          "message": "Zásilka k vyzvednutí ({id: shp_xxx})"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXBpY2t1cA.option.cmVmZXJlbmNl.desc": {
+          "source": "Caller-supplied reference",
+          "message": "Reference zadaná volajícím"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXBpY2t1cA.option.cmVmZXJlbmNl.display_name": {
+          "source": "Reference",
+          "message": "Reference"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXBpY2t1cA.option.cmVmZXJlbmNl.short_desc": {
+          "source": "Caller-supplied reference",
+          "message": "Reference zadaná volajícím"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXBpY2t1cA.short_desc": {
+          "source": "Schedule a pickup",
+          "message": "Naplánovat vyzvednutí"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXJlZnVuZA.desc": {
+          "source": "Submit one or more refund requests by carrier and tracking code.",
+          "message": "Odeslat jednu nebo více žádostí o vrácení peněz podle dopravce a sledovacího kódu."
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXJlZnVuZA.display_name": {
+          "source": "Create Refund",
+          "message": "Vytvořit refundaci"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXJlZnVuZA.option.Y2Fycmllcg.desc": {
+          "source": "Carrier name (e.g. `USPS`, `UPS`, `FedEx`) of the labels being refunded",
+          "message": "Název dopravce (např. `USPS`, `UPS`, `FedEx`) refundovaných štítků"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXJlZnVuZA.option.Y2Fycmllcg.display_name": {
+          "source": "Carrier",
+          "message": "Dopravce"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXJlZnVuZA.option.Y2Fycmllcg.short_desc": {
+          "source": "Carrier name",
+          "message": "Název přepravce"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXJlZnVuZA.option.dHJhY2tpbmdfY29kZXM.desc": {
+          "source": "List of tracking codes to refund",
+          "message": "Seznam sledovacích kódů k refundaci"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXJlZnVuZA.option.dHJhY2tpbmdfY29kZXM.display_name": {
+          "source": "Tracking Codes",
+          "message": "Sledovací kódy"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXJlZnVuZA.option.dHJhY2tpbmdfY29kZXM.short_desc": {
+          "source": "Tracking codes to refund",
+          "message": "Sledovací kódy k refundaci"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXJlZnVuZA.short_desc": {
+          "source": "Request a refund",
+          "message": "Požádat o refundaci"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXNoaXBtZW50.desc": {
+          "source": "Create a new shipment. The response contains a list of available rates that can be used to purchase a label via `buy-shipment`.",
+          "message": "Vytvořit novou zásilku. Odpověď obsahuje seznam dostupných sazeb, které lze použít k zakoupení štítku prostřednictvím `buy-shipment`."
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXNoaXBtZW50.display_name": {
+          "source": "Create Shipment",
+          "message": "Vytvořit zásilku"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXNoaXBtZW50.option.Y2Fycmllcg.desc": {
+          "source": "Carrier name (e.g. `USPS`, `UPS`, `FedEx`)",
+          "message": "Název dopravce (např. `USPS`, `UPS`, `FedEx`)"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXNoaXBtZW50.option.Y2Fycmllcg.display_name": {
+          "source": "Carrier",
+          "message": "Dopravce"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXNoaXBtZW50.option.Y2Fycmllcg.short_desc": {
+          "source": "Carrier name",
+          "message": "Název přepravce"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXNoaXBtZW50.option.Y2Fycmllcl9hY2NvdW50cw.desc": {
+          "source": "List of carrier account IDs to use for rating this shipment",
+          "message": "Seznam ID účtů dopravce použitých k nacenění této zásilky"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXNoaXBtZW50.option.Y2Fycmllcl9hY2NvdW50cw.display_name": {
+          "source": "Carrier Accounts",
+          "message": "Účty přepravce"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXNoaXBtZW50.option.Y2Fycmllcl9hY2NvdW50cw.short_desc": {
+          "source": "Carrier accounts to use for rating",
+          "message": "Účty dopravce k nacenění"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXNoaXBtZW50.option.Y3VzdG9tc19pbmZv.desc": {
+          "source": "Customs information for international shipments",
+          "message": "Celní informace pro mezinárodní zásilky"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXNoaXBtZW50.option.Y3VzdG9tc19pbmZv.display_name": {
+          "source": "Customs Info",
+          "message": "Celní informace"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXNoaXBtZW50.option.Y3VzdG9tc19pbmZv.short_desc": {
+          "source": "Customs information for international shipments",
+          "message": "Celní informace pro mezinárodní zásilky"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXNoaXBtZW50.option.YnV5ZXJfYWRkcmVzcw.desc": {
+          "source": "Buyer address (when different from `to_address`)",
+          "message": "Adresa kupujícího (pokud se liší od `to_address`)"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXNoaXBtZW50.option.YnV5ZXJfYWRkcmVzcw.display_name": {
+          "source": "Buyer Address",
+          "message": "Adresa kupujícího"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXNoaXBtZW50.option.YnV5ZXJfYWRkcmVzcw.short_desc": {
+          "source": "Buyer address",
+          "message": "Adresa kupujícího"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXNoaXBtZW50.option.ZnJvbV9hZGRyZXNz.desc": {
+          "source": "Origin address - either a full address object or a reference by `id`",
+          "message": "Výchozí adresa – buď úplný objekt adresy, nebo reference pomocí `id`"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXNoaXBtZW50.option.ZnJvbV9hZGRyZXNz.display_name": {
+          "source": "From Address",
+          "message": "Adresa odesílatele"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXNoaXBtZW50.option.ZnJvbV9hZGRyZXNz.short_desc": {
+          "source": "Origin address (or {id: adr_xxx})",
+          "message": "Výchozí adresa (nebo {id: adr_xxx})"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXNoaXBtZW50.option.aW5zdXJhbmNl.desc": {
+          "source": "Insurance amount as a string (e.g. `\"100.00\"`). Used by the one-call buy flow.",
+          "message": "Částka pojištění jako řetězec (např. `\"100.00\"`). Používá se pro nákup jedním voláním."
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXNoaXBtZW50.option.aW5zdXJhbmNl.display_name": {
+          "source": "Insurance",
+          "message": "Pojištění"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXNoaXBtZW50.option.aW5zdXJhbmNl.short_desc": {
+          "source": "Insurance amount for one-call buy",
+          "message": "Částka pojištění pro nákup jedním voláním"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXNoaXBtZW50.option.aXNfcmV0dXJu.desc": {
+          "source": "Set to `True` to mark this as a return shipment",
+          "message": "Nastavte na `True` pro označení jako zpětnou zásilku"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXNoaXBtZW50.option.aXNfcmV0dXJu.display_name": {
+          "source": "Is Return",
+          "message": "Je vratka"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXNoaXBtZW50.option.aXNfcmV0dXJu.short_desc": {
+          "source": "Mark as return shipment",
+          "message": "Označit jako zpětnou zásilku"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXNoaXBtZW50.option.b3B0aW9ucw.desc": {
+          "source": "Shipment options (e.g. `delivery_confirmation`, `label_format`)",
+          "message": "Možnosti zásilky (např. `delivery_confirmation`, `label_format`)"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXNoaXBtZW50.option.b3B0aW9ucw.display_name": {
+          "source": "Options",
+          "message": "Možnosti"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXNoaXBtZW50.option.b3B0aW9ucw.short_desc": {
+          "source": "Shipment options",
+          "message": "Možnosti zásilky"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXNoaXBtZW50.option.c2VydmljZQ.desc": {
+          "source": "Carrier service code (e.g. `Priority`, `Ground`)",
+          "message": "Kód služby dopravce (např. `Priority`, `Ground`)"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXNoaXBtZW50.option.c2VydmljZQ.display_name": {
+          "source": "Service",
+          "message": "Služba"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXNoaXBtZW50.option.c2VydmljZQ.short_desc": {
+          "source": "Carrier service",
+          "message": "Služba dopravce"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXNoaXBtZW50.option.cGFyY2Vs.desc": {
+          "source": "Parcel details - either a full parcel object or a reference by `id`",
+          "message": "Podrobnosti balíku – buď úplný objekt balíku, nebo reference pomocí `id`"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXNoaXBtZW50.option.cGFyY2Vs.display_name": {
+          "source": "Parcel",
+          "message": "Balík"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXNoaXBtZW50.option.cGFyY2Vs.short_desc": {
+          "source": "Parcel details (or {id: prcl_xxx})",
+          "message": "Podrobnosti balíku (nebo {id: prcl_xxx})"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXNoaXBtZW50.option.cmV0dXJuX2FkZHJlc3M.desc": {
+          "source": "Return address (used for return shipments)",
+          "message": "Zpáteční adresa (používá se pro zpětné zásilky)"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXNoaXBtZW50.option.cmV0dXJuX2FkZHJlc3M.display_name": {
+          "source": "Return Address",
+          "message": "Zpáteční adresa"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXNoaXBtZW50.option.cmV0dXJuX2FkZHJlc3M.short_desc": {
+          "source": "Return address",
+          "message": "Zpáteční adresa"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXNoaXBtZW50.option.cmVmZXJlbmNl.desc": {
+          "source": "Caller-supplied reference",
+          "message": "Reference zadaná volajícím"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXNoaXBtZW50.option.cmVmZXJlbmNl.display_name": {
+          "source": "Reference",
+          "message": "Reference"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXNoaXBtZW50.option.cmVmZXJlbmNl.short_desc": {
+          "source": "Caller-supplied reference",
+          "message": "Reference zadaná volajícím"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXNoaXBtZW50.option.dG9fYWRkcmVzcw.desc": {
+          "source": "Destination address - either a full address object or a reference by `id`",
+          "message": "Cílová adresa – buď úplný objekt adresy, nebo reference pomocí `id`"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXNoaXBtZW50.option.dG9fYWRkcmVzcw.display_name": {
+          "source": "To Address",
+          "message": "Cílová adresa"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXNoaXBtZW50.option.dG9fYWRkcmVzcw.short_desc": {
+          "source": "Destination address (or {id: adr_xxx})",
+          "message": "Cílová adresa (nebo {id: adr_xxx})"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXNoaXBtZW50.option.dGF4X2lkZW50aWZpZXJz.desc": {
+          "source": "List of tax identifiers (e.g. VAT, EIN)",
+          "message": "Seznam daňových identifikátorů (např. DIČ, EIN)"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXNoaXBtZW50.option.dGF4X2lkZW50aWZpZXJz.display_name": {
+          "source": "Tax Identifiers",
+          "message": "Daňové identifikátory"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXNoaXBtZW50.option.dGF4X2lkZW50aWZpZXJz.short_desc": {
+          "source": "Tax identifiers for international shipments",
+          "message": "Daňové identifikátory pro mezinárodní zásilky"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXNoaXBtZW50.short_desc": {
+          "source": "Create a new shipment (returns rate options)",
+          "message": "Vytvořit novou zásilku (vrací možnosti sazeb)"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXRyYWNrZXI.desc": {
+          "source": "Create a new tracker for a carrier tracking code.",
+          "message": "Vytvořit nový tracker pro sledovací kód dopravce."
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXRyYWNrZXI.display_name": {
+          "source": "Create Tracker",
+          "message": "Vytvořit tracker"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXRyYWNrZXI.option.Y2Fycmllcg.desc": {
+          "source": "Carrier name (e.g. `USPS`, `FedEx`); EasyPost auto-detects when omitted",
+          "message": "Název přepravce (např. `USPS`, `FedEx`); při vynechání EasyPost detekuje automaticky"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXRyYWNrZXI.option.Y2Fycmllcg.display_name": {
+          "source": "Carrier",
+          "message": "Dopravce"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXRyYWNrZXI.option.Y2Fycmllcg.short_desc": {
+          "source": "Carrier name",
+          "message": "Název přepravce"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXRyYWNrZXI.option.dHJhY2tpbmdfY29kZQ.desc": {
+          "source": "Carrier tracking number to monitor",
+          "message": "Sledovací číslo přepravce k monitorování"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXRyYWNrZXI.option.dHJhY2tpbmdfY29kZQ.display_name": {
+          "source": "Tracking Code",
+          "message": "Sledovací kód"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXRyYWNrZXI.option.dHJhY2tpbmdfY29kZQ.short_desc": {
+          "source": "Carrier tracking code",
+          "message": "Sledovací kód dopravce"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXRyYWNrZXI.short_desc": {
+          "source": "Create a tracker",
+          "message": "Vytvořit sledování"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXdlYmhvb2s.desc": {
+          "source": "Create a new webhook subscription.",
+          "message": "Vytvořit nový odběr webhooku."
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXdlYmhvb2s.display_name": {
+          "source": "Create Webhook",
+          "message": "Vytvořit webhook"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXdlYmhvb2s.option.Y3VzdG9tX2hlYWRlcnM.desc": {
+          "source": "Custom HTTP headers to send with webhook callbacks",
+          "message": "Vlastní HTTP hlavičky, které se mají odesílat se zpětnými voláními webhooku"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXdlYmhvb2s.option.Y3VzdG9tX2hlYWRlcnM.display_name": {
+          "source": "Custom Headers",
+          "message": "Vlastní záhlaví"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXdlYmhvb2s.option.Y3VzdG9tX2hlYWRlcnM.short_desc": {
+          "source": "Custom HTTP headers",
+          "message": "Vlastní HTTP hlavičky"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXdlYmhvb2s.option.d2ViaG9va19zZWNyZXQ.desc": {
+          "source": "Optional shared secret used to sign webhook payloads (HMAC-SHA-256)",
+          "message": "Volitelný sdílený tajný klíč používaný k podepisování datových zpráv webhooku (HMAC-SHA-256)"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXdlYmhvb2s.option.d2ViaG9va19zZWNyZXQ.display_name": {
+          "source": "Webhook Secret",
+          "message": "Tajný klíč webhooku"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXdlYmhvb2s.option.d2ViaG9va19zZWNyZXQ.short_desc": {
+          "source": "Optional shared secret",
+          "message": "Volitelný sdílený tajný klíč"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXdlYmhvb2s.option.dXJs.desc": {
+          "source": "URL to receive webhook callbacks",
+          "message": "URL pro příjem zpětných volání webhooku"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXdlYmhvb2s.option.dXJs.display_name": {
+          "source": "URL",
+          "message": "URL"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXdlYmhvb2s.option.dXJs.short_desc": {
+          "source": "Webhook target URL",
+          "message": "Cílová URL webhooku"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXdlYmhvb2s.short_desc": {
+          "source": "Create a webhook",
+          "message": "Vytvořit webhook"
+        },
+        "app.RWFzeVBvc3Q.action.YmF0Y2gtYWRkLXNoaXBtZW50cw.desc": {
+          "source": "Add shipments to an existing batch.",
+          "message": "Přidat zásilky do existující dávky."
+        },
+        "app.RWFzeVBvc3Q.action.YmF0Y2gtYWRkLXNoaXBtZW50cw.display_name": {
+          "source": "Add Shipments to Batch",
+          "message": "Přidat zásilky do dávky"
+        },
+        "app.RWFzeVBvc3Q.action.YmF0Y2gtYWRkLXNoaXBtZW50cw.option.YmF0Y2hfaWQ.desc": {
+          "source": "Batch to add shipments to",
+          "message": "Dávka, do které se mají přidat zásilky"
+        },
+        "app.RWFzeVBvc3Q.action.YmF0Y2gtYWRkLXNoaXBtZW50cw.option.YmF0Y2hfaWQ.display_name": {
+          "source": "Batch ID",
+          "message": "ID dávky"
+        },
+        "app.RWFzeVBvc3Q.action.YmF0Y2gtYWRkLXNoaXBtZW50cw.option.YmF0Y2hfaWQ.short_desc": {
+          "source": "Batch ID (batch_xxx)",
+          "message": "ID dávky (batch_xxx)"
+        },
+        "app.RWFzeVBvc3Q.action.YmF0Y2gtYWRkLXNoaXBtZW50cw.option.c2hpcG1lbnRz.desc": {
+          "source": "List of shipment references to add to the batch (each `{id: shp_xxx}`)",
+          "message": "Seznam referencí zásilek k přidání do dávky (každá `{id: shp_xxx}`)"
+        },
+        "app.RWFzeVBvc3Q.action.YmF0Y2gtYWRkLXNoaXBtZW50cw.option.c2hpcG1lbnRz.display_name": {
+          "source": "Shipments",
+          "message": "Zásilky"
+        },
+        "app.RWFzeVBvc3Q.action.YmF0Y2gtYWRkLXNoaXBtZW50cw.option.c2hpcG1lbnRz.short_desc": {
+          "source": "Shipments to add (each {id: shp_xxx})",
+          "message": "Zásilky k přidání (každá {id: shp_xxx})"
+        },
+        "app.RWFzeVBvc3Q.action.YmF0Y2gtYWRkLXNoaXBtZW50cw.short_desc": {
+          "source": "Add shipments to a batch",
+          "message": "Přidat zásilky do dávky"
+        },
+        "app.RWFzeVBvc3Q.action.YmF0Y2gtYnV5.desc": {
+          "source": "Purchase labels for all shipments in a batch.",
+          "message": "Zakoupit štítky pro všechny zásilky v dávce."
+        },
+        "app.RWFzeVBvc3Q.action.YmF0Y2gtYnV5.display_name": {
+          "source": "Buy Batch",
+          "message": "Koupit dávku"
+        },
+        "app.RWFzeVBvc3Q.action.YmF0Y2gtYnV5.option.YmF0Y2hfaWQ.desc": {
+          "source": "Batch to buy (purchase labels for all shipments)",
+          "message": "Dávka ke koupi (nákup štítků pro všechny zásilky)"
+        },
+        "app.RWFzeVBvc3Q.action.YmF0Y2gtYnV5.option.YmF0Y2hfaWQ.display_name": {
+          "source": "Batch ID",
+          "message": "ID dávky"
+        },
+        "app.RWFzeVBvc3Q.action.YmF0Y2gtYnV5.option.YmF0Y2hfaWQ.short_desc": {
+          "source": "Batch ID (batch_xxx)",
+          "message": "ID dávky (batch_xxx)"
+        },
+        "app.RWFzeVBvc3Q.action.YmF0Y2gtYnV5.short_desc": {
+          "source": "Buy a batch",
+          "message": "Koupit dávku"
+        },
+        "app.RWFzeVBvc3Q.action.YmF0Y2gtbGFiZWw.desc": {
+          "source": "Generate a single combined label file for all shipments in a batch.",
+          "message": "Vygenerovat jeden kombinovaný soubor štítků pro všechny zásilky v dávce."
+        },
+        "app.RWFzeVBvc3Q.action.YmF0Y2gtbGFiZWw.display_name": {
+          "source": "Get Batch Label",
+          "message": "Získat štítek dávky"
+        },
+        "app.RWFzeVBvc3Q.action.YmF0Y2gtbGFiZWw.option.YmF0Y2hfaWQ.desc": {
+          "source": "Batch to generate combined labels for",
+          "message": "Dávka, pro kterou se mají vygenerovat kombinované štítky"
+        },
+        "app.RWFzeVBvc3Q.action.YmF0Y2gtbGFiZWw.option.YmF0Y2hfaWQ.display_name": {
+          "source": "Batch ID",
+          "message": "ID dávky"
+        },
+        "app.RWFzeVBvc3Q.action.YmF0Y2gtbGFiZWw.option.YmF0Y2hfaWQ.short_desc": {
+          "source": "Batch ID (batch_xxx)",
+          "message": "ID dávky (batch_xxx)"
+        },
+        "app.RWFzeVBvc3Q.action.YmF0Y2gtbGFiZWw.option.ZmlsZV9mb3JtYXQ.allowed-value.c3RyaW5nOkVQTDI.desc": {
+          "source": "Eltron EPL2",
+          "message": "Eltron EPL2"
+        },
+        "app.RWFzeVBvc3Q.action.YmF0Y2gtbGFiZWw.option.ZmlsZV9mb3JtYXQ.allowed-value.c3RyaW5nOlBERg.desc": {
+          "source": "PDF",
+          "message": "PDF"
+        },
+        "app.RWFzeVBvc3Q.action.YmF0Y2gtbGFiZWw.option.ZmlsZV9mb3JtYXQ.allowed-value.c3RyaW5nOlpQTA.desc": {
+          "source": "Zebra ZPL",
+          "message": "Zebra ZPL"
+        },
+        "app.RWFzeVBvc3Q.action.YmF0Y2gtbGFiZWw.option.ZmlsZV9mb3JtYXQ.desc": {
+          "source": "Output format for the combined label file",
+          "message": "Výstupní formát pro kombinovaný soubor štítků"
+        },
+        "app.RWFzeVBvc3Q.action.YmF0Y2gtbGFiZWw.option.ZmlsZV9mb3JtYXQ.display_name": {
+          "source": "File Format",
+          "message": "Formát souboru"
+        },
+        "app.RWFzeVBvc3Q.action.YmF0Y2gtbGFiZWw.option.ZmlsZV9mb3JtYXQ.short_desc": {
+          "source": "Combined label file format",
+          "message": "Formát souboru kombinovaného štítku"
+        },
+        "app.RWFzeVBvc3Q.action.YmF0Y2gtbGFiZWw.short_desc": {
+          "source": "Generate a combined batch label",
+          "message": "Vygenerovat kombinovaný štítek dávky"
+        },
+        "app.RWFzeVBvc3Q.action.YmF0Y2gtc2Nhbi1mb3Jt.desc": {
+          "source": "Generate a scan form for all shipments in a batch.",
+          "message": "Vygenerovat skenovací formulář pro všechny zásilky v dávce."
+        },
+        "app.RWFzeVBvc3Q.action.YmF0Y2gtc2Nhbi1mb3Jt.display_name": {
+          "source": "Generate Batch Scan Form",
+          "message": "Vygenerovat skenovací formulář dávky"
+        },
+        "app.RWFzeVBvc3Q.action.YmF0Y2gtc2Nhbi1mb3Jt.option.YmF0Y2hfaWQ.desc": {
+          "source": "Batch to generate a scan form for",
+          "message": "Dávka, pro kterou se má vygenerovat skenovací formulář"
+        },
+        "app.RWFzeVBvc3Q.action.YmF0Y2gtc2Nhbi1mb3Jt.option.YmF0Y2hfaWQ.display_name": {
+          "source": "Batch ID",
+          "message": "ID dávky"
+        },
+        "app.RWFzeVBvc3Q.action.YmF0Y2gtc2Nhbi1mb3Jt.option.YmF0Y2hfaWQ.short_desc": {
+          "source": "Batch ID (batch_xxx)",
+          "message": "ID dávky (batch_xxx)"
+        },
+        "app.RWFzeVBvc3Q.action.YmF0Y2gtc2Nhbi1mb3Jt.short_desc": {
+          "source": "Generate a scan form",
+          "message": "Vygenerovat skenovací formulář"
+        },
+        "app.RWFzeVBvc3Q.action.YmF0Y2gtcmVtb3ZlLXNoaXBtZW50cw.desc": {
+          "source": "Remove shipments from an existing batch.",
+          "message": "Odebrat zásilky z existující dávky."
+        },
+        "app.RWFzeVBvc3Q.action.YmF0Y2gtcmVtb3ZlLXNoaXBtZW50cw.display_name": {
+          "source": "Remove Shipments from Batch",
+          "message": "Odebrat zásilky z dávky"
+        },
+        "app.RWFzeVBvc3Q.action.YmF0Y2gtcmVtb3ZlLXNoaXBtZW50cw.option.YmF0Y2hfaWQ.desc": {
+          "source": "Batch to remove shipments from",
+          "message": "Dávka, ze které se mají odebrat zásilky"
+        },
+        "app.RWFzeVBvc3Q.action.YmF0Y2gtcmVtb3ZlLXNoaXBtZW50cw.option.YmF0Y2hfaWQ.display_name": {
+          "source": "Batch ID",
+          "message": "ID dávky"
+        },
+        "app.RWFzeVBvc3Q.action.YmF0Y2gtcmVtb3ZlLXNoaXBtZW50cw.option.YmF0Y2hfaWQ.short_desc": {
+          "source": "Batch ID (batch_xxx)",
+          "message": "ID dávky (batch_xxx)"
+        },
+        "app.RWFzeVBvc3Q.action.YmF0Y2gtcmVtb3ZlLXNoaXBtZW50cw.option.c2hpcG1lbnRz.desc": {
+          "source": "List of shipment references to remove from the batch (each `{id: shp_xxx}`)",
+          "message": "Seznam referencí zásilek k odebrání z dávky (každá `{id: shp_xxx}`)"
+        },
+        "app.RWFzeVBvc3Q.action.YmF0Y2gtcmVtb3ZlLXNoaXBtZW50cw.option.c2hpcG1lbnRz.display_name": {
+          "source": "Shipments",
+          "message": "Zásilky"
+        },
+        "app.RWFzeVBvc3Q.action.YmF0Y2gtcmVtb3ZlLXNoaXBtZW50cw.option.c2hpcG1lbnRz.short_desc": {
+          "source": "Shipments to remove (each {id: shp_xxx})",
+          "message": "Zásilky k odebrání (každá {id: shp_xxx})"
+        },
+        "app.RWFzeVBvc3Q.action.YmF0Y2gtcmVtb3ZlLXNoaXBtZW50cw.short_desc": {
+          "source": "Remove shipments from a batch",
+          "message": "Odebrat zásilky z dávky"
+        },
+        "app.RWFzeVBvc3Q.action.YnV5LW9yZGVy.desc": {
+          "source": "Buy all shipments in an order with a single carrier and service.",
+          "message": "Zakoupit všechny zásilky v objednávce s jediným přepravcem a službou."
+        },
+        "app.RWFzeVBvc3Q.action.YnV5LW9yZGVy.display_name": {
+          "source": "Buy Order",
+          "message": "Koupit objednávku"
+        },
+        "app.RWFzeVBvc3Q.action.YnV5LW9yZGVy.option.Y2Fycmllcg.desc": {
+          "source": "Carrier name (e.g. `FedEx`, `UPS`) — must match a `carrier` returned in the Order's `rates`",
+          "message": "Název přepravce (např. `FedEx`, `UPS`) — musí odpovídat `carrier` vrácenému v `rates` objednávky"
+        },
+        "app.RWFzeVBvc3Q.action.YnV5LW9yZGVy.option.Y2Fycmllcg.display_name": {
+          "source": "Carrier",
+          "message": "Dopravce"
+        },
+        "app.RWFzeVBvc3Q.action.YnV5LW9yZGVy.option.Y2Fycmllcg.short_desc": {
+          "source": "Carrier name",
+          "message": "Název přepravce"
+        },
+        "app.RWFzeVBvc3Q.action.YnV5LW9yZGVy.option.b3JkZXJfaWQ.desc": {
+          "source": "Order to buy",
+          "message": "Objednávka ke koupi"
+        },
+        "app.RWFzeVBvc3Q.action.YnV5LW9yZGVy.option.b3JkZXJfaWQ.display_name": {
+          "source": "Order ID",
+          "message": "ID objednávky"
+        },
+        "app.RWFzeVBvc3Q.action.YnV5LW9yZGVy.option.b3JkZXJfaWQ.short_desc": {
+          "source": "Order ID (order_xxx)",
+          "message": "ID objednávky (order_xxx)"
+        },
+        "app.RWFzeVBvc3Q.action.YnV5LW9yZGVy.option.c2VydmljZQ.desc": {
+          "source": "Carrier service code",
+          "message": "Kód služby přepravce"
+        },
+        "app.RWFzeVBvc3Q.action.YnV5LW9yZGVy.option.c2VydmljZQ.display_name": {
+          "source": "Service",
+          "message": "Služba"
+        },
+        "app.RWFzeVBvc3Q.action.YnV5LW9yZGVy.option.c2VydmljZQ.short_desc": {
+          "source": "Carrier service",
+          "message": "Služba dopravce"
+        },
+        "app.RWFzeVBvc3Q.action.YnV5LW9yZGVy.short_desc": {
+          "source": "Buy an order",
+          "message": "Koupit objednávku"
+        },
+        "app.RWFzeVBvc3Q.action.YnV5LXBpY2t1cA.desc": {
+          "source": "Confirm/buy a previously scheduled pickup.",
+          "message": "Potvrdit/koupit dříve naplánované vyzvednutí."
+        },
+        "app.RWFzeVBvc3Q.action.YnV5LXBpY2t1cA.display_name": {
+          "source": "Buy Pickup",
+          "message": "Koupit vyzvednutí"
+        },
+        "app.RWFzeVBvc3Q.action.YnV5LXBpY2t1cA.option.Y2Fycmllcg.desc": {
+          "source": "Carrier name (e.g. `UPS`, `FedEx`) — must match a `carrier` returned in the Pickup's `pickup_rates`",
+          "message": "Název přepravce (např. `UPS`, `FedEx`) — musí odpovídat `carrier` vrácenému v `pickup_rates` vyzvednutí"
+        },
+        "app.RWFzeVBvc3Q.action.YnV5LXBpY2t1cA.option.Y2Fycmllcg.display_name": {
+          "source": "Carrier",
+          "message": "Dopravce"
+        },
+        "app.RWFzeVBvc3Q.action.YnV5LXBpY2t1cA.option.Y2Fycmllcg.short_desc": {
+          "source": "Carrier name",
+          "message": "Název přepravce"
+        },
+        "app.RWFzeVBvc3Q.action.YnV5LXBpY2t1cA.option.c2VydmljZQ.desc": {
+          "source": "Pickup service code returned in `pickup_rates`",
+          "message": "Kód služby vyzvednutí vrácený v `pickup_rates`"
+        },
+        "app.RWFzeVBvc3Q.action.YnV5LXBpY2t1cA.option.c2VydmljZQ.display_name": {
+          "source": "Service",
+          "message": "Služba"
+        },
+        "app.RWFzeVBvc3Q.action.YnV5LXBpY2t1cA.option.c2VydmljZQ.short_desc": {
+          "source": "Pickup service code",
+          "message": "Kód služby vyzvednutí"
+        },
+        "app.RWFzeVBvc3Q.action.YnV5LXBpY2t1cA.option.cGlja3VwX2lk.desc": {
+          "source": "Pickup to confirm/buy",
+          "message": "Vyzvednutí k potvrzení/koupi"
+        },
+        "app.RWFzeVBvc3Q.action.YnV5LXBpY2t1cA.option.cGlja3VwX2lk.display_name": {
+          "source": "Pickup ID",
+          "message": "ID vyzvednutí"
+        },
+        "app.RWFzeVBvc3Q.action.YnV5LXBpY2t1cA.option.cGlja3VwX2lk.short_desc": {
+          "source": "Pickup ID (pickup_xxx)",
+          "message": "ID vyzvednutí (pickup_xxx)"
+        },
+        "app.RWFzeVBvc3Q.action.YnV5LXBpY2t1cA.short_desc": {
+          "source": "Confirm a pickup",
+          "message": "Potvrdit vyzvednutí"
+        },
+        "app.RWFzeVBvc3Q.action.YnV5LXNoaXBtZW50.desc": {
+          "source": "Purchase a shipping label by selecting one of the rates returned by `create-shipment`.",
+          "message": "Zakoupit přepravní štítek výběrem jedné ze sazeb vrácených funkcí `create-shipment`."
+        },
+        "app.RWFzeVBvc3Q.action.YnV5LXNoaXBtZW50.display_name": {
+          "source": "Buy Shipment",
+          "message": "Koupit zásilku"
+        },
+        "app.RWFzeVBvc3Q.action.YnV5LXNoaXBtZW50.option.Y2FyYm9uX29mZnNldA.desc": {
+          "source": "Set to `True` to apply EasyPost's carbon offset surcharge",
+          "message": "Nastavte na `True` pro uplatnění příplatku za kompenzaci uhlíku EasyPost"
+        },
+        "app.RWFzeVBvc3Q.action.YnV5LXNoaXBtZW50.option.Y2FyYm9uX29mZnNldA.display_name": {
+          "source": "Carbon Offset",
+          "message": "Uhlíková kompenzace"
+        },
+        "app.RWFzeVBvc3Q.action.YnV5LXNoaXBtZW50.option.Y2FyYm9uX29mZnNldA.short_desc": {
+          "source": "Apply carbon offset",
+          "message": "Uplatnit uhlíkovou kompenzaci"
+        },
+        "app.RWFzeVBvc3Q.action.YnV5LXNoaXBtZW50.option.ZW5kX3NoaXBwZXJfaWQ.desc": {
+          "source": "End shipper ID for the purchase",
+          "message": "ID koncového odesílatele pro nákup"
+        },
+        "app.RWFzeVBvc3Q.action.YnV5LXNoaXBtZW50.option.ZW5kX3NoaXBwZXJfaWQ.display_name": {
+          "source": "End Shipper ID",
+          "message": "ID koncového odesílatele"
+        },
+        "app.RWFzeVBvc3Q.action.YnV5LXNoaXBtZW50.option.ZW5kX3NoaXBwZXJfaWQ.short_desc": {
+          "source": "End shipper ID (es_xxx)",
+          "message": "ID koncového odesílatele (es_xxx)"
+        },
+        "app.RWFzeVBvc3Q.action.YnV5LXNoaXBtZW50.option.aW5zdXJhbmNl.desc": {
+          "source": "Insure the shipment for this amount (string, e.g. `\"100.00\"`)",
+          "message": "Pojistit zásilku na tuto částku (řetězec, např. `\"100.00\"`)"
+        },
+        "app.RWFzeVBvc3Q.action.YnV5LXNoaXBtZW50.option.aW5zdXJhbmNl.display_name": {
+          "source": "Insurance",
+          "message": "Pojištění"
+        },
+        "app.RWFzeVBvc3Q.action.YnV5LXNoaXBtZW50.option.aW5zdXJhbmNl.short_desc": {
+          "source": "Insurance amount (string)",
+          "message": "Částka pojištění (řetězec)"
+        },
+        "app.RWFzeVBvc3Q.action.YnV5LXNoaXBtZW50.option.c2hpcG1lbnRfaWQ.desc": {
+          "source": "Shipment to purchase a label for",
+          "message": "Zásilka, pro kterou se má zakoupit štítek"
+        },
+        "app.RWFzeVBvc3Q.action.YnV5LXNoaXBtZW50.option.c2hpcG1lbnRfaWQ.display_name": {
+          "source": "Shipment ID",
+          "message": "ID zásilky"
+        },
+        "app.RWFzeVBvc3Q.action.YnV5LXNoaXBtZW50.option.c2hpcG1lbnRfaWQ.short_desc": {
+          "source": "Shipment ID (shp_xxx)",
+          "message": "ID zásilky (shp_xxx)"
+        },
+        "app.RWFzeVBvc3Q.action.YnV5LXNoaXBtZW50.option.cmF0ZQ.desc": {
+          "source": "Rate to purchase - select one of the rates returned by `create-shipment`",
+          "message": "Sazba k zakoupení – vyberte jednu ze sazeb vrácených `create-shipment`"
+        },
+        "app.RWFzeVBvc3Q.action.YnV5LXNoaXBtZW50.option.cmF0ZQ.display_name": {
+          "source": "Rate",
+          "message": "Sazba"
+        },
+        "app.RWFzeVBvc3Q.action.YnV5LXNoaXBtZW50.option.cmF0ZQ.short_desc": {
+          "source": "Selected rate ({id: rate_xxx})",
+          "message": "Vybraná sazba ({id: rate_xxx})"
+        },
+        "app.RWFzeVBvc3Q.action.YnV5LXNoaXBtZW50.short_desc": {
+          "source": "Purchase a shipping label",
+          "message": "Zakoupit přepravní štítek"
+        },
+        "app.RWFzeVBvc3Q.action.YnVsay1jcmVhdGUtdHJhY2tlcnM.desc": {
+          "source": "Create up to 100 trackers in a single request.",
+          "message": "Vytvořte až 100 sledování v jednom požadavku."
+        },
+        "app.RWFzeVBvc3Q.action.YnVsay1jcmVhdGUtdHJhY2tlcnM.display_name": {
+          "source": "Bulk Create Trackers",
+          "message": "Hromadně vytvořit sledování"
+        },
+        "app.RWFzeVBvc3Q.action.YnVsay1jcmVhdGUtdHJhY2tlcnM.option.dHJhY2tlcnM.desc": {
+          "source": "List of tracker entries to create in a single batch",
+          "message": "Seznam položek sledování k vytvoření v jedné dávce"
+        },
+        "app.RWFzeVBvc3Q.action.YnVsay1jcmVhdGUtdHJhY2tlcnM.option.dHJhY2tlcnM.display_name": {
+          "source": "Trackers",
+          "message": "Sledování"
+        },
+        "app.RWFzeVBvc3Q.action.YnVsay1jcmVhdGUtdHJhY2tlcnM.option.dHJhY2tlcnM.short_desc": {
+          "source": "List of tracker entries",
+          "message": "Seznam položek sledování"
+        },
+        "app.RWFzeVBvc3Q.action.YnVsay1jcmVhdGUtdHJhY2tlcnM.short_desc": {
+          "source": "Bulk-create trackers",
+          "message": "Hromadně vytvořit sledování"
+        },
+        "app.RWFzeVBvc3Q.action.Z2V0LW9yZGVy.desc": {
+          "source": "Retrieve an EasyPost order by ID.",
+          "message": "Načíst objednávku EasyPost podle ID."
+        },
+        "app.RWFzeVBvc3Q.action.Z2V0LW9yZGVy.display_name": {
+          "source": "Get Order",
+          "message": "Získat objednávku"
+        },
+        "app.RWFzeVBvc3Q.action.Z2V0LW9yZGVy.option.b3JkZXJfaWQ.desc": {
+          "source": "Order to retrieve",
+          "message": "Objednávka k načtení"
+        },
+        "app.RWFzeVBvc3Q.action.Z2V0LW9yZGVy.option.b3JkZXJfaWQ.display_name": {
+          "source": "Order ID",
+          "message": "ID objednávky"
+        },
+        "app.RWFzeVBvc3Q.action.Z2V0LW9yZGVy.option.b3JkZXJfaWQ.short_desc": {
+          "source": "Order ID (order_xxx)",
+          "message": "ID objednávky (order_xxx)"
+        },
+        "app.RWFzeVBvc3Q.action.Z2V0LW9yZGVy.short_desc": {
+          "source": "Retrieve an order",
+          "message": "Načíst objednávku"
+        },
+        "app.RWFzeVBvc3Q.action.Z2V0LWFkZHJlc3M.desc": {
+          "source": "Retrieve an EasyPost address by ID.",
+          "message": "Načíst adresu EasyPost podle ID."
+        },
+        "app.RWFzeVBvc3Q.action.Z2V0LWFkZHJlc3M.display_name": {
+          "source": "Get Address",
+          "message": "Získat adresu"
+        },
+        "app.RWFzeVBvc3Q.action.Z2V0LWFkZHJlc3M.option.YWRkcmVzc19pZA.desc": {
+          "source": "Address to retrieve",
+          "message": "Adresa k načtení"
+        },
+        "app.RWFzeVBvc3Q.action.Z2V0LWFkZHJlc3M.option.YWRkcmVzc19pZA.display_name": {
+          "source": "Address ID",
+          "message": "ID adresy"
+        },
+        "app.RWFzeVBvc3Q.action.Z2V0LWFkZHJlc3M.option.YWRkcmVzc19pZA.short_desc": {
+          "source": "Address ID (adr_xxx)",
+          "message": "ID adresy (adr_xxx)"
+        },
+        "app.RWFzeVBvc3Q.action.Z2V0LWFkZHJlc3M.short_desc": {
+          "source": "Retrieve an address by ID",
+          "message": "Načíst adresu podle ID"
+        },
+        "app.RWFzeVBvc3Q.action.Z2V0LWJhdGNo.desc": {
+          "source": "Retrieve an EasyPost batch by ID.",
+          "message": "Načíst dávku EasyPost podle ID."
+        },
+        "app.RWFzeVBvc3Q.action.Z2V0LWJhdGNo.display_name": {
+          "source": "Get Batch",
+          "message": "Získat dávku"
+        },
+        "app.RWFzeVBvc3Q.action.Z2V0LWJhdGNo.option.YmF0Y2hfaWQ.desc": {
+          "source": "Batch to retrieve",
+          "message": "Dávka k načtení"
+        },
+        "app.RWFzeVBvc3Q.action.Z2V0LWJhdGNo.option.YmF0Y2hfaWQ.display_name": {
+          "source": "Batch ID",
+          "message": "ID dávky"
+        },
+        "app.RWFzeVBvc3Q.action.Z2V0LWJhdGNo.option.YmF0Y2hfaWQ.short_desc": {
+          "source": "Batch ID (batch_xxx)",
+          "message": "ID dávky (batch_xxx)"
+        },
+        "app.RWFzeVBvc3Q.action.Z2V0LWJhdGNo.short_desc": {
+          "source": "Retrieve a batch by ID",
+          "message": "Načíst dávku podle ID"
+        },
+        "app.RWFzeVBvc3Q.action.Z2V0LWN1c3RvbXMtaW5mbw.desc": {
+          "source": "Retrieve a customs info object by ID.",
+          "message": "Načíst objekt celních informací podle ID."
+        },
+        "app.RWFzeVBvc3Q.action.Z2V0LWN1c3RvbXMtaW5mbw.display_name": {
+          "source": "Get Customs Info",
+          "message": "Získat celní informace"
+        },
+        "app.RWFzeVBvc3Q.action.Z2V0LWN1c3RvbXMtaW5mbw.option.Y3VzdG9tc19pbmZvX2lk.desc": {
+          "source": "Customs info ID to retrieve",
+          "message": "ID celních informací k načtení"
+        },
+        "app.RWFzeVBvc3Q.action.Z2V0LWN1c3RvbXMtaW5mbw.option.Y3VzdG9tc19pbmZvX2lk.display_name": {
+          "source": "Customs Info ID",
+          "message": "ID celních informací"
+        },
+        "app.RWFzeVBvc3Q.action.Z2V0LWN1c3RvbXMtaW5mbw.option.Y3VzdG9tc19pbmZvX2lk.short_desc": {
+          "source": "Customs info ID (cstinfo_xxx)",
+          "message": "ID celních informací (cstinfo_xxx)"
+        },
+        "app.RWFzeVBvc3Q.action.Z2V0LWN1c3RvbXMtaW5mbw.short_desc": {
+          "source": "Retrieve a customs info object",
+          "message": "Načíst objekt celních informací"
+        },
+        "app.RWFzeVBvc3Q.action.Z2V0LWN1c3RvbXMtaXRlbQ.desc": {
+          "source": "Retrieve a customs item by ID.",
+          "message": "Načíst celní položku podle ID."
+        },
+        "app.RWFzeVBvc3Q.action.Z2V0LWN1c3RvbXMtaXRlbQ.display_name": {
+          "source": "Get Customs Item",
+          "message": "Získat celní položku"
+        },
+        "app.RWFzeVBvc3Q.action.Z2V0LWN1c3RvbXMtaXRlbQ.option.Y3VzdG9tc19pdGVtX2lk.desc": {
+          "source": "Customs item to retrieve",
+          "message": "Celní položka k načtení"
+        },
+        "app.RWFzeVBvc3Q.action.Z2V0LWN1c3RvbXMtaXRlbQ.option.Y3VzdG9tc19pdGVtX2lk.display_name": {
+          "source": "Customs Item ID",
+          "message": "ID celní položky"
+        },
+        "app.RWFzeVBvc3Q.action.Z2V0LWN1c3RvbXMtaXRlbQ.option.Y3VzdG9tc19pdGVtX2lk.short_desc": {
+          "source": "Customs item ID (cstitem_xxx)",
+          "message": "ID celní položky (cstitem_xxx)"
+        },
+        "app.RWFzeVBvc3Q.action.Z2V0LWN1c3RvbXMtaXRlbQ.short_desc": {
+          "source": "Retrieve a customs item",
+          "message": "Načíst celní položku"
+        },
+        "app.RWFzeVBvc3Q.action.Z2V0LWNhcnJpZXItYWNjb3VudA.desc": {
+          "source": "Retrieve a carrier account by ID.",
+          "message": "Načíst účet dopravce podle ID."
+        },
+        "app.RWFzeVBvc3Q.action.Z2V0LWNhcnJpZXItYWNjb3VudA.display_name": {
+          "source": "Get Carrier Account",
+          "message": "Získat účet dopravce"
+        },
+        "app.RWFzeVBvc3Q.action.Z2V0LWNhcnJpZXItYWNjb3VudA.option.Y2Fycmllcl9hY2NvdW50X2lk.desc": {
+          "source": "Carrier account to retrieve",
+          "message": "Účet dopravce k načtení"
+        },
+        "app.RWFzeVBvc3Q.action.Z2V0LWNhcnJpZXItYWNjb3VudA.option.Y2Fycmllcl9hY2NvdW50X2lk.display_name": {
+          "source": "Carrier Account ID",
+          "message": "ID účtu dopravce"
+        },
+        "app.RWFzeVBvc3Q.action.Z2V0LWNhcnJpZXItYWNjb3VudA.option.Y2Fycmllcl9hY2NvdW50X2lk.short_desc": {
+          "source": "Carrier account ID (ca_xxx)",
+          "message": "ID účtu dopravce (ca_xxx)"
+        },
+        "app.RWFzeVBvc3Q.action.Z2V0LWNhcnJpZXItYWNjb3VudA.short_desc": {
+          "source": "Retrieve a carrier account",
+          "message": "Načíst účet dopravce"
+        },
+        "app.RWFzeVBvc3Q.action.Z2V0LWV2ZW50.desc": {
+          "source": "Retrieve a webhook event by ID.",
+          "message": "Načíst událost webhooku podle ID."
+        },
+        "app.RWFzeVBvc3Q.action.Z2V0LWV2ZW50.display_name": {
+          "source": "Get Event",
+          "message": "Získat událost"
+        },
+        "app.RWFzeVBvc3Q.action.Z2V0LWV2ZW50.option.ZXZlbnRfaWQ.desc": {
+          "source": "Event to retrieve",
+          "message": "Událost k načtení"
+        },
+        "app.RWFzeVBvc3Q.action.Z2V0LWV2ZW50.option.ZXZlbnRfaWQ.display_name": {
+          "source": "Event ID",
+          "message": "ID události"
+        },
+        "app.RWFzeVBvc3Q.action.Z2V0LWV2ZW50.option.ZXZlbnRfaWQ.short_desc": {
+          "source": "Event ID (evt_xxx)",
+          "message": "ID události (evt_xxx)"
+        },
+        "app.RWFzeVBvc3Q.action.Z2V0LWV2ZW50.short_desc": {
+          "source": "Retrieve an event",
+          "message": "Načíst událost"
+        },
+        "app.RWFzeVBvc3Q.action.Z2V0LWV2ZW50LXBheWxvYWQ.desc": {
+          "source": "Retrieve a single webhook delivery payload.",
+          "message": "Načíst data doručení jednoho webhooku."
+        },
+        "app.RWFzeVBvc3Q.action.Z2V0LWV2ZW50LXBheWxvYWQ.display_name": {
+          "source": "Get Event Payload",
+          "message": "Získat payload události"
+        },
+        "app.RWFzeVBvc3Q.action.Z2V0LWV2ZW50LXBheWxvYWQ.option.ZXZlbnRfaWQ.desc": {
+          "source": "Parent event ID",
+          "message": "ID nadřazené události"
+        },
+        "app.RWFzeVBvc3Q.action.Z2V0LWV2ZW50LXBheWxvYWQ.option.ZXZlbnRfaWQ.display_name": {
+          "source": "Event ID",
+          "message": "ID události"
+        },
+        "app.RWFzeVBvc3Q.action.Z2V0LWV2ZW50LXBheWxvYWQ.option.ZXZlbnRfaWQ.short_desc": {
+          "source": "Event ID (evt_xxx)",
+          "message": "ID události (evt_xxx)"
+        },
+        "app.RWFzeVBvc3Q.action.Z2V0LWV2ZW50LXBheWxvYWQ.option.cGF5bG9hZF9pZA.desc": {
+          "source": "Payload to retrieve",
+          "message": "Payload k načtení"
+        },
+        "app.RWFzeVBvc3Q.action.Z2V0LWV2ZW50LXBheWxvYWQ.option.cGF5bG9hZF9pZA.display_name": {
+          "source": "Payload ID",
+          "message": "ID payloadu"
+        },
+        "app.RWFzeVBvc3Q.action.Z2V0LWV2ZW50LXBheWxvYWQ.option.cGF5bG9hZF9pZA.short_desc": {
+          "source": "Payload ID (payload_xxx)",
+          "message": "ID payloadu (payload_xxx)"
+        },
+        "app.RWFzeVBvc3Q.action.Z2V0LWV2ZW50LXBheWxvYWQ.short_desc": {
+          "source": "Retrieve a single payload",
+          "message": "Načíst jeden payload"
+        },
+        "app.RWFzeVBvc3Q.action.Z2V0LWluc3VyYW5jZQ.desc": {
+          "source": "Retrieve an EasyPost insurance record by ID.",
+          "message": "Načíst záznam pojištění EasyPost podle ID."
+        },
+        "app.RWFzeVBvc3Q.action.Z2V0LWluc3VyYW5jZQ.display_name": {
+          "source": "Get Insurance",
+          "message": "Získat pojištění"
+        },
+        "app.RWFzeVBvc3Q.action.Z2V0LWluc3VyYW5jZQ.option.aW5zdXJhbmNlX2lk.desc": {
+          "source": "Insurance record to retrieve",
+          "message": "Záznam pojištění k načtení"
+        },
+        "app.RWFzeVBvc3Q.action.Z2V0LWluc3VyYW5jZQ.option.aW5zdXJhbmNlX2lk.display_name": {
+          "source": "Insurance ID",
+          "message": "ID pojištění"
+        },
+        "app.RWFzeVBvc3Q.action.Z2V0LWluc3VyYW5jZQ.option.aW5zdXJhbmNlX2lk.short_desc": {
+          "source": "Insurance ID (ins_xxx)",
+          "message": "ID pojištění (ins_xxx)"
+        },
+        "app.RWFzeVBvc3Q.action.Z2V0LWluc3VyYW5jZQ.short_desc": {
+          "source": "Retrieve an insurance record by ID",
+          "message": "Načíst záznam pojištění podle ID"
+        },
+        "app.RWFzeVBvc3Q.action.Z2V0LXBhcmNlbA.desc": {
+          "source": "Retrieve an EasyPost parcel by ID.",
+          "message": "Načíst balík EasyPost podle ID."
+        },
+        "app.RWFzeVBvc3Q.action.Z2V0LXBhcmNlbA.display_name": {
+          "source": "Get Parcel",
+          "message": "Získat balík"
+        },
+        "app.RWFzeVBvc3Q.action.Z2V0LXBhcmNlbA.option.cGFyY2VsX2lk.desc": {
+          "source": "Existing EasyPost parcel ID to retrieve",
+          "message": "ID existujícího balíku EasyPost k načtení"
+        },
+        "app.RWFzeVBvc3Q.action.Z2V0LXBhcmNlbA.option.cGFyY2VsX2lk.display_name": {
+          "source": "Parcel ID",
+          "message": "ID balíku"
+        },
+        "app.RWFzeVBvc3Q.action.Z2V0LXBhcmNlbA.option.cGFyY2VsX2lk.short_desc": {
+          "source": "Parcel ID (prcl_xxx)",
+          "message": "ID balíku (prcl_xxx)"
+        },
+        "app.RWFzeVBvc3Q.action.Z2V0LXBhcmNlbA.short_desc": {
+          "source": "Retrieve a parcel by ID",
+          "message": "Získat balík podle ID"
+        },
+        "app.RWFzeVBvc3Q.action.Z2V0LXBpY2t1cA.desc": {
+          "source": "Retrieve an EasyPost pickup by ID.",
+          "message": "Získat EasyPost vyzvednutí podle ID."
+        },
+        "app.RWFzeVBvc3Q.action.Z2V0LXBpY2t1cA.display_name": {
+          "source": "Get Pickup",
+          "message": "Získat vyzvednutí"
+        },
+        "app.RWFzeVBvc3Q.action.Z2V0LXBpY2t1cA.option.cGlja3VwX2lk.desc": {
+          "source": "Pickup to retrieve",
+          "message": "Vyzvednutí k získání"
+        },
+        "app.RWFzeVBvc3Q.action.Z2V0LXBpY2t1cA.option.cGlja3VwX2lk.display_name": {
+          "source": "Pickup ID",
+          "message": "ID vyzvednutí"
+        },
+        "app.RWFzeVBvc3Q.action.Z2V0LXBpY2t1cA.option.cGlja3VwX2lk.short_desc": {
+          "source": "Pickup ID (pickup_xxx)",
+          "message": "ID vyzvednutí (pickup_xxx)"
+        },
+        "app.RWFzeVBvc3Q.action.Z2V0LXBpY2t1cA.short_desc": {
+          "source": "Retrieve a pickup by ID",
+          "message": "Získat vyzvednutí podle ID"
+        },
+        "app.RWFzeVBvc3Q.action.Z2V0LXJlZnVuZA.desc": {
+          "source": "Retrieve an EasyPost refund by ID.",
+          "message": "Získat EasyPost refundaci podle ID."
+        },
+        "app.RWFzeVBvc3Q.action.Z2V0LXJlZnVuZA.display_name": {
+          "source": "Get Refund",
+          "message": "Získat refundaci"
+        },
+        "app.RWFzeVBvc3Q.action.Z2V0LXJlZnVuZA.option.cmVmdW5kX2lk.desc": {
+          "source": "Refund to retrieve",
+          "message": "Refundace k získání"
+        },
+        "app.RWFzeVBvc3Q.action.Z2V0LXJlZnVuZA.option.cmVmdW5kX2lk.display_name": {
+          "source": "Refund ID",
+          "message": "ID refundace"
+        },
+        "app.RWFzeVBvc3Q.action.Z2V0LXJlZnVuZA.option.cmVmdW5kX2lk.short_desc": {
+          "source": "Refund ID (rfnd_xxx)",
+          "message": "ID refundace (rfnd_xxx)"
+        },
+        "app.RWFzeVBvc3Q.action.Z2V0LXJlZnVuZA.short_desc": {
+          "source": "Retrieve a refund by ID",
+          "message": "Získat refundaci podle ID"
+        },
+        "app.RWFzeVBvc3Q.action.Z2V0LXNoaXBtZW50.desc": {
+          "source": "Retrieve an EasyPost shipment by ID.",
+          "message": "Získat EasyPost zásilku podle ID."
+        },
+        "app.RWFzeVBvc3Q.action.Z2V0LXNoaXBtZW50.display_name": {
+          "source": "Get Shipment",
+          "message": "Získat zásilku"
+        },
+        "app.RWFzeVBvc3Q.action.Z2V0LXNoaXBtZW50.option.c2hpcG1lbnRfaWQ.desc": {
+          "source": "Shipment to retrieve",
+          "message": "Zásilka k získání"
+        },
+        "app.RWFzeVBvc3Q.action.Z2V0LXNoaXBtZW50.option.c2hpcG1lbnRfaWQ.display_name": {
+          "source": "Shipment ID",
+          "message": "ID zásilky"
+        },
+        "app.RWFzeVBvc3Q.action.Z2V0LXNoaXBtZW50.option.c2hpcG1lbnRfaWQ.short_desc": {
+          "source": "Shipment ID (shp_xxx)",
+          "message": "ID zásilky (shp_xxx)"
+        },
+        "app.RWFzeVBvc3Q.action.Z2V0LXNoaXBtZW50.short_desc": {
+          "source": "Retrieve a shipment by ID",
+          "message": "Získat zásilku podle ID"
+        },
+        "app.RWFzeVBvc3Q.action.Z2V0LXNoaXBtZW50LWxhYmVs.desc": {
+          "source": "Retrieve a shipment label in a specific format (PDF, ZPL, EPL2, or PNG).",
+          "message": "Získat štítek zásilky v konkrétním formátu (PDF, ZPL, EPL2 nebo PNG)."
+        },
+        "app.RWFzeVBvc3Q.action.Z2V0LXNoaXBtZW50LWxhYmVs.display_name": {
+          "source": "Get Shipment Label",
+          "message": "Získat štítek zásilky"
+        },
+        "app.RWFzeVBvc3Q.action.Z2V0LXNoaXBtZW50LWxhYmVs.option.ZmlsZV9mb3JtYXQ.allowed-value.c3RyaW5nOkVQTDI.desc": {
+          "source": "Eltron EPL2",
+          "message": "Eltron EPL2"
+        },
+        "app.RWFzeVBvc3Q.action.Z2V0LXNoaXBtZW50LWxhYmVs.option.ZmlsZV9mb3JtYXQ.allowed-value.c3RyaW5nOlBERg.desc": {
+          "source": "PDF",
+          "message": "PDF"
+        },
+        "app.RWFzeVBvc3Q.action.Z2V0LXNoaXBtZW50LWxhYmVs.option.ZmlsZV9mb3JtYXQ.allowed-value.c3RyaW5nOlBORw.desc": {
+          "source": "PNG image",
+          "message": "Obrázek PNG"
+        },
+        "app.RWFzeVBvc3Q.action.Z2V0LXNoaXBtZW50LWxhYmVs.option.ZmlsZV9mb3JtYXQ.allowed-value.c3RyaW5nOlpQTA.desc": {
+          "source": "Zebra ZPL",
+          "message": "Zebra ZPL"
+        },
+        "app.RWFzeVBvc3Q.action.Z2V0LXNoaXBtZW50LWxhYmVs.option.ZmlsZV9mb3JtYXQ.desc": {
+          "source": "Format of the label file to retrieve",
+          "message": "Formát souboru štítku k získání"
+        },
+        "app.RWFzeVBvc3Q.action.Z2V0LXNoaXBtZW50LWxhYmVs.option.ZmlsZV9mb3JtYXQ.display_name": {
+          "source": "File Format",
+          "message": "Formát souboru"
+        },
+        "app.RWFzeVBvc3Q.action.Z2V0LXNoaXBtZW50LWxhYmVs.option.ZmlsZV9mb3JtYXQ.short_desc": {
+          "source": "Label file format",
+          "message": "Formát souboru štítku"
+        },
+        "app.RWFzeVBvc3Q.action.Z2V0LXNoaXBtZW50LWxhYmVs.option.c2hpcG1lbnRfaWQ.desc": {
+          "source": "Shipment to fetch the label for",
+          "message": "Zásilka, pro kterou se má štítek získat"
+        },
+        "app.RWFzeVBvc3Q.action.Z2V0LXNoaXBtZW50LWxhYmVs.option.c2hpcG1lbnRfaWQ.display_name": {
+          "source": "Shipment ID",
+          "message": "ID zásilky"
+        },
+        "app.RWFzeVBvc3Q.action.Z2V0LXNoaXBtZW50LWxhYmVs.option.c2hpcG1lbnRfaWQ.short_desc": {
+          "source": "Shipment ID (shp_xxx)",
+          "message": "ID zásilky (shp_xxx)"
+        },
+        "app.RWFzeVBvc3Q.action.Z2V0LXNoaXBtZW50LWxhYmVs.short_desc": {
+          "source": "Retrieve a shipment label",
+          "message": "Získat štítek zásilky"
+        },
+        "app.RWFzeVBvc3Q.action.Z2V0LXNoaXBtZW50LXNtYXJ0cmF0ZXM.desc": {
+          "source": "Retrieve SmartRates for a shipment. Each rate includes a `time_in_transit` object with percentile-based estimated transit business days (`percentile_50` through `percentile_99`) for SLA-aware rate selection.",
+          "message": "Získat SmartRates pro zásilku. Každá sazba obsahuje objekt `time_in_transit` s odhadovanými pracovními dny přepravy podle percentilu (`percentile_50` až `percentile_99`) pro výběr sazby s ohledem na SLA."
+        },
+        "app.RWFzeVBvc3Q.action.Z2V0LXNoaXBtZW50LXNtYXJ0cmF0ZXM.display_name": {
+          "source": "Get Shipment SmartRates",
+          "message": "Získat SmartRates zásilky"
+        },
+        "app.RWFzeVBvc3Q.action.Z2V0LXNoaXBtZW50LXNtYXJ0cmF0ZXM.option.c2hpcG1lbnRfaWQ.desc": {
+          "source": "Shipment to retrieve SmartRates for",
+          "message": "Zásilka, pro kterou se mají získat SmartRates"
+        },
+        "app.RWFzeVBvc3Q.action.Z2V0LXNoaXBtZW50LXNtYXJ0cmF0ZXM.option.c2hpcG1lbnRfaWQ.display_name": {
+          "source": "Shipment ID",
+          "message": "ID zásilky"
+        },
+        "app.RWFzeVBvc3Q.action.Z2V0LXNoaXBtZW50LXNtYXJ0cmF0ZXM.option.c2hpcG1lbnRfaWQ.short_desc": {
+          "source": "Shipment ID (shp_xxx)",
+          "message": "ID zásilky (shp_xxx)"
+        },
+        "app.RWFzeVBvc3Q.action.Z2V0LXNoaXBtZW50LXNtYXJ0cmF0ZXM.short_desc": {
+          "source": "Retrieve SmartRates for a shipment",
+          "message": "Získat SmartRates pro zásilku"
+        },
+        "app.RWFzeVBvc3Q.action.Z2V0LXRyYWNrZXI.desc": {
+          "source": "Retrieve an EasyPost tracker by ID.",
+          "message": "Získat EasyPost tracker podle ID."
+        },
+        "app.RWFzeVBvc3Q.action.Z2V0LXRyYWNrZXI.display_name": {
+          "source": "Get Tracker",
+          "message": "Získat tracker"
+        },
+        "app.RWFzeVBvc3Q.action.Z2V0LXRyYWNrZXI.option.dHJhY2tlcl9pZA.desc": {
+          "source": "Tracker to retrieve",
+          "message": "Tracker k získání"
+        },
+        "app.RWFzeVBvc3Q.action.Z2V0LXRyYWNrZXI.option.dHJhY2tlcl9pZA.display_name": {
+          "source": "Tracker ID",
+          "message": "ID trackeru"
+        },
+        "app.RWFzeVBvc3Q.action.Z2V0LXRyYWNrZXI.option.dHJhY2tlcl9pZA.short_desc": {
+          "source": "Tracker ID (trk_xxx)",
+          "message": "ID trackeru (trk_xxx)"
+        },
+        "app.RWFzeVBvc3Q.action.Z2V0LXRyYWNrZXI.short_desc": {
+          "source": "Retrieve a tracker by ID",
+          "message": "Získat tracker podle ID"
+        },
+        "app.RWFzeVBvc3Q.action.Z2V0LXdlYmhvb2s.desc": {
+          "source": "Retrieve a webhook by ID.",
+          "message": "Získat webhook podle ID."
+        },
+        "app.RWFzeVBvc3Q.action.Z2V0LXdlYmhvb2s.display_name": {
+          "source": "Get Webhook",
+          "message": "Získat webhook"
+        },
+        "app.RWFzeVBvc3Q.action.Z2V0LXdlYmhvb2s.option.d2ViaG9va19pZA.desc": {
+          "source": "Webhook to retrieve",
+          "message": "Webhook k získání"
+        },
+        "app.RWFzeVBvc3Q.action.Z2V0LXdlYmhvb2s.option.d2ViaG9va19pZA.display_name": {
+          "source": "Webhook ID",
+          "message": "ID webhooku"
+        },
+        "app.RWFzeVBvc3Q.action.Z2V0LXdlYmhvb2s.option.d2ViaG9va19pZA.short_desc": {
+          "source": "Webhook ID (hook_xxx)",
+          "message": "ID webhooku (hook_xxx)"
+        },
+        "app.RWFzeVBvc3Q.action.Z2V0LXdlYmhvb2s.short_desc": {
+          "source": "Retrieve a webhook",
+          "message": "Získat webhook"
+        },
+        "app.RWFzeVBvc3Q.action.ZGVsZXRlLWNhcnJpZXItYWNjb3VudA.desc": {
+          "source": "Delete a carrier account.",
+          "message": "Smazat účet dopravce."
+        },
+        "app.RWFzeVBvc3Q.action.ZGVsZXRlLWNhcnJpZXItYWNjb3VudA.display_name": {
+          "source": "Delete Carrier Account",
+          "message": "Smazat účet dopravce"
+        },
+        "app.RWFzeVBvc3Q.action.ZGVsZXRlLWNhcnJpZXItYWNjb3VudA.option.Y2Fycmllcl9hY2NvdW50X2lk.desc": {
+          "source": "Carrier account to delete",
+          "message": "Účet dopravce ke smazání"
+        },
+        "app.RWFzeVBvc3Q.action.ZGVsZXRlLWNhcnJpZXItYWNjb3VudA.option.Y2Fycmllcl9hY2NvdW50X2lk.display_name": {
+          "source": "Carrier Account ID",
+          "message": "ID účtu dopravce"
+        },
+        "app.RWFzeVBvc3Q.action.ZGVsZXRlLWNhcnJpZXItYWNjb3VudA.option.Y2Fycmllcl9hY2NvdW50X2lk.short_desc": {
+          "source": "Carrier account ID (ca_xxx)",
+          "message": "ID účtu dopravce (ca_xxx)"
+        },
+        "app.RWFzeVBvc3Q.action.ZGVsZXRlLWNhcnJpZXItYWNjb3VudA.short_desc": {
+          "source": "Delete a carrier account",
+          "message": "Smazat účet dopravce"
+        },
+        "app.RWFzeVBvc3Q.action.ZGVsZXRlLXRyYWNrZXI.desc": {
+          "source": "Delete an EasyPost tracker by ID.",
+          "message": "Smazat EasyPost tracker podle ID."
+        },
+        "app.RWFzeVBvc3Q.action.ZGVsZXRlLXRyYWNrZXI.display_name": {
+          "source": "Delete Tracker",
+          "message": "Smazat tracker"
+        },
+        "app.RWFzeVBvc3Q.action.ZGVsZXRlLXRyYWNrZXI.option.dHJhY2tlcl9pZA.desc": {
+          "source": "Tracker to delete",
+          "message": "Tracker ke smazání"
+        },
+        "app.RWFzeVBvc3Q.action.ZGVsZXRlLXRyYWNrZXI.option.dHJhY2tlcl9pZA.display_name": {
+          "source": "Tracker ID",
+          "message": "ID trackeru"
+        },
+        "app.RWFzeVBvc3Q.action.ZGVsZXRlLXRyYWNrZXI.option.dHJhY2tlcl9pZA.short_desc": {
+          "source": "Tracker ID (trk_xxx)",
+          "message": "ID trackeru (trk_xxx)"
+        },
+        "app.RWFzeVBvc3Q.action.ZGVsZXRlLXRyYWNrZXI.short_desc": {
+          "source": "Delete a tracker by ID",
+          "message": "Smazat tracker podle ID"
+        },
+        "app.RWFzeVBvc3Q.action.ZGVsZXRlLXdlYmhvb2s.desc": {
+          "source": "Delete a webhook subscription.",
+          "message": "Smazat odběr webhooku."
+        },
+        "app.RWFzeVBvc3Q.action.ZGVsZXRlLXdlYmhvb2s.display_name": {
+          "source": "Delete Webhook",
+          "message": "Smazat webhook"
+        },
+        "app.RWFzeVBvc3Q.action.ZGVsZXRlLXdlYmhvb2s.option.d2ViaG9va19pZA.desc": {
+          "source": "Webhook to delete",
+          "message": "Webhook ke smazání"
+        },
+        "app.RWFzeVBvc3Q.action.ZGVsZXRlLXdlYmhvb2s.option.d2ViaG9va19pZA.display_name": {
+          "source": "Webhook ID",
+          "message": "ID webhooku"
+        },
+        "app.RWFzeVBvc3Q.action.ZGVsZXRlLXdlYmhvb2s.option.d2ViaG9va19pZA.short_desc": {
+          "source": "Webhook ID (hook_xxx)",
+          "message": "ID webhooku (hook_xxx)"
+        },
+        "app.RWFzeVBvc3Q.action.ZGVsZXRlLXdlYmhvb2s.short_desc": {
+          "source": "Delete a webhook",
+          "message": "Smazat webhook"
+        },
+        "app.RWFzeVBvc3Q.action.aW5zdXJlLXNoaXBtZW50.desc": {
+          "source": "Add insurance to an already-purchased shipment.",
+          "message": "Přidat pojištění k již zakoupené zásilce."
+        },
+        "app.RWFzeVBvc3Q.action.aW5zdXJlLXNoaXBtZW50.display_name": {
+          "source": "Insure Shipment",
+          "message": "Pojistit zásilku"
+        },
+        "app.RWFzeVBvc3Q.action.aW5zdXJlLXNoaXBtZW50.option.YW1vdW50.desc": {
+          "source": "Amount to insure the shipment for, as a string (e.g. `\"100.00\"`)",
+          "message": "Částka, na kterou má být zásilka pojištěna, jako řetězec (např. `\"100.00\"`)"
+        },
+        "app.RWFzeVBvc3Q.action.aW5zdXJlLXNoaXBtZW50.option.YW1vdW50.display_name": {
+          "source": "Amount",
+          "message": "Množství"
+        },
+        "app.RWFzeVBvc3Q.action.aW5zdXJlLXNoaXBtZW50.option.YW1vdW50.short_desc": {
+          "source": "Amount to insure (string)",
+          "message": "Pojistná částka (řetězec)"
+        },
+        "app.RWFzeVBvc3Q.action.aW5zdXJlLXNoaXBtZW50.option.c2hpcG1lbnRfaWQ.desc": {
+          "source": "Shipment to insure",
+          "message": "Zásilka k pojištění"
+        },
+        "app.RWFzeVBvc3Q.action.aW5zdXJlLXNoaXBtZW50.option.c2hpcG1lbnRfaWQ.display_name": {
+          "source": "Shipment ID",
+          "message": "ID zásilky"
+        },
+        "app.RWFzeVBvc3Q.action.aW5zdXJlLXNoaXBtZW50.option.c2hpcG1lbnRfaWQ.short_desc": {
+          "source": "Shipment ID (shp_xxx)",
+          "message": "ID zásilky (shp_xxx)"
+        },
+        "app.RWFzeVBvc3Q.action.aW5zdXJlLXNoaXBtZW50.short_desc": {
+          "source": "Insure a shipment",
+          "message": "Pojistit zásilku"
+        },
+        "app.RWFzeVBvc3Q.action.bGlzdC10cmFja2Vycw.desc": {
+          "source": "Retrieve a paginated list of trackers. Optionally filter by tracking code or carrier.",
+          "message": "Získat stránkovaný seznam trackerů. Volitelně filtrovat podle sledovacího kódu nebo dopravce."
+        },
+        "app.RWFzeVBvc3Q.action.bGlzdC10cmFja2Vycw.display_name": {
+          "source": "List Trackers",
+          "message": "Vypsat trackery"
+        },
+        "app.RWFzeVBvc3Q.action.bGlzdC10cmFja2Vycw.short_desc": {
+          "source": "List trackers",
+          "message": "Vypsat trackery"
+        },
+        "app.RWFzeVBvc3Q.action.bGlzdC13ZWJob29rcw.desc": {
+          "source": "Retrieve all configured webhooks.",
+          "message": "Získat všechny nakonfigurované webhooky."
+        },
+        "app.RWFzeVBvc3Q.action.bGlzdC13ZWJob29rcw.display_name": {
+          "source": "List Webhooks",
+          "message": "Vypsat webhooky"
+        },
+        "app.RWFzeVBvc3Q.action.bGlzdC13ZWJob29rcw.short_desc": {
+          "source": "List webhooks",
+          "message": "Vypsat webhooky"
+        },
+        "app.RWFzeVBvc3Q.action.bGlzdC1hZGRyZXNzZXM.desc": {
+          "source": "Retrieve a paginated list of addresses, or fetch a single address by ID.",
+          "message": "Získat stránkovaný seznam adres nebo načíst jednu adresu podle ID."
+        },
+        "app.RWFzeVBvc3Q.action.bGlzdC1hZGRyZXNzZXM.display_name": {
+          "source": "List Addresses",
+          "message": "Vypsat adresy"
+        },
+        "app.RWFzeVBvc3Q.action.bGlzdC1hZGRyZXNzZXM.short_desc": {
+          "source": "List EasyPost addresses",
+          "message": "Vypsat adresy EasyPost"
+        },
+        "app.RWFzeVBvc3Q.action.bGlzdC1iYXRjaGVz.desc": {
+          "source": "Retrieve a paginated list of batches.",
+          "message": "Získat stránkovaný seznam dávek."
+        },
+        "app.RWFzeVBvc3Q.action.bGlzdC1iYXRjaGVz.display_name": {
+          "source": "List Batches",
+          "message": "Vypsat dávky"
+        },
+        "app.RWFzeVBvc3Q.action.bGlzdC1iYXRjaGVz.short_desc": {
+          "source": "List batches",
+          "message": "Vypsat dávky"
+        },
+        "app.RWFzeVBvc3Q.action.bGlzdC1jYXJyaWVyLWFjY291bnRz.desc": {
+          "source": "Retrieve all carrier accounts configured on the EasyPost account.",
+          "message": "Získat všechny účty dopravců nakonfigurované na účtu EasyPost."
+        },
+        "app.RWFzeVBvc3Q.action.bGlzdC1jYXJyaWVyLWFjY291bnRz.display_name": {
+          "source": "List Carrier Accounts",
+          "message": "Vypsat účty dopravců"
+        },
+        "app.RWFzeVBvc3Q.action.bGlzdC1jYXJyaWVyLWFjY291bnRz.short_desc": {
+          "source": "List carrier accounts",
+          "message": "Vypsat účty dopravců"
+        },
+        "app.RWFzeVBvc3Q.action.bGlzdC1ldmVudC1wYXlsb2Fkcw.desc": {
+          "source": "List webhook delivery payloads (attempts) for an event.",
+          "message": "Vypsat datové obsahy (pokusy) doručení webhooku pro událost."
+        },
+        "app.RWFzeVBvc3Q.action.bGlzdC1ldmVudC1wYXlsb2Fkcw.display_name": {
+          "source": "List Event Payloads",
+          "message": "Vypsat datové obsahy události"
+        },
+        "app.RWFzeVBvc3Q.action.bGlzdC1ldmVudC1wYXlsb2Fkcw.option.ZXZlbnRfaWQ.desc": {
+          "source": "Event to list payloads for",
+          "message": "Událost, pro kterou se mají vypsat datové obsahy"
+        },
+        "app.RWFzeVBvc3Q.action.bGlzdC1ldmVudC1wYXlsb2Fkcw.option.ZXZlbnRfaWQ.display_name": {
+          "source": "Event ID",
+          "message": "ID události"
+        },
+        "app.RWFzeVBvc3Q.action.bGlzdC1ldmVudC1wYXlsb2Fkcw.option.ZXZlbnRfaWQ.short_desc": {
+          "source": "Event ID (evt_xxx)",
+          "message": "ID události (evt_xxx)"
+        },
+        "app.RWFzeVBvc3Q.action.bGlzdC1ldmVudC1wYXlsb2Fkcw.short_desc": {
+          "source": "List event payloads",
+          "message": "Vypsat datové obsahy události"
+        },
+        "app.RWFzeVBvc3Q.action.bGlzdC1ldmVudHM.desc": {
+          "source": "Retrieve a paginated list of webhook delivery events.",
+          "message": "Získat stránkovaný seznam událostí doručení webhooků."
+        },
+        "app.RWFzeVBvc3Q.action.bGlzdC1ldmVudHM.display_name": {
+          "source": "List Events",
+          "message": "Seznam událostí"
+        },
+        "app.RWFzeVBvc3Q.action.bGlzdC1ldmVudHM.short_desc": {
+          "source": "List webhook events",
+          "message": "Vypsat události webhooků"
+        },
+        "app.RWFzeVBvc3Q.action.bGlzdC1pbnN1cmFuY2Vz.desc": {
+          "source": "Retrieve a paginated list of insurance records.",
+          "message": "Získat stránkovaný seznam záznamů pojištění."
+        },
+        "app.RWFzeVBvc3Q.action.bGlzdC1pbnN1cmFuY2Vz.display_name": {
+          "source": "List Insurance Records",
+          "message": "Vypsat záznamy pojištění"
+        },
+        "app.RWFzeVBvc3Q.action.bGlzdC1pbnN1cmFuY2Vz.short_desc": {
+          "source": "List insurance records",
+          "message": "Vypsat záznamy pojištění"
+        },
+        "app.RWFzeVBvc3Q.action.bGlzdC1waWNrdXBz.desc": {
+          "source": "Retrieve a paginated list of pickups.",
+          "message": "Získat stránkovaný seznam vyzvednutí."
+        },
+        "app.RWFzeVBvc3Q.action.bGlzdC1waWNrdXBz.display_name": {
+          "source": "List Pickups",
+          "message": "Vypsat vyzvednutí"
+        },
+        "app.RWFzeVBvc3Q.action.bGlzdC1waWNrdXBz.short_desc": {
+          "source": "List pickups",
+          "message": "Vypsat vyzvednutí"
+        },
+        "app.RWFzeVBvc3Q.action.bGlzdC1yZWZ1bmRz.desc": {
+          "source": "Retrieve a paginated list of refunds.",
+          "message": "Získat stránkovaný seznam refundací."
+        },
+        "app.RWFzeVBvc3Q.action.bGlzdC1yZWZ1bmRz.display_name": {
+          "source": "List Refunds",
+          "message": "Vypsat refundace"
+        },
+        "app.RWFzeVBvc3Q.action.bGlzdC1yZWZ1bmRz.short_desc": {
+          "source": "List refunds",
+          "message": "Vypsat refundace"
+        },
+        "app.RWFzeVBvc3Q.action.bGlzdC1zaGlwbWVudHM.desc": {
+          "source": "Retrieve a paginated list of shipments. Optionally fetch by ID or filter by purchased status.",
+          "message": "Získat stránkovaný seznam zásilek. Volitelně načíst podle ID nebo filtrovat podle stavu zakoupení."
+        },
+        "app.RWFzeVBvc3Q.action.bGlzdC1zaGlwbWVudHM.display_name": {
+          "source": "List Shipments",
+          "message": "Zobrazit seznam zásilek"
+        },
+        "app.RWFzeVBvc3Q.action.bGlzdC1zaGlwbWVudHM.short_desc": {
+          "source": "List shipments",
+          "message": "Vypsat zásilky"
+        },
+        "app.RWFzeVBvc3Q.action.bWFrZS1hcGktY2FsbA.desc": {
+          "source": "Make a custom HTTP / REST API call to **EasyPost** using the configured connection's authentication.\n\nSpecify the HTTP method, the URI path (relative to the connection's API base URL), optional query parameters, headers, and request body. The response is returned as a hash containing the status code, response headers, and response body.\n\nUse this action for endpoints that are not yet exposed as first-class actions on this app.",
+          "message": "Provést vlastní volání HTTP / REST API do **EasyPost** pomocí autentizace nakonfigurovaného připojení.\n\nZadejte metodu HTTP, cestu URI (relativní k základní adrese URL API připojení), volitelné parametry dotazu, záhlaví a tělo požadavku. Odpověď je vrácena jako hash obsahující stavový kód, záhlaví odpovědi a tělo odpovědi.\n\nTuto akci použijte pro koncové body, které v této aplikaci ještě nejsou dostupné jako standardní akce."
+        },
+        "app.RWFzeVBvc3Q.action.bWFrZS1hcGktY2FsbA.display_name": {
+          "source": "Make an API call",
+          "message": "Provést volání API"
+        },
+        "app.RWFzeVBvc3Q.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.desc": {
+          "source": "The request body. The effective type depends on `body_type`: JSON/form/YAML expect a hash, XML/text expect a string, multipart expects a file structure, binary expects raw bytes.",
+          "message": "Tělo požadavku. Efektivní typ závisí na `body_type`: JSON/form/YAML očekávají hash, XML/text očekávají řetězec, multipart očekává strukturu souboru, binary očekává surové bajty."
+        },
+        "app.RWFzeVBvc3Q.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.display_name": {
+          "source": "Body",
+          "message": "Tělo"
+        },
+        "app.RWFzeVBvc3Q.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.short_desc": {
+          "source": "The request body",
+          "message": "Tělo požadavku"
+        },
+        "app.RWFzeVBvc3Q.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.desc": {
+          "source": "Upload a file using `multipart/form-data`. The body must be a @ref DataProvider::FileDataType \"FileDataType\" structure (filename + content + mime_type). The framework builds the multipart envelope and sets the boundary header.",
+          "message": "Nahrát soubor pomocí `multipart/form-data`. Tělo musí být struktura @ref DataProvider::FileDataType \"FileDataType\" (filename + content + mime_type). Framework vytvoří obálku multipart a nastaví záhlaví boundary."
+        },
+        "app.RWFzeVBvc3Q.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.display_name": {
+          "source": "Multipart Form",
+          "message": "Multipart Form"
+        },
+        "app.RWFzeVBvc3Q.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.short_desc": {
+          "source": "Upload a file using multipart/form-data",
+          "message": "Nahrát soubor pomocí multipart/form-data"
+        },
+        "app.RWFzeVBvc3Q.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.desc": {
+          "source": "Pass the body to the REST client unchanged; the client decides serialization based on its configured `data` option and the value type",
+          "message": "Předat tělo klientovi REST beze změny; klient rozhodne o serializaci na základě své nakonfigurované možnosti `data` a typu hodnoty"
+        },
+        "app.RWFzeVBvc3Q.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.display_name": {
+          "source": "Auto",
+          "message": "Automaticky"
+        },
+        "app.RWFzeVBvc3Q.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.short_desc": {
+          "source": "Pass-through; use connection serialization and let the REST client decide",
+          "message": "Předání bez změn; použít serializaci připojení a nechat rozhodnutí na klientovi REST"
+        },
+        "app.RWFzeVBvc3Q.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.desc": {
+          "source": "Send the body as raw bytes. The body must be a binary value. Sets `Content-Type: application/octet-stream` unless overridden by `hdr`.",
+          "message": "Odeslat tělo jako surové bajty. Tělo musí být binární hodnota. Nastavuje `Content-Type: application/octet-stream`, pokud není přepsáno `hdr`."
+        },
+        "app.RWFzeVBvc3Q.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.display_name": {
+          "source": "Raw Binary",
+          "message": "Surová binární data"
+        },
+        "app.RWFzeVBvc3Q.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.short_desc": {
+          "source": "Send body as raw bytes",
+          "message": "Odeslat tělo jako surové bajty"
+        },
+        "app.RWFzeVBvc3Q.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.desc": {
+          "source": "Serialize a hash of form fields as `application/x-www-form-urlencoded`. The body must be a hash whose values are scalars (strings/numbers/booleans).",
+          "message": "Serializovat hash formulářových polí jako `application/x-www-form-urlencoded`. Tělo musí být hash, jehož hodnotami jsou skaláry (řetězce/čísla/booleovské hodnoty)."
+        },
+        "app.RWFzeVBvc3Q.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.display_name": {
+          "source": "Form (URL-encoded)",
+          "message": "Formulář (URL-encoded)"
+        },
+        "app.RWFzeVBvc3Q.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.short_desc": {
+          "source": "Serialize body as application/x-www-form-urlencoded form fields",
+          "message": "Serializovat tělo jako formulářová pole application/x-www-form-urlencoded"
+        },
+        "app.RWFzeVBvc3Q.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.desc": {
+          "source": "Serialize the body as JSON; sets `Content-Type: application/json`. The body should be a hash, list, or scalar value.",
+          "message": "Serializovat tělo jako JSON; nastavuje `Content-Type: application/json`. Tělo by mělo být hash, seznam nebo skalární hodnota."
+        },
+        "app.RWFzeVBvc3Q.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.display_name": {
+          "source": "JSON",
+          "message": "JSON"
+        },
+        "app.RWFzeVBvc3Q.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.short_desc": {
+          "source": "Serialize body as JSON",
+          "message": "Serializovat tělo jako JSON"
+        },
+        "app.RWFzeVBvc3Q.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.desc": {
+          "source": "Send the body as plain text. The body must be a string. Sets `Content-Type: text/plain`.",
+          "message": "Odeslat tělo jako prostý text. Tělo musí být řetězec. Nastavuje `Content-Type: text/plain`."
+        },
+        "app.RWFzeVBvc3Q.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.display_name": {
+          "source": "Plain Text",
+          "message": "Čistý text"
+        },
+        "app.RWFzeVBvc3Q.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.short_desc": {
+          "source": "Send body as text/plain",
+          "message": "Odeslat tělo jako text/plain"
+        },
+        "app.RWFzeVBvc3Q.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.desc": {
+          "source": "Send the body as XML. If the body is a hash it is serialized to XML; if it is a string it is sent verbatim. Sets `Content-Type: application/xml`.",
+          "message": "Odeslat tělo jako XML. Pokud je tělo hash, serializuje se do XML; pokud je to řetězec, odešle se doslovně. Nastavuje `Content-Type: application/xml`."
+        },
+        "app.RWFzeVBvc3Q.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.display_name": {
+          "source": "XML",
+          "message": "XML"
+        },
+        "app.RWFzeVBvc3Q.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.short_desc": {
+          "source": "Send body as XML",
+          "message": "Odeslat tělo jako XML"
+        },
+        "app.RWFzeVBvc3Q.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.desc": {
+          "source": "Send the body as YAML. If the body is a hash it is serialized to YAML; if it is a string it is sent verbatim. Sets `Content-Type: application/x-yaml`.",
+          "message": "Odeslat tělo jako YAML. Pokud je tělo hash, serializuje se do YAML; pokud je to řetězec, odešle se doslovně. Nastavuje `Content-Type: application/x-yaml`."
+        },
+        "app.RWFzeVBvc3Q.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.display_name": {
+          "source": "YAML",
+          "message": "YAML"
+        },
+        "app.RWFzeVBvc3Q.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.short_desc": {
+          "source": "Send body as YAML",
+          "message": "Odeslat tělo jako YAML"
+        },
+        "app.RWFzeVBvc3Q.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.desc": {
+          "source": "Selects the body serialization mode and the corresponding `Content-Type` header. Changing this field reshapes the `body` editor - selecting JSON exposes a JSON editor, selecting Multipart Form exposes a file picker, and so on.",
+          "message": "Vybírá režim serializace těla a odpovídající záhlaví `Content-Type`. Změna tohoto pole upraví editor `body` – výběrem JSON se zobrazí editor JSON, výběrem Multipart Form se zobrazí výběr souboru a podobně."
+        },
+        "app.RWFzeVBvc3Q.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.display_name": {
+          "source": "Body Type",
+          "message": "Typ těla"
+        },
+        "app.RWFzeVBvc3Q.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.short_desc": {
+          "source": "How the body is serialized and what Content-Type is sent",
+          "message": "Jak je tělo serializováno a jaký Content-Type je odeslán"
+        },
+        "app.RWFzeVBvc3Q.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.desc": {
+          "source": "If `True`, non-2xx HTTP responses return as the normal response hash (with the actual status code) instead of raising `REST-RESPONSE-ERROR`. Useful for handling 4xx/5xx as data - e.g. checking whether a resource exists. Overrides the connection's `error_passthru` setting for this call only.",
+          "message": "Pokud je `True`, odpovědi HTTP jiné než 2xx se vrátí jako běžný hash odpovědi (s reálným stavovým kódem) namísto vyvolání `REST-RESPONSE-ERROR`. Užitečné pro zpracování 4xx/5xx jako dat – např. kontrola, zda prostředek existuje. Přepisuje nastavení `error_passthru` připojení pouze pro toto volání."
+        },
+        "app.RWFzeVBvc3Q.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.display_name": {
+          "source": "Return Errors as Data",
+          "message": "Vracet chyby jako data"
+        },
+        "app.RWFzeVBvc3Q.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.short_desc": {
+          "source": "Return non-2xx responses normally instead of throwing",
+          "message": "Vracet odpovědi jiné než 2xx normálně namísto vyvolání výjimky"
+        },
+        "app.RWFzeVBvc3Q.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.desc": {
+          "source": "Optional list of HTTP status codes treated as success. If set and the response status is not in this list, the action throws `REST-STATUS-ERROR`. When unset, the REST client's default behavior applies (typically: 2xx is success, non-2xx throws).",
+          "message": "Volitelný seznam stavových kódů HTTP považovaných za úspěch. Je-li nastaven a stav odpovědi není v tomto seznamu, akce vyvolá `REST-STATUS-ERROR`. Pokud není nastaven, uplatní se výchozí chování klienta REST (obvykle: 2xx je úspěch, jiné než 2xx vyvolá výjimku)."
+        },
+        "app.RWFzeVBvc3Q.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.display_name": {
+          "source": "Expected Status Codes",
+          "message": "Očekávané stavové kódy"
+        },
+        "app.RWFzeVBvc3Q.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.short_desc": {
+          "source": "Response status codes treated as success",
+          "message": "Stavové kódy odpovědi považované za úspěch"
+        },
+        "app.RWFzeVBvc3Q.action.bWFrZS1hcGktY2FsbA.option.aGRy.desc": {
+          "source": "Hash of custom headers added to the request. These override any default headers set by `body_type` (e.g. supplying `Content-Type` here wins over the body-type default).",
+          "message": "Hash vlastních záhlaví přidaných k požadavku. Tyto přepisují jakákoli výchozí záhlaví nastavená `body_type` (např. zadání `Content-Type` zde má přednost před výchozím nastavením typu těla)."
+        },
+        "app.RWFzeVBvc3Q.action.bWFrZS1hcGktY2FsbA.option.aGRy.display_name": {
+          "source": "Custom Headers",
+          "message": "Vlastní záhlaví"
+        },
+        "app.RWFzeVBvc3Q.action.bWFrZS1hcGktY2FsbA.option.aGRy.short_desc": {
+          "source": "Extra request headers",
+          "message": "Dodatečná záhlaví požadavku"
+        },
+        "app.RWFzeVBvc3Q.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.desc": {
+          "source": "If `True`, the response hash includes a `debug` sub-hash containing the request method/URL/headers (with sensitive values redacted), request and response sizes, and round-trip duration. Useful when investigating slow or failing calls. Off by default to keep responses lean.",
+          "message": "Pokud je `True`, hash odpovědi obsahuje pod-hash `debug` obsahující metodu/URL/záhlaví požadavku (s cenzurovanými citlivými hodnotami), velikosti požadavku a odpovědi a dobu trvání. Užitečné při zkoumání pomalých nebo selhávajících volání. Ve výchozím nastavení vypnuto pro zachování kompaktních odpovědí."
+        },
+        "app.RWFzeVBvc3Q.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.display_name": {
+          "source": "Include Debug Info",
+          "message": "Zahrnout ladicí informace"
+        },
+        "app.RWFzeVBvc3Q.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.short_desc": {
+          "source": "Include request/timing/size debug info in the response",
+          "message": "Zahrnout do odpovědi ladicí informace o požadavku/časování/velikosti"
+        },
+        "app.RWFzeVBvc3Q.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.desc": {
+          "source": "HTTP `OPTIONS`",
+          "message": "HTTP `OPTIONS`"
+        },
+        "app.RWFzeVBvc3Q.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.display_name": {
+          "source": "OPTIONS",
+          "message": "OPTIONS"
+        },
+        "app.RWFzeVBvc3Q.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.short_desc": {
+          "source": "HTTP OPTIONS",
+          "message": "HTTP OPTIONS"
+        },
+        "app.RWFzeVBvc3Q.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.desc": {
+          "source": "HTTP `DELETE`",
+          "message": "HTTP `DELETE`"
+        },
+        "app.RWFzeVBvc3Q.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.display_name": {
+          "source": "DELETE",
+          "message": "DELETE"
+        },
+        "app.RWFzeVBvc3Q.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.short_desc": {
+          "source": "HTTP DELETE",
+          "message": "HTTP DELETE"
+        },
+        "app.RWFzeVBvc3Q.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.desc": {
+          "source": "HTTP `GET`",
+          "message": "HTTP `GET`"
+        },
+        "app.RWFzeVBvc3Q.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.display_name": {
+          "source": "GET",
+          "message": "GET"
+        },
+        "app.RWFzeVBvc3Q.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.short_desc": {
+          "source": "HTTP GET",
+          "message": "HTTP GET"
+        },
+        "app.RWFzeVBvc3Q.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.desc": {
+          "source": "HTTP `HEAD`",
+          "message": "HTTP `HEAD`"
+        },
+        "app.RWFzeVBvc3Q.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.display_name": {
+          "source": "HEAD",
+          "message": "HEAD"
+        },
+        "app.RWFzeVBvc3Q.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.short_desc": {
+          "source": "HTTP HEAD",
+          "message": "HTTP HEAD"
+        },
+        "app.RWFzeVBvc3Q.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.desc": {
+          "source": "HTTP `PATCH`",
+          "message": "HTTP `PATCH`"
+        },
+        "app.RWFzeVBvc3Q.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.display_name": {
+          "source": "PATCH",
+          "message": "PATCH"
+        },
+        "app.RWFzeVBvc3Q.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.short_desc": {
+          "source": "HTTP PATCH",
+          "message": "HTTP PATCH"
+        },
+        "app.RWFzeVBvc3Q.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.desc": {
+          "source": "HTTP `POST`",
+          "message": "HTTP `POST`"
+        },
+        "app.RWFzeVBvc3Q.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.display_name": {
+          "source": "POST",
+          "message": "POST"
+        },
+        "app.RWFzeVBvc3Q.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.short_desc": {
+          "source": "HTTP POST",
+          "message": "HTTP POST"
+        },
+        "app.RWFzeVBvc3Q.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.desc": {
+          "source": "HTTP `PUT`",
+          "message": "HTTP `PUT`"
+        },
+        "app.RWFzeVBvc3Q.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.display_name": {
+          "source": "PUT",
+          "message": "PUT"
+        },
+        "app.RWFzeVBvc3Q.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.short_desc": {
+          "source": "HTTP PUT",
+          "message": "HTTP PUT"
+        },
+        "app.RWFzeVBvc3Q.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.desc": {
+          "source": "HTTP `TRACE`",
+          "message": "HTTP `TRACE`"
+        },
+        "app.RWFzeVBvc3Q.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.display_name": {
+          "source": "TRACE",
+          "message": "TRACE"
+        },
+        "app.RWFzeVBvc3Q.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.short_desc": {
+          "source": "HTTP TRACE",
+          "message": "HTTP TRACE"
+        },
+        "app.RWFzeVBvc3Q.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "Metoda HTTP, která se má použít pro požadavek"
+        },
+        "app.RWFzeVBvc3Q.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.display_name": {
+          "source": "HTTP Method",
+          "message": "Metoda HTTP"
+        },
+        "app.RWFzeVBvc3Q.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.short_desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "Metoda HTTP, která se má použít pro požadavek"
+        },
+        "app.RWFzeVBvc3Q.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain `{name}` placeholders that are replaced from `path_vars`. Example: `/users/{id}/comments`.",
+          "message": "Cesta URI relativní k základní adrese URL API připojení. Může obsahovat zástupné symboly `{name}`, které jsou nahrazeny z `path_vars`. Příklad: `/users/{id}/comments`."
+        },
+        "app.RWFzeVBvc3Q.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.display_name": {
+          "source": "URI Path",
+          "message": "Cesta URI"
+        },
+        "app.RWFzeVBvc3Q.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.short_desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain '{name}' placeholders that are replaced from 'path_vars'. Example: '/users/{id}/comments'",
+          "message": "Cesta URI relativní vůči základní URL API připojení. Může obsahovat zástupné symboly '{name}', které jsou nahrazeny z 'path_vars'. Příklad: '/users/{id}/comments'"
+        },
+        "app.RWFzeVBvc3Q.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.desc": {
+          "source": "Hash of values substituted into `{name}` placeholders in the URI path. Example: with `path = /users/{id}` and `path_vars = {id: 123}` the framework sends `/users/123`. Values are URL-encoded.",
+          "message": "Haš hodnot nahrazených za zástupné symboly `{name}` v cestě URI. Příklad: s `path = /users/{id}` a `path_vars = {id: 123}` rozhraní odesílá `/users/123`. Hodnoty jsou kódovány v URL."
+        },
+        "app.RWFzeVBvc3Q.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.display_name": {
+          "source": "Path Variables",
+          "message": "Proměnné cesty"
+        },
+        "app.RWFzeVBvc3Q.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.short_desc": {
+          "source": "Values for {name} placeholders in path",
+          "message": "Hodnoty pro zástupné symboly {name} v cestě"
+        },
+        "app.RWFzeVBvc3Q.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.desc": {
+          "source": "Hash of query string parameters to append to the URI path. Values are URL-encoded; list values are joined with `,`.",
+          "message": "Haš parametrů dotazovacího řetězce, které se připojí k cestě URI. Hodnoty jsou kódovány v URL; hodnoty seznamu jsou spojeny pomocí `,`."
+        },
+        "app.RWFzeVBvc3Q.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.display_name": {
+          "source": "Query Arguments",
+          "message": "Argumenty dotazu"
+        },
+        "app.RWFzeVBvc3Q.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.short_desc": {
+          "source": "Query string parameters",
+          "message": "Parametry dotazovacího řetězce"
+        },
+        "app.RWFzeVBvc3Q.action.bWFrZS1hcGktY2FsbA.short_desc": {
+          "source": "Make a custom API call to EasyPost",
+          "message": "Provést vlastní volání API do EasyPost"
+        },
+        "app.RWFzeVBvc3Q.action.cmVmdW5kLWluc3VyYW5jZQ.desc": {
+          "source": "Submit a refund request for an insurance record.",
+          "message": "Odeslat žádost o refundaci záznamu pojištění."
+        },
+        "app.RWFzeVBvc3Q.action.cmVmdW5kLWluc3VyYW5jZQ.display_name": {
+          "source": "Refund Insurance",
+          "message": "Refundovat pojištění"
+        },
+        "app.RWFzeVBvc3Q.action.cmVmdW5kLWluc3VyYW5jZQ.option.aW5zdXJhbmNlX2lk.desc": {
+          "source": "Insurance ID to refund",
+          "message": "ID pojištění k refundaci"
+        },
+        "app.RWFzeVBvc3Q.action.cmVmdW5kLWluc3VyYW5jZQ.option.aW5zdXJhbmNlX2lk.display_name": {
+          "source": "Insurance ID",
+          "message": "ID pojištění"
+        },
+        "app.RWFzeVBvc3Q.action.cmVmdW5kLWluc3VyYW5jZQ.option.aW5zdXJhbmNlX2lk.short_desc": {
+          "source": "Insurance ID (ins_xxx)",
+          "message": "ID pojištění (ins_xxx)"
+        },
+        "app.RWFzeVBvc3Q.action.cmVmdW5kLWluc3VyYW5jZQ.short_desc": {
+          "source": "Refund an insurance record",
+          "message": "Refundovat záznam pojištění"
+        },
+        "app.RWFzeVBvc3Q.action.cmVmdW5kLXNoaXBtZW50.desc": {
+          "source": "Submit a refund request for a previously purchased shipment.",
+          "message": "Odeslat žádost o refundaci dříve zakoupené zásilky."
+        },
+        "app.RWFzeVBvc3Q.action.cmVmdW5kLXNoaXBtZW50.display_name": {
+          "source": "Refund Shipment",
+          "message": "Refundovat zásilku"
+        },
+        "app.RWFzeVBvc3Q.action.cmVmdW5kLXNoaXBtZW50.option.c2hpcG1lbnRfaWQ.desc": {
+          "source": "ID of a previously purchased shipment to refund",
+          "message": "ID dříve zakoupené zásilky k refundaci"
+        },
+        "app.RWFzeVBvc3Q.action.cmVmdW5kLXNoaXBtZW50.option.c2hpcG1lbnRfaWQ.display_name": {
+          "source": "Shipment ID",
+          "message": "ID zásilky"
+        },
+        "app.RWFzeVBvc3Q.action.cmVmdW5kLXNoaXBtZW50.option.c2hpcG1lbnRfaWQ.short_desc": {
+          "source": "Shipment ID to refund (shp_xxx)",
+          "message": "ID zásilky k refundaci (shp_xxx)"
+        },
+        "app.RWFzeVBvc3Q.action.cmVmdW5kLXNoaXBtZW50.short_desc": {
+          "source": "Refund a purchased shipment",
+          "message": "Refundovat zakoupenou zásilku"
+        },
+        "app.RWFzeVBvc3Q.action.cmVyYXRlLXNoaXBtZW50.desc": {
+          "source": "Re-fetch rate quotes for an existing shipment.",
+          "message": "Znovu načíst cenové nabídky pro existující zásilku."
+        },
+        "app.RWFzeVBvc3Q.action.cmVyYXRlLXNoaXBtZW50.display_name": {
+          "source": "Rerate Shipment",
+          "message": "Znovu nacenit zásilku"
+        },
+        "app.RWFzeVBvc3Q.action.cmVyYXRlLXNoaXBtZW50.option.c2hpcG1lbnRfaWQ.desc": {
+          "source": "Shipment to re-rate",
+          "message": "Zásilka k novému nacenění"
+        },
+        "app.RWFzeVBvc3Q.action.cmVyYXRlLXNoaXBtZW50.option.c2hpcG1lbnRfaWQ.display_name": {
+          "source": "Shipment ID",
+          "message": "ID zásilky"
+        },
+        "app.RWFzeVBvc3Q.action.cmVyYXRlLXNoaXBtZW50.option.c2hpcG1lbnRfaWQ.short_desc": {
+          "source": "Shipment ID to re-rate (shp_xxx)",
+          "message": "ID zásilky k novému nacenění (shp_xxx)"
+        },
+        "app.RWFzeVBvc3Q.action.cmVyYXRlLXNoaXBtZW50.short_desc": {
+          "source": "Re-rate a shipment",
+          "message": "Znovu nacenit zásilku"
+        },
+        "app.RWFzeVBvc3Q.action.d2F0Y2gtYmF0Y2gtY3JlYXRlZA.desc": {
+          "source": "Fires when a new batch is created (`batch.created` webhook event).",
+          "message": "Spustí se při vytvoření nové dávky (událost webhooku `batch.created`)."
+        },
+        "app.RWFzeVBvc3Q.action.d2F0Y2gtYmF0Y2gtY3JlYXRlZA.display_name": {
+          "source": "On Batch Created",
+          "message": "Při vytvoření dávky"
+        },
+        "app.RWFzeVBvc3Q.action.d2F0Y2gtYmF0Y2gtY3JlYXRlZA.short_desc": {
+          "source": "Trigger when a batch is created",
+          "message": "Spustit při vytvoření dávky"
+        },
+        "app.RWFzeVBvc3Q.action.d2F0Y2gtYmF0Y2gtdXBkYXRlZA.desc": {
+          "source": "Fires when a batch is updated (`batch.updated` webhook event).",
+          "message": "Spustí se při aktualizaci dávky (událost webhooku `batch.updated`)."
+        },
+        "app.RWFzeVBvc3Q.action.d2F0Y2gtYmF0Y2gtdXBkYXRlZA.display_name": {
+          "source": "On Batch Updated",
+          "message": "Při aktualizaci dávky"
+        },
+        "app.RWFzeVBvc3Q.action.d2F0Y2gtYmF0Y2gtdXBkYXRlZA.short_desc": {
+          "source": "Trigger when a batch is updated",
+          "message": "Spustit při aktualizaci dávky"
+        },
+        "app.RWFzeVBvc3Q.action.d2F0Y2gtaW5zdXJhbmNlLWNhbmNlbGxlZA.desc": {
+          "source": "Fires when a standalone Insurance is cancelled or fails purchasing (`insurance.cancelled` webhook event).",
+          "message": "Spustí se při zrušení samostatného pojištění nebo selhání jeho nákupu (událost webhooku `insurance.cancelled`)."
+        },
+        "app.RWFzeVBvc3Q.action.d2F0Y2gtaW5zdXJhbmNlLWNhbmNlbGxlZA.display_name": {
+          "source": "On Insurance Cancelled",
+          "message": "Při zrušení pojištění"
+        },
+        "app.RWFzeVBvc3Q.action.d2F0Y2gtaW5zdXJhbmNlLWNhbmNlbGxlZA.short_desc": {
+          "source": "Trigger when insurance is cancelled or fails",
+          "message": "Spustit při zrušení pojištění nebo selhání"
+        },
+        "app.RWFzeVBvc3Q.action.d2F0Y2gtaW5zdXJhbmNlLXB1cmNoYXNlZA.desc": {
+          "source": "Fires when insurance is purchased (`insurance.purchased` webhook event).",
+          "message": "Spustí se při zakoupení pojištění (událost webhooku `insurance.purchased`)."
+        },
+        "app.RWFzeVBvc3Q.action.d2F0Y2gtaW5zdXJhbmNlLXB1cmNoYXNlZA.display_name": {
+          "source": "On Insurance Purchased",
+          "message": "Při zakoupení pojištění"
+        },
+        "app.RWFzeVBvc3Q.action.d2F0Y2gtaW5zdXJhbmNlLXB1cmNoYXNlZA.short_desc": {
+          "source": "Trigger when insurance is purchased",
+          "message": "Spustit při zakoupení pojištění"
+        },
+        "app.RWFzeVBvc3Q.action.d2F0Y2gtc2Nhbi1mb3JtLWNyZWF0ZWQ.desc": {
+          "source": "Fires when initial creation of a ScanForm object is complete (`scan_form.created` webhook event).",
+          "message": "Spustí se po dokončení počátečního vytvoření objektu ScanForm (událost webhooku `scan_form.created`)."
+        },
+        "app.RWFzeVBvc3Q.action.d2F0Y2gtc2Nhbi1mb3JtLWNyZWF0ZWQ.display_name": {
+          "source": "On Scan Form Created",
+          "message": "Při vytvoření formuláře pro skenování"
+        },
+        "app.RWFzeVBvc3Q.action.d2F0Y2gtc2Nhbi1mb3JtLWNyZWF0ZWQ.short_desc": {
+          "source": "Trigger when a scan form is created",
+          "message": "Spustit při vytvoření formuláře pro skenování"
+        },
+        "app.RWFzeVBvc3Q.action.d2F0Y2gtc2Nhbi1mb3JtLXVwZGF0ZWQ.desc": {
+          "source": "Fires when the status of a ScanForm object changes (`scan_form.updated` webhook event).",
+          "message": "Spustí se při změně stavu objektu ScanForm (událost webhooku `scan_form.updated`)."
+        },
+        "app.RWFzeVBvc3Q.action.d2F0Y2gtc2Nhbi1mb3JtLXVwZGF0ZWQ.display_name": {
+          "source": "On Scan Form Updated",
+          "message": "Při aktualizaci formuláře pro skenování"
+        },
+        "app.RWFzeVBvc3Q.action.d2F0Y2gtc2Nhbi1mb3JtLXVwZGF0ZWQ.short_desc": {
+          "source": "Trigger when a scan form status changes",
+          "message": "Spustit při změně stavu formuláře pro skenování"
+        },
+        "app.RWFzeVBvc3Q.action.d2F0Y2gtc2hpcG1lbnQtaW52b2ljZS11cGRhdGVk.desc": {
+          "source": "Fires when a shipment invoice is adjusted and updated (`shipment.invoice.updated` webhook event).",
+          "message": "Spustí se při úpravě a aktualizaci faktury za zásilku (událost webhooku `shipment.invoice.updated`)."
+        },
+        "app.RWFzeVBvc3Q.action.d2F0Y2gtc2hpcG1lbnQtaW52b2ljZS11cGRhdGVk.display_name": {
+          "source": "On Shipment Invoice Updated",
+          "message": "Při aktualizaci faktury za zásilku"
+        },
+        "app.RWFzeVBvc3Q.action.d2F0Y2gtc2hpcG1lbnQtaW52b2ljZS11cGRhdGVk.short_desc": {
+          "source": "Trigger when a shipment invoice is updated",
+          "message": "Spustit při aktualizaci faktury za zásilku"
+        },
+        "app.RWFzeVBvc3Q.action.d2F0Y2gtc2hpcG1lbnQtaW52b2ljZS1jcmVhdGVk.desc": {
+          "source": "Fires when a shipment invoice is created (`shipment.invoice.created` webhook event).",
+          "message": "Spustí se při vytvoření faktury za zásilku (událost webhooku `shipment.invoice.created`)."
+        },
+        "app.RWFzeVBvc3Q.action.d2F0Y2gtc2hpcG1lbnQtaW52b2ljZS1jcmVhdGVk.display_name": {
+          "source": "On Shipment Invoice Created",
+          "message": "Při vytvoření faktury za zásilku"
+        },
+        "app.RWFzeVBvc3Q.action.d2F0Y2gtc2hpcG1lbnQtaW52b2ljZS1jcmVhdGVk.short_desc": {
+          "source": "Trigger when a shipment invoice is created",
+          "message": "Spustit při vytvoření faktury za zásilku"
+        },
+        "app.RWFzeVBvc3Q.action.d2F0Y2gtcGF5bWVudC1jb21wbGV0ZWQ.desc": {
+          "source": "Fires when a payment is completed (`payment.completed` webhook event).",
+          "message": "Aktivuje se při dokončení platby (událost webhooku `payment.completed`)."
+        },
+        "app.RWFzeVBvc3Q.action.d2F0Y2gtcGF5bWVudC1jb21wbGV0ZWQ.display_name": {
+          "source": "On Payment Completed",
+          "message": "Při dokončení platby"
+        },
+        "app.RWFzeVBvc3Q.action.d2F0Y2gtcGF5bWVudC1jb21wbGV0ZWQ.short_desc": {
+          "source": "Trigger when a payment is completed",
+          "message": "Spustit při dokončení platby"
+        },
+        "app.RWFzeVBvc3Q.action.d2F0Y2gtcGF5bWVudC1jcmVhdGVk.desc": {
+          "source": "Fires when a bank account or credit card is successfully charged (`payment.created` webhook event).",
+          "message": "Aktivuje se při úspěšném stržení částky z bankovního účtu nebo platební karty (událost webhooku `payment.created`)."
+        },
+        "app.RWFzeVBvc3Q.action.d2F0Y2gtcGF5bWVudC1jcmVhdGVk.display_name": {
+          "source": "On Payment Created",
+          "message": "Při vytvoření platby"
+        },
+        "app.RWFzeVBvc3Q.action.d2F0Y2gtcGF5bWVudC1jcmVhdGVk.short_desc": {
+          "source": "Trigger when a payment is charged",
+          "message": "Spustit při stržení platby"
+        },
+        "app.RWFzeVBvc3Q.action.d2F0Y2gtcGF5bWVudC1mYWlsZWQ.desc": {
+          "source": "Fires when a payment fails (`payment.failed` webhook event).",
+          "message": "Aktivuje se při selhání platby (událost webhooku `payment.failed`)."
+        },
+        "app.RWFzeVBvc3Q.action.d2F0Y2gtcGF5bWVudC1mYWlsZWQ.display_name": {
+          "source": "On Payment Failed",
+          "message": "Při selhání platby"
+        },
+        "app.RWFzeVBvc3Q.action.d2F0Y2gtcGF5bWVudC1mYWlsZWQ.short_desc": {
+          "source": "Trigger when a payment fails",
+          "message": "Spustit při selhání platby"
+        },
+        "app.RWFzeVBvc3Q.action.d2F0Y2gtcmVmdW5kLXN1Y2Nlc3NmdWw.desc": {
+          "source": "Fires when a refund is successful (`refund.successful` webhook event).",
+          "message": "Aktivuje se při úspěšném vrácení peněz (událost webhooku `refund.successful`)."
+        },
+        "app.RWFzeVBvc3Q.action.d2F0Y2gtcmVmdW5kLXN1Y2Nlc3NmdWw.display_name": {
+          "source": "On Refund Successful",
+          "message": "Při úspěšném vrácení peněz"
+        },
+        "app.RWFzeVBvc3Q.action.d2F0Y2gtcmVmdW5kLXN1Y2Nlc3NmdWw.short_desc": {
+          "source": "Trigger when a refund succeeds",
+          "message": "Spustit při úspěšném vrácení peněz"
+        },
+        "app.RWFzeVBvc3Q.action.d2F0Y2gtdHJhY2tlci11cGRhdGVk.desc": {
+          "source": "Fires when a tracker status changes (`tracker.updated` webhook event).",
+          "message": "Aktivuje se při změně stavu trackeru (událost webhooku `tracker.updated`)."
+        },
+        "app.RWFzeVBvc3Q.action.d2F0Y2gtdHJhY2tlci11cGRhdGVk.display_name": {
+          "source": "On Tracker Updated",
+          "message": "Při aktualizaci trackeru"
+        },
+        "app.RWFzeVBvc3Q.action.d2F0Y2gtdHJhY2tlci11cGRhdGVk.short_desc": {
+          "source": "Trigger when a tracker is updated",
+          "message": "Spustit při aktualizaci trackeru"
+        },
+        "app.RWFzeVBvc3Q.action.d2F0Y2gtdHJhY2tlci1jcmVhdGVk.desc": {
+          "source": "Fires when a new tracker is created (`tracker.created` webhook event).",
+          "message": "Aktivuje se při vytvoření nového trackeru (událost webhooku `tracker.created`)."
+        },
+        "app.RWFzeVBvc3Q.action.d2F0Y2gtdHJhY2tlci1jcmVhdGVk.display_name": {
+          "source": "On Tracker Created",
+          "message": "Při vytvoření trackeru"
+        },
+        "app.RWFzeVBvc3Q.action.d2F0Y2gtdHJhY2tlci1jcmVhdGVk.short_desc": {
+          "source": "Trigger when a tracker is created",
+          "message": "Spustit při vytvoření trackeru"
+        },
+        "app.RWFzeVBvc3Q.action.dXBkYXRlLWNhcnJpZXItYWNjb3VudA.desc": {
+          "source": "Update an existing carrier account. Selecting a carrier account populates the `credentials` and `test_credentials` fields with that carrier's specific schema.",
+          "message": "Aktualizujte existující účet dopravce. Výběrem účtu dopravce se pole `credentials` a `test_credentials` vyplní schématem specifickým pro daného dopravce."
+        },
+        "app.RWFzeVBvc3Q.action.dXBkYXRlLWNhcnJpZXItYWNjb3VudA.display_name": {
+          "source": "Update Carrier Account",
+          "message": "Aktualizovat účet dopravce"
+        },
+        "app.RWFzeVBvc3Q.action.dXBkYXRlLWNhcnJpZXItYWNjb3VudA.option.Y2Fycmllcl9hY2NvdW50X2lk.desc": {
+          "source": "Carrier account to update",
+          "message": "Účet dopravce k aktualizaci"
+        },
+        "app.RWFzeVBvc3Q.action.dXBkYXRlLWNhcnJpZXItYWNjb3VudA.option.Y2Fycmllcl9hY2NvdW50X2lk.display_name": {
+          "source": "Carrier Account ID",
+          "message": "ID účtu dopravce"
+        },
+        "app.RWFzeVBvc3Q.action.dXBkYXRlLWNhcnJpZXItYWNjb3VudA.option.Y2Fycmllcl9hY2NvdW50X2lk.short_desc": {
+          "source": "Carrier account ID (ca_xxx)",
+          "message": "ID účtu dopravce (ca_xxx)"
+        },
+        "app.RWFzeVBvc3Q.action.dXBkYXRlLWNhcnJpZXItYWNjb3VudA.option.Y3JlZGVudGlhbHM.desc": {
+          "source": "New production credentials. Carrier-specific schema; see [carrier types](https://docs.easypost.com/docs/carrier-types).\n\n**Example (UPS)**: `{\"account_number\": \"...\", \"user_id\": \"...\"}`",
+          "message": "Nové produkční přihlašovací údaje. Schéma specifické pro dopravce; viz [carrier types](https://docs.easypost.com/docs/carrier-types).\n\n**Příklad (UPS)**: `{\"account_number\": \"...\", \"user_id\": \"...\"}`"
+        },
+        "app.RWFzeVBvc3Q.action.dXBkYXRlLWNhcnJpZXItYWNjb3VudA.option.Y3JlZGVudGlhbHM.display_name": {
+          "source": "Credentials",
+          "message": "Přihlašovací údaje"
+        },
+        "app.RWFzeVBvc3Q.action.dXBkYXRlLWNhcnJpZXItYWNjb3VudA.option.Y3JlZGVudGlhbHM.short_desc": {
+          "source": "Production credentials hash",
+          "message": "Hash produkčních přihlašovacích údajů"
+        },
+        "app.RWFzeVBvc3Q.action.dXBkYXRlLWNhcnJpZXItYWNjb3VudA.option.ZGVzY3JpcHRpb24.desc": {
+          "source": "New account description",
+          "message": "Nový popis účtu"
+        },
+        "app.RWFzeVBvc3Q.action.dXBkYXRlLWNhcnJpZXItYWNjb3VudA.option.ZGVzY3JpcHRpb24.display_name": {
+          "source": "Description",
+          "message": "Popis"
+        },
+        "app.RWFzeVBvc3Q.action.dXBkYXRlLWNhcnJpZXItYWNjb3VudA.option.ZGVzY3JpcHRpb24.short_desc": {
+          "source": "Account description",
+          "message": "Popis účtu"
+        },
+        "app.RWFzeVBvc3Q.action.dXBkYXRlLWNhcnJpZXItYWNjb3VudA.option.cmVmZXJlbmNl.desc": {
+          "source": "Caller-supplied reference",
+          "message": "Reference zadaná volajícím"
+        },
+        "app.RWFzeVBvc3Q.action.dXBkYXRlLWNhcnJpZXItYWNjb3VudA.option.cmVmZXJlbmNl.display_name": {
+          "source": "Reference",
+          "message": "Reference"
+        },
+        "app.RWFzeVBvc3Q.action.dXBkYXRlLWNhcnJpZXItYWNjb3VudA.option.cmVmZXJlbmNl.short_desc": {
+          "source": "Caller-supplied reference",
+          "message": "Reference zadaná volajícím"
+        },
+        "app.RWFzeVBvc3Q.action.dXBkYXRlLWNhcnJpZXItYWNjb3VudA.option.dGVzdF9jcmVkZW50aWFscw.desc": {
+          "source": "New test credentials. Same schema as `credentials`.",
+          "message": "Nové testovací přihlašovací údaje. Stejné schéma jako `credentials`."
+        },
+        "app.RWFzeVBvc3Q.action.dXBkYXRlLWNhcnJpZXItYWNjb3VudA.option.dGVzdF9jcmVkZW50aWFscw.display_name": {
+          "source": "Test Credentials",
+          "message": "Testovací přihlašovací údaje"
+        },
+        "app.RWFzeVBvc3Q.action.dXBkYXRlLWNhcnJpZXItYWNjb3VudA.option.dGVzdF9jcmVkZW50aWFscw.short_desc": {
+          "source": "Test credentials hash",
+          "message": "Hash testovacích přihlašovacích údajů"
+        },
+        "app.RWFzeVBvc3Q.action.dXBkYXRlLWNhcnJpZXItYWNjb3VudA.short_desc": {
+          "source": "Update a carrier account",
+          "message": "Aktualizovat účet dopravce"
+        },
+        "app.RWFzeVBvc3Q.action.dXBkYXRlLXdlYmhvb2s.desc": {
+          "source": "Update an existing webhook.",
+          "message": "Aktualizovat existující webhook."
+        },
+        "app.RWFzeVBvc3Q.action.dXBkYXRlLXdlYmhvb2s.display_name": {
+          "source": "Update Webhook",
+          "message": "Aktualizovat webhook"
+        },
+        "app.RWFzeVBvc3Q.action.dXBkYXRlLXdlYmhvb2s.option.Y3VzdG9tX2hlYWRlcnM.desc": {
+          "source": "Custom HTTP headers to send with webhook callbacks",
+          "message": "Vlastní HTTP hlavičky, které se mají odesílat se zpětnými voláními webhooku"
+        },
+        "app.RWFzeVBvc3Q.action.dXBkYXRlLXdlYmhvb2s.option.Y3VzdG9tX2hlYWRlcnM.display_name": {
+          "source": "Custom Headers",
+          "message": "Vlastní záhlaví"
+        },
+        "app.RWFzeVBvc3Q.action.dXBkYXRlLXdlYmhvb2s.option.Y3VzdG9tX2hlYWRlcnM.short_desc": {
+          "source": "Custom HTTP headers",
+          "message": "Vlastní HTTP hlavičky"
+        },
+        "app.RWFzeVBvc3Q.action.dXBkYXRlLXdlYmhvb2s.option.d2ViaG9va19pZA.desc": {
+          "source": "Webhook to update",
+          "message": "Webhook k aktualizaci"
+        },
+        "app.RWFzeVBvc3Q.action.dXBkYXRlLXdlYmhvb2s.option.d2ViaG9va19pZA.display_name": {
+          "source": "Webhook ID",
+          "message": "ID webhooku"
+        },
+        "app.RWFzeVBvc3Q.action.dXBkYXRlLXdlYmhvb2s.option.d2ViaG9va19pZA.short_desc": {
+          "source": "Webhook ID (hook_xxx)",
+          "message": "ID webhooku (hook_xxx)"
+        },
+        "app.RWFzeVBvc3Q.action.dXBkYXRlLXdlYmhvb2s.option.d2ViaG9va19zZWNyZXQ.desc": {
+          "source": "Optional shared secret used to sign webhook payloads",
+          "message": "Volitelný sdílený tajný klíč používaný k podepisování dat webhooku"
+        },
+        "app.RWFzeVBvc3Q.action.dXBkYXRlLXdlYmhvb2s.option.d2ViaG9va19zZWNyZXQ.display_name": {
+          "source": "Webhook Secret",
+          "message": "Tajný klíč webhooku"
+        },
+        "app.RWFzeVBvc3Q.action.dXBkYXRlLXdlYmhvb2s.option.d2ViaG9va19zZWNyZXQ.short_desc": {
+          "source": "Shared secret",
+          "message": "Sdílený tajný klíč"
+        },
+        "app.RWFzeVBvc3Q.action.dXBkYXRlLXdlYmhvb2s.short_desc": {
+          "source": "Update a webhook",
+          "message": "Aktualizovat webhook"
+        },
+        "app.RWFzeVBvc3Q.action.dmVyaWZ5LWFkZHJlc3M.desc": {
+          "source": "Run carrier-side address verification on an existing address.",
+          "message": "Spustit ověření existující adresy na straně dopravce."
+        },
+        "app.RWFzeVBvc3Q.action.dmVyaWZ5LWFkZHJlc3M.display_name": {
+          "source": "Verify Address",
+          "message": "Ověřit adresu"
+        },
+        "app.RWFzeVBvc3Q.action.dmVyaWZ5LWFkZHJlc3M.option.YWRkcmVzc19pZA.desc": {
+          "source": "Existing EasyPost address ID to verify",
+          "message": "ID existující adresy EasyPost k ověření"
+        },
+        "app.RWFzeVBvc3Q.action.dmVyaWZ5LWFkZHJlc3M.option.YWRkcmVzc19pZA.display_name": {
+          "source": "Address ID",
+          "message": "ID adresy"
+        },
+        "app.RWFzeVBvc3Q.action.dmVyaWZ5LWFkZHJlc3M.option.YWRkcmVzc19pZA.short_desc": {
+          "source": "Address ID to verify (adr_xxx)",
+          "message": "ID adresy k ověření (adr_xxx)"
+        },
+        "app.RWFzeVBvc3Q.action.dmVyaWZ5LWFkZHJlc3M.short_desc": {
+          "source": "Verify an existing address",
+          "message": "Ověřit existující adresu"
+        },
+        "app.RWFzeVBvc3Q.desc": {
+          "source": "EasyPost is a unified shipping API that connects to dozens of carriers including USPS, UPS, FedEx, DHL, and more. This integration enables creating addresses, parcels, shipments, trackers, insurance records, pickups, and orders, as well as managing carrier accounts and subscribing to webhook events.\n\n**Features:**\n- Address creation, verification, and lookup\n- Shipment lifecycle (create, buy, refund, label, rerate, insure)\n- Tracker creation (single and bulk) and lookup\n- Insurance creation and refund\n- Pickup scheduling, buying, and cancellation\n- Multi-shipment orders\n- Customs information and customs items\n- Refunds and batches\n- Webhook and carrier-account management\n- Real-time webhook events for tracker, batch, insurance, refund, and payment updates",
+          "message": "EasyPost je jednotné API pro přepravu, které propojuje desítky dopravců včetně USPS, UPS, FedEx, DHL a dalších. Tato integrace umožňuje vytvářet adresy, balíky, zásilky, trackery, záznamy o pojištění, vyzvednutí a objednávky, stejně jako spravovat účty dopravců a odebírat události webhooků.\n\n**Funkce:**\n- Vytváření, ověřování a vyhledávání adres\n- Životní cyklus zásilky (vytvoření, nákup, refundace, štítek, přecenění, pojištění)\n- Vytváření trackerů (jednotlivě i hromadně) a vyhledávání\n- Vytváření a refundace pojištění\n- Plánování, nákup a zrušení vyzvednutí\n- Vícezásilkové objednávky\n- Celní informace a celní položky\n- Refundace a dávky\n- Správa webhooků a účtů dopravců\n- Události webhooků v reálném čase pro aktualizace trackerů, dávek, pojištění, refundací a plateb"
+        },
+        "app.RWFzeVBvc3Q.display_name": {
+          "source": "EasyPost",
+          "message": "EasyPost"
+        },
+        "app.RWFzeVBvc3Q.short_desc": {
+          "source": "EasyPost shipping and logistics platform",
+          "message": "Přepravní a logistická platforma EasyPost"
+        }
+      }
+    }
+  }
+}

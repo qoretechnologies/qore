@@ -1,0 +1,1341 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "ko": {
+      "messages": {
+        "app.TGlua2VkSW4.action.Y3JlYXRlLW11bHRpLWltYWdlLXBvc3Q.desc": {
+          "source": "Uploads several images and publishes them as one post that readers swipe through.\n\nLinkedIn requires between 2 and 20 images; the images appear in the order given. Alt texts are matched to the images **by position**.",
+          "message": "여러 이미지를 업로드하고 독자가 넘겨볼 수 있는 하나의 게시물로 게시합니다.\n\nLinkedIn은 2개에서 20개 사이의 이미지를 요구하며, 이미지는 지정된 순서대로 표시됩니다. 대체 텍스트는 **위치순**으로 이미지와 매칭됩니다."
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLW11bHRpLWltYWdlLXBvc3Q.display_name": {
+          "source": "Create Multi-Image Post",
+          "message": "다중 이미지 게시물 생성"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLW11bHRpLWltYWdlLXBvc3Q.option.Y29tbWVudGFyeQ.desc": {
+          "source": "The post's text.\n\nMentions and hashtags are written **inline**: `@[Qore Technologies](urn:li:organization:2414183)` mentions an organization — the display text must match the entity's name exactly, case included, or it stays plain text — and `#coding` is a hashtag.",
+          "message": "게시물의 텍스트입니다.\n\n멘션과 해시태그는 **인라인**으로 작성됩니다. `@[Qore Technologies](urn:li:organization:2414183)`은(는) 조직을 멘션하며(표시 텍스트는 대소문자를 포함하여 엔티티 이름과 정확히 일치해야 하며, 그렇지 않으면 일반 텍스트로 유지됨), `#coding`은(는) 해시태그입니다."
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLW11bHRpLWltYWdlLXBvc3Q.option.Y29tbWVudGFyeQ.display_name": {
+          "source": "Text",
+          "message": "텍스트"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLW11bHRpLWltYWdlLXBvc3Q.option.Y29tbWVudGFyeQ.short_desc": {
+          "source": "The post's text",
+          "message": "게시물 텍스트"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLW11bHRpLWltYWdlLXBvc3Q.option.YWx0X3RleHRz.desc": {
+          "source": "Alternative text describing each image, used by screen readers and matched to `images` **by position**; a shorter list leaves the remaining images without alt text",
+          "message": "각 이미지를 설명하는 대체 텍스트로, 스크린 리더에서 사용되며 `images`과(와) **위치순**으로 매칭됩니다. 목록 길이가 더 짧으면 나머지 이미지에는 대체 텍스트가 적용되지 않습니다."
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLW11bHRpLWltYWdlLXBvc3Q.option.YWx0X3RleHRz.display_name": {
+          "source": "Alt Texts",
+          "message": "대체 텍스트"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLW11bHRpLWltYWdlLXBvc3Q.option.YWx0X3RleHRz.short_desc": {
+          "source": "Alternative text for each image, matched by position",
+          "message": "위치순으로 매칭되는 각 이미지의 대체 텍스트"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLW11bHRpLWltYWdlLXBvc3Q.option.ZGlzYWJsZV9yZXNoYXJpbmc.desc": {
+          "source": "Prevent others from resharing the post",
+          "message": "다른 사용자가 게시물을 다시 공유하지 못하도록 방지"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLW11bHRpLWltYWdlLXBvc3Q.option.ZGlzYWJsZV9yZXNoYXJpbmc.display_name": {
+          "source": "Disable Resharing",
+          "message": "다시 공유 비활성화"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLW11bHRpLWltYWdlLXBvc3Q.option.ZGlzYWJsZV9yZXNoYXJpbmc.short_desc": {
+          "source": "Prevent others from resharing the post",
+          "message": "다른 사용자가 게시물을 다시 공유하지 못하도록 방지"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLW11bHRpLWltYWdlLXBvc3Q.option.ZmVlZF9kaXN0cmlidXRpb24.allowed-value.c3RyaW5nOk1BSU5fRkVFRA.desc": {
+          "source": "The post is distributed to the main LinkedIn feed",
+          "message": "게시물이 기본 LinkedIn 피드에 배포됩니다"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLW11bHRpLWltYWdlLXBvc3Q.option.ZmVlZF9kaXN0cmlidXRpb24.allowed-value.c3RyaW5nOk1BSU5fRkVFRA.display_name": {
+          "source": "Main Feed",
+          "message": "기본 피드"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLW11bHRpLWltYWdlLXBvc3Q.option.ZmVlZF9kaXN0cmlidXRpb24.allowed-value.c3RyaW5nOk1BSU5fRkVFRA.short_desc": {
+          "source": "Distributed to the main LinkedIn feed",
+          "message": "기본 LinkedIn 피드에 배포됨"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLW11bHRpLWltYWdlLXBvc3Q.option.ZmVlZF9kaXN0cmlidXRpb24.allowed-value.c3RyaW5nOk5PTkU.desc": {
+          "source": "The post is not distributed to any feed; it is reachable only by its URN",
+          "message": "게시물이 어떤 피드에도 배포되지 않으며, 해당 URN을 통해서만 접근할 수 있습니다"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLW11bHRpLWltYWdlLXBvc3Q.option.ZmVlZF9kaXN0cmlidXRpb24.allowed-value.c3RyaW5nOk5PTkU.display_name": {
+          "source": "None",
+          "message": "없음"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLW11bHRpLWltYWdlLXBvc3Q.option.ZmVlZF9kaXN0cmlidXRpb24.allowed-value.c3RyaW5nOk5PTkU.short_desc": {
+          "source": "Not distributed to any feed",
+          "message": "어떤 피드에도 배포되지 않음"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLW11bHRpLWltYWdlLXBvc3Q.option.ZmVlZF9kaXN0cmlidXRpb24.desc": {
+          "source": "Where the post is distributed.  `NONE` creates a post that is reachable only by its URN and does not appear in any feed",
+          "message": "게시물이 배포되는 위치입니다. `NONE`은(는) 어떤 피드에도 표시되지 않고 해당 URN으로만 접근할 수 있는 게시물을 생성합니다"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLW11bHRpLWltYWdlLXBvc3Q.option.ZmVlZF9kaXN0cmlidXRpb24.display_name": {
+          "source": "Feed Distribution",
+          "message": "피드 배포"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLW11bHRpLWltYWdlLXBvc3Q.option.ZmVlZF9kaXN0cmlidXRpb24.short_desc": {
+          "source": "Where the post is distributed",
+          "message": "게시물이 배포되는 위치"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLW11bHRpLWltYWdlLXBvc3Q.option.aW1hZ2Vz.desc": {
+          "source": "The images to post, in the order they should appear; LinkedIn requires between 2 and 20 of them",
+          "message": "게시할 이미지(표시될 순서대로 지정). LinkedIn에는 2개에서 20개 사이의 이미지가 필요합니다"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLW11bHRpLWltYWdlLXBvc3Q.option.aW1hZ2Vz.display_name": {
+          "source": "Images",
+          "message": "이미지"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLW11bHRpLWltYWdlLXBvc3Q.option.aW1hZ2Vz.short_desc": {
+          "source": "The images to post, in the order they should appear",
+          "message": "게시할 이미지(표시될 순서대로 지정)"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLW11bHRpLWltYWdlLXBvc3Q.option.dmlzaWJpbGl0eQ.allowed-value.c3RyaW5nOkNPTk5FQ1RJT05T.desc": {
+          "source": "Visible only to the authenticated member's connections",
+          "message": "인증된 1촌에게만 표시됨"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLW11bHRpLWltYWdlLXBvc3Q.option.dmlzaWJpbGl0eQ.allowed-value.c3RyaW5nOkNPTk5FQ1RJT05T.display_name": {
+          "source": "Connections Only",
+          "message": "1촌 전용"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLW11bHRpLWltYWdlLXBvc3Q.option.dmlzaWJpbGl0eQ.allowed-value.c3RyaW5nOkNPTk5FQ1RJT05T.short_desc": {
+          "source": "Visible only to the member's connections",
+          "message": "회원의 1촌에게만 표시됨"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLW11bHRpLWltYWdlLXBvc3Q.option.dmlzaWJpbGl0eQ.allowed-value.c3RyaW5nOlBVQkxJQw.desc": {
+          "source": "Visible to anyone on or off LinkedIn",
+          "message": "LinkedIn 내부 및 외부의 모든 사용자에게 표시됨"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLW11bHRpLWltYWdlLXBvc3Q.option.dmlzaWJpbGl0eQ.allowed-value.c3RyaW5nOlBVQkxJQw.display_name": {
+          "source": "Public",
+          "message": "공개"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLW11bHRpLWltYWdlLXBvc3Q.option.dmlzaWJpbGl0eQ.allowed-value.c3RyaW5nOlBVQkxJQw.short_desc": {
+          "source": "Visible to anyone on or off LinkedIn",
+          "message": "LinkedIn 내부 및 외부의 모든 사용자에게 표시됨"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLW11bHRpLWltYWdlLXBvc3Q.option.dmlzaWJpbGl0eQ.desc": {
+          "source": "Who can see the post",
+          "message": "게시물을 볼 수 있는 대상"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLW11bHRpLWltYWdlLXBvc3Q.option.dmlzaWJpbGl0eQ.display_name": {
+          "source": "Visibility",
+          "message": "공개 범위"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLW11bHRpLWltYWdlLXBvc3Q.option.dmlzaWJpbGl0eQ.short_desc": {
+          "source": "Who can see the post",
+          "message": "게시물을 볼 수 있는 대상"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLW11bHRpLWltYWdlLXBvc3Q.short_desc": {
+          "source": "Publish a post with several images",
+          "message": "여러 이미지가 포함된 게시물 게시"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLWFydGljbGUtcG9zdA.desc": {
+          "source": "Publishes a post that links to an article, shown as a card under the post's text.\n\nLinkedIn does **not** scrape the URL, so the title, description and thumbnail have to be supplied here or the card appears bare. Upload a thumbnail with the **Upload Image** action first and pass the image URN it returns.",
+          "message": "게시물 텍스트 아래에 카드로 표시되는 기사 링크 게시물을 게시합니다.\n\nLinkedIn은 URL을 스크랩하지 **않으므로**, 제목, 설명, 썸네일을 직접 제공하지 않으면 카드가 빈 상태로 표시됩니다. 먼저 **Upload Image** 액션으로 썸네일을 업로드하고 반환된 이미지 URN을 전달하세요."
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLWFydGljbGUtcG9zdA.display_name": {
+          "source": "Create Article Post",
+          "message": "기사 게시물 생성"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLWFydGljbGUtcG9zdA.option.Y29tbWVudGFyeQ.desc": {
+          "source": "The post's text.\n\nMentions and hashtags are written **inline**: `@[Qore Technologies](urn:li:organization:2414183)` mentions an organization — the display text must match the entity's name exactly, case included, or it stays plain text — and `#coding` is a hashtag.",
+          "message": "게시물의 텍스트입니다.\n\n멘션과 해시태그는 **인라인**으로 작성됩니다. `@[Qore Technologies](urn:li:organization:2414183)`은(는) 조직을 멘션하며(표시 텍스트는 대소문자를 포함하여 엔티티 이름과 정확히 일치해야 하며, 그렇지 않으면 일반 텍스트로 유지됨), `#coding`은(는) 해시태그입니다."
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLWFydGljbGUtcG9zdA.option.Y29tbWVudGFyeQ.display_name": {
+          "source": "Text",
+          "message": "텍스트"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLWFydGljbGUtcG9zdA.option.Y29tbWVudGFyeQ.short_desc": {
+          "source": "The post's text",
+          "message": "게시물 텍스트"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLWFydGljbGUtcG9zdA.option.YXJ0aWNsZV90aHVtYm5haWw.desc": {
+          "source": "An uploaded image URN (`urn:li:image:...`) to show as the article's thumbnail; upload one with the **Upload Image** action first.  LinkedIn does not scrape the URL for an image",
+          "message": "기사의 썸네일로 표시할 업로드된 이미지 URN(`urn:li:image:...`)입니다. 먼저 **Upload Image** 액션으로 이미지를 업로드하세요. LinkedIn은 이미지를 얻기 위해 URL을 스크랩하지 않습니다"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLWFydGljbGUtcG9zdA.option.YXJ0aWNsZV90aHVtYm5haWw.display_name": {
+          "source": "Thumbnail Image URN",
+          "message": "썸네일 이미지 URN"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLWFydGljbGUtcG9zdA.option.YXJ0aWNsZV90aHVtYm5haWw.short_desc": {
+          "source": "An uploaded image URN to show as the article's thumbnail",
+          "message": "기사의 썸네일로 표시할 업로드된 이미지 URN"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLWFydGljbGUtcG9zdA.option.YXJ0aWNsZV90aXRsZQ.desc": {
+          "source": "The title shown on the article card.\n\nLinkedIn does **not** scrape the URL for a title, so an article posted without one shows a card with no heading.",
+          "message": "기사 카드에 표시되는 제목입니다.\n\nLinkedIn은 제목을 얻기 위해 URL을 스크랩하지 **않으므로**, 제목 없이 게시된 기사는 제목 없는 카드로 표시됩니다."
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLWFydGljbGUtcG9zdA.option.YXJ0aWNsZV90aXRsZQ.display_name": {
+          "source": "Article Title",
+          "message": "기사 제목"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLWFydGljbGUtcG9zdA.option.YXJ0aWNsZV90aXRsZQ.short_desc": {
+          "source": "The title shown on the article card",
+          "message": "기사 카드에 표시되는 제목"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLWFydGljbGUtcG9zdA.option.YXJ0aWNsZV91cmw.desc": {
+          "source": "The URL the article links to",
+          "message": "기사가 연결되는 URL"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLWFydGljbGUtcG9zdA.option.YXJ0aWNsZV91cmw.display_name": {
+          "source": "Article URL",
+          "message": "기사 URL"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLWFydGljbGUtcG9zdA.option.YXJ0aWNsZV91cmw.short_desc": {
+          "source": "The URL the article links to",
+          "message": "기사가 연결되는 URL"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLWFydGljbGUtcG9zdA.option.YXJ0aWNsZV9kZXNjcmlwdGlvbg.desc": {
+          "source": "The description shown on the article card; LinkedIn does not scrape the URL for one",
+          "message": "기사 카드에 표시되는 설명입니다. LinkedIn은 설명을 얻기 위해 URL을 스크랩하지 않습니다"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLWFydGljbGUtcG9zdA.option.YXJ0aWNsZV9kZXNjcmlwdGlvbg.display_name": {
+          "source": "Article Description",
+          "message": "기사 설명"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLWFydGljbGUtcG9zdA.option.YXJ0aWNsZV9kZXNjcmlwdGlvbg.short_desc": {
+          "source": "The description shown on the article card",
+          "message": "기사 카드에 표시되는 설명"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLWFydGljbGUtcG9zdA.option.ZGlzYWJsZV9yZXNoYXJpbmc.desc": {
+          "source": "Prevent others from resharing the post",
+          "message": "다른 사용자가 게시물을 다시 공유하지 못하도록 방지"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLWFydGljbGUtcG9zdA.option.ZGlzYWJsZV9yZXNoYXJpbmc.display_name": {
+          "source": "Disable Resharing",
+          "message": "다시 공유 비활성화"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLWFydGljbGUtcG9zdA.option.ZGlzYWJsZV9yZXNoYXJpbmc.short_desc": {
+          "source": "Prevent others from resharing the post",
+          "message": "다른 사용자가 게시물을 다시 공유하지 못하도록 방지"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLWFydGljbGUtcG9zdA.option.ZmVlZF9kaXN0cmlidXRpb24.allowed-value.c3RyaW5nOk1BSU5fRkVFRA.desc": {
+          "source": "The post is distributed to the main LinkedIn feed",
+          "message": "게시물이 기본 LinkedIn 피드에 배포됩니다"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLWFydGljbGUtcG9zdA.option.ZmVlZF9kaXN0cmlidXRpb24.allowed-value.c3RyaW5nOk1BSU5fRkVFRA.display_name": {
+          "source": "Main Feed",
+          "message": "기본 피드"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLWFydGljbGUtcG9zdA.option.ZmVlZF9kaXN0cmlidXRpb24.allowed-value.c3RyaW5nOk1BSU5fRkVFRA.short_desc": {
+          "source": "Distributed to the main LinkedIn feed",
+          "message": "기본 LinkedIn 피드에 배포됨"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLWFydGljbGUtcG9zdA.option.ZmVlZF9kaXN0cmlidXRpb24.allowed-value.c3RyaW5nOk5PTkU.desc": {
+          "source": "The post is not distributed to any feed; it is reachable only by its URN",
+          "message": "게시물이 어떤 피드에도 배포되지 않으며, 해당 URN을 통해서만 접근할 수 있습니다"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLWFydGljbGUtcG9zdA.option.ZmVlZF9kaXN0cmlidXRpb24.allowed-value.c3RyaW5nOk5PTkU.display_name": {
+          "source": "None",
+          "message": "없음"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLWFydGljbGUtcG9zdA.option.ZmVlZF9kaXN0cmlidXRpb24.allowed-value.c3RyaW5nOk5PTkU.short_desc": {
+          "source": "Not distributed to any feed",
+          "message": "어떤 피드에도 배포되지 않음"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLWFydGljbGUtcG9zdA.option.ZmVlZF9kaXN0cmlidXRpb24.desc": {
+          "source": "Where the post is distributed.  `NONE` creates a post that is reachable only by its URN and does not appear in any feed",
+          "message": "게시물이 배포되는 위치입니다. `NONE`은(는) 어떤 피드에도 표시되지 않고 해당 URN으로만 접근할 수 있는 게시물을 생성합니다"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLWFydGljbGUtcG9zdA.option.ZmVlZF9kaXN0cmlidXRpb24.display_name": {
+          "source": "Feed Distribution",
+          "message": "피드 배포"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLWFydGljbGUtcG9zdA.option.ZmVlZF9kaXN0cmlidXRpb24.short_desc": {
+          "source": "Where the post is distributed",
+          "message": "게시물이 배포되는 위치"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLWFydGljbGUtcG9zdA.option.dmlzaWJpbGl0eQ.allowed-value.c3RyaW5nOkNPTk5FQ1RJT05T.desc": {
+          "source": "Visible only to the authenticated member's connections",
+          "message": "인증된 1촌에게만 표시됨"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLWFydGljbGUtcG9zdA.option.dmlzaWJpbGl0eQ.allowed-value.c3RyaW5nOkNPTk5FQ1RJT05T.display_name": {
+          "source": "Connections Only",
+          "message": "1촌 전용"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLWFydGljbGUtcG9zdA.option.dmlzaWJpbGl0eQ.allowed-value.c3RyaW5nOkNPTk5FQ1RJT05T.short_desc": {
+          "source": "Visible only to the member's connections",
+          "message": "회원의 1촌에게만 표시됨"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLWFydGljbGUtcG9zdA.option.dmlzaWJpbGl0eQ.allowed-value.c3RyaW5nOlBVQkxJQw.desc": {
+          "source": "Visible to anyone on or off LinkedIn",
+          "message": "LinkedIn 내부 및 외부의 모든 사용자에게 표시됨"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLWFydGljbGUtcG9zdA.option.dmlzaWJpbGl0eQ.allowed-value.c3RyaW5nOlBVQkxJQw.display_name": {
+          "source": "Public",
+          "message": "공개"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLWFydGljbGUtcG9zdA.option.dmlzaWJpbGl0eQ.allowed-value.c3RyaW5nOlBVQkxJQw.short_desc": {
+          "source": "Visible to anyone on or off LinkedIn",
+          "message": "LinkedIn 내부 및 외부의 모든 사용자에게 표시됨"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLWFydGljbGUtcG9zdA.option.dmlzaWJpbGl0eQ.desc": {
+          "source": "Who can see the post",
+          "message": "게시물을 볼 수 있는 대상"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLWFydGljbGUtcG9zdA.option.dmlzaWJpbGl0eQ.display_name": {
+          "source": "Visibility",
+          "message": "공개 범위"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLWFydGljbGUtcG9zdA.option.dmlzaWJpbGl0eQ.short_desc": {
+          "source": "Who can see the post",
+          "message": "게시물을 볼 수 있는 대상"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLWFydGljbGUtcG9zdA.short_desc": {
+          "source": "Publish a post linking to an article",
+          "message": "기사로 연결되는 게시물 게시"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLWltYWdlLXBvc3Q.desc": {
+          "source": "Uploads an image and publishes it as a post by the signed-in member.\n\nLinkedIn accepts JPG, PNG and GIF. Supplying alt text is worth the effort: it is what screen readers announce, and LinkedIn shows it when the image cannot be loaded.",
+          "message": "이미지를 업로드하고 로그인한 회원의 게시물로 게시합니다.\n\nLinkedIn은 JPG, PNG, GIF를 지원합니다. 대체 텍스트를 제공하는 것이 좋습니다. 스크린 리더가 이를 읽어주며 이미지를 로드할 수 없을 때 LinkedIn에 표시됩니다."
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLWltYWdlLXBvc3Q.display_name": {
+          "source": "Create Image Post",
+          "message": "이미지 게시물 생성"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLWltYWdlLXBvc3Q.option.Y29tbWVudGFyeQ.desc": {
+          "source": "The post's text.\n\nMentions and hashtags are written **inline**: `@[Qore Technologies](urn:li:organization:2414183)` mentions an organization — the display text must match the entity's name exactly, case included, or it stays plain text — and `#coding` is a hashtag.",
+          "message": "게시물의 텍스트입니다.\n\n멘션과 해시태그는 **인라인**으로 작성됩니다. `@[Qore Technologies](urn:li:organization:2414183)`은(는) 조직을 멘션하며(표시 텍스트는 대소문자를 포함하여 엔티티 이름과 정확히 일치해야 하며, 그렇지 않으면 일반 텍스트로 유지됨), `#coding`은(는) 해시태그입니다."
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLWltYWdlLXBvc3Q.option.Y29tbWVudGFyeQ.display_name": {
+          "source": "Text",
+          "message": "텍스트"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLWltYWdlLXBvc3Q.option.Y29tbWVudGFyeQ.short_desc": {
+          "source": "The post's text",
+          "message": "게시물 텍스트"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLWltYWdlLXBvc3Q.option.YWx0X3RleHQ.desc": {
+          "source": "The alternative text describing the image, used by screen readers; up to 4,086 characters, and best kept under 120",
+          "message": "스크린 리더에서 사용하는 이미지를 설명하는 대체 텍스트입니다. 최대 4,086자까지 가능하며 120자 미만으로 유지하는 것이 좋습니다"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLWltYWdlLXBvc3Q.option.YWx0X3RleHQ.display_name": {
+          "source": "Alt Text",
+          "message": "대체 텍스트"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLWltYWdlLXBvc3Q.option.YWx0X3RleHQ.short_desc": {
+          "source": "The alternative text describing the image",
+          "message": "이미지를 설명하는 대체 텍스트"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLWltYWdlLXBvc3Q.option.ZGlzYWJsZV9yZXNoYXJpbmc.desc": {
+          "source": "Prevent others from resharing the post",
+          "message": "다른 사용자가 게시물을 다시 공유하지 못하도록 방지"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLWltYWdlLXBvc3Q.option.ZGlzYWJsZV9yZXNoYXJpbmc.display_name": {
+          "source": "Disable Resharing",
+          "message": "다시 공유 비활성화"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLWltYWdlLXBvc3Q.option.ZGlzYWJsZV9yZXNoYXJpbmc.short_desc": {
+          "source": "Prevent others from resharing the post",
+          "message": "다른 사용자가 게시물을 다시 공유하지 못하도록 방지"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLWltYWdlLXBvc3Q.option.ZmVlZF9kaXN0cmlidXRpb24.allowed-value.c3RyaW5nOk1BSU5fRkVFRA.desc": {
+          "source": "The post is distributed to the main LinkedIn feed",
+          "message": "게시물이 기본 LinkedIn 피드에 배포됩니다"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLWltYWdlLXBvc3Q.option.ZmVlZF9kaXN0cmlidXRpb24.allowed-value.c3RyaW5nOk1BSU5fRkVFRA.display_name": {
+          "source": "Main Feed",
+          "message": "기본 피드"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLWltYWdlLXBvc3Q.option.ZmVlZF9kaXN0cmlidXRpb24.allowed-value.c3RyaW5nOk1BSU5fRkVFRA.short_desc": {
+          "source": "Distributed to the main LinkedIn feed",
+          "message": "기본 LinkedIn 피드에 배포됨"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLWltYWdlLXBvc3Q.option.ZmVlZF9kaXN0cmlidXRpb24.allowed-value.c3RyaW5nOk5PTkU.desc": {
+          "source": "The post is not distributed to any feed; it is reachable only by its URN",
+          "message": "게시물이 어떤 피드에도 배포되지 않으며, 해당 URN을 통해서만 접근할 수 있습니다"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLWltYWdlLXBvc3Q.option.ZmVlZF9kaXN0cmlidXRpb24.allowed-value.c3RyaW5nOk5PTkU.display_name": {
+          "source": "None",
+          "message": "없음"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLWltYWdlLXBvc3Q.option.ZmVlZF9kaXN0cmlidXRpb24.allowed-value.c3RyaW5nOk5PTkU.short_desc": {
+          "source": "Not distributed to any feed",
+          "message": "어떤 피드에도 배포되지 않음"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLWltYWdlLXBvc3Q.option.ZmVlZF9kaXN0cmlidXRpb24.desc": {
+          "source": "Where the post is distributed.  `NONE` creates a post that is reachable only by its URN and does not appear in any feed",
+          "message": "게시물이 배포되는 위치입니다. `NONE`은(는) 어떤 피드에도 표시되지 않고 해당 URN으로만 접근할 수 있는 게시물을 생성합니다"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLWltYWdlLXBvc3Q.option.ZmVlZF9kaXN0cmlidXRpb24.display_name": {
+          "source": "Feed Distribution",
+          "message": "피드 배포"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLWltYWdlLXBvc3Q.option.ZmVlZF9kaXN0cmlidXRpb24.short_desc": {
+          "source": "Where the post is distributed",
+          "message": "게시물이 배포되는 위치"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLWltYWdlLXBvc3Q.option.aW1hZ2U.desc": {
+          "source": "The image to post; LinkedIn accepts JPG, PNG and GIF with fewer than 36,152,320 pixels",
+          "message": "게시할 이미지입니다. LinkedIn은 36,152,320픽셀 미만의 JPG, PNG, GIF를 지원합니다"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLWltYWdlLXBvc3Q.option.aW1hZ2U.display_name": {
+          "source": "Image",
+          "message": "이미지"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLWltYWdlLXBvc3Q.option.aW1hZ2U.short_desc": {
+          "source": "The image to post",
+          "message": "게시할 이미지"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLWltYWdlLXBvc3Q.option.dGl0bGU.desc": {
+          "source": "The title shown with the image",
+          "message": "이미지와 함께 표시되는 제목"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLWltYWdlLXBvc3Q.option.dGl0bGU.display_name": {
+          "source": "Image Title",
+          "message": "이미지 제목"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLWltYWdlLXBvc3Q.option.dGl0bGU.short_desc": {
+          "source": "The title shown with the image",
+          "message": "이미지와 함께 표시되는 제목"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLWltYWdlLXBvc3Q.option.dmlzaWJpbGl0eQ.allowed-value.c3RyaW5nOkNPTk5FQ1RJT05T.desc": {
+          "source": "Visible only to the authenticated member's connections",
+          "message": "인증된 1촌에게만 표시됨"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLWltYWdlLXBvc3Q.option.dmlzaWJpbGl0eQ.allowed-value.c3RyaW5nOkNPTk5FQ1RJT05T.display_name": {
+          "source": "Connections Only",
+          "message": "1촌 전용"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLWltYWdlLXBvc3Q.option.dmlzaWJpbGl0eQ.allowed-value.c3RyaW5nOkNPTk5FQ1RJT05T.short_desc": {
+          "source": "Visible only to the member's connections",
+          "message": "회원의 1촌에게만 표시됨"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLWltYWdlLXBvc3Q.option.dmlzaWJpbGl0eQ.allowed-value.c3RyaW5nOlBVQkxJQw.desc": {
+          "source": "Visible to anyone on or off LinkedIn",
+          "message": "LinkedIn 내부 및 외부의 모든 사용자에게 표시됨"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLWltYWdlLXBvc3Q.option.dmlzaWJpbGl0eQ.allowed-value.c3RyaW5nOlBVQkxJQw.display_name": {
+          "source": "Public",
+          "message": "공개"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLWltYWdlLXBvc3Q.option.dmlzaWJpbGl0eQ.allowed-value.c3RyaW5nOlBVQkxJQw.short_desc": {
+          "source": "Visible to anyone on or off LinkedIn",
+          "message": "LinkedIn 내부 및 외부의 모든 사용자에게 표시됨"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLWltYWdlLXBvc3Q.option.dmlzaWJpbGl0eQ.desc": {
+          "source": "Who can see the post",
+          "message": "게시물을 볼 수 있는 대상"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLWltYWdlLXBvc3Q.option.dmlzaWJpbGl0eQ.display_name": {
+          "source": "Visibility",
+          "message": "공개 범위"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLWltYWdlLXBvc3Q.option.dmlzaWJpbGl0eQ.short_desc": {
+          "source": "Who can see the post",
+          "message": "게시물을 볼 수 있는 대상"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLWltYWdlLXBvc3Q.short_desc": {
+          "source": "Publish a post with an image",
+          "message": "이미지가 포함된 게시물 게시"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLXRleHQtcG9zdA.desc": {
+          "source": "Publishes a text-only post as the signed-in member.\n\nReturns the post's URN and the URL a browser can open it at.",
+          "message": "로그인한 회원 명의로 텍스트 전용 게시물을 게시합니다.\n\n게시물의 URN과 브라우저에서 열 수 있는 URL을 반환합니다."
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLXRleHQtcG9zdA.display_name": {
+          "source": "Create Text Post",
+          "message": "텍스트 게시물 생성"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLXRleHQtcG9zdA.option.Y29tbWVudGFyeQ.desc": {
+          "source": "The post's text.\n\nMentions and hashtags are written **inline**: `@[Qore Technologies](urn:li:organization:2414183)` mentions an organization — the display text must match the entity's name exactly, case included, or it stays plain text — and `#coding` is a hashtag.",
+          "message": "게시물의 텍스트입니다.\n\n멘션과 해시태그는 **인라인**으로 작성됩니다. `@[Qore Technologies](urn:li:organization:2414183)`은(는) 조직을 멘션하며(표시 텍스트는 대소문자를 포함하여 엔티티 이름과 정확히 일치해야 하며, 그렇지 않으면 일반 텍스트로 유지됨), `#coding`은(는) 해시태그입니다."
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLXRleHQtcG9zdA.option.Y29tbWVudGFyeQ.display_name": {
+          "source": "Text",
+          "message": "텍스트"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLXRleHQtcG9zdA.option.Y29tbWVudGFyeQ.short_desc": {
+          "source": "The post's text",
+          "message": "게시물 텍스트"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLXRleHQtcG9zdA.option.ZGlzYWJsZV9yZXNoYXJpbmc.desc": {
+          "source": "Prevent others from resharing the post",
+          "message": "다른 사용자가 게시물을 다시 공유하지 못하도록 방지"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLXRleHQtcG9zdA.option.ZGlzYWJsZV9yZXNoYXJpbmc.display_name": {
+          "source": "Disable Resharing",
+          "message": "다시 공유 비활성화"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLXRleHQtcG9zdA.option.ZGlzYWJsZV9yZXNoYXJpbmc.short_desc": {
+          "source": "Prevent others from resharing the post",
+          "message": "다른 사용자가 게시물을 다시 공유하지 못하도록 방지"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLXRleHQtcG9zdA.option.ZmVlZF9kaXN0cmlidXRpb24.allowed-value.c3RyaW5nOk1BSU5fRkVFRA.desc": {
+          "source": "The post is distributed to the main LinkedIn feed",
+          "message": "게시물이 기본 LinkedIn 피드에 배포됩니다"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLXRleHQtcG9zdA.option.ZmVlZF9kaXN0cmlidXRpb24.allowed-value.c3RyaW5nOk1BSU5fRkVFRA.display_name": {
+          "source": "Main Feed",
+          "message": "기본 피드"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLXRleHQtcG9zdA.option.ZmVlZF9kaXN0cmlidXRpb24.allowed-value.c3RyaW5nOk1BSU5fRkVFRA.short_desc": {
+          "source": "Distributed to the main LinkedIn feed",
+          "message": "기본 LinkedIn 피드에 배포됨"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLXRleHQtcG9zdA.option.ZmVlZF9kaXN0cmlidXRpb24.allowed-value.c3RyaW5nOk5PTkU.desc": {
+          "source": "The post is not distributed to any feed; it is reachable only by its URN",
+          "message": "게시물이 어떤 피드에도 배포되지 않으며, 해당 URN을 통해서만 접근할 수 있습니다"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLXRleHQtcG9zdA.option.ZmVlZF9kaXN0cmlidXRpb24.allowed-value.c3RyaW5nOk5PTkU.display_name": {
+          "source": "None",
+          "message": "없음"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLXRleHQtcG9zdA.option.ZmVlZF9kaXN0cmlidXRpb24.allowed-value.c3RyaW5nOk5PTkU.short_desc": {
+          "source": "Not distributed to any feed",
+          "message": "어떤 피드에도 배포되지 않음"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLXRleHQtcG9zdA.option.ZmVlZF9kaXN0cmlidXRpb24.desc": {
+          "source": "Where the post is distributed.  `NONE` creates a post that is reachable only by its URN and does not appear in any feed",
+          "message": "게시물이 배포되는 위치입니다. `NONE`은(는) 어떤 피드에도 표시되지 않고 해당 URN으로만 접근할 수 있는 게시물을 생성합니다"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLXRleHQtcG9zdA.option.ZmVlZF9kaXN0cmlidXRpb24.display_name": {
+          "source": "Feed Distribution",
+          "message": "피드 배포"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLXRleHQtcG9zdA.option.ZmVlZF9kaXN0cmlidXRpb24.short_desc": {
+          "source": "Where the post is distributed",
+          "message": "게시물이 배포되는 위치"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLXRleHQtcG9zdA.option.dmlzaWJpbGl0eQ.allowed-value.c3RyaW5nOkNPTk5FQ1RJT05T.desc": {
+          "source": "Visible only to the authenticated member's connections",
+          "message": "인증된 1촌에게만 표시됨"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLXRleHQtcG9zdA.option.dmlzaWJpbGl0eQ.allowed-value.c3RyaW5nOkNPTk5FQ1RJT05T.display_name": {
+          "source": "Connections Only",
+          "message": "1촌 전용"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLXRleHQtcG9zdA.option.dmlzaWJpbGl0eQ.allowed-value.c3RyaW5nOkNPTk5FQ1RJT05T.short_desc": {
+          "source": "Visible only to the member's connections",
+          "message": "회원의 1촌에게만 표시됨"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLXRleHQtcG9zdA.option.dmlzaWJpbGl0eQ.allowed-value.c3RyaW5nOlBVQkxJQw.desc": {
+          "source": "Visible to anyone on or off LinkedIn",
+          "message": "LinkedIn 내부 및 외부의 모든 사용자에게 표시됨"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLXRleHQtcG9zdA.option.dmlzaWJpbGl0eQ.allowed-value.c3RyaW5nOlBVQkxJQw.display_name": {
+          "source": "Public",
+          "message": "공개"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLXRleHQtcG9zdA.option.dmlzaWJpbGl0eQ.allowed-value.c3RyaW5nOlBVQkxJQw.short_desc": {
+          "source": "Visible to anyone on or off LinkedIn",
+          "message": "LinkedIn 내부 및 외부의 모든 사용자에게 표시됨"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLXRleHQtcG9zdA.option.dmlzaWJpbGl0eQ.desc": {
+          "source": "Who can see the post",
+          "message": "게시물을 볼 수 있는 대상"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLXRleHQtcG9zdA.option.dmlzaWJpbGl0eQ.display_name": {
+          "source": "Visibility",
+          "message": "공개 범위"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLXRleHQtcG9zdA.option.dmlzaWJpbGl0eQ.short_desc": {
+          "source": "Who can see the post",
+          "message": "게시물을 볼 수 있는 대상"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLXRleHQtcG9zdA.short_desc": {
+          "source": "Publish a text post",
+          "message": "텍스트 게시물 게시"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLXZpZGVvLXBvc3Q.desc": {
+          "source": "Uploads a video and publishes it as a post by the signed-in member.\n\nLinkedIn accepts MP4 between 75 KB and 500 MB, and between 3 seconds and 30 minutes long. The upload is sent in parts, so a large video does not have to start again from the beginning if one part fails.\n\nLinkedIn processes a video after it is uploaded, so the post may take a short while to become visible even though this action has already returned its URN.",
+          "message": "동영상을 업로드하고 로그인한 회원의 게시물로 게시합니다.\n\nLinkedIn은 75KB에서 500MB 사이, 3초에서 30분 길이의 MP4를 지원합니다. 분할 업로드되므로 한 부분이 실패하더라도 대용량 동영상을 처음부터 다시 시작할 필요가 없습니다.\n\nLinkedIn은 업로드된 동영상을 처리하므로 이 액션이 이미 URN을 반환했더라도 게시물이 표시되기까지 약간의 시간이 걸릴 수 있습니다."
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLXZpZGVvLXBvc3Q.display_name": {
+          "source": "Create Video Post",
+          "message": "동영상 게시물 생성"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLXZpZGVvLXBvc3Q.option.Y29tbWVudGFyeQ.desc": {
+          "source": "The post's text.\n\nMentions and hashtags are written **inline**: `@[Qore Technologies](urn:li:organization:2414183)` mentions an organization — the display text must match the entity's name exactly, case included, or it stays plain text — and `#coding` is a hashtag.",
+          "message": "게시물의 텍스트입니다.\n\n멘션과 해시태그는 **인라인**으로 작성됩니다. `@[Qore Technologies](urn:li:organization:2414183)`은(는) 조직을 멘션하며(표시 텍스트는 대소문자를 포함하여 엔티티 이름과 정확히 일치해야 하며, 그렇지 않으면 일반 텍스트로 유지됨), `#coding`은(는) 해시태그입니다."
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLXZpZGVvLXBvc3Q.option.Y29tbWVudGFyeQ.display_name": {
+          "source": "Text",
+          "message": "텍스트"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLXZpZGVvLXBvc3Q.option.Y29tbWVudGFyeQ.short_desc": {
+          "source": "The post's text",
+          "message": "게시물 텍스트"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLXZpZGVvLXBvc3Q.option.ZGlzYWJsZV9yZXNoYXJpbmc.desc": {
+          "source": "Prevent others from resharing the post",
+          "message": "다른 사용자가 게시물을 다시 공유하지 못하도록 방지"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLXZpZGVvLXBvc3Q.option.ZGlzYWJsZV9yZXNoYXJpbmc.display_name": {
+          "source": "Disable Resharing",
+          "message": "다시 공유 비활성화"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLXZpZGVvLXBvc3Q.option.ZGlzYWJsZV9yZXNoYXJpbmc.short_desc": {
+          "source": "Prevent others from resharing the post",
+          "message": "다른 사용자가 게시물을 다시 공유하지 못하도록 방지"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLXZpZGVvLXBvc3Q.option.ZmVlZF9kaXN0cmlidXRpb24.allowed-value.c3RyaW5nOk1BSU5fRkVFRA.desc": {
+          "source": "The post is distributed to the main LinkedIn feed",
+          "message": "게시물이 기본 LinkedIn 피드에 배포됩니다"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLXZpZGVvLXBvc3Q.option.ZmVlZF9kaXN0cmlidXRpb24.allowed-value.c3RyaW5nOk1BSU5fRkVFRA.display_name": {
+          "source": "Main Feed",
+          "message": "기본 피드"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLXZpZGVvLXBvc3Q.option.ZmVlZF9kaXN0cmlidXRpb24.allowed-value.c3RyaW5nOk1BSU5fRkVFRA.short_desc": {
+          "source": "Distributed to the main LinkedIn feed",
+          "message": "기본 LinkedIn 피드에 배포됨"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLXZpZGVvLXBvc3Q.option.ZmVlZF9kaXN0cmlidXRpb24.allowed-value.c3RyaW5nOk5PTkU.desc": {
+          "source": "The post is not distributed to any feed; it is reachable only by its URN",
+          "message": "게시물이 어떤 피드에도 배포되지 않으며, 해당 URN을 통해서만 접근할 수 있습니다"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLXZpZGVvLXBvc3Q.option.ZmVlZF9kaXN0cmlidXRpb24.allowed-value.c3RyaW5nOk5PTkU.display_name": {
+          "source": "None",
+          "message": "없음"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLXZpZGVvLXBvc3Q.option.ZmVlZF9kaXN0cmlidXRpb24.allowed-value.c3RyaW5nOk5PTkU.short_desc": {
+          "source": "Not distributed to any feed",
+          "message": "어떤 피드에도 배포되지 않음"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLXZpZGVvLXBvc3Q.option.ZmVlZF9kaXN0cmlidXRpb24.desc": {
+          "source": "Where the post is distributed.  `NONE` creates a post that is reachable only by its URN and does not appear in any feed",
+          "message": "게시물이 배포되는 위치입니다. `NONE`은(는) 어떤 피드에도 표시되지 않고 해당 URN으로만 접근할 수 있는 게시물을 생성합니다"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLXZpZGVvLXBvc3Q.option.ZmVlZF9kaXN0cmlidXRpb24.display_name": {
+          "source": "Feed Distribution",
+          "message": "피드 배포"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLXZpZGVvLXBvc3Q.option.ZmVlZF9kaXN0cmlidXRpb24.short_desc": {
+          "source": "Where the post is distributed",
+          "message": "게시물이 배포되는 위치"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLXZpZGVvLXBvc3Q.option.dGl0bGU.desc": {
+          "source": "The title shown with the video",
+          "message": "동영상과 함께 표시되는 제목"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLXZpZGVvLXBvc3Q.option.dGl0bGU.display_name": {
+          "source": "Video Title",
+          "message": "동영상 제목"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLXZpZGVvLXBvc3Q.option.dGl0bGU.short_desc": {
+          "source": "The title shown with the video",
+          "message": "동영상과 함께 표시되는 제목"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLXZpZGVvLXBvc3Q.option.dmlkZW8.desc": {
+          "source": "The video to post; LinkedIn accepts MP4 between 75 KB and 500 MB and between 3 seconds and 30 minutes long",
+          "message": "게시할 동영상입니다. LinkedIn은 75KB에서 500MB 사이, 3초에서 30분 길이의 MP4를 지원합니다"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLXZpZGVvLXBvc3Q.option.dmlkZW8.display_name": {
+          "source": "Video",
+          "message": "비디오"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLXZpZGVvLXBvc3Q.option.dmlkZW8.short_desc": {
+          "source": "The video to post",
+          "message": "게시할 동영상"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLXZpZGVvLXBvc3Q.option.dmlzaWJpbGl0eQ.allowed-value.c3RyaW5nOkNPTk5FQ1RJT05T.desc": {
+          "source": "Visible only to the authenticated member's connections",
+          "message": "인증된 1촌에게만 표시됨"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLXZpZGVvLXBvc3Q.option.dmlzaWJpbGl0eQ.allowed-value.c3RyaW5nOkNPTk5FQ1RJT05T.display_name": {
+          "source": "Connections Only",
+          "message": "1촌 전용"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLXZpZGVvLXBvc3Q.option.dmlzaWJpbGl0eQ.allowed-value.c3RyaW5nOkNPTk5FQ1RJT05T.short_desc": {
+          "source": "Visible only to the member's connections",
+          "message": "회원의 1촌에게만 표시됨"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLXZpZGVvLXBvc3Q.option.dmlzaWJpbGl0eQ.allowed-value.c3RyaW5nOlBVQkxJQw.desc": {
+          "source": "Visible to anyone on or off LinkedIn",
+          "message": "LinkedIn 내부 및 외부의 모든 사용자에게 표시됨"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLXZpZGVvLXBvc3Q.option.dmlzaWJpbGl0eQ.allowed-value.c3RyaW5nOlBVQkxJQw.display_name": {
+          "source": "Public",
+          "message": "공개"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLXZpZGVvLXBvc3Q.option.dmlzaWJpbGl0eQ.allowed-value.c3RyaW5nOlBVQkxJQw.short_desc": {
+          "source": "Visible to anyone on or off LinkedIn",
+          "message": "LinkedIn 내부 및 외부의 모든 사용자에게 표시됨"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLXZpZGVvLXBvc3Q.option.dmlzaWJpbGl0eQ.desc": {
+          "source": "Who can see the post",
+          "message": "게시물을 볼 수 있는 대상"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLXZpZGVvLXBvc3Q.option.dmlzaWJpbGl0eQ.display_name": {
+          "source": "Visibility",
+          "message": "공개 범위"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLXZpZGVvLXBvc3Q.option.dmlzaWJpbGl0eQ.short_desc": {
+          "source": "Who can see the post",
+          "message": "게시물을 볼 수 있는 대상"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLXZpZGVvLXBvc3Q.short_desc": {
+          "source": "Publish a post with a video",
+          "message": "동영상이 포함된 게시물 게시"
+        },
+        "app.TGlua2VkSW4.action.Z2V0LWN1cnJlbnQtdXNlcg.desc": {
+          "source": "Retrieves the signed-in member's profile: name, email address, profile picture and locale.\n\nThe `urn` field is the member's `urn:li:person:{id}` URN, which is what LinkedIn APIs take wherever a member has to be named.",
+          "message": "로그인한 회원의 프로필(이름, 이메일 주소, 프로필 사진 및 언어/지역)을 조회합니다.\n\n`urn` 필드는 회원의 `urn:li:person:{id}` URN으로, LinkedIn API에서 회원을 지정해야 하는 모든 위치에 사용됩니다."
+        },
+        "app.TGlua2VkSW4.action.Z2V0LWN1cnJlbnQtdXNlcg.display_name": {
+          "source": "Get Current User",
+          "message": "현재 사용자 가져오기"
+        },
+        "app.TGlua2VkSW4.action.Z2V0LWN1cnJlbnQtdXNlcg.short_desc": {
+          "source": "Get the signed-in member's profile",
+          "message": "로그인한 회원의 프로필 가져오기"
+        },
+        "app.TGlua2VkSW4.action.Z2V0LXBvc3Q.desc": {
+          "source": "Retrieves a post by its URN, with its text, visibility, attached content and timestamps.\n\n**Requires the `r_member_social` permission**, which LinkedIn grants only to approved applications; add it to the connection's scopes once the application has been approved for it, otherwise this action fails with HTTP 403.\n\nTimestamps are returned as dates: LinkedIn reports them as milliseconds since the epoch and they are converted here.",
+          "message": "URN을 통해 게시물의 텍스트, 공개 범위, 첨부 콘텐츠 및 타임스탬프를 조회합니다.\n\n**`r_member_social` 권한이 필요합니다.** 이 권한은 LinkedIn에서 승인된 애플리케이션에만 부여합니다. 애플리케이션이 승인되면 연결 범위(scope)에 추가하세요. 그렇지 않으면 이 작업이 HTTP 403 오류로 실패합니다.\n\n타임스탬프는 날짜 형식으로 반환됩니다. LinkedIn에서는 에포크 이후의 밀리초 단위로 보고하며 여기서 변환됩니다."
+        },
+        "app.TGlua2VkSW4.action.Z2V0LXBvc3Q.display_name": {
+          "source": "Get Post",
+          "message": "게시물 가져오기"
+        },
+        "app.TGlua2VkSW4.action.Z2V0LXBvc3Q.option.cG9zdA.desc": {
+          "source": "The URN of the post to retrieve",
+          "message": "조회할 게시물의 URN"
+        },
+        "app.TGlua2VkSW4.action.Z2V0LXBvc3Q.option.cG9zdA.display_name": {
+          "source": "Post URN",
+          "message": "게시물 URN"
+        },
+        "app.TGlua2VkSW4.action.Z2V0LXBvc3Q.option.cG9zdA.short_desc": {
+          "source": "The URN of the post to retrieve",
+          "message": "조회할 게시물의 URN"
+        },
+        "app.TGlua2VkSW4.action.Z2V0LXBvc3Q.option.dmlld19jb250ZXh0.allowed-value.c3RyaW5nOkFVVEhPUg.desc": {
+          "source": "The latest version, which may be `DRAFT` or `PROCESSING` rather than published",
+          "message": "게시된 버전이 아닌 `DRAFT` 또는 `PROCESSING` 상태일 수 있는 최신 버전"
+        },
+        "app.TGlua2VkSW4.action.Z2V0LXBvc3Q.option.dmlld19jb250ZXh0.allowed-value.c3RyaW5nOkFVVEhPUg.display_name": {
+          "source": "Author",
+          "message": "작성자"
+        },
+        "app.TGlua2VkSW4.action.Z2V0LXBvc3Q.option.dmlld19jb250ZXh0.allowed-value.c3RyaW5nOkFVVEhPUg.short_desc": {
+          "source": "The latest version, including drafts and processing posts",
+          "message": "임시 저장 및 처리 중인 게시물을 포함한 최신 버전"
+        },
+        "app.TGlua2VkSW4.action.Z2V0LXBvc3Q.option.dmlld19jb250ZXh0.allowed-value.c3RyaW5nOlJFQURFUg.desc": {
+          "source": "The published version visible to a general audience",
+          "message": "일반 사용자에게 표시되는 게시된 버전"
+        },
+        "app.TGlua2VkSW4.action.Z2V0LXBvc3Q.option.dmlld19jb250ZXh0.allowed-value.c3RyaW5nOlJFQURFUg.display_name": {
+          "source": "Reader",
+          "message": "뷰어"
+        },
+        "app.TGlua2VkSW4.action.Z2V0LXBvc3Q.option.dmlld19jb250ZXh0.allowed-value.c3RyaW5nOlJFQURFUg.short_desc": {
+          "source": "The published version visible to a general audience",
+          "message": "일반 사용자에게 표시되는 게시된 버전"
+        },
+        "app.TGlua2VkSW4.action.Z2V0LXBvc3Q.option.dmlld19jb250ZXh0.desc": {
+          "source": "Whether to read the post as its author or as a reader.  `AUTHOR` returns the latest version, which may still be a draft or processing; `READER` returns the published version visible to a general audience",
+          "message": "게시물을 작성자로서 읽을지 또는 독자로서 읽을지 여부입니다. `AUTHOR`(은)는 아직 임시 저장 상태이거나 처리 중일 수 있는 최신 버전을 반환하며, `READER`(은)는 일반 사용자에게 표시되는 게시된 버전을 반환합니다."
+        },
+        "app.TGlua2VkSW4.action.Z2V0LXBvc3Q.option.dmlld19jb250ZXh0.display_name": {
+          "source": "View Context",
+          "message": "조회 컨텍스트"
+        },
+        "app.TGlua2VkSW4.action.Z2V0LXBvc3Q.option.dmlld19jb250ZXh0.short_desc": {
+          "source": "Whether to read the post as its author or as a reader",
+          "message": "게시물을 작성자로서 읽을지 독자로서 읽을지 여부"
+        },
+        "app.TGlua2VkSW4.action.Z2V0LXBvc3Q.short_desc": {
+          "source": "Retrieve a post by its URN",
+          "message": "URN으로 게시물 조회"
+        },
+        "app.TGlua2VkSW4.action.ZGVsZXRlLXBvc3Q.desc": {
+          "source": "Deletes a post.\n\nDeletion is idempotent: deleting a post that is already gone succeeds rather than failing.",
+          "message": "게시물을 삭제합니다.\n\n삭제는 멱등성을 가집니다. 이미 삭제된 게시물을 삭제해도 실패하지 않고 성공합니다."
+        },
+        "app.TGlua2VkSW4.action.ZGVsZXRlLXBvc3Q.display_name": {
+          "source": "Delete Post",
+          "message": "게시물 삭제"
+        },
+        "app.TGlua2VkSW4.action.ZGVsZXRlLXBvc3Q.option.cG9zdA.desc": {
+          "source": "The URN of the post to delete",
+          "message": "삭제할 게시물의 URN"
+        },
+        "app.TGlua2VkSW4.action.ZGVsZXRlLXBvc3Q.option.cG9zdA.display_name": {
+          "source": "Post URN",
+          "message": "게시물 URN"
+        },
+        "app.TGlua2VkSW4.action.ZGVsZXRlLXBvc3Q.option.cG9zdA.short_desc": {
+          "source": "The URN of the post to delete",
+          "message": "삭제할 게시물의 URN"
+        },
+        "app.TGlua2VkSW4.action.ZGVsZXRlLXBvc3Q.short_desc": {
+          "source": "Delete a post",
+          "message": "게시물 삭제"
+        },
+        "app.TGlua2VkSW4.action.bWFrZS1hcGktY2FsbA.desc": {
+          "source": "Make a custom HTTP / REST API call to **LinkedIn** using the configured connection's authentication.\n\nSpecify the HTTP method, the URI path (relative to the connection's API base URL), optional query parameters, headers, and request body. The response is returned as a hash containing the status code, response headers, and response body.\n\nUse this action for endpoints that are not yet exposed as first-class actions on this app.",
+          "message": "구성된 연결의 인증을 사용하여 **LinkedIn**에 사용자 지정 HTTP / REST API 호출을 수행합니다.\n\nHTTP 메서드, URI 경로(연결의 API 기본 URL 기준 상대 경로), 선택적 쿼리 매개변수, 헤더 및 요청 본문을 지정합니다. 응답은 상태 코드, 응답 헤더 및 응답 본문을 포함하는 해시로 반환됩니다.\n\n이 앱에서 기본 작업으로 아직 노출되지 않은 엔드포인트에 이 작업을 사용하세요."
+        },
+        "app.TGlua2VkSW4.action.bWFrZS1hcGktY2FsbA.display_name": {
+          "source": "Make an API call",
+          "message": "API 호출 실행"
+        },
+        "app.TGlua2VkSW4.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.desc": {
+          "source": "The request body. The effective type depends on `body_type`: JSON/form/YAML expect a hash, XML/text expect a string, multipart expects a file structure, binary expects raw bytes.",
+          "message": "요청 본문입니다. 유효한 유형은 `body_type`에 따라 달라집니다. JSON/form/YAML은 해시를, XML/text는 문자열을, multipart는 파일 구조를, binary는 원시 바이트를 요구합니다."
+        },
+        "app.TGlua2VkSW4.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.display_name": {
+          "source": "Body",
+          "message": "본문"
+        },
+        "app.TGlua2VkSW4.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.short_desc": {
+          "source": "The request body",
+          "message": "요청 본문"
+        },
+        "app.TGlua2VkSW4.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.desc": {
+          "source": "Upload a file using `multipart/form-data`. The body must be a @ref DataProvider::FileDataType \"FileDataType\" structure (filename + content + mime_type). The framework builds the multipart envelope and sets the boundary header.",
+          "message": "`multipart/form-data`을(를) 사용하여 파일을 업로드합니다. 본문은 @ref DataProvider::FileDataType \"FileDataType\" 구조(filename + content + mime_type)여야 합니다. 프레임워크가 multipart 봉투를 작성하고 boundary 헤더를 설정합니다."
+        },
+        "app.TGlua2VkSW4.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.display_name": {
+          "source": "Multipart Form",
+          "message": "멀티파트 폼"
+        },
+        "app.TGlua2VkSW4.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.short_desc": {
+          "source": "Upload a file using multipart/form-data",
+          "message": "multipart/form-data를 사용하여 파일 업로드"
+        },
+        "app.TGlua2VkSW4.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.desc": {
+          "source": "Pass the body to the REST client unchanged; the client decides serialization based on its configured `data` option and the value type",
+          "message": "본문을 변경하지 않고 REST 클라이언트에 전달합니다. 클라이언트는 구성된 `data` 옵션과 값 유형을 기반으로 직렬화를 결정합니다."
+        },
+        "app.TGlua2VkSW4.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.display_name": {
+          "source": "Auto",
+          "message": "자동"
+        },
+        "app.TGlua2VkSW4.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.short_desc": {
+          "source": "Pass-through; use connection serialization and let the REST client decide",
+          "message": "패스스루: 연결 직렬화를 사용하고 REST 클라이언트가 결정하도록 합니다."
+        },
+        "app.TGlua2VkSW4.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.desc": {
+          "source": "Send the body as raw bytes. The body must be a binary value. Sets `Content-Type: application/octet-stream` unless overridden by `hdr`.",
+          "message": "본문을 원시 바이트로 전송합니다. 본문은 바이너리 값이어야 합니다. `hdr`에 의해 재정의되지 않는 한 `Content-Type: application/octet-stream`을(를) 설정합니다."
+        },
+        "app.TGlua2VkSW4.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.display_name": {
+          "source": "Raw Binary",
+          "message": "원시 바이너리"
+        },
+        "app.TGlua2VkSW4.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.short_desc": {
+          "source": "Send body as raw bytes",
+          "message": "본문을 원시 바이트로 전송"
+        },
+        "app.TGlua2VkSW4.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.desc": {
+          "source": "Serialize a hash of form fields as `application/x-www-form-urlencoded`. The body must be a hash whose values are scalars (strings/numbers/booleans).",
+          "message": "폼 필드의 해시를 `application/x-www-form-urlencoded`(으)로 직렬화합니다. 본문은 값이 스칼라(문자열/숫자/불리언)인 해시여야 합니다."
+        },
+        "app.TGlua2VkSW4.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.display_name": {
+          "source": "Form (URL-encoded)",
+          "message": "폼 (URL 인코딩)"
+        },
+        "app.TGlua2VkSW4.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.short_desc": {
+          "source": "Serialize body as application/x-www-form-urlencoded form fields",
+          "message": "본문을 application/x-www-form-urlencoded 폼 필드로 직렬화"
+        },
+        "app.TGlua2VkSW4.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.desc": {
+          "source": "Serialize the body as JSON; sets `Content-Type: application/json`. The body should be a hash, list, or scalar value.",
+          "message": "본문을 JSON으로 직렬화하며, `Content-Type: application/json`을(를) 설정합니다. 본문은 해시, 리스트 또는 스칼라 값이어야 합니다."
+        },
+        "app.TGlua2VkSW4.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.display_name": {
+          "source": "JSON",
+          "message": "JSON"
+        },
+        "app.TGlua2VkSW4.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.short_desc": {
+          "source": "Serialize body as JSON",
+          "message": "본문을 JSON으로 직렬화"
+        },
+        "app.TGlua2VkSW4.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.desc": {
+          "source": "Send the body as plain text. The body must be a string. Sets `Content-Type: text/plain`.",
+          "message": "본문을 일반 텍스트로 전송합니다. 본문은 문자열이어야 합니다. `Content-Type: text/plain`을(를) 설정합니다."
+        },
+        "app.TGlua2VkSW4.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.display_name": {
+          "source": "Plain Text",
+          "message": "일반 텍스트"
+        },
+        "app.TGlua2VkSW4.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.short_desc": {
+          "source": "Send body as text/plain",
+          "message": "본문을 text/plain으로 전송"
+        },
+        "app.TGlua2VkSW4.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.desc": {
+          "source": "Send the body as XML. If the body is a hash it is serialized to XML; if it is a string it is sent verbatim. Sets `Content-Type: application/xml`.",
+          "message": "본문을 XML로 전송합니다. 본문이 해시인 경우 XML로 직렬화되고, 문자열인 경우 그대로 전송됩니다. `Content-Type: application/xml`을(를) 설정합니다."
+        },
+        "app.TGlua2VkSW4.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.display_name": {
+          "source": "XML",
+          "message": "XML"
+        },
+        "app.TGlua2VkSW4.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.short_desc": {
+          "source": "Send body as XML",
+          "message": "본문을 XML로 전송"
+        },
+        "app.TGlua2VkSW4.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.desc": {
+          "source": "Send the body as YAML. If the body is a hash it is serialized to YAML; if it is a string it is sent verbatim. Sets `Content-Type: application/x-yaml`.",
+          "message": "본문을 YAML로 전송합니다. 본문이 해시인 경우 YAML로 직렬화되고, 문자열인 경우 그대로 전송됩니다. `Content-Type: application/x-yaml`을(를) 설정합니다."
+        },
+        "app.TGlua2VkSW4.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.display_name": {
+          "source": "YAML",
+          "message": "YAML"
+        },
+        "app.TGlua2VkSW4.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.short_desc": {
+          "source": "Send body as YAML",
+          "message": "본문을 YAML로 전송"
+        },
+        "app.TGlua2VkSW4.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.desc": {
+          "source": "Selects the body serialization mode and the corresponding `Content-Type` header. Changing this field reshapes the `body` editor - selecting JSON exposes a JSON editor, selecting Multipart Form exposes a file picker, and so on.",
+          "message": "본문 직렬화 모드 및 해당되는 `Content-Type` 헤더를 선택합니다. 이 필드를 변경하면 `body` 에디터의 형태가 변경됩니다. JSON을 선택하면 JSON 에디터가 표시되고, 멀티파트 폼을 선택하면 파일 선택기가 표시되는 방식입니다."
+        },
+        "app.TGlua2VkSW4.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.display_name": {
+          "source": "Body Type",
+          "message": "본문 유형"
+        },
+        "app.TGlua2VkSW4.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.short_desc": {
+          "source": "How the body is serialized and what Content-Type is sent",
+          "message": "본문이 직렬화되는 방식 및 전송되는 Content-Type"
+        },
+        "app.TGlua2VkSW4.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.desc": {
+          "source": "If `True`, non-2xx HTTP responses return as the normal response hash (with the actual status code) instead of raising `REST-RESPONSE-ERROR`. Useful for handling 4xx/5xx as data - e.g. checking whether a resource exists. Overrides the connection's `error_passthru` setting for this call only.",
+          "message": "`True`인 경우, 2xx가 아닌 HTTP 응답은 `REST-RESPONSE-ERROR`을(를) 발생시키는 대신 (실제 상태 코드와 함께) 일반 응답 해시로 반환됩니다. 리소스 존재 여부 확인 등 4xx/5xx를 데이터로 처리할 때 유용합니다. 이 호출에 대해서만 연결의 `error_passthru` 설정을 재정의합니다."
+        },
+        "app.TGlua2VkSW4.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.display_name": {
+          "source": "Return Errors as Data",
+          "message": "오류를 데이터로 반환"
+        },
+        "app.TGlua2VkSW4.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.short_desc": {
+          "source": "Return non-2xx responses normally instead of throwing",
+          "message": "예외를 발생시키는 대신 2xx가 아닌 응답을 정상적으로 반환"
+        },
+        "app.TGlua2VkSW4.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.desc": {
+          "source": "Optional list of HTTP status codes treated as success. If set and the response status is not in this list, the action throws `REST-STATUS-ERROR`. When unset, the REST client's default behavior applies (typically: 2xx is success, non-2xx throws).",
+          "message": "성공으로 처리되는 HTTP 상태 코드의 선택적 목록입니다. 설정되어 있고 응답 상태가 이 목록에 없는 경우 작업이 `REST-STATUS-ERROR` 예외를 발생시킵니다. 설정되지 않은 경우 REST 클라이언트의 기본 동작이 적용됩니다(일반적으로 2xx는 성공, 2xx 이외는 예외 발생)."
+        },
+        "app.TGlua2VkSW4.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.display_name": {
+          "source": "Expected Status Codes",
+          "message": "예상되는 상태 코드"
+        },
+        "app.TGlua2VkSW4.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.short_desc": {
+          "source": "Response status codes treated as success",
+          "message": "성공으로 처리되는 응답 상태 코드"
+        },
+        "app.TGlua2VkSW4.action.bWFrZS1hcGktY2FsbA.option.aGRy.desc": {
+          "source": "Hash of custom headers added to the request. These override any default headers set by `body_type` (e.g. supplying `Content-Type` here wins over the body-type default).",
+          "message": "요청에 추가되는 사용자 지정 헤더의 해시입니다. 이는 `body_type`에 의해 설정된 기본 헤더보다 우선합니다(예: 여기에 `Content-Type`을(를) 제공하면 본문 유형 기본값보다 우선 적용됨)."
+        },
+        "app.TGlua2VkSW4.action.bWFrZS1hcGktY2FsbA.option.aGRy.display_name": {
+          "source": "Custom Headers",
+          "message": "사용자 지정 헤더"
+        },
+        "app.TGlua2VkSW4.action.bWFrZS1hcGktY2FsbA.option.aGRy.short_desc": {
+          "source": "Extra request headers",
+          "message": "추가 요청 헤더"
+        },
+        "app.TGlua2VkSW4.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.desc": {
+          "source": "If `True`, the response hash includes a `debug` sub-hash containing the request method/URL/headers (with sensitive values redacted), request and response sizes, and round-trip duration. Useful when investigating slow or failing calls. Off by default to keep responses lean.",
+          "message": "`True`인 경우 응답 해시에 요청 메서드/URL/헤더(민감한 값은 가려짐), 요청 및 응답 크기, 왕복 시간이 포함된 `debug` 하위 해시가 포함됩니다. 느리거나 실패한 호출을 조사할 때 유용합니다. 응답을 가볍게 유지하기 위해 기본적으로 비활성화되어 있습니다."
+        },
+        "app.TGlua2VkSW4.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.display_name": {
+          "source": "Include Debug Info",
+          "message": "디버그 정보 포함"
+        },
+        "app.TGlua2VkSW4.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.short_desc": {
+          "source": "Include request/timing/size debug info in the response",
+          "message": "응답에 요청/타이밍/크기 디버그 정보 포함"
+        },
+        "app.TGlua2VkSW4.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.desc": {
+          "source": "HTTP `OPTIONS`",
+          "message": "HTTP `OPTIONS`"
+        },
+        "app.TGlua2VkSW4.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.display_name": {
+          "source": "OPTIONS",
+          "message": "OPTIONS"
+        },
+        "app.TGlua2VkSW4.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.short_desc": {
+          "source": "HTTP OPTIONS",
+          "message": "HTTP OPTIONS"
+        },
+        "app.TGlua2VkSW4.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.desc": {
+          "source": "HTTP `DELETE`",
+          "message": "HTTP `DELETE`"
+        },
+        "app.TGlua2VkSW4.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.display_name": {
+          "source": "DELETE",
+          "message": "DELETE"
+        },
+        "app.TGlua2VkSW4.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.short_desc": {
+          "source": "HTTP DELETE",
+          "message": "HTTP DELETE"
+        },
+        "app.TGlua2VkSW4.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.desc": {
+          "source": "HTTP `GET`",
+          "message": "HTTP `GET`"
+        },
+        "app.TGlua2VkSW4.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.display_name": {
+          "source": "GET",
+          "message": "GET"
+        },
+        "app.TGlua2VkSW4.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.short_desc": {
+          "source": "HTTP GET",
+          "message": "HTTP GET"
+        },
+        "app.TGlua2VkSW4.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.desc": {
+          "source": "HTTP `HEAD`",
+          "message": "HTTP `HEAD`"
+        },
+        "app.TGlua2VkSW4.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.display_name": {
+          "source": "HEAD",
+          "message": "HEAD"
+        },
+        "app.TGlua2VkSW4.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.short_desc": {
+          "source": "HTTP HEAD",
+          "message": "HTTP HEAD"
+        },
+        "app.TGlua2VkSW4.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.desc": {
+          "source": "HTTP `PATCH`",
+          "message": "HTTP `PATCH`"
+        },
+        "app.TGlua2VkSW4.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.display_name": {
+          "source": "PATCH",
+          "message": "PATCH"
+        },
+        "app.TGlua2VkSW4.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.short_desc": {
+          "source": "HTTP PATCH",
+          "message": "HTTP PATCH"
+        },
+        "app.TGlua2VkSW4.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.desc": {
+          "source": "HTTP `POST`",
+          "message": "HTTP `POST`"
+        },
+        "app.TGlua2VkSW4.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.display_name": {
+          "source": "POST",
+          "message": "POST"
+        },
+        "app.TGlua2VkSW4.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.short_desc": {
+          "source": "HTTP POST",
+          "message": "HTTP POST"
+        },
+        "app.TGlua2VkSW4.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.desc": {
+          "source": "HTTP `PUT`",
+          "message": "HTTP `PUT`"
+        },
+        "app.TGlua2VkSW4.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.display_name": {
+          "source": "PUT",
+          "message": "PUT"
+        },
+        "app.TGlua2VkSW4.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.short_desc": {
+          "source": "HTTP PUT",
+          "message": "HTTP PUT"
+        },
+        "app.TGlua2VkSW4.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.desc": {
+          "source": "HTTP `TRACE`",
+          "message": "HTTP `TRACE`"
+        },
+        "app.TGlua2VkSW4.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.display_name": {
+          "source": "TRACE",
+          "message": "TRACE"
+        },
+        "app.TGlua2VkSW4.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.short_desc": {
+          "source": "HTTP TRACE",
+          "message": "HTTP TRACE"
+        },
+        "app.TGlua2VkSW4.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "요청에 사용할 HTTP 메서드"
+        },
+        "app.TGlua2VkSW4.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.display_name": {
+          "source": "HTTP Method",
+          "message": "HTTP 메서드"
+        },
+        "app.TGlua2VkSW4.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.short_desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "요청에 사용할 HTTP 메서드"
+        },
+        "app.TGlua2VkSW4.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain `{name}` placeholders that are replaced from `path_vars`. Example: `/users/{id}/comments`.",
+          "message": "연결의 API 기본 URL에 대한 상대 URI 경로입니다. `path_vars`에서 대체되는 `{name}` 자리 표시자가 포함될 수 있습니다. 예: `/users/{id}/comments`."
+        },
+        "app.TGlua2VkSW4.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.display_name": {
+          "source": "URI Path",
+          "message": "URI 경로"
+        },
+        "app.TGlua2VkSW4.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.short_desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain '{name}' placeholders that are replaced from 'path_vars'. Example: '/users/{id}/comments'",
+          "message": "연결의 API 기본 URL에 대한 상대 URI 경로입니다. 'path_vars'에서 대체되는 '{name}' 자리 표시자를 포함할 수 있습니다. 예: '/users/{id}/comments'"
+        },
+        "app.TGlua2VkSW4.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.desc": {
+          "source": "Hash of values substituted into `{name}` placeholders in the URI path. Example: with `path = /users/{id}` and `path_vars = {id: 123}` the framework sends `/users/123`. Values are URL-encoded.",
+          "message": "URI 경로의 `{name}` 자리 표시자에 대체되는 값의 해시입니다. 예: `path = /users/{id}` 및 `path_vars = {id: 123}`이 있으면 프레임워크가 `/users/123`을(를) 전송합니다. 값은 URL 인코딩됩니다."
+        },
+        "app.TGlua2VkSW4.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.display_name": {
+          "source": "Path Variables",
+          "message": "경로 변수"
+        },
+        "app.TGlua2VkSW4.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.short_desc": {
+          "source": "Values for {name} placeholders in path",
+          "message": "경로 내 {name} 자리 표시자의 값"
+        },
+        "app.TGlua2VkSW4.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.desc": {
+          "source": "Hash of query string parameters to append to the URI path. Values are URL-encoded; list values are joined with `,`.",
+          "message": "URI 경로에 추가할 쿼리 문자열 매개변수 해시입니다. 값은 URL 인코딩되며, 목록 값은 `,`(으)로 연결됩니다."
+        },
+        "app.TGlua2VkSW4.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.display_name": {
+          "source": "Query Arguments",
+          "message": "쿼리 인수"
+        },
+        "app.TGlua2VkSW4.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.short_desc": {
+          "source": "Query string parameters",
+          "message": "쿼리 문자열 매개변수"
+        },
+        "app.TGlua2VkSW4.action.bWFrZS1hcGktY2FsbA.short_desc": {
+          "source": "Make a custom API call to LinkedIn",
+          "message": "LinkedIn에 사용자 지정 API 호출 수행"
+        },
+        "app.TGlua2VkSW4.action.cmVzaGFyZS1wb3N0.desc": {
+          "source": "Reshares an existing post as the signed-in member, optionally with commentary of your own above it.\n\nAny post the member can see may be reshared, including an organization's.",
+          "message": "로그인한 회원으로 기존 게시물을 다시 공유하며, 선택적으로 상단에 자신만의 코멘터리를 추가할 수 있습니다.\n\n회원이 볼 수 있는 모든 게시물(조직의 게시물 포함)을 다시 공유할 수 있습니다."
+        },
+        "app.TGlua2VkSW4.action.cmVzaGFyZS1wb3N0.display_name": {
+          "source": "Reshare Post",
+          "message": "게시물 재공유"
+        },
+        "app.TGlua2VkSW4.action.cmVzaGFyZS1wb3N0.option.Y29tbWVudGFyeQ.desc": {
+          "source": "The text to add above the reshared post; a reshare may carry no text of its own.\n\nMentions and hashtags are written **inline**: `@[Qore Technologies](urn:li:organization:2414183)` mentions an organization and `#coding` is a hashtag.",
+          "message": "재공유된 게시물 위에 추가할 텍스트입니다. 재공유 시 자체 텍스트를 포함하지 않을 수도 있습니다.\n\n멘션과 해시태그는 **인라인**으로 작성됩니다. `@[Qore Technologies](urn:li:organization:2414183)`(은)는 조직을 멘션하고 `#coding`(은)는 해시태그입니다."
+        },
+        "app.TGlua2VkSW4.action.cmVzaGFyZS1wb3N0.option.Y29tbWVudGFyeQ.display_name": {
+          "source": "Text",
+          "message": "텍스트"
+        },
+        "app.TGlua2VkSW4.action.cmVzaGFyZS1wb3N0.option.Y29tbWVudGFyeQ.short_desc": {
+          "source": "The post's text",
+          "message": "게시물 텍스트"
+        },
+        "app.TGlua2VkSW4.action.cmVzaGFyZS1wb3N0.option.ZGlzYWJsZV9yZXNoYXJpbmc.desc": {
+          "source": "Prevent others from resharing the post",
+          "message": "다른 사용자가 게시물을 다시 공유하지 못하도록 방지"
+        },
+        "app.TGlua2VkSW4.action.cmVzaGFyZS1wb3N0.option.ZGlzYWJsZV9yZXNoYXJpbmc.display_name": {
+          "source": "Disable Resharing",
+          "message": "다시 공유 비활성화"
+        },
+        "app.TGlua2VkSW4.action.cmVzaGFyZS1wb3N0.option.ZGlzYWJsZV9yZXNoYXJpbmc.short_desc": {
+          "source": "Prevent others from resharing the post",
+          "message": "다른 사용자가 게시물을 다시 공유하지 못하도록 방지"
+        },
+        "app.TGlua2VkSW4.action.cmVzaGFyZS1wb3N0.option.ZmVlZF9kaXN0cmlidXRpb24.allowed-value.c3RyaW5nOk1BSU5fRkVFRA.desc": {
+          "source": "The post is distributed to the main LinkedIn feed",
+          "message": "게시물이 기본 LinkedIn 피드에 배포됩니다"
+        },
+        "app.TGlua2VkSW4.action.cmVzaGFyZS1wb3N0.option.ZmVlZF9kaXN0cmlidXRpb24.allowed-value.c3RyaW5nOk1BSU5fRkVFRA.display_name": {
+          "source": "Main Feed",
+          "message": "기본 피드"
+        },
+        "app.TGlua2VkSW4.action.cmVzaGFyZS1wb3N0.option.ZmVlZF9kaXN0cmlidXRpb24.allowed-value.c3RyaW5nOk1BSU5fRkVFRA.short_desc": {
+          "source": "Distributed to the main LinkedIn feed",
+          "message": "기본 LinkedIn 피드에 배포됨"
+        },
+        "app.TGlua2VkSW4.action.cmVzaGFyZS1wb3N0.option.ZmVlZF9kaXN0cmlidXRpb24.allowed-value.c3RyaW5nOk5PTkU.desc": {
+          "source": "The post is not distributed to any feed; it is reachable only by its URN",
+          "message": "게시물이 어떤 피드에도 배포되지 않으며, 해당 URN을 통해서만 접근할 수 있습니다"
+        },
+        "app.TGlua2VkSW4.action.cmVzaGFyZS1wb3N0.option.ZmVlZF9kaXN0cmlidXRpb24.allowed-value.c3RyaW5nOk5PTkU.display_name": {
+          "source": "None",
+          "message": "없음"
+        },
+        "app.TGlua2VkSW4.action.cmVzaGFyZS1wb3N0.option.ZmVlZF9kaXN0cmlidXRpb24.allowed-value.c3RyaW5nOk5PTkU.short_desc": {
+          "source": "Not distributed to any feed",
+          "message": "어떤 피드에도 배포되지 않음"
+        },
+        "app.TGlua2VkSW4.action.cmVzaGFyZS1wb3N0.option.ZmVlZF9kaXN0cmlidXRpb24.desc": {
+          "source": "Where the post is distributed.  `NONE` creates a post that is reachable only by its URN and does not appear in any feed",
+          "message": "게시물이 배포되는 위치입니다. `NONE`은(는) 어떤 피드에도 표시되지 않고 해당 URN으로만 접근할 수 있는 게시물을 생성합니다"
+        },
+        "app.TGlua2VkSW4.action.cmVzaGFyZS1wb3N0.option.ZmVlZF9kaXN0cmlidXRpb24.display_name": {
+          "source": "Feed Distribution",
+          "message": "피드 배포"
+        },
+        "app.TGlua2VkSW4.action.cmVzaGFyZS1wb3N0.option.ZmVlZF9kaXN0cmlidXRpb24.short_desc": {
+          "source": "Where the post is distributed",
+          "message": "게시물이 배포되는 위치"
+        },
+        "app.TGlua2VkSW4.action.cmVzaGFyZS1wb3N0.option.cG9zdA.desc": {
+          "source": "The URN of the post to reshare, e.g. `urn:li:share:6957408550713184256`",
+          "message": "재공유할 게시물의 URN (예: `urn:li:share:6957408550713184256`)"
+        },
+        "app.TGlua2VkSW4.action.cmVzaGFyZS1wb3N0.option.cG9zdA.display_name": {
+          "source": "Post URN",
+          "message": "게시물 URN"
+        },
+        "app.TGlua2VkSW4.action.cmVzaGFyZS1wb3N0.option.cG9zdA.short_desc": {
+          "source": "The URN of the post to reshare",
+          "message": "재공유할 게시물의 URN"
+        },
+        "app.TGlua2VkSW4.action.cmVzaGFyZS1wb3N0.option.dmlzaWJpbGl0eQ.allowed-value.c3RyaW5nOkNPTk5FQ1RJT05T.desc": {
+          "source": "Visible only to the authenticated member's connections",
+          "message": "인증된 1촌에게만 표시됨"
+        },
+        "app.TGlua2VkSW4.action.cmVzaGFyZS1wb3N0.option.dmlzaWJpbGl0eQ.allowed-value.c3RyaW5nOkNPTk5FQ1RJT05T.display_name": {
+          "source": "Connections Only",
+          "message": "1촌 전용"
+        },
+        "app.TGlua2VkSW4.action.cmVzaGFyZS1wb3N0.option.dmlzaWJpbGl0eQ.allowed-value.c3RyaW5nOkNPTk5FQ1RJT05T.short_desc": {
+          "source": "Visible only to the member's connections",
+          "message": "회원의 1촌에게만 표시됨"
+        },
+        "app.TGlua2VkSW4.action.cmVzaGFyZS1wb3N0.option.dmlzaWJpbGl0eQ.allowed-value.c3RyaW5nOlBVQkxJQw.desc": {
+          "source": "Visible to anyone on or off LinkedIn",
+          "message": "LinkedIn 내부 및 외부의 모든 사용자에게 표시됨"
+        },
+        "app.TGlua2VkSW4.action.cmVzaGFyZS1wb3N0.option.dmlzaWJpbGl0eQ.allowed-value.c3RyaW5nOlBVQkxJQw.display_name": {
+          "source": "Public",
+          "message": "공개"
+        },
+        "app.TGlua2VkSW4.action.cmVzaGFyZS1wb3N0.option.dmlzaWJpbGl0eQ.allowed-value.c3RyaW5nOlBVQkxJQw.short_desc": {
+          "source": "Visible to anyone on or off LinkedIn",
+          "message": "LinkedIn 내부 및 외부의 모든 사용자에게 표시됨"
+        },
+        "app.TGlua2VkSW4.action.cmVzaGFyZS1wb3N0.option.dmlzaWJpbGl0eQ.desc": {
+          "source": "Who can see the post",
+          "message": "게시물을 볼 수 있는 대상"
+        },
+        "app.TGlua2VkSW4.action.cmVzaGFyZS1wb3N0.option.dmlzaWJpbGl0eQ.display_name": {
+          "source": "Visibility",
+          "message": "공개 범위"
+        },
+        "app.TGlua2VkSW4.action.cmVzaGFyZS1wb3N0.option.dmlzaWJpbGl0eQ.short_desc": {
+          "source": "Who can see the post",
+          "message": "게시물을 볼 수 있는 대상"
+        },
+        "app.TGlua2VkSW4.action.cmVzaGFyZS1wb3N0.short_desc": {
+          "source": "Reshare an existing post",
+          "message": "기존 게시물 재공유"
+        },
+        "app.TGlua2VkSW4.action.dXBkYXRlLXBvc3Q.desc": {
+          "source": "Replaces the text of a post that has already been published.\n\nLinkedIn marks an edited post as edited; the attached content of a post cannot be changed after publication, only its text.",
+          "message": "이미 게시된 게시물의 텍스트를 대체합니다.\n\nLinkedIn은 수정된 게시물을 수정됨으로 표시합니다. 게시물의 첨부 콘텐츠는 게시 후 변경할 수 없으며 텍스트만 변경할 수 있습니다."
+        },
+        "app.TGlua2VkSW4.action.dXBkYXRlLXBvc3Q.display_name": {
+          "source": "Update Post",
+          "message": "게시물 업데이트"
+        },
+        "app.TGlua2VkSW4.action.dXBkYXRlLXBvc3Q.option.Y29tbWVudGFyeQ.desc": {
+          "source": "The post's new text, replacing the existing text.\n\nMentions and hashtags are written **inline**: `@[Qore Technologies](urn:li:organization:2414183)` mentions an organization and `#coding` is a hashtag.",
+          "message": "기존 텍스트를 대체할 게시물의 새 텍스트입니다.\n\n멘션과 해시태그는 **인라인**으로 작성됩니다. `@[Qore Technologies](urn:li:organization:2414183)`(은)는 조직을 멘션하고 `#coding`(은)는 해시태그입니다."
+        },
+        "app.TGlua2VkSW4.action.dXBkYXRlLXBvc3Q.option.Y29tbWVudGFyeQ.display_name": {
+          "source": "Text",
+          "message": "텍스트"
+        },
+        "app.TGlua2VkSW4.action.dXBkYXRlLXBvc3Q.option.Y29tbWVudGFyeQ.short_desc": {
+          "source": "The post's new text",
+          "message": "게시물의 새 텍스트"
+        },
+        "app.TGlua2VkSW4.action.dXBkYXRlLXBvc3Q.option.cG9zdA.desc": {
+          "source": "The URN of the post to update",
+          "message": "업데이트할 게시물의 URN"
+        },
+        "app.TGlua2VkSW4.action.dXBkYXRlLXBvc3Q.option.cG9zdA.display_name": {
+          "source": "Post URN",
+          "message": "게시물 URN"
+        },
+        "app.TGlua2VkSW4.action.dXBkYXRlLXBvc3Q.option.cG9zdA.short_desc": {
+          "source": "The URN of the post to update",
+          "message": "업데이트할 게시물의 URN"
+        },
+        "app.TGlua2VkSW4.action.dXBkYXRlLXBvc3Q.short_desc": {
+          "source": "Change the text of a published post",
+          "message": "게시된 게시물의 텍스트 변경"
+        },
+        "app.TGlua2VkSW4.action.dXBsb2FkLWltYWdl.desc": {
+          "source": "Uploads an image to LinkedIn and returns its URN, without posting it.\n\nUse this when the same image is needed in more than one post, or as an article post's thumbnail. An uploaded image can be reused across posts and ad formats without uploading it again.",
+          "message": "게시하지 않고 이미지를 LinkedIn에 업로드하여 해당 URN을 반환합니다.\n\n동일한 이미지를 둘 이상의 게시물에 사용해야 하거나 아티클 게시물의 썸네일로 사용할 때 사용하세요. 업로드된 이미지는 다시 업로드할 필요 없이 여러 게시물 및 광고 형식에서 재사용할 수 있습니다."
+        },
+        "app.TGlua2VkSW4.action.dXBsb2FkLWltYWdl.display_name": {
+          "source": "Upload Image",
+          "message": "이미지 업로드"
+        },
+        "app.TGlua2VkSW4.action.dXBsb2FkLWltYWdl.option.aW1hZ2U.desc": {
+          "source": "The image to upload; LinkedIn accepts JPG, PNG and GIF with fewer than 36,152,320 pixels",
+          "message": "업로드할 이미지입니다. LinkedIn은 36,152,320픽셀 미만의 JPG, PNG 및 GIF 형식을 지원합니다."
+        },
+        "app.TGlua2VkSW4.action.dXBsb2FkLWltYWdl.option.aW1hZ2U.display_name": {
+          "source": "Image",
+          "message": "이미지"
+        },
+        "app.TGlua2VkSW4.action.dXBsb2FkLWltYWdl.option.aW1hZ2U.short_desc": {
+          "source": "The image to upload",
+          "message": "업로드할 이미지"
+        },
+        "app.TGlua2VkSW4.action.dXBsb2FkLWltYWdl.option.b3duZXI.desc": {
+          "source": "The URN of the entity that will own the asset.  Defaults to the authenticated member (`urn:li:person:...`); an organization URN (`urn:li:organization:...`) requires an administrator or content-admin role on that page and the `w_organization_social` scope",
+          "message": "에셋을 소유할 엔터티의 URN입니다. 기본값은 인증된 회원(`urn:li:person:...`)입니다. 조직 URN(`urn:li:organization:...`)을 사용하려면 해당 페이지에 대한 관리자 또는 콘텐츠 관리자 역할과 `w_organization_social` 스코프가 필요합니다."
+        },
+        "app.TGlua2VkSW4.action.dXBsb2FkLWltYWdl.option.b3duZXI.display_name": {
+          "source": "Owner URN",
+          "message": "소유자 URN"
+        },
+        "app.TGlua2VkSW4.action.dXBsb2FkLWltYWdl.option.b3duZXI.short_desc": {
+          "source": "The URN of the entity that will own the asset",
+          "message": "에셋을 소유할 엔터티의 URN"
+        },
+        "app.TGlua2VkSW4.action.dXBsb2FkLWltYWdl.short_desc": {
+          "source": "Upload an image and get its URN",
+          "message": "이미지 업로드 및 URN 가져오기"
+        },
+        "app.TGlua2VkSW4.action.dXBsb2FkLXZpZGVv.desc": {
+          "source": "Uploads a video to LinkedIn and returns its URN, without posting it.\n\nThe upload is sent in parts, so a large video does not have to start again from the beginning if one part fails. LinkedIn processes the video afterwards; it can be attached to a post before processing finishes.",
+          "message": "게시하지 않고 비디오를 LinkedIn에 업로드하여 해당 URN을 반환합니다.\n\n업로드는 분할 전송되므로 일부가 실패하더라도 대용량 비디오를 처음부터 다시 시작할 필요가 없습니다. LinkedIn은 이후에 비디오를 처리합니다. 처리가 완료되기 전에도 게시물에 첨부할 수 있습니다."
+        },
+        "app.TGlua2VkSW4.action.dXBsb2FkLXZpZGVv.display_name": {
+          "source": "Upload Video",
+          "message": "동영상 업로드"
+        },
+        "app.TGlua2VkSW4.action.dXBsb2FkLXZpZGVv.option.b3duZXI.desc": {
+          "source": "The URN of the entity that will own the asset.  Defaults to the authenticated member (`urn:li:person:...`); an organization URN (`urn:li:organization:...`) requires an administrator or content-admin role on that page and the `w_organization_social` scope",
+          "message": "에셋을 소유할 엔터티의 URN입니다. 기본값은 인증된 회원(`urn:li:person:...`)입니다. 조직 URN(`urn:li:organization:...`)을 사용하려면 해당 페이지에 대한 관리자 또는 콘텐츠 관리자 역할과 `w_organization_social` 스코프가 필요합니다."
+        },
+        "app.TGlua2VkSW4.action.dXBsb2FkLXZpZGVv.option.b3duZXI.display_name": {
+          "source": "Owner URN",
+          "message": "소유자 URN"
+        },
+        "app.TGlua2VkSW4.action.dXBsb2FkLXZpZGVv.option.b3duZXI.short_desc": {
+          "source": "The URN of the entity that will own the asset",
+          "message": "에셋을 소유할 엔터티의 URN"
+        },
+        "app.TGlua2VkSW4.action.dXBsb2FkLXZpZGVv.option.dmlkZW8.desc": {
+          "source": "The video to upload; LinkedIn accepts MP4 between 75 KB and 500 MB and between 3 seconds and 30 minutes long",
+          "message": "업로드할 비디오입니다. LinkedIn은 75KB~500MB 크기 및 3초~30분 길이의 MP4를 지원합니다."
+        },
+        "app.TGlua2VkSW4.action.dXBsb2FkLXZpZGVv.option.dmlkZW8.display_name": {
+          "source": "Video",
+          "message": "비디오"
+        },
+        "app.TGlua2VkSW4.action.dXBsb2FkLXZpZGVv.option.dmlkZW8.short_desc": {
+          "source": "The video to upload",
+          "message": "업로드할 비디오"
+        },
+        "app.TGlua2VkSW4.action.dXBsb2FkLXZpZGVv.short_desc": {
+          "source": "Upload a video and get its URN",
+          "message": "비디오 업로드 및 URN 가져오기"
+        },
+        "app.TGlua2VkSW4.desc": {
+          "source": "Provides access to [LinkedIn](https://www.linkedin.com) for publishing and managing content as the signed-in member, through the [Posts](https://learn.microsoft.com/en-us/linkedin/marketing/community-management/shares/posts-api), [Images](https://learn.microsoft.com/en-us/linkedin/marketing/community-management/shares/images-api) and [Videos](https://learn.microsoft.com/en-us/linkedin/marketing/community-management/shares/videos-api) APIs.\n\n**Common use cases**:\n- **Publishing**: post text, an article link, an image, a video, or a set of images, and reshare someone else's post with your own commentary\n- **Content management**: edit the text of a post you published, or delete it\n- **Media**: upload an image or a video once and reuse its URN across several posts\n\nMentions and hashtags are written **inline** in the post text: `@[Qore Technologies](urn:li:organization:2414183)` mentions an organization and `#coding` is a hashtag.\n\nAuthentication is OAuth2 with a LinkedIn developer application carrying the **Sign In with LinkedIn using OpenID Connect** and **Share on LinkedIn** products. Reading posts back (the **Get Post** action) additionally needs the `r_member_social` permission, which LinkedIn grants only to approved applications; add it to the connection's scopes once it has been approved.\n\nTo work with an organization's page content — its posts, comments, reactions, followers and analytics — use the **LinkedIn Organizations** application instead.\n\nLinkedIn is a trademark of LinkedIn Corporation",
+          "message": "[Posts](https://learn.microsoft.com/en-us/linkedin/marketing/community-management/shares/posts-api), [Images](https://learn.microsoft.com/en-us/linkedin/marketing/community-management/shares/images-api), [Videos](https://learn.microsoft.com/en-us/linkedin/marketing/community-management/shares/videos-api) API를 통해 로그인한 회원으로서 [LinkedIn](https://www.linkedin.com)에 콘텐츠를 게시하고 관리할 수 있는 액세스를 제공합니다.\n\n**일반적인 사용 사례**:\n- **게시**: 텍스트, 아티클 링크, 이미지, 동영상 또는 이미지 세트를 게시하고, 다른 사람의 게시물을 자신의 코멘터리와 함께 재공유\n- **콘텐츠 관리**: 게시한 게시물의 텍스트를 수정하거나 삭제\n- **미디어**: 이미지 또는 동영상을 한 번 업로드하고 여러 게시물에서 해당 URN 재사용\n\n멘션과 해시태그는 게시물 텍스트에 **인라인**으로 작성됩니다. `@[Qore Technologies](urn:li:organization:2414183)`(은)는 조직을 멘션하고 `#coding`(은)는 해시태그입니다.\n\n인증은 **Sign In with LinkedIn using OpenID Connect** 및 **Share on LinkedIn** 제품이 포함된 LinkedIn 개발자 애플리케이션을 사용하는 OAuth2입니다. 게시물을 다시 읽으려면(**게시물 가져오기** 작업) 추가로 `r_member_social` 권한이 필요하며, 이는 LinkedIn에서 승인된 애플리케이션에만 부여합니다. 승인된 후 연결 범위에 추가하세요.\n\n조직 페이지 콘텐츠(게시물, 댓글, 반응, 팔로워 및 분석)를 다루려면 대신 **LinkedIn Organizations** 애플리케이션을 사용하세요.\n\nLinkedIn은 LinkedIn Corporation의 상표입니다."
+        },
+        "app.TGlua2VkSW4.display_name": {
+          "source": "LinkedIn",
+          "message": "LinkedIn"
+        },
+        "app.TGlua2VkSW4.short_desc": {
+          "source": "Publish and manage content on LinkedIn as the signed-in member",
+          "message": "로그인한 회원으로서 LinkedIn에서 콘텐츠 게시 및 관리"
+        }
+      }
+    }
+  }
+}

@@ -461,7 +461,14 @@ for test in $TESTS; do
             if [ -n "$CORE_FILE" ] && command -v gdb > /dev/null 2>&1; then
                 echo "*** Core dump found: $CORE_FILE - extracting backtrace ***"
                 BT_FILE="$CORE_DIR/backtrace-${TEST_BASENAME}.txt"
-                gdb -batch -ex "thread apply all bt full" -ex "quit" "$QORE" "$CORE_FILE" 2>&1 | tee "$BT_FILE" | head -500
+                # Write the whole backtrace to the file first, then show the head of the file: piping
+                # gdb through "tee | head" makes head close the pipe after its limit, and the
+                # resulting SIGPIPE kills tee and gdb, so the saved artifact is truncated too.  The
+                # crashing thread is printed LAST by "thread apply all bt", so it is exactly what
+                # such a truncation loses; dump it first so it survives both the file and the head.
+                gdb -batch -ex "bt full" -ex "thread apply all bt full" -ex "quit" \
+                    "$QORE" "$CORE_FILE" > "$BT_FILE" 2>&1
+                head -500 "$BT_FILE"
                 # Move core to artifact directory for CI collection (don't delete)
                 case "$CORE_FILE" in
                     "$CORE_DIR"/*|"$CORE_DIR_ABS"/*) ;;
@@ -471,10 +478,11 @@ for test in $TESTS; do
                 echo "*** No core dump found; re-running under gdb to try to capture backtrace ***"
                 BT_FILE="$CORE_DIR/backtrace-${TEST_BASENAME}.txt"
                 # Filter out thread creation/exit noise (both glibc [New Thread] and musl [New LWP] formats)
-                gdb -batch -ex run -ex "thread apply all bt full" -ex quit \
+                gdb -batch -ex run -ex "bt full" -ex "thread apply all bt full" -ex quit \
                     --args $QORE $QORE_TEST_OPTS $test $TEST_OUTPUT_FORMAT 2>&1 \
                     | grep -v '^\[New Thread\|^\[Thread.*exited\]\|^\[New LWP\|^\[LWP.*exited\]\|^\[Detaching' \
-                    | tee "$BT_FILE" | head -500
+                    > "$BT_FILE"
+                head -500 "$BT_FILE"
             else
                 echo "*** No core dump found and gdb not available ***"
             fi

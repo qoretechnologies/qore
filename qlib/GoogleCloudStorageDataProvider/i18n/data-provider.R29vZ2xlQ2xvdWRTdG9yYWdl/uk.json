@@ -1,0 +1,1269 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "uk": {
+      "messages": {
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.Y29tcG9zZQ.desc": {
+          "source": "Concatenates up to 32 objects into a single new object, entirely within Google Cloud Storage and without transferring any content through the caller.\n\nEvery source and the destination must be in the same bucket. The destination may be one of the sources, which is how content is appended to an existing object. Set `content_type` explicitly: Google Cloud Storage does not infer it from the sources.",
+          "message": "Об'єднує до 32 об'єктів в один новий об'єкт повністю в межах Google Cloud Storage без передавання вмісту через сторону, що викликає.\n\nКожен вихідний об'єкт і цільовий об'єкт повинні бути в одному бакеті. Цільовим об'єктом може бути один із вихідних, завдяки чому вміст додається до наявного об'єкта. Укажіть `content_type` явно: Google Cloud Storage не визначає його автоматично з вихідних об'єктів."
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.Y29tcG9zZQ.display_name": {
+          "source": "Compose Objects",
+          "message": "Об'єднати об'єкти"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.Y29tcG9zZQ.option.Y29udGVudF90eXBl.desc": {
+          "source": "The MIME type the composed object should have.  Google Cloud Storage does not infer it from the sources, so it should be set explicitly",
+          "message": "MIME-тип, який повинен мати складений об'єкт. Google Cloud Storage не визначає його автоматично з вихідних об'єктів, тому його слід указати явно"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.Y29tcG9zZQ.option.Y29udGVudF90eXBl.display_name": {
+          "source": "Content Type",
+          "message": "Тип вмісту"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.Y29tcG9zZQ.option.Y29udGVudF90eXBl.short_desc": {
+          "source": "The MIME type for the destination",
+          "message": "MIME-тип для цільового об'єкта"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.Y29tcG9zZQ.option.YnVja2V0.desc": {
+          "source": "The name of the bucket; every source and the destination must be in the same bucket, which is a Google Cloud Storage restriction on compose",
+          "message": "Назва бакета; кожен вихідний об'єкт і цільовий об'єкт повинні бути в одному бакеті, що є обмеженням Google Cloud Storage для об'єднання"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.Y29tcG9zZQ.option.YnVja2V0.display_name": {
+          "source": "Bucket",
+          "message": "Бакет"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.Y29tcG9zZQ.option.YnVja2V0.short_desc": {
+          "source": "The bucket holding the sources and the destination",
+          "message": "Бакет, що містить вихідні та цільовий об'єкти"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.Y29tcG9zZQ.option.ZGVzdGluYXRpb25fb2JqZWN0.desc": {
+          "source": "The name of the object the sources are concatenated into, used verbatim; it may be one of the sources, which is how content is appended",
+          "message": "Назва об'єкта, у який об'єднуються вихідні об'єкти, використовується дослівно; це може бути один із вихідних об'єктів, завдяки чому вміст додається"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.Y29tcG9zZQ.option.ZGVzdGluYXRpb25fb2JqZWN0.display_name": {
+          "source": "Destination Object Name",
+          "message": "Назва цільового об'єкта"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.Y29tcG9zZQ.option.ZGVzdGluYXRpb25fb2JqZWN0.short_desc": {
+          "source": "The object to write the concatenation to",
+          "message": "Об'єкт для запису результату об'єднання"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.Y29tcG9zZQ.option.bWV0YWRhdGE.desc": {
+          "source": "User-defined metadata for the composed object as key/value pairs",
+          "message": "Користувацькі метадані для складеного об'єкта у вигляді пар ключ/значення"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.Y29tcG9zZQ.option.bWV0YWRhdGE.display_name": {
+          "source": "Custom Metadata",
+          "message": "Користувацькі метадані"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.Y29tcG9zZQ.option.bWV0YWRhdGE.short_desc": {
+          "source": "User-defined metadata for the destination",
+          "message": "Користувацькі метадані для цільового об'єкта"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.Y29tcG9zZQ.option.c291cmNlX29iamVjdHM.desc": {
+          "source": "The names of the objects to concatenate, in the order they should appear; between 1 and 32 names, used verbatim",
+          "message": "Назви об'єктів для об'єднання в порядку їхнього розміщення; від 1 до 32 назв, використовуються дослівно"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.Y29tcG9zZQ.option.c291cmNlX29iamVjdHM.display_name": {
+          "source": "Source Object Names",
+          "message": "Назви вихідних об'єктів"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.Y29tcG9zZQ.option.c291cmNlX29iamVjdHM.short_desc": {
+          "source": "The objects to concatenate, in order",
+          "message": "Об'єкти для об'єднання по порядку"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.Y29tcG9zZQ.short_desc": {
+          "source": "Concatenate objects into one object",
+          "message": "Об'єднати об'єкти в один об'єкт"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.Y29weS1vYmplY3Q.desc": {
+          "source": "Copies an object to another name or bucket entirely within Google Cloud Storage, without transferring the content through the caller.\n\nHandles an object of any size and a copy between different locations, storage classes, or encryption keys. Copying an object onto itself with a new `destination_storage_class` is how an object's storage class is changed.",
+          "message": "Копіює об'єкт з іншою назвою або в інший бакет повністю в межах Google Cloud Storage без передавання вмісту через сторону, що викликає.\n\nОбробляє об'єкти будь-якого розміру та копіювання між різними розташуваннями, класами зберігання чи ключами шифрування. Перезапис об'єкта самим собою з новим `destination_storage_class` є способом зміни класу зберігання об'єкта."
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.Y29weS1vYmplY3Q.display_name": {
+          "source": "Copy Object",
+          "message": "Копіювати об’єкт"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.Y29weS1vYmplY3Q.option.Y29udGVudF90eXBl.desc": {
+          "source": "The MIME type the copy should have; when omitted the source's is kept",
+          "message": "MIME-тип, який повинна мати копія; якщо опущено, зберігається тип вихідного об'єкта"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.Y29weS1vYmplY3Q.option.Y29udGVudF90eXBl.display_name": {
+          "source": "Content Type",
+          "message": "Тип вмісту"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.Y29weS1vYmplY3Q.option.Y29udGVudF90eXBl.short_desc": {
+          "source": "The MIME type for the copy",
+          "message": "MIME-тип для копії"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.Y29weS1vYmplY3Q.option.ZGVzdGluYXRpb25fYnVja2V0.desc": {
+          "source": "The name of the bucket to copy the object into; may be the same as the source bucket",
+          "message": "Назва бакета для копіювання об'єкта; може збігатися з вихідним бакетом"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.Y29weS1vYmplY3Q.option.ZGVzdGluYXRpb25fYnVja2V0.display_name": {
+          "source": "Destination Bucket",
+          "message": "Цільовий бакет"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.Y29weS1vYmplY3Q.option.ZGVzdGluYXRpb25fYnVja2V0.short_desc": {
+          "source": "The bucket to copy the object into",
+          "message": "Бакет, у який потрібно скопіювати об’єкт"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.Y29weS1vYmplY3Q.option.ZGVzdGluYXRpb25fb2JqZWN0.desc": {
+          "source": "The name the copy should have, used verbatim",
+          "message": "Назва, яку повинна мати копія, використовується дослівно"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.Y29weS1vYmplY3Q.option.ZGVzdGluYXRpb25fb2JqZWN0.display_name": {
+          "source": "Destination Object Name",
+          "message": "Назва цільового об'єкта"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.Y29weS1vYmplY3Q.option.ZGVzdGluYXRpb25fb2JqZWN0.short_desc": {
+          "source": "The name to copy the object to",
+          "message": "Назва для копіювання об'єкта"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.Y29weS1vYmplY3Q.option.ZGVzdGluYXRpb25fc3RvcmFnZV9jbGFzcw.desc": {
+          "source": "The storage class the copy should have: `STANDARD`, `NEARLINE`, `COLDLINE` or `ARCHIVE`.  When omitted the destination bucket's default is used.  Rewriting an object onto itself with a new storage class is how an object's class is changed",
+          "message": "Клас зберігання, який повинна мати копія: `STANDARD`, `NEARLINE`, `COLDLINE` або `ARCHIVE`. Якщо опущено, використовується значення за замовчуванням цільового бакета. Перезапис об'єкта самим собою з новим класом зберігання є способом зміни класу об'єкта"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.Y29weS1vYmplY3Q.option.ZGVzdGluYXRpb25fc3RvcmFnZV9jbGFzcw.display_name": {
+          "source": "Destination Storage Class",
+          "message": "Цільовий клас зберігання"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.Y29weS1vYmplY3Q.option.ZGVzdGluYXRpb25fc3RvcmFnZV9jbGFzcw.short_desc": {
+          "source": "The storage class for the copy",
+          "message": "Клас сховища для копії"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.Y29weS1vYmplY3Q.option.bWV0YWRhdGE.desc": {
+          "source": "User-defined metadata for the copy as key/value pairs; when omitted the source's metadata is kept",
+          "message": "Користувацькі метадані для копії у вигляді пар ключ/значення; якщо опущено, зберігаються метадані вихідного об'єкта"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.Y29weS1vYmplY3Q.option.bWV0YWRhdGE.display_name": {
+          "source": "Custom Metadata",
+          "message": "Користувацькі метадані"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.Y29weS1vYmplY3Q.option.bWV0YWRhdGE.short_desc": {
+          "source": "User-defined metadata for the copy",
+          "message": "Користувацькі метадані для копії"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.Y29weS1vYmplY3Q.option.c291cmNlX29iamVjdA.desc": {
+          "source": "The name of the object to copy, used verbatim",
+          "message": "Назва об'єкта для копіювання, використовується дослівно"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.Y29weS1vYmplY3Q.option.c291cmNlX29iamVjdA.display_name": {
+          "source": "Source Object Name",
+          "message": "Назва вихідного об'єкта"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.Y29weS1vYmplY3Q.option.c291cmNlX29iamVjdA.short_desc": {
+          "source": "The object to copy",
+          "message": "Об'єкт для копіювання"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.Y29weS1vYmplY3Q.option.c291cmNlX2J1Y2tldA.desc": {
+          "source": "The name of the bucket holding the object to copy",
+          "message": "Назва бакета, що містить об'єкт для копіювання"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.Y29weS1vYmplY3Q.option.c291cmNlX2J1Y2tldA.display_name": {
+          "source": "Source Bucket",
+          "message": "Вихідний бакет"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.Y29weS1vYmplY3Q.option.c291cmNlX2J1Y2tldA.short_desc": {
+          "source": "The bucket holding the source object",
+          "message": "Бакет, що містить вихідний об'єкт"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.Y29weS1vYmplY3Q.option.c291cmNlX2dlbmVyYXRpb24.desc": {
+          "source": "The content generation of the source to copy; when omitted the live version is copied",
+          "message": "Генерація вмісту вихідного об'єкта для копіювання; якщо опущено, копіюється актуальна версія"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.Y29weS1vYmplY3Q.option.c291cmNlX2dlbmVyYXRpb24.display_name": {
+          "source": "Source Generation",
+          "message": "Вихідна генерація"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.Y29weS1vYmplY3Q.option.c291cmNlX2dlbmVyYXRpb24.short_desc": {
+          "source": "A specific source content generation to copy",
+          "message": "Конкретна генерація вмісту вихідного об'єкта для копіювання"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.Y29weS1vYmplY3Q.short_desc": {
+          "source": "Copy an object without downloading it",
+          "message": "Скопіювати об'єкт без завантаження"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.Y3JlYXRlLXNpZ25lZC11cmw.desc": {
+          "source": "Creates a V4 signed URL granting access to a single object for a single HTTP method until it expires. Anyone holding the URL can use it with no credentials, which is how content is handed to a browser or to a third party with no Google account.\n\nSigning is performed by the IAM Service Account Credentials API, so it also works when the credential is Application Default Credentials or a workload identity and there is no private key on the host. The caller needs the `iam.serviceAccounts.signBlob` permission on the signing service account (the `roles/iam.serviceAccountTokenCreator` role) and that API must be enabled on the project.",
+          "message": "Створює підписаний URL V4, що надає доступ до одного об'єкта для одного методу HTTP до закінчення терміну дії. Будь-хто, хто має цей URL, може використовувати його без облікових даних, що дозволяє передавати вміст браузеру або третій стороні без облікового запису Google.\n\nПідписання здійснюється через IAM Service Account Credentials API, тому це також працює, коли обліковими даними є Application Default Credentials або workload identity, а приватний ключ на хості відсутній. Стороні, що викликає, потрібен дозвіл `iam.serviceAccounts.signBlob` для сервісного акаунта підписувача (роль `roles/iam.serviceAccountTokenCreator`), і цей API має бути ввімкнено в проєкті."
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.Y3JlYXRlLXNpZ25lZC11cmw.display_name": {
+          "source": "Create Signed URL",
+          "message": "Створити підписаний URL"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.Y3JlYXRlLXNpZ25lZC11cmw.option.YnVja2V0.desc": {
+          "source": "The name of the bucket the signed URL should address",
+          "message": "Назва бакета, до якого має звертатися підписаний URL"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.Y3JlYXRlLXNpZ25lZC11cmw.option.YnVja2V0.display_name": {
+          "source": "Bucket",
+          "message": "Бакет"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.Y3JlYXRlLXNpZ25lZC11cmw.option.YnVja2V0.short_desc": {
+          "source": "The bucket holding the object",
+          "message": "Бакет, що містить об'єкт"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.Y3JlYXRlLXNpZ25lZC11cmw.option.ZXhwaXJlc19pbl9zZWNvbmRz.desc": {
+          "source": "The lifetime of the signed URL in seconds; Google Cloud Storage allows at most 604800 (7 days) for a V4 signature",
+          "message": "Термін дії підписаного URL у секундах; Google Cloud Storage дозволяє щонайбільше 604800 (7 днів) для підпису V4"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.Y3JlYXRlLXNpZ25lZC11cmw.option.ZXhwaXJlc19pbl9zZWNvbmRz.display_name": {
+          "source": "Expires In (Seconds)",
+          "message": "Термін дії закінчується через (секунди)"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.Y3JlYXRlLXNpZ25lZC11cmw.option.ZXhwaXJlc19pbl9zZWNvbmRz.short_desc": {
+          "source": "How long the URL stays valid",
+          "message": "Скільки часу URL залишається дійсним"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.Y3JlYXRlLXNpZ25lZC11cmw.option.b2JqZWN0.desc": {
+          "source": "The name of the object the signed URL should address, used verbatim",
+          "message": "Назва об'єкта, до якого має звертатися підписаний URL, використовується дослівно"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.Y3JlYXRlLXNpZ25lZC11cmw.option.b2JqZWN0.display_name": {
+          "source": "Object Name",
+          "message": "Назва об'єкта"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.Y3JlYXRlLXNpZ25lZC11cmw.option.b2JqZWN0.short_desc": {
+          "source": "The object's name",
+          "message": "Назва об'єкта"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.Y3JlYXRlLXNpZ25lZC11cmw.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.desc": {
+          "source": "Grants deleting the object",
+          "message": "Надає дозвіл на видалення об'єкта"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.Y3JlYXRlLXNpZ25lZC11cmw.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.display_name": {
+          "source": "DELETE",
+          "message": "DELETE"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.Y3JlYXRlLXNpZ25lZC11cmw.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.short_desc": {
+          "source": "Grants deleting the object",
+          "message": "Надає дозвіл на видалення об'єкта"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.Y3JlYXRlLXNpZ25lZC11cmw.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.desc": {
+          "source": "Grants reading the object's content",
+          "message": "Надає дозвіл на читання вмісту об'єкта"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.Y3JlYXRlLXNpZ25lZC11cmw.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.display_name": {
+          "source": "GET (download)",
+          "message": "GET (завантаження)"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.Y3JlYXRlLXNpZ25lZC11cmw.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.short_desc": {
+          "source": "Grants reading the object",
+          "message": "Надає дозвіл на читання об'єкта"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.Y3JlYXRlLXNpZ25lZC11cmw.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.desc": {
+          "source": "Grants reading the object's response headers without its content",
+          "message": "Надає дозвіл на читання заголовків відповіді об'єкта без його вмісту"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.Y3JlYXRlLXNpZ25lZC11cmw.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.display_name": {
+          "source": "HEAD (metadata)",
+          "message": "HEAD (метадані)"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.Y3JlYXRlLXNpZ25lZC11cmw.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.short_desc": {
+          "source": "Grants reading the object's metadata",
+          "message": "Надає дозвіл на читання метаданих об'єкта"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.Y3JlYXRlLXNpZ25lZC11cmw.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.desc": {
+          "source": "Grants writing the object's content",
+          "message": "Надає дозвіл на запис вмісту об'єкта"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.Y3JlYXRlLXNpZ25lZC11cmw.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.display_name": {
+          "source": "PUT (upload)",
+          "message": "PUT (передавання)"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.Y3JlYXRlLXNpZ25lZC11cmw.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.short_desc": {
+          "source": "Grants writing the object",
+          "message": "Надає дозвіл на запис об'єкта"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.Y3JlYXRlLXNpZ25lZC11cmw.option.bWV0aG9k.desc": {
+          "source": "The HTTP method the URL should be valid for.  A URL signed for `GET` grants read access only; sign for `PUT` to grant an upload",
+          "message": "HTTP-метод, для якого URL має бути дійсним. URL, підписаний для `GET`, надає доступ лише для читання; підпишіть для `PUT`, щоб надати дозвіл на передавання"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.Y3JlYXRlLXNpZ25lZC11cmw.option.bWV0aG9k.display_name": {
+          "source": "HTTP Method",
+          "message": "Метод HTTP"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.Y3JlYXRlLXNpZ25lZC11cmw.option.bWV0aG9k.short_desc": {
+          "source": "The HTTP method to sign for",
+          "message": "HTTP-метод для підпису"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.Y3JlYXRlLXNpZ25lZC11cmw.option.c2lnbmVyX2VtYWls.desc": {
+          "source": "The service account whose key should sign the URL.  When omitted the connection's `gcp_signer_email` is used, and failing that the `client_email` from the service-account key",
+          "message": "Сервісний акаунт, ключ якого повинен підписати URL. Якщо опущено, використовується `gcp_signer_email` з'єднання, а якщо воно відсутнє — `client_email` із ключа сервісного акаунта"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.Y3JlYXRlLXNpZ25lZC11cmw.option.c2lnbmVyX2VtYWls.display_name": {
+          "source": "Signer Email",
+          "message": "Електронна пошта підписувача"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.Y3JlYXRlLXNpZ25lZC11cmw.option.c2lnbmVyX2VtYWls.short_desc": {
+          "source": "The service account to sign with",
+          "message": "Сервісний акаунт для підпису"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.Y3JlYXRlLXNpZ25lZC11cmw.short_desc": {
+          "source": "Create a time-limited URL granting access to one object",
+          "message": "Створити обмежений за часом URL, що надає доступ до одного об'єкта"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.Z2V0LW9iamVjdC1tZXRhZGF0YQ.desc": {
+          "source": "Retrieves an object's metadata — size, content type, checksums, storage class, generation, and user-defined metadata — without transferring its content.",
+          "message": "Отримує метадані об'єкта — розмір, тип вмісту, контрольні суми, клас зберігання, генерацію та користувацькі метадані — без передавання його вмісту."
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.Z2V0LW9iamVjdC1tZXRhZGF0YQ.display_name": {
+          "source": "Get Object Metadata",
+          "message": "Отримати метадані об'єкта"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.Z2V0LW9iamVjdC1tZXRhZGF0YQ.option.YnVja2V0.desc": {
+          "source": "The name of the bucket holding the object",
+          "message": "Назва бакета, що містить об'єкт"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.Z2V0LW9iamVjdC1tZXRhZGF0YQ.option.YnVja2V0.display_name": {
+          "source": "Bucket",
+          "message": "Бакет"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.Z2V0LW9iamVjdC1tZXRhZGF0YQ.option.YnVja2V0.short_desc": {
+          "source": "The bucket holding the object",
+          "message": "Бакет, що містить об'єкт"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.Z2V0LW9iamVjdC1tZXRhZGF0YQ.option.Z2VuZXJhdGlvbg.desc": {
+          "source": "The content generation to retrieve; when omitted the live version is used",
+          "message": "Покоління вмісту для отримання; якщо опущено, використовується актуальна версія"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.Z2V0LW9iamVjdC1tZXRhZGF0YQ.option.Z2VuZXJhdGlvbg.display_name": {
+          "source": "Generation",
+          "message": "Покоління"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.Z2V0LW9iamVjdC1tZXRhZGF0YQ.option.Z2VuZXJhdGlvbg.short_desc": {
+          "source": "A specific content generation to address",
+          "message": "Конкретне покоління вмісту для звернення"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.Z2V0LW9iamVjdC1tZXRhZGF0YQ.option.b2JqZWN0.desc": {
+          "source": "The name of the object.  Object names are a flat key space in which `/` is an ordinary character, so the value is used verbatim: it is not split, normalized, or resolved against anything",
+          "message": "Назва об'єкта. Назви об'єктів — це плоский простір ключів, у якому `/` є звичайним символом, тому значення використовується дослівно: воно не розділяється, не нормалізується та ні з чим не зіставляється"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.Z2V0LW9iamVjdC1tZXRhZGF0YQ.option.b2JqZWN0.display_name": {
+          "source": "Object Name",
+          "message": "Назва об'єкта"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.Z2V0LW9iamVjdC1tZXRhZGF0YQ.option.b2JqZWN0.short_desc": {
+          "source": "The object's name",
+          "message": "Назва об'єкта"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.Z2V0LW9iamVjdC1tZXRhZGF0YQ.short_desc": {
+          "source": "Get an object's metadata without its content",
+          "message": "Отримати метадані об'єкта без його вмісту"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.Z2V0LWJ1Y2tldA.desc": {
+          "source": "Retrieves a bucket's metadata: its location, storage class, versioning and uniform bucket-level access settings, labels, and timestamps.",
+          "message": "Отримує метадані бакета: його розташування, клас зберігання, налаштування керування версіями та єдиного доступу на рівні бакета, мітки та часові позначки."
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.Z2V0LWJ1Y2tldA.display_name": {
+          "source": "Get Bucket",
+          "message": "Отримати бакет"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.Z2V0LWJ1Y2tldA.option.YnVja2V0.desc": {
+          "source": "The name of the bucket whose metadata should be retrieved",
+          "message": "Назва бакета, метадані якого слід отримати"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.Z2V0LWJ1Y2tldA.option.YnVja2V0.display_name": {
+          "source": "Bucket",
+          "message": "Бакет"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.Z2V0LWJ1Y2tldA.option.YnVja2V0.short_desc": {
+          "source": "The bucket to retrieve",
+          "message": "Бакет для отримання"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.Z2V0LWJ1Y2tldA.short_desc": {
+          "source": "Get a bucket's metadata",
+          "message": "Отримати метадані бакета"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.ZG93bmxvYWQtb2JqZWN0.desc": {
+          "source": "Downloads an object's content and returns it as raw bytes in `content`, together with the content type, size, and the checksums Google Cloud Storage reports.\n\n`object` is used verbatim. Set `generation` to download a specific version of an object in a bucket with versioning enabled.",
+          "message": "Завантажує вміст об'єкта та повертає його у вигляді необроблених байтів у `content` разом із типом вмісту, розміром і контрольними сумами, які повідомляє Google Cloud Storage.\n\n`object` використовується дослівно. Вкажіть `generation`, щоб завантажити певну версію об'єкта в бакеті з увімкненим керуванням версіями."
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.ZG93bmxvYWQtb2JqZWN0.display_name": {
+          "source": "Download Object",
+          "message": "Завантажити об'єкт"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.ZG93bmxvYWQtb2JqZWN0.option.YnVja2V0.desc": {
+          "source": "The name of the bucket holding the object",
+          "message": "Назва бакета, що містить об'єкт"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.ZG93bmxvYWQtb2JqZWN0.option.YnVja2V0.display_name": {
+          "source": "Bucket",
+          "message": "Бакет"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.ZG93bmxvYWQtb2JqZWN0.option.YnVja2V0.short_desc": {
+          "source": "The bucket holding the object",
+          "message": "Бакет, що містить об'єкт"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.ZG93bmxvYWQtb2JqZWN0.option.Z2VuZXJhdGlvbg.desc": {
+          "source": "The content generation to download; when omitted the live version is used",
+          "message": "Покоління вмісту для завантаження; якщо опущено, використовується актуальна версія"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.ZG93bmxvYWQtb2JqZWN0.option.Z2VuZXJhdGlvbg.display_name": {
+          "source": "Generation",
+          "message": "Покоління"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.ZG93bmxvYWQtb2JqZWN0.option.Z2VuZXJhdGlvbg.short_desc": {
+          "source": "A specific content generation to download",
+          "message": "Конкретне покоління вмісту для завантаження"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.ZG93bmxvYWQtb2JqZWN0.option.b2JqZWN0.desc": {
+          "source": "The name of the object to download, used verbatim: `/` is an ordinary character in a Google Cloud Storage object name, so the value is not split or normalized",
+          "message": "Назва об'єкта для завантаження, що використовується дослівно: `/` є звичайним символом у назві об'єкта Google Cloud Storage, тому значення не розділяється та не нормалізується"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.ZG93bmxvYWQtb2JqZWN0.option.b2JqZWN0.display_name": {
+          "source": "Object Name",
+          "message": "Назва об'єкта"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.ZG93bmxvYWQtb2JqZWN0.option.b2JqZWN0.short_desc": {
+          "source": "The object's name",
+          "message": "Назва об'єкта"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.ZG93bmxvYWQtb2JqZWN0.short_desc": {
+          "source": "Download an object's content",
+          "message": "Завантажити вміст об'єкта"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.ZGVsZXRlLW9iamVjdA.desc": {
+          "source": "Deletes an object.\n\nIn a bucket with versioning enabled, deleting without a `generation` removes the live version and retains the earlier generations; naming a `generation` removes that version permanently.",
+          "message": "Видаляє об'єкт.\n\nУ бакеті з увімкненим керуванням версіями видалення без `generation` видаляє актуальну версію та зберігає попередні покоління; зазначення `generation` видаляє цю версію назавжди."
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.ZGVsZXRlLW9iamVjdA.display_name": {
+          "source": "Delete Object",
+          "message": "Видалити об'єкт"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.ZGVsZXRlLW9iamVjdA.option.YnVja2V0.desc": {
+          "source": "The name of the bucket holding the object",
+          "message": "Назва бакета, що містить об'єкт"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.ZGVsZXRlLW9iamVjdA.option.YnVja2V0.display_name": {
+          "source": "Bucket",
+          "message": "Бакет"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.ZGVsZXRlLW9iamVjdA.option.YnVja2V0.short_desc": {
+          "source": "The bucket holding the object",
+          "message": "Бакет, що містить об'єкт"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.ZGVsZXRlLW9iamVjdA.option.Z2VuZXJhdGlvbg.desc": {
+          "source": "The content generation to delete; when omitted the live version is deleted.  In a bucket with versioning enabled, deleting the live version leaves the earlier generations in place, and a specific generation must be named to remove it permanently",
+          "message": "Покоління вмісту для видалення; якщо опущено, видаляється актуальна версія. У бакеті з увімкненим керуванням версіями видалення актуальної версії залишає попередні покоління, і щоб видалити покоління назавжди, необхідно вказати його значення"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.ZGVsZXRlLW9iamVjdA.option.Z2VuZXJhdGlvbg.display_name": {
+          "source": "Generation",
+          "message": "Покоління"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.ZGVsZXRlLW9iamVjdA.option.Z2VuZXJhdGlvbg.short_desc": {
+          "source": "A specific content generation to delete",
+          "message": "Конкретне покоління вмісту для видалення"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.ZGVsZXRlLW9iamVjdA.option.b2JqZWN0.desc": {
+          "source": "The name of the object to delete, used verbatim",
+          "message": "Назва об'єкта для видалення, що використовується дослівно"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.ZGVsZXRlLW9iamVjdA.option.b2JqZWN0.display_name": {
+          "source": "Object Name",
+          "message": "Назва об'єкта"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.ZGVsZXRlLW9iamVjdA.option.b2JqZWN0.short_desc": {
+          "source": "The object's name",
+          "message": "Назва об'єкта"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.ZGVsZXRlLW9iamVjdA.short_desc": {
+          "source": "Delete an object",
+          "message": "Видалити об'єкт"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bGlzdC1idWNrZXRz.desc": {
+          "source": "Lists the buckets in the connection's GCP project.\n\nA listing is capped at `1000` buckets; when a `next_page_token` is returned, pass it back in `page_token` to retrieve the following page.",
+          "message": "Перелічує бакети у проєкті GCP підключення.\n\nСписок обмежено `1000` бакетами; якщо повертається `next_page_token`, передайте його назад у `page_token`, щоб отримати наступну сторінку."
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bGlzdC1idWNrZXRz.display_name": {
+          "source": "List Buckets",
+          "message": "Отримати список бакетів"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bGlzdC1idWNrZXRz.option.bWF4X3Jlc3VsdHM.desc": {
+          "source": "The maximum number of buckets to return in one page (max `1000`)",
+          "message": "Максимальна кількість бакетів для повернення на одній сторінці (макс. `1000`)"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bGlzdC1idWNrZXRz.option.bWF4X3Jlc3VsdHM.display_name": {
+          "source": "Max Results",
+          "message": "Макс. результатів"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bGlzdC1idWNrZXRz.option.bWF4X3Jlc3VsdHM.short_desc": {
+          "source": "Maximum buckets to return per page",
+          "message": "Максимальна кількість бакетів на сторінку"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bGlzdC1idWNrZXRz.option.cGFnZV90b2tlbg.desc": {
+          "source": "The `next_page_token` from a previous call, to retrieve the following page",
+          "message": "`next_page_token` із попереднього виклику для отримання наступної сторінки"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bGlzdC1idWNrZXRz.option.cGFnZV90b2tlbg.display_name": {
+          "source": "Page Token",
+          "message": "Токен сторінки"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bGlzdC1idWNrZXRz.option.cGFnZV90b2tlbg.short_desc": {
+          "source": "Token identifying the page to return",
+          "message": "Токен, що ідентифікує сторінку для повернення"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bGlzdC1idWNrZXRz.option.cHJlZml4.desc": {
+          "source": "List only buckets whose name begins with this string",
+          "message": "Перелічувати лише бакети, назва яких починається з цього рядка"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bGlzdC1idWNrZXRz.option.cHJlZml4.display_name": {
+          "source": "Prefix",
+          "message": "Префікс"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bGlzdC1idWNrZXRz.option.cHJlZml4.short_desc": {
+          "source": "List only buckets whose name begins with this string",
+          "message": "Перелічувати лише бакети, назва яких починається з цього рядка"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bGlzdC1idWNrZXRz.short_desc": {
+          "source": "List the buckets in the project",
+          "message": "Перелічити бакети в проєкті"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bGlzdC1vYmplY3Rz.desc": {
+          "source": "Lists the objects in a bucket.\n\nObject names are a flat key space, so `prefix` is how a subset is selected; it is matched literally. Set `delimiter` to `/` as well to list one level at a time, which makes a bucket browsable as though it had folders — the rolled-up names are returned in `prefixes` and are not objects.\n\nA listing is capped at `1000` objects; when a `next_page_token` is returned, pass it back in `page_token` to retrieve the following page.",
+          "message": "Перелічує об'єкти в бакеті.\n\nНазви об'єктів — це плоский простір ключів, тому підмножина вибирається за допомогою `prefix`; відповідність шукається буквально. Також укажіть `delimiter` як `/`, щоб переглядати по одному рівню за раз, що дозволяє переглядати бакет так, ніби він містить папки — згруповані назви повертаються в `prefixes` і не є об'єктами.\n\nСписок обмежено `1000` об'єктами; якщо повертається `next_page_token`, передайте його назад у `page_token`, щоб отримати наступну сторінку."
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bGlzdC1vYmplY3Rz.display_name": {
+          "source": "List Objects",
+          "message": "Отримати список об'єктів"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bGlzdC1vYmplY3Rz.option.YnVja2V0.desc": {
+          "source": "The name of the bucket whose objects should be listed",
+          "message": "Назва бакета, об'єкти якого слід перелічити"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bGlzdC1vYmplY3Rz.option.YnVja2V0.display_name": {
+          "source": "Bucket",
+          "message": "Бакет"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bGlzdC1vYmplY3Rz.option.YnVja2V0.short_desc": {
+          "source": "The bucket to list",
+          "message": "Бакет для переліку"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bGlzdC1vYmplY3Rz.option.ZGVsaW1pdGVy.desc": {
+          "source": "Objects whose name contains this string after `prefix` are omitted from `objects` and rolled up into `prefixes` instead.  Setting it to `/` together with `prefix` makes a bucket browsable one level at a time, as though it had folders — which it does not",
+          "message": "Об'єкти, назва яких містить цей рядок після `prefix`, опускаються з `objects` і натомість згортаються в `prefixes`. Встановлення значення `/` разом із `prefix` дозволяє переглядати бакет по одному рівню за раз, ніби він містить папки, хоча це не так"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bGlzdC1vYmplY3Rz.option.ZGVsaW1pdGVy.display_name": {
+          "source": "Delimiter",
+          "message": "Розділювач"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bGlzdC1vYmplY3Rz.option.ZGVsaW1pdGVy.short_desc": {
+          "source": "Roll up names containing this delimiter into common prefixes",
+          "message": "Згортати назви, що містять цей роздільник, у спільні префікси"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bGlzdC1vYmplY3Rz.option.ZW5kX29mZnNldA.desc": {
+          "source": "List only objects whose name is lexicographically less than this value",
+          "message": "Перелічувати лише об'єкти, назва яких лексикографічно менша за це значення"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bGlzdC1vYmplY3Rz.option.ZW5kX29mZnNldA.display_name": {
+          "source": "End Offset",
+          "message": "Кінцевий зсув"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bGlzdC1vYmplY3Rz.option.ZW5kX29mZnNldA.short_desc": {
+          "source": "List only objects before this name",
+          "message": "Перелічувати лише об'єкти до цієї назви"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bGlzdC1vYmplY3Rz.option.aW5jbHVkZV90cmFpbGluZ19kZWxpbWl0ZXI.desc": {
+          "source": "When set, objects whose name ends with `delimiter` are returned in `objects` as well as being rolled up into `prefixes`; this is how the zero-byte folder placeholder objects written by some tools become visible",
+          "message": "Якщо встановлено, об'єкти, назва яких закінчується на `delimiter`, повертаються в `objects`, а також згортаються в `prefixes`; саме так стають видимими об'єкти-заповнювачі папок розміром 0 байтів, створені деякими інструментами"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bGlzdC1vYmplY3Rz.option.aW5jbHVkZV90cmFpbGluZ19kZWxpbWl0ZXI.display_name": {
+          "source": "Include Trailing Delimiter",
+          "message": "Включати кінцевий роздільник"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bGlzdC1vYmplY3Rz.option.aW5jbHVkZV90cmFpbGluZ19kZWxpbWl0ZXI.short_desc": {
+          "source": "Also return objects whose name ends with the delimiter",
+          "message": "Також повертати об'єкти, назва яких закінчується роздільником"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bGlzdC1vYmplY3Rz.option.bWF4X3Jlc3VsdHM.desc": {
+          "source": "The maximum number of objects to return in one page (max `1000`)",
+          "message": "Максимальна кількість об'єктів для повернення на одній сторінці (макс. `1000`)"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bGlzdC1vYmplY3Rz.option.bWF4X3Jlc3VsdHM.display_name": {
+          "source": "Max Results",
+          "message": "Макс. результатів"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bGlzdC1vYmplY3Rz.option.bWF4X3Jlc3VsdHM.short_desc": {
+          "source": "Maximum objects to return per page",
+          "message": "Максимальна кількість об'єктів на сторінку"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bGlzdC1vYmplY3Rz.option.c3RhcnRfb2Zmc2V0.desc": {
+          "source": "List only objects whose name is lexicographically greater than or equal to this value",
+          "message": "Перелічувати лише об'єкти, назва яких лексикографічно більша або дорівнює цьому значенню"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bGlzdC1vYmplY3Rz.option.c3RhcnRfb2Zmc2V0.display_name": {
+          "source": "Start Offset",
+          "message": "Початковий зсув"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bGlzdC1vYmplY3Rz.option.c3RhcnRfb2Zmc2V0.short_desc": {
+          "source": "List only objects at or after this name",
+          "message": "Перелічувати лише об'єкти, починаючи з цієї назви або після неї"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bGlzdC1vYmplY3Rz.option.cGFnZV90b2tlbg.desc": {
+          "source": "The `next_page_token` from a previous call, to retrieve the following page",
+          "message": "`next_page_token` із попереднього виклику для отримання наступної сторінки"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bGlzdC1vYmplY3Rz.option.cGFnZV90b2tlbg.display_name": {
+          "source": "Page Token",
+          "message": "Токен сторінки"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bGlzdC1vYmplY3Rz.option.cGFnZV90b2tlbg.short_desc": {
+          "source": "Token identifying the page to return",
+          "message": "Токен, що ідентифікує сторінку для повернення"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bGlzdC1vYmplY3Rz.option.cHJlZml4.desc": {
+          "source": "List only objects whose name begins with this string.  Because object names are a flat key space, a prefix is how a subset is selected; it is matched literally and byte for byte",
+          "message": "Перелічувати лише об'єкти, назва яких починається з цього рядка. Оскільки назви об'єктів — це плоский простір ключів, префікс використовується для вибору підмножини; відповідність перевіряється буквально та побайтово"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bGlzdC1vYmplY3Rz.option.cHJlZml4.display_name": {
+          "source": "Prefix",
+          "message": "Префікс"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bGlzdC1vYmplY3Rz.option.cHJlZml4.short_desc": {
+          "source": "List only objects whose name begins with this string",
+          "message": "Перелічувати лише об'єкти, назва яких починається з цього рядка"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bGlzdC1vYmplY3Rz.option.dmVyc2lvbnM.desc": {
+          "source": "Include noncurrent generations of objects, which exist only in a bucket with versioning enabled; each generation is returned as a separate entry",
+          "message": "Включати неактуальні покоління об'єктів, які існують лише в бакеті з увімкненим керуванням версіями; кожне покоління повертається як окремий запис"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bGlzdC1vYmplY3Rz.option.dmVyc2lvbnM.display_name": {
+          "source": "Include Versions",
+          "message": "Включити версії"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bGlzdC1vYmplY3Rz.option.dmVyc2lvbnM.short_desc": {
+          "source": "Include noncurrent object generations",
+          "message": "Включати неактуальні покоління об'єктів"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bGlzdC1vYmplY3Rz.short_desc": {
+          "source": "List the objects in a bucket",
+          "message": "Отримати список об'єктів у бакеті"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bWFrZS1hcGktY2FsbA.desc": {
+          "source": "Make a custom HTTP / REST API call to **Google Cloud Storage** using the configured connection's authentication.\n\nSpecify the HTTP method, the URI path (relative to the connection's API base URL), optional query parameters, headers, and request body. The response is returned as a hash containing the status code, response headers, and response body.\n\nUse this action for endpoints that are not yet exposed as first-class actions on this app.",
+          "message": "Виконати довільний виклик HTTP / REST API до **Google Cloud Storage**, використовуючи автентифікацію налаштованого підключення.\n\nУкажіть метод HTTP, шлях URI (відносно базової URL-адреси API підключення), необов'язкові параметри запиту, заголовки та тіло запиту. Відповідь повертається у вигляді хешу, що містить код статусу, заголовки відповіді та тіло відповіді.\n\nВикористовуйте цю дію для кінцевих точок, які ще не представлені як окремі дії в цьому застосунку."
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bWFrZS1hcGktY2FsbA.display_name": {
+          "source": "Make an API call",
+          "message": "Зробити виклик API"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.desc": {
+          "source": "The request body. The effective type depends on `body_type`: JSON/form/YAML expect a hash, XML/text expect a string, multipart expects a file structure, binary expects raw bytes.",
+          "message": "Тіло запиту. Ефективний тип залежить від `body_type`: JSON/form/YAML очікують хеш, XML/text очікують рядок, multipart очікує структуру файлу, binary очікує необроблені байти."
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.display_name": {
+          "source": "Body",
+          "message": "Тіло"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.short_desc": {
+          "source": "The request body",
+          "message": "Тіло запиту"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.desc": {
+          "source": "Upload a file using `multipart/form-data`. The body must be a @ref DataProvider::FileDataType \"FileDataType\" structure (filename + content + mime_type). The framework builds the multipart envelope and sets the boundary header.",
+          "message": "Завантажити файл за допомогою `multipart/form-data`. Тіло має бути структурою @ref DataProvider::FileDataType \"FileDataType\" (filename + content + mime_type). Фреймворк створює конверт multipart і встановлює заголовок boundary."
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.display_name": {
+          "source": "Multipart Form",
+          "message": "Форма Multipart"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.short_desc": {
+          "source": "Upload a file using multipart/form-data",
+          "message": "Завантажити файл за допомогою multipart/form-data"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.desc": {
+          "source": "Pass the body to the REST client unchanged; the client decides serialization based on its configured `data` option and the value type",
+          "message": "Передати тіло REST-клієнту без змін; клієнт визначає серіалізацію на основі налаштованого параметра `data` та типу значення"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.display_name": {
+          "source": "Auto",
+          "message": "Авто"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.short_desc": {
+          "source": "Pass-through; use connection serialization and let the REST client decide",
+          "message": "Пряма передача; використовувати серіалізацію з'єднання та дозволити REST-клієнту приймати рішення"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.desc": {
+          "source": "Send the body as raw bytes. The body must be a binary value. Sets `Content-Type: application/octet-stream` unless overridden by `hdr`.",
+          "message": "Надіслати тіло як необроблені байти. Тіло має бути бінарним значенням. Установлює `Content-Type: application/octet-stream`, якщо не перевизначено через `hdr`."
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.display_name": {
+          "source": "Raw Binary",
+          "message": "Необроблені бінарні дані"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.short_desc": {
+          "source": "Send body as raw bytes",
+          "message": "Надіслати тіло як необроблені байти"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.desc": {
+          "source": "Serialize a hash of form fields as `application/x-www-form-urlencoded`. The body must be a hash whose values are scalars (strings/numbers/booleans).",
+          "message": "Серіалізувати хеш полів форми як `application/x-www-form-urlencoded`. Тіло має бути хешем, значеннями якого є скаляри (рядки/числа/булеві значення)."
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.display_name": {
+          "source": "Form (URL-encoded)",
+          "message": "Форма (URL-encoded)"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.short_desc": {
+          "source": "Serialize body as application/x-www-form-urlencoded form fields",
+          "message": "Серіалізувати тіло як поля форми application/x-www-form-urlencoded"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.desc": {
+          "source": "Serialize the body as JSON; sets `Content-Type: application/json`. The body should be a hash, list, or scalar value.",
+          "message": "Серіалізувати тіло як JSON; встановлює `Content-Type: application/json`. Тіло має бути хешем, списком або скалярним значенням."
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.display_name": {
+          "source": "JSON",
+          "message": "JSON"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.short_desc": {
+          "source": "Serialize body as JSON",
+          "message": "Серіалізувати тіло як JSON"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.desc": {
+          "source": "Send the body as plain text. The body must be a string. Sets `Content-Type: text/plain`.",
+          "message": "Надіслати тіло як простий текст. Тіло має бути рядком. Установлює `Content-Type: text/plain`."
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.display_name": {
+          "source": "Plain Text",
+          "message": "Простий текст"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.short_desc": {
+          "source": "Send body as text/plain",
+          "message": "Надіслати тіло як text/plain"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.desc": {
+          "source": "Send the body as XML. If the body is a hash it is serialized to XML; if it is a string it is sent verbatim. Sets `Content-Type: application/xml`.",
+          "message": "Надіслати тіло як XML. Якщо тіло є хешем, воно серіалізується в XML; якщо це рядок, воно надсилається без змін. Установлює `Content-Type: application/xml`."
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.display_name": {
+          "source": "XML",
+          "message": "XML"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.short_desc": {
+          "source": "Send body as XML",
+          "message": "Надіслати тіло як XML"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.desc": {
+          "source": "Send the body as YAML. If the body is a hash it is serialized to YAML; if it is a string it is sent verbatim. Sets `Content-Type: application/x-yaml`.",
+          "message": "Надіслати тіло як YAML. Якщо тіло є хешем, воно серіалізується в YAML; якщо це рядок, воно надсилається без змін. Установлює `Content-Type: application/x-yaml`."
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.display_name": {
+          "source": "YAML",
+          "message": "YAML"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.short_desc": {
+          "source": "Send body as YAML",
+          "message": "Надіслати тіло як YAML"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.desc": {
+          "source": "Selects the body serialization mode and the corresponding `Content-Type` header. Changing this field reshapes the `body` editor - selecting JSON exposes a JSON editor, selecting Multipart Form exposes a file picker, and so on.",
+          "message": "Вибирає режим серіалізації тіла та відповідний заголовок `Content-Type`. Зміна цього поля змінює вигляд редактора `body` — вибір JSON відкриває редактор JSON, вибір Multipart Form відкриває вибір файлу тощо."
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.display_name": {
+          "source": "Body Type",
+          "message": "Тип тіла"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.short_desc": {
+          "source": "How the body is serialized and what Content-Type is sent",
+          "message": "Як серіалізується тіло та який Content-Type надсилається"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.desc": {
+          "source": "If `True`, non-2xx HTTP responses return as the normal response hash (with the actual status code) instead of raising `REST-RESPONSE-ERROR`. Useful for handling 4xx/5xx as data - e.g. checking whether a resource exists. Overrides the connection's `error_passthru` setting for this call only.",
+          "message": "Якщо `True`, HTTP-відповіді з кодом, відмінним від 2xx, повертаються як звичайний хеш відповіді (з фактичним кодом стану) замість генерації `REST-RESPONSE-ERROR`. Корисно для обробки 4xx/5xx як даних — наприклад, перевірки існування ресурсу. Перевизначає налаштування `error_passthru` з'єднання лише для цього виклику."
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.display_name": {
+          "source": "Return Errors as Data",
+          "message": "Повертати помилки як дані"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.short_desc": {
+          "source": "Return non-2xx responses normally instead of throwing",
+          "message": "Повертати відповіді з кодом, відмінним від 2xx, у звичайному режимі замість генерації помилки"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.desc": {
+          "source": "Optional list of HTTP status codes treated as success. If set and the response status is not in this list, the action throws `REST-STATUS-ERROR`. When unset, the REST client's default behavior applies (typically: 2xx is success, non-2xx throws).",
+          "message": "Необов'язковий список кодів стану HTTP, які вважаються успішними. Якщо задано і код стану відповіді відсутній у цьому списку, дія генерує `REST-STATUS-ERROR`. Якщо не задано, застосовується поведінка REST-клієнта за замовчуванням (зазвичай: 2xx — успіх, не-2xx генерує помилку)."
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.display_name": {
+          "source": "Expected Status Codes",
+          "message": "Очікувані коди стану"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.short_desc": {
+          "source": "Response status codes treated as success",
+          "message": "Коди стану відповіді, які вважаються успішними"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bWFrZS1hcGktY2FsbA.option.aGRy.desc": {
+          "source": "Hash of custom headers added to the request. These override any default headers set by `body_type` (e.g. supplying `Content-Type` here wins over the body-type default).",
+          "message": "Хеш користувацьких заголовків, доданих до запиту. Вони перевизначають будь-які заголовки за замовчуванням, встановлені `body_type` (наприклад, передання `Content-Type` тут має перевагу над замовчуваним значенням для типу тіла)."
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bWFrZS1hcGktY2FsbA.option.aGRy.display_name": {
+          "source": "Custom Headers",
+          "message": "Користувацькі заголовки"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bWFrZS1hcGktY2FsbA.option.aGRy.short_desc": {
+          "source": "Extra request headers",
+          "message": "Додаткові заголовки запиту"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.desc": {
+          "source": "If `True`, the response hash includes a `debug` sub-hash containing the request method/URL/headers (with sensitive values redacted), request and response sizes, and round-trip duration. Useful when investigating slow or failing calls. Off by default to keep responses lean.",
+          "message": "Якщо `True`, хеш відповіді містить підхеш `debug`, що містить метод/URL/заголовки запиту (з відредагованими конфіденційними значеннями), розміри запиту та відповіді, а також тривалість виконання. Корисно під час дослідження повільних або невдалих викликів. Вимкнено за замовчуванням для зменшення обсягу відповідей."
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.display_name": {
+          "source": "Include Debug Info",
+          "message": "Включати зневаджувальну інформацію"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.short_desc": {
+          "source": "Include request/timing/size debug info in the response",
+          "message": "Включати зневаджувальну інформацію про запит/час/розмір у відповідь"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.desc": {
+          "source": "HTTP `OPTIONS`",
+          "message": "HTTP `OPTIONS`"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.display_name": {
+          "source": "OPTIONS",
+          "message": "OPTIONS"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.short_desc": {
+          "source": "HTTP OPTIONS",
+          "message": "HTTP OPTIONS"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.desc": {
+          "source": "HTTP `DELETE`",
+          "message": "HTTP `DELETE`"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.display_name": {
+          "source": "DELETE",
+          "message": "DELETE"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.short_desc": {
+          "source": "HTTP DELETE",
+          "message": "HTTP DELETE"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.desc": {
+          "source": "HTTP `GET`",
+          "message": "HTTP `GET`"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.display_name": {
+          "source": "GET",
+          "message": "GET"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.short_desc": {
+          "source": "HTTP GET",
+          "message": "HTTP GET"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.desc": {
+          "source": "HTTP `HEAD`",
+          "message": "HTTP `HEAD`"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.display_name": {
+          "source": "HEAD",
+          "message": "HEAD"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.short_desc": {
+          "source": "HTTP HEAD",
+          "message": "HTTP HEAD"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.desc": {
+          "source": "HTTP `PATCH`",
+          "message": "HTTP `PATCH`"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.display_name": {
+          "source": "PATCH",
+          "message": "PATCH"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.short_desc": {
+          "source": "HTTP PATCH",
+          "message": "HTTP PATCH"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.desc": {
+          "source": "HTTP `POST`",
+          "message": "HTTP `POST`"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.display_name": {
+          "source": "POST",
+          "message": "POST"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.short_desc": {
+          "source": "HTTP POST",
+          "message": "HTTP POST"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.desc": {
+          "source": "HTTP `PUT`",
+          "message": "HTTP `PUT`"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.display_name": {
+          "source": "PUT",
+          "message": "PUT"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.short_desc": {
+          "source": "HTTP PUT",
+          "message": "HTTP PUT"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.desc": {
+          "source": "HTTP `TRACE`",
+          "message": "HTTP `TRACE`"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.display_name": {
+          "source": "TRACE",
+          "message": "TRACE"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.short_desc": {
+          "source": "HTTP TRACE",
+          "message": "HTTP TRACE"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "Метод HTTP для використання в запиті"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.display_name": {
+          "source": "HTTP Method",
+          "message": "Метод HTTP"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.short_desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "Метод HTTP для використання в запиті"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain `{name}` placeholders that are replaced from `path_vars`. Example: `/users/{id}/comments`.",
+          "message": "Шлях URI відносно базового URL API з'єднання. Може містити заповнювачі `{name}`, які замінюються з `path_vars`. Приклад: `/users/{id}/comments`."
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.display_name": {
+          "source": "URI Path",
+          "message": "Шлях URI"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.short_desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain '{name}' placeholders that are replaced from 'path_vars'. Example: '/users/{id}/comments'",
+          "message": "Шлях URI відносно базового URL API підключення. Може містити заповнювачі '{name}', які замінюються з 'path_vars'. Приклад: '/users/{id}/comments'"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.desc": {
+          "source": "Hash of values substituted into `{name}` placeholders in the URI path. Example: with `path = /users/{id}` and `path_vars = {id: 123}` the framework sends `/users/123`. Values are URL-encoded.",
+          "message": "Хеш значень, що підставляються замість заповнювачів `{name}` у шляху URI. Приклад: із `path = /users/{id}` та `path_vars = {id: 123}` фреймворк надсилає `/users/123`. Значення кодуються у форматі URL."
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.display_name": {
+          "source": "Path Variables",
+          "message": "Змінні шляху"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.short_desc": {
+          "source": "Values for {name} placeholders in path",
+          "message": "Значення для заповнювачів {name} у шляху"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.desc": {
+          "source": "Hash of query string parameters to append to the URI path. Values are URL-encoded; list values are joined with `,`.",
+          "message": "Хеш параметрів рядка запиту для додавання до шляху URI. Значення кодуються у форматі URL; значення списку об'єднуються за допомогою `,`."
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.display_name": {
+          "source": "Query Arguments",
+          "message": "Аргументи запиту"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.short_desc": {
+          "source": "Query string parameters",
+          "message": "Параметри рядка запиту"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bWFrZS1hcGktY2FsbA.short_desc": {
+          "source": "Make a custom API call to Google Cloud Storage",
+          "message": "Виконати довільний виклик API до Google Cloud Storage"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.dXBkYXRlLW9iamVjdC1tZXRhZGF0YQ.desc": {
+          "source": "Updates an object's metadata in place, without re-uploading its content: the content type, the cache and content headers served with it, a custom timestamp, and user-defined metadata.\n\nThe update is a merge, so only the fields supplied are changed; set a `metadata` key to `null` to remove that key.",
+          "message": "Оновлює метадані об'єкта на місці без повторного завантаження його вмісту: тип вмісту, заголовки кешування та вмісту, що надаються разом із ним, користувацьку часову позначку та визначені користувачем метадані.\n\nОновлення є об'єднанням, тому змінюються лише надані поля; встановіть для ключа `metadata` значення `null`, щоб видалити цей ключ."
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.dXBkYXRlLW9iamVjdC1tZXRhZGF0YQ.display_name": {
+          "source": "Update Object Metadata",
+          "message": "Оновити метадані об'єкта"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.dXBkYXRlLW9iamVjdC1tZXRhZGF0YQ.option.Y29udGVudF90eXBl.desc": {
+          "source": "The MIME type served with the object's content",
+          "message": "MIME-тип, що надається з вмістом об'єкта"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.dXBkYXRlLW9iamVjdC1tZXRhZGF0YQ.option.Y29udGVudF90eXBl.display_name": {
+          "source": "Content Type",
+          "message": "Тип вмісту"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.dXBkYXRlLW9iamVjdC1tZXRhZGF0YQ.option.Y29udGVudF90eXBl.short_desc": {
+          "source": "The MIME type to set",
+          "message": "MIME-тип для встановлення"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.dXBkYXRlLW9iamVjdC1tZXRhZGF0YQ.option.Y29udGVudF9kaXNwb3NpdGlvbg.desc": {
+          "source": "The `Content-Disposition` header served with the object's content",
+          "message": "Заголовок `Content-Disposition`, що надається з вмістом об'єкта"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.dXBkYXRlLW9iamVjdC1tZXRhZGF0YQ.option.Y29udGVudF9kaXNwb3NpdGlvbg.display_name": {
+          "source": "Content Disposition",
+          "message": "Content Disposition"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.dXBkYXRlLW9iamVjdC1tZXRhZGF0YQ.option.Y29udGVudF9kaXNwb3NpdGlvbg.short_desc": {
+          "source": "The Content-Disposition header to set",
+          "message": "Заголовок Content-Disposition для встановлення"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.dXBkYXRlLW9iamVjdC1tZXRhZGF0YQ.option.Y29udGVudF9lbmNvZGluZw.desc": {
+          "source": "The `Content-Encoding` header served with the object's content (e.g. `gzip`)",
+          "message": "Заголовок `Content-Encoding`, що надається з вмістом об'єкта (наприклад, `gzip`)"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.dXBkYXRlLW9iamVjdC1tZXRhZGF0YQ.option.Y29udGVudF9lbmNvZGluZw.display_name": {
+          "source": "Content Encoding",
+          "message": "Content Encoding"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.dXBkYXRlLW9iamVjdC1tZXRhZGF0YQ.option.Y29udGVudF9lbmNvZGluZw.short_desc": {
+          "source": "The Content-Encoding header to set",
+          "message": "Заголовок Content-Encoding для встановлення"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.dXBkYXRlLW9iamVjdC1tZXRhZGF0YQ.option.Y29udGVudF9sYW5ndWFnZQ.desc": {
+          "source": "The `Content-Language` header served with the object's content",
+          "message": "Заголовок `Content-Language`, що надається з вмістом об'єкта"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.dXBkYXRlLW9iamVjdC1tZXRhZGF0YQ.option.Y29udGVudF9sYW5ndWFnZQ.display_name": {
+          "source": "Content Language",
+          "message": "Content Language"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.dXBkYXRlLW9iamVjdC1tZXRhZGF0YQ.option.Y29udGVudF9sYW5ndWFnZQ.short_desc": {
+          "source": "The Content-Language header to set",
+          "message": "Заголовок Content-Language для встановлення"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.dXBkYXRlLW9iamVjdC1tZXRhZGF0YQ.option.Y2FjaGVfY29udHJvbA.desc": {
+          "source": "The `Cache-Control` header served with the object's content",
+          "message": "Заголовок `Cache-Control`, що надається з вмістом об'єкта"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.dXBkYXRlLW9iamVjdC1tZXRhZGF0YQ.option.Y2FjaGVfY29udHJvbA.display_name": {
+          "source": "Cache Control",
+          "message": "Cache Control"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.dXBkYXRlLW9iamVjdC1tZXRhZGF0YQ.option.Y2FjaGVfY29udHJvbA.short_desc": {
+          "source": "The Cache-Control header to set",
+          "message": "Заголовок Cache-Control, який потрібно встановити"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.dXBkYXRlLW9iamVjdC1tZXRhZGF0YQ.option.Y3VzdG9tX3RpbWU.desc": {
+          "source": "A user-specified date and time on the object, usable in lifecycle rules",
+          "message": "Вказані користувачем дата й час об'єкта, які можна використовувати в правилах життєвого циклу"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.dXBkYXRlLW9iamVjdC1tZXRhZGF0YQ.option.Y3VzdG9tX3RpbWU.display_name": {
+          "source": "Custom Time",
+          "message": "Користувацький час"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.dXBkYXRlLW9iamVjdC1tZXRhZGF0YQ.option.Y3VzdG9tX3RpbWU.short_desc": {
+          "source": "The user-specified timestamp to set",
+          "message": "Вказана користувачем мітка часу, яку потрібно встановити"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.dXBkYXRlLW9iamVjdC1tZXRhZGF0YQ.option.YnVja2V0.desc": {
+          "source": "The name of the bucket holding the object",
+          "message": "Назва бакета, що містить об'єкт"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.dXBkYXRlLW9iamVjdC1tZXRhZGF0YQ.option.YnVja2V0.display_name": {
+          "source": "Bucket",
+          "message": "Бакет"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.dXBkYXRlLW9iamVjdC1tZXRhZGF0YQ.option.YnVja2V0.short_desc": {
+          "source": "The bucket holding the object",
+          "message": "Бакет, що містить об'єкт"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.dXBkYXRlLW9iamVjdC1tZXRhZGF0YQ.option.Z2VuZXJhdGlvbg.desc": {
+          "source": "The content generation whose metadata should be updated; when omitted the live version is used",
+          "message": "Покоління вмісту, метадані якого потрібно оновити; якщо пропущено, використовується поточна версія"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.dXBkYXRlLW9iamVjdC1tZXRhZGF0YQ.option.Z2VuZXJhdGlvbg.display_name": {
+          "source": "Generation",
+          "message": "Покоління"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.dXBkYXRlLW9iamVjdC1tZXRhZGF0YQ.option.Z2VuZXJhdGlvbg.short_desc": {
+          "source": "A specific content generation to address",
+          "message": "Конкретне покоління вмісту для звернення"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.dXBkYXRlLW9iamVjdC1tZXRhZGF0YQ.option.b2JqZWN0.desc": {
+          "source": "The name of the object, used verbatim",
+          "message": "Назва об'єкта, використовується дослівно"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.dXBkYXRlLW9iamVjdC1tZXRhZGF0YQ.option.b2JqZWN0.display_name": {
+          "source": "Object Name",
+          "message": "Назва об'єкта"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.dXBkYXRlLW9iamVjdC1tZXRhZGF0YQ.option.b2JqZWN0.short_desc": {
+          "source": "The object's name",
+          "message": "Назва об'єкта"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.dXBkYXRlLW9iamVjdC1tZXRhZGF0YQ.option.bWV0YWRhdGE.desc": {
+          "source": "User-defined metadata as key/value pairs.  A `PATCH` merges these with the existing metadata; set a key to `null` to remove it",
+          "message": "Користувацькі метадані у вигляді пар ключ/значення. `PATCH` об'єднує їх з наявними метаданими; встановіть значення ключа в `null`, щоб видалити його"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.dXBkYXRlLW9iamVjdC1tZXRhZGF0YQ.option.bWV0YWRhdGE.display_name": {
+          "source": "Custom Metadata",
+          "message": "Користувацькі метадані"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.dXBkYXRlLW9iamVjdC1tZXRhZGF0YQ.option.bWV0YWRhdGE.short_desc": {
+          "source": "User-defined metadata to set",
+          "message": "Користувацькі метадані, які потрібно встановити"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.dXBkYXRlLW9iamVjdC1tZXRhZGF0YQ.short_desc": {
+          "source": "Update an object's metadata without rewriting it",
+          "message": "Оновити метадані об'єкта без його перезаписування"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.dXBsb2FkLW9iamVjdA.desc": {
+          "source": "Uploads content to a bucket as an object of any size.\n\nLarge content, and any upload that also sets metadata, is sent as a resumable upload in chunks that Google Cloud Storage commits as they arrive, so a large transfer does not have to restart from the beginning if a chunk fails. Small content is sent in a single request.\n\n`object` is used verbatim, so `reports/2026/q1.csv` is one key rather than a path. Set `if_generation_match` to `0` to create the object only if it does not already exist, rather than overwriting it.",
+          "message": "Завантажує вміст у бакет як об'єкт будь-якого розміру.\n\nВеликий вміст, а також будь-яке завантаження, що також встановлює метадані, надсилається як відновлюване завантаження частинами, які Google Cloud Storage фіксує в міру їх надходження, тому у разі збою частини передавання великого обсягу даних не потрібно починати спочатку. Невеликий вміст надсилається в одному запиті.\n\n`object` використовується дослівно, тому `reports/2026/q1.csv` є одним ключем, а не шляхом. Встановіть `if_generation_match` у значення `0`, щоб створити об'єкт лише якщо він ще не існує, замість його перезаписування."
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.dXBsb2FkLW9iamVjdA.display_name": {
+          "source": "Upload Object",
+          "message": "Завантажити об'єкт"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.dXBsb2FkLW9iamVjdA.option.Y29udGVudF90eXBl.desc": {
+          "source": "The MIME type to store the object with.  When omitted the file's MIME type is used; if that is unset or `auto`, it is derived from the object name, falling back to `application/octet-stream`",
+          "message": "MIME-тип, з яким зберігається об'єкт. Якщо пропущено, використовується MIME-тип файлу; якщо він не встановлений або дорівнює `auto`, він визначається з назви об'єкта з поверненням до `application/octet-stream`"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.dXBsb2FkLW9iamVjdA.option.Y29udGVudF90eXBl.display_name": {
+          "source": "Content Type",
+          "message": "Тип вмісту"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.dXBsb2FkLW9iamVjdA.option.Y29udGVudF90eXBl.short_desc": {
+          "source": "The MIME type to store",
+          "message": "MIME-тип для збереження"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.dXBsb2FkLW9iamVjdA.option.Y29udGVudF9kaXNwb3NpdGlvbg.desc": {
+          "source": "The `Content-Disposition` header to serve the object's content with",
+          "message": "Заголовок `Content-Disposition`, з яким надається вміст об'єкта"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.dXBsb2FkLW9iamVjdA.option.Y29udGVudF9kaXNwb3NpdGlvbg.display_name": {
+          "source": "Content Disposition",
+          "message": "Content Disposition"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.dXBsb2FkLW9iamVjdA.option.Y29udGVudF9kaXNwb3NpdGlvbg.short_desc": {
+          "source": "The Content-Disposition header to store",
+          "message": "Заголовок Content-Disposition для збереження"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.dXBsb2FkLW9iamVjdA.option.Y29udGVudF9lbmNvZGluZw.desc": {
+          "source": "The `Content-Encoding` header to serve the object's content with (e.g. `gzip`).  This declares how the bytes being uploaded are already encoded; it does not compress them",
+          "message": "Заголовок `Content-Encoding`, з яким надається вміст об'єкта (наприклад, `gzip`). Це оголошує, як завантажувані байти вже закодовані; це не стискає їх"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.dXBsb2FkLW9iamVjdA.option.Y29udGVudF9lbmNvZGluZw.display_name": {
+          "source": "Content Encoding",
+          "message": "Content Encoding"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.dXBsb2FkLW9iamVjdA.option.Y29udGVudF9lbmNvZGluZw.short_desc": {
+          "source": "The Content-Encoding header to store",
+          "message": "Заголовок Content-Encoding для збереження"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.dXBsb2FkLW9iamVjdA.option.Y29udGVudF9sYW5ndWFnZQ.desc": {
+          "source": "The `Content-Language` header to serve the object's content with",
+          "message": "Заголовок `Content-Language`, з яким надається вміст об'єкта"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.dXBsb2FkLW9iamVjdA.option.Y29udGVudF9sYW5ndWFnZQ.display_name": {
+          "source": "Content Language",
+          "message": "Content Language"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.dXBsb2FkLW9iamVjdA.option.Y29udGVudF9sYW5ndWFnZQ.short_desc": {
+          "source": "The Content-Language header to store",
+          "message": "Заголовок Content-Language для збереження"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.dXBsb2FkLW9iamVjdA.option.Y2FjaGVfY29udHJvbA.desc": {
+          "source": "The `Cache-Control` header to serve the object's content with",
+          "message": "Заголовок `Cache-Control`, з яким надається вміст об'єкта"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.dXBsb2FkLW9iamVjdA.option.Y2FjaGVfY29udHJvbA.display_name": {
+          "source": "Cache Control",
+          "message": "Cache Control"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.dXBsb2FkLW9iamVjdA.option.Y2FjaGVfY29udHJvbA.short_desc": {
+          "source": "The Cache-Control header to store",
+          "message": "Заголовок Cache-Control для збереження"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.dXBsb2FkLW9iamVjdA.option.Y3VzdG9tX3RpbWU.desc": {
+          "source": "A user-specified date and time on the object, usable in lifecycle rules",
+          "message": "Вказані користувачем дата й час об'єкта, які можна використовувати в правилах життєвого циклу"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.dXBsb2FkLW9iamVjdA.option.Y3VzdG9tX3RpbWU.display_name": {
+          "source": "Custom Time",
+          "message": "Користувацький час"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.dXBsb2FkLW9iamVjdA.option.Y3VzdG9tX3RpbWU.short_desc": {
+          "source": "The user-specified timestamp to store",
+          "message": "Вказана користувачем мітка часу для збереження"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.dXBsb2FkLW9iamVjdA.option.YnVja2V0.desc": {
+          "source": "The name of the bucket to upload the object into",
+          "message": "Назва бакета, в який завантажується об'єкт"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.dXBsb2FkLW9iamVjdA.option.YnVja2V0.display_name": {
+          "source": "Bucket",
+          "message": "Бакет"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.dXBsb2FkLW9iamVjdA.option.YnVja2V0.short_desc": {
+          "source": "The bucket to upload into",
+          "message": "Бакет для завантаження"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.dXBsb2FkLW9iamVjdA.option.ZmlsZQ.desc": {
+          "source": "The content to upload, including the file name, the content, and the MIME type",
+          "message": "Вміст для завантаження, включаючи назву файлу, вміст і MIME-тип"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.dXBsb2FkLW9iamVjdA.option.ZmlsZQ.display_name": {
+          "source": "File",
+          "message": "Файл"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.dXBsb2FkLW9iamVjdA.option.ZmlsZQ.short_desc": {
+          "source": "The content to upload",
+          "message": "Вміст для завантаження"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.dXBsb2FkLW9iamVjdA.option.aWZfZ2VuZXJhdGlvbl9tYXRjaA.desc": {
+          "source": "Only perform the write if the object's current generation matches this value; pass `0` to write only if the object does not exist yet, which makes the upload a safe create rather than an overwrite",
+          "message": "Виконувати запис, лише якщо поточне покоління об'єкта відповідає цьому значенню; передайте `0`, щоб записувати лише якщо об'єкт ще не існує, що робить завантаження безпечним створенням замість перезаписування"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.dXBsb2FkLW9iamVjdA.option.aWZfZ2VuZXJhdGlvbl9tYXRjaA.display_name": {
+          "source": "If Generation Match",
+          "message": "Якщо покоління збігається"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.dXBsb2FkLW9iamVjdA.option.aWZfZ2VuZXJhdGlvbl9tYXRjaA.short_desc": {
+          "source": "Only write if the live generation matches",
+          "message": "Записувати лише якщо поточне покоління збігається"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.dXBsb2FkLW9iamVjdA.option.b2JqZWN0.desc": {
+          "source": "The name to store the object under, used verbatim: `/` is an ordinary character in a Google Cloud Storage object name, so `reports/2026/q1.csv` is a single key and not a path.  When omitted the file's name is used",
+          "message": "Назва, під якою зберігається об'єкт, використовується дослівно: `/` є звичайним символом у назві об'єкта Google Cloud Storage, тому `reports/2026/q1.csv` є єдиним ключем, а не шляхом. Якщо пропущено, використовується назва файлу"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.dXBsb2FkLW9iamVjdA.option.b2JqZWN0.display_name": {
+          "source": "Object Name",
+          "message": "Назва об'єкта"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.dXBsb2FkLW9iamVjdA.option.b2JqZWN0.short_desc": {
+          "source": "The object name to write",
+          "message": "Назва об'єкта для запису"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.dXBsb2FkLW9iamVjdA.option.bWV0YWRhdGE.desc": {
+          "source": "User-defined metadata to store on the object as key/value pairs",
+          "message": "Користувацькі метадані для збереження в об'єкті у вигляді пар ключ/значення"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.dXBsb2FkLW9iamVjdA.option.bWV0YWRhdGE.display_name": {
+          "source": "Custom Metadata",
+          "message": "Користувацькі метадані"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.dXBsb2FkLW9iamVjdA.option.bWV0YWRhdGE.short_desc": {
+          "source": "User-defined metadata to store",
+          "message": "Користувацькі метадані для збереження"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.dXBsb2FkLW9iamVjdA.option.c3RvcmFnZV9jbGFzcw.desc": {
+          "source": "The storage class for the new object: `STANDARD`, `NEARLINE`, `COLDLINE` or `ARCHIVE`.  When omitted the bucket's default is used",
+          "message": "Клас зберігання для нового об'єкта: `STANDARD`, `NEARLINE`, `COLDLINE` або `ARCHIVE`. Якщо пропущено, використовується значення бакета за замовчуванням"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.dXBsb2FkLW9iamVjdA.option.c3RvcmFnZV9jbGFzcw.display_name": {
+          "source": "Storage Class",
+          "message": "Клас сховища"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.dXBsb2FkLW9iamVjdA.option.c3RvcmFnZV9jbGFzcw.short_desc": {
+          "source": "The storage class to store the object with",
+          "message": "Клас зберігання, з яким зберігається об'єкт"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.dXBsb2FkLW9iamVjdA.short_desc": {
+          "source": "Upload content to a bucket",
+          "message": "Завантажити вміст у бакет"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.desc": {
+          "source": "Provides access to [Google Cloud Storage](https://cloud.google.com/storage) — Google's object storage service — through its [JSON API](https://cloud.google.com/storage/docs/json_api).\n\n**Common use cases**:\n- **Object storage**: upload, download, copy, and delete objects, with resumable uploads for large content\n- **Bucket browsing**: list buckets and list objects by prefix, optionally rolled up into synthetic folders with a delimiter\n- **Metadata management**: read and update content type, cache headers, and user-defined metadata\n- **Sharing**: generate time-limited signed URLs that grant access to a single object with no credentials\n- **Concatenation**: compose up to 32 objects into one without downloading them\n\nThis application is also a file-location target, so a `conn://` location can read and write objects through a Google Cloud Storage connection, and it can supply the `gs://` inputs and outputs that the Vertex AI and Google Document AI applications take.\n\n**Object names are a flat key space**: `/` is an ordinary character in an object name and not a path separator, so names are used verbatim and are never split or normalized. `dir/`, `a//b` and `/leading` are all valid, distinct object names.\n\nAuthentication uses a GCP service account or Application Default Credentials.\n\nGoogle Cloud and Google Cloud Storage are trademarks of Google LLC",
+          "message": "Надає доступ до [Google Cloud Storage](https://cloud.google.com/storage) — сервісу об'єктного сховища Google — через його [JSON API](https://cloud.google.com/storage/docs/json_api).\n\n**Поширені варіанти використання**:\n- **Об'єктне сховище**: завантаження, завантаження з сервера, копіювання та видалення об'єктів з підтримкою відновлюваного завантаження для великих обсягів даних\n- **Огляд бакетів**: перелік бакетів і перелік об'єктів за префіксом, за бажанням згрупованих у синтетичні папки за допомогою роздільника\n- **Керування метаданими**: читання та оновлення типу вмісту, заголовків кешування та користувацьких метаданих\n- **Спільний доступ**: створення обмежених за часом підписаних URL-адрес, які надають доступ до окремого об'єкта без облікових даних\n- **Конкатенація**: об'єднання до 32 об'єктів в один без їх завантаження\n\nЦя програма також є цільовим розташуванням файлів, тому розташування `conn://` може зчитувати та записувати об'єкти через з'єднання Google Cloud Storage, а також може надавати вхідні та вихідні дані `gs://`, які приймають програми Vertex AI та Google Document AI.\n\n**Назви об'єктів — це плаский простір ключів**: `/` є звичайним символом у назві об'єкта, а не роздільником шляху, тому назви використовуються дослівно і ніколи не розбиваються та не нормалізуються. `dir/`, `a//b` та `/leading` є дійсними окремими назвами об'єктів.\n\nАвтентифікація використовує сервісний акаунт GCP або Application Default Credentials.\n\nGoogle Cloud та Google Cloud Storage є торговельними марками Google LLC"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.display_name": {
+          "source": "Google Cloud Storage",
+          "message": "Google Cloud Storage"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.short_desc": {
+          "source": "Google Cloud Storage object storage",
+          "message": "Об'єктне сховище Google Cloud Storage"
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,2437 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "uk": {
+      "messages": {
+        "app.RGVlbA.action.Y29udHJhY3QtY3JlYXRlZA.desc": {
+          "source": "Fires when a new contract is created in Deel. Uses polling to detect new records.",
+          "message": "Спрацьовує, коли в Deel створюється новий контракт. Використовує опитування для виявлення нових записів."
+        },
+        "app.RGVlbA.action.Y29udHJhY3QtY3JlYXRlZA.display_name": {
+          "source": "Contract Created",
+          "message": "Контракт створено"
+        },
+        "app.RGVlbA.action.Y29udHJhY3QtY3JlYXRlZA.option.c3RhcnRfZGF0ZQ.desc": {
+          "source": "Only detect events created or updated after this date/time. If not set, polling starts from the current time.",
+          "message": "Виявляти події, створені або оновлені лише після цієї дати/часу. Якщо не встановлено, опитування починається з поточного часу."
+        },
+        "app.RGVlbA.action.Y29udHJhY3QtY3JlYXRlZA.option.c3RhcnRfZGF0ZQ.display_name": {
+          "source": "Start Date",
+          "message": "Дата початку"
+        },
+        "app.RGVlbA.action.Y29udHJhY3QtY3JlYXRlZA.option.c3RhcnRfZGF0ZQ.short_desc": {
+          "source": "Only detect events after this date",
+          "message": "Виявляти події лише після цієї дати"
+        },
+        "app.RGVlbA.action.Y29udHJhY3QtY3JlYXRlZA.option.cG9sbF9pbnRlcnZhbA.desc": {
+          "source": "How often to check for new records (minimum 30 seconds)",
+          "message": "Як часто перевіряти наявність нових записів (мінімум 30 секунд)"
+        },
+        "app.RGVlbA.action.Y29udHJhY3QtY3JlYXRlZA.option.cG9sbF9pbnRlcnZhbA.display_name": {
+          "source": "Poll Interval",
+          "message": "Інтервал опитування"
+        },
+        "app.RGVlbA.action.Y29udHJhY3QtY3JlYXRlZA.option.cG9sbF9pbnRlcnZhbA.short_desc": {
+          "source": "Polling interval in seconds",
+          "message": "Інтервал опитування в секундах"
+        },
+        "app.RGVlbA.action.Y29udHJhY3QtY3JlYXRlZA.short_desc": {
+          "source": "Trigger when a new contract is created",
+          "message": "Запускати, коли створено новий контракт"
+        },
+        "app.RGVlbA.action.Y29udHJhY3Qtc3RhdHVzLXVwZGF0ZWQ.desc": {
+          "source": "Fires when a contract's status is updated in Deel. Uses polling to detect changes.",
+          "message": "Спрацьовує, коли статус контракту оновлюється в Deel. Використовує опитування для виявлення змін."
+        },
+        "app.RGVlbA.action.Y29udHJhY3Qtc3RhdHVzLXVwZGF0ZWQ.display_name": {
+          "source": "Contract Status Updated",
+          "message": "Статус контракту оновлено"
+        },
+        "app.RGVlbA.action.Y29udHJhY3Qtc3RhdHVzLXVwZGF0ZWQ.option.c3RhcnRfZGF0ZQ.desc": {
+          "source": "Only detect events created or updated after this date/time. If not set, polling starts from the current time.",
+          "message": "Виявляти події, створені або оновлені лише після цієї дати/часу. Якщо не встановлено, опитування починається з поточного часу."
+        },
+        "app.RGVlbA.action.Y29udHJhY3Qtc3RhdHVzLXVwZGF0ZWQ.option.c3RhcnRfZGF0ZQ.display_name": {
+          "source": "Start Date",
+          "message": "Дата початку"
+        },
+        "app.RGVlbA.action.Y29udHJhY3Qtc3RhdHVzLXVwZGF0ZWQ.option.c3RhcnRfZGF0ZQ.short_desc": {
+          "source": "Only detect events after this date",
+          "message": "Виявляти події лише після цієї дати"
+        },
+        "app.RGVlbA.action.Y29udHJhY3Qtc3RhdHVzLXVwZGF0ZWQ.option.cG9sbF9pbnRlcnZhbA.desc": {
+          "source": "How often to check for new records (minimum 30 seconds)",
+          "message": "Як часто перевіряти наявність нових записів (мінімум 30 секунд)"
+        },
+        "app.RGVlbA.action.Y29udHJhY3Qtc3RhdHVzLXVwZGF0ZWQ.option.cG9sbF9pbnRlcnZhbA.display_name": {
+          "source": "Poll Interval",
+          "message": "Інтервал опитування"
+        },
+        "app.RGVlbA.action.Y29udHJhY3Qtc3RhdHVzLXVwZGF0ZWQ.option.cG9sbF9pbnRlcnZhbA.short_desc": {
+          "source": "Polling interval in seconds",
+          "message": "Інтервал опитування в секундах"
+        },
+        "app.RGVlbA.action.Y29udHJhY3Qtc3RhdHVzLXVwZGF0ZWQ.short_desc": {
+          "source": "Trigger when a contract's status changes",
+          "message": "Запускати, коли змінюється статус контракту"
+        },
+        "app.RGVlbA.action.Y29udHJhY3QtdGVybWluYXRlZA.desc": {
+          "source": "Fires when a contract is terminated in Deel. Uses polling to detect terminated contracts.",
+          "message": "Спрацьовує, коли контракт розривається в Deel. Використовує опитування для виявлення розірваних контрактів."
+        },
+        "app.RGVlbA.action.Y29udHJhY3QtdGVybWluYXRlZA.display_name": {
+          "source": "Contract Terminated",
+          "message": "Контракт розірвано"
+        },
+        "app.RGVlbA.action.Y29udHJhY3QtdGVybWluYXRlZA.option.c3RhcnRfZGF0ZQ.desc": {
+          "source": "Only detect events created or updated after this date/time. If not set, polling starts from the current time.",
+          "message": "Виявляти події, створені або оновлені лише після цієї дати/часу. Якщо не встановлено, опитування починається з поточного часу."
+        },
+        "app.RGVlbA.action.Y29udHJhY3QtdGVybWluYXRlZA.option.c3RhcnRfZGF0ZQ.display_name": {
+          "source": "Start Date",
+          "message": "Дата початку"
+        },
+        "app.RGVlbA.action.Y29udHJhY3QtdGVybWluYXRlZA.option.c3RhcnRfZGF0ZQ.short_desc": {
+          "source": "Only detect events after this date",
+          "message": "Виявляти події лише після цієї дати"
+        },
+        "app.RGVlbA.action.Y29udHJhY3QtdGVybWluYXRlZA.option.cG9sbF9pbnRlcnZhbA.desc": {
+          "source": "How often to check for new records (minimum 30 seconds)",
+          "message": "Як часто перевіряти наявність нових записів (мінімум 30 секунд)"
+        },
+        "app.RGVlbA.action.Y29udHJhY3QtdGVybWluYXRlZA.option.cG9sbF9pbnRlcnZhbA.display_name": {
+          "source": "Poll Interval",
+          "message": "Інтервал опитування"
+        },
+        "app.RGVlbA.action.Y29udHJhY3QtdGVybWluYXRlZA.option.cG9sbF9pbnRlcnZhbA.short_desc": {
+          "source": "Polling interval in seconds",
+          "message": "Інтервал опитування в секундах"
+        },
+        "app.RGVlbA.action.Y29udHJhY3QtdGVybWluYXRlZA.short_desc": {
+          "source": "Trigger when a contract is terminated",
+          "message": "Запускати, коли контракт розривається"
+        },
+        "app.RGVlbA.action.Y3JlYXRlLWNvbnRyYWN0.desc": {
+          "source": "Create a new contractor or employee contract in Deel",
+          "message": "Створити новий контракт підрядника або працівника в Deel"
+        },
+        "app.RGVlbA.action.Y3JlYXRlLWNvbnRyYWN0.display_name": {
+          "source": "Create a Contract",
+          "message": "Створити контракт"
+        },
+        "app.RGVlbA.action.Y3JlYXRlLWNvbnRyYWN0.option.Y291bnRyeQ.desc": {
+          "source": "The ISO 3166-1 alpha-2 country code for the worker's location",
+          "message": "Код країни ISO 3166-1 alpha-2 для місцезнаходження працівника"
+        },
+        "app.RGVlbA.action.Y3JlYXRlLWNvbnRyYWN0.option.Y291bnRyeQ.display_name": {
+          "source": "Country",
+          "message": "Країна"
+        },
+        "app.RGVlbA.action.Y3JlYXRlLWNvbnRyYWN0.option.Y291bnRyeQ.short_desc": {
+          "source": "The worker's country",
+          "message": "Країна працівника"
+        },
+        "app.RGVlbA.action.Y3JlYXRlLWNvbnRyYWN0.option.Y3VycmVuY3k.desc": {
+          "source": "The ISO 4217 currency code for payments (e.g., `USD`, `EUR`)",
+          "message": "Код валюти ISO 4217 для платежів (наприклад, `USD`, `EUR`)"
+        },
+        "app.RGVlbA.action.Y3JlYXRlLWNvbnRyYWN0.option.Y3VycmVuY3k.display_name": {
+          "source": "Currency",
+          "message": "Валюта"
+        },
+        "app.RGVlbA.action.Y3JlYXRlLWNvbnRyYWN0.option.Y3VycmVuY3k.short_desc": {
+          "source": "The contract currency",
+          "message": "Валюта контракту"
+        },
+        "app.RGVlbA.action.Y3JlYXRlLWNvbnRyYWN0.option.YW1vdW50.desc": {
+          "source": "The monetary amount for the contract (rate or fixed amount)",
+          "message": "Грошова сума для контракту (ставка або фіксована сума)"
+        },
+        "app.RGVlbA.action.Y3JlYXRlLWNvbnRyYWN0.option.YW1vdW50.display_name": {
+          "source": "Amount",
+          "message": "Величина"
+        },
+        "app.RGVlbA.action.Y3JlYXRlLWNvbnRyYWN0.option.YW1vdW50.short_desc": {
+          "source": "The contract amount",
+          "message": "Сума контракту"
+        },
+        "app.RGVlbA.action.Y3JlYXRlLWNvbnRyYWN0.option.ZW5kX2RhdGU.desc": {
+          "source": "The date the contract ends (YYYY-MM-DD format), if applicable",
+          "message": "Дата закінчення контракту (формат РРРР-ММ-ДД), якщо застосовно"
+        },
+        "app.RGVlbA.action.Y3JlYXRlLWNvbnRyYWN0.option.ZW5kX2RhdGU.display_name": {
+          "source": "End Date",
+          "message": "Кінцева дата"
+        },
+        "app.RGVlbA.action.Y3JlYXRlLWNvbnRyYWN0.option.ZW5kX2RhdGU.short_desc": {
+          "source": "The contract end date",
+          "message": "Дата закінчення контракту"
+        },
+        "app.RGVlbA.action.Y3JlYXRlLWNvbnRyYWN0.option.am9iX3RpdGxl.desc": {
+          "source": "The job title of the contractor or employee",
+          "message": "Посада підрядника або працівника"
+        },
+        "app.RGVlbA.action.Y3JlYXRlLWNvbnRyYWN0.option.am9iX3RpdGxl.display_name": {
+          "source": "Job Title",
+          "message": "Посада"
+        },
+        "app.RGVlbA.action.Y3JlYXRlLWNvbnRyYWN0.option.am9iX3RpdGxl.short_desc": {
+          "source": "The worker's job title",
+          "message": "Посада працівника"
+        },
+        "app.RGVlbA.action.Y3JlYXRlLWNvbnRyYWN0.option.c2NvcGVfb2Zfd29yaw.desc": {
+          "source": "A description of the work to be performed under this contract",
+          "message": "Опис робіт, що виконуватимуться за цим контрактом"
+        },
+        "app.RGVlbA.action.Y3JlYXRlLWNvbnRyYWN0.option.c2NvcGVfb2Zfd29yaw.display_name": {
+          "source": "Scope of Work",
+          "message": "Обсяг робіт"
+        },
+        "app.RGVlbA.action.Y3JlYXRlLWNvbnRyYWN0.option.c2NvcGVfb2Zfd29yaw.short_desc": {
+          "source": "Description of the work",
+          "message": "Опис робіт"
+        },
+        "app.RGVlbA.action.Y3JlYXRlLWNvbnRyYWN0.option.c3RhcnRfZGF0ZQ.desc": {
+          "source": "The date the contract starts (YYYY-MM-DD format)",
+          "message": "Дата початку контракту (формат РРРР-ММ-ДД)"
+        },
+        "app.RGVlbA.action.Y3JlYXRlLWNvbnRyYWN0.option.c3RhcnRfZGF0ZQ.display_name": {
+          "source": "Start Date",
+          "message": "Дата початку"
+        },
+        "app.RGVlbA.action.Y3JlYXRlLWNvbnRyYWN0.option.c3RhcnRfZGF0ZQ.short_desc": {
+          "source": "The contract start date",
+          "message": "Дата початку контракту"
+        },
+        "app.RGVlbA.action.Y3JlYXRlLWNvbnRyYWN0.option.cGF5bWVudF9jeWNsZQ.allowed-value.c3RyaW5nOm1vbnRobHk.desc": {
+          "source": "Monthly payments",
+          "message": "Щомісячні виплати"
+        },
+        "app.RGVlbA.action.Y3JlYXRlLWNvbnRyYWN0.option.cGF5bWVudF9jeWNsZQ.allowed-value.c3RyaW5nOmJpd2Vla2x5.desc": {
+          "source": "Biweekly (every two weeks) payments",
+          "message": "Виплати раз на два тижні"
+        },
+        "app.RGVlbA.action.Y3JlYXRlLWNvbnRyYWN0.option.cGF5bWVudF9jeWNsZQ.allowed-value.c3RyaW5nOndlZWtseQ.desc": {
+          "source": "Weekly payments",
+          "message": "Щотижневі виплати"
+        },
+        "app.RGVlbA.action.Y3JlYXRlLWNvbnRyYWN0.option.cGF5bWVudF9jeWNsZQ.desc": {
+          "source": "The payment cycle for this contract",
+          "message": "Платіжний цикл для цього контракту"
+        },
+        "app.RGVlbA.action.Y3JlYXRlLWNvbnRyYWN0.option.cGF5bWVudF9jeWNsZQ.display_name": {
+          "source": "Payment Cycle",
+          "message": "Платіжний цикл"
+        },
+        "app.RGVlbA.action.Y3JlYXRlLWNvbnRyYWN0.option.cGF5bWVudF9jeWNsZQ.short_desc": {
+          "source": "How often payments are made",
+          "message": "Частота здійснення виплат"
+        },
+        "app.RGVlbA.action.Y3JlYXRlLWNvbnRyYWN0.option.d29ya2VyX2VtYWls.desc": {
+          "source": "The email address of the contractor or employee",
+          "message": "Адреса електронної пошти підрядника або працівника"
+        },
+        "app.RGVlbA.action.Y3JlYXRlLWNvbnRyYWN0.option.d29ya2VyX2VtYWls.display_name": {
+          "source": "Worker Email",
+          "message": "Електронна пошта працівника"
+        },
+        "app.RGVlbA.action.Y3JlYXRlLWNvbnRyYWN0.option.d29ya2VyX2VtYWls.short_desc": {
+          "source": "The worker's email address",
+          "message": "Адреса електронної пошти працівника"
+        },
+        "app.RGVlbA.action.Y3JlYXRlLWNvbnRyYWN0.option.dGl0bGU.desc": {
+          "source": "A descriptive title for the contract",
+          "message": "Описова назва контракту"
+        },
+        "app.RGVlbA.action.Y3JlYXRlLWNvbnRyYWN0.option.dGl0bGU.display_name": {
+          "source": "Title",
+          "message": "Заголовок"
+        },
+        "app.RGVlbA.action.Y3JlYXRlLWNvbnRyYWN0.option.dGl0bGU.short_desc": {
+          "source": "The contract title",
+          "message": "Назва контракту"
+        },
+        "app.RGVlbA.action.Y3JlYXRlLWNvbnRyYWN0.option.dHlwZQ.allowed-value.c3RyaW5nOm1pbGVzdG9uZQ.desc": {
+          "source": "Milestone-based contract",
+          "message": "Контракт на основі етапів"
+        },
+        "app.RGVlbA.action.Y3JlYXRlLWNvbnRyYWN0.option.dHlwZQ.allowed-value.c3RyaW5nOmVtcGxveWVl.desc": {
+          "source": "Employee contract",
+          "message": "Трудовий договір працівника"
+        },
+        "app.RGVlbA.action.Y3JlYXRlLWNvbnRyYWN0.option.dHlwZQ.allowed-value.c3RyaW5nOmZpeGVk.desc": {
+          "source": "Fixed-rate contract",
+          "message": "Контракт із фіксованою ставкою"
+        },
+        "app.RGVlbA.action.Y3JlYXRlLWNvbnRyYWN0.option.dHlwZQ.allowed-value.c3RyaW5nOnBheV9hc195b3VfZ29fdGltZV9iYXNlZA.desc": {
+          "source": "Pay-as-you-go time-based contract",
+          "message": "Погодинний контракт з оплатою за фактом"
+        },
+        "app.RGVlbA.action.Y3JlYXRlLWNvbnRyYWN0.option.dHlwZQ.desc": {
+          "source": "The type of contract to create",
+          "message": "Тип контракту для створення"
+        },
+        "app.RGVlbA.action.Y3JlYXRlLWNvbnRyYWN0.option.dHlwZQ.display_name": {
+          "source": "Contract Type",
+          "message": "Тип контракту"
+        },
+        "app.RGVlbA.action.Y3JlYXRlLWNvbnRyYWN0.option.dHlwZQ.short_desc": {
+          "source": "The type of contract",
+          "message": "Тип контракту"
+        },
+        "app.RGVlbA.action.Y3JlYXRlLWNvbnRyYWN0.short_desc": {
+          "source": "Create a new contract in Deel",
+          "message": "Створити новий контракт у Deel"
+        },
+        "app.RGVlbA.action.Y3JlYXRlLWludm9pY2UtYWRqdXN0bWVudA.desc": {
+          "source": "Create a new invoice adjustment (bonus, reimbursement, or deduction) in Deel",
+          "message": "Створити нове коригування рахунку-фактури (бонус, відшкодування або відрахування) в Deel"
+        },
+        "app.RGVlbA.action.Y3JlYXRlLWludm9pY2UtYWRqdXN0bWVudA.display_name": {
+          "source": "Create an Invoice Adjustment",
+          "message": "Створити коригування рахунку-фактури"
+        },
+        "app.RGVlbA.action.Y3JlYXRlLWludm9pY2UtYWRqdXN0bWVudA.option.Y29udHJhY3RfaWQ.desc": {
+          "source": "The unique identifier of the contract this adjustment belongs to",
+          "message": "Унікальний ідентифікатор контракту, до якого належить це коригування"
+        },
+        "app.RGVlbA.action.Y3JlYXRlLWludm9pY2UtYWRqdXN0bWVudA.option.Y29udHJhY3RfaWQ.display_name": {
+          "source": "Contract ID",
+          "message": "ID контракту"
+        },
+        "app.RGVlbA.action.Y3JlYXRlLWludm9pY2UtYWRqdXN0bWVudA.option.Y29udHJhY3RfaWQ.short_desc": {
+          "source": "The associated contract",
+          "message": "Пов'язаний контракт"
+        },
+        "app.RGVlbA.action.Y3JlYXRlLWludm9pY2UtYWRqdXN0bWVudA.option.Y3VycmVuY3k.desc": {
+          "source": "The ISO 4217 currency code (e.g., `USD`, `EUR`)",
+          "message": "Код валюти ISO 4217 (наприклад, `USD`, `EUR`)"
+        },
+        "app.RGVlbA.action.Y3JlYXRlLWludm9pY2UtYWRqdXN0bWVudA.option.Y3VycmVuY3k.display_name": {
+          "source": "Currency",
+          "message": "Валюта"
+        },
+        "app.RGVlbA.action.Y3JlYXRlLWludm9pY2UtYWRqdXN0bWVudA.option.Y3VycmVuY3k.short_desc": {
+          "source": "The adjustment currency",
+          "message": "Валюта коригування"
+        },
+        "app.RGVlbA.action.Y3JlYXRlLWludm9pY2UtYWRqdXN0bWVudA.option.YW1vdW50.desc": {
+          "source": "The monetary amount for this invoice adjustment",
+          "message": "Грошова сума для цього коригування рахунку-фактури"
+        },
+        "app.RGVlbA.action.Y3JlYXRlLWludm9pY2UtYWRqdXN0bWVudA.option.YW1vdW50.display_name": {
+          "source": "Amount",
+          "message": "Величина"
+        },
+        "app.RGVlbA.action.Y3JlYXRlLWludm9pY2UtYWRqdXN0bWVudA.option.YW1vdW50.short_desc": {
+          "source": "The adjustment amount",
+          "message": "Сума коригування"
+        },
+        "app.RGVlbA.action.Y3JlYXRlLWludm9pY2UtYWRqdXN0bWVudA.option.ZGF0ZV9zdWJtaXR0ZWQ.desc": {
+          "source": "The date for this adjustment entry (YYYY-MM-DD format)",
+          "message": "Дата для цього запису коригування (формат РРРР-ММ-ДД)"
+        },
+        "app.RGVlbA.action.Y3JlYXRlLWludm9pY2UtYWRqdXN0bWVudA.option.ZGF0ZV9zdWJtaXR0ZWQ.display_name": {
+          "source": "Date Submitted",
+          "message": "Дата подання"
+        },
+        "app.RGVlbA.action.Y3JlYXRlLWludm9pY2UtYWRqdXN0bWVudA.option.ZGF0ZV9zdWJtaXR0ZWQ.short_desc": {
+          "source": "The adjustment date",
+          "message": "Дата коригування"
+        },
+        "app.RGVlbA.action.Y3JlYXRlLWludm9pY2UtYWRqdXN0bWVudA.option.ZGVzY3JpcHRpb24.desc": {
+          "source": "An explanation for why this invoice adjustment is being created",
+          "message": "Пояснення причини створення цього коригування рахунку-фактури"
+        },
+        "app.RGVlbA.action.Y3JlYXRlLWludm9pY2UtYWRqdXN0bWVudA.option.ZGVzY3JpcHRpb24.display_name": {
+          "source": "Description",
+          "message": "Опис"
+        },
+        "app.RGVlbA.action.Y3JlYXRlLWludm9pY2UtYWRqdXN0bWVudA.option.ZGVzY3JpcHRpb24.short_desc": {
+          "source": "The reason for the adjustment",
+          "message": "Причина коригування"
+        },
+        "app.RGVlbA.action.Y3JlYXRlLWludm9pY2UtYWRqdXN0bWVudA.option.dHlwZQ.allowed-value.c3RyaW5nOmJvbnVz.desc": {
+          "source": "Bonus payment",
+          "message": "Виплата бонуса"
+        },
+        "app.RGVlbA.action.Y3JlYXRlLWludm9pY2UtYWRqdXN0bWVudA.option.dHlwZQ.allowed-value.c3RyaW5nOmRlZHVjdGlvbg.desc": {
+          "source": "Payment deduction",
+          "message": "Відрахування з виплати"
+        },
+        "app.RGVlbA.action.Y3JlYXRlLWludm9pY2UtYWRqdXN0bWVudA.option.dHlwZQ.allowed-value.c3RyaW5nOnJlaW1idXJzZW1lbnQ.desc": {
+          "source": "Expense reimbursement",
+          "message": "Відшкодування витрат"
+        },
+        "app.RGVlbA.action.Y3JlYXRlLWludm9pY2UtYWRqdXN0bWVudA.option.dHlwZQ.desc": {
+          "source": "The type of invoice adjustment",
+          "message": "Тип коригування рахунку-фактури"
+        },
+        "app.RGVlbA.action.Y3JlYXRlLWludm9pY2UtYWRqdXN0bWVudA.option.dHlwZQ.display_name": {
+          "source": "Adjustment Type",
+          "message": "Тип коригування"
+        },
+        "app.RGVlbA.action.Y3JlYXRlLWludm9pY2UtYWRqdXN0bWVudA.option.dHlwZQ.short_desc": {
+          "source": "The type of adjustment",
+          "message": "Тип коригування"
+        },
+        "app.RGVlbA.action.Y3JlYXRlLWludm9pY2UtYWRqdXN0bWVudA.short_desc": {
+          "source": "Create a new invoice adjustment",
+          "message": "Створити нове коригування рахунку-фактури"
+        },
+        "app.RGVlbA.action.Y3JlYXRlLXRpbWUtb2ZmLXJlcXVlc3Q.desc": {
+          "source": "Create a new time-off request for a worker in Deel",
+          "message": "Створити новий запит на відпустку для працівника в Deel"
+        },
+        "app.RGVlbA.action.Y3JlYXRlLXRpbWUtb2ZmLXJlcXVlc3Q.display_name": {
+          "source": "Create a Time-Off Request",
+          "message": "Створити запит на відпустку"
+        },
+        "app.RGVlbA.action.Y3JlYXRlLXRpbWUtb2ZmLXJlcXVlc3Q.option.Y29udHJhY3RfaWQ.desc": {
+          "source": "The unique identifier of the contract for this time-off request",
+          "message": "Унікальний ідентифікатор контракту для цього запиту на відпустку"
+        },
+        "app.RGVlbA.action.Y3JlYXRlLXRpbWUtb2ZmLXJlcXVlc3Q.option.Y29udHJhY3RfaWQ.display_name": {
+          "source": "Contract ID",
+          "message": "ID контракту"
+        },
+        "app.RGVlbA.action.Y3JlYXRlLXRpbWUtb2ZmLXJlcXVlc3Q.option.Y29udHJhY3RfaWQ.short_desc": {
+          "source": "The associated contract",
+          "message": "Пов'язаний контракт"
+        },
+        "app.RGVlbA.action.Y3JlYXRlLXRpbWUtb2ZmLXJlcXVlc3Q.option.ZW5kX2RhdGU.desc": {
+          "source": "The last day of the requested time-off period (YYYY-MM-DD format)",
+          "message": "Останній день запитаного періоду відпустки (у форматі РРРР-ММ-ДД)"
+        },
+        "app.RGVlbA.action.Y3JlYXRlLXRpbWUtb2ZmLXJlcXVlc3Q.option.ZW5kX2RhdGU.display_name": {
+          "source": "End Date",
+          "message": "Кінцева дата"
+        },
+        "app.RGVlbA.action.Y3JlYXRlLXRpbWUtb2ZmLXJlcXVlc3Q.option.ZW5kX2RhdGU.short_desc": {
+          "source": "The time-off end date",
+          "message": "Дата завершення відпустки"
+        },
+        "app.RGVlbA.action.Y3JlYXRlLXRpbWUtb2ZmLXJlcXVlc3Q.option.bm90ZXM.desc": {
+          "source": "Optional notes or reason for the time-off request",
+          "message": "Необов'язкові примітки або причина запиту на відпустку"
+        },
+        "app.RGVlbA.action.Y3JlYXRlLXRpbWUtb2ZmLXJlcXVlc3Q.option.bm90ZXM.display_name": {
+          "source": "Notes",
+          "message": "Примітки"
+        },
+        "app.RGVlbA.action.Y3JlYXRlLXRpbWUtb2ZmLXJlcXVlc3Q.option.bm90ZXM.short_desc": {
+          "source": "Notes about the request",
+          "message": "Примітки щодо запиту"
+        },
+        "app.RGVlbA.action.Y3JlYXRlLXRpbWUtb2ZmLXJlcXVlc3Q.option.c3RhcnRfZGF0ZQ.desc": {
+          "source": "The first day of the requested time-off period (YYYY-MM-DD format)",
+          "message": "Перший день запитаного періоду відпустки (у форматі РРРР-ММ-ДД)"
+        },
+        "app.RGVlbA.action.Y3JlYXRlLXRpbWUtb2ZmLXJlcXVlc3Q.option.c3RhcnRfZGF0ZQ.display_name": {
+          "source": "Start Date",
+          "message": "Дата початку"
+        },
+        "app.RGVlbA.action.Y3JlYXRlLXRpbWUtb2ZmLXJlcXVlc3Q.option.c3RhcnRfZGF0ZQ.short_desc": {
+          "source": "The time-off start date",
+          "message": "Дата початку відпустки"
+        },
+        "app.RGVlbA.action.Y3JlYXRlLXRpbWUtb2ZmLXJlcXVlc3Q.option.dHlwZV9pZA.desc": {
+          "source": "The ID of the time-off type (entitlement) to use for this request",
+          "message": "Ідентифікатор типу відпустки (пільги), який слід використати для цього запиту"
+        },
+        "app.RGVlbA.action.Y3JlYXRlLXRpbWUtb2ZmLXJlcXVlc3Q.option.dHlwZV9pZA.display_name": {
+          "source": "Time-Off Type ID",
+          "message": "ID типу відпустки"
+        },
+        "app.RGVlbA.action.Y3JlYXRlLXRpbWUtb2ZmLXJlcXVlc3Q.option.dHlwZV9pZA.short_desc": {
+          "source": "The time-off type",
+          "message": "Тип відпустки"
+        },
+        "app.RGVlbA.action.Y3JlYXRlLXRpbWUtb2ZmLXJlcXVlc3Q.short_desc": {
+          "source": "Create a new time-off request",
+          "message": "Створити новий запит на відпустку"
+        },
+        "app.RGVlbA.action.Y3JlYXRlLXdvcmtlcg.desc": {
+          "source": "Create a new worker or person record in Deel",
+          "message": "Створити запис про нового працівника або особу в Deel"
+        },
+        "app.RGVlbA.action.Y3JlYXRlLXdvcmtlcg.display_name": {
+          "source": "Create a Worker",
+          "message": "Створити працівника"
+        },
+        "app.RGVlbA.action.Y3JlYXRlLXdvcmtlcg.option.Y291bnRyeV9jb2Rl.desc": {
+          "source": "The ISO 3166-1 alpha-2 country code for the worker's location",
+          "message": "Код країни ISO 3166-1 alpha-2 для місцезнаходження працівника"
+        },
+        "app.RGVlbA.action.Y3JlYXRlLXdvcmtlcg.option.Y291bnRyeV9jb2Rl.display_name": {
+          "source": "Country Code",
+          "message": "Код країни"
+        },
+        "app.RGVlbA.action.Y3JlYXRlLXdvcmtlcg.option.Y291bnRyeV9jb2Rl.short_desc": {
+          "source": "The worker's country",
+          "message": "Країна працівника"
+        },
+        "app.RGVlbA.action.Y3JlYXRlLXdvcmtlcg.option.ZW1haWw.desc": {
+          "source": "The email address of the worker",
+          "message": "Адреса електронної пошти працівника"
+        },
+        "app.RGVlbA.action.Y3JlYXRlLXdvcmtlcg.option.ZW1haWw.display_name": {
+          "source": "Email",
+          "message": "Електронна пошта"
+        },
+        "app.RGVlbA.action.Y3JlYXRlLXdvcmtlcg.option.ZW1haWw.short_desc": {
+          "source": "The worker's email address",
+          "message": "Адреса електронної пошти працівника"
+        },
+        "app.RGVlbA.action.Y3JlYXRlLXdvcmtlcg.option.Zmlyc3RfbmFtZQ.desc": {
+          "source": "The given (first) name of the worker",
+          "message": "Ім'я працівника"
+        },
+        "app.RGVlbA.action.Y3JlYXRlLXdvcmtlcg.option.Zmlyc3RfbmFtZQ.display_name": {
+          "source": "First Name",
+          "message": "Ім'я"
+        },
+        "app.RGVlbA.action.Y3JlYXRlLXdvcmtlcg.option.Zmlyc3RfbmFtZQ.short_desc": {
+          "source": "The worker's first name",
+          "message": "Ім'я працівника"
+        },
+        "app.RGVlbA.action.Y3JlYXRlLXdvcmtlcg.option.am9iX3RpdGxl.desc": {
+          "source": "The job title of the worker",
+          "message": "Посада працівника"
+        },
+        "app.RGVlbA.action.Y3JlYXRlLXdvcmtlcg.option.am9iX3RpdGxl.display_name": {
+          "source": "Job Title",
+          "message": "Посада"
+        },
+        "app.RGVlbA.action.Y3JlYXRlLXdvcmtlcg.option.am9iX3RpdGxl.short_desc": {
+          "source": "The worker's job title",
+          "message": "Посада працівника"
+        },
+        "app.RGVlbA.action.Y3JlYXRlLXdvcmtlcg.option.bGFzdF9uYW1l.desc": {
+          "source": "The family (last) name of the worker",
+          "message": "Прізвище працівника"
+        },
+        "app.RGVlbA.action.Y3JlYXRlLXdvcmtlcg.option.bGFzdF9uYW1l.display_name": {
+          "source": "Last Name",
+          "message": "Прізвище"
+        },
+        "app.RGVlbA.action.Y3JlYXRlLXdvcmtlcg.option.bGFzdF9uYW1l.short_desc": {
+          "source": "The worker's last name",
+          "message": "Прізвище працівника"
+        },
+        "app.RGVlbA.action.Y3JlYXRlLXdvcmtlcg.option.c2VuaW9yaXR5.allowed-value.c3RyaW5nOm1pZA.desc": {
+          "source": "Mid level",
+          "message": "Рівень Mid"
+        },
+        "app.RGVlbA.action.Y3JlYXRlLXdvcmtlcg.option.c2VuaW9yaXR5.allowed-value.c3RyaW5nOmp1bmlvcg.desc": {
+          "source": "Junior level",
+          "message": "Рівень Junior"
+        },
+        "app.RGVlbA.action.Y3JlYXRlLXdvcmtlcg.option.c2VuaW9yaXR5.allowed-value.c3RyaW5nOmxlYWQ.desc": {
+          "source": "Lead level",
+          "message": "Рівень Lead"
+        },
+        "app.RGVlbA.action.Y3JlYXRlLXdvcmtlcg.option.c2VuaW9yaXR5.allowed-value.c3RyaW5nOnNlbmlvcg.desc": {
+          "source": "Senior level",
+          "message": "Рівень Senior"
+        },
+        "app.RGVlbA.action.Y3JlYXRlLXdvcmtlcg.option.c2VuaW9yaXR5.desc": {
+          "source": "The seniority level of the worker",
+          "message": "Рівень кваліфікації працівника"
+        },
+        "app.RGVlbA.action.Y3JlYXRlLXdvcmtlcg.option.c2VuaW9yaXR5.display_name": {
+          "source": "Seniority",
+          "message": "Рівень кваліфікації"
+        },
+        "app.RGVlbA.action.Y3JlYXRlLXdvcmtlcg.option.c2VuaW9yaXR5.short_desc": {
+          "source": "The worker's seniority level",
+          "message": "Рівень кваліфікації працівника"
+        },
+        "app.RGVlbA.action.Y3JlYXRlLXdvcmtlcg.option.cGhvbmU.desc": {
+          "source": "The worker's phone number in international format",
+          "message": "Номер телефону працівника в міжнародному форматі"
+        },
+        "app.RGVlbA.action.Y3JlYXRlLXdvcmtlcg.option.cGhvbmU.display_name": {
+          "source": "Phone",
+          "message": "Телефон"
+        },
+        "app.RGVlbA.action.Y3JlYXRlLXdvcmtlcg.option.cGhvbmU.short_desc": {
+          "source": "The worker's phone number",
+          "message": "Номер телефону працівника"
+        },
+        "app.RGVlbA.action.Y3JlYXRlLXdvcmtlcg.short_desc": {
+          "source": "Create a new worker/person in Deel",
+          "message": "Створити нового працівника/особу в Deel"
+        },
+        "app.RGVlbA.action.YXBwcm92ZS10aW1lLW9mZi1yZXF1ZXN0.desc": {
+          "source": "Approve a pending time-off request for a worker in Deel",
+          "message": "Схвалити очікуваний запит на відпустку для працівника в Deel"
+        },
+        "app.RGVlbA.action.YXBwcm92ZS10aW1lLW9mZi1yZXF1ZXN0.display_name": {
+          "source": "Approve a Time-Off Request",
+          "message": "Схвалити запит на відпустку"
+        },
+        "app.RGVlbA.action.YXBwcm92ZS10aW1lLW9mZi1yZXF1ZXN0.option.cmVxdWVzdF9pZA.desc": {
+          "source": "The unique identifier of the time-off request to approve",
+          "message": "Унікальний ідентифікатор запиту на відпустку, який потрібно схвалити"
+        },
+        "app.RGVlbA.action.YXBwcm92ZS10aW1lLW9mZi1yZXF1ZXN0.option.cmVxdWVzdF9pZA.display_name": {
+          "source": "Request ID",
+          "message": "ID запиту"
+        },
+        "app.RGVlbA.action.YXBwcm92ZS10aW1lLW9mZi1yZXF1ZXN0.option.cmVxdWVzdF9pZA.short_desc": {
+          "source": "The time-off request to approve",
+          "message": "Запит на відпустку, який потрібно схвалити"
+        },
+        "app.RGVlbA.action.YXBwcm92ZS10aW1lLW9mZi1yZXF1ZXN0.short_desc": {
+          "source": "Approve a time-off request",
+          "message": "Схвалити запит на відпустку"
+        },
+        "app.RGVlbA.action.YXBwcm92ZS10aW1lc2hlZXQ.desc": {
+          "source": "Approve a timesheet entry in Deel",
+          "message": "Схвалити запис у табелі в Deel"
+        },
+        "app.RGVlbA.action.YXBwcm92ZS10aW1lc2hlZXQ.display_name": {
+          "source": "Approve a Timesheet",
+          "message": "Схвалити табель"
+        },
+        "app.RGVlbA.action.YXBwcm92ZS10aW1lc2hlZXQ.option.dGltZXNoZWV0X2lk.desc": {
+          "source": "The unique identifier of the timesheet entry to approve",
+          "message": "Унікальний ідентифікатор запису в табелі, який потрібно схвалити"
+        },
+        "app.RGVlbA.action.YXBwcm92ZS10aW1lc2hlZXQ.option.dGltZXNoZWV0X2lk.display_name": {
+          "source": "Timesheet ID",
+          "message": "ID табеля"
+        },
+        "app.RGVlbA.action.YXBwcm92ZS10aW1lc2hlZXQ.option.dGltZXNoZWV0X2lk.short_desc": {
+          "source": "The timesheet to approve",
+          "message": "Табель, який потрібно схвалити"
+        },
+        "app.RGVlbA.action.YXBwcm92ZS10aW1lc2hlZXQ.short_desc": {
+          "source": "Approve a timesheet entry",
+          "message": "Схвалити запис у табелі"
+        },
+        "app.RGVlbA.action.Z2V0LWNvbnRyYWN0.desc": {
+          "source": "Retrieve a single contract by ID from Deel",
+          "message": "Отримати окремий контракт за ID з Deel"
+        },
+        "app.RGVlbA.action.Z2V0LWNvbnRyYWN0.display_name": {
+          "source": "Get a Contract",
+          "message": "Отримати контракт"
+        },
+        "app.RGVlbA.action.Z2V0LWNvbnRyYWN0.option.Y29udHJhY3RfaWQ.desc": {
+          "source": "The unique identifier of the contract",
+          "message": "Унікальний ідентифікатор контракту"
+        },
+        "app.RGVlbA.action.Z2V0LWNvbnRyYWN0.option.Y29udHJhY3RfaWQ.display_name": {
+          "source": "Contract ID",
+          "message": "ID контракту"
+        },
+        "app.RGVlbA.action.Z2V0LWNvbnRyYWN0.option.Y29udHJhY3RfaWQ.short_desc": {
+          "source": "The contract ID",
+          "message": "ID контракту"
+        },
+        "app.RGVlbA.action.Z2V0LWNvbnRyYWN0.short_desc": {
+          "source": "Get a single contract by ID",
+          "message": "Отримати окремий контракт за ID"
+        },
+        "app.RGVlbA.action.Z2V0LWludm9pY2U.desc": {
+          "source": "Retrieve a single invoice by ID from Deel",
+          "message": "Отримати окремий рахунок за ID з Deel"
+        },
+        "app.RGVlbA.action.Z2V0LWludm9pY2U.display_name": {
+          "source": "Get an Invoice",
+          "message": "Отримати рахунок"
+        },
+        "app.RGVlbA.action.Z2V0LWludm9pY2U.option.aW52b2ljZV9pZA.desc": {
+          "source": "The unique identifier of the invoice",
+          "message": "Унікальний ідентифікатор рахунка-фактури"
+        },
+        "app.RGVlbA.action.Z2V0LWludm9pY2U.option.aW52b2ljZV9pZA.display_name": {
+          "source": "Invoice ID",
+          "message": "ID рахунку-фактури"
+        },
+        "app.RGVlbA.action.Z2V0LWludm9pY2U.option.aW52b2ljZV9pZA.short_desc": {
+          "source": "The invoice ID",
+          "message": "Ідентифікатор рахунка-фактури"
+        },
+        "app.RGVlbA.action.Z2V0LWludm9pY2U.short_desc": {
+          "source": "Get a single invoice by ID",
+          "message": "Отримати один рахунок-фактуру за ідентифікатором"
+        },
+        "app.RGVlbA.action.Z2V0LWludm9pY2UtYWRqdXN0bWVudA.desc": {
+          "source": "Retrieve a single invoice adjustment by ID from Deel",
+          "message": "Отримати окреме коригування рахунку за ID з Deel"
+        },
+        "app.RGVlbA.action.Z2V0LWludm9pY2UtYWRqdXN0bWVudA.display_name": {
+          "source": "Get an Invoice Adjustment",
+          "message": "Отримати коригування рахунку"
+        },
+        "app.RGVlbA.action.Z2V0LWludm9pY2UtYWRqdXN0bWVudA.option.YWRqdXN0bWVudF9pZA.desc": {
+          "source": "The unique identifier of the invoice adjustment",
+          "message": "Унікальний ідентифікатор коригування рахунку"
+        },
+        "app.RGVlbA.action.Z2V0LWludm9pY2UtYWRqdXN0bWVudA.option.YWRqdXN0bWVudF9pZA.display_name": {
+          "source": "Adjustment ID",
+          "message": "ID коригування"
+        },
+        "app.RGVlbA.action.Z2V0LWludm9pY2UtYWRqdXN0bWVudA.option.YWRqdXN0bWVudF9pZA.short_desc": {
+          "source": "The adjustment ID",
+          "message": "ID коригування"
+        },
+        "app.RGVlbA.action.Z2V0LWludm9pY2UtYWRqdXN0bWVudA.short_desc": {
+          "source": "Get a single invoice adjustment by ID",
+          "message": "Отримати окреме коригування рахунку за ID"
+        },
+        "app.RGVlbA.action.Z2V0LXRpbWVzaGVldA.desc": {
+          "source": "Retrieve a single timesheet entry by ID from Deel",
+          "message": "Отримати окремий запис у табелі за ID з Deel"
+        },
+        "app.RGVlbA.action.Z2V0LXRpbWVzaGVldA.display_name": {
+          "source": "Get a Timesheet",
+          "message": "Отримати табель"
+        },
+        "app.RGVlbA.action.Z2V0LXRpbWVzaGVldA.option.dGltZXNoZWV0X2lk.desc": {
+          "source": "The unique identifier of the timesheet entry",
+          "message": "Унікальний ідентифікатор запису в табелі"
+        },
+        "app.RGVlbA.action.Z2V0LXRpbWVzaGVldA.option.dGltZXNoZWV0X2lk.display_name": {
+          "source": "Timesheet ID",
+          "message": "ID табеля"
+        },
+        "app.RGVlbA.action.Z2V0LXRpbWVzaGVldA.option.dGltZXNoZWV0X2lk.short_desc": {
+          "source": "The timesheet ID",
+          "message": "ID табеля"
+        },
+        "app.RGVlbA.action.Z2V0LXRpbWVzaGVldA.short_desc": {
+          "source": "Get a single timesheet by ID",
+          "message": "Отримати окремий табель за ID"
+        },
+        "app.RGVlbA.action.Z2V0LXdvcmtlcg.desc": {
+          "source": "Retrieve a single worker or person record by ID from Deel",
+          "message": "Отримати окремий запис про працівника або особу за ID з Deel"
+        },
+        "app.RGVlbA.action.Z2V0LXdvcmtlcg.display_name": {
+          "source": "Get a Worker",
+          "message": "Отримати працівника"
+        },
+        "app.RGVlbA.action.Z2V0LXdvcmtlcg.option.d29ya2VyX2lk.desc": {
+          "source": "The unique identifier of the worker",
+          "message": "Унікальний ідентифікатор працівника"
+        },
+        "app.RGVlbA.action.Z2V0LXdvcmtlcg.option.d29ya2VyX2lk.display_name": {
+          "source": "Worker ID",
+          "message": "ID працівника"
+        },
+        "app.RGVlbA.action.Z2V0LXdvcmtlcg.option.d29ya2VyX2lk.short_desc": {
+          "source": "The worker ID",
+          "message": "ID працівника"
+        },
+        "app.RGVlbA.action.Z2V0LXdvcmtlcg.short_desc": {
+          "source": "Get a single worker by ID",
+          "message": "Отримати одного працівника за ID"
+        },
+        "app.RGVlbA.action.ZGVsZXRlLWludm9pY2UtYWRqdXN0bWVudA.desc": {
+          "source": "Delete an invoice adjustment in Deel",
+          "message": "Видалити коригування рахунка-фактури в Deel"
+        },
+        "app.RGVlbA.action.ZGVsZXRlLWludm9pY2UtYWRqdXN0bWVudA.display_name": {
+          "source": "Delete an Invoice Adjustment",
+          "message": "Видалити коригування рахунка-фактури"
+        },
+        "app.RGVlbA.action.ZGVsZXRlLWludm9pY2UtYWRqdXN0bWVudA.option.YWRqdXN0bWVudF9pZA.desc": {
+          "source": "The unique identifier of the invoice adjustment to delete",
+          "message": "Унікальний ідентифікатор коригування рахунка-фактури для видалення"
+        },
+        "app.RGVlbA.action.ZGVsZXRlLWludm9pY2UtYWRqdXN0bWVudA.option.YWRqdXN0bWVudF9pZA.display_name": {
+          "source": "Adjustment ID",
+          "message": "ID коригування"
+        },
+        "app.RGVlbA.action.ZGVsZXRlLWludm9pY2UtYWRqdXN0bWVudA.option.YWRqdXN0bWVudF9pZA.short_desc": {
+          "source": "The adjustment to delete",
+          "message": "Коригування для видалення"
+        },
+        "app.RGVlbA.action.ZGVsZXRlLWludm9pY2UtYWRqdXN0bWVudA.short_desc": {
+          "source": "Delete an invoice adjustment",
+          "message": "Видалити коригування рахунка-фактури"
+        },
+        "app.RGVlbA.action.ZGVsZXRlLXRpbWVzaGVldA.desc": {
+          "source": "Delete a timesheet entry in Deel",
+          "message": "Видалити запис табеля в Deel"
+        },
+        "app.RGVlbA.action.ZGVsZXRlLXRpbWVzaGVldA.display_name": {
+          "source": "Delete a Timesheet",
+          "message": "Видалити табель"
+        },
+        "app.RGVlbA.action.ZGVsZXRlLXRpbWVzaGVldA.option.dGltZXNoZWV0X2lk.desc": {
+          "source": "The unique identifier of the timesheet entry to delete",
+          "message": "Унікальний ідентифікатор запису табеля для видалення"
+        },
+        "app.RGVlbA.action.ZGVsZXRlLXRpbWVzaGVldA.option.dGltZXNoZWV0X2lk.display_name": {
+          "source": "Timesheet ID",
+          "message": "ID табеля"
+        },
+        "app.RGVlbA.action.ZGVsZXRlLXRpbWVzaGVldA.option.dGltZXNoZWV0X2lk.short_desc": {
+          "source": "The timesheet to delete",
+          "message": "Табель для видалення"
+        },
+        "app.RGVlbA.action.ZGVsZXRlLXRpbWVzaGVldA.short_desc": {
+          "source": "Delete a timesheet entry",
+          "message": "Видалити запис табеля"
+        },
+        "app.RGVlbA.action.aW52b2ljZS1hZGp1c3RtZW50LWNyZWF0ZWQ.desc": {
+          "source": "Fires when a new invoice adjustment is created in Deel. Uses polling to detect new records.",
+          "message": "Спрацьовує, коли в Deel створюється нове коригування рахунка-фактури. Використовує опитування для виявлення нових записів."
+        },
+        "app.RGVlbA.action.aW52b2ljZS1hZGp1c3RtZW50LWNyZWF0ZWQ.display_name": {
+          "source": "Invoice Adjustment Created",
+          "message": "Створено коригування рахунка-фактури"
+        },
+        "app.RGVlbA.action.aW52b2ljZS1hZGp1c3RtZW50LWNyZWF0ZWQ.option.c3RhcnRfZGF0ZQ.desc": {
+          "source": "Only detect events created or updated after this date/time. If not set, polling starts from the current time.",
+          "message": "Виявляти події, створені або оновлені лише після цієї дати/часу. Якщо не встановлено, опитування починається з поточного часу."
+        },
+        "app.RGVlbA.action.aW52b2ljZS1hZGp1c3RtZW50LWNyZWF0ZWQ.option.c3RhcnRfZGF0ZQ.display_name": {
+          "source": "Start Date",
+          "message": "Дата початку"
+        },
+        "app.RGVlbA.action.aW52b2ljZS1hZGp1c3RtZW50LWNyZWF0ZWQ.option.c3RhcnRfZGF0ZQ.short_desc": {
+          "source": "Only detect events after this date",
+          "message": "Виявляти події лише після цієї дати"
+        },
+        "app.RGVlbA.action.aW52b2ljZS1hZGp1c3RtZW50LWNyZWF0ZWQ.option.cG9sbF9pbnRlcnZhbA.desc": {
+          "source": "How often to check for new records (minimum 30 seconds)",
+          "message": "Як часто перевіряти наявність нових записів (мінімум 30 секунд)"
+        },
+        "app.RGVlbA.action.aW52b2ljZS1hZGp1c3RtZW50LWNyZWF0ZWQ.option.cG9sbF9pbnRlcnZhbA.display_name": {
+          "source": "Poll Interval",
+          "message": "Інтервал опитування"
+        },
+        "app.RGVlbA.action.aW52b2ljZS1hZGp1c3RtZW50LWNyZWF0ZWQ.option.cG9sbF9pbnRlcnZhbA.short_desc": {
+          "source": "Polling interval in seconds",
+          "message": "Інтервал опитування в секундах"
+        },
+        "app.RGVlbA.action.aW52b2ljZS1hZGp1c3RtZW50LWNyZWF0ZWQ.short_desc": {
+          "source": "Trigger when a new invoice adjustment is created",
+          "message": "Запускати, коли створюється нове коригування рахунка-фактури"
+        },
+        "app.RGVlbA.action.aW52b2ljZS1hZGp1c3RtZW50LXJldmlld2Vk.desc": {
+          "source": "Fires when an invoice adjustment is approved or declined in Deel. Uses polling to detect changes.",
+          "message": "Спрацьовує, коли в Deel схвалюється або відхиляється коригування рахунка-фактури. Використовує опитування для виявлення змін."
+        },
+        "app.RGVlbA.action.aW52b2ljZS1hZGp1c3RtZW50LXJldmlld2Vk.display_name": {
+          "source": "Invoice Adjustment Reviewed",
+          "message": "Коригування рахунка-фактури розглянуто"
+        },
+        "app.RGVlbA.action.aW52b2ljZS1hZGp1c3RtZW50LXJldmlld2Vk.option.c3RhcnRfZGF0ZQ.desc": {
+          "source": "Only detect events created or updated after this date/time. If not set, polling starts from the current time.",
+          "message": "Виявляти події, створені або оновлені лише після цієї дати/часу. Якщо не встановлено, опитування починається з поточного часу."
+        },
+        "app.RGVlbA.action.aW52b2ljZS1hZGp1c3RtZW50LXJldmlld2Vk.option.c3RhcnRfZGF0ZQ.display_name": {
+          "source": "Start Date",
+          "message": "Дата початку"
+        },
+        "app.RGVlbA.action.aW52b2ljZS1hZGp1c3RtZW50LXJldmlld2Vk.option.c3RhcnRfZGF0ZQ.short_desc": {
+          "source": "Only detect events after this date",
+          "message": "Виявляти події лише після цієї дати"
+        },
+        "app.RGVlbA.action.aW52b2ljZS1hZGp1c3RtZW50LXJldmlld2Vk.option.cG9sbF9pbnRlcnZhbA.desc": {
+          "source": "How often to check for new records (minimum 30 seconds)",
+          "message": "Як часто перевіряти наявність нових записів (мінімум 30 секунд)"
+        },
+        "app.RGVlbA.action.aW52b2ljZS1hZGp1c3RtZW50LXJldmlld2Vk.option.cG9sbF9pbnRlcnZhbA.display_name": {
+          "source": "Poll Interval",
+          "message": "Інтервал опитування"
+        },
+        "app.RGVlbA.action.aW52b2ljZS1hZGp1c3RtZW50LXJldmlld2Vk.option.cG9sbF9pbnRlcnZhbA.short_desc": {
+          "source": "Polling interval in seconds",
+          "message": "Інтервал опитування в секундах"
+        },
+        "app.RGVlbA.action.aW52b2ljZS1hZGp1c3RtZW50LXJldmlld2Vk.short_desc": {
+          "source": "Trigger when an invoice adjustment is reviewed",
+          "message": "Запускати, коли коригування рахунка-фактури розглянуто"
+        },
+        "app.RGVlbA.action.bGlzdC1sZWdhbC1lbnRpdGllcw.desc": {
+          "source": "List all legal entities (companies) registered in Deel",
+          "message": "Список усіх юридичних осіб (компаній), зареєстрованих у Deel"
+        },
+        "app.RGVlbA.action.bGlzdC1sZWdhbC1lbnRpdGllcw.display_name": {
+          "source": "List Legal Entities",
+          "message": "Список юридичних осіб"
+        },
+        "app.RGVlbA.action.bGlzdC1sZWdhbC1lbnRpdGllcw.option.b2Zmc2V0.desc": {
+          "source": "Number of results to skip (for manual pagination)",
+          "message": "Кількість результатів для пропуску (для ручної пагінації)"
+        },
+        "app.RGVlbA.action.bGlzdC1sZWdhbC1lbnRpdGllcw.option.b2Zmc2V0.display_name": {
+          "source": "Offset",
+          "message": "Зсув"
+        },
+        "app.RGVlbA.action.bGlzdC1sZWdhbC1lbnRpdGllcw.option.b2Zmc2V0.short_desc": {
+          "source": "Results offset",
+          "message": "Зсув результатів"
+        },
+        "app.RGVlbA.action.bGlzdC1sZWdhbC1lbnRpdGllcw.option.bGltaXQ.desc": {
+          "source": "Maximum number of results to return",
+          "message": "Максимальна кількість результатів для повернення"
+        },
+        "app.RGVlbA.action.bGlzdC1sZWdhbC1lbnRpdGllcw.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "Ліміт"
+        },
+        "app.RGVlbA.action.bGlzdC1sZWdhbC1lbnRpdGllcw.option.bGltaXQ.short_desc": {
+          "source": "Maximum results",
+          "message": "Максимальна кількість результатів"
+        },
+        "app.RGVlbA.action.bGlzdC1sZWdhbC1lbnRpdGllcw.short_desc": {
+          "source": "List legal entities in Deel",
+          "message": "Список юридичних осіб у Deel"
+        },
+        "app.RGVlbA.action.bWFrZS1hcGktY2FsbA.desc": {
+          "source": "Make a custom HTTP / REST API call to **Deel** using the configured connection's authentication.\n\nSpecify the HTTP method, the URI path (relative to the connection's API base URL), optional query parameters, headers, and request body. The response is returned as a hash containing the status code, response headers, and response body.\n\nUse this action for endpoints that are not yet exposed as first-class actions on this app.",
+          "message": "Виконати довільний виклик HTTP / REST API до **Deel**, використовуючи автентифікацію налаштованого підключення.\n\nУкажіть HTTP-метод, шлях URI (відносно базової URL-адреси API підключення), необов'язкові параметри запиту, заголовки та тіло запиту. Відповідь повертається у вигляді хешу, що містить код стану, заголовки відповіді та тіло відповіді.\n\nВикористовуйте цю дію для кінцевих точок, які ще не представлені як окремі дії в цьому додатку."
+        },
+        "app.RGVlbA.action.bWFrZS1hcGktY2FsbA.display_name": {
+          "source": "Make an API call",
+          "message": "Зробити виклик API"
+        },
+        "app.RGVlbA.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.desc": {
+          "source": "The request body. The effective type depends on `body_type`: JSON/form/YAML expect a hash, XML/text expect a string, multipart expects a file structure, binary expects raw bytes.",
+          "message": "Тіло запиту. Ефективний тип залежить від `body_type`: JSON/form/YAML очікують хеш, XML/text очікують рядок, multipart очікує структуру файлу, binary очікує необроблені байти."
+        },
+        "app.RGVlbA.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.display_name": {
+          "source": "Body",
+          "message": "Тіло"
+        },
+        "app.RGVlbA.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.short_desc": {
+          "source": "The request body",
+          "message": "Тіло запиту"
+        },
+        "app.RGVlbA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.desc": {
+          "source": "Upload a file using `multipart/form-data`. The body must be a @ref DataProvider::FileDataType \"FileDataType\" structure (filename + content + mime_type). The framework builds the multipart envelope and sets the boundary header.",
+          "message": "Завантажити файл за допомогою `multipart/form-data`. Тіло має бути структурою @ref DataProvider::FileDataType \"FileDataType\" (filename + content + mime_type). Фреймворк створює конверт multipart і встановлює заголовок boundary."
+        },
+        "app.RGVlbA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.display_name": {
+          "source": "Multipart Form",
+          "message": "Форма Multipart"
+        },
+        "app.RGVlbA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.short_desc": {
+          "source": "Upload a file using multipart/form-data",
+          "message": "Завантажити файл за допомогою multipart/form-data"
+        },
+        "app.RGVlbA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.desc": {
+          "source": "Pass the body to the REST client unchanged; the client decides serialization based on its configured `data` option and the value type",
+          "message": "Передати тіло REST-клієнту без змін; клієнт визначає серіалізацію на основі налаштованого параметра `data` та типу значення"
+        },
+        "app.RGVlbA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.display_name": {
+          "source": "Auto",
+          "message": "Авто"
+        },
+        "app.RGVlbA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.short_desc": {
+          "source": "Pass-through; use connection serialization and let the REST client decide",
+          "message": "Пряма передача; використовувати серіалізацію з'єднання та дозволити REST-клієнту приймати рішення"
+        },
+        "app.RGVlbA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.desc": {
+          "source": "Send the body as raw bytes. The body must be a binary value. Sets `Content-Type: application/octet-stream` unless overridden by `hdr`.",
+          "message": "Надіслати тіло як необроблені байти. Тіло має бути бінарним значенням. Установлює `Content-Type: application/octet-stream`, якщо не перевизначено через `hdr`."
+        },
+        "app.RGVlbA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.display_name": {
+          "source": "Raw Binary",
+          "message": "Необроблені бінарні дані"
+        },
+        "app.RGVlbA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.short_desc": {
+          "source": "Send body as raw bytes",
+          "message": "Надіслати тіло як необроблені байти"
+        },
+        "app.RGVlbA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.desc": {
+          "source": "Serialize a hash of form fields as `application/x-www-form-urlencoded`. The body must be a hash whose values are scalars (strings/numbers/booleans).",
+          "message": "Серіалізувати хеш полів форми як `application/x-www-form-urlencoded`. Тіло має бути хешем, значеннями якого є скаляри (рядки/числа/булеві значення)."
+        },
+        "app.RGVlbA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.display_name": {
+          "source": "Form (URL-encoded)",
+          "message": "Форма (URL-encoded)"
+        },
+        "app.RGVlbA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.short_desc": {
+          "source": "Serialize body as application/x-www-form-urlencoded form fields",
+          "message": "Серіалізувати тіло як поля форми application/x-www-form-urlencoded"
+        },
+        "app.RGVlbA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.desc": {
+          "source": "Serialize the body as JSON; sets `Content-Type: application/json`. The body should be a hash, list, or scalar value.",
+          "message": "Серіалізувати тіло як JSON; встановлює `Content-Type: application/json`. Тіло має бути хешем, списком або скалярним значенням."
+        },
+        "app.RGVlbA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.display_name": {
+          "source": "JSON",
+          "message": "JSON"
+        },
+        "app.RGVlbA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.short_desc": {
+          "source": "Serialize body as JSON",
+          "message": "Серіалізувати тіло як JSON"
+        },
+        "app.RGVlbA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.desc": {
+          "source": "Send the body as plain text. The body must be a string. Sets `Content-Type: text/plain`.",
+          "message": "Надіслати тіло як простий текст. Тіло має бути рядком. Установлює `Content-Type: text/plain`."
+        },
+        "app.RGVlbA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.display_name": {
+          "source": "Plain Text",
+          "message": "Простий текст"
+        },
+        "app.RGVlbA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.short_desc": {
+          "source": "Send body as text/plain",
+          "message": "Надіслати тіло як text/plain"
+        },
+        "app.RGVlbA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.desc": {
+          "source": "Send the body as XML. If the body is a hash it is serialized to XML; if it is a string it is sent verbatim. Sets `Content-Type: application/xml`.",
+          "message": "Надіслати тіло як XML. Якщо тіло є хешем, воно серіалізується в XML; якщо це рядок, воно надсилається без змін. Установлює `Content-Type: application/xml`."
+        },
+        "app.RGVlbA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.display_name": {
+          "source": "XML",
+          "message": "XML"
+        },
+        "app.RGVlbA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.short_desc": {
+          "source": "Send body as XML",
+          "message": "Надіслати тіло як XML"
+        },
+        "app.RGVlbA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.desc": {
+          "source": "Send the body as YAML. If the body is a hash it is serialized to YAML; if it is a string it is sent verbatim. Sets `Content-Type: application/x-yaml`.",
+          "message": "Надіслати тіло як YAML. Якщо тіло є хешем, воно серіалізується в YAML; якщо це рядок, воно надсилається без змін. Установлює `Content-Type: application/x-yaml`."
+        },
+        "app.RGVlbA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.display_name": {
+          "source": "YAML",
+          "message": "YAML"
+        },
+        "app.RGVlbA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.short_desc": {
+          "source": "Send body as YAML",
+          "message": "Надіслати тіло як YAML"
+        },
+        "app.RGVlbA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.desc": {
+          "source": "Selects the body serialization mode and the corresponding `Content-Type` header. Changing this field reshapes the `body` editor - selecting JSON exposes a JSON editor, selecting Multipart Form exposes a file picker, and so on.",
+          "message": "Вибирає режим серіалізації тіла та відповідний заголовок `Content-Type`. Зміна цього поля змінює вигляд редактора `body` — вибір JSON відкриває редактор JSON, вибір Multipart Form відкриває вибір файлу тощо."
+        },
+        "app.RGVlbA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.display_name": {
+          "source": "Body Type",
+          "message": "Тип тіла"
+        },
+        "app.RGVlbA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.short_desc": {
+          "source": "How the body is serialized and what Content-Type is sent",
+          "message": "Як серіалізується тіло та який Content-Type надсилається"
+        },
+        "app.RGVlbA.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.desc": {
+          "source": "If `True`, non-2xx HTTP responses return as the normal response hash (with the actual status code) instead of raising `REST-RESPONSE-ERROR`. Useful for handling 4xx/5xx as data - e.g. checking whether a resource exists. Overrides the connection's `error_passthru` setting for this call only.",
+          "message": "Якщо `True`, HTTP-відповіді з кодом, відмінним від 2xx, повертаються як звичайний хеш відповіді (з фактичним кодом стану) замість генерації `REST-RESPONSE-ERROR`. Корисно для обробки 4xx/5xx як даних — наприклад, перевірки існування ресурсу. Перевизначає налаштування `error_passthru` з'єднання лише для цього виклику."
+        },
+        "app.RGVlbA.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.display_name": {
+          "source": "Return Errors as Data",
+          "message": "Повертати помилки як дані"
+        },
+        "app.RGVlbA.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.short_desc": {
+          "source": "Return non-2xx responses normally instead of throwing",
+          "message": "Повертати відповіді з кодом, відмінним від 2xx, у звичайному режимі замість генерації помилки"
+        },
+        "app.RGVlbA.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.desc": {
+          "source": "Optional list of HTTP status codes treated as success. If set and the response status is not in this list, the action throws `REST-STATUS-ERROR`. When unset, the REST client's default behavior applies (typically: 2xx is success, non-2xx throws).",
+          "message": "Необов'язковий список кодів стану HTTP, які вважаються успішними. Якщо задано і код стану відповіді відсутній у цьому списку, дія генерує `REST-STATUS-ERROR`. Якщо не задано, застосовується поведінка REST-клієнта за замовчуванням (зазвичай: 2xx — успіх, не-2xx генерує помилку)."
+        },
+        "app.RGVlbA.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.display_name": {
+          "source": "Expected Status Codes",
+          "message": "Очікувані коди стану"
+        },
+        "app.RGVlbA.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.short_desc": {
+          "source": "Response status codes treated as success",
+          "message": "Коди стану відповіді, які вважаються успішними"
+        },
+        "app.RGVlbA.action.bWFrZS1hcGktY2FsbA.option.aGRy.desc": {
+          "source": "Hash of custom headers added to the request. These override any default headers set by `body_type` (e.g. supplying `Content-Type` here wins over the body-type default).",
+          "message": "Хеш користувацьких заголовків, доданих до запиту. Вони перевизначають будь-які заголовки за замовчуванням, встановлені `body_type` (наприклад, передання `Content-Type` тут має перевагу над замовчуваним значенням для типу тіла)."
+        },
+        "app.RGVlbA.action.bWFrZS1hcGktY2FsbA.option.aGRy.display_name": {
+          "source": "Custom Headers",
+          "message": "Користувацькі заголовки"
+        },
+        "app.RGVlbA.action.bWFrZS1hcGktY2FsbA.option.aGRy.short_desc": {
+          "source": "Extra request headers",
+          "message": "Додаткові заголовки запиту"
+        },
+        "app.RGVlbA.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.desc": {
+          "source": "If `True`, the response hash includes a `debug` sub-hash containing the request method/URL/headers (with sensitive values redacted), request and response sizes, and round-trip duration. Useful when investigating slow or failing calls. Off by default to keep responses lean.",
+          "message": "Якщо `True`, хеш відповіді містить підхеш `debug`, що містить метод/URL/заголовки запиту (з відредагованими конфіденційними значеннями), розміри запиту та відповіді, а також тривалість виконання. Корисно під час дослідження повільних або невдалих викликів. Вимкнено за замовчуванням для зменшення обсягу відповідей."
+        },
+        "app.RGVlbA.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.display_name": {
+          "source": "Include Debug Info",
+          "message": "Включати зневаджувальну інформацію"
+        },
+        "app.RGVlbA.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.short_desc": {
+          "source": "Include request/timing/size debug info in the response",
+          "message": "Включати зневаджувальну інформацію про запит/час/розмір у відповідь"
+        },
+        "app.RGVlbA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.desc": {
+          "source": "HTTP `OPTIONS`",
+          "message": "HTTP `OPTIONS`"
+        },
+        "app.RGVlbA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.display_name": {
+          "source": "OPTIONS",
+          "message": "OPTIONS"
+        },
+        "app.RGVlbA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.short_desc": {
+          "source": "HTTP OPTIONS",
+          "message": "HTTP OPTIONS"
+        },
+        "app.RGVlbA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.desc": {
+          "source": "HTTP `DELETE`",
+          "message": "HTTP `DELETE`"
+        },
+        "app.RGVlbA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.display_name": {
+          "source": "DELETE",
+          "message": "DELETE"
+        },
+        "app.RGVlbA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.short_desc": {
+          "source": "HTTP DELETE",
+          "message": "HTTP DELETE"
+        },
+        "app.RGVlbA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.desc": {
+          "source": "HTTP `GET`",
+          "message": "HTTP `GET`"
+        },
+        "app.RGVlbA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.display_name": {
+          "source": "GET",
+          "message": "GET"
+        },
+        "app.RGVlbA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.short_desc": {
+          "source": "HTTP GET",
+          "message": "HTTP GET"
+        },
+        "app.RGVlbA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.desc": {
+          "source": "HTTP `HEAD`",
+          "message": "HTTP `HEAD`"
+        },
+        "app.RGVlbA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.display_name": {
+          "source": "HEAD",
+          "message": "HEAD"
+        },
+        "app.RGVlbA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.short_desc": {
+          "source": "HTTP HEAD",
+          "message": "HTTP HEAD"
+        },
+        "app.RGVlbA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.desc": {
+          "source": "HTTP `PATCH`",
+          "message": "HTTP `PATCH`"
+        },
+        "app.RGVlbA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.display_name": {
+          "source": "PATCH",
+          "message": "PATCH"
+        },
+        "app.RGVlbA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.short_desc": {
+          "source": "HTTP PATCH",
+          "message": "HTTP PATCH"
+        },
+        "app.RGVlbA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.desc": {
+          "source": "HTTP `POST`",
+          "message": "HTTP `POST`"
+        },
+        "app.RGVlbA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.display_name": {
+          "source": "POST",
+          "message": "POST"
+        },
+        "app.RGVlbA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.short_desc": {
+          "source": "HTTP POST",
+          "message": "HTTP POST"
+        },
+        "app.RGVlbA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.desc": {
+          "source": "HTTP `PUT`",
+          "message": "HTTP `PUT`"
+        },
+        "app.RGVlbA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.display_name": {
+          "source": "PUT",
+          "message": "PUT"
+        },
+        "app.RGVlbA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.short_desc": {
+          "source": "HTTP PUT",
+          "message": "HTTP PUT"
+        },
+        "app.RGVlbA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.desc": {
+          "source": "HTTP `TRACE`",
+          "message": "HTTP `TRACE`"
+        },
+        "app.RGVlbA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.display_name": {
+          "source": "TRACE",
+          "message": "TRACE"
+        },
+        "app.RGVlbA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.short_desc": {
+          "source": "HTTP TRACE",
+          "message": "HTTP TRACE"
+        },
+        "app.RGVlbA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "Метод HTTP для використання в запиті"
+        },
+        "app.RGVlbA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.display_name": {
+          "source": "HTTP Method",
+          "message": "Метод HTTP"
+        },
+        "app.RGVlbA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.short_desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "Метод HTTP для використання в запиті"
+        },
+        "app.RGVlbA.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain `{name}` placeholders that are replaced from `path_vars`. Example: `/users/{id}/comments`.",
+          "message": "Шлях URI відносно базового URL API з'єднання. Може містити заповнювачі `{name}`, які замінюються з `path_vars`. Приклад: `/users/{id}/comments`."
+        },
+        "app.RGVlbA.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.display_name": {
+          "source": "URI Path",
+          "message": "Шлях URI"
+        },
+        "app.RGVlbA.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.short_desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain '{name}' placeholders that are replaced from 'path_vars'. Example: '/users/{id}/comments'",
+          "message": "Шлях URI відносно базового URL API підключення. Може містити заповнювачі '{name}', які замінюються з 'path_vars'. Приклад: '/users/{id}/comments'"
+        },
+        "app.RGVlbA.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.desc": {
+          "source": "Hash of values substituted into `{name}` placeholders in the URI path. Example: with `path = /users/{id}` and `path_vars = {id: 123}` the framework sends `/users/123`. Values are URL-encoded.",
+          "message": "Хеш значень, що підставляються замість заповнювачів `{name}` у шляху URI. Приклад: із `path = /users/{id}` та `path_vars = {id: 123}` фреймворк надсилає `/users/123`. Значення кодуються у форматі URL."
+        },
+        "app.RGVlbA.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.display_name": {
+          "source": "Path Variables",
+          "message": "Змінні шляху"
+        },
+        "app.RGVlbA.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.short_desc": {
+          "source": "Values for {name} placeholders in path",
+          "message": "Значення для заповнювачів {name} у шляху"
+        },
+        "app.RGVlbA.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.desc": {
+          "source": "Hash of query string parameters to append to the URI path. Values are URL-encoded; list values are joined with `,`.",
+          "message": "Хеш параметрів рядка запиту для додавання до шляху URI. Значення кодуються у форматі URL; значення списку об'єднуються за допомогою `,`."
+        },
+        "app.RGVlbA.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.display_name": {
+          "source": "Query Arguments",
+          "message": "Аргументи запиту"
+        },
+        "app.RGVlbA.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.short_desc": {
+          "source": "Query string parameters",
+          "message": "Параметри рядка запиту"
+        },
+        "app.RGVlbA.action.bWFrZS1hcGktY2FsbA.short_desc": {
+          "source": "Make a custom API call to Deel",
+          "message": "Зробити власний виклик API до Deel"
+        },
+        "app.RGVlbA.action.c2VhcmNoLWNvbnRyYWN0cw.desc": {
+          "source": "List and search contracts in Deel with optional filtering",
+          "message": "Список та пошук контрактів у Deel з необов'язковою фільтрацією"
+        },
+        "app.RGVlbA.action.c2VhcmNoLWNvbnRyYWN0cw.display_name": {
+          "source": "Search Contracts",
+          "message": "Пошук контрактів"
+        },
+        "app.RGVlbA.action.c2VhcmNoLWNvbnRyYWN0cw.option.Y29udHJhY3RfaWQ.desc": {
+          "source": "Get a specific contract by its ID",
+          "message": "Отримати конкретний контракт за його ID"
+        },
+        "app.RGVlbA.action.c2VhcmNoLWNvbnRyYWN0cw.option.Y29udHJhY3RfaWQ.display_name": {
+          "source": "Contract ID",
+          "message": "ID контракту"
+        },
+        "app.RGVlbA.action.c2VhcmNoLWNvbnRyYWN0cw.option.Y29udHJhY3RfaWQ.short_desc": {
+          "source": "Filter by contract ID",
+          "message": "Фільтрувати за ID контракту"
+        },
+        "app.RGVlbA.action.c2VhcmNoLWNvbnRyYWN0cw.option.Y29udHJhY3RfdHlwZQ.allowed-value.c3RyaW5nOm1pbGVzdG9uZQ.desc": {
+          "source": "Milestone-based contracts",
+          "message": "Контракти за етапами"
+        },
+        "app.RGVlbA.action.c2VhcmNoLWNvbnRyYWN0cw.option.Y29udHJhY3RfdHlwZQ.allowed-value.c3RyaW5nOmVtcGxveWVl.desc": {
+          "source": "Employee contracts",
+          "message": "Трудові договори"
+        },
+        "app.RGVlbA.action.c2VhcmNoLWNvbnRyYWN0cw.option.Y29udHJhY3RfdHlwZQ.allowed-value.c3RyaW5nOmZpeGVk.desc": {
+          "source": "Fixed-rate contracts",
+          "message": "Контракти з фіксованою оплатою"
+        },
+        "app.RGVlbA.action.c2VhcmNoLWNvbnRyYWN0cw.option.Y29udHJhY3RfdHlwZQ.allowed-value.c3RyaW5nOnBheV9hc195b3VfZ29fdGltZV9iYXNlZA.desc": {
+          "source": "Pay-as-you-go time-based contracts",
+          "message": "Контракти з погодинною оплатою"
+        },
+        "app.RGVlbA.action.c2VhcmNoLWNvbnRyYWN0cw.option.Y29udHJhY3RfdHlwZQ.desc": {
+          "source": "Filter contracts by type",
+          "message": "Фільтрувати контракти за типом"
+        },
+        "app.RGVlbA.action.c2VhcmNoLWNvbnRyYWN0cw.option.Y29udHJhY3RfdHlwZQ.display_name": {
+          "source": "Contract Type",
+          "message": "Тип контракту"
+        },
+        "app.RGVlbA.action.c2VhcmNoLWNvbnRyYWN0cw.option.Y29udHJhY3RfdHlwZQ.short_desc": {
+          "source": "Filter by contract type",
+          "message": "Фільтрувати за типом контракту"
+        },
+        "app.RGVlbA.action.c2VhcmNoLWNvbnRyYWN0cw.option.b2Zmc2V0.desc": {
+          "source": "Number of results to skip (for manual pagination)",
+          "message": "Кількість результатів для пропуску (для ручної пагінації)"
+        },
+        "app.RGVlbA.action.c2VhcmNoLWNvbnRyYWN0cw.option.b2Zmc2V0.display_name": {
+          "source": "Offset",
+          "message": "Зсув"
+        },
+        "app.RGVlbA.action.c2VhcmNoLWNvbnRyYWN0cw.option.b2Zmc2V0.short_desc": {
+          "source": "Results offset",
+          "message": "Зсув результатів"
+        },
+        "app.RGVlbA.action.c2VhcmNoLWNvbnRyYWN0cw.option.bGltaXQ.desc": {
+          "source": "Maximum number of results to return",
+          "message": "Максимальна кількість результатів для повернення"
+        },
+        "app.RGVlbA.action.c2VhcmNoLWNvbnRyYWN0cw.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "Ліміт"
+        },
+        "app.RGVlbA.action.c2VhcmNoLWNvbnRyYWN0cw.option.bGltaXQ.short_desc": {
+          "source": "Maximum results",
+          "message": "Максимальна кількість результатів"
+        },
+        "app.RGVlbA.action.c2VhcmNoLWNvbnRyYWN0cw.option.c3RhdHVz.allowed-value.c3RyaW5nOmFjdGl2ZQ.desc": {
+          "source": "Active contracts",
+          "message": "Активні контракти"
+        },
+        "app.RGVlbA.action.c2VhcmNoLWNvbnRyYWN0cw.option.c3RhdHVz.allowed-value.c3RyaW5nOmVuZGVk.desc": {
+          "source": "Ended contracts",
+          "message": "Завершені контракти"
+        },
+        "app.RGVlbA.action.c2VhcmNoLWNvbnRyYWN0cw.option.c3RhdHVz.allowed-value.c3RyaW5nOnBlbmRpbmc.desc": {
+          "source": "Pending contracts",
+          "message": "Очікувані контракти"
+        },
+        "app.RGVlbA.action.c2VhcmNoLWNvbnRyYWN0cw.option.c3RhdHVz.allowed-value.c3RyaW5nOnRlcm1pbmF0ZWQ.desc": {
+          "source": "Terminated contracts",
+          "message": "Розірвані контракти"
+        },
+        "app.RGVlbA.action.c2VhcmNoLWNvbnRyYWN0cw.option.c3RhdHVz.desc": {
+          "source": "Filter contracts by status",
+          "message": "Фільтрувати контракти за статусом"
+        },
+        "app.RGVlbA.action.c2VhcmNoLWNvbnRyYWN0cw.option.c3RhdHVz.display_name": {
+          "source": "Status",
+          "message": "Статус"
+        },
+        "app.RGVlbA.action.c2VhcmNoLWNvbnRyYWN0cw.option.c3RhdHVz.short_desc": {
+          "source": "Filter by contract status",
+          "message": "Фільтрувати за статусом контракту"
+        },
+        "app.RGVlbA.action.c2VhcmNoLWNvbnRyYWN0cw.short_desc": {
+          "source": "Search for contracts in Deel",
+          "message": "Пошук контрактів у Deel"
+        },
+        "app.RGVlbA.action.c2VhcmNoLWludm9pY2UtYWRqdXN0bWVudHM.desc": {
+          "source": "List and search invoice adjustments in Deel with optional filtering",
+          "message": "Список та пошук коригувань рахунків-фактур у Deel з необов'язковою фільтрацією"
+        },
+        "app.RGVlbA.action.c2VhcmNoLWludm9pY2UtYWRqdXN0bWVudHM.display_name": {
+          "source": "Search Invoice Adjustments",
+          "message": "Пошук коригувань рахунків-фактур"
+        },
+        "app.RGVlbA.action.c2VhcmNoLWludm9pY2UtYWRqdXN0bWVudHM.option.Y29udHJhY3RfaWQ.desc": {
+          "source": "Filter adjustments by associated contract ID",
+          "message": "Фільтрувати коригування за пов'язаним ID контракту"
+        },
+        "app.RGVlbA.action.c2VhcmNoLWludm9pY2UtYWRqdXN0bWVudHM.option.Y29udHJhY3RfaWQ.display_name": {
+          "source": "Contract ID",
+          "message": "ID контракту"
+        },
+        "app.RGVlbA.action.c2VhcmNoLWludm9pY2UtYWRqdXN0bWVudHM.option.Y29udHJhY3RfaWQ.short_desc": {
+          "source": "Filter by contract",
+          "message": "Фільтрувати за контрактом"
+        },
+        "app.RGVlbA.action.c2VhcmNoLWludm9pY2UtYWRqdXN0bWVudHM.option.YWRqdXN0bWVudF9pZA.desc": {
+          "source": "Get a specific adjustment by its ID",
+          "message": "Отримати конкретне коригування за його ID"
+        },
+        "app.RGVlbA.action.c2VhcmNoLWludm9pY2UtYWRqdXN0bWVudHM.option.YWRqdXN0bWVudF9pZA.display_name": {
+          "source": "Adjustment ID",
+          "message": "ID коригування"
+        },
+        "app.RGVlbA.action.c2VhcmNoLWludm9pY2UtYWRqdXN0bWVudHM.option.YWRqdXN0bWVudF9pZA.short_desc": {
+          "source": "Filter by adjustment ID",
+          "message": "Фільтрувати за ID коригування"
+        },
+        "app.RGVlbA.action.c2VhcmNoLWludm9pY2UtYWRqdXN0bWVudHM.option.b2Zmc2V0.desc": {
+          "source": "Number of results to skip (for manual pagination)",
+          "message": "Кількість результатів для пропуску (для ручної пагінації)"
+        },
+        "app.RGVlbA.action.c2VhcmNoLWludm9pY2UtYWRqdXN0bWVudHM.option.b2Zmc2V0.display_name": {
+          "source": "Offset",
+          "message": "Зсув"
+        },
+        "app.RGVlbA.action.c2VhcmNoLWludm9pY2UtYWRqdXN0bWVudHM.option.b2Zmc2V0.short_desc": {
+          "source": "Results offset",
+          "message": "Зсув результатів"
+        },
+        "app.RGVlbA.action.c2VhcmNoLWludm9pY2UtYWRqdXN0bWVudHM.option.bGltaXQ.desc": {
+          "source": "Maximum number of results to return",
+          "message": "Максимальна кількість результатів для повернення"
+        },
+        "app.RGVlbA.action.c2VhcmNoLWludm9pY2UtYWRqdXN0bWVudHM.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "Ліміт"
+        },
+        "app.RGVlbA.action.c2VhcmNoLWludm9pY2UtYWRqdXN0bWVudHM.option.bGltaXQ.short_desc": {
+          "source": "Maximum results",
+          "message": "Максимальна кількість результатів"
+        },
+        "app.RGVlbA.action.c2VhcmNoLWludm9pY2UtYWRqdXN0bWVudHM.option.c3RhdHVz.allowed-value.c3RyaW5nOmFwcHJvdmVk.desc": {
+          "source": "Approved adjustments",
+          "message": "Схвалені коригування"
+        },
+        "app.RGVlbA.action.c2VhcmNoLWludm9pY2UtYWRqdXN0bWVudHM.option.c3RhdHVz.allowed-value.c3RyaW5nOmRlY2xpbmVk.desc": {
+          "source": "Declined adjustments",
+          "message": "Відхилені коригування"
+        },
+        "app.RGVlbA.action.c2VhcmNoLWludm9pY2UtYWRqdXN0bWVudHM.option.c3RhdHVz.allowed-value.c3RyaW5nOnBlbmRpbmc.desc": {
+          "source": "Pending adjustments",
+          "message": "Очікувані коригування"
+        },
+        "app.RGVlbA.action.c2VhcmNoLWludm9pY2UtYWRqdXN0bWVudHM.option.c3RhdHVz.desc": {
+          "source": "Filter adjustments by status",
+          "message": "Фільтрувати коригування за статусом"
+        },
+        "app.RGVlbA.action.c2VhcmNoLWludm9pY2UtYWRqdXN0bWVudHM.option.c3RhdHVz.display_name": {
+          "source": "Status",
+          "message": "Статус"
+        },
+        "app.RGVlbA.action.c2VhcmNoLWludm9pY2UtYWRqdXN0bWVudHM.option.c3RhdHVz.short_desc": {
+          "source": "Filter by adjustment status",
+          "message": "Фільтрувати за статусом коригування"
+        },
+        "app.RGVlbA.action.c2VhcmNoLWludm9pY2UtYWRqdXN0bWVudHM.short_desc": {
+          "source": "Search for invoice adjustments",
+          "message": "Пошук коригувань рахунків-фактур"
+        },
+        "app.RGVlbA.action.c2VhcmNoLWludm9pY2Vz.desc": {
+          "source": "List and search invoices in Deel with optional filtering",
+          "message": "Список та пошук рахунків-фактур у Deel з необов'язковою фільтрацією"
+        },
+        "app.RGVlbA.action.c2VhcmNoLWludm9pY2Vz.display_name": {
+          "source": "Search Invoices",
+          "message": "Пошук рахунків-фактур"
+        },
+        "app.RGVlbA.action.c2VhcmNoLWludm9pY2Vz.option.Y29udHJhY3RfaWQ.desc": {
+          "source": "Filter invoices by associated contract ID",
+          "message": "Фільтрувати рахунки-фактури за пов'язаним ID контракту"
+        },
+        "app.RGVlbA.action.c2VhcmNoLWludm9pY2Vz.option.Y29udHJhY3RfaWQ.display_name": {
+          "source": "Contract ID",
+          "message": "ID контракту"
+        },
+        "app.RGVlbA.action.c2VhcmNoLWludm9pY2Vz.option.Y29udHJhY3RfaWQ.short_desc": {
+          "source": "Filter by contract",
+          "message": "Фільтрувати за контрактом"
+        },
+        "app.RGVlbA.action.c2VhcmNoLWludm9pY2Vz.option.ZGF0ZV90bw.desc": {
+          "source": "Filter invoices up to this date (YYYY-MM-DD format)",
+          "message": "Фільтрувати рахунки-фактури до цієї дати (у форматі РРРР-ММ-ДД)"
+        },
+        "app.RGVlbA.action.c2VhcmNoLWludm9pY2Vz.option.ZGF0ZV90bw.display_name": {
+          "source": "Date To",
+          "message": "Дата по"
+        },
+        "app.RGVlbA.action.c2VhcmNoLWludm9pY2Vz.option.ZGF0ZV90bw.short_desc": {
+          "source": "End of date range",
+          "message": "Кінець діапазону дат"
+        },
+        "app.RGVlbA.action.c2VhcmNoLWludm9pY2Vz.option.ZGF0ZV9mcm9t.desc": {
+          "source": "Filter invoices from this date (YYYY-MM-DD format)",
+          "message": "Фільтрувати рахунки-фактури з цієї дати (у форматі РРРР-ММ-ДД)"
+        },
+        "app.RGVlbA.action.c2VhcmNoLWludm9pY2Vz.option.ZGF0ZV9mcm9t.display_name": {
+          "source": "Date From",
+          "message": "Дата з"
+        },
+        "app.RGVlbA.action.c2VhcmNoLWludm9pY2Vz.option.ZGF0ZV9mcm9t.short_desc": {
+          "source": "Start of date range",
+          "message": "Початок діапазону дат"
+        },
+        "app.RGVlbA.action.c2VhcmNoLWludm9pY2Vz.option.aW52b2ljZV9pZA.desc": {
+          "source": "Get a specific invoice by its ID",
+          "message": "Отримати конкретний рахунок-фактуру за його ID"
+        },
+        "app.RGVlbA.action.c2VhcmNoLWludm9pY2Vz.option.aW52b2ljZV9pZA.display_name": {
+          "source": "Invoice ID",
+          "message": "ID рахунку-фактури"
+        },
+        "app.RGVlbA.action.c2VhcmNoLWludm9pY2Vz.option.aW52b2ljZV9pZA.short_desc": {
+          "source": "Filter by invoice ID",
+          "message": "Фільтрувати за ID рахунка-фактури"
+        },
+        "app.RGVlbA.action.c2VhcmNoLWludm9pY2Vz.option.b2Zmc2V0.desc": {
+          "source": "Number of results to skip (for manual pagination)",
+          "message": "Кількість результатів для пропуску (для ручної пагінації)"
+        },
+        "app.RGVlbA.action.c2VhcmNoLWludm9pY2Vz.option.b2Zmc2V0.display_name": {
+          "source": "Offset",
+          "message": "Зсув"
+        },
+        "app.RGVlbA.action.c2VhcmNoLWludm9pY2Vz.option.b2Zmc2V0.short_desc": {
+          "source": "Results offset",
+          "message": "Зсув результатів"
+        },
+        "app.RGVlbA.action.c2VhcmNoLWludm9pY2Vz.option.bGltaXQ.desc": {
+          "source": "Maximum number of results to return",
+          "message": "Максимальна кількість результатів для повернення"
+        },
+        "app.RGVlbA.action.c2VhcmNoLWludm9pY2Vz.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "Ліміт"
+        },
+        "app.RGVlbA.action.c2VhcmNoLWludm9pY2Vz.option.bGltaXQ.short_desc": {
+          "source": "Maximum results",
+          "message": "Максимальна кількість результатів"
+        },
+        "app.RGVlbA.action.c2VhcmNoLWludm9pY2Vz.option.c3RhdHVz.allowed-value.c3RyaW5nOmNhbmNlbGxlZA.desc": {
+          "source": "Cancelled invoices",
+          "message": "Скасовані рахунки-фактури"
+        },
+        "app.RGVlbA.action.c2VhcmNoLWludm9pY2Vz.option.c3RhdHVz.allowed-value.c3RyaW5nOnBhaWQ.desc": {
+          "source": "Paid invoices",
+          "message": "Оплачені рахунки-фактури"
+        },
+        "app.RGVlbA.action.c2VhcmNoLWludm9pY2Vz.option.c3RhdHVz.allowed-value.c3RyaW5nOnBlbmRpbmc.desc": {
+          "source": "Pending invoices",
+          "message": "Очікувані рахунки-фактури"
+        },
+        "app.RGVlbA.action.c2VhcmNoLWludm9pY2Vz.option.c3RhdHVz.desc": {
+          "source": "Filter invoices by status",
+          "message": "Фільтрувати рахунки-фактури за статусом"
+        },
+        "app.RGVlbA.action.c2VhcmNoLWludm9pY2Vz.option.c3RhdHVz.display_name": {
+          "source": "Status",
+          "message": "Статус"
+        },
+        "app.RGVlbA.action.c2VhcmNoLWludm9pY2Vz.option.c3RhdHVz.short_desc": {
+          "source": "Filter by invoice status",
+          "message": "Фільтрувати за статусом рахунка-фактури"
+        },
+        "app.RGVlbA.action.c2VhcmNoLWludm9pY2Vz.short_desc": {
+          "source": "Search for invoices in Deel",
+          "message": "Пошук рахунків-фактур у Deel"
+        },
+        "app.RGVlbA.action.c2VhcmNoLXRpbWUtb2ZmLXR5cGVz.desc": {
+          "source": "List available time-off types and entitlements in Deel",
+          "message": "Отримати список доступних типів відпусток і пільг у Deel"
+        },
+        "app.RGVlbA.action.c2VhcmNoLXRpbWUtb2ZmLXR5cGVz.display_name": {
+          "source": "Search Time-Off Types",
+          "message": "Пошук типів відпусток"
+        },
+        "app.RGVlbA.action.c2VhcmNoLXRpbWUtb2ZmLXR5cGVz.option.Y29udHJhY3RfaWQ.desc": {
+          "source": "Filter time-off types by associated contract ID",
+          "message": "Фільтрувати типи відпусток за пов'язаним ID контракту"
+        },
+        "app.RGVlbA.action.c2VhcmNoLXRpbWUtb2ZmLXR5cGVz.option.Y29udHJhY3RfaWQ.display_name": {
+          "source": "Contract ID",
+          "message": "ID контракту"
+        },
+        "app.RGVlbA.action.c2VhcmNoLXRpbWUtb2ZmLXR5cGVz.option.Y29udHJhY3RfaWQ.short_desc": {
+          "source": "Filter by contract",
+          "message": "Фільтрувати за контрактом"
+        },
+        "app.RGVlbA.action.c2VhcmNoLXRpbWUtb2ZmLXR5cGVz.option.bGltaXQ.desc": {
+          "source": "Maximum number of results to return",
+          "message": "Максимальна кількість результатів для повернення"
+        },
+        "app.RGVlbA.action.c2VhcmNoLXRpbWUtb2ZmLXR5cGVz.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "Ліміт"
+        },
+        "app.RGVlbA.action.c2VhcmNoLXRpbWUtb2ZmLXR5cGVz.option.bGltaXQ.short_desc": {
+          "source": "Maximum results",
+          "message": "Максимальна кількість результатів"
+        },
+        "app.RGVlbA.action.c2VhcmNoLXRpbWUtb2ZmLXR5cGVz.short_desc": {
+          "source": "List available time-off types/entitlements",
+          "message": "Отримати список доступних типів відпусток/пільг"
+        },
+        "app.RGVlbA.action.c2VhcmNoLXRpbWVzaGVldHM.desc": {
+          "source": "List and search timesheet entries in Deel with optional filtering",
+          "message": "Отримати список і шукати записи табелів у Deel із можливістю фільтрації"
+        },
+        "app.RGVlbA.action.c2VhcmNoLXRpbWVzaGVldHM.display_name": {
+          "source": "Search Timesheets",
+          "message": "Пошук табелів"
+        },
+        "app.RGVlbA.action.c2VhcmNoLXRpbWVzaGVldHM.option.Y29udHJhY3RfaWQ.desc": {
+          "source": "Filter timesheets by associated contract ID",
+          "message": "Фільтрувати табелі за пов'язаним ID контракту"
+        },
+        "app.RGVlbA.action.c2VhcmNoLXRpbWVzaGVldHM.option.Y29udHJhY3RfaWQ.display_name": {
+          "source": "Contract ID",
+          "message": "ID контракту"
+        },
+        "app.RGVlbA.action.c2VhcmNoLXRpbWVzaGVldHM.option.Y29udHJhY3RfaWQ.short_desc": {
+          "source": "Filter by contract",
+          "message": "Фільтрувати за контрактом"
+        },
+        "app.RGVlbA.action.c2VhcmNoLXRpbWVzaGVldHM.option.ZGF0ZV90bw.desc": {
+          "source": "Filter timesheets up to this date (YYYY-MM-DD format)",
+          "message": "Фільтрувати табелі до цієї дати (формат РРРР-ММ-ДД)"
+        },
+        "app.RGVlbA.action.c2VhcmNoLXRpbWVzaGVldHM.option.ZGF0ZV90bw.display_name": {
+          "source": "Date To",
+          "message": "Дата по"
+        },
+        "app.RGVlbA.action.c2VhcmNoLXRpbWVzaGVldHM.option.ZGF0ZV90bw.short_desc": {
+          "source": "End of date range",
+          "message": "Кінець діапазону дат"
+        },
+        "app.RGVlbA.action.c2VhcmNoLXRpbWVzaGVldHM.option.ZGF0ZV9mcm9t.desc": {
+          "source": "Filter timesheets from this date (YYYY-MM-DD format)",
+          "message": "Фільтрувати табелі від цієї дати (формат РРРР-ММ-ДД)"
+        },
+        "app.RGVlbA.action.c2VhcmNoLXRpbWVzaGVldHM.option.ZGF0ZV9mcm9t.display_name": {
+          "source": "Date From",
+          "message": "Дата з"
+        },
+        "app.RGVlbA.action.c2VhcmNoLXRpbWVzaGVldHM.option.ZGF0ZV9mcm9t.short_desc": {
+          "source": "Start of date range",
+          "message": "Початок діапазону дат"
+        },
+        "app.RGVlbA.action.c2VhcmNoLXRpbWVzaGVldHM.option.b2Zmc2V0.desc": {
+          "source": "Number of results to skip (for manual pagination)",
+          "message": "Кількість результатів для пропуску (для ручної пагінації)"
+        },
+        "app.RGVlbA.action.c2VhcmNoLXRpbWVzaGVldHM.option.b2Zmc2V0.display_name": {
+          "source": "Offset",
+          "message": "Зсув"
+        },
+        "app.RGVlbA.action.c2VhcmNoLXRpbWVzaGVldHM.option.b2Zmc2V0.short_desc": {
+          "source": "Results offset",
+          "message": "Зсув результатів"
+        },
+        "app.RGVlbA.action.c2VhcmNoLXRpbWVzaGVldHM.option.bGltaXQ.desc": {
+          "source": "Maximum number of results to return",
+          "message": "Максимальна кількість результатів для повернення"
+        },
+        "app.RGVlbA.action.c2VhcmNoLXRpbWVzaGVldHM.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "Ліміт"
+        },
+        "app.RGVlbA.action.c2VhcmNoLXRpbWVzaGVldHM.option.bGltaXQ.short_desc": {
+          "source": "Maximum results",
+          "message": "Максимальна кількість результатів"
+        },
+        "app.RGVlbA.action.c2VhcmNoLXRpbWVzaGVldHM.option.c3RhdHVz.allowed-value.c3RyaW5nOmFwcHJvdmVk.desc": {
+          "source": "Approved timesheets",
+          "message": "Схвалені табелі"
+        },
+        "app.RGVlbA.action.c2VhcmNoLXRpbWVzaGVldHM.option.c3RhdHVz.allowed-value.c3RyaW5nOnBlbmRpbmc.desc": {
+          "source": "Pending timesheets",
+          "message": "Очікувані табелі"
+        },
+        "app.RGVlbA.action.c2VhcmNoLXRpbWVzaGVldHM.option.c3RhdHVz.allowed-value.c3RyaW5nOnJlamVjdGVk.desc": {
+          "source": "Rejected timesheets",
+          "message": "Відхилені табелі"
+        },
+        "app.RGVlbA.action.c2VhcmNoLXRpbWVzaGVldHM.option.c3RhdHVz.desc": {
+          "source": "Filter timesheets by status",
+          "message": "Фільтрувати табелі за статусом"
+        },
+        "app.RGVlbA.action.c2VhcmNoLXRpbWVzaGVldHM.option.c3RhdHVz.display_name": {
+          "source": "Status",
+          "message": "Статус"
+        },
+        "app.RGVlbA.action.c2VhcmNoLXRpbWVzaGVldHM.option.c3RhdHVz.short_desc": {
+          "source": "Filter by timesheet status",
+          "message": "Фільтрувати за статусом табеля"
+        },
+        "app.RGVlbA.action.c2VhcmNoLXRpbWVzaGVldHM.option.dGltZXNoZWV0X2lk.desc": {
+          "source": "Get a specific timesheet by its ID",
+          "message": "Отримати конкретний табель за його ID"
+        },
+        "app.RGVlbA.action.c2VhcmNoLXRpbWVzaGVldHM.option.dGltZXNoZWV0X2lk.display_name": {
+          "source": "Timesheet ID",
+          "message": "ID табеля"
+        },
+        "app.RGVlbA.action.c2VhcmNoLXRpbWVzaGVldHM.option.dGltZXNoZWV0X2lk.short_desc": {
+          "source": "Filter by timesheet ID",
+          "message": "Фільтрувати за ID табеля"
+        },
+        "app.RGVlbA.action.c2VhcmNoLXRpbWVzaGVldHM.short_desc": {
+          "source": "Search for timesheets in Deel",
+          "message": "Пошук табелів у Deel"
+        },
+        "app.RGVlbA.action.c2VhcmNoLXdvcmtlcnM.desc": {
+          "source": "List and search workers/people in Deel with optional filtering",
+          "message": "Отримати список і шукати працівників/людей у Deel із можливості фільтрації"
+        },
+        "app.RGVlbA.action.c2VhcmNoLXdvcmtlcnM.display_name": {
+          "source": "Search Workers",
+          "message": "Пошук працівників"
+        },
+        "app.RGVlbA.action.c2VhcmNoLXdvcmtlcnM.option.Y291bnRyeV9jb2Rl.desc": {
+          "source": "Filter workers by country code (ISO 3166-1 alpha-2)",
+          "message": "Фільтрувати працівників за кодом країни (ISO 3166-1 alpha-2)"
+        },
+        "app.RGVlbA.action.c2VhcmNoLXdvcmtlcnM.option.Y291bnRyeV9jb2Rl.display_name": {
+          "source": "Country Code",
+          "message": "Код країни"
+        },
+        "app.RGVlbA.action.c2VhcmNoLXdvcmtlcnM.option.Y291bnRyeV9jb2Rl.short_desc": {
+          "source": "Filter by country",
+          "message": "Фільтрувати за країною"
+        },
+        "app.RGVlbA.action.c2VhcmNoLXdvcmtlcnM.option.ZW1wbG95bWVudF9zdGF0dXM.allowed-value.c3RyaW5nOmFjdGl2ZQ.desc": {
+          "source": "Active workers",
+          "message": "Активні працівники"
+        },
+        "app.RGVlbA.action.c2VhcmNoLXdvcmtlcnM.option.ZW1wbG95bWVudF9zdGF0dXM.allowed-value.c3RyaW5nOmluYWN0aXZl.desc": {
+          "source": "Inactive workers",
+          "message": "Неактивні працівники"
+        },
+        "app.RGVlbA.action.c2VhcmNoLXdvcmtlcnM.option.ZW1wbG95bWVudF9zdGF0dXM.allowed-value.c3RyaW5nOnBlbmRpbmc.desc": {
+          "source": "Pending workers",
+          "message": "Очікувані працівники"
+        },
+        "app.RGVlbA.action.c2VhcmNoLXdvcmtlcnM.option.ZW1wbG95bWVudF9zdGF0dXM.desc": {
+          "source": "Filter workers by employment status",
+          "message": "Фільтрувати працівників за статусом працевлаштування"
+        },
+        "app.RGVlbA.action.c2VhcmNoLXdvcmtlcnM.option.ZW1wbG95bWVudF9zdGF0dXM.display_name": {
+          "source": "Employment Status",
+          "message": "Статус працевлаштування"
+        },
+        "app.RGVlbA.action.c2VhcmNoLXdvcmtlcnM.option.ZW1wbG95bWVudF9zdGF0dXM.short_desc": {
+          "source": "Filter by employment status",
+          "message": "Фільтрувати за статусом працевлаштування"
+        },
+        "app.RGVlbA.action.c2VhcmNoLXdvcmtlcnM.option.b2Zmc2V0.desc": {
+          "source": "Number of results to skip (for manual pagination)",
+          "message": "Кількість результатів для пропуску (для ручної пагінації)"
+        },
+        "app.RGVlbA.action.c2VhcmNoLXdvcmtlcnM.option.b2Zmc2V0.display_name": {
+          "source": "Offset",
+          "message": "Зсув"
+        },
+        "app.RGVlbA.action.c2VhcmNoLXdvcmtlcnM.option.b2Zmc2V0.short_desc": {
+          "source": "Results offset",
+          "message": "Зсув результатів"
+        },
+        "app.RGVlbA.action.c2VhcmNoLXdvcmtlcnM.option.bGltaXQ.desc": {
+          "source": "Maximum number of results to return",
+          "message": "Максимальна кількість результатів для повернення"
+        },
+        "app.RGVlbA.action.c2VhcmNoLXdvcmtlcnM.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "Ліміт"
+        },
+        "app.RGVlbA.action.c2VhcmNoLXdvcmtlcnM.option.bGltaXQ.short_desc": {
+          "source": "Maximum results",
+          "message": "Максимальна кількість результатів"
+        },
+        "app.RGVlbA.action.c2VhcmNoLXdvcmtlcnM.option.d29ya2VyX2lk.desc": {
+          "source": "Get a specific worker by their ID",
+          "message": "Отримати конкретного працівника за його ID"
+        },
+        "app.RGVlbA.action.c2VhcmNoLXdvcmtlcnM.option.d29ya2VyX2lk.display_name": {
+          "source": "Worker ID",
+          "message": "ID працівника"
+        },
+        "app.RGVlbA.action.c2VhcmNoLXdvcmtlcnM.option.d29ya2VyX2lk.short_desc": {
+          "source": "Filter by worker ID",
+          "message": "Фільтрувати за ID працівника"
+        },
+        "app.RGVlbA.action.c2VhcmNoLXdvcmtlcnM.short_desc": {
+          "source": "Search for workers in Deel",
+          "message": "Пошук працівників у Deel"
+        },
+        "app.RGVlbA.action.c2lnbi1jb250cmFjdA.desc": {
+          "source": "Sign a contract in Deel on behalf of the organization",
+          "message": "Підписати контракт у Deel від імені організації"
+        },
+        "app.RGVlbA.action.c2lnbi1jb250cmFjdA.display_name": {
+          "source": "Sign a Contract",
+          "message": "Підписати контракт"
+        },
+        "app.RGVlbA.action.c2lnbi1jb250cmFjdA.option.Y29udHJhY3RfaWQ.desc": {
+          "source": "The unique identifier of the contract to sign",
+          "message": "Унікальний ідентифікатор контракту для підписання"
+        },
+        "app.RGVlbA.action.c2lnbi1jb250cmFjdA.option.Y29udHJhY3RfaWQ.display_name": {
+          "source": "Contract ID",
+          "message": "ID контракту"
+        },
+        "app.RGVlbA.action.c2lnbi1jb250cmFjdA.option.Y29udHJhY3RfaWQ.short_desc": {
+          "source": "The contract to sign",
+          "message": "Контракт для підписання"
+        },
+        "app.RGVlbA.action.c2lnbi1jb250cmFjdA.short_desc": {
+          "source": "Sign a contract in Deel",
+          "message": "Підписати контракт у Deel"
+        },
+        "app.RGVlbA.action.c3VibWl0LXRpbWVzaGVldA.desc": {
+          "source": "Submit a new timesheet entry for a contract in Deel",
+          "message": "Подати новий запис табеля для контракту в Deel"
+        },
+        "app.RGVlbA.action.c3VibWl0LXRpbWVzaGVldA.display_name": {
+          "source": "Submit a Timesheet",
+          "message": "Подати табель"
+        },
+        "app.RGVlbA.action.c3VibWl0LXRpbWVzaGVldA.option.Y29udHJhY3RfaWQ.desc": {
+          "source": "The unique identifier of the contract this timesheet belongs to",
+          "message": "Унікальний ідентифікатор контракту, до якого належить цей табель"
+        },
+        "app.RGVlbA.action.c3VibWl0LXRpbWVzaGVldA.option.Y29udHJhY3RfaWQ.display_name": {
+          "source": "Contract ID",
+          "message": "ID контракту"
+        },
+        "app.RGVlbA.action.c3VibWl0LXRpbWVzaGVldA.option.Y29udHJhY3RfaWQ.short_desc": {
+          "source": "The associated contract",
+          "message": "Пов'язаний контракт"
+        },
+        "app.RGVlbA.action.c3VibWl0LXRpbWVzaGVldA.option.ZGF0ZV9zdWJtaXR0ZWQ.desc": {
+          "source": "The date for this timesheet entry (YYYY-MM-DD format)",
+          "message": "Дата для цього запису табеля (формат РРРР-ММ-ДД)"
+        },
+        "app.RGVlbA.action.c3VibWl0LXRpbWVzaGVldA.option.ZGF0ZV9zdWJtaXR0ZWQ.display_name": {
+          "source": "Date Submitted",
+          "message": "Дата подання"
+        },
+        "app.RGVlbA.action.c3VibWl0LXRpbWVzaGVldA.option.ZGF0ZV9zdWJtaXR0ZWQ.short_desc": {
+          "source": "The timesheet date",
+          "message": "Дата табеля"
+        },
+        "app.RGVlbA.action.c3VibWl0LXRpbWVzaGVldA.option.ZGVzY3JpcHRpb24.desc": {
+          "source": "A description of the work performed",
+          "message": "Опис виконаної роботи"
+        },
+        "app.RGVlbA.action.c3VibWl0LXRpbWVzaGVldA.option.ZGVzY3JpcHRpb24.display_name": {
+          "source": "Description",
+          "message": "Опис"
+        },
+        "app.RGVlbA.action.c3VibWl0LXRpbWVzaGVldA.option.ZGVzY3JpcHRpb24.short_desc": {
+          "source": "Work description",
+          "message": "Опис роботи"
+        },
+        "app.RGVlbA.action.c3VibWl0LXRpbWVzaGVldA.option.cXVhbnRpdHk.desc": {
+          "source": "The number of hours worked for this timesheet entry",
+          "message": "Кількість відпрацьованих годин для цього запису табеля"
+        },
+        "app.RGVlbA.action.c3VibWl0LXRpbWVzaGVldA.option.cXVhbnRpdHk.display_name": {
+          "source": "Hours (Quantity)",
+          "message": "Години (кількість)"
+        },
+        "app.RGVlbA.action.c3VibWl0LXRpbWVzaGVldA.option.cXVhbnRpdHk.short_desc": {
+          "source": "The number of hours worked",
+          "message": "Кількість відпрацьованих годин"
+        },
+        "app.RGVlbA.action.c3VibWl0LXRpbWVzaGVldA.short_desc": {
+          "source": "Submit a timesheet entry in Deel",
+          "message": "Подати запис табеля в Deel"
+        },
+        "app.RGVlbA.action.cmV2aWV3LWludm9pY2UtYWRqdXN0bWVudA.desc": {
+          "source": "Approve or decline an invoice adjustment in Deel",
+          "message": "Схвалити або відхилити коригування рахунка-фактури в Deel"
+        },
+        "app.RGVlbA.action.cmV2aWV3LWludm9pY2UtYWRqdXN0bWVudA.display_name": {
+          "source": "Review an Invoice Adjustment",
+          "message": "Розглянути коригування рахунка-фактури"
+        },
+        "app.RGVlbA.action.cmV2aWV3LWludm9pY2UtYWRqdXN0bWVudA.option.YWRqdXN0bWVudF9pZA.desc": {
+          "source": "The unique identifier of the invoice adjustment to review",
+          "message": "Унікальний ідентифікатор коригування рахунка-фактури для розгляду"
+        },
+        "app.RGVlbA.action.cmV2aWV3LWludm9pY2UtYWRqdXN0bWVudA.option.YWRqdXN0bWVudF9pZA.display_name": {
+          "source": "Adjustment ID",
+          "message": "ID коригування"
+        },
+        "app.RGVlbA.action.cmV2aWV3LWludm9pY2UtYWRqdXN0bWVudA.option.YWRqdXN0bWVudF9pZA.short_desc": {
+          "source": "The adjustment to review",
+          "message": "Коригування для розгляду"
+        },
+        "app.RGVlbA.action.cmV2aWV3LWludm9pY2UtYWRqdXN0bWVudA.option.c3RhdHVz.allowed-value.c3RyaW5nOmFwcHJvdmVk.desc": {
+          "source": "Approve the adjustment",
+          "message": "Схвалити коригування"
+        },
+        "app.RGVlbA.action.cmV2aWV3LWludm9pY2UtYWRqdXN0bWVudA.option.c3RhdHVz.allowed-value.c3RyaW5nOmRlY2xpbmVk.desc": {
+          "source": "Decline the adjustment",
+          "message": "Відхилити коригування"
+        },
+        "app.RGVlbA.action.cmV2aWV3LWludm9pY2UtYWRqdXN0bWVudA.option.c3RhdHVz.desc": {
+          "source": "The review decision for the invoice adjustment",
+          "message": "Рішення розгляду коригування рахунка-фактури"
+        },
+        "app.RGVlbA.action.cmV2aWV3LWludm9pY2UtYWRqdXN0bWVudA.option.c3RhdHVz.display_name": {
+          "source": "Review Status",
+          "message": "Статус розгляду"
+        },
+        "app.RGVlbA.action.cmV2aWV3LWludm9pY2UtYWRqdXN0bWVudA.option.c3RhdHVz.short_desc": {
+          "source": "The review decision",
+          "message": "Рішення розгляду"
+        },
+        "app.RGVlbA.action.cmV2aWV3LWludm9pY2UtYWRqdXN0bWVudA.short_desc": {
+          "source": "Approve or decline an invoice adjustment",
+          "message": "Схвалити або відхилити коригування рахунка-фактури"
+        },
+        "app.RGVlbA.action.cmVqZWN0LXRpbWUtb2ZmLXJlcXVlc3Q.desc": {
+          "source": "Reject a pending time-off request for a worker in Deel",
+          "message": "Відхилити очікуваний запит на відпустку для працівника в Deel"
+        },
+        "app.RGVlbA.action.cmVqZWN0LXRpbWUtb2ZmLXJlcXVlc3Q.display_name": {
+          "source": "Reject a Time-Off Request",
+          "message": "Відхилити запит на відпустку"
+        },
+        "app.RGVlbA.action.cmVqZWN0LXRpbWUtb2ZmLXJlcXVlc3Q.option.cmVqZWN0aW9uX3JlYXNvbg.desc": {
+          "source": "An explanation for why the time-off request was rejected",
+          "message": "Пояснення причини відхилення запиту на відпустку/відгул"
+        },
+        "app.RGVlbA.action.cmVqZWN0LXRpbWUtb2ZmLXJlcXVlc3Q.option.cmVqZWN0aW9uX3JlYXNvbg.display_name": {
+          "source": "Rejection Reason",
+          "message": "Причина відхилення"
+        },
+        "app.RGVlbA.action.cmVqZWN0LXRpbWUtb2ZmLXJlcXVlc3Q.option.cmVqZWN0aW9uX3JlYXNvbg.short_desc": {
+          "source": "The reason for rejection",
+          "message": "Причина відхилення"
+        },
+        "app.RGVlbA.action.cmVqZWN0LXRpbWUtb2ZmLXJlcXVlc3Q.option.cmVxdWVzdF9pZA.desc": {
+          "source": "The unique identifier of the time-off request to reject",
+          "message": "Унікальний ідентифікатор запиту на відпустку/відгул, який потрібно відхилити"
+        },
+        "app.RGVlbA.action.cmVqZWN0LXRpbWUtb2ZmLXJlcXVlc3Q.option.cmVxdWVzdF9pZA.display_name": {
+          "source": "Request ID",
+          "message": "ID запиту"
+        },
+        "app.RGVlbA.action.cmVqZWN0LXRpbWUtb2ZmLXJlcXVlc3Q.option.cmVxdWVzdF9pZA.short_desc": {
+          "source": "The time-off request to reject",
+          "message": "Запит на відпустку/відгул для відхилення"
+        },
+        "app.RGVlbA.action.cmVqZWN0LXRpbWUtb2ZmLXJlcXVlc3Q.short_desc": {
+          "source": "Reject a time-off request",
+          "message": "Відхилити запит на відпустку/відгул"
+        },
+        "app.RGVlbA.action.cmVqZWN0LXRpbWVzaGVldA.desc": {
+          "source": "Reject a timesheet entry in Deel with an optional rejection reason",
+          "message": "Відхилити запис у табелі в Deel із зазначенням необов’язкової причини відхилення"
+        },
+        "app.RGVlbA.action.cmVqZWN0LXRpbWVzaGVldA.display_name": {
+          "source": "Reject a Timesheet",
+          "message": "Відхилити табель"
+        },
+        "app.RGVlbA.action.cmVqZWN0LXRpbWVzaGVldA.option.cmVqZWN0aW9uX3JlYXNvbg.desc": {
+          "source": "An explanation for why the timesheet entry was rejected",
+          "message": "Пояснення причини відхилення запису в табелі"
+        },
+        "app.RGVlbA.action.cmVqZWN0LXRpbWVzaGVldA.option.cmVqZWN0aW9uX3JlYXNvbg.display_name": {
+          "source": "Rejection Reason",
+          "message": "Причина відхилення"
+        },
+        "app.RGVlbA.action.cmVqZWN0LXRpbWVzaGVldA.option.cmVqZWN0aW9uX3JlYXNvbg.short_desc": {
+          "source": "The reason for rejection",
+          "message": "Причина відхилення"
+        },
+        "app.RGVlbA.action.cmVqZWN0LXRpbWVzaGVldA.option.dGltZXNoZWV0X2lk.desc": {
+          "source": "The unique identifier of the timesheet entry to reject",
+          "message": "Унікальний ідентифікатор запису в табелі, який потрібно відхилити"
+        },
+        "app.RGVlbA.action.cmVqZWN0LXRpbWVzaGVldA.option.dGltZXNoZWV0X2lk.display_name": {
+          "source": "Timesheet ID",
+          "message": "ID табеля"
+        },
+        "app.RGVlbA.action.cmVqZWN0LXRpbWVzaGVldA.option.dGltZXNoZWV0X2lk.short_desc": {
+          "source": "The timesheet to reject",
+          "message": "Табель для відхилення"
+        },
+        "app.RGVlbA.action.cmVqZWN0LXRpbWVzaGVldA.short_desc": {
+          "source": "Reject a timesheet entry",
+          "message": "Відхилити запис у табелі"
+        },
+        "app.RGVlbA.action.dGVybWluYXRlLWNvbnRyYWN0.desc": {
+          "source": "Terminate an existing contractor or employee contract in Deel",
+          "message": "Розірвати наявний контракт підрядника або працівника в Deel"
+        },
+        "app.RGVlbA.action.dGVybWluYXRlLWNvbnRyYWN0.display_name": {
+          "source": "Terminate a Contract",
+          "message": "Розірвати контракт"
+        },
+        "app.RGVlbA.action.dGVybWluYXRlLWNvbnRyYWN0.option.Y29udHJhY3RfaWQ.desc": {
+          "source": "The unique identifier of the contract to terminate",
+          "message": "Унікальний ідентифікатор контракту для розірвання"
+        },
+        "app.RGVlbA.action.dGVybWluYXRlLWNvbnRyYWN0.option.Y29udHJhY3RfaWQ.display_name": {
+          "source": "Contract ID",
+          "message": "ID контракту"
+        },
+        "app.RGVlbA.action.dGVybWluYXRlLWNvbnRyYWN0.option.Y29udHJhY3RfaWQ.short_desc": {
+          "source": "The contract to terminate",
+          "message": "Контракт для розірвання"
+        },
+        "app.RGVlbA.action.dGVybWluYXRlLWNvbnRyYWN0.option.bGFzdF9kYXlfb2Zfd29yaw.desc": {
+          "source": "The last day the worker will be active (YYYY-MM-DD format)",
+          "message": "Останній день активності працівника (формат РРРР-ММ-ДД)"
+        },
+        "app.RGVlbA.action.dGVybWluYXRlLWNvbnRyYWN0.option.bGFzdF9kYXlfb2Zfd29yaw.display_name": {
+          "source": "Last Day of Work",
+          "message": "Останній робочий день"
+        },
+        "app.RGVlbA.action.dGVybWluYXRlLWNvbnRyYWN0.option.bGFzdF9kYXlfb2Zfd29yaw.short_desc": {
+          "source": "The worker's last working day",
+          "message": "Останній робочий день працівника"
+        },
+        "app.RGVlbA.action.dGVybWluYXRlLWNvbnRyYWN0.option.dGVybWluYXRpb25fcmVhc29u.desc": {
+          "source": "The reason for terminating the contract",
+          "message": "Причина розірвання контракту"
+        },
+        "app.RGVlbA.action.dGVybWluYXRlLWNvbnRyYWN0.option.dGVybWluYXRpb25fcmVhc29u.display_name": {
+          "source": "Termination Reason",
+          "message": "Причина розірвання"
+        },
+        "app.RGVlbA.action.dGVybWluYXRlLWNvbnRyYWN0.option.dGVybWluYXRpb25fcmVhc29u.short_desc": {
+          "source": "The reason for termination",
+          "message": "Причина припинення дії"
+        },
+        "app.RGVlbA.action.dGVybWluYXRlLWNvbnRyYWN0.short_desc": {
+          "source": "Terminate an existing contract",
+          "message": "Розірвати наявний контракт"
+        },
+        "app.RGVlbA.action.dGltZS1vZmYtY3JlYXRlZA.desc": {
+          "source": "Fires when a new time-off request is created in Deel. Uses polling to detect new records.",
+          "message": "Спрацьовує під час створення нового запиту на відпустку/відгул у Deel. Використовує опитування для виявлення нових записів."
+        },
+        "app.RGVlbA.action.dGltZS1vZmYtY3JlYXRlZA.display_name": {
+          "source": "Time-Off Request Created",
+          "message": "Створено запит на відпустку/відгул"
+        },
+        "app.RGVlbA.action.dGltZS1vZmYtY3JlYXRlZA.option.c3RhcnRfZGF0ZQ.desc": {
+          "source": "Only detect events created or updated after this date/time. If not set, polling starts from the current time.",
+          "message": "Виявляти події, створені або оновлені лише після цієї дати/часу. Якщо не встановлено, опитування починається з поточного часу."
+        },
+        "app.RGVlbA.action.dGltZS1vZmYtY3JlYXRlZA.option.c3RhcnRfZGF0ZQ.display_name": {
+          "source": "Start Date",
+          "message": "Дата початку"
+        },
+        "app.RGVlbA.action.dGltZS1vZmYtY3JlYXRlZA.option.c3RhcnRfZGF0ZQ.short_desc": {
+          "source": "Only detect events after this date",
+          "message": "Виявляти події лише після цієї дати"
+        },
+        "app.RGVlbA.action.dGltZS1vZmYtY3JlYXRlZA.option.cG9sbF9pbnRlcnZhbA.desc": {
+          "source": "How often to check for new records (minimum 30 seconds)",
+          "message": "Як часто перевіряти наявність нових записів (мінімум 30 секунд)"
+        },
+        "app.RGVlbA.action.dGltZS1vZmYtY3JlYXRlZA.option.cG9sbF9pbnRlcnZhbA.display_name": {
+          "source": "Poll Interval",
+          "message": "Інтервал опитування"
+        },
+        "app.RGVlbA.action.dGltZS1vZmYtY3JlYXRlZA.option.cG9sbF9pbnRlcnZhbA.short_desc": {
+          "source": "Polling interval in seconds",
+          "message": "Інтервал опитування в секундах"
+        },
+        "app.RGVlbA.action.dGltZS1vZmYtY3JlYXRlZA.short_desc": {
+          "source": "Trigger when a new time-off request is created",
+          "message": "Запускати під час створення нового запиту на відпустку/відгул"
+        },
+        "app.RGVlbA.action.dGltZS1vZmYtcmV2aWV3ZWQ.desc": {
+          "source": "Fires when a time-off request is approved or rejected in Deel. Uses polling to detect changes.",
+          "message": "Спрацьовує після схвалення або відхилення запиту на відпустку/відгул у Deel. Використовує опитування для виявлення змін."
+        },
+        "app.RGVlbA.action.dGltZS1vZmYtcmV2aWV3ZWQ.display_name": {
+          "source": "Time-Off Request Reviewed",
+          "message": "Запит на відпустку/відгул розглянуто"
+        },
+        "app.RGVlbA.action.dGltZS1vZmYtcmV2aWV3ZWQ.option.c3RhcnRfZGF0ZQ.desc": {
+          "source": "Only detect events created or updated after this date/time. If not set, polling starts from the current time.",
+          "message": "Виявляти події, створені або оновлені лише після цієї дати/часу. Якщо не встановлено, опитування починається з поточного часу."
+        },
+        "app.RGVlbA.action.dGltZS1vZmYtcmV2aWV3ZWQ.option.c3RhcnRfZGF0ZQ.display_name": {
+          "source": "Start Date",
+          "message": "Дата початку"
+        },
+        "app.RGVlbA.action.dGltZS1vZmYtcmV2aWV3ZWQ.option.c3RhcnRfZGF0ZQ.short_desc": {
+          "source": "Only detect events after this date",
+          "message": "Виявляти події лише після цієї дати"
+        },
+        "app.RGVlbA.action.dGltZS1vZmYtcmV2aWV3ZWQ.option.cG9sbF9pbnRlcnZhbA.desc": {
+          "source": "How often to check for new records (minimum 30 seconds)",
+          "message": "Як часто перевіряти наявність нових записів (мінімум 30 секунд)"
+        },
+        "app.RGVlbA.action.dGltZS1vZmYtcmV2aWV3ZWQ.option.cG9sbF9pbnRlcnZhbA.display_name": {
+          "source": "Poll Interval",
+          "message": "Інтервал опитування"
+        },
+        "app.RGVlbA.action.dGltZS1vZmYtcmV2aWV3ZWQ.option.cG9sbF9pbnRlcnZhbA.short_desc": {
+          "source": "Polling interval in seconds",
+          "message": "Інтервал опитування в секундах"
+        },
+        "app.RGVlbA.action.dGltZS1vZmYtcmV2aWV3ZWQ.short_desc": {
+          "source": "Trigger when a time-off request is approved or rejected",
+          "message": "Запускати після схвалення або відхилення запиту на відпустку/відгул"
+        },
+        "app.RGVlbA.action.dGltZS1vZmYtdXBkYXRlZA.desc": {
+          "source": "Fires when a time-off request is updated in Deel. Uses polling to detect changes.",
+          "message": "Спрацьовує після оновлення запиту на відпустку/відгул у Deel. Використовує опитування для виявлення змін."
+        },
+        "app.RGVlbA.action.dGltZS1vZmYtdXBkYXRlZA.display_name": {
+          "source": "Time-Off Request Updated",
+          "message": "Запит на відпустку/відгул оновлено"
+        },
+        "app.RGVlbA.action.dGltZS1vZmYtdXBkYXRlZA.option.c3RhcnRfZGF0ZQ.desc": {
+          "source": "Only detect events created or updated after this date/time. If not set, polling starts from the current time.",
+          "message": "Виявляти події, створені або оновлені лише після цієї дати/часу. Якщо не встановлено, опитування починається з поточного часу."
+        },
+        "app.RGVlbA.action.dGltZS1vZmYtdXBkYXRlZA.option.c3RhcnRfZGF0ZQ.display_name": {
+          "source": "Start Date",
+          "message": "Дата початку"
+        },
+        "app.RGVlbA.action.dGltZS1vZmYtdXBkYXRlZA.option.c3RhcnRfZGF0ZQ.short_desc": {
+          "source": "Only detect events after this date",
+          "message": "Виявляти події лише після цієї дати"
+        },
+        "app.RGVlbA.action.dGltZS1vZmYtdXBkYXRlZA.option.cG9sbF9pbnRlcnZhbA.desc": {
+          "source": "How often to check for new records (minimum 30 seconds)",
+          "message": "Як часто перевіряти наявність нових записів (мінімум 30 секунд)"
+        },
+        "app.RGVlbA.action.dGltZS1vZmYtdXBkYXRlZA.option.cG9sbF9pbnRlcnZhbA.display_name": {
+          "source": "Poll Interval",
+          "message": "Інтервал опитування"
+        },
+        "app.RGVlbA.action.dGltZS1vZmYtdXBkYXRlZA.option.cG9sbF9pbnRlcnZhbA.short_desc": {
+          "source": "Polling interval in seconds",
+          "message": "Інтервал опитування в секундах"
+        },
+        "app.RGVlbA.action.dGltZS1vZmYtdXBkYXRlZA.short_desc": {
+          "source": "Trigger when a time-off request is updated",
+          "message": "Запускати після оновлення запиту на відпустку/відгул"
+        },
+        "app.RGVlbA.action.dGltZXNoZWV0LWNyZWF0ZWQ.desc": {
+          "source": "Fires when a new timesheet entry is submitted in Deel. Uses polling to detect new records.",
+          "message": "Спрацьовує під час надсилання нового запису в табелі в Deel. Використовує опитування для виявлення нових записів."
+        },
+        "app.RGVlbA.action.dGltZXNoZWV0LWNyZWF0ZWQ.display_name": {
+          "source": "Timesheet Submitted",
+          "message": "Табель надіслано"
+        },
+        "app.RGVlbA.action.dGltZXNoZWV0LWNyZWF0ZWQ.option.c3RhcnRfZGF0ZQ.desc": {
+          "source": "Only detect events created or updated after this date/time. If not set, polling starts from the current time.",
+          "message": "Виявляти події, створені або оновлені лише після цієї дати/часу. Якщо не встановлено, опитування починається з поточного часу."
+        },
+        "app.RGVlbA.action.dGltZXNoZWV0LWNyZWF0ZWQ.option.c3RhcnRfZGF0ZQ.display_name": {
+          "source": "Start Date",
+          "message": "Дата початку"
+        },
+        "app.RGVlbA.action.dGltZXNoZWV0LWNyZWF0ZWQ.option.c3RhcnRfZGF0ZQ.short_desc": {
+          "source": "Only detect events after this date",
+          "message": "Виявляти події лише після цієї дати"
+        },
+        "app.RGVlbA.action.dGltZXNoZWV0LWNyZWF0ZWQ.option.cG9sbF9pbnRlcnZhbA.desc": {
+          "source": "How often to check for new records (minimum 30 seconds)",
+          "message": "Як часто перевіряти наявність нових записів (мінімум 30 секунд)"
+        },
+        "app.RGVlbA.action.dGltZXNoZWV0LWNyZWF0ZWQ.option.cG9sbF9pbnRlcnZhbA.display_name": {
+          "source": "Poll Interval",
+          "message": "Інтервал опитування"
+        },
+        "app.RGVlbA.action.dGltZXNoZWV0LWNyZWF0ZWQ.option.cG9sbF9pbnRlcnZhbA.short_desc": {
+          "source": "Polling interval in seconds",
+          "message": "Інтервал опитування в секундах"
+        },
+        "app.RGVlbA.action.dGltZXNoZWV0LWNyZWF0ZWQ.short_desc": {
+          "source": "Trigger when a new timesheet is submitted",
+          "message": "Запускати під час надсилання нового табеля"
+        },
+        "app.RGVlbA.action.dGltZXNoZWV0LXJldmlld2Vk.desc": {
+          "source": "Fires when a timesheet entry is approved or rejected in Deel. Uses polling to detect changes.",
+          "message": "Спрацьовує після схвалення або відхилення запису в табелі в Deel. Використовує опитування для виявлення змін."
+        },
+        "app.RGVlbA.action.dGltZXNoZWV0LXJldmlld2Vk.display_name": {
+          "source": "Timesheet Reviewed",
+          "message": "Табель розглянуто"
+        },
+        "app.RGVlbA.action.dGltZXNoZWV0LXJldmlld2Vk.option.c3RhcnRfZGF0ZQ.desc": {
+          "source": "Only detect events created or updated after this date/time. If not set, polling starts from the current time.",
+          "message": "Виявляти події, створені або оновлені лише після цієї дати/часу. Якщо не встановлено, опитування починається з поточного часу."
+        },
+        "app.RGVlbA.action.dGltZXNoZWV0LXJldmlld2Vk.option.c3RhcnRfZGF0ZQ.display_name": {
+          "source": "Start Date",
+          "message": "Дата початку"
+        },
+        "app.RGVlbA.action.dGltZXNoZWV0LXJldmlld2Vk.option.c3RhcnRfZGF0ZQ.short_desc": {
+          "source": "Only detect events after this date",
+          "message": "Виявляти події лише після цієї дати"
+        },
+        "app.RGVlbA.action.dGltZXNoZWV0LXJldmlld2Vk.option.cG9sbF9pbnRlcnZhbA.desc": {
+          "source": "How often to check for new records (minimum 30 seconds)",
+          "message": "Як часто перевіряти наявність нових записів (мінімум 30 секунд)"
+        },
+        "app.RGVlbA.action.dGltZXNoZWV0LXJldmlld2Vk.option.cG9sbF9pbnRlcnZhbA.display_name": {
+          "source": "Poll Interval",
+          "message": "Інтервал опитування"
+        },
+        "app.RGVlbA.action.dGltZXNoZWV0LXJldmlld2Vk.option.cG9sbF9pbnRlcnZhbA.short_desc": {
+          "source": "Polling interval in seconds",
+          "message": "Інтервал опитування в секундах"
+        },
+        "app.RGVlbA.action.dGltZXNoZWV0LXJldmlld2Vk.short_desc": {
+          "source": "Trigger when a timesheet is approved or rejected",
+          "message": "Запускати після схвалення або відхилення табеля"
+        },
+        "app.RGVlbA.action.dXBkYXRlLWNvbnRyYWN0.desc": {
+          "source": "Update the details of an existing contract in Deel",
+          "message": "Оновити дані наявного контракту в Deel"
+        },
+        "app.RGVlbA.action.dXBkYXRlLWNvbnRyYWN0.display_name": {
+          "source": "Update a Contract",
+          "message": "Оновити контракт"
+        },
+        "app.RGVlbA.action.dXBkYXRlLWNvbnRyYWN0.option.Y29udHJhY3RfaWQ.desc": {
+          "source": "The unique identifier of the contract to update",
+          "message": "Унікальний ідентифікатор контракту для оновлення"
+        },
+        "app.RGVlbA.action.dXBkYXRlLWNvbnRyYWN0.option.Y29udHJhY3RfaWQ.display_name": {
+          "source": "Contract ID",
+          "message": "ID контракту"
+        },
+        "app.RGVlbA.action.dXBkYXRlLWNvbnRyYWN0.option.Y29udHJhY3RfaWQ.short_desc": {
+          "source": "The contract to update",
+          "message": "Контракт для оновлення"
+        },
+        "app.RGVlbA.action.dXBkYXRlLWNvbnRyYWN0.option.YW1vdW50.desc": {
+          "source": "The updated monetary amount for the contract",
+          "message": "Оновлена грошова сума за контрактом"
+        },
+        "app.RGVlbA.action.dXBkYXRlLWNvbnRyYWN0.option.YW1vdW50.display_name": {
+          "source": "Amount",
+          "message": "Величина"
+        },
+        "app.RGVlbA.action.dXBkYXRlLWNvbnRyYWN0.option.YW1vdW50.short_desc": {
+          "source": "Updated contract amount",
+          "message": "Оновлена сума контракту"
+        },
+        "app.RGVlbA.action.dXBkYXRlLWNvbnRyYWN0.option.am9iX3RpdGxl.desc": {
+          "source": "The updated job title for the contract",
+          "message": "Оновлена посада для контракту"
+        },
+        "app.RGVlbA.action.dXBkYXRlLWNvbnRyYWN0.option.am9iX3RpdGxl.display_name": {
+          "source": "Job Title",
+          "message": "Посада"
+        },
+        "app.RGVlbA.action.dXBkYXRlLWNvbnRyYWN0.option.am9iX3RpdGxl.short_desc": {
+          "source": "Updated job title",
+          "message": "Оновлена посада"
+        },
+        "app.RGVlbA.action.dXBkYXRlLWNvbnRyYWN0.option.c2NvcGVfb2Zfd29yaw.desc": {
+          "source": "Updated description of the work to be performed",
+          "message": "Оновлений опис робіт, які необхідно виконати"
+        },
+        "app.RGVlbA.action.dXBkYXRlLWNvbnRyYWN0.option.c2NvcGVfb2Zfd29yaw.display_name": {
+          "source": "Scope of Work",
+          "message": "Обсяг робіт"
+        },
+        "app.RGVlbA.action.dXBkYXRlLWNvbnRyYWN0.option.c2NvcGVfb2Zfd29yaw.short_desc": {
+          "source": "Updated scope of work",
+          "message": "Оновлений обсяг робіт"
+        },
+        "app.RGVlbA.action.dXBkYXRlLWNvbnRyYWN0.option.dGl0bGU.desc": {
+          "source": "A new descriptive title for the contract",
+          "message": "Нова описова назва контракту"
+        },
+        "app.RGVlbA.action.dXBkYXRlLWNvbnRyYWN0.option.dGl0bGU.display_name": {
+          "source": "Title",
+          "message": "Заголовок"
+        },
+        "app.RGVlbA.action.dXBkYXRlLWNvbnRyYWN0.option.dGl0bGU.short_desc": {
+          "source": "Updated contract title",
+          "message": "Оновлена назва контракту"
+        },
+        "app.RGVlbA.action.dXBkYXRlLWNvbnRyYWN0.short_desc": {
+          "source": "Update an existing contract",
+          "message": "Оновити наявний контракт"
+        },
+        "app.RGVlbA.action.dXBkYXRlLWludm9pY2UtYWRqdXN0bWVudA.desc": {
+          "source": "Update an existing invoice adjustment in Deel",
+          "message": "Оновити наявне коригування рахунка-фактури в Deel"
+        },
+        "app.RGVlbA.action.dXBkYXRlLWludm9pY2UtYWRqdXN0bWVudA.display_name": {
+          "source": "Update an Invoice Adjustment",
+          "message": "Оновити коригування рахунка-фактури"
+        },
+        "app.RGVlbA.action.dXBkYXRlLWludm9pY2UtYWRqdXN0bWVudA.option.YW1vdW50.desc": {
+          "source": "The new monetary amount for this invoice adjustment",
+          "message": "Нова грошова сума для цього коригування рахунка-фактури"
+        },
+        "app.RGVlbA.action.dXBkYXRlLWludm9pY2UtYWRqdXN0bWVudA.option.YW1vdW50.display_name": {
+          "source": "Amount",
+          "message": "Величина"
+        },
+        "app.RGVlbA.action.dXBkYXRlLWludm9pY2UtYWRqdXN0bWVudA.option.YW1vdW50.short_desc": {
+          "source": "The updated adjustment amount",
+          "message": "Оновлена сума коригування"
+        },
+        "app.RGVlbA.action.dXBkYXRlLWludm9pY2UtYWRqdXN0bWVudA.option.YWRqdXN0bWVudF9pZA.desc": {
+          "source": "The unique identifier of the invoice adjustment to update",
+          "message": "Унікальний ідентифікатор коригування рахунка-фактури для оновлення"
+        },
+        "app.RGVlbA.action.dXBkYXRlLWludm9pY2UtYWRqdXN0bWVudA.option.YWRqdXN0bWVudF9pZA.display_name": {
+          "source": "Adjustment ID",
+          "message": "ID коригування"
+        },
+        "app.RGVlbA.action.dXBkYXRlLWludm9pY2UtYWRqdXN0bWVudA.option.YWRqdXN0bWVudF9pZA.short_desc": {
+          "source": "The adjustment to update",
+          "message": "Коригування для оновлення"
+        },
+        "app.RGVlbA.action.dXBkYXRlLWludm9pY2UtYWRqdXN0bWVudA.option.ZGVzY3JpcHRpb24.desc": {
+          "source": "The updated explanation for this invoice adjustment",
+          "message": "Оновлене пояснення для цього коригування рахунка-фактури"
+        },
+        "app.RGVlbA.action.dXBkYXRlLWludm9pY2UtYWRqdXN0bWVudA.option.ZGVzY3JpcHRpb24.display_name": {
+          "source": "Description",
+          "message": "Опис"
+        },
+        "app.RGVlbA.action.dXBkYXRlLWludm9pY2UtYWRqdXN0bWVudA.option.ZGVzY3JpcHRpb24.short_desc": {
+          "source": "The updated description",
+          "message": "Оновлений опис"
+        },
+        "app.RGVlbA.action.dXBkYXRlLWludm9pY2UtYWRqdXN0bWVudA.short_desc": {
+          "source": "Update an existing invoice adjustment",
+          "message": "Оновити наявне коригування рахунка-фактури"
+        },
+        "app.RGVlbA.action.dXBkYXRlLXRpbWVzaGVldA.desc": {
+          "source": "Update an existing timesheet entry in Deel",
+          "message": "Оновити наявний запис у табелі в Deel"
+        },
+        "app.RGVlbA.action.dXBkYXRlLXRpbWVzaGVldA.display_name": {
+          "source": "Update a Timesheet",
+          "message": "Оновити табель"
+        },
+        "app.RGVlbA.action.dXBkYXRlLXRpbWVzaGVldA.option.ZGVzY3JpcHRpb24.desc": {
+          "source": "The updated description of the work performed",
+          "message": "Оновлений опис виконаної роботи"
+        },
+        "app.RGVlbA.action.dXBkYXRlLXRpbWVzaGVldA.option.ZGVzY3JpcHRpb24.display_name": {
+          "source": "Description",
+          "message": "Опис"
+        },
+        "app.RGVlbA.action.dXBkYXRlLXRpbWVzaGVldA.option.ZGVzY3JpcHRpb24.short_desc": {
+          "source": "Updated work description",
+          "message": "Оновлений опис роботи"
+        },
+        "app.RGVlbA.action.dXBkYXRlLXRpbWVzaGVldA.option.cXVhbnRpdHk.desc": {
+          "source": "The new number of hours worked",
+          "message": "Нова кількість відпрацьованих годин"
+        },
+        "app.RGVlbA.action.dXBkYXRlLXRpbWVzaGVldA.option.cXVhbnRpdHk.display_name": {
+          "source": "Hours (Quantity)",
+          "message": "Години (кількість)"
+        },
+        "app.RGVlbA.action.dXBkYXRlLXRpbWVzaGVldA.option.cXVhbnRpdHk.short_desc": {
+          "source": "The updated number of hours",
+          "message": "Оновлена кількість годин"
+        },
+        "app.RGVlbA.action.dXBkYXRlLXRpbWVzaGVldA.option.dGltZXNoZWV0X2lk.desc": {
+          "source": "The unique identifier of the timesheet entry to update",
+          "message": "Унікальний ідентифікатор запису табеля для оновлення"
+        },
+        "app.RGVlbA.action.dXBkYXRlLXRpbWVzaGVldA.option.dGltZXNoZWV0X2lk.display_name": {
+          "source": "Timesheet ID",
+          "message": "ID табеля"
+        },
+        "app.RGVlbA.action.dXBkYXRlLXRpbWVzaGVldA.option.dGltZXNoZWV0X2lk.short_desc": {
+          "source": "The timesheet to update",
+          "message": "Табель для оновлення"
+        },
+        "app.RGVlbA.action.dXBkYXRlLXRpbWVzaGVldA.short_desc": {
+          "source": "Update an existing timesheet entry",
+          "message": "Оновити наявний запис табеля"
+        },
+        "app.RGVlbA.action.dXBkYXRlLXdvcmtlcg.desc": {
+          "source": "Update an existing worker or person record in Deel",
+          "message": "Оновити наявний запис працівника або особи в Deel"
+        },
+        "app.RGVlbA.action.dXBkYXRlLXdvcmtlcg.display_name": {
+          "source": "Update a Worker",
+          "message": "Оновити працівника"
+        },
+        "app.RGVlbA.action.dXBkYXRlLXdvcmtlcg.option.Zmlyc3RfbmFtZQ.desc": {
+          "source": "The updated given (first) name of the worker",
+          "message": "Оновлене ім'я працівника"
+        },
+        "app.RGVlbA.action.dXBkYXRlLXdvcmtlcg.option.Zmlyc3RfbmFtZQ.display_name": {
+          "source": "First Name",
+          "message": "Ім'я"
+        },
+        "app.RGVlbA.action.dXBkYXRlLXdvcmtlcg.option.Zmlyc3RfbmFtZQ.short_desc": {
+          "source": "The worker's first name",
+          "message": "Ім'я працівника"
+        },
+        "app.RGVlbA.action.dXBkYXRlLXdvcmtlcg.option.am9iX3RpdGxl.desc": {
+          "source": "The updated job title of the worker",
+          "message": "Оновлена посада працівника"
+        },
+        "app.RGVlbA.action.dXBkYXRlLXdvcmtlcg.option.am9iX3RpdGxl.display_name": {
+          "source": "Job Title",
+          "message": "Посада"
+        },
+        "app.RGVlbA.action.dXBkYXRlLXdvcmtlcg.option.am9iX3RpdGxl.short_desc": {
+          "source": "The worker's job title",
+          "message": "Посада працівника"
+        },
+        "app.RGVlbA.action.dXBkYXRlLXdvcmtlcg.option.bGFzdF9uYW1l.desc": {
+          "source": "The updated family (last) name of the worker",
+          "message": "Оновлене прізвище працівника"
+        },
+        "app.RGVlbA.action.dXBkYXRlLXdvcmtlcg.option.bGFzdF9uYW1l.display_name": {
+          "source": "Last Name",
+          "message": "Прізвище"
+        },
+        "app.RGVlbA.action.dXBkYXRlLXdvcmtlcg.option.bGFzdF9uYW1l.short_desc": {
+          "source": "The worker's last name",
+          "message": "Прізвище працівника"
+        },
+        "app.RGVlbA.action.dXBkYXRlLXdvcmtlcg.option.c2VuaW9yaXR5.allowed-value.c3RyaW5nOm1pZA.desc": {
+          "source": "Mid level",
+          "message": "Рівень Mid"
+        },
+        "app.RGVlbA.action.dXBkYXRlLXdvcmtlcg.option.c2VuaW9yaXR5.allowed-value.c3RyaW5nOmp1bmlvcg.desc": {
+          "source": "Junior level",
+          "message": "Рівень Junior"
+        },
+        "app.RGVlbA.action.dXBkYXRlLXdvcmtlcg.option.c2VuaW9yaXR5.allowed-value.c3RyaW5nOmxlYWQ.desc": {
+          "source": "Lead level",
+          "message": "Рівень Lead"
+        },
+        "app.RGVlbA.action.dXBkYXRlLXdvcmtlcg.option.c2VuaW9yaXR5.allowed-value.c3RyaW5nOnNlbmlvcg.desc": {
+          "source": "Senior level",
+          "message": "Рівень Senior"
+        },
+        "app.RGVlbA.action.dXBkYXRlLXdvcmtlcg.option.c2VuaW9yaXR5.desc": {
+          "source": "The updated seniority level of the worker",
+          "message": "Оновлений рівень кваліфікації працівника"
+        },
+        "app.RGVlbA.action.dXBkYXRlLXdvcmtlcg.option.c2VuaW9yaXR5.display_name": {
+          "source": "Seniority",
+          "message": "Рівень кваліфікації"
+        },
+        "app.RGVlbA.action.dXBkYXRlLXdvcmtlcg.option.c2VuaW9yaXR5.short_desc": {
+          "source": "The worker's seniority level",
+          "message": "Рівень кваліфікації працівника"
+        },
+        "app.RGVlbA.action.dXBkYXRlLXdvcmtlcg.option.d29ya2VyX2lk.desc": {
+          "source": "The unique identifier of the worker to update",
+          "message": "Унікальний ідентифікатор працівника для оновлення"
+        },
+        "app.RGVlbA.action.dXBkYXRlLXdvcmtlcg.option.d29ya2VyX2lk.display_name": {
+          "source": "Worker ID",
+          "message": "ID працівника"
+        },
+        "app.RGVlbA.action.dXBkYXRlLXdvcmtlcg.option.d29ya2VyX2lk.short_desc": {
+          "source": "The worker to update",
+          "message": "Працівник для оновлення"
+        },
+        "app.RGVlbA.action.dXBkYXRlLXdvcmtlcg.short_desc": {
+          "source": "Update an existing worker's information",
+          "message": "Оновити інформацію про наявного працівника"
+        },
+        "app.RGVlbA.desc": {
+          "source": "Deel is a global workforce management and HR platform for hiring, managing, and paying contractors and full-time employees worldwide.\n\nThis integration supports contracts, timesheets, invoice adjustments, workers, time-off requests, legal entities, invoices, and polling-based event triggers.",
+          "message": "Deel — це глобальна платформа для управління персоналом та HR, призначена для найму, управління та виплати винагороди підрядникам і штатним працівникам по всьому світу.\n\nЦя інтеграція підтримує контракти, табелі обліку робочого часу, коригування інвойсів, працівників, запити на відпустку, юридичні особи, рахунки-фактури та тригери подій на основі опитування."
+        },
+        "app.RGVlbA.display_name": {
+          "source": "Deel",
+          "message": "Deel"
+        },
+        "app.RGVlbA.short_desc": {
+          "source": "Deel global workforce management platform",
+          "message": "Глобальна платформа управління персоналом Deel"
+        }
+      }
+    }
+  }
+}

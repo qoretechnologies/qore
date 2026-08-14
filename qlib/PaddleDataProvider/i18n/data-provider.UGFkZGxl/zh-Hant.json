@@ -1,0 +1,3089 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "zh-Hant": {
+      "messages": {
+        "app.UGFkZGxl.action.Y3JlYXRl.desc": {
+          "source": "Creates new records in the given table",
+          "message": "在指定的資料表中建立新記錄"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRl.display_name": {
+          "source": "Create Records",
+          "message": "建立記錄"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRl.option.dGFibGU.desc": {
+          "source": "The table to work with: `customers`, `products`, `prices`, `transactions` or `reports`",
+          "message": "要操作的資料表：`customers`、`products`、`prices`、`transactions` 或 `reports`"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRl.option.dGFibGU.display_name": {
+          "source": "Table",
+          "message": "表格"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRl.option.dGFibGU.short_desc": {
+          "source": "The name of the table to work with",
+          "message": "要操作的資料表名稱"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRl.short_desc": {
+          "source": "Create new records in the given table",
+          "message": "在指定的資料表中建立新記錄"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX2N1c3RvbWVy.desc": {
+          "source": "Creates a customer.\n\n`email` is the only required field and it must be unique in the account: creating a customer with an address that already exists fails with a conflict rather than returning the existing one. Look the address up with **List Customers** first if that is a possibility.\n\nUse `custom_data` to carry your own identifier for the customer, so the two systems can be reconciled later.",
+          "message": "建立客戶。\n\n`email` 是唯一的必填欄位，且在帳戶中必須具備唯一性：使用已存在的地址建立客戶會因衝突而失敗，而不會傳回既有客戶。如果有此可能性，請先使用**列出客戶**查詢該地址。\n\n使用 `custom_data` 攜帶您自訂的客戶識別碼，以便日後核對這兩個系統。"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX2N1c3RvbWVy.display_name": {
+          "source": "Create Customer",
+          "message": "建立客戶"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX2N1c3RvbWVy.option.Y3VzdG9tX2RhdGE.desc": {
+          "source": "Your own structured key-value data.",
+          "message": "您自訂的結構化鍵值資料。"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX2N1c3RvbWVy.option.Y3VzdG9tX2RhdGE.display_name": {
+          "source": "Custom Data",
+          "message": "自訂資料"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX2N1c3RvbWVy.option.Y3VzdG9tX2RhdGE.short_desc": {
+          "source": "Your own structured key-value data",
+          "message": "您自訂的結構化鍵值資料"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX2N1c3RvbWVy.option.ZW1haWw.desc": {
+          "source": "Email address for this customer.",
+          "message": "此客戶的電子郵件地址。"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX2N1c3RvbWVy.option.ZW1haWw.display_name": {
+          "source": "Email",
+          "message": "電子郵件"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX2N1c3RvbWVy.option.ZW1haWw.short_desc": {
+          "source": "Email address for this customer",
+          "message": "此客戶的電子郵件地址"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX2N1c3RvbWVy.option.aW1wb3J0X21ldGE.desc": {
+          "source": "Import information for this entity. `null` if this entity is not imported.",
+          "message": "此實體的匯入資訊。若未匯入此實體，則為 `null`。"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX2N1c3RvbWVy.option.aW1wb3J0X21ldGE.display_name": {
+          "source": "Import Meta",
+          "message": "匯入中繼資料"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX2N1c3RvbWVy.option.aW1wb3J0X21ldGE.short_desc": {
+          "source": "Import information for this entity",
+          "message": "此實體的匯入資訊"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX2N1c3RvbWVy.option.aWQ.desc": {
+          "source": "Unique Paddle ID for this customer entity, prefixed with `ctm_`.",
+          "message": "此客戶實體的唯一 Paddle ID，以 `ctm_` 為字首。"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX2N1c3RvbWVy.option.aWQ.display_name": {
+          "source": "Customer ID",
+          "message": "客戶 ID"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX2N1c3RvbWVy.option.aWQ.short_desc": {
+          "source": "Import an existing customer under a known Paddle ID",
+          "message": "在已知的 Paddle ID 下匯入現有客戶"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX2N1c3RvbWVy.option.bG9jYWxl.desc": {
+          "source": "Valid IETF BCP 47 short form locale tag. If omitted, defaults to `en`.",
+          "message": "有效的 IETF BCP 47 簡短形式語言代碼標籤。如果省略，預設為 `en`。"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX2N1c3RvbWVy.option.bG9jYWxl.display_name": {
+          "source": "Locale",
+          "message": "地區設定"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX2N1c3RvbWVy.option.bG9jYWxl.short_desc": {
+          "source": "Valid IETF BCP 47 short form locale tag",
+          "message": "有效的 IETF BCP 47 簡短形式語言代碼標籤"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX2N1c3RvbWVy.option.bWFya2V0aW5nX2NvbnNlbnQ.desc": {
+          "source": "Whether this customer opted into marketing from you. `false` unless customers check the marketing consent box\nwhen using Paddle Checkout. Set automatically by Paddle.",
+          "message": "此客戶是否同意接收您的行銷資訊。除非客戶在使用 Paddle Checkout 時勾選行銷同意方塊，否則為 `false`。\n由 Paddle 自動設定。"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX2N1c3RvbWVy.option.bWFya2V0aW5nX2NvbnNlbnQ.display_name": {
+          "source": "Marketing Consent",
+          "message": "行銷同意"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX2N1c3RvbWVy.option.bWFya2V0aW5nX2NvbnNlbnQ.short_desc": {
+          "source": "Whether this customer opted into marketing from you",
+          "message": "此客戶是否同意接收您的行銷資訊"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX2N1c3RvbWVy.option.bmFtZQ.desc": {
+          "source": "Full name of this customer. Required when creating transactions where `collection_mode` is `manual` (invoices).",
+          "message": "此客戶的全名。當建立 `collection_mode` 為 `manual`（發票）的交易時為必填。"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX2N1c3RvbWVy.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "名稱"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX2N1c3RvbWVy.option.bmFtZQ.short_desc": {
+          "source": "Full name of this customer",
+          "message": "此客戶的全名"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX2N1c3RvbWVy.short_desc": {
+          "source": "Create a customer",
+          "message": "建立客戶"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3ByaWNl.desc": {
+          "source": "Creates a price against a product.\n\n`unit_price` is an amount in the **smallest unit of its currency** given as a string - `\"1000\"` is $10.00 in USD, but ¥1000 in JPY, which has no minor unit. Getting this wrong is a factor-of-100 error in what customers are charged.\n\nSet `billing_cycle` to make it a subscription price; leave it unset for a one-off charge. `unit_price_overrides` sets a different amount for specific countries, which is how local pricing is done.\n\nA price cannot be moved to another product afterwards.",
+          "message": "為產品建立價格。\n\n`unit_price` 是以字串形式提供的**該貨幣最小單位**金額 — `\"1000\"` 在 USD 中為 $10.00，但在 JPY 中為 ¥1000（日圓沒有更小的單位）。若設定錯誤，向客戶收取的費用將會出現 100 倍的誤差。\n\n設定 `billing_cycle` 可將其設為訂閱價格；若為單次收費請保持未設定。`unit_price_overrides` 可為特定國家/地區設定不同的金額，這也是本地定價的實現方式。\n\n價格在建立後無法移動到其他產品。"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3ByaWNl.display_name": {
+          "source": "Create Price",
+          "message": "建立價格"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3ByaWNl.option.Y3VzdG9tX2RhdGE.desc": {
+          "source": "Your own structured key-value data.",
+          "message": "您自訂的結構化鍵值資料。"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3ByaWNl.option.Y3VzdG9tX2RhdGE.display_name": {
+          "source": "Custom Data",
+          "message": "自訂資料"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3ByaWNl.option.Y3VzdG9tX2RhdGE.short_desc": {
+          "source": "Your own structured key-value data",
+          "message": "您自訂的結構化鍵值資料"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3ByaWNl.option.YmlsbGluZ19jeWNsZQ.desc": {
+          "source": "How often this price should be charged. `null` if price is non-recurring (one-time). If omitted, defaults to `null`.",
+          "message": "此價格收取的頻率。若價格為非定期（一次性），則為 `null`。若省略，預設為 `null`。"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3ByaWNl.option.YmlsbGluZ19jeWNsZQ.display_name": {
+          "source": "Billing Cycle",
+          "message": "計費週期"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3ByaWNl.option.YmlsbGluZ19jeWNsZQ.short_desc": {
+          "source": "Set for a subscription price; leave unset for a one-off charge",
+          "message": "設為訂閱價格；若為單次收費請保留未設定"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3ByaWNl.option.ZGVzY3JpcHRpb24.desc": {
+          "source": "Internal description for this price, not shown to customers. Typically notes for your team.",
+          "message": "此價格的內部說明，不向客戶顯示。通常供您的團隊備註使用。"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3ByaWNl.option.ZGVzY3JpcHRpb24.display_name": {
+          "source": "Description",
+          "message": "描述"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3ByaWNl.option.ZGVzY3JpcHRpb24.short_desc": {
+          "source": "An internal description; not shown to customers",
+          "message": "內部說明；不向客戶顯示"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3ByaWNl.option.aW1wb3J0X21ldGE.desc": {
+          "source": "Import information for this entity. `null` if this entity is not imported.",
+          "message": "此實體的匯入資訊。若未匯入此實體，則為 `null`。"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3ByaWNl.option.aW1wb3J0X21ldGE.display_name": {
+          "source": "Import Meta",
+          "message": "匯入中繼資料"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3ByaWNl.option.aW1wb3J0X21ldGE.short_desc": {
+          "source": "Import information for this entity",
+          "message": "此實體的匯入資訊"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3ByaWNl.option.aWQ.desc": {
+          "source": "Unique Paddle ID for this price, prefixed with `pri_`.",
+          "message": "此價格的唯一 Paddle ID，以 `pri_` 為字首。"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3ByaWNl.option.aWQ.display_name": {
+          "source": "Price ID",
+          "message": "價格 ID"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3ByaWNl.option.aWQ.short_desc": {
+          "source": "Import an existing price under a known Paddle ID",
+          "message": "在已知的 Paddle ID 下匯入現有價格"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3ByaWNl.option.bmFtZQ.desc": {
+          "source": "Name of this price, shown to customers at checkout and on invoices. Typically describes how often the related product bills.",
+          "message": "此價格的名稱，在結帳和發票上向客戶顯示。通常描述相關產品的計費頻率。"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3ByaWNl.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "名稱"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3ByaWNl.option.bmFtZQ.short_desc": {
+          "source": "Name of this price, shown to customers at checkout and on invoices",
+          "message": "此價格的名稱，在結帳和發票上向客戶顯示"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3ByaWNl.option.cHJvZHVjdF9pZA.desc": {
+          "source": "Paddle ID for the product that this price is for, prefixed with `pro_`.",
+          "message": "此價格所屬產品的 Paddle ID，以 `pro_` 為字首。"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3ByaWNl.option.cHJvZHVjdF9pZA.display_name": {
+          "source": "Product",
+          "message": "產品"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3ByaWNl.option.cHJvZHVjdF9pZA.short_desc": {
+          "source": "The product this price belongs to",
+          "message": "此價格所屬的產品"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3ByaWNl.option.cXVhbnRpdHk.desc": {
+          "source": "Limits on how many times the related product can be purchased at this price. Useful for discount campaigns. If omitted, defaults to 1-100.",
+          "message": "可以此價格購買相關產品的次數限制。適用於折扣行銷活動。如果省略，預設為 1-100。"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3ByaWNl.option.cXVhbnRpdHk.display_name": {
+          "source": "Quantity",
+          "message": "數量"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3ByaWNl.option.cXVhbnRpdHk.short_desc": {
+          "source": "Limits on how many times the related product can be purchased at this price",
+          "message": "可以此價格購買相關產品的次數限制"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3ByaWNl.option.dGF4X21vZGU.allowed-value.c3RyaW5nOmFjY291bnRfc2V0dGluZw.display_name": {
+          "source": "account_setting",
+          "message": "account_setting"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3ByaWNl.option.dGF4X21vZGU.allowed-value.c3RyaW5nOmV4dGVybmFs.display_name": {
+          "source": "external",
+          "message": "外部"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3ByaWNl.option.dGF4X21vZGU.allowed-value.c3RyaW5nOmludGVybmFs.display_name": {
+          "source": "internal",
+          "message": "內部"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3ByaWNl.option.dGF4X21vZGU.allowed-value.c3RyaW5nOmxvY2F0aW9u.display_name": {
+          "source": "location",
+          "message": "地點"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3ByaWNl.option.dGF4X21vZGU.desc": {
+          "source": "How tax is calculated for this price. If omitted, defaults to `account_setting`.",
+          "message": "此價格的稅費計算方式。若省略，預設為 `account_setting`。"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3ByaWNl.option.dGF4X21vZGU.display_name": {
+          "source": "Tax Mode",
+          "message": "稅務模式"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3ByaWNl.option.dGF4X21vZGU.short_desc": {
+          "source": "How tax is calculated for this price",
+          "message": "此價格的稅費計算方式"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3ByaWNl.option.dHJpYWxfcGVyaW9k.desc": {
+          "source": "Trial period for the product related to this price. The billing cycle begins once the trial period is over.\n`null` for no trial period. Requires `billing_cycle`. If omitted, defaults to `null`.",
+          "message": "與此價格相關之產品的試用期。計費週期在試用期結束後開始。\n`null` 代表無試用期。需要 `billing_cycle`。若省略，預設為 `null`。"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3ByaWNl.option.dHJpYWxfcGVyaW9k.display_name": {
+          "source": "Trial Period",
+          "message": "試用期"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3ByaWNl.option.dHJpYWxfcGVyaW9k.short_desc": {
+          "source": "Trial period for the product related to this price",
+          "message": "與此價格相關之產品的試用期"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3ByaWNl.option.dHlwZQ.allowed-value.c3RyaW5nOmN1c3RvbQ.display_name": {
+          "source": "custom",
+          "message": "自訂"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3ByaWNl.option.dHlwZQ.allowed-value.c3RyaW5nOnN0YW5kYXJk.display_name": {
+          "source": "standard",
+          "message": "標準"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3ByaWNl.option.dHlwZQ.desc": {
+          "source": "Type of item. Standard items are considered part of your catalog and are shown in the Paddle dashboard. If omitted, defaults to `standard`.",
+          "message": "項目類型。標準項目會被視為目錄的一部分，並顯示於 Paddle 儀表板中。若省略，預設為 `standard`。"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3ByaWNl.option.dHlwZQ.display_name": {
+          "source": "Type",
+          "message": "類型"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3ByaWNl.option.dHlwZQ.short_desc": {
+          "source": "Type of item",
+          "message": "項目類型"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3ByaWNl.option.dW5pdF9wcmljZQ.desc": {
+          "source": "Base price. This price applies to all customers, except for customers located in countries where you have `unit_price_overrides`.",
+          "message": "基本價格。此價格適用於所有客戶，但位於您設定有 `unit_price_overrides` 國家/地區的客戶除外。"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3ByaWNl.option.dW5pdF9wcmljZQ.display_name": {
+          "source": "Unit Price",
+          "message": "單價"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3ByaWNl.option.dW5pdF9wcmljZQ.short_desc": {
+          "source": "The amount, in the smallest unit of its currency",
+          "message": "金額，以該幣別的最小單位表示"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3ByaWNl.option.dW5pdF9wcmljZV9vdmVycmlkZXM.desc": {
+          "source": "List of unit price overrides. Use to override the base price with a custom price and currency for a country or group of countries.",
+          "message": "單價覆寫清單。用於以特定國家或國家群組的自訂價格與幣別覆寫基本價格。"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3ByaWNl.option.dW5pdF9wcmljZV9vdmVycmlkZXM.display_name": {
+          "source": "Unit Price Overrides",
+          "message": "單價覆寫"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3ByaWNl.option.dW5pdF9wcmljZV9vdmVycmlkZXM.short_desc": {
+          "source": "List of unit price overrides",
+          "message": "單價覆寫清單"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3ByaWNl.short_desc": {
+          "source": "Create a price for a catalog product",
+          "message": "為目錄產品建立價格"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3Byb2R1Y3Q.desc": {
+          "source": "Creates a product in the catalog.\n\nA product is what you sell; it carries no price of its own. Create at least one price against it with **Create Price** before it can be billed.\n\n`tax_category` decides how Paddle charges sales tax and **cannot be changed afterwards**, so it has to be right at creation. Most software is `standard-digital-goods` or `saas`; using the wrong category means tax is calculated wrongly for every sale of the product.",
+          "message": "在目錄中建立產品。\n\n產品是您銷售的項目；它本身沒有價格。必須先使用 **Create Price** 為其建立至少一個價格才能進行計費。\n\n`tax_category` 決定 Paddle 如何收取銷售稅，且**建立後無法變更**，因此建立時必須正確無誤。大多數軟體為 `standard-digital-goods` 或 `saas`；使用錯誤的類別代表該產品的每次銷售都會計錯稅費。"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3Byb2R1Y3Q.display_name": {
+          "source": "Create Product",
+          "message": "建立產品"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3Byb2R1Y3Q.option.Y3VzdG9tX2RhdGE.desc": {
+          "source": "Your own structured key-value data.",
+          "message": "您自訂的結構化鍵值資料。"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3Byb2R1Y3Q.option.Y3VzdG9tX2RhdGE.display_name": {
+          "source": "Custom Data",
+          "message": "自訂資料"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3Byb2R1Y3Q.option.Y3VzdG9tX2RhdGE.short_desc": {
+          "source": "Your own structured key-value data",
+          "message": "您自訂的結構化鍵值資料"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3Byb2R1Y3Q.option.ZGVzY3JpcHRpb24.desc": {
+          "source": "Short description for this product.",
+          "message": "此產品的簡短描述。"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3Byb2R1Y3Q.option.ZGVzY3JpcHRpb24.display_name": {
+          "source": "Description",
+          "message": "描述"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3Byb2R1Y3Q.option.ZGVzY3JpcHRpb24.short_desc": {
+          "source": "Short description for this product",
+          "message": "此產品的簡短描述"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3Byb2R1Y3Q.option.aW1hZ2VfdXJs.desc": {
+          "source": "Image for this product. Included in the checkout and on some customer documents.",
+          "message": "此產品的圖片。包含在結帳頁面以及某些客戶文件中。"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3Byb2R1Y3Q.option.aW1hZ2VfdXJs.display_name": {
+          "source": "Image Url",
+          "message": "圖片 URL"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3Byb2R1Y3Q.option.aW1hZ2VfdXJs.short_desc": {
+          "source": "Image for this product",
+          "message": "此產品的圖片"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3Byb2R1Y3Q.option.aW1wb3J0X21ldGE.desc": {
+          "source": "Import information for this entity. `null` if this entity is not imported.",
+          "message": "此實體的匯入資訊。若未匯入此實體，則為 `null`。"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3Byb2R1Y3Q.option.aW1wb3J0X21ldGE.display_name": {
+          "source": "Import Meta",
+          "message": "匯入中繼資料"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3Byb2R1Y3Q.option.aW1wb3J0X21ldGE.short_desc": {
+          "source": "Import information for this entity",
+          "message": "此實體的匯入資訊"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3Byb2R1Y3Q.option.aWQ.desc": {
+          "source": "Unique Paddle ID for this product, prefixed with `pro_`.",
+          "message": "此產品的唯一 Paddle ID，前綴為 `pro_`。"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3Byb2R1Y3Q.option.aWQ.display_name": {
+          "source": "Product ID",
+          "message": "產品 ID"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3Byb2R1Y3Q.option.aWQ.short_desc": {
+          "source": "Import an existing product under a known Paddle ID",
+          "message": "在已知的 Paddle ID 下匯入現有產品"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3Byb2R1Y3Q.option.bmFtZQ.desc": {
+          "source": "Name of this product.",
+          "message": "此產品的名稱。"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3Byb2R1Y3Q.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "名稱"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3Byb2R1Y3Q.option.bmFtZQ.short_desc": {
+          "source": "Name of this product",
+          "message": "此產品的名稱"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3Byb2R1Y3Q.option.dGF4X2NhdGVnb3J5.allowed-value.c3RyaW5nOmRpZ2l0YWwtZ29vZHM.display_name": {
+          "source": "digital-goods",
+          "message": "數位商品"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3Byb2R1Y3Q.option.dGF4X2NhdGVnb3J5.allowed-value.c3RyaW5nOmVib29rcw.display_name": {
+          "source": "ebooks",
+          "message": "電子書"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3Byb2R1Y3Q.option.dGF4X2NhdGVnb3J5.allowed-value.c3RyaW5nOmltcGxlbWVudGF0aW9uLXNlcnZpY2Vz.display_name": {
+          "source": "implementation-services",
+          "message": "實作服務"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3Byb2R1Y3Q.option.dGF4X2NhdGVnb3J5.allowed-value.c3RyaW5nOnByb2Zlc3Npb25hbC1zZXJ2aWNlcw.display_name": {
+          "source": "professional-services",
+          "message": "專業服務"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3Byb2R1Y3Q.option.dGF4X2NhdGVnb3J5.allowed-value.c3RyaW5nOnN0YW5kYXJk.display_name": {
+          "source": "standard",
+          "message": "標準"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3Byb2R1Y3Q.option.dGF4X2NhdGVnb3J5.allowed-value.c3RyaW5nOnNhYXM.display_name": {
+          "source": "saas",
+          "message": "SaaS"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3Byb2R1Y3Q.option.dGF4X2NhdGVnb3J5.allowed-value.c3RyaW5nOnNvZnR3YXJlLXByb2dyYW1taW5nLXNlcnZpY2Vz.display_name": {
+          "source": "software-programming-services",
+          "message": "軟體程式設計服務"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3Byb2R1Y3Q.option.dGF4X2NhdGVnb3J5.allowed-value.c3RyaW5nOnRyYWluaW5nLXNlcnZpY2Vz.display_name": {
+          "source": "training-services",
+          "message": "培訓服務"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3Byb2R1Y3Q.option.dGF4X2NhdGVnb3J5.allowed-value.c3RyaW5nOndlYnNpdGUtaG9zdGluZw.display_name": {
+          "source": "website-hosting",
+          "message": "網站託管"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3Byb2R1Y3Q.option.dGF4X2NhdGVnb3J5.desc": {
+          "source": "Tax category for this product. Used for charging the correct rate of tax. Selected tax category must be enabled on your Paddle account.",
+          "message": "此產品的稅務類別。用於收取正確的稅率。所選的稅務類別必須已在您的 Paddle 帳戶中啟用。"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3Byb2R1Y3Q.option.dGF4X2NhdGVnb3J5.display_name": {
+          "source": "Tax Category",
+          "message": "稅務類別"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3Byb2R1Y3Q.option.dGF4X2NhdGVnb3J5.short_desc": {
+          "source": "How Paddle charges tax; cannot be changed later",
+          "message": "Paddle 收取稅費的方式；建立後無法變更"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3Byb2R1Y3Q.option.dHlwZQ.allowed-value.c3RyaW5nOmN1c3RvbQ.display_name": {
+          "source": "custom",
+          "message": "自訂"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3Byb2R1Y3Q.option.dHlwZQ.allowed-value.c3RyaW5nOnN0YW5kYXJk.display_name": {
+          "source": "standard",
+          "message": "標準"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3Byb2R1Y3Q.option.dHlwZQ.desc": {
+          "source": "Type of item. Standard items are considered part of your catalog and are shown in the Paddle dashboard. If omitted, defaults to `standard`.",
+          "message": "項目類型。標準項目會被視為目錄的一部分，並顯示於 Paddle 儀表板中。若省略，預設為 `standard`。"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3Byb2R1Y3Q.option.dHlwZQ.display_name": {
+          "source": "Type",
+          "message": "類型"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3Byb2R1Y3Q.option.dHlwZQ.short_desc": {
+          "source": "Type of item",
+          "message": "項目類型"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3Byb2R1Y3Q.short_desc": {
+          "source": "Create a catalog product",
+          "message": "建立目錄產品"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3JlcG9ydA.desc": {
+          "source": "Requests a report. Paddle generates it in the background, so this returns a report in the `pending` state rather than any data.\n\nThe body selects the report type and its filters, and the fields a report accepts depend on the type: `transactions`, `adjustments`, `products_prices`, `discounts`, `balance`, `payout_reconciliation` or `checkouts`. Because the shape differs per type, the body is supplied whole rather than as separate options.\n\n**With no `filters`, a report covers only the last 30 days of updates.** Pass an `updated_at` filter for any other window.\n\nPoll **Get Report** until `status` is `ready`, or subscribe to the `report.updated` event, then call **Get Report File** for the download URL.",
+          "message": "請求報表。Paddle 會在背景產生報表，因此這會傳回處於 `pending` 狀態的報表，而非任何資料。\n\n請求主體 (body) 用於選擇報表類型及其篩選條件，而報表接受的欄位取決於類型：`transactions`、`adjustments`、`products_prices`、`discounts`、`balance`、`payout_reconciliation` 或 `checkouts`。由於每種類型的結構不同，主體是整體提供的，而不是作為獨立選項。\n\n**若未提供 `filters`，報表僅涵蓋過去 30 天的更新。**若需其他時間範圍，請傳遞 `updated_at` 篩選條件。\n\n輪詢 **Get Report** 直到 `status` 為 `ready`，或訂閱 `report.updated` 事件，然後呼叫 **Get Report File** 以取得下載 URL。"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3JlcG9ydA.display_name": {
+          "source": "Create Report",
+          "message": "建立報表"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3JlcG9ydA.option.Ym9keQ.desc": {
+          "source": "REST request body argument: Represents a report entity.",
+          "message": "REST 請求主體引數：代表報表實體。"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3JlcG9ydA.option.Ym9keQ.display_name": {
+          "source": "Report",
+          "message": "報表"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3JlcG9ydA.option.Ym9keQ.short_desc": {
+          "source": "The report type and its filters",
+          "message": "報表類型及其篩選條件"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3JlcG9ydA.short_desc": {
+          "source": "Request a report; it is generated asynchronously",
+          "message": "請求報表；採非同步方式產生"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.desc": {
+          "source": "Creates a transaction: the record of what a customer is being charged for.\n\n`items` is required - each entry names a `price_id` and a `quantity`, or carries a one-off price inline. `status` decides what happens next: leave it unset for a `draft` that can still be edited, or set it to `billed` to issue it to the customer.\n\n**A transaction with no `customer_id` is a quote nobody can pay**; set it, along with `address_id` where tax depends on location, for anything the customer is meant to settle.\n\nSet `include` to `totals` to get the calculated amounts back in the same response, which is the cheapest way to see what a transaction actually comes to.",
+          "message": "建立交易：向客戶收費的項目記錄。\n\n`items` 為必填欄位——每個項目指定一個 `price_id` 和 `quantity`，或內嵌單次價格。`status` 決定後續處理方式：保留未設定以建立仍可編輯的 `draft`，或將其設定為 `billed` 以開立給客戶。\n\n**沒有 `customer_id` 的交易是無法付款的報價**；對於需要客戶結清的任何交易，請設定此項，並在稅費取決於位置時同時設定 `address_id`。\n\n將 `include` 設定為 `totals` 可在同一個回應中取回計算後的金額，這是查看交易實際總額最省資源的方式。"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.display_name": {
+          "source": "Create Transaction",
+          "message": "建立交易"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.Y29sbGVjdGlvbl9tb2Rl.allowed-value.c3RyaW5nOm1hbnVhbA.display_name": {
+          "source": "manual",
+          "message": "手動"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.Y29sbGVjdGlvbl9tb2Rl.allowed-value.c3RyaW5nOmF1dG9tYXRpYw.display_name": {
+          "source": "automatic",
+          "message": "自動"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.Y29sbGVjdGlvbl9tb2Rl.desc": {
+          "source": "How payment is collected for this transaction. `automatic` for checkout, `manual` for invoices. If omitted, defaults to `automatic`.",
+          "message": "此交易的收款方式。結帳使用 `automatic`，發票使用 `manual`。若省略，預設為 `automatic`。"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.Y29sbGVjdGlvbl9tb2Rl.display_name": {
+          "source": "Collection Mode",
+          "message": "收款模式"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.Y29sbGVjdGlvbl9tb2Rl.short_desc": {
+          "source": "How payment is collected for this transaction",
+          "message": "此交易的收款方式"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.Y2hlY2tvdXQ.desc": {
+          "source": "Paddle Checkout details for this transaction. You may pass a URL when creating or updating an automatically-collected transaction, or when creating or updating a manually-collected transaction where `billing_details.enable_checkout` is `true`.",
+          "message": "此交易的 Paddle Checkout 詳細資訊。在建立或更新自動收款交易時，或在 `billing_details.enable_checkout` 為 `true` 的情況下建立或更新手動收款交易時，您可以傳遞 URL。"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.Y2hlY2tvdXQ.display_name": {
+          "source": "Checkout",
+          "message": "結帳"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.Y2hlY2tvdXQ.short_desc": {
+          "source": "Paddle Checkout details for this transaction",
+          "message": "此交易的 Paddle Checkout 詳細資訊"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.Y3JlYXRlZF9hdA.desc": {
+          "source": "RFC 3339 datetime string of when this entity was created. Set automatically by Paddle.",
+          "message": "此實體建立時間的 RFC 3339 日期時間字串。由 Paddle 自動設定。"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.Y3JlYXRlZF9hdA.display_name": {
+          "source": "Created At",
+          "message": "建立時間"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.Y3JlYXRlZF9hdA.short_desc": {
+          "source": "RFC 3339 datetime string of when this entity was created",
+          "message": "此實體建立時間的 RFC 3339 日期時間字串"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.Y3VycmVuY3lfY29kZQ.desc": {
+          "source": "Supported three-letter ISO 4217 currency code. Must be `USD`, `EUR`, or `GBP` if `collection_mode` is `manual`.",
+          "message": "支援的三位字母 ISO 4217 幣別代碼。若 `collection_mode` 為 `manual`，則必須是 `USD`、`EUR` 或 `GBP`。"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.Y3VycmVuY3lfY29kZQ.display_name": {
+          "source": "Currency Code",
+          "message": "貨幣代碼"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.Y3VycmVuY3lfY29kZQ.short_desc": {
+          "source": "Supported three-letter ISO 4217 currency code",
+          "message": "支援的三位字母 ISO 4217 幣別代碼"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.Y3VzdG9tX2RhdGE.desc": {
+          "source": "Your own structured key-value data.",
+          "message": "您自訂的結構化鍵值資料。"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.Y3VzdG9tX2RhdGE.display_name": {
+          "source": "Custom Data",
+          "message": "自訂資料"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.Y3VzdG9tX2RhdGE.short_desc": {
+          "source": "Your own structured key-value data",
+          "message": "您自訂的結構化鍵值資料"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.Y3VzdG9tZXJfaWQ.desc": {
+          "source": "Paddle ID of the customer that this transaction is for, prefixed with `ctm_`. If omitted, transaction status is `draft`.",
+          "message": "此交易之客戶的 Paddle ID，前綴為 `ctm_`。若省略，交易狀態為 `draft`。"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.Y3VzdG9tZXJfaWQ.display_name": {
+          "source": "Customer",
+          "message": "客戶"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.Y3VzdG9tZXJfaWQ.short_desc": {
+          "source": "The customer being billed",
+          "message": "要計費的客戶"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.YWRkcmVzc19pZA.desc": {
+          "source": "Paddle ID of the address that this transaction is for, prefixed with `add_`. Requires `customer_id`. If omitted, transaction status is `draft`.",
+          "message": "此交易所屬地址的 Paddle ID，前綴為 `add_`。需要 `customer_id`。若省略，交易狀態為 `draft`。"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.YWRkcmVzc19pZA.display_name": {
+          "source": "Address Id",
+          "message": "地址 ID"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.YWRkcmVzc19pZA.short_desc": {
+          "source": "Paddle ID of the address that this transaction is for, prefixed with 'add_'. Requires 'customer_id'. If omitted, transaction status is 'draft'",
+          "message": "此交易所屬地址的 Paddle ID，前綴為 'add_'。需要 'customer_id'。若省略，交易狀態為 'draft'"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.YmlsbGVkX2F0.desc": {
+          "source": "RFC 3339 datetime string of when this transaction was marked as `billed`. `null` for transactions that aren't `billed` or `completed`. Set automatically by Paddle.",
+          "message": "此交易標記為 `billed` 時間的 RFC 3339 日期時間字串。非 `billed` 或 `completed` 的交易為 `null`。由 Paddle 自動設定。"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.YmlsbGVkX2F0.display_name": {
+          "source": "Billed At",
+          "message": "計費時間"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.YmlsbGVkX2F0.short_desc": {
+          "source": "RFC 3339 datetime string of when this transaction was marked as 'billed'. 'null' for transactions that aren't 'billed' or 'completed'. Set automatically by Paddle",
+          "message": "此交易標記為「billed」時的 RFC 3339 日期時間字串。對於非「billed」或「completed」的交易為「null」。由 Paddle 自動設定"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.YmlsbGluZ19kZXRhaWxz.desc": {
+          "source": "Details for invoicing. Required if `collection_mode` is `manual`.",
+          "message": "開立發票的詳細資料。當 `collection_mode` 為 `manual` 時為必填。"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.YmlsbGluZ19kZXRhaWxz.display_name": {
+          "source": "Billing Details",
+          "message": "帳單詳細資料"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.YmlsbGluZ19kZXRhaWxz.short_desc": {
+          "source": "Details for invoicing",
+          "message": "開立發票的詳細資料"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.YmlsbGluZ19wZXJpb2Q.desc": {
+          "source": "Time period that this transaction is for. Set automatically by Paddle for subscription renewals to describe the period that charges are for.",
+          "message": "此交易所屬的時間週期。由 Paddle 在訂閱續訂時自動設定，用以說明收費所屬的期間。"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.YmlsbGluZ19wZXJpb2Q.display_name": {
+          "source": "Billing Period",
+          "message": "計費週期"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.YmlsbGluZ19wZXJpb2Q.short_desc": {
+          "source": "Time period that this transaction is for",
+          "message": "此交易所屬的時間週期"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.YnVzaW5lc3NfaWQ.desc": {
+          "source": "Paddle ID of the business that this transaction is for, prefixed with `biz_`. Requires `customer_id`. ",
+          "message": "此交易所屬企業的 Paddle ID，以 `biz_` 為前綴。需要 `customer_id`。"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.YnVzaW5lc3NfaWQ.display_name": {
+          "source": "Business Id",
+          "message": "企業 ID"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.YnVzaW5lc3NfaWQ.short_desc": {
+          "source": "Paddle ID of the business that this transaction is for, prefixed with 'biz_'. Requires 'customer_id'",
+          "message": "此交易所屬企業的 Paddle ID，以「biz_」為前綴。需要「customer_id」"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.ZGV0YWlscw.desc": {
+          "source": "Calculated totals for a transaction, including proration, discounts, tax, and currency conversion. Considered the source of truth for totals on a transaction.",
+          "message": "交易的計算總額，包括比例分配、折扣、稅額和貨幣轉換。視為交易總額的真實來源。"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.ZGV0YWlscw.display_name": {
+          "source": "Details",
+          "message": "詳細資料"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.ZGV0YWlscw.short_desc": {
+          "source": "Calculated totals for a transaction, including proration, discounts, tax, and currency conversion",
+          "message": "交易的計算總額，包括比例分配、折扣、稅額和貨幣轉換"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.ZGlzY291bnQ.desc": {
+          "source": "Apply a non-catalog discount to a transaction. Send one of `discount_id` or `discount`.",
+          "message": "將非目錄折扣套用至交易。請傳送 `discount_id` 或 `discount` 其中之一。"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.ZGlzY291bnQ.display_name": {
+          "source": "Discount",
+          "message": "折扣"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.ZGlzY291bnQ.short_desc": {
+          "source": "Apply a non-catalog discount to a transaction",
+          "message": "將非目錄折扣套用至交易"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.ZGlzY291bnRfaWQ.desc": {
+          "source": "Paddle ID of the discount to apply to this transaction, prefixed with `dsc_`.",
+          "message": "要套用至此交易的折扣 Paddle ID，以 `dsc_` 為前綴。"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.ZGlzY291bnRfaWQ.display_name": {
+          "source": "Discount Id",
+          "message": "折扣 ID"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.ZGlzY291bnRfaWQ.short_desc": {
+          "source": "Paddle ID of the discount to apply to this transaction, prefixed with 'dsc_'",
+          "message": "要套用至此交易的折扣 Paddle ID，以「dsc_」為前綴"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.aW52b2ljZV9pZA.desc": {
+          "source": "Paddle ID of the invoice that this transaction is related to, prefixed with `inv_`. Used for compatibility with the Paddle Invoice API, which is now deprecated. This field is scheduled to be removed in the next version of the Paddle API.",
+          "message": "與此交易相關聯的發票 Paddle ID，以 `inv_` 為前綴。用於與現已淘汰的 Paddle Invoice API 相容。此欄位預計在下一版 Paddle API 中移除。"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.aW52b2ljZV9pZA.display_name": {
+          "source": "Invoice Id",
+          "message": "發票 ID"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.aW52b2ljZV9pZA.short_desc": {
+          "source": "Paddle ID of the invoice that this transaction is related to, prefixed with 'inv_'",
+          "message": "與此交易相關聯的發票 Paddle ID，以「inv_」為前綴"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.aW52b2ljZV9udW1iZXI.desc": {
+          "source": "Invoice number for this transaction. Automatically generated by Paddle when you mark a transaction as `billed` where `collection_mode` is `manual`.",
+          "message": "此交易的發票編號。當您在 `collection_mode` 為 `manual` 的情況下將交易標記為 `billed` 時，由 Paddle 自動產生。"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.aW52b2ljZV9udW1iZXI.display_name": {
+          "source": "Invoice Number",
+          "message": "發票號碼"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.aW52b2ljZV9udW1iZXI.short_desc": {
+          "source": "Invoice number for this transaction",
+          "message": "此交易的發票編號"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.aW5jbHVkZQ.desc": {
+          "source": "Include related entities in the response. Use a comma-separated list to specify multiple entities.",
+          "message": "在回應中包含相關實體。使用逗號分隔清單指定多個實體。"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.aW5jbHVkZQ.display_name": {
+          "source": "Include",
+          "message": "包含"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.aW5jbHVkZQ.short_desc": {
+          "source": "Include related entities, ex: \"totals\", in the response",
+          "message": "在回應中包含相關實體，例如：「totals」"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.aWQ.desc": {
+          "source": "Unique Paddle ID for this transaction entity, prefixed with `txn_`.",
+          "message": "此交易實體的專屬 Paddle ID，以 `txn_` 為前綴。"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.aWQ.display_name": {
+          "source": "Id",
+          "message": "ID"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.aWQ.short_desc": {
+          "source": "Unique Paddle ID for this transaction entity, prefixed with 'txn_'",
+          "message": "此交易實體的專屬 Paddle ID，以「txn_」為前綴"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.aXRlbXM.desc": {
+          "source": "List of items to charge for. You can charge for items that you've added to your catalog by passing the Paddle ID of an existing price entity, or you can charge for non-catalog items by passing a price object.\n\nNon-catalog items can be for existing products, or you can pass a product object as part of your price to charge for a non-catalog product.",
+          "message": "要收費的品項清單。您可以傳遞現有價格實體的 Paddle ID 來為目錄中的品項收費，也可以傳遞價格物件來為非目錄品項收費。\n\n非目錄品項可以屬於現有產品，或者您可以在價格中傳遞產品物件以針對非目錄產品收費。"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.aXRlbXM.display_name": {
+          "source": "Items",
+          "message": "項目"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.aXRlbXM.short_desc": {
+          "source": "What is being billed: a price and a quantity per line",
+          "message": "計費項目：每行的價格與數量"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.b3JpZ2lu.allowed-value.c3RyaW5nOmFwaQ.display_name": {
+          "source": "api",
+          "message": "api"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.b3JpZ2lu.allowed-value.c3RyaW5nOnN1YnNjcmlwdGlvbl91cGRhdGU.display_name": {
+          "source": "subscription_update",
+          "message": "subscription_update"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.b3JpZ2lu.allowed-value.c3RyaW5nOnN1YnNjcmlwdGlvbl9jaGFyZ2U.display_name": {
+          "source": "subscription_charge",
+          "message": "subscription_charge"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.b3JpZ2lu.allowed-value.c3RyaW5nOnN1YnNjcmlwdGlvbl9wYXltZW50X21ldGhvZF9jaGFuZ2U.display_name": {
+          "source": "subscription_payment_method_change",
+          "message": "subscription_payment_method_change"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.b3JpZ2lu.allowed-value.c3RyaW5nOnN1YnNjcmlwdGlvbl9yZWN1cnJpbmc.display_name": {
+          "source": "subscription_recurring",
+          "message": "subscription_recurring"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.b3JpZ2lu.allowed-value.c3RyaW5nOndlYg.display_name": {
+          "source": "web",
+          "message": "web"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.b3JpZ2lu.desc": {
+          "source": "How the transaction came about - `api` for one created through the API, `web` for a Paddle.js checkout, or one of the `subscription_…` values for one Paddle raised itself for a renewal, charge or update.\n\nLeave this unset when creating a transaction: Paddle sets it.",
+          "message": "交易產生的方式 —— 透過 API 建立為 `api`，透過 Paddle.js 結帳為 `web`，或者為續訂、收費或更新由 Paddle 自行發起的 `subscription_…` 值之一。\n\n建立交易時請保持未設定：Paddle 會自行設定。"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.b3JpZ2lu.display_name": {
+          "source": "Origin",
+          "message": "來源"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.b3JpZ2lu.short_desc": {
+          "source": "How the transaction came about",
+          "message": "交易產生的方式"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.c3RhdHVz.allowed-value.c3RyaW5nOmJpbGxlZA.display_name": {
+          "source": "billed",
+          "message": "billed"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.c3RhdHVz.allowed-value.c3RyaW5nOmNhbmNlbGVk.display_name": {
+          "source": "canceled",
+          "message": "canceled"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.c3RhdHVz.allowed-value.c3RyaW5nOmNvbXBsZXRlZA.display_name": {
+          "source": "completed",
+          "message": "已完成"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.c3RhdHVz.allowed-value.c3RyaW5nOmRyYWZ0.display_name": {
+          "source": "draft",
+          "message": "草稿"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.c3RhdHVz.allowed-value.c3RyaW5nOnBhaWQ.display_name": {
+          "source": "paid",
+          "message": "paid"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.c3RhdHVz.allowed-value.c3RyaW5nOnBhc3RfZHVl.display_name": {
+          "source": "past_due",
+          "message": "past_due"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.c3RhdHVz.allowed-value.c3RyaW5nOnJlYWR5.display_name": {
+          "source": "ready",
+          "message": "ready"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.c3RhdHVz.desc": {
+          "source": "Status of this transaction. You may set a transaction to `billed` when creating,\nor omit to let Paddle set the status. Transactions are created as `ready` if they have\nan `address_id`, `customer_id`, and `items`, otherwise they are created as `draft`.\n\nMarking as `billed` when creating is typically used when working with manually-collected\ntransactions as part of an invoicing workflow. Billed transactions cannot be updated, only canceled.",
+          "message": "此交易的狀態。您可以在建立時將交易設定為 `billed`，\n或略過讓 Paddle 設定狀態。如果交易包含\n`address_id`、`customer_id` 和 `items`，則會建立為 `ready`，否則會建立為 `draft`。\n\n建立時標記為 `billed` 通常用於作為發票開立工作流程一部分的手動收款\n交易。已計費的交易無法更新，只能取消。"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.c3RhdHVz.display_name": {
+          "source": "Status",
+          "message": "狀態"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.c3RhdHVz.short_desc": {
+          "source": "Leave unset for a draft; \"billed\" issues it to the customer",
+          "message": "草稿請保持未設定；「billed」會向客戶開立"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.c3Vic2NyaXB0aW9uX2lk.desc": {
+          "source": "Paddle ID of the subscription that this transaction is for, prefixed with `sub_`.",
+          "message": "此交易所屬訂閱的 Paddle ID，以 `sub_` 為前綴。"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.c3Vic2NyaXB0aW9uX2lk.display_name": {
+          "source": "Subscription",
+          "message": "訂閱"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.c3Vic2NyaXB0aW9uX2lk.short_desc": {
+          "source": "Paddle ID of the subscription that this transaction is for, prefixed with 'sub_'",
+          "message": "此交易所屬訂閱的 Paddle ID，以「sub_」為前綴"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.cGF5bWVudHM.desc": {
+          "source": "List of payment attempts for this transaction, including successful payments. Sorted by `created_at` in descending order, so most recent attempts are returned first.",
+          "message": "此交易的付款嘗試清單，包含成功付款。依 `created_at` 降冪排序，因此最新的嘗試會排在最前面。"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.cGF5bWVudHM.display_name": {
+          "source": "Payments",
+          "message": "付款"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.cGF5bWVudHM.short_desc": {
+          "source": "List of payment attempts for this transaction, including successful payments",
+          "message": "此交易的付款嘗試清單，包含成功付款"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.dXBkYXRlZF9hdA.desc": {
+          "source": "RFC 3339 datetime string of when this entity was updated. Set automatically by Paddle.",
+          "message": "此實體更新時的 RFC 3339 日期時間字串。由 Paddle 自動設定。"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.dXBkYXRlZF9hdA.display_name": {
+          "source": "Updated At",
+          "message": "更新時間"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.dXBkYXRlZF9hdA.short_desc": {
+          "source": "RFC 3339 datetime string of when this entity was updated",
+          "message": "此實體更新時的 RFC 3339 日期時間字串"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.short_desc": {
+          "source": "Create a transaction, optionally billing it",
+          "message": "建立交易，可選擇同時計費"
+        },
+        "app.UGFkZGxl.action.Y3VzdG9tZXItY3JlYXRlZA.desc": {
+          "source": "Fires when a customer is created, however it happened -- through the API, a checkout, or the Paddle dashboard.\n\nThis replaces polling the customer listing: a poll ordered by creation time cannot see a customer that was created and removed between two runs, and costs a request per interval whether or not anything happened.",
+          "message": "在建立客戶時觸發，無論是透過 API、結帳或 Paddle 儀表板建立。\n\n這取代了輪詢客戶清單：依建立時間排序的輪詢無法偵測在兩次執行之間建立並刪除的客戶，且無論是否有事件發生都會在每個間隔消耗一次請求。"
+        },
+        "app.UGFkZGxl.action.Y3VzdG9tZXItY3JlYXRlZA.display_name": {
+          "source": "Customer Created",
+          "message": "客戶已建立"
+        },
+        "app.UGFkZGxl.action.Y3VzdG9tZXItY3JlYXRlZA.short_desc": {
+          "source": "React to a customer being created",
+          "message": "對建立客戶做出反應"
+        },
+        "app.UGFkZGxl.action.Y3VzdG9tZXItdXBkYXRlZA.desc": {
+          "source": "Fires when a customer changes, including when one is archived -- `status` becomes `archived` rather than the customer being deleted.\n\nPaddle sends the whole customer, not a diff, so compare against what you hold if you need to know which field moved.",
+          "message": "在客戶變更時觸發，包括封存客戶 —— `status` 會變為 `archived`，而非刪除客戶。\n\nPaddle 會傳送完整的客戶資料而非差異，因此如果需要知道哪個欄位發生變更，請與您持有的資料進行比較。"
+        },
+        "app.UGFkZGxl.action.Y3VzdG9tZXItdXBkYXRlZA.display_name": {
+          "source": "Customer Updated",
+          "message": "客戶已更新"
+        },
+        "app.UGFkZGxl.action.Y3VzdG9tZXItdXBkYXRlZA.short_desc": {
+          "source": "React to a customer's details changing",
+          "message": "對客戶詳細資料變更做出反應"
+        },
+        "app.UGFkZGxl.action.YXJjaGl2ZV9wcm9kdWN0.desc": {
+          "source": "Archives a product, so it can no longer be billed and stops appearing in listings.\n\nExisting subscriptions and transactions that reference the product are unaffected - archiving withdraws it from sale, it does not delete it. Paddle has no delete operation for a product.\n\n**The product's prices are not archived with it.** Archive each price separately if they should also be withdrawn.\n\nThis is **Update Product** with `status` fixed to `archived`; use that action to change anything else, or to un-archive by setting `status` back to `active`.",
+          "message": "封存產品，使其無法再計費並停止出現在清單中。\n\n引用該產品的現有訂閱和交易不受影響 —— 封存會將其下架停售，但不會將其刪除。Paddle 沒有針對產品的刪除操作。\n\n**產品的價格不會隨之一併封存。** 如果價格也應停用，請分別封存每個價格。\n\n此動作相當於將 `status` 固定為 `archived` 的 **Update Product**；若要變更任何其他內容，或將 `status` 設回 `active` 以解除封存，請使用該動作。"
+        },
+        "app.UGFkZGxl.action.YXJjaGl2ZV9wcm9kdWN0.display_name": {
+          "source": "Archive Product",
+          "message": "封存產品"
+        },
+        "app.UGFkZGxl.action.YXJjaGl2ZV9wcm9kdWN0.option.c3RhdHVz.allowed-value.c3RyaW5nOmFyY2hpdmVk.display_name": {
+          "source": "archived",
+          "message": "已封存"
+        },
+        "app.UGFkZGxl.action.YXJjaGl2ZV9wcm9kdWN0.option.c3RhdHVz.desc": {
+          "source": "Fixed to `archived`: this action exists to retire a product. Use **Update Product** to set any other status.",
+          "message": "固定為 `archived`：此動作旨在淘汰產品。請使用 **Update Product** 來設定任何其他狀態。"
+        },
+        "app.UGFkZGxl.action.YXJjaGl2ZV9wcm9kdWN0.option.c3RhdHVz.display_name": {
+          "source": "Status",
+          "message": "狀態"
+        },
+        "app.UGFkZGxl.action.YXJjaGl2ZV9wcm9kdWN0.option.c3RhdHVz.short_desc": {
+          "source": "Always \"archived\" for this action",
+          "message": "此動作一律為「archived」"
+        },
+        "app.UGFkZGxl.action.YXJjaGl2ZV9wcm9kdWN0.option.cHJvZHVjdF9pZA.desc": {
+          "source": "Paddle ID of the product entity to work with.",
+          "message": "要處理的產品實體的 Paddle ID。"
+        },
+        "app.UGFkZGxl.action.YXJjaGl2ZV9wcm9kdWN0.option.cHJvZHVjdF9pZA.display_name": {
+          "source": "Product",
+          "message": "產品"
+        },
+        "app.UGFkZGxl.action.YXJjaGl2ZV9wcm9kdWN0.option.cHJvZHVjdF9pZA.short_desc": {
+          "source": "Paddle ID of the product entity to work with",
+          "message": "要處理的產品實體的 Paddle ID"
+        },
+        "app.UGFkZGxl.action.YXJjaGl2ZV9wcm9kdWN0.short_desc": {
+          "source": "Retire a catalog product",
+          "message": "淘汰目錄產品"
+        },
+        "app.UGFkZGxl.action.Z2V0X2N1c3RvbWVy.desc": {
+          "source": "Retrieves a customer by Paddle ID, including any `custom_data` stored against it.\n\nThis returns a customer whatever its status, so it is how an archived customer is read back - **List Customers** omits archived customers by default.",
+          "message": "依 Paddle ID 擷取客戶，包括針對該客戶儲存的任何 `custom_data`。\n\n無論狀態為何，此操作都會傳回客戶，因此可用於讀取封存的客戶——**List Customers** 預設會忽略封存的客戶。"
+        },
+        "app.UGFkZGxl.action.Z2V0X2N1c3RvbWVy.display_name": {
+          "source": "Get Customer",
+          "message": "取得客戶"
+        },
+        "app.UGFkZGxl.action.Z2V0X2N1c3RvbWVy.option.Y3VzdG9tZXJfaWQ.desc": {
+          "source": "Paddle ID of the customer entity to work with.: Unique Paddle ID for this customer entity, prefixed with `ctm_`.",
+          "message": "要操作的客戶實體的 Paddle ID。：此客戶實體的唯一 Paddle ID，前綴為 `ctm_`。"
+        },
+        "app.UGFkZGxl.action.Z2V0X2N1c3RvbWVy.option.Y3VzdG9tZXJfaWQ.display_name": {
+          "source": "Customer",
+          "message": "客戶"
+        },
+        "app.UGFkZGxl.action.Z2V0X2N1c3RvbWVy.option.Y3VzdG9tZXJfaWQ.short_desc": {
+          "source": "Paddle ID of the customer entity to work with",
+          "message": "要操作的客戶實體的 Paddle ID"
+        },
+        "app.UGFkZGxl.action.Z2V0X2N1c3RvbWVy.short_desc": {
+          "source": "Retrieve one customer",
+          "message": "擷取單一客戶"
+        },
+        "app.UGFkZGxl.action.Z2V0X2N1c3RvbWVyX2F1dGhfdG9rZW4.desc": {
+          "source": "Generates an authentication token for a customer, so that a checkout opened with Paddle.js knows who the buyer is without them signing in again.\n\n**The token is short-lived and grants access to that customer's data**, so generate it per checkout, server-side, and pass it straight to the browser rather than storing it.\n\nThis needs the `customer_auth_token.write` permission, which is separate from `customer.write`.",
+          "message": "為客戶產生驗證權杖，以便透過 Paddle.js 開啟的結帳流程能夠知道買家身分而無需重新登入。\n\n**此權杖為短期有效並授予存取該客戶資料的權限**，因此請在伺服器端按每次結帳產生，並直接傳遞給瀏覽器而非儲存。\n\n這需要 `customer_auth_token.write` 權限，該權限與 `customer.write` 分開。"
+        },
+        "app.UGFkZGxl.action.Z2V0X2N1c3RvbWVyX2F1dGhfdG9rZW4.display_name": {
+          "source": "Get Customer Authentication Token",
+          "message": "取得客戶驗證權杖"
+        },
+        "app.UGFkZGxl.action.Z2V0X2N1c3RvbWVyX2F1dGhfdG9rZW4.option.Y3VzdG9tZXJfaWQ.desc": {
+          "source": "Paddle ID of the customer entity to work with.: Unique Paddle ID for this customer entity, prefixed with `ctm_`.",
+          "message": "要操作的客戶實體的 Paddle ID。：此客戶實體的唯一 Paddle ID，前綴為 `ctm_`。"
+        },
+        "app.UGFkZGxl.action.Z2V0X2N1c3RvbWVyX2F1dGhfdG9rZW4.option.Y3VzdG9tZXJfaWQ.display_name": {
+          "source": "Customer",
+          "message": "客戶"
+        },
+        "app.UGFkZGxl.action.Z2V0X2N1c3RvbWVyX2F1dGhfdG9rZW4.option.Y3VzdG9tZXJfaWQ.short_desc": {
+          "source": "Paddle ID of the customer entity to work with",
+          "message": "要操作的客戶實體的 Paddle ID"
+        },
+        "app.UGFkZGxl.action.Z2V0X2N1c3RvbWVyX2F1dGhfdG9rZW4.short_desc": {
+          "source": "Generate a short-lived token identifying a customer to Paddle.js",
+          "message": "產生向 Paddle.js 識別客戶的短期權杖"
+        },
+        "app.UGFkZGxl.action.Z2V0X3ByaWNl.desc": {
+          "source": "Retrieves a price by Paddle ID, whatever its status.\n\nSet `include` to `product` to get the owning product in the same response.",
+          "message": "依 Paddle ID 擷取價格，無論其狀態為何。\n\n將 `include` 設為 `product` 可在同一個回應中取得所屬產品。"
+        },
+        "app.UGFkZGxl.action.Z2V0X3ByaWNl.display_name": {
+          "source": "Get Price",
+          "message": "取得價格"
+        },
+        "app.UGFkZGxl.action.Z2V0X3ByaWNl.option.aW5jbHVkZQ.desc": {
+          "source": "Include related entities in the response.",
+          "message": "在回應中包含相關實體。"
+        },
+        "app.UGFkZGxl.action.Z2V0X3ByaWNl.option.aW5jbHVkZQ.display_name": {
+          "source": "Include",
+          "message": "包含"
+        },
+        "app.UGFkZGxl.action.Z2V0X3ByaWNl.option.aW5jbHVkZQ.short_desc": {
+          "source": "Include related entities in the response",
+          "message": "在回應中包含相關實體"
+        },
+        "app.UGFkZGxl.action.Z2V0X3ByaWNl.option.cHJpY2VfaWQ.desc": {
+          "source": "Paddle ID of the price entity to work with.",
+          "message": "要操作的價格實體的 Paddle ID。"
+        },
+        "app.UGFkZGxl.action.Z2V0X3ByaWNl.option.cHJpY2VfaWQ.display_name": {
+          "source": "Price",
+          "message": "價格"
+        },
+        "app.UGFkZGxl.action.Z2V0X3ByaWNl.option.cHJpY2VfaWQ.short_desc": {
+          "source": "Paddle ID of the price entity to work with",
+          "message": "要操作的價格實體的 Paddle ID"
+        },
+        "app.UGFkZGxl.action.Z2V0X3ByaWNl.short_desc": {
+          "source": "Retrieve one catalog price",
+          "message": "擷取單一目錄價格"
+        },
+        "app.UGFkZGxl.action.Z2V0X3Byb2R1Y3Q.desc": {
+          "source": "Retrieves a product by Paddle ID, whatever its status.\n\nSet `include` to `prices` to get the product's prices in the same response.",
+          "message": "依 Paddle ID 擷取產品，無論其狀態為何。\n\n將 `include` 設為 `prices` 可在同一個回應中取得產品的價格。"
+        },
+        "app.UGFkZGxl.action.Z2V0X3Byb2R1Y3Q.display_name": {
+          "source": "Get Product",
+          "message": "取得產品"
+        },
+        "app.UGFkZGxl.action.Z2V0X3Byb2R1Y3Q.option.aW5jbHVkZQ.desc": {
+          "source": "Include related entities in the response. Use a comma-separated list to specify multiple entities.",
+          "message": "在回應中包含相關實體。使用逗號分隔清單指定多個實體。"
+        },
+        "app.UGFkZGxl.action.Z2V0X3Byb2R1Y3Q.option.aW5jbHVkZQ.display_name": {
+          "source": "Include",
+          "message": "包含"
+        },
+        "app.UGFkZGxl.action.Z2V0X3Byb2R1Y3Q.option.aW5jbHVkZQ.short_desc": {
+          "source": "Include related entities in the response",
+          "message": "在回應中包含相關實體"
+        },
+        "app.UGFkZGxl.action.Z2V0X3Byb2R1Y3Q.option.cHJvZHVjdF9pZA.desc": {
+          "source": "Paddle ID of the product entity to work with.",
+          "message": "要處理的產品實體的 Paddle ID。"
+        },
+        "app.UGFkZGxl.action.Z2V0X3Byb2R1Y3Q.option.cHJvZHVjdF9pZA.display_name": {
+          "source": "Product",
+          "message": "產品"
+        },
+        "app.UGFkZGxl.action.Z2V0X3Byb2R1Y3Q.option.cHJvZHVjdF9pZA.short_desc": {
+          "source": "Paddle ID of the product entity to work with",
+          "message": "要處理的產品實體的 Paddle ID"
+        },
+        "app.UGFkZGxl.action.Z2V0X3Byb2R1Y3Q.short_desc": {
+          "source": "Retrieve one catalog product",
+          "message": "擷取單一目錄產品"
+        },
+        "app.UGFkZGxl.action.Z2V0X3JlcG9ydA.desc": {
+          "source": "Retrieves a report by Paddle ID.\n\n`status` is what matters: `pending` while Paddle is still generating it, `ready` when the file can be downloaded, `failed` if generation did not succeed, and `expired` once Paddle has removed it. `rows` is how many records it holds.\n\nThis is the action to poll after **Create Report**.",
+          "message": "依 Paddle ID 擷取報告。\n\n`status` 是關鍵：當 Paddle 仍在產生時為 `pending`，可下載檔案時為 `ready`，若產生失敗則為 `failed`，當 Paddle 移除它後則為 `expired`。`rows` 表示它包含的記錄筆數。\n\n這是在 **Create Report** 之後用來輪詢的操作。"
+        },
+        "app.UGFkZGxl.action.Z2V0X3JlcG9ydA.display_name": {
+          "source": "Get Report",
+          "message": "取得報告"
+        },
+        "app.UGFkZGxl.action.Z2V0X3JlcG9ydA.option.cmVwb3J0X2lk.desc": {
+          "source": "Paddle ID of the report entity.",
+          "message": "報告實體的 Paddle ID。"
+        },
+        "app.UGFkZGxl.action.Z2V0X3JlcG9ydA.option.cmVwb3J0X2lk.display_name": {
+          "source": "Report",
+          "message": "報表"
+        },
+        "app.UGFkZGxl.action.Z2V0X3JlcG9ydA.option.cmVwb3J0X2lk.short_desc": {
+          "source": "Paddle ID of the report entity",
+          "message": "報告實體的 Paddle ID"
+        },
+        "app.UGFkZGxl.action.Z2V0X3JlcG9ydA.short_desc": {
+          "source": "Retrieve one report and its status",
+          "message": "擷取單一報告及其狀態"
+        },
+        "app.UGFkZGxl.action.Z2V0X3JlcG9ydF9maWxl.desc": {
+          "source": "Returns a URL the report's CSV file can be downloaded from.\n\n**This is a URL, not the file**: fetch it separately. The URL is signed and short-lived - Paddle expires it within the hour - so generate it at the point of download rather than storing it.\n\nThe report must be `ready`; asking for the file of a report that is still `pending` fails.",
+          "message": "傳回可用於下載報告 CSV 檔案的 URL。\n\n**這是一個 URL，不是檔案本身**：請單獨擷取它。該 URL 經過簽名且具有時效性——Paddle 會在 1 小時內將其過期——因此請在下載時產生，而非預先儲存。\n\n報告狀態必須為 `ready`；請求仍處於 `pending` 狀態的報告檔案將會失敗。"
+        },
+        "app.UGFkZGxl.action.Z2V0X3JlcG9ydF9maWxl.display_name": {
+          "source": "Get Report File",
+          "message": "取得報告檔案"
+        },
+        "app.UGFkZGxl.action.Z2V0X3JlcG9ydF9maWxl.option.cmVwb3J0X2lk.desc": {
+          "source": "Paddle ID of the report entity.",
+          "message": "報告實體的 Paddle ID。"
+        },
+        "app.UGFkZGxl.action.Z2V0X3JlcG9ydF9maWxl.option.cmVwb3J0X2lk.display_name": {
+          "source": "Report",
+          "message": "報表"
+        },
+        "app.UGFkZGxl.action.Z2V0X3JlcG9ydF9maWxl.option.cmVwb3J0X2lk.short_desc": {
+          "source": "Paddle ID of the report entity",
+          "message": "報告實體的 Paddle ID"
+        },
+        "app.UGFkZGxl.action.Z2V0X3JlcG9ydF9maWxl.short_desc": {
+          "source": "Get a download URL for a report's CSV file",
+          "message": "取得報告 CSV 檔案的下載 URL"
+        },
+        "app.UGFkZGxl.action.Z2V0X3N1YnNjcmlwdGlvbg.desc": {
+          "source": "Retrieves a subscription by Paddle ID.\n\n`items` is what the customer is billed for, `current_billing_period` is the window they have paid for, and `scheduled_change` is a pause or cancellation already booked for a future date - a subscription can be `active` and still be due to end.\n\nSet `include` to `next_transaction` for what the next renewal will cost, or `recurring_transaction_details` for the recurring amount.",
+          "message": "依 Paddle ID 擷取訂閱。\n\n`items` 是向客戶收費的項目，`current_billing_period` 是客戶已付費的週期期間，`scheduled_change` 是已排定在未來特定日期的暫停或取消——訂閱可能為 `active` 且仍即將結束。\n\n將 `include` 設為 `next_transaction` 可取得下次續約費用，或設為 `recurring_transaction_details` 取得經常性金額。"
+        },
+        "app.UGFkZGxl.action.Z2V0X3N1YnNjcmlwdGlvbg.display_name": {
+          "source": "Get Subscription",
+          "message": "取得訂閱"
+        },
+        "app.UGFkZGxl.action.Z2V0X3N1YnNjcmlwdGlvbg.option.aW5jbHVkZQ.desc": {
+          "source": "Include related entities in the response. Use a comma-separated list to specify multiple entities.",
+          "message": "在回應中包含相關實體。使用逗號分隔清單指定多個實體。"
+        },
+        "app.UGFkZGxl.action.Z2V0X3N1YnNjcmlwdGlvbg.option.aW5jbHVkZQ.display_name": {
+          "source": "Include",
+          "message": "包含"
+        },
+        "app.UGFkZGxl.action.Z2V0X3N1YnNjcmlwdGlvbg.option.aW5jbHVkZQ.short_desc": {
+          "source": "Include related entities in the response",
+          "message": "在回應中包含相關實體"
+        },
+        "app.UGFkZGxl.action.Z2V0X3N1YnNjcmlwdGlvbg.option.c3Vic2NyaXB0aW9uX2lk.desc": {
+          "source": "Paddle ID of the subscription entity to work with.",
+          "message": "要操作的訂閱實體的 Paddle ID。"
+        },
+        "app.UGFkZGxl.action.Z2V0X3N1YnNjcmlwdGlvbg.option.c3Vic2NyaXB0aW9uX2lk.display_name": {
+          "source": "Subscription",
+          "message": "訂閱"
+        },
+        "app.UGFkZGxl.action.Z2V0X3N1YnNjcmlwdGlvbg.option.c3Vic2NyaXB0aW9uX2lk.short_desc": {
+          "source": "Paddle ID of the subscription entity to work with",
+          "message": "要操作的訂閱實體的 Paddle ID"
+        },
+        "app.UGFkZGxl.action.Z2V0X3N1YnNjcmlwdGlvbg.short_desc": {
+          "source": "Retrieve one subscription",
+          "message": "擷取單一訂閱"
+        },
+        "app.UGFkZGxl.action.Z2V0X3RyYW5zYWN0aW9u.desc": {
+          "source": "Retrieves a transaction by Paddle ID.\n\n`details.totals` breaks the amount down into subtotal, tax, discount and the balance still due; `payments` records each attempt to collect it, including failures. `status` is what says whether the money actually arrived.\n\nSet `include` to `customer` or `address` to resolve the related entities in the same response.",
+          "message": "依 Paddle ID 擷取交易。\n\n`details.totals` 將金額拆分為小計、稅額、折扣和仍需支付的餘額；`payments` 記錄每次請款嘗試（包含失敗嘗試）。`status` 則指示款項是否實際到帳。\n\n將 `include` 設為 `customer` 或 `address` 可在同一個回應中解析相關實體。"
+        },
+        "app.UGFkZGxl.action.Z2V0X3RyYW5zYWN0aW9u.display_name": {
+          "source": "Get Transaction",
+          "message": "取得交易"
+        },
+        "app.UGFkZGxl.action.Z2V0X3RyYW5zYWN0aW9u.option.aW5jbHVkZQ.desc": {
+          "source": "Include related entities in the response. Use a comma-separated list to specify multiple entities.",
+          "message": "在回應中包含相關實體。使用逗號分隔清單指定多個實體。"
+        },
+        "app.UGFkZGxl.action.Z2V0X3RyYW5zYWN0aW9u.option.aW5jbHVkZQ.display_name": {
+          "source": "Include",
+          "message": "包含"
+        },
+        "app.UGFkZGxl.action.Z2V0X3RyYW5zYWN0aW9u.option.aW5jbHVkZQ.short_desc": {
+          "source": "Include related entities in the response",
+          "message": "在回應中包含相關實體"
+        },
+        "app.UGFkZGxl.action.Z2V0X3RyYW5zYWN0aW9u.option.dHJhbnNhY3Rpb25faWQ.desc": {
+          "source": "Paddle ID of the transaction entity to work with.",
+          "message": "要操作的交易實體的 Paddle ID。"
+        },
+        "app.UGFkZGxl.action.Z2V0X3RyYW5zYWN0aW9u.option.dHJhbnNhY3Rpb25faWQ.display_name": {
+          "source": "Transaction",
+          "message": "交易"
+        },
+        "app.UGFkZGxl.action.Z2V0X3RyYW5zYWN0aW9u.option.dHJhbnNhY3Rpb25faWQ.short_desc": {
+          "source": "Paddle ID of the transaction entity to work with",
+          "message": "要操作的交易實體的 Paddle ID"
+        },
+        "app.UGFkZGxl.action.Z2V0X3RyYW5zYWN0aW9u.short_desc": {
+          "source": "Retrieve one transaction",
+          "message": "擷取單一交易"
+        },
+        "app.UGFkZGxl.action.bGlzdF90cmFuc2FjdGlvbnM.desc": {
+          "source": "Lists transactions - the records that calculate and capture revenue.\n\nFilter by `status` to separate what has been paid (`completed`, `paid`) from what is outstanding (`billed`, `past_due`) or still a draft (`draft`, `ready`). `created_at`, `updated_at` and `billed_at` take an operator suffix, as in `updated_at[GT]=2026-01-01T00:00:00Z`, which is how an incremental sync picks up only what changed.\n\n`per_page` defaults to 30 here rather than 50, because a transaction is a large object.",
+          "message": "列出交易——計算與收取營收的記錄。\n\n依 `status` 篩選以區分已付款項 (`completed`, `paid`)、未付款項 (`billed`, `past_due`) 或仍為草稿者 (`draft`, `ready`)。`created_at`、`updated_at` 和 `billed_at` 接受運算子後綴，例如 `updated_at[GT]=2026-01-01T00:00:00Z`，增量同步正是透過此方式僅擷取變更的內容。\n\n此處 `per_page` 預設為 30 而非 50，因為交易屬於大型物件。"
+        },
+        "app.UGFkZGxl.action.bGlzdF90cmFuc2FjdGlvbnM.display_name": {
+          "source": "List Transactions",
+          "message": "列出交易"
+        },
+        "app.UGFkZGxl.action.bGlzdF90cmFuc2FjdGlvbnM.option.Y29sbGVjdGlvbl9tb2Rl.allowed-value.c3RyaW5nOm1hbnVhbA.display_name": {
+          "source": "manual",
+          "message": "手動"
+        },
+        "app.UGFkZGxl.action.bGlzdF90cmFuc2FjdGlvbnM.option.Y29sbGVjdGlvbl9tb2Rl.allowed-value.c3RyaW5nOmF1dG9tYXRpYw.display_name": {
+          "source": "automatic",
+          "message": "自動"
+        },
+        "app.UGFkZGxl.action.bGlzdF90cmFuc2FjdGlvbnM.option.Y29sbGVjdGlvbl9tb2Rl.desc": {
+          "source": "Return entities that match the specified collection mode.: How payment is collected. `automatic` for checkout, `manual` for invoices.",
+          "message": "傳回符合指定收款模式的實體。：付款的收取方式。`automatic` 用於結帳，`manual` 用於發票。"
+        },
+        "app.UGFkZGxl.action.bGlzdF90cmFuc2FjdGlvbnM.option.Y29sbGVjdGlvbl9tb2Rl.display_name": {
+          "source": "Collection Mode",
+          "message": "收款模式"
+        },
+        "app.UGFkZGxl.action.bGlzdF90cmFuc2FjdGlvbnM.option.Y29sbGVjdGlvbl9tb2Rl.short_desc": {
+          "source": "Return entities that match the specified collection mode",
+          "message": "傳回符合指定收款模式的實體"
+        },
+        "app.UGFkZGxl.action.bGlzdF90cmFuc2FjdGlvbnM.option.Y3JlYXRlZF9hdA.desc": {
+          "source": "Return entities created at a specific time. Pass an RFC 3339 datetime string, or use `[LT]` (less than), `[LTE]` (less than or equal to), `[GT]` (greater than), or `[GTE]` (greater than or equal to) operators. For example, `created_at=2023-04-18T17:03:26` or `created_at[LT]=2023-04-18T17:03:26`.",
+          "message": "傳回在特定時間建立的實體。傳遞 RFC 3339 日期時間字串，或使用 `[LT]` (小於)、`[LTE]` (小於或等於)、`[GT]` (大於) 或 `[GTE]` (大於或等於) 運算子。例如 `created_at=2023-04-18T17:03:26` 或 `created_at[LT]=2023-04-18T17:03:26`。"
+        },
+        "app.UGFkZGxl.action.bGlzdF90cmFuc2FjdGlvbnM.option.Y3JlYXRlZF9hdA.display_name": {
+          "source": "Created At",
+          "message": "建立時間"
+        },
+        "app.UGFkZGxl.action.bGlzdF90cmFuc2FjdGlvbnM.option.Y3JlYXRlZF9hdA.short_desc": {
+          "source": "Filter on creation time; takes an operator suffix",
+          "message": "依建立時間篩選；接受運算子後綴"
+        },
+        "app.UGFkZGxl.action.bGlzdF90cmFuc2FjdGlvbnM.option.Y3VzdG9tZXJfaWQ.desc": {
+          "source": "Return entities related to the specified customer. Use a comma-separated list to specify multiple customer IDs.",
+          "message": "傳回與指定客戶相關的實體。使用逗號分隔清單以指定多個客戶 ID。"
+        },
+        "app.UGFkZGxl.action.bGlzdF90cmFuc2FjdGlvbnM.option.Y3VzdG9tZXJfaWQ.display_name": {
+          "source": "Customer",
+          "message": "客戶"
+        },
+        "app.UGFkZGxl.action.bGlzdF90cmFuc2FjdGlvbnM.option.Y3VzdG9tZXJfaWQ.short_desc": {
+          "source": "Return only transactions for these customers",
+          "message": "僅傳回這些客戶的交易"
+        },
+        "app.UGFkZGxl.action.bGlzdF90cmFuc2FjdGlvbnM.option.YWZ0ZXI.desc": {
+          "source": "The pagination cursor: return the records that come after this Paddle ID.\n\nTake it from the `after` query argument of the `meta.pagination.next` URL in the previous response. Paddle always returns that URL, even on the last page, so page on `meta.pagination.has_more` rather than on its presence.",
+          "message": "分頁游標：傳回此 Paddle ID 之後的記錄。\n\n請從前一個回應中的 `meta.pagination.next` URL 的 `after` 查詢引數取得。Paddle 始終會傳回該 URL（即使在最後一頁也是如此），因此請根據 `meta.pagination.has_more` 進行分頁，而非根據其是否存在。"
+        },
+        "app.UGFkZGxl.action.bGlzdF90cmFuc2FjdGlvbnM.option.YWZ0ZXI.display_name": {
+          "source": "After",
+          "message": "之後"
+        },
+        "app.UGFkZGxl.action.bGlzdF90cmFuc2FjdGlvbnM.option.YWZ0ZXI.short_desc": {
+          "source": "Return records after this Paddle ID",
+          "message": "傳回此 Paddle ID 之後的記錄"
+        },
+        "app.UGFkZGxl.action.bGlzdF90cmFuc2FjdGlvbnM.option.YmlsbGVkX2F0.desc": {
+          "source": "Return entities billed at a specific time. Pass an RFC 3339 datetime string, or use `[LT]` (less than), `[LTE]` (less than or equal to), `[GT]` (greater than), or `[GTE]` (greater than or equal to) operators. For example, `billed_at=2023-04-18T17:03:26` or `billed_at[LT]=2023-04-18T17:03:26`.",
+          "message": "傳回在特定時間計費的實體。傳遞 RFC 3339 日期時間字串，或使用 `[LT]` (小於)、`[LTE]` (小於或等於)、`[GT]` (大於) 或 `[GTE]` (大於或等於) 運算子。例如 `billed_at=2023-04-18T17:03:26` 或 `billed_at[LT]=2023-04-18T17:03:26`。"
+        },
+        "app.UGFkZGxl.action.bGlzdF90cmFuc2FjdGlvbnM.option.YmlsbGVkX2F0.display_name": {
+          "source": "Billed At",
+          "message": "計費時間"
+        },
+        "app.UGFkZGxl.action.bGlzdF90cmFuc2FjdGlvbnM.option.YmlsbGVkX2F0.short_desc": {
+          "source": "Filter on when the transaction was billed; takes an operator suffix",
+          "message": "依交易計費時間篩選；接受運算子後綴"
+        },
+        "app.UGFkZGxl.action.bGlzdF90cmFuc2FjdGlvbnM.option.aW52b2ljZV9udW1iZXI.desc": {
+          "source": "Return entities that match the invoice number. Use a comma-separated list to specify multiple invoice numbers.",
+          "message": "傳回符合發票號碼的實體。使用逗號分隔清單以指定多個發票號碼。"
+        },
+        "app.UGFkZGxl.action.bGlzdF90cmFuc2FjdGlvbnM.option.aW52b2ljZV9udW1iZXI.display_name": {
+          "source": "Invoice Number",
+          "message": "發票號碼"
+        },
+        "app.UGFkZGxl.action.bGlzdF90cmFuc2FjdGlvbnM.option.aW52b2ljZV9udW1iZXI.short_desc": {
+          "source": "Return entities that match the invoice number",
+          "message": "傳回符合發票號碼的實體"
+        },
+        "app.UGFkZGxl.action.bGlzdF90cmFuc2FjdGlvbnM.option.aW5jbHVkZQ.desc": {
+          "source": "Include related entities in the response. Use a comma-separated list to specify multiple entities.",
+          "message": "在回應中包含相關實體。使用逗號分隔清單指定多個實體。"
+        },
+        "app.UGFkZGxl.action.bGlzdF90cmFuc2FjdGlvbnM.option.aW5jbHVkZQ.display_name": {
+          "source": "Include",
+          "message": "包含"
+        },
+        "app.UGFkZGxl.action.bGlzdF90cmFuc2FjdGlvbnM.option.aW5jbHVkZQ.short_desc": {
+          "source": "Include related entities in the response",
+          "message": "在回應中包含相關實體"
+        },
+        "app.UGFkZGxl.action.bGlzdF90cmFuc2FjdGlvbnM.option.aWQ.desc": {
+          "source": "Return only the IDs specified. Use a comma-separated list to get multiple entities.",
+          "message": "僅傳回指定的 ID。使用逗號分隔清單以取得多個實體。"
+        },
+        "app.UGFkZGxl.action.bGlzdF90cmFuc2FjdGlvbnM.option.aWQ.display_name": {
+          "source": "Transaction",
+          "message": "交易"
+        },
+        "app.UGFkZGxl.action.bGlzdF90cmFuc2FjdGlvbnM.option.aWQ.short_desc": {
+          "source": "Return only these transactions",
+          "message": "僅傳回這些交易"
+        },
+        "app.UGFkZGxl.action.bGlzdF90cmFuc2FjdGlvbnM.option.b3JkZXJfYnk.desc": {
+          "source": "Order returned entities by the specified field and direction (`[ASC]` or `[DESC]`). For example, `?order_by=id[ASC]`.\n\nValid fields for ordering: `id`.",
+          "message": "依指定的欄位和方向 (`[ASC]` 或 `[DESC]`) 對傳回的實體進行排序。例如 `?order_by=id[ASC]`。\n\n有效的排序欄位：`id`。"
+        },
+        "app.UGFkZGxl.action.bGlzdF90cmFuc2FjdGlvbnM.option.b3JkZXJfYnk.display_name": {
+          "source": "Order By",
+          "message": "排序依據"
+        },
+        "app.UGFkZGxl.action.bGlzdF90cmFuc2FjdGlvbnM.option.b3JkZXJfYnk.short_desc": {
+          "source": "Order by a field and direction, ex: \"id[ASC]\"",
+          "message": "依欄位和方向排序，例如：\"id[ASC]\""
+        },
+        "app.UGFkZGxl.action.bGlzdF90cmFuc2FjdGlvbnM.option.b3JpZ2lu.desc": {
+          "source": "Return entities related to the specified origin. Use a comma-separated list to specify multiple origins.",
+          "message": "傳回與指定來源相關的實體。使用逗號分隔清單以指定多個來源。"
+        },
+        "app.UGFkZGxl.action.bGlzdF90cmFuc2FjdGlvbnM.option.b3JpZ2lu.display_name": {
+          "source": "Origin",
+          "message": "來源"
+        },
+        "app.UGFkZGxl.action.bGlzdF90cmFuc2FjdGlvbnM.option.b3JpZ2lu.short_desc": {
+          "source": "Return entities related to the specified origin",
+          "message": "傳回與指定來源相關的實體"
+        },
+        "app.UGFkZGxl.action.bGlzdF90cmFuc2FjdGlvbnM.option.c2tpcF9jb3VudA.desc": {
+          "source": "Set to `true` to skip the count query Paddle runs for a listing.\n\n`meta.pagination.estimated_total` then returns `-1` instead of a count. Worth setting when paging through a large collection, where the count costs time on every page and is not used.",
+          "message": "設為 `true` 以略過 Paddle 在清單查詢時執行的計數查詢。\n\n此時 `meta.pagination.estimated_total` 會傳回 `-1` 而非計數。在對大型集合進行分頁時值得設定此項，因為計數在每一頁都會耗費時間且未被使用。"
+        },
+        "app.UGFkZGxl.action.bGlzdF90cmFuc2FjdGlvbnM.option.c2tpcF9jb3VudA.display_name": {
+          "source": "Skip Count",
+          "message": "略過計數"
+        },
+        "app.UGFkZGxl.action.bGlzdF90cmFuc2FjdGlvbnM.option.c2tpcF9jb3VudA.short_desc": {
+          "source": "Skip the count query, making a large listing cheaper",
+          "message": "略過計數查詢，降低大型清單操作的開銷"
+        },
+        "app.UGFkZGxl.action.bGlzdF90cmFuc2FjdGlvbnM.option.c3RhdHVz.desc": {
+          "source": "Return entities that match the specified status. Use a comma-separated list to specify multiple status values.",
+          "message": "傳回符合指定狀態的實體。使用逗號分隔清單以指定多個狀態值。"
+        },
+        "app.UGFkZGxl.action.bGlzdF90cmFuc2FjdGlvbnM.option.c3RhdHVz.display_name": {
+          "source": "Status",
+          "message": "狀態"
+        },
+        "app.UGFkZGxl.action.bGlzdF90cmFuc2FjdGlvbnM.option.c3RhdHVz.short_desc": {
+          "source": "Return only transactions with these statuses",
+          "message": "僅傳回具有這些狀態的交易"
+        },
+        "app.UGFkZGxl.action.bGlzdF90cmFuc2FjdGlvbnM.option.c3Vic2NyaXB0aW9uX2lk.desc": {
+          "source": "Return entities related to the specified subscription. Use a comma-separated list to specify multiple subscription IDs. Pass `null` to return entities that aren't related to any subscription.",
+          "message": "傳回與指定訂閱相關的實體。使用逗號分隔清單以指定多個訂閱 ID。傳遞 `null` 可傳回不屬於任何訂閱的實體。"
+        },
+        "app.UGFkZGxl.action.bGlzdF90cmFuc2FjdGlvbnM.option.c3Vic2NyaXB0aW9uX2lk.display_name": {
+          "source": "Subscription",
+          "message": "訂閱"
+        },
+        "app.UGFkZGxl.action.bGlzdF90cmFuc2FjdGlvbnM.option.c3Vic2NyaXB0aW9uX2lk.short_desc": {
+          "source": "Return only transactions for these subscriptions",
+          "message": "僅傳回這些訂閱的交易"
+        },
+        "app.UGFkZGxl.action.bGlzdF90cmFuc2FjdGlvbnM.option.cGVyX3BhZ2U.desc": {
+          "source": "How many records to return in one request, up to Paddle's maximum of `200`. Asking for more returns the maximum rather than failing.\n\n`meta.pagination.per_page` in the response reports how many were actually returned, and `meta.pagination.has_more` says whether another page exists.",
+          "message": "單次請求中傳回的記錄筆數，最高為 Paddle 的上限 `200`。請求超過上限的值將會傳回最大值而非失敗。\n\n回應中的 `meta.pagination.per_page` 會回報實際傳回的筆數，而 `meta.pagination.has_more` 則指示是否存在下一頁。"
+        },
+        "app.UGFkZGxl.action.bGlzdF90cmFuc2FjdGlvbnM.option.cGVyX3BhZ2U.display_name": {
+          "source": "Per Page",
+          "message": "每頁"
+        },
+        "app.UGFkZGxl.action.bGlzdF90cmFuc2FjdGlvbnM.option.cGVyX3BhZ2U.short_desc": {
+          "source": "How many records to return, up to 200",
+          "message": "要傳回的記錄筆數，最多 200"
+        },
+        "app.UGFkZGxl.action.bGlzdF90cmFuc2FjdGlvbnM.option.dXBkYXRlZF9hdA.desc": {
+          "source": "Return entities updated at a specific time. Pass an RFC 3339 datetime string, or use `[LT]` (less than), `[LTE]` (less than or equal to), `[GT]` (greater than), or `[GTE]` (greater than or equal to) operators. For example, `updated_at=2023-04-18T17:03:26` or `updated_at[LT]=2023-04-18T17:03:26`.",
+          "message": "傳回在特定時間更新的實體。傳遞 RFC 3339 日期時間字串，或使用 `[LT]` (小於)、`[LTE]` (小於或等於)、`[GT]` (大於) 或 `[GTE]` (大於或等於) 運算子。例如 `updated_at=2023-04-18T17:03:26` 或 `updated_at[LT]=2023-04-18T17:03:26`。"
+        },
+        "app.UGFkZGxl.action.bGlzdF90cmFuc2FjdGlvbnM.option.dXBkYXRlZF9hdA.display_name": {
+          "source": "Updated At",
+          "message": "更新時間"
+        },
+        "app.UGFkZGxl.action.bGlzdF90cmFuc2FjdGlvbnM.option.dXBkYXRlZF9hdA.short_desc": {
+          "source": "Filter on last-modified time; takes an operator suffix",
+          "message": "依最後修改時間篩選；接受運算子後綴"
+        },
+        "app.UGFkZGxl.action.bGlzdF90cmFuc2FjdGlvbnM.short_desc": {
+          "source": "List the transactions in this Paddle account",
+          "message": "列出此 Paddle 帳戶中的交易"
+        },
+        "app.UGFkZGxl.action.bGlzdF9jdXN0b21lcl9jcmVkaXRfYmFsYW5jZXM.desc": {
+          "source": "Lists the credit a customer holds, one entry per currency.\n\nEach entry splits the balance into `available` credit, credit `reserved` against an unpaid transaction, and the `used` total. Credit arises from a refund or an adjustment and is applied automatically to the customer's next transaction in the same currency.\n\nThis listing is not paginated: every currency the customer holds credit in is returned.",
+          "message": "列出客戶持有的抵用金，每一種貨幣一筆項目。\n\n每筆項目會將餘額劃分為 `available` 抵用金、針對未付款交易 `reserved` 的抵用金以及 `used` 總計。抵用金來自退款或調整，並會自動套用至客戶下一筆相同貨幣的交易。\n\n此列表未分頁：將返回客戶持有抵用金的所有貨幣。"
+        },
+        "app.UGFkZGxl.action.bGlzdF9jdXN0b21lcl9jcmVkaXRfYmFsYW5jZXM.display_name": {
+          "source": "List Customer Credit Balances",
+          "message": "列出客戶抵用金餘額"
+        },
+        "app.UGFkZGxl.action.bGlzdF9jdXN0b21lcl9jcmVkaXRfYmFsYW5jZXM.option.Y3VycmVuY3lfY29kZQ.desc": {
+          "source": "Return entities that match the currency code. Use a comma-separated list to specify multiple currency codes.",
+          "message": "傳回符合貨幣代碼的實體。使用逗號分隔清單指定多個貨幣代碼。"
+        },
+        "app.UGFkZGxl.action.bGlzdF9jdXN0b21lcl9jcmVkaXRfYmFsYW5jZXM.option.Y3VycmVuY3lfY29kZQ.display_name": {
+          "source": "Currency Code",
+          "message": "貨幣代碼"
+        },
+        "app.UGFkZGxl.action.bGlzdF9jdXN0b21lcl9jcmVkaXRfYmFsYW5jZXM.option.Y3VycmVuY3lfY29kZQ.short_desc": {
+          "source": "Return only balances in these currencies",
+          "message": "僅傳回這些貨幣的餘額"
+        },
+        "app.UGFkZGxl.action.bGlzdF9jdXN0b21lcl9jcmVkaXRfYmFsYW5jZXM.option.Y3VzdG9tZXJfaWQ.desc": {
+          "source": "Paddle ID of the customer entity to work with.: Unique Paddle ID for this customer entity, prefixed with `ctm_`.",
+          "message": "要操作的客戶實體的 Paddle ID。：此客戶實體的唯一 Paddle ID，前綴為 `ctm_`。"
+        },
+        "app.UGFkZGxl.action.bGlzdF9jdXN0b21lcl9jcmVkaXRfYmFsYW5jZXM.option.Y3VzdG9tZXJfaWQ.display_name": {
+          "source": "Customer",
+          "message": "客戶"
+        },
+        "app.UGFkZGxl.action.bGlzdF9jdXN0b21lcl9jcmVkaXRfYmFsYW5jZXM.option.Y3VzdG9tZXJfaWQ.short_desc": {
+          "source": "Paddle ID of the customer entity to work with",
+          "message": "要操作的客戶實體的 Paddle ID"
+        },
+        "app.UGFkZGxl.action.bGlzdF9jdXN0b21lcl9jcmVkaXRfYmFsYW5jZXM.short_desc": {
+          "source": "List a customer's credit balances, by currency",
+          "message": "依貨幣列出客戶的抵用金餘額"
+        },
+        "app.UGFkZGxl.action.bGlzdF9jdXN0b21lcnM.desc": {
+          "source": "Lists customers, newest first by default.\n\nOnly `active` customers are returned unless `status` says otherwise, which is worth knowing when a lookup by email comes back empty: an archived customer is still there. Use `email` for an exact address and `search` for a partial match across `id`, `name` and `email`.\n\nThe response is Paddle's list envelope: the customers are in `data`, and `meta.pagination` carries the cursor for the next page.",
+          "message": "列出客戶，預設依最新優先排序。\n\n除非 `status` 另有指定，否則僅傳回 `active` 客戶。這在透過電子郵件查詢結果為空時特別重要：已封存的客戶仍然存在。使用 `email` 進行精確地址比對，使用 `search` 在 `id`、`name` 及 `email` 之間進行部分比對。\n\n回應為 Paddle 的清單封裝：客戶位於 `data` 中，而 `meta.pagination` 則攜帶下一頁的游標。"
+        },
+        "app.UGFkZGxl.action.bGlzdF9jdXN0b21lcnM.display_name": {
+          "source": "List Customers",
+          "message": "列出客戶"
+        },
+        "app.UGFkZGxl.action.bGlzdF9jdXN0b21lcnM.option.YWZ0ZXI.desc": {
+          "source": "The pagination cursor: return the records that come after this Paddle ID.\n\nTake it from the `after` query argument of the `meta.pagination.next` URL in the previous response. Paddle always returns that URL, even on the last page, so page on `meta.pagination.has_more` rather than on its presence.",
+          "message": "分頁游標：傳回此 Paddle ID 之後的記錄。\n\n請從前一個回應中的 `meta.pagination.next` URL 的 `after` 查詢引數取得。Paddle 始終會傳回該 URL（即使在最後一頁也是如此），因此請根據 `meta.pagination.has_more` 進行分頁，而非根據其是否存在。"
+        },
+        "app.UGFkZGxl.action.bGlzdF9jdXN0b21lcnM.option.YWZ0ZXI.display_name": {
+          "source": "After",
+          "message": "之後"
+        },
+        "app.UGFkZGxl.action.bGlzdF9jdXN0b21lcnM.option.YWZ0ZXI.short_desc": {
+          "source": "Return records after this Paddle ID",
+          "message": "傳回此 Paddle ID 之後的記錄"
+        },
+        "app.UGFkZGxl.action.bGlzdF9jdXN0b21lcnM.option.ZW1haWw.desc": {
+          "source": "Return entities that exactly match the specified email address. Use a comma-separated list to specify multiple email addresses. Recommended for precise matching of email addresses.",
+          "message": "傳回完全符合指定電子郵件地址的實體。使用逗號分隔清單指定多個電子郵件地址。建議用於電子郵件地址的精確比對。"
+        },
+        "app.UGFkZGxl.action.bGlzdF9jdXN0b21lcnM.option.ZW1haWw.display_name": {
+          "source": "Email",
+          "message": "電子郵件"
+        },
+        "app.UGFkZGxl.action.bGlzdF9jdXN0b21lcnM.option.ZW1haWw.short_desc": {
+          "source": "Return only customers with these exact email addresses",
+          "message": "僅傳回具有這些精確電子郵件地址的客戶"
+        },
+        "app.UGFkZGxl.action.bGlzdF9jdXN0b21lcnM.option.aWQ.desc": {
+          "source": "Return only the IDs specified. Use a comma-separated list to get multiple entities.",
+          "message": "僅傳回指定的 ID。使用逗號分隔清單以取得多個實體。"
+        },
+        "app.UGFkZGxl.action.bGlzdF9jdXN0b21lcnM.option.aWQ.display_name": {
+          "source": "Customer",
+          "message": "客戶"
+        },
+        "app.UGFkZGxl.action.bGlzdF9jdXN0b21lcnM.option.aWQ.short_desc": {
+          "source": "Return only these customers",
+          "message": "僅傳回這些客戶"
+        },
+        "app.UGFkZGxl.action.bGlzdF9jdXN0b21lcnM.option.b3JkZXJfYnk.desc": {
+          "source": "Order returned entities by the specified field and direction (`[ASC]` or `[DESC]`). For example, `?order_by=id[ASC]`.\n\nValid fields for ordering: `id`.",
+          "message": "依指定的欄位和方向 (`[ASC]` 或 `[DESC]`) 對傳回的實體進行排序。例如 `?order_by=id[ASC]`。\n\n有效的排序欄位：`id`。"
+        },
+        "app.UGFkZGxl.action.bGlzdF9jdXN0b21lcnM.option.b3JkZXJfYnk.display_name": {
+          "source": "Order By",
+          "message": "排序依據"
+        },
+        "app.UGFkZGxl.action.bGlzdF9jdXN0b21lcnM.option.b3JkZXJfYnk.short_desc": {
+          "source": "Order by a field and direction, ex: \"id[ASC]\"",
+          "message": "依欄位和方向排序，例如：\"id[ASC]\""
+        },
+        "app.UGFkZGxl.action.bGlzdF9jdXN0b21lcnM.option.c2VhcmNo.desc": {
+          "source": "Return entities that match a search query. Searches `id`, `name`, and `email` fields. Use the `email` query parameter for precise matching of email addresses.",
+          "message": "傳回符合搜尋查詢的實體。搜尋 `id`、`name` 及 `email` 欄位。使用 `email` 查詢參數精確比對電子郵件地址。"
+        },
+        "app.UGFkZGxl.action.bGlzdF9jdXN0b21lcnM.option.c2VhcmNo.display_name": {
+          "source": "Search",
+          "message": "搜尋"
+        },
+        "app.UGFkZGxl.action.bGlzdF9jdXN0b21lcnM.option.c2VhcmNo.short_desc": {
+          "source": "Match against id, name and email",
+          "message": "比對 id、name 和 email"
+        },
+        "app.UGFkZGxl.action.bGlzdF9jdXN0b21lcnM.option.c2tpcF9jb3VudA.desc": {
+          "source": "Set to `true` to skip the count query Paddle runs for a listing.\n\n`meta.pagination.estimated_total` then returns `-1` instead of a count. Worth setting when paging through a large collection, where the count costs time on every page and is not used.",
+          "message": "設為 `true` 以略過 Paddle 在清單查詢時執行的計數查詢。\n\n此時 `meta.pagination.estimated_total` 會傳回 `-1` 而非計數。在對大型集合進行分頁時值得設定此項，因為計數在每一頁都會耗費時間且未被使用。"
+        },
+        "app.UGFkZGxl.action.bGlzdF9jdXN0b21lcnM.option.c2tpcF9jb3VudA.display_name": {
+          "source": "Skip Count",
+          "message": "略過計數"
+        },
+        "app.UGFkZGxl.action.bGlzdF9jdXN0b21lcnM.option.c2tpcF9jb3VudA.short_desc": {
+          "source": "Skip the count query, making a large listing cheaper",
+          "message": "略過計數查詢，降低大型清單操作的開銷"
+        },
+        "app.UGFkZGxl.action.bGlzdF9jdXN0b21lcnM.option.c3RhdHVz.desc": {
+          "source": "Return entities that match the specified status. Use a comma-separated list to specify multiple status values.",
+          "message": "傳回符合指定狀態的實體。使用逗號分隔清單以指定多個狀態值。"
+        },
+        "app.UGFkZGxl.action.bGlzdF9jdXN0b21lcnM.option.c3RhdHVz.display_name": {
+          "source": "Status",
+          "message": "狀態"
+        },
+        "app.UGFkZGxl.action.bGlzdF9jdXN0b21lcnM.option.c3RhdHVz.short_desc": {
+          "source": "Return only customers with these statuses",
+          "message": "僅傳回具有這些狀態的客戶"
+        },
+        "app.UGFkZGxl.action.bGlzdF9jdXN0b21lcnM.option.cGVyX3BhZ2U.desc": {
+          "source": "How many records to return in one request, up to Paddle's maximum of `200`. Asking for more returns the maximum rather than failing.\n\n`meta.pagination.per_page` in the response reports how many were actually returned, and `meta.pagination.has_more` says whether another page exists.",
+          "message": "單次請求中傳回的記錄筆數，最高為 Paddle 的上限 `200`。請求超過上限的值將會傳回最大值而非失敗。\n\n回應中的 `meta.pagination.per_page` 會回報實際傳回的筆數，而 `meta.pagination.has_more` 則指示是否存在下一頁。"
+        },
+        "app.UGFkZGxl.action.bGlzdF9jdXN0b21lcnM.option.cGVyX3BhZ2U.display_name": {
+          "source": "Per Page",
+          "message": "每頁"
+        },
+        "app.UGFkZGxl.action.bGlzdF9jdXN0b21lcnM.option.cGVyX3BhZ2U.short_desc": {
+          "source": "How many records to return, up to 200",
+          "message": "要傳回的記錄筆數，最多 200"
+        },
+        "app.UGFkZGxl.action.bGlzdF9jdXN0b21lcnM.short_desc": {
+          "source": "List the customers in this Paddle account",
+          "message": "列出此 Paddle 帳戶中的客戶"
+        },
+        "app.UGFkZGxl.action.bGlzdF9wcm9kdWN0cw.desc": {
+          "source": "Lists catalog products.\n\nOnly `active` products are returned unless `status` says otherwise. Set `include` to `prices` to get each product's prices in the same request, which saves a call per product when building a pricing page.\n\nThe products are in `data`, and `meta.pagination` carries the cursor for the next page.",
+          "message": "列出目錄產品。\n\n除非 `status` 另有指定，否則僅傳回 `active` 產品。將 `include` 設定為 `prices` 可在同一個請求中取得每個產品的價格，在建立定價頁面時可為每個產品節省一次呼叫。\n\n產品位於 `data` 中，而 `meta.pagination` 則攜帶下一頁的游標。"
+        },
+        "app.UGFkZGxl.action.bGlzdF9wcm9kdWN0cw.display_name": {
+          "source": "List Products",
+          "message": "列出產品"
+        },
+        "app.UGFkZGxl.action.bGlzdF9wcm9kdWN0cw.option.YWZ0ZXI.desc": {
+          "source": "The pagination cursor: return the records that come after this Paddle ID.\n\nTake it from the `after` query argument of the `meta.pagination.next` URL in the previous response. Paddle always returns that URL, even on the last page, so page on `meta.pagination.has_more` rather than on its presence.",
+          "message": "分頁游標：傳回此 Paddle ID 之後的記錄。\n\n請從前一個回應中的 `meta.pagination.next` URL 的 `after` 查詢引數取得。Paddle 始終會傳回該 URL（即使在最後一頁也是如此），因此請根據 `meta.pagination.has_more` 進行分頁，而非根據其是否存在。"
+        },
+        "app.UGFkZGxl.action.bGlzdF9wcm9kdWN0cw.option.YWZ0ZXI.display_name": {
+          "source": "After",
+          "message": "之後"
+        },
+        "app.UGFkZGxl.action.bGlzdF9wcm9kdWN0cw.option.YWZ0ZXI.short_desc": {
+          "source": "Return records after this Paddle ID",
+          "message": "傳回此 Paddle ID 之後的記錄"
+        },
+        "app.UGFkZGxl.action.bGlzdF9wcm9kdWN0cw.option.aW5jbHVkZQ.desc": {
+          "source": "Include related entities in the response. Use a comma-separated list to specify multiple entities.",
+          "message": "在回應中包含相關實體。使用逗號分隔清單指定多個實體。"
+        },
+        "app.UGFkZGxl.action.bGlzdF9wcm9kdWN0cw.option.aW5jbHVkZQ.display_name": {
+          "source": "Include",
+          "message": "包含"
+        },
+        "app.UGFkZGxl.action.bGlzdF9wcm9kdWN0cw.option.aW5jbHVkZQ.short_desc": {
+          "source": "Include related entities in the response",
+          "message": "在回應中包含相關實體"
+        },
+        "app.UGFkZGxl.action.bGlzdF9wcm9kdWN0cw.option.aWQ.desc": {
+          "source": "Return only the IDs specified. Use a comma-separated list to get multiple entities.",
+          "message": "僅傳回指定的 ID。使用逗號分隔清單以取得多個實體。"
+        },
+        "app.UGFkZGxl.action.bGlzdF9wcm9kdWN0cw.option.aWQ.display_name": {
+          "source": "Product",
+          "message": "產品"
+        },
+        "app.UGFkZGxl.action.bGlzdF9wcm9kdWN0cw.option.aWQ.short_desc": {
+          "source": "Return only these products",
+          "message": "僅傳回這些產品"
+        },
+        "app.UGFkZGxl.action.bGlzdF9wcm9kdWN0cw.option.b3JkZXJfYnk.desc": {
+          "source": "Order returned entities by the specified field and direction (`[ASC]` or `[DESC]`). For example, `?order_by=id[ASC]`.\n\nValid fields for ordering: `id`.",
+          "message": "依指定的欄位和方向 (`[ASC]` 或 `[DESC]`) 對傳回的實體進行排序。例如 `?order_by=id[ASC]`。\n\n有效的排序欄位：`id`。"
+        },
+        "app.UGFkZGxl.action.bGlzdF9wcm9kdWN0cw.option.b3JkZXJfYnk.display_name": {
+          "source": "Order By",
+          "message": "排序依據"
+        },
+        "app.UGFkZGxl.action.bGlzdF9wcm9kdWN0cw.option.b3JkZXJfYnk.short_desc": {
+          "source": "Order by a field and direction, ex: \"id[ASC]\"",
+          "message": "依欄位和方向排序，例如：\"id[ASC]\""
+        },
+        "app.UGFkZGxl.action.bGlzdF9wcm9kdWN0cw.option.c2tpcF9jb3VudA.desc": {
+          "source": "Set to `true` to skip the count query Paddle runs for a listing.\n\n`meta.pagination.estimated_total` then returns `-1` instead of a count. Worth setting when paging through a large collection, where the count costs time on every page and is not used.",
+          "message": "設為 `true` 以略過 Paddle 在清單查詢時執行的計數查詢。\n\n此時 `meta.pagination.estimated_total` 會傳回 `-1` 而非計數。在對大型集合進行分頁時值得設定此項，因為計數在每一頁都會耗費時間且未被使用。"
+        },
+        "app.UGFkZGxl.action.bGlzdF9wcm9kdWN0cw.option.c2tpcF9jb3VudA.display_name": {
+          "source": "Skip Count",
+          "message": "略過計數"
+        },
+        "app.UGFkZGxl.action.bGlzdF9wcm9kdWN0cw.option.c2tpcF9jb3VudA.short_desc": {
+          "source": "Skip the count query, making a large listing cheaper",
+          "message": "略過計數查詢，降低大型清單操作的開銷"
+        },
+        "app.UGFkZGxl.action.bGlzdF9wcm9kdWN0cw.option.c3RhdHVz.desc": {
+          "source": "Return entities that match the specified status. Use a comma-separated list to specify multiple status values.",
+          "message": "傳回符合指定狀態的實體。使用逗號分隔清單以指定多個狀態值。"
+        },
+        "app.UGFkZGxl.action.bGlzdF9wcm9kdWN0cw.option.c3RhdHVz.display_name": {
+          "source": "Status",
+          "message": "狀態"
+        },
+        "app.UGFkZGxl.action.bGlzdF9wcm9kdWN0cw.option.c3RhdHVz.short_desc": {
+          "source": "Return only products with these statuses",
+          "message": "僅傳回具有這些狀態的產品"
+        },
+        "app.UGFkZGxl.action.bGlzdF9wcm9kdWN0cw.option.cGVyX3BhZ2U.desc": {
+          "source": "How many records to return in one request, up to Paddle's maximum of `200`. Asking for more returns the maximum rather than failing.\n\n`meta.pagination.per_page` in the response reports how many were actually returned, and `meta.pagination.has_more` says whether another page exists.",
+          "message": "單次請求中傳回的記錄筆數，最高為 Paddle 的上限 `200`。請求超過上限的值將會傳回最大值而非失敗。\n\n回應中的 `meta.pagination.per_page` 會回報實際傳回的筆數，而 `meta.pagination.has_more` 則指示是否存在下一頁。"
+        },
+        "app.UGFkZGxl.action.bGlzdF9wcm9kdWN0cw.option.cGVyX3BhZ2U.display_name": {
+          "source": "Per Page",
+          "message": "每頁"
+        },
+        "app.UGFkZGxl.action.bGlzdF9wcm9kdWN0cw.option.cGVyX3BhZ2U.short_desc": {
+          "source": "How many records to return, up to 200",
+          "message": "要傳回的記錄筆數，最多 200"
+        },
+        "app.UGFkZGxl.action.bGlzdF9wcm9kdWN0cw.option.dGF4X2NhdGVnb3J5.desc": {
+          "source": "Return entities that match the specified tax category. Use a comma-separated list to specify multiple tax categories.",
+          "message": "傳回符合指定稅務類別的實體。使用逗號分隔清單指定多個稅務類別。"
+        },
+        "app.UGFkZGxl.action.bGlzdF9wcm9kdWN0cw.option.dGF4X2NhdGVnb3J5.display_name": {
+          "source": "Tax Category",
+          "message": "稅務類別"
+        },
+        "app.UGFkZGxl.action.bGlzdF9wcm9kdWN0cw.option.dGF4X2NhdGVnb3J5.short_desc": {
+          "source": "Return entities that match the specified tax category",
+          "message": "傳回符合指定稅務類別的實體"
+        },
+        "app.UGFkZGxl.action.bGlzdF9wcm9kdWN0cw.option.dHlwZQ.allowed-value.c3RyaW5nOmN1c3RvbQ.display_name": {
+          "source": "custom",
+          "message": "自訂"
+        },
+        "app.UGFkZGxl.action.bGlzdF9wcm9kdWN0cw.option.dHlwZQ.allowed-value.c3RyaW5nOnN0YW5kYXJk.display_name": {
+          "source": "standard",
+          "message": "標準"
+        },
+        "app.UGFkZGxl.action.bGlzdF9wcm9kdWN0cw.option.dHlwZQ.desc": {
+          "source": "Return items that match the specified type.: Type of item. Standard items are considered part of your catalog and are shown in the Paddle dashboard.",
+          "message": "傳回符合指定類型的項目。：項目類型。標準項目被視為目錄的一部分，並會顯示在 Paddle 資訊主頁中。"
+        },
+        "app.UGFkZGxl.action.bGlzdF9wcm9kdWN0cw.option.dHlwZQ.display_name": {
+          "source": "Type",
+          "message": "類型"
+        },
+        "app.UGFkZGxl.action.bGlzdF9wcm9kdWN0cw.option.dHlwZQ.short_desc": {
+          "source": "Return items that match the specified type",
+          "message": "傳回符合指定類型的項目"
+        },
+        "app.UGFkZGxl.action.bGlzdF9wcm9kdWN0cw.short_desc": {
+          "source": "List the products in the catalog",
+          "message": "列出目錄中的產品"
+        },
+        "app.UGFkZGxl.action.bGlzdF9wcmljZXM.desc": {
+          "source": "Lists catalog prices.\n\nOnly `active` prices are returned unless `status` says otherwise. Filter by `product_id` for one product's prices, or by `recurring` to separate subscription prices from one-off ones. Set `include` to `product` to get the owning product alongside each price.\n\nThe prices are in `data`, and `meta.pagination` carries the cursor for the next page.",
+          "message": "列出目錄價格。\n\n除非 `status` 另有指定，否則僅傳回 `active` 價格。依 `product_id` 篩選單一產品的價格，或依 `recurring` 區分訂閱價格與單次價格。將 `include` 設定為 `product` 可在每個價格旁同時取得所屬產品。\n\n價格位於 `data` 中，而 `meta.pagination` 則攜帶下一頁的游標。"
+        },
+        "app.UGFkZGxl.action.bGlzdF9wcmljZXM.display_name": {
+          "source": "List Prices",
+          "message": "列出價格"
+        },
+        "app.UGFkZGxl.action.bGlzdF9wcmljZXM.option.YWZ0ZXI.desc": {
+          "source": "The pagination cursor: return the records that come after this Paddle ID.\n\nTake it from the `after` query argument of the `meta.pagination.next` URL in the previous response. Paddle always returns that URL, even on the last page, so page on `meta.pagination.has_more` rather than on its presence.",
+          "message": "分頁游標：傳回此 Paddle ID 之後的記錄。\n\n請從前一個回應中的 `meta.pagination.next` URL 的 `after` 查詢引數取得。Paddle 始終會傳回該 URL（即使在最後一頁也是如此），因此請根據 `meta.pagination.has_more` 進行分頁，而非根據其是否存在。"
+        },
+        "app.UGFkZGxl.action.bGlzdF9wcmljZXM.option.YWZ0ZXI.display_name": {
+          "source": "After",
+          "message": "之後"
+        },
+        "app.UGFkZGxl.action.bGlzdF9wcmljZXM.option.YWZ0ZXI.short_desc": {
+          "source": "Return records after this Paddle ID",
+          "message": "傳回此 Paddle ID 之後的記錄"
+        },
+        "app.UGFkZGxl.action.bGlzdF9wcmljZXM.option.YmlsbGluZ19jeWNsZS5mcmVxdWVuY3k.desc": {
+          "source": "Return entities where the price billing cycle frequency matches this value.",
+          "message": "傳回價格計費週期頻率符合此值的實體。"
+        },
+        "app.UGFkZGxl.action.bGlzdF9wcmljZXM.option.YmlsbGluZ19jeWNsZS5mcmVxdWVuY3k.display_name": {
+          "source": "Billing Cycle Frequency",
+          "message": "計費週期頻率"
+        },
+        "app.UGFkZGxl.action.bGlzdF9wcmljZXM.option.YmlsbGluZ19jeWNsZS5mcmVxdWVuY3k.short_desc": {
+          "source": "Return entities where the price billing cycle frequency matches this value",
+          "message": "傳回價格計費週期頻率符合此值的實體"
+        },
+        "app.UGFkZGxl.action.bGlzdF9wcmljZXM.option.YmlsbGluZ19jeWNsZS5pbnRlcnZhbA.allowed-value.c3RyaW5nOm1vbnRo.display_name": {
+          "source": "month",
+          "message": "month"
+        },
+        "app.UGFkZGxl.action.bGlzdF9wcmljZXM.option.YmlsbGluZ19jeWNsZS5pbnRlcnZhbA.allowed-value.c3RyaW5nOmRheQ.display_name": {
+          "source": "day",
+          "message": "日"
+        },
+        "app.UGFkZGxl.action.bGlzdF9wcmljZXM.option.YmlsbGluZ19jeWNsZS5pbnRlcnZhbA.allowed-value.c3RyaW5nOndlZWs.display_name": {
+          "source": "week",
+          "message": "week"
+        },
+        "app.UGFkZGxl.action.bGlzdF9wcmljZXM.option.YmlsbGluZ19jeWNsZS5pbnRlcnZhbA.allowed-value.c3RyaW5nOnllYXI.display_name": {
+          "source": "year",
+          "message": "年"
+        },
+        "app.UGFkZGxl.action.bGlzdF9wcmljZXM.option.YmlsbGluZ19jeWNsZS5pbnRlcnZhbA.desc": {
+          "source": "Return entities where the price billing cycle interval matches this value.",
+          "message": "傳回價格計費週期區間符合此值的實體。"
+        },
+        "app.UGFkZGxl.action.bGlzdF9wcmljZXM.option.YmlsbGluZ19jeWNsZS5pbnRlcnZhbA.display_name": {
+          "source": "Billing Cycle Interval",
+          "message": "計費週期區間"
+        },
+        "app.UGFkZGxl.action.bGlzdF9wcmljZXM.option.YmlsbGluZ19jeWNsZS5pbnRlcnZhbA.short_desc": {
+          "source": "Return entities where the price billing cycle interval matches this value",
+          "message": "傳回價格計費週期區間符合此值的實體"
+        },
+        "app.UGFkZGxl.action.bGlzdF9wcmljZXM.option.aW5jbHVkZQ.desc": {
+          "source": "Include related entities in the response.",
+          "message": "在回應中包含相關實體。"
+        },
+        "app.UGFkZGxl.action.bGlzdF9wcmljZXM.option.aW5jbHVkZQ.display_name": {
+          "source": "Include",
+          "message": "包含"
+        },
+        "app.UGFkZGxl.action.bGlzdF9wcmljZXM.option.aW5jbHVkZQ.short_desc": {
+          "source": "Include related entities in the response",
+          "message": "在回應中包含相關實體"
+        },
+        "app.UGFkZGxl.action.bGlzdF9wcmljZXM.option.aWQ.desc": {
+          "source": "Return only the IDs specified. Use a comma-separated list to get multiple entities.",
+          "message": "僅傳回指定的 ID。使用逗號分隔清單以取得多個實體。"
+        },
+        "app.UGFkZGxl.action.bGlzdF9wcmljZXM.option.aWQ.display_name": {
+          "source": "Price",
+          "message": "價格"
+        },
+        "app.UGFkZGxl.action.bGlzdF9wcmljZXM.option.aWQ.short_desc": {
+          "source": "Return only these prices",
+          "message": "僅傳回這些價格"
+        },
+        "app.UGFkZGxl.action.bGlzdF9wcmljZXM.option.b3JkZXJfYnk.desc": {
+          "source": "Order returned entities by the specified field and direction (`[ASC]` or `[DESC]`). For example, `?order_by=id[ASC]`.\n\nValid fields for ordering: `id`.",
+          "message": "依指定的欄位和方向 (`[ASC]` 或 `[DESC]`) 對傳回的實體進行排序。例如 `?order_by=id[ASC]`。\n\n有效的排序欄位：`id`。"
+        },
+        "app.UGFkZGxl.action.bGlzdF9wcmljZXM.option.b3JkZXJfYnk.display_name": {
+          "source": "Order By",
+          "message": "排序依據"
+        },
+        "app.UGFkZGxl.action.bGlzdF9wcmljZXM.option.b3JkZXJfYnk.short_desc": {
+          "source": "Order by a field and direction, ex: \"id[ASC]\"",
+          "message": "依欄位和方向排序，例如：\"id[ASC]\""
+        },
+        "app.UGFkZGxl.action.bGlzdF9wcmljZXM.option.c2tpcF9jb3VudA.desc": {
+          "source": "Set to `true` to skip the count query Paddle runs for a listing.\n\n`meta.pagination.estimated_total` then returns `-1` instead of a count. Worth setting when paging through a large collection, where the count costs time on every page and is not used.",
+          "message": "設為 `true` 以略過 Paddle 在清單查詢時執行的計數查詢。\n\n此時 `meta.pagination.estimated_total` 會傳回 `-1` 而非計數。在對大型集合進行分頁時值得設定此項，因為計數在每一頁都會耗費時間且未被使用。"
+        },
+        "app.UGFkZGxl.action.bGlzdF9wcmljZXM.option.c2tpcF9jb3VudA.display_name": {
+          "source": "Skip Count",
+          "message": "略過計數"
+        },
+        "app.UGFkZGxl.action.bGlzdF9wcmljZXM.option.c2tpcF9jb3VudA.short_desc": {
+          "source": "Skip the count query, making a large listing cheaper",
+          "message": "略過計數查詢，降低大型清單操作的開銷"
+        },
+        "app.UGFkZGxl.action.bGlzdF9wcmljZXM.option.c3RhdHVz.desc": {
+          "source": "Return entities that match the specified status. Use a comma-separated list to specify multiple status values.",
+          "message": "傳回符合指定狀態的實體。使用逗號分隔清單以指定多個狀態值。"
+        },
+        "app.UGFkZGxl.action.bGlzdF9wcmljZXM.option.c3RhdHVz.display_name": {
+          "source": "Status",
+          "message": "狀態"
+        },
+        "app.UGFkZGxl.action.bGlzdF9wcmljZXM.option.c3RhdHVz.short_desc": {
+          "source": "Return only prices with these statuses",
+          "message": "僅傳回具有這些狀態的價格"
+        },
+        "app.UGFkZGxl.action.bGlzdF9wcmljZXM.option.cGVyX3BhZ2U.desc": {
+          "source": "How many records to return in one request, up to Paddle's maximum of `200`. Asking for more returns the maximum rather than failing.\n\n`meta.pagination.per_page` in the response reports how many were actually returned, and `meta.pagination.has_more` says whether another page exists.",
+          "message": "單次請求中傳回的記錄筆數，最高為 Paddle 的上限 `200`。請求超過上限的值將會傳回最大值而非失敗。\n\n回應中的 `meta.pagination.per_page` 會回報實際傳回的筆數，而 `meta.pagination.has_more` 則指示是否存在下一頁。"
+        },
+        "app.UGFkZGxl.action.bGlzdF9wcmljZXM.option.cGVyX3BhZ2U.display_name": {
+          "source": "Per Page",
+          "message": "每頁"
+        },
+        "app.UGFkZGxl.action.bGlzdF9wcmljZXM.option.cGVyX3BhZ2U.short_desc": {
+          "source": "How many records to return, up to 200",
+          "message": "要傳回的記錄筆數，最多 200"
+        },
+        "app.UGFkZGxl.action.bGlzdF9wcmljZXM.option.cHJvZHVjdF9pZA.desc": {
+          "source": "Return entities related to the specified product. Use a comma-separated list to specify multiple product IDs.",
+          "message": "傳回與指定產品相關的實體。使用逗號分隔清單指定多個產品 ID。"
+        },
+        "app.UGFkZGxl.action.bGlzdF9wcmljZXM.option.cHJvZHVjdF9pZA.display_name": {
+          "source": "Product",
+          "message": "產品"
+        },
+        "app.UGFkZGxl.action.bGlzdF9wcmljZXM.option.cHJvZHVjdF9pZA.short_desc": {
+          "source": "Return only prices for these products",
+          "message": "僅傳回這些產品的價格"
+        },
+        "app.UGFkZGxl.action.bGlzdF9wcmljZXM.option.cmVjdXJyaW5n.desc": {
+          "source": "Determine whether returned entities are for recurring prices (`true`) or one-time prices (`false`).",
+          "message": "決定傳回的實體是用於週期性價格 (`true`) 還是單次價格 (`false`)。"
+        },
+        "app.UGFkZGxl.action.bGlzdF9wcmljZXM.option.cmVjdXJyaW5n.display_name": {
+          "source": "Recurring",
+          "message": "週期性"
+        },
+        "app.UGFkZGxl.action.bGlzdF9wcmljZXM.option.cmVjdXJyaW5n.short_desc": {
+          "source": "True for subscription prices, false for one-off prices",
+          "message": "訂閱價格為 true，單次價格為 false"
+        },
+        "app.UGFkZGxl.action.bGlzdF9wcmljZXM.option.dHlwZQ.allowed-value.c3RyaW5nOmN1c3RvbQ.display_name": {
+          "source": "custom",
+          "message": "自訂"
+        },
+        "app.UGFkZGxl.action.bGlzdF9wcmljZXM.option.dHlwZQ.allowed-value.c3RyaW5nOnN0YW5kYXJk.display_name": {
+          "source": "standard",
+          "message": "標準"
+        },
+        "app.UGFkZGxl.action.bGlzdF9wcmljZXM.option.dHlwZQ.desc": {
+          "source": "Return items that match the specified type.: Type of item. Standard items are considered part of your catalog and are shown in the Paddle dashboard.",
+          "message": "傳回符合指定類型的項目。：項目類型。標準項目被視為目錄的一部分，並會顯示在 Paddle 資訊主頁中。"
+        },
+        "app.UGFkZGxl.action.bGlzdF9wcmljZXM.option.dHlwZQ.display_name": {
+          "source": "Type",
+          "message": "類型"
+        },
+        "app.UGFkZGxl.action.bGlzdF9wcmljZXM.option.dHlwZQ.short_desc": {
+          "source": "Return items that match the specified type",
+          "message": "傳回符合指定類型的項目"
+        },
+        "app.UGFkZGxl.action.bGlzdF9wcmljZXM.short_desc": {
+          "source": "List the prices in the catalog",
+          "message": "列出目錄中的價格"
+        },
+        "app.UGFkZGxl.action.bGlzdF9yZXBvcnRz.desc": {
+          "source": "Lists reports and the state each is in.\n\nA report is generated asynchronously: it starts `pending`, becomes `ready` when the file can be downloaded, and is `expired` once Paddle has removed it. Filter by `status` to find the ones worth downloading.\n\nReports are kept for a limited time, so a job that generates one should download it rather than assume it will still be there later.",
+          "message": "列出報表及其各自的狀態。\n\n報表為非同步產生：開始時為 `pending`，可下載檔案時變為 `ready`，在 Paddle 移除後則為 `expired`。依 `status` 篩選以尋找可供下載的報表。\n\n報表僅保留有限時間，因此產生報表的作業應立即下載，而非假定稍後仍會保留。"
+        },
+        "app.UGFkZGxl.action.bGlzdF9yZXBvcnRz.display_name": {
+          "source": "List Reports",
+          "message": "列出報表"
+        },
+        "app.UGFkZGxl.action.bGlzdF9yZXBvcnRz.option.YWZ0ZXI.desc": {
+          "source": "The pagination cursor: return the records that come after this Paddle ID.\n\nTake it from the `after` query argument of the `meta.pagination.next` URL in the previous response. Paddle always returns that URL, even on the last page, so page on `meta.pagination.has_more` rather than on its presence.",
+          "message": "分頁游標：傳回此 Paddle ID 之後的記錄。\n\n請從前一個回應中的 `meta.pagination.next` URL 的 `after` 查詢引數取得。Paddle 始終會傳回該 URL（即使在最後一頁也是如此），因此請根據 `meta.pagination.has_more` 進行分頁，而非根據其是否存在。"
+        },
+        "app.UGFkZGxl.action.bGlzdF9yZXBvcnRz.option.YWZ0ZXI.display_name": {
+          "source": "After",
+          "message": "之後"
+        },
+        "app.UGFkZGxl.action.bGlzdF9yZXBvcnRz.option.YWZ0ZXI.short_desc": {
+          "source": "Return records after this Paddle ID",
+          "message": "傳回此 Paddle ID 之後的記錄"
+        },
+        "app.UGFkZGxl.action.bGlzdF9yZXBvcnRz.option.b3JkZXJfYnk.desc": {
+          "source": "Order returned entities by the specified field and direction (`[ASC]` or `[DESC]`). For example, `?order_by=id[ASC]`.\n\nValid fields for ordering: `id`.",
+          "message": "依指定的欄位和方向 (`[ASC]` 或 `[DESC]`) 對傳回的實體進行排序。例如 `?order_by=id[ASC]`。\n\n有效的排序欄位：`id`。"
+        },
+        "app.UGFkZGxl.action.bGlzdF9yZXBvcnRz.option.b3JkZXJfYnk.display_name": {
+          "source": "Order By",
+          "message": "排序依據"
+        },
+        "app.UGFkZGxl.action.bGlzdF9yZXBvcnRz.option.b3JkZXJfYnk.short_desc": {
+          "source": "Order by a field and direction, ex: \"id[ASC]\"",
+          "message": "依欄位和方向排序，例如：\"id[ASC]\""
+        },
+        "app.UGFkZGxl.action.bGlzdF9yZXBvcnRz.option.c2tpcF9jb3VudA.desc": {
+          "source": "Set to `true` to skip the count query Paddle runs for a listing.\n\n`meta.pagination.estimated_total` then returns `-1` instead of a count. Worth setting when paging through a large collection, where the count costs time on every page and is not used.",
+          "message": "設為 `true` 以略過 Paddle 在清單查詢時執行的計數查詢。\n\n此時 `meta.pagination.estimated_total` 會傳回 `-1` 而非計數。在對大型集合進行分頁時值得設定此項，因為計數在每一頁都會耗費時間且未被使用。"
+        },
+        "app.UGFkZGxl.action.bGlzdF9yZXBvcnRz.option.c2tpcF9jb3VudA.display_name": {
+          "source": "Skip Count",
+          "message": "略過計數"
+        },
+        "app.UGFkZGxl.action.bGlzdF9yZXBvcnRz.option.c2tpcF9jb3VudA.short_desc": {
+          "source": "Skip the count query, making a large listing cheaper",
+          "message": "略過計數查詢，降低大型清單操作的開銷"
+        },
+        "app.UGFkZGxl.action.bGlzdF9yZXBvcnRz.option.c3RhdHVz.desc": {
+          "source": "Return entities that match the specified status. Use a comma-separated list to specify multiple status values.",
+          "message": "傳回符合指定狀態的實體。使用逗號分隔清單以指定多個狀態值。"
+        },
+        "app.UGFkZGxl.action.bGlzdF9yZXBvcnRz.option.c3RhdHVz.display_name": {
+          "source": "Status",
+          "message": "狀態"
+        },
+        "app.UGFkZGxl.action.bGlzdF9yZXBvcnRz.option.c3RhdHVz.short_desc": {
+          "source": "Return only reports with these statuses",
+          "message": "僅傳回具有這些狀態的報表"
+        },
+        "app.UGFkZGxl.action.bGlzdF9yZXBvcnRz.option.cGVyX3BhZ2U.desc": {
+          "source": "How many records to return in one request, up to Paddle's maximum of `200`. Asking for more returns the maximum rather than failing.\n\n`meta.pagination.per_page` in the response reports how many were actually returned, and `meta.pagination.has_more` says whether another page exists.",
+          "message": "單次請求中傳回的記錄筆數，最高為 Paddle 的上限 `200`。請求超過上限的值將會傳回最大值而非失敗。\n\n回應中的 `meta.pagination.per_page` 會回報實際傳回的筆數，而 `meta.pagination.has_more` 則指示是否存在下一頁。"
+        },
+        "app.UGFkZGxl.action.bGlzdF9yZXBvcnRz.option.cGVyX3BhZ2U.display_name": {
+          "source": "Per Page",
+          "message": "每頁"
+        },
+        "app.UGFkZGxl.action.bGlzdF9yZXBvcnRz.option.cGVyX3BhZ2U.short_desc": {
+          "source": "How many records to return, up to 200",
+          "message": "要傳回的記錄筆數，最多 200"
+        },
+        "app.UGFkZGxl.action.bGlzdF9yZXBvcnRz.short_desc": {
+          "source": "List the reports requested from this account",
+          "message": "列出從此帳戶請求的報表"
+        },
+        "app.UGFkZGxl.action.bGlzdF9zdWJzY3JpcHRpb25z.desc": {
+          "source": "Lists subscriptions.\n\nFilter by `customer_id` for one customer's subscriptions, by `status` for the state they are in - `active`, `trialing`, `past_due`, `paused` or `canceled` - or by `scheduled_change_action` to find the ones with a pause or cancellation already booked.\n\nThe subscriptions are in `data`, and `meta.pagination` carries the cursor for the next page.",
+          "message": "列出訂閱。\n\n依 `customer_id` 篩選單一客戶的訂閱，依 `status` 篩選訂閱所處狀態 — `active`、`trialing`、`past_due`、`paused` 或 `canceled` — 或依 `scheduled_change_action` 尋找已排定暫停或取消的訂閱。\n\n訂閱位於 `data` 中，而 `meta.pagination` 則攜帶下一頁的游標。"
+        },
+        "app.UGFkZGxl.action.bGlzdF9zdWJzY3JpcHRpb25z.display_name": {
+          "source": "List Subscriptions",
+          "message": "列出訂閱"
+        },
+        "app.UGFkZGxl.action.bGlzdF9zdWJzY3JpcHRpb25z.option.Y29sbGVjdGlvbl9tb2Rl.allowed-value.c3RyaW5nOm1hbnVhbA.display_name": {
+          "source": "manual",
+          "message": "手動"
+        },
+        "app.UGFkZGxl.action.bGlzdF9zdWJzY3JpcHRpb25z.option.Y29sbGVjdGlvbl9tb2Rl.allowed-value.c3RyaW5nOmF1dG9tYXRpYw.display_name": {
+          "source": "automatic",
+          "message": "自動"
+        },
+        "app.UGFkZGxl.action.bGlzdF9zdWJzY3JpcHRpb25z.option.Y29sbGVjdGlvbl9tb2Rl.desc": {
+          "source": "Return entities that match the specified collection mode.",
+          "message": "傳回符合指定收款模式的實體。"
+        },
+        "app.UGFkZGxl.action.bGlzdF9zdWJzY3JpcHRpb25z.option.Y29sbGVjdGlvbl9tb2Rl.display_name": {
+          "source": "Collection Mode",
+          "message": "收款模式"
+        },
+        "app.UGFkZGxl.action.bGlzdF9zdWJzY3JpcHRpb25z.option.Y29sbGVjdGlvbl9tb2Rl.short_desc": {
+          "source": "Return entities that match the specified collection mode",
+          "message": "傳回符合指定收款模式的實體"
+        },
+        "app.UGFkZGxl.action.bGlzdF9zdWJzY3JpcHRpb25z.option.Y3VzdG9tZXJfaWQ.desc": {
+          "source": "Return entities related to the specified customer. Use a comma-separated list to specify multiple customer IDs.",
+          "message": "傳回與指定客戶相關的實體。使用逗號分隔清單以指定多個客戶 ID。"
+        },
+        "app.UGFkZGxl.action.bGlzdF9zdWJzY3JpcHRpb25z.option.Y3VzdG9tZXJfaWQ.display_name": {
+          "source": "Customer",
+          "message": "客戶"
+        },
+        "app.UGFkZGxl.action.bGlzdF9zdWJzY3JpcHRpb25z.option.Y3VzdG9tZXJfaWQ.short_desc": {
+          "source": "Return only subscriptions for these customers",
+          "message": "僅傳回這些客戶的訂閱"
+        },
+        "app.UGFkZGxl.action.bGlzdF9zdWJzY3JpcHRpb25z.option.YWRkcmVzc19pZA.desc": {
+          "source": "Return entities related to the specified address. Use a comma-separated list to specify multiple address IDs.",
+          "message": "傳回與指定地址相關的實體。使用逗號分隔清單指定多個地址 ID。"
+        },
+        "app.UGFkZGxl.action.bGlzdF9zdWJzY3JpcHRpb25z.option.YWRkcmVzc19pZA.display_name": {
+          "source": "Address Id",
+          "message": "地址 ID"
+        },
+        "app.UGFkZGxl.action.bGlzdF9zdWJzY3JpcHRpb25z.option.YWRkcmVzc19pZA.short_desc": {
+          "source": "Return entities related to the specified address",
+          "message": "傳回與指定地址相關的實體"
+        },
+        "app.UGFkZGxl.action.bGlzdF9zdWJzY3JpcHRpb25z.option.YWZ0ZXI.desc": {
+          "source": "The pagination cursor: return the records that come after this Paddle ID.\n\nTake it from the `after` query argument of the `meta.pagination.next` URL in the previous response. Paddle always returns that URL, even on the last page, so page on `meta.pagination.has_more` rather than on its presence.",
+          "message": "分頁游標：傳回此 Paddle ID 之後的記錄。\n\n請從前一個回應中的 `meta.pagination.next` URL 的 `after` 查詢引數取得。Paddle 始終會傳回該 URL（即使在最後一頁也是如此），因此請根據 `meta.pagination.has_more` 進行分頁，而非根據其是否存在。"
+        },
+        "app.UGFkZGxl.action.bGlzdF9zdWJzY3JpcHRpb25z.option.YWZ0ZXI.display_name": {
+          "source": "After",
+          "message": "之後"
+        },
+        "app.UGFkZGxl.action.bGlzdF9zdWJzY3JpcHRpb25z.option.YWZ0ZXI.short_desc": {
+          "source": "Return records after this Paddle ID",
+          "message": "傳回此 Paddle ID 之後的記錄"
+        },
+        "app.UGFkZGxl.action.bGlzdF9zdWJzY3JpcHRpb25z.option.aWQ.desc": {
+          "source": "Return only the IDs specified. Use a comma-separated list to get multiple entities.",
+          "message": "僅傳回指定的 ID。使用逗號分隔清單以取得多個實體。"
+        },
+        "app.UGFkZGxl.action.bGlzdF9zdWJzY3JpcHRpb25z.option.aWQ.display_name": {
+          "source": "Subscription",
+          "message": "訂閱"
+        },
+        "app.UGFkZGxl.action.bGlzdF9zdWJzY3JpcHRpb25z.option.aWQ.short_desc": {
+          "source": "Return only these subscriptions",
+          "message": "僅傳回這些訂閱"
+        },
+        "app.UGFkZGxl.action.bGlzdF9zdWJzY3JpcHRpb25z.option.b3JkZXJfYnk.desc": {
+          "source": "Order returned entities by the specified field and direction (`[ASC]` or `[DESC]`). For example, `?order_by=id[ASC]`.\n\nValid fields for ordering: `id`.",
+          "message": "依指定的欄位和方向 (`[ASC]` 或 `[DESC]`) 對傳回的實體進行排序。例如 `?order_by=id[ASC]`。\n\n有效的排序欄位：`id`。"
+        },
+        "app.UGFkZGxl.action.bGlzdF9zdWJzY3JpcHRpb25z.option.b3JkZXJfYnk.display_name": {
+          "source": "Order By",
+          "message": "排序依據"
+        },
+        "app.UGFkZGxl.action.bGlzdF9zdWJzY3JpcHRpb25z.option.b3JkZXJfYnk.short_desc": {
+          "source": "Order by a field and direction, ex: \"id[ASC]\"",
+          "message": "依欄位和方向排序，例如：\"id[ASC]\""
+        },
+        "app.UGFkZGxl.action.bGlzdF9zdWJzY3JpcHRpb25z.option.bmV4dF9iaWxsZWRfYXQ.desc": {
+          "source": "Return entities next billed at a specific time. Pass `null` to return entities with no next billing date.\n",
+          "message": "傳回在特定時間進行下一次計費的實體。傳遞 `null` 以傳回沒有下一次計費日期的實體。\n"
+        },
+        "app.UGFkZGxl.action.bGlzdF9zdWJzY3JpcHRpb25z.option.bmV4dF9iaWxsZWRfYXQ.display_name": {
+          "source": "Next Billed At",
+          "message": "下一次計費時間"
+        },
+        "app.UGFkZGxl.action.bGlzdF9zdWJzY3JpcHRpb25z.option.bmV4dF9iaWxsZWRfYXQ.short_desc": {
+          "source": "Return entities next billed at a specific time",
+          "message": "傳回在特定時間進行下一次計費的實體"
+        },
+        "app.UGFkZGxl.action.bGlzdF9zdWJzY3JpcHRpb25z.option.c2NoZWR1bGVkX2NoYW5nZV9hY3Rpb24.desc": {
+          "source": "Return subscriptions that have a scheduled change. Use a comma-separated list to specify multiple scheduled change actions.",
+          "message": "傳回有排程變更的訂閱。使用逗號分隔清單指定多個排程變更動作。"
+        },
+        "app.UGFkZGxl.action.bGlzdF9zdWJzY3JpcHRpb25z.option.c2NoZWR1bGVkX2NoYW5nZV9hY3Rpb24.display_name": {
+          "source": "Scheduled Change Action",
+          "message": "排程變更動作"
+        },
+        "app.UGFkZGxl.action.bGlzdF9zdWJzY3JpcHRpb25z.option.c2NoZWR1bGVkX2NoYW5nZV9hY3Rpb24.short_desc": {
+          "source": "Return subscriptions that have a scheduled change",
+          "message": "傳回有排程變更的訂閱"
+        },
+        "app.UGFkZGxl.action.bGlzdF9zdWJzY3JpcHRpb25z.option.c2tpcF9jb3VudA.desc": {
+          "source": "Set to `true` to skip the count query Paddle runs for a listing.\n\n`meta.pagination.estimated_total` then returns `-1` instead of a count. Worth setting when paging through a large collection, where the count costs time on every page and is not used.",
+          "message": "設為 `true` 以略過 Paddle 在清單查詢時執行的計數查詢。\n\n此時 `meta.pagination.estimated_total` 會傳回 `-1` 而非計數。在對大型集合進行分頁時值得設定此項，因為計數在每一頁都會耗費時間且未被使用。"
+        },
+        "app.UGFkZGxl.action.bGlzdF9zdWJzY3JpcHRpb25z.option.c2tpcF9jb3VudA.display_name": {
+          "source": "Skip Count",
+          "message": "略過計數"
+        },
+        "app.UGFkZGxl.action.bGlzdF9zdWJzY3JpcHRpb25z.option.c2tpcF9jb3VudA.short_desc": {
+          "source": "Skip the count query, making a large listing cheaper",
+          "message": "略過計數查詢，降低大型清單操作的開銷"
+        },
+        "app.UGFkZGxl.action.bGlzdF9zdWJzY3JpcHRpb25z.option.c3RhdHVz.desc": {
+          "source": "Return entities that match the specified status. Use a comma-separated list to specify multiple status values.",
+          "message": "傳回符合指定狀態的實體。使用逗號分隔清單以指定多個狀態值。"
+        },
+        "app.UGFkZGxl.action.bGlzdF9zdWJzY3JpcHRpb25z.option.c3RhdHVz.display_name": {
+          "source": "Status",
+          "message": "狀態"
+        },
+        "app.UGFkZGxl.action.bGlzdF9zdWJzY3JpcHRpb25z.option.c3RhdHVz.short_desc": {
+          "source": "Return only subscriptions with these statuses",
+          "message": "僅傳回具有這些狀態的訂閱"
+        },
+        "app.UGFkZGxl.action.bGlzdF9zdWJzY3JpcHRpb25z.option.cGVyX3BhZ2U.desc": {
+          "source": "How many records to return in one request, up to Paddle's maximum of `200`. Asking for more returns the maximum rather than failing.\n\n`meta.pagination.per_page` in the response reports how many were actually returned, and `meta.pagination.has_more` says whether another page exists.",
+          "message": "單次請求中傳回的記錄筆數，最高為 Paddle 的上限 `200`。請求超過上限的值將會傳回最大值而非失敗。\n\n回應中的 `meta.pagination.per_page` 會回報實際傳回的筆數，而 `meta.pagination.has_more` 則指示是否存在下一頁。"
+        },
+        "app.UGFkZGxl.action.bGlzdF9zdWJzY3JpcHRpb25z.option.cGVyX3BhZ2U.display_name": {
+          "source": "Per Page",
+          "message": "每頁"
+        },
+        "app.UGFkZGxl.action.bGlzdF9zdWJzY3JpcHRpb25z.option.cGVyX3BhZ2U.short_desc": {
+          "source": "How many records to return, up to 200",
+          "message": "要傳回的記錄筆數，最多 200"
+        },
+        "app.UGFkZGxl.action.bGlzdF9zdWJzY3JpcHRpb25z.option.cHJpY2VfaWQ.desc": {
+          "source": "Return entities related to the specified price. Use a comma-separated list to specify multiple price IDs.",
+          "message": "傳回與指定價格相關的實體。使用逗號分隔清單指定多個價格 ID。"
+        },
+        "app.UGFkZGxl.action.bGlzdF9zdWJzY3JpcHRpb25z.option.cHJpY2VfaWQ.display_name": {
+          "source": "Price",
+          "message": "價格"
+        },
+        "app.UGFkZGxl.action.bGlzdF9zdWJzY3JpcHRpb25z.option.cHJpY2VfaWQ.short_desc": {
+          "source": "Return only subscriptions billing these prices",
+          "message": "僅傳回使用這些價格計費的訂閱"
+        },
+        "app.UGFkZGxl.action.bGlzdF9zdWJzY3JpcHRpb25z.short_desc": {
+          "source": "List the subscriptions in this Paddle account",
+          "message": "列出此 Paddle 帳戶中的訂閱"
+        },
+        "app.UGFkZGxl.action.bWFrZS1hcGktY2FsbA.desc": {
+          "source": "Make a custom HTTP / REST API call to **Paddle** using the configured connection's authentication.\n\nSpecify the HTTP method, the URI path (relative to the connection's API base URL), optional query parameters, headers, and request body. The response is returned as a hash containing the status code, response headers, and response body.\n\nUse this action for endpoints that are not yet exposed as first-class actions on this app.",
+          "message": "使用已設定連線的驗證向 **Paddle** 發出自訂 HTTP / REST API 呼叫。\n\n指定 HTTP 方法、URI 路徑 (相對於連線的 API 基礎 URL)、選填查詢參數、標頭和請求主體。回應將以包含狀態碼、回應標頭和回應主體的雜湊傳回。\n\n對於尚未在此應用程式上作為頂級動作公開的端點，請使用此動作。"
+        },
+        "app.UGFkZGxl.action.bWFrZS1hcGktY2FsbA.display_name": {
+          "source": "Make an API call",
+          "message": "發出 API 呼叫"
+        },
+        "app.UGFkZGxl.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.desc": {
+          "source": "The request body. The effective type depends on `body_type`: JSON/form/YAML expect a hash, XML/text expect a string, multipart expects a file structure, binary expects raw bytes.",
+          "message": "請求主體。有效類型取決於 `body_type`：JSON/form/YAML 期望雜湊，XML/text 期望字串，multipart 期望檔案結構，binary 期望原始位元組。"
+        },
+        "app.UGFkZGxl.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.display_name": {
+          "source": "Body",
+          "message": "內文"
+        },
+        "app.UGFkZGxl.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.short_desc": {
+          "source": "The request body",
+          "message": "請求主體"
+        },
+        "app.UGFkZGxl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.desc": {
+          "source": "Upload a file using `multipart/form-data`. The body must be a @ref DataProvider::FileDataType \"FileDataType\" structure (filename + content + mime_type). The framework builds the multipart envelope and sets the boundary header.",
+          "message": "使用 `multipart/form-data` 上傳檔案。主體必須是 @ref DataProvider::FileDataType \"FileDataType\" 結構（filename + content + mime_type）。架構會建立 multipart 封套並設定 boundary 標頭。"
+        },
+        "app.UGFkZGxl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.display_name": {
+          "source": "Multipart Form",
+          "message": "Multipart 表單"
+        },
+        "app.UGFkZGxl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.short_desc": {
+          "source": "Upload a file using multipart/form-data",
+          "message": "使用 multipart/form-data 上傳檔案"
+        },
+        "app.UGFkZGxl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.desc": {
+          "source": "Pass the body to the REST client unchanged; the client decides serialization based on its configured `data` option and the value type",
+          "message": "原封不動地將主體傳遞給 REST 用戶端；用戶端會根據其設定的 `data` 選項和值類型來決定序列化方式"
+        },
+        "app.UGFkZGxl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.display_name": {
+          "source": "Auto",
+          "message": "自動"
+        },
+        "app.UGFkZGxl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.short_desc": {
+          "source": "Pass-through; use connection serialization and let the REST client decide",
+          "message": "透傳；使用連線序列化並由 REST 用戶端決定"
+        },
+        "app.UGFkZGxl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.desc": {
+          "source": "Send the body as raw bytes. The body must be a binary value. Sets `Content-Type: application/octet-stream` unless overridden by `hdr`.",
+          "message": "將主體作為原始位元組傳送。主體必須是二進位值。除非被 `hdr` 覆蓋，否則會設定 `Content-Type: application/octet-stream`。"
+        },
+        "app.UGFkZGxl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.display_name": {
+          "source": "Raw Binary",
+          "message": "原始二進位"
+        },
+        "app.UGFkZGxl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.short_desc": {
+          "source": "Send body as raw bytes",
+          "message": "將主體作為原始位元組傳送"
+        },
+        "app.UGFkZGxl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.desc": {
+          "source": "Serialize a hash of form fields as `application/x-www-form-urlencoded`. The body must be a hash whose values are scalars (strings/numbers/booleans).",
+          "message": "將表單欄位的雜湊序列化為 `application/x-www-form-urlencoded`。主體必須是值為純量（字串/數字/布林值）的雜湊。"
+        },
+        "app.UGFkZGxl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.display_name": {
+          "source": "Form (URL-encoded)",
+          "message": "表單 (URL 編碼)"
+        },
+        "app.UGFkZGxl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.short_desc": {
+          "source": "Serialize body as application/x-www-form-urlencoded form fields",
+          "message": "將主體序列化為 application/x-www-form-urlencoded 表單欄位"
+        },
+        "app.UGFkZGxl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.desc": {
+          "source": "Serialize the body as JSON; sets `Content-Type: application/json`. The body should be a hash, list, or scalar value.",
+          "message": "將主體序列化為 JSON；設定 `Content-Type: application/json`。主體應為雜湊、清單或純量值。"
+        },
+        "app.UGFkZGxl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.display_name": {
+          "source": "JSON",
+          "message": "JSON"
+        },
+        "app.UGFkZGxl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.short_desc": {
+          "source": "Serialize body as JSON",
+          "message": "將主體序列化為 JSON"
+        },
+        "app.UGFkZGxl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.desc": {
+          "source": "Send the body as plain text. The body must be a string. Sets `Content-Type: text/plain`.",
+          "message": "將主體作為純文字傳送。主體必須是字串。設定 `Content-Type: text/plain`。"
+        },
+        "app.UGFkZGxl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.display_name": {
+          "source": "Plain Text",
+          "message": "純文字"
+        },
+        "app.UGFkZGxl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.short_desc": {
+          "source": "Send body as text/plain",
+          "message": "將主體作為 text/plain 傳送"
+        },
+        "app.UGFkZGxl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.desc": {
+          "source": "Send the body as XML. If the body is a hash it is serialized to XML; if it is a string it is sent verbatim. Sets `Content-Type: application/xml`.",
+          "message": "將主體作為 XML 傳送。若主體為雜湊，則會序列化為 XML；若為字串，則原樣傳送。設定 `Content-Type: application/xml`。"
+        },
+        "app.UGFkZGxl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.display_name": {
+          "source": "XML",
+          "message": "XML"
+        },
+        "app.UGFkZGxl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.short_desc": {
+          "source": "Send body as XML",
+          "message": "將主體作為 XML 傳送"
+        },
+        "app.UGFkZGxl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.desc": {
+          "source": "Send the body as YAML. If the body is a hash it is serialized to YAML; if it is a string it is sent verbatim. Sets `Content-Type: application/x-yaml`.",
+          "message": "將主體作為 YAML 傳送。若主體為雜湊，則會序列化為 YAML；若為字串，則原樣傳送。設定 `Content-Type: application/x-yaml`。"
+        },
+        "app.UGFkZGxl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.display_name": {
+          "source": "YAML",
+          "message": "YAML"
+        },
+        "app.UGFkZGxl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.short_desc": {
+          "source": "Send body as YAML",
+          "message": "將主體作為 YAML 傳送"
+        },
+        "app.UGFkZGxl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.desc": {
+          "source": "Selects the body serialization mode and the corresponding `Content-Type` header. Changing this field reshapes the `body` editor - selecting JSON exposes a JSON editor, selecting Multipart Form exposes a file picker, and so on.",
+          "message": "選擇主體序列化模式及對應的 `Content-Type` 標頭。變更此欄位會重新配置 `body` 編輯器 — 選擇 JSON 會顯示 JSON 編輯器，選擇 Multipart 表單會顯示檔案選擇器，依此類推。"
+        },
+        "app.UGFkZGxl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.display_name": {
+          "source": "Body Type",
+          "message": "主體類型"
+        },
+        "app.UGFkZGxl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.short_desc": {
+          "source": "How the body is serialized and what Content-Type is sent",
+          "message": "主體如何序列化以及傳送何種 Content-Type"
+        },
+        "app.UGFkZGxl.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.desc": {
+          "source": "If `True`, non-2xx HTTP responses return as the normal response hash (with the actual status code) instead of raising `REST-RESPONSE-ERROR`. Useful for handling 4xx/5xx as data - e.g. checking whether a resource exists. Overrides the connection's `error_passthru` setting for this call only.",
+          "message": "若為 `True`，非 2xx HTTP 回應會作為正常的相應雜湊傳回（帶有實際狀態碼），而非引發 `REST-RESPONSE-ERROR`。有助於將 4xx/5xx 作為資料處理 — 例如檢查資源是否存在。僅針對本次呼叫覆蓋連線的 `error_passthru` 設定。"
+        },
+        "app.UGFkZGxl.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.display_name": {
+          "source": "Return Errors as Data",
+          "message": "將錯誤作為資料傳回"
+        },
+        "app.UGFkZGxl.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.short_desc": {
+          "source": "Return non-2xx responses normally instead of throwing",
+          "message": "正常傳回非 2xx 回應而非拋出例外"
+        },
+        "app.UGFkZGxl.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.desc": {
+          "source": "Optional list of HTTP status codes treated as success. If set and the response status is not in this list, the action throws `REST-STATUS-ERROR`. When unset, the REST client's default behavior applies (typically: 2xx is success, non-2xx throws).",
+          "message": "視為成功的 HTTP 狀態碼選擇性清單。若有設定且回應狀態不在此清單中，該動作會拋出 `REST-STATUS-ERROR`。若未設定，則套用 REST 用戶端的預設行為（通常：2xx 為成功，非 2xx 則拋出例外）。"
+        },
+        "app.UGFkZGxl.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.display_name": {
+          "source": "Expected Status Codes",
+          "message": "預期的狀態碼"
+        },
+        "app.UGFkZGxl.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.short_desc": {
+          "source": "Response status codes treated as success",
+          "message": "視為成功的回應狀態碼"
+        },
+        "app.UGFkZGxl.action.bWFrZS1hcGktY2FsbA.option.aGRy.desc": {
+          "source": "Hash of custom headers added to the request. These override any default headers set by `body_type` (e.g. supplying `Content-Type` here wins over the body-type default).",
+          "message": "新增至請求的自訂標頭雜湊。這些標頭會覆蓋由 `body_type` 設定的任何預設標頭（例如，在此處提供 `Content-Type` 會優先於主體類型的預設值）。"
+        },
+        "app.UGFkZGxl.action.bWFrZS1hcGktY2FsbA.option.aGRy.display_name": {
+          "source": "Custom Headers",
+          "message": "自訂標頭"
+        },
+        "app.UGFkZGxl.action.bWFrZS1hcGktY2FsbA.option.aGRy.short_desc": {
+          "source": "Extra request headers",
+          "message": "額外的請求標頭"
+        },
+        "app.UGFkZGxl.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.desc": {
+          "source": "If `True`, the response hash includes a `debug` sub-hash containing the request method/URL/headers (with sensitive values redacted), request and response sizes, and round-trip duration. Useful when investigating slow or failing calls. Off by default to keep responses lean.",
+          "message": "若為 `True`，回應雜湊包含 `debug` 子雜湊，其中含有請求方法/URL/標頭（敏感值已被隱藏）、請求與回應大小以及來回時間。在調查過慢或失敗的呼叫時很有用。預設為關閉以保持回應精簡。"
+        },
+        "app.UGFkZGxl.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.display_name": {
+          "source": "Include Debug Info",
+          "message": "包含除錯資訊"
+        },
+        "app.UGFkZGxl.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.short_desc": {
+          "source": "Include request/timing/size debug info in the response",
+          "message": "在回應中包含請求/計時/大小等除錯資訊"
+        },
+        "app.UGFkZGxl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.desc": {
+          "source": "HTTP `OPTIONS`",
+          "message": "HTTP `OPTIONS`"
+        },
+        "app.UGFkZGxl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.display_name": {
+          "source": "OPTIONS",
+          "message": "OPTIONS"
+        },
+        "app.UGFkZGxl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.short_desc": {
+          "source": "HTTP OPTIONS",
+          "message": "HTTP OPTIONS"
+        },
+        "app.UGFkZGxl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.desc": {
+          "source": "HTTP `DELETE`",
+          "message": "HTTP `DELETE`"
+        },
+        "app.UGFkZGxl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.display_name": {
+          "source": "DELETE",
+          "message": "DELETE"
+        },
+        "app.UGFkZGxl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.short_desc": {
+          "source": "HTTP DELETE",
+          "message": "HTTP DELETE"
+        },
+        "app.UGFkZGxl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.desc": {
+          "source": "HTTP `GET`",
+          "message": "HTTP `GET`"
+        },
+        "app.UGFkZGxl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.display_name": {
+          "source": "GET",
+          "message": "GET"
+        },
+        "app.UGFkZGxl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.short_desc": {
+          "source": "HTTP GET",
+          "message": "HTTP GET"
+        },
+        "app.UGFkZGxl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.desc": {
+          "source": "HTTP `HEAD`",
+          "message": "HTTP `HEAD`"
+        },
+        "app.UGFkZGxl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.display_name": {
+          "source": "HEAD",
+          "message": "HEAD"
+        },
+        "app.UGFkZGxl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.short_desc": {
+          "source": "HTTP HEAD",
+          "message": "HTTP HEAD"
+        },
+        "app.UGFkZGxl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.desc": {
+          "source": "HTTP `PATCH`",
+          "message": "HTTP `PATCH`"
+        },
+        "app.UGFkZGxl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.display_name": {
+          "source": "PATCH",
+          "message": "PATCH"
+        },
+        "app.UGFkZGxl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.short_desc": {
+          "source": "HTTP PATCH",
+          "message": "HTTP PATCH"
+        },
+        "app.UGFkZGxl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.desc": {
+          "source": "HTTP `POST`",
+          "message": "HTTP `POST`"
+        },
+        "app.UGFkZGxl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.display_name": {
+          "source": "POST",
+          "message": "POST"
+        },
+        "app.UGFkZGxl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.short_desc": {
+          "source": "HTTP POST",
+          "message": "HTTP POST"
+        },
+        "app.UGFkZGxl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.desc": {
+          "source": "HTTP `PUT`",
+          "message": "HTTP `PUT`"
+        },
+        "app.UGFkZGxl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.display_name": {
+          "source": "PUT",
+          "message": "PUT"
+        },
+        "app.UGFkZGxl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.short_desc": {
+          "source": "HTTP PUT",
+          "message": "HTTP PUT"
+        },
+        "app.UGFkZGxl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.desc": {
+          "source": "HTTP `TRACE`",
+          "message": "HTTP `TRACE`"
+        },
+        "app.UGFkZGxl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.display_name": {
+          "source": "TRACE",
+          "message": "TRACE"
+        },
+        "app.UGFkZGxl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.short_desc": {
+          "source": "HTTP TRACE",
+          "message": "HTTP TRACE"
+        },
+        "app.UGFkZGxl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "用於請求的 HTTP 方法"
+        },
+        "app.UGFkZGxl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.display_name": {
+          "source": "HTTP Method",
+          "message": "HTTP 方法"
+        },
+        "app.UGFkZGxl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.short_desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "用於請求的 HTTP 方法"
+        },
+        "app.UGFkZGxl.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain `{name}` placeholders that are replaced from `path_vars`. Example: `/users/{id}/comments`.",
+          "message": "相於連線 API 基底 URL 的 URI 路徑。可能包含從 `path_vars` 替換的 `{name}` 預留位置。範例：`/users/{id}/comments`。"
+        },
+        "app.UGFkZGxl.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.display_name": {
+          "source": "URI Path",
+          "message": "URI 路徑"
+        },
+        "app.UGFkZGxl.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.short_desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain '{name}' placeholders that are replaced from 'path_vars'. Example: '/users/{id}/comments'",
+          "message": "相對於連線 API 根 URL 的 URI 路徑。可能包含從 'path_vars' 替換的 '{name}' 預留位置。範例：'/users/{id}/comments'"
+        },
+        "app.UGFkZGxl.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.desc": {
+          "source": "Hash of values substituted into `{name}` placeholders in the URI path. Example: with `path = /users/{id}` and `path_vars = {id: 123}` the framework sends `/users/123`. Values are URL-encoded.",
+          "message": "代入 URI 路徑中 `{name}` 預留位置的值 Hash。範例：使用 `path = /users/{id}` 與 `path_vars = {id: 123}`，框架會傳送 `/users/123`。值均經過 URL 編碼。"
+        },
+        "app.UGFkZGxl.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.display_name": {
+          "source": "Path Variables",
+          "message": "路徑變數"
+        },
+        "app.UGFkZGxl.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.short_desc": {
+          "source": "Values for {name} placeholders in path",
+          "message": "路徑中 {name} 預留位置的值"
+        },
+        "app.UGFkZGxl.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.desc": {
+          "source": "Hash of query string parameters to append to the URI path. Values are URL-encoded; list values are joined with `,`.",
+          "message": "要附加至 URI 路徑的查詢字串參數 Hash。值均經過 URL 編碼；清單值會以 `,` 連接。"
+        },
+        "app.UGFkZGxl.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.display_name": {
+          "source": "Query Arguments",
+          "message": "查詢引數"
+        },
+        "app.UGFkZGxl.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.short_desc": {
+          "source": "Query string parameters",
+          "message": "查詢字串參數"
+        },
+        "app.UGFkZGxl.action.bWFrZS1hcGktY2FsbA.short_desc": {
+          "source": "Make a custom API call to Paddle",
+          "message": "向 Paddle 發出自訂 API 呼叫"
+        },
+        "app.UGFkZGxl.action.c2VhcmNo.desc": {
+          "source": "Returns every record in the given table matching the search criteria",
+          "message": "返回給定表格中符合搜尋條件的每筆記錄"
+        },
+        "app.UGFkZGxl.action.c2VhcmNo.display_name": {
+          "source": "Search Records",
+          "message": "搜尋記錄"
+        },
+        "app.UGFkZGxl.action.c2VhcmNo.option.dGFibGU.desc": {
+          "source": "The table to work with: `customers`, `products`, `prices`, `transactions` or `reports`",
+          "message": "要操作的資料表：`customers`、`products`、`prices`、`transactions` 或 `reports`"
+        },
+        "app.UGFkZGxl.action.c2VhcmNo.option.dGFibGU.display_name": {
+          "source": "Table",
+          "message": "表格"
+        },
+        "app.UGFkZGxl.action.c2VhcmNo.option.dGFibGU.short_desc": {
+          "source": "The name of the table to work with",
+          "message": "要操作的資料表名稱"
+        },
+        "app.UGFkZGxl.action.c2VhcmNo.short_desc": {
+          "source": "Search for matching records in the given table",
+          "message": "在給定表格中搜尋符合的記錄"
+        },
+        "app.UGFkZGxl.action.c2VhcmNoLXNpbmdsZQ.desc": {
+          "source": "Returns the one record in the given table matching the search criteria; it is an error if more than one matches",
+          "message": "返回給定表格中符合搜尋條件的一筆記錄；如果有多筆符合則會回報錯誤"
+        },
+        "app.UGFkZGxl.action.c2VhcmNoLXNpbmdsZQ.display_name": {
+          "source": "Find a Single Record",
+          "message": "尋找單筆記錄"
+        },
+        "app.UGFkZGxl.action.c2VhcmNoLXNpbmdsZQ.option.dGFibGU.desc": {
+          "source": "The table to work with: `customers`, `products`, `prices`, `transactions` or `reports`",
+          "message": "要操作的資料表：`customers`、`products`、`prices`、`transactions` 或 `reports`"
+        },
+        "app.UGFkZGxl.action.c2VhcmNoLXNpbmdsZQ.option.dGFibGU.display_name": {
+          "source": "Table",
+          "message": "表格"
+        },
+        "app.UGFkZGxl.action.c2VhcmNoLXNpbmdsZQ.option.dGFibGU.short_desc": {
+          "source": "The name of the table to work with",
+          "message": "要操作的資料表名稱"
+        },
+        "app.UGFkZGxl.action.c2VhcmNoLXNpbmdsZQ.short_desc": {
+          "source": "Search for a single matching record in the given table",
+          "message": "在給定表格中搜尋單筆符合的記錄"
+        },
+        "app.UGFkZGxl.action.c3Vic2NyaXB0aW9uLWFjdGl2YXRlZA.desc": {
+          "source": "Fires when a subscription first becomes `active` -- a trial ended and was paid for, or a scheduled start arrived.\n\nThis is the signal to provision a paid plan: it means Paddle has collected, where `subscription.created` only means the record exists.",
+          "message": "當訂閱首次變為 `active` 時觸發 —— 試用結束並已付款，或已到達排定的開始時間。\n\n這是佈建付費方案的信號：這代表 Paddle 已收款，而 `subscription.created` 僅代表記錄存在。"
+        },
+        "app.UGFkZGxl.action.c3Vic2NyaXB0aW9uLWFjdGl2YXRlZA.display_name": {
+          "source": "Subscription Activated",
+          "message": "訂閱已啟用"
+        },
+        "app.UGFkZGxl.action.c3Vic2NyaXB0aW9uLWFjdGl2YXRlZA.short_desc": {
+          "source": "React to a subscription becoming active",
+          "message": "當訂閱變為有效時作出反應"
+        },
+        "app.UGFkZGxl.action.c3Vic2NyaXB0aW9uLWNhbmNlbGVk.desc": {
+          "source": "Fires when a subscription actually ends and `status` becomes `canceled`.\n\n**This is the deprovisioning signal, not the cancellation request.** A cancellation booked for the end of the billing period appears first as a `scheduled_change` on `subscription.updated`, and the customer has paid up to that date; this event is when the date arrives.",
+          "message": "當訂閱實際結束且 `status` 變更為 `canceled` 時觸發。\n\n**這是取消佈署信號，而不是取消請求。** 預定在計費週期結束時取消的訂閱，首先會顯示為 `subscription.updated` 上的 `scheduled_change`，且客戶已支付至該日期為止的費用；此事件會在該日期到達時觸發。"
+        },
+        "app.UGFkZGxl.action.c3Vic2NyaXB0aW9uLWNhbmNlbGVk.display_name": {
+          "source": "Subscription Canceled",
+          "message": "訂閱已取消"
+        },
+        "app.UGFkZGxl.action.c3Vic2NyaXB0aW9uLWNhbmNlbGVk.short_desc": {
+          "source": "React to a subscription ending",
+          "message": "在訂閱結束時作出回應"
+        },
+        "app.UGFkZGxl.action.c3Vic2NyaXB0aW9uLWNyZWF0ZWQ.desc": {
+          "source": "Fires when a subscription is created.\n\n**Created is not the same as paid.** A new subscription is often `trialing`, and one created for a transaction that has not been collected yet is not earning anything; check `status` before provisioning. `subscription.activated` is the signal that billing has actually begun.\n\nThis replaces polling the subscription listing.",
+          "message": "當訂閱建立時觸發。\n\n**已建立不等於已付款。** 新訂閱通常處於 `trialing` 狀態，而針對尚未收款的交易建立的訂閱並未產生任何收入；在佈署前請檢查 `status`。`subscription.activated` 才是計費實際開始的信號。\n\n這取代了輪詢訂閱清單的做法。"
+        },
+        "app.UGFkZGxl.action.c3Vic2NyaXB0aW9uLWNyZWF0ZWQ.display_name": {
+          "source": "Subscription Created",
+          "message": "訂閱已建立"
+        },
+        "app.UGFkZGxl.action.c3Vic2NyaXB0aW9uLWNyZWF0ZWQ.short_desc": {
+          "source": "React to a subscription being created",
+          "message": "在訂閱建立時作出回應"
+        },
+        "app.UGFkZGxl.action.c3Vic2NyaXB0aW9uLXBhc3QtZHVl.desc": {
+          "source": "Fires when a renewal could not be collected and the subscription becomes `past_due`.\n\nPaddle retries on its dunning schedule, so this is not yet the end: the subscription recovers to `active` if a retry succeeds, or is canceled when the retries run out. Treat it as a warning to prompt the customer, not as a reason to cut off access.",
+          "message": "當續訂無法收款且訂閱變更為 `past_due` 時觸發。\n\nPaddle 會依催收排程重試，因此這尚未結束：如果重試成功，訂閱將恢復為 `active`；若重試次數用盡則會取消。請將此視為提醒客戶的警告，而非切斷存取權限的理由。"
+        },
+        "app.UGFkZGxl.action.c3Vic2NyaXB0aW9uLXBhc3QtZHVl.display_name": {
+          "source": "Subscription Past Due",
+          "message": "訂閱逾期"
+        },
+        "app.UGFkZGxl.action.c3Vic2NyaXB0aW9uLXBhc3QtZHVl.short_desc": {
+          "source": "React to a subscription's payment failing",
+          "message": "在訂閱付款失敗時作出回應"
+        },
+        "app.UGFkZGxl.action.c3Vic2NyaXB0aW9uLXVwZGF0ZWQ.desc": {
+          "source": "Fires for any change to a subscription: a plan change, a quantity change, a renewal moving `next_billed_at`, or a pause or cancellation being **scheduled**.\n\n`scheduled_change` is the field that distinguishes those last cases -- a subscription can be `active` and still be booked to end. Paddle sends the whole subscription rather than a diff.",
+          "message": "當訂閱發生任何變更時觸發：方案變更、數量變更、推進 `next_billed_at` 的續訂，或是**已排程**暫停或取消。\n\n`scheduled_change` 是用來區分後者情況的欄位——訂閱可能處於 `active` 狀態，但仍已預定結束。Paddle 會發送完整的訂閱物件而非差異。"
+        },
+        "app.UGFkZGxl.action.c3Vic2NyaXB0aW9uLXVwZGF0ZWQ.display_name": {
+          "source": "Subscription Updated",
+          "message": "訂閱已更新"
+        },
+        "app.UGFkZGxl.action.c3Vic2NyaXB0aW9uLXVwZGF0ZWQ.short_desc": {
+          "source": "React to a subscription changing",
+          "message": "在訂閱變更時作出回應"
+        },
+        "app.UGFkZGxl.action.cHJpY2UtY3JlYXRlZA.desc": {
+          "source": "Fires when a price is created against a product.\n\n`unit_price.amount` is a string in the **smallest unit of its currency**, so `1000` is $10.00 in USD but 1000 yen in JPY. A `billing_cycle` makes it a subscription price; without one it is a one-off charge.",
+          "message": "當為產品建立價格時觸發。\n\n`unit_price.amount` 是以**該貨幣的最小單位**表示的字串，例如 `1000` 在 USD 中為 $10.00，但在 JPY 中為 1000 日圓。具備 `billing_cycle` 會使其成為訂閱價格；沒有則為單次收費。"
+        },
+        "app.UGFkZGxl.action.cHJpY2UtY3JlYXRlZA.display_name": {
+          "source": "Price Created",
+          "message": "價格已建立"
+        },
+        "app.UGFkZGxl.action.cHJpY2UtY3JlYXRlZA.short_desc": {
+          "source": "React to a catalog price being created",
+          "message": "在型錄價格建立時作出回應"
+        },
+        "app.UGFkZGxl.action.cHJpY2UtdXBkYXRlZA.desc": {
+          "source": "Fires when a price changes, including when one is archived.\n\n**A change to `unit_price` affects new purchases only**; subscriptions already billing this price keep the amount they were created with until they are explicitly updated. A price change is therefore not a signal that anyone's bill changed.",
+          "message": "當價格變更時觸發，包括價格被封存時。\n\n**對 `unit_price` 的變更僅會影響新購買**；已按此價格計費的訂閱將保留建立時的金額，直到被明確更新為止。因此，價格變更並不代表任何人的帳單已變更。"
+        },
+        "app.UGFkZGxl.action.cHJpY2UtdXBkYXRlZA.display_name": {
+          "source": "Price Updated",
+          "message": "價格已更新"
+        },
+        "app.UGFkZGxl.action.cHJpY2UtdXBkYXRlZA.short_desc": {
+          "source": "React to a catalog price changing",
+          "message": "在型錄價格變更時作出回應"
+        },
+        "app.UGFkZGxl.action.cHJvZHVjdC11cGRhdGVk.desc": {
+          "source": "Fires when a product changes, including when one is archived -- `status` becomes `archived`, which withdraws it from sale without affecting existing subscriptions.\n\n**Archiving a product does not archive its prices**, so a price of an archived product can still be billed unless it is archived too.",
+          "message": "當產品變更時觸發，包括產品被封存時——`status` 變更為 `archived`，這會將其下架停售，但不會影響現有訂閱。\n\n**封存產品不會封存其價格**，因此已封存產品的價格仍可進行計費，除非該價格也一併被封存。"
+        },
+        "app.UGFkZGxl.action.cHJvZHVjdC11cGRhdGVk.display_name": {
+          "source": "Product Updated",
+          "message": "產品已更新"
+        },
+        "app.UGFkZGxl.action.cHJvZHVjdC11cGRhdGVk.short_desc": {
+          "source": "React to a catalog product changing",
+          "message": "在型錄產品變更時作出回應"
+        },
+        "app.UGFkZGxl.action.cHJvZHVjdC1jcmVhdGVk.desc": {
+          "source": "Fires when a product is added to the catalog.\n\nA product carries no price of its own, so a newly created product cannot be sold until a price exists for it; watch `price.created` for that.\n\nThis replaces polling the product listing.",
+          "message": "當產品新增至型錄時觸發。\n\n產品本身不帶有價格，因此新建立的產品在為其設定價格之前無法銷售；請監聽 `price.created` 以獲取此資訊。\n\n這取代了輪詢產品清單的做法。"
+        },
+        "app.UGFkZGxl.action.cHJvZHVjdC1jcmVhdGVk.display_name": {
+          "source": "Product Created",
+          "message": "產品已建立"
+        },
+        "app.UGFkZGxl.action.cHJvZHVjdC1jcmVhdGVk.short_desc": {
+          "source": "React to a catalog product being created",
+          "message": "在型錄產品建立時作出回應"
+        },
+        "app.UGFkZGxl.action.cmVwb3J0LWNyZWF0ZWQ.desc": {
+          "source": "Fires when a report is requested. It arrives `pending`: Paddle generates the file in the background, so there is nothing to download yet.\n\nWait for `report.updated` with `status` of `ready` before asking for the file.\n\nThis replaces polling the report listing.",
+          "message": "當請求報表時觸發。回傳狀態為 `pending`：Paddle 會在背景產生檔案，因此目前尚無可下載內容。\n\n請等待 `status` 為 `ready` 的 `report.updated` 事件，然後再索取檔案。\n\n這取代了輪詢報表清單的做法。"
+        },
+        "app.UGFkZGxl.action.cmVwb3J0LWNyZWF0ZWQ.display_name": {
+          "source": "Report Created",
+          "message": "報表已建立"
+        },
+        "app.UGFkZGxl.action.cmVwb3J0LWNyZWF0ZWQ.short_desc": {
+          "source": "React to a report being requested",
+          "message": "在請求報表時作出回應"
+        },
+        "app.UGFkZGxl.action.cmVwb3J0LXVwZGF0ZWQ.desc": {
+          "source": "Fires when a report's status changes: `ready` when the file can be downloaded, `failed` when generation did not succeed, `expired` once Paddle has removed it.\n\nThis is the signal to call **Get Report File** -- and to do it promptly, because a report is kept only for a limited time.",
+          "message": "當報表狀態變更時觸發：當檔案可供下載時為 `ready`，產生失敗時為 `failed`，Paddle 移除檔案後為 `expired`。\n\n這是呼叫 **Get Report File** 的信號——請務必迅速呼叫，因為報表僅保留有限時間。"
+        },
+        "app.UGFkZGxl.action.cmVwb3J0LXVwZGF0ZWQ.display_name": {
+          "source": "Report Updated",
+          "message": "報表已更新"
+        },
+        "app.UGFkZGxl.action.cmVwb3J0LXVwZGF0ZWQ.short_desc": {
+          "source": "React to a report becoming ready",
+          "message": "在報表準備就緒時作出回應"
+        },
+        "app.UGFkZGxl.action.dHJhbnNhY3Rpb24tY29tcGxldGVk.desc": {
+          "source": "Fires when a transaction is `completed`: the money has been collected and the invoice is settled.\n\nThis is the event to fulfil an order on. `details.totals` breaks the amount down into subtotal, tax and the grand total, all as strings in the smallest unit of `currency_code`.",
+          "message": "當交易為 `completed` 時觸發：款項已收取且發票已結清。\n\n這是履行訂單的事件。`details.totals` 將金額細分為小計、稅額與總計，全部皆以 `currency_code` 的最小單位字串表示。"
+        },
+        "app.UGFkZGxl.action.dHJhbnNhY3Rpb24tY29tcGxldGVk.display_name": {
+          "source": "Transaction Completed",
+          "message": "交易已完成"
+        },
+        "app.UGFkZGxl.action.dHJhbnNhY3Rpb24tY29tcGxldGVk.short_desc": {
+          "source": "React to a transaction being paid in full",
+          "message": "在交易全額付款時作出回應"
+        },
+        "app.UGFkZGxl.action.dHJhbnNhY3Rpb24tY3JlYXRlZA.desc": {
+          "source": "Fires when a transaction is created, including the draft Paddle raises for an upcoming renewal.\n\n**A created transaction has not been paid**; most are `draft` or `ready` at this point. Use `transaction.completed` for money actually collected.\n\nThis replaces polling the transaction listing.",
+          "message": "當交易建立時觸發，包括 Paddle 為即將到來的續訂所產生的草稿。\n\n**已建立的交易尚未付款**；此時大多數處於 `draft` 或 `ready` 狀態。請使用 `transaction.completed` 來確認實際收取的款項。\n\n這取代了輪詢交易清單的做法。"
+        },
+        "app.UGFkZGxl.action.dHJhbnNhY3Rpb24tY3JlYXRlZA.display_name": {
+          "source": "Transaction Created",
+          "message": "交易已建立"
+        },
+        "app.UGFkZGxl.action.dHJhbnNhY3Rpb24tY3JlYXRlZA.short_desc": {
+          "source": "React to a transaction being created",
+          "message": "在交易建立時作出回應"
+        },
+        "app.UGFkZGxl.action.dHJhbnNhY3Rpb24tcGF5bWVudC1mYWlsZWQ.desc": {
+          "source": "Fires when an attempt to collect a transaction fails.\n\n`payments` carries the attempt and the reason it failed. Paddle retries automatically for a subscription renewal, so a single failure is not final; the subscription moving to `past_due` is the point at which the customer needs to act.",
+          "message": "當收取交易款項嘗試失敗時觸發。\n\n`payments` 包含嘗試紀錄及失敗原因。Paddle 會自動重試訂閱續訂，因此單次失敗並非最終結果；當訂閱轉為 `past_due` 時，客戶才需要採取行動。"
+        },
+        "app.UGFkZGxl.action.dHJhbnNhY3Rpb24tcGF5bWVudC1mYWlsZWQ.display_name": {
+          "source": "Transaction Payment Failed",
+          "message": "交易付款失敗"
+        },
+        "app.UGFkZGxl.action.dHJhbnNhY3Rpb24tcGF5bWVudC1mYWlsZWQ.short_desc": {
+          "source": "React to a payment attempt failing",
+          "message": "在付款嘗試失敗時作出回應"
+        },
+        "app.UGFkZGxl.action.dXBkYXRl.desc": {
+          "source": "Updates every record in the given table matching the search criteria",
+          "message": "更新指定資料表中所有符合搜尋條件的記錄"
+        },
+        "app.UGFkZGxl.action.dXBkYXRl.display_name": {
+          "source": "Update Records",
+          "message": "更新記錄"
+        },
+        "app.UGFkZGxl.action.dXBkYXRl.option.dGFibGU.desc": {
+          "source": "The table to work with: `customers`, `products`, `prices`, `transactions` or `reports`",
+          "message": "要操作的資料表：`customers`、`products`、`prices`、`transactions` 或 `reports`"
+        },
+        "app.UGFkZGxl.action.dXBkYXRl.option.dGFibGU.display_name": {
+          "source": "Table",
+          "message": "表格"
+        },
+        "app.UGFkZGxl.action.dXBkYXRl.option.dGFibGU.short_desc": {
+          "source": "The name of the table to work with",
+          "message": "要操作的資料表名稱"
+        },
+        "app.UGFkZGxl.action.dXBkYXRl.short_desc": {
+          "source": "Update the records matching the search criteria",
+          "message": "更新符合搜尋條件的記錄"
+        },
+        "app.UGFkZGxl.action.dXBkYXRlX2N1c3RvbWVy.desc": {
+          "source": "Updates a customer. Only the fields supplied are changed; everything else is left as it is.\n\nSetting `status` to `archived` is how a customer is retired: an archived customer cannot be billed and stops appearing in listings, but its transactions and subscriptions are untouched.\n\n**`custom_data` is replaced, not merged.** Send the whole object, or previously stored keys are lost.",
+          "message": "更新客戶。僅變更提供的欄位；其他所有內容保持不變。\n\n將 `status` 設定為 `archived` 可停用客戶：已封存的客戶無法被計費且不再顯示於清單中，但其交易和訂閱不受影響。\n\n**`custom_data` 會被取代而非合併。** 請發送整個物件，否則先前儲存的索引鍵將會遺失。"
+        },
+        "app.UGFkZGxl.action.dXBkYXRlX2N1c3RvbWVy.display_name": {
+          "source": "Update Customer",
+          "message": "更新客戶"
+        },
+        "app.UGFkZGxl.action.dXBkYXRlX2N1c3RvbWVy.option.Y3VzdG9tX2RhdGE.desc": {
+          "source": "Your own structured key-value data.",
+          "message": "您自訂的結構化鍵值資料。"
+        },
+        "app.UGFkZGxl.action.dXBkYXRlX2N1c3RvbWVy.option.Y3VzdG9tX2RhdGE.display_name": {
+          "source": "Custom Data",
+          "message": "自訂資料"
+        },
+        "app.UGFkZGxl.action.dXBkYXRlX2N1c3RvbWVy.option.Y3VzdG9tX2RhdGE.short_desc": {
+          "source": "Replaces the stored custom data in full",
+          "message": "完整取代已儲存的自訂資料"
+        },
+        "app.UGFkZGxl.action.dXBkYXRlX2N1c3RvbWVy.option.Y3VzdG9tZXJfaWQ.desc": {
+          "source": "Paddle ID of the customer entity to work with.: Unique Paddle ID for this customer entity, prefixed with `ctm_`.",
+          "message": "要操作的客戶實體的 Paddle ID。：此客戶實體的唯一 Paddle ID，前綴為 `ctm_`。"
+        },
+        "app.UGFkZGxl.action.dXBkYXRlX2N1c3RvbWVy.option.Y3VzdG9tZXJfaWQ.display_name": {
+          "source": "Customer",
+          "message": "客戶"
+        },
+        "app.UGFkZGxl.action.dXBkYXRlX2N1c3RvbWVy.option.Y3VzdG9tZXJfaWQ.short_desc": {
+          "source": "Paddle ID of the customer entity to work with",
+          "message": "要操作的客戶實體的 Paddle ID"
+        },
+        "app.UGFkZGxl.action.dXBkYXRlX2N1c3RvbWVy.option.ZW1haWw.desc": {
+          "source": "Email address for this customer.",
+          "message": "此客戶的電子郵件地址。"
+        },
+        "app.UGFkZGxl.action.dXBkYXRlX2N1c3RvbWVy.option.ZW1haWw.display_name": {
+          "source": "Email",
+          "message": "電子郵件"
+        },
+        "app.UGFkZGxl.action.dXBkYXRlX2N1c3RvbWVy.option.ZW1haWw.short_desc": {
+          "source": "Email address for this customer",
+          "message": "此客戶的電子郵件地址"
+        },
+        "app.UGFkZGxl.action.dXBkYXRlX2N1c3RvbWVy.option.aW1wb3J0X21ldGE.desc": {
+          "source": "Import information for this entity. `null` if this entity is not imported.",
+          "message": "此實體的匯入資訊。若未匯入此實體，則為 `null`。"
+        },
+        "app.UGFkZGxl.action.dXBkYXRlX2N1c3RvbWVy.option.aW1wb3J0X21ldGE.display_name": {
+          "source": "Import Meta",
+          "message": "匯入中繼資料"
+        },
+        "app.UGFkZGxl.action.dXBkYXRlX2N1c3RvbWVy.option.aW1wb3J0X21ldGE.short_desc": {
+          "source": "Import information for this entity",
+          "message": "此實體的匯入資訊"
+        },
+        "app.UGFkZGxl.action.dXBkYXRlX2N1c3RvbWVy.option.bG9jYWxl.desc": {
+          "source": "Valid IETF BCP 47 short form locale tag.",
+          "message": "有效的 IETF BCP 47 簡短形式語言地區代碼。"
+        },
+        "app.UGFkZGxl.action.dXBkYXRlX2N1c3RvbWVy.option.bG9jYWxl.display_name": {
+          "source": "Locale",
+          "message": "地區設定"
+        },
+        "app.UGFkZGxl.action.dXBkYXRlX2N1c3RvbWVy.option.bG9jYWxl.short_desc": {
+          "source": "Valid IETF BCP 47 short form locale tag",
+          "message": "有效的 IETF BCP 47 簡短形式語言代碼標籤"
+        },
+        "app.UGFkZGxl.action.dXBkYXRlX2N1c3RvbWVy.option.bWFya2V0aW5nX2NvbnNlbnQ.desc": {
+          "source": "Whether this customer opted into marketing from you. `false` unless customers check the marketing consent box\nwhen using Paddle Checkout. Set automatically by Paddle.",
+          "message": "此客戶是否同意接收您的行銷資訊。除非客戶在使用 Paddle Checkout 時勾選行銷同意方塊，否則為 `false`。\n由 Paddle 自動設定。"
+        },
+        "app.UGFkZGxl.action.dXBkYXRlX2N1c3RvbWVy.option.bWFya2V0aW5nX2NvbnNlbnQ.display_name": {
+          "source": "Marketing Consent",
+          "message": "行銷同意"
+        },
+        "app.UGFkZGxl.action.dXBkYXRlX2N1c3RvbWVy.option.bWFya2V0aW5nX2NvbnNlbnQ.short_desc": {
+          "source": "Whether this customer opted into marketing from you",
+          "message": "此客戶是否同意接收您的行銷資訊"
+        },
+        "app.UGFkZGxl.action.dXBkYXRlX2N1c3RvbWVy.option.bmFtZQ.desc": {
+          "source": "Full name of this customer. Required when creating transactions where `collection_mode` is `manual` (invoices).",
+          "message": "此客戶的全名。當建立 `collection_mode` 為 `manual`（發票）的交易時為必填。"
+        },
+        "app.UGFkZGxl.action.dXBkYXRlX2N1c3RvbWVy.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "名稱"
+        },
+        "app.UGFkZGxl.action.dXBkYXRlX2N1c3RvbWVy.option.bmFtZQ.short_desc": {
+          "source": "Full name of this customer",
+          "message": "此客戶的全名"
+        },
+        "app.UGFkZGxl.action.dXBkYXRlX2N1c3RvbWVy.option.c3RhdHVz.allowed-value.c3RyaW5nOmFjdGl2ZQ.display_name": {
+          "source": "active",
+          "message": "作用中"
+        },
+        "app.UGFkZGxl.action.dXBkYXRlX2N1c3RvbWVy.option.c3RhdHVz.allowed-value.c3RyaW5nOmFyY2hpdmVk.display_name": {
+          "source": "archived",
+          "message": "已封存"
+        },
+        "app.UGFkZGxl.action.dXBkYXRlX2N1c3RvbWVy.option.c3RhdHVz.desc": {
+          "source": "Whether this entity can be used in Paddle.",
+          "message": "此實體是否可在 Paddle 中使用。"
+        },
+        "app.UGFkZGxl.action.dXBkYXRlX2N1c3RvbWVy.option.c3RhdHVz.display_name": {
+          "source": "Status",
+          "message": "狀態"
+        },
+        "app.UGFkZGxl.action.dXBkYXRlX2N1c3RvbWVy.option.c3RhdHVz.short_desc": {
+          "source": "Set to \"archived\" to retire the customer",
+          "message": "設定為 \"archived\" 以停用客戶"
+        },
+        "app.UGFkZGxl.action.dXBkYXRlX2N1c3RvbWVy.short_desc": {
+          "source": "Update a customer",
+          "message": "更新客戶"
+        },
+        "app.UGFkZGxl.action.dXBkYXRlX3ByaWNl.desc": {
+          "source": "Updates a price. Only the fields supplied are changed.\n\n**Changing `unit_price` changes what new purchases cost; existing subscriptions keep the amount they were created with** until they are explicitly updated. Raising a published price is normally done by creating a new price and archiving the old one, so that the change is visible in the catalog.\n\nSet `status` to `archived` to withdraw the price from sale.",
+          "message": "更新價格。僅變更提供的欄位。\n\n**變更 `unit_price` 會改變新購買的費用；現有訂閱將保留建立時的金額**，直到被明確更新為止。調高已發布的價格通常是透過建立新價格並封存舊價格來完成，這樣變更才會在型錄中顯示。\n\n將 `status` 設定為 `archived` 以停止銷售該價格。"
+        },
+        "app.UGFkZGxl.action.dXBkYXRlX3ByaWNl.display_name": {
+          "source": "Update Price",
+          "message": "更新價格"
+        },
+        "app.UGFkZGxl.action.dXBkYXRlX3ByaWNl.option.Y3VzdG9tX2RhdGE.desc": {
+          "source": "Your own structured key-value data.",
+          "message": "您自訂的結構化鍵值資料。"
+        },
+        "app.UGFkZGxl.action.dXBkYXRlX3ByaWNl.option.Y3VzdG9tX2RhdGE.display_name": {
+          "source": "Custom Data",
+          "message": "自訂資料"
+        },
+        "app.UGFkZGxl.action.dXBkYXRlX3ByaWNl.option.Y3VzdG9tX2RhdGE.short_desc": {
+          "source": "Replaces the stored custom data in full",
+          "message": "完整取代已儲存的自訂資料"
+        },
+        "app.UGFkZGxl.action.dXBkYXRlX3ByaWNl.option.YmlsbGluZ19jeWNsZQ.desc": {
+          "source": "How often this price should be charged. `null` if price is non-recurring (one-time).",
+          "message": "此價格收取的頻率。若價格為非週期性（單次），則為 `null`。"
+        },
+        "app.UGFkZGxl.action.dXBkYXRlX3ByaWNl.option.YmlsbGluZ19jeWNsZQ.display_name": {
+          "source": "Billing Cycle",
+          "message": "計費週期"
+        },
+        "app.UGFkZGxl.action.dXBkYXRlX3ByaWNl.option.YmlsbGluZ19jeWNsZQ.short_desc": {
+          "source": "How often this price should be charged",
+          "message": "此價格收取的頻率"
+        },
+        "app.UGFkZGxl.action.dXBkYXRlX3ByaWNl.option.ZGVzY3JpcHRpb24.desc": {
+          "source": "Internal description for this price, not shown to customers. Typically notes for your team.",
+          "message": "此價格的內部說明，不向客戶顯示。通常供您的團隊備註使用。"
+        },
+        "app.UGFkZGxl.action.dXBkYXRlX3ByaWNl.option.ZGVzY3JpcHRpb24.display_name": {
+          "source": "Description",
+          "message": "描述"
+        },
+        "app.UGFkZGxl.action.dXBkYXRlX3ByaWNl.option.ZGVzY3JpcHRpb24.short_desc": {
+          "source": "Internal description for this price, not shown to customers",
+          "message": "此價格的內部描述，不向客戶顯示"
+        },
+        "app.UGFkZGxl.action.dXBkYXRlX3ByaWNl.option.bmFtZQ.desc": {
+          "source": "Name of this price, shown to customers at checkout and on invoices. Typically describes how often the related product bills.",
+          "message": "此價格的名稱，在結帳和發票上向客戶顯示。通常描述相關產品的計費頻率。"
+        },
+        "app.UGFkZGxl.action.dXBkYXRlX3ByaWNl.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "名稱"
+        },
+        "app.UGFkZGxl.action.dXBkYXRlX3ByaWNl.option.bmFtZQ.short_desc": {
+          "source": "Name of this price, shown to customers at checkout and on invoices",
+          "message": "此價格的名稱，在結帳和發票上向客戶顯示"
+        },
+        "app.UGFkZGxl.action.dXBkYXRlX3ByaWNl.option.c3RhdHVz.allowed-value.c3RyaW5nOmFjdGl2ZQ.display_name": {
+          "source": "active",
+          "message": "作用中"
+        },
+        "app.UGFkZGxl.action.dXBkYXRlX3ByaWNl.option.c3RhdHVz.allowed-value.c3RyaW5nOmFyY2hpdmVk.display_name": {
+          "source": "archived",
+          "message": "已封存"
+        },
+        "app.UGFkZGxl.action.dXBkYXRlX3ByaWNl.option.c3RhdHVz.desc": {
+          "source": "Whether this entity can be used in Paddle.",
+          "message": "此實體是否可在 Paddle 中使用。"
+        },
+        "app.UGFkZGxl.action.dXBkYXRlX3ByaWNl.option.c3RhdHVz.display_name": {
+          "source": "Status",
+          "message": "狀態"
+        },
+        "app.UGFkZGxl.action.dXBkYXRlX3ByaWNl.option.c3RhdHVz.short_desc": {
+          "source": "Set to \"archived\" to withdraw the price from sale",
+          "message": "設定為 \"archived\" 以停止銷售該價格"
+        },
+        "app.UGFkZGxl.action.dXBkYXRlX3ByaWNl.option.cHJpY2VfaWQ.desc": {
+          "source": "Paddle ID of the price entity to work with.",
+          "message": "要操作的價格實體的 Paddle ID。"
+        },
+        "app.UGFkZGxl.action.dXBkYXRlX3ByaWNl.option.cHJpY2VfaWQ.display_name": {
+          "source": "Price",
+          "message": "價格"
+        },
+        "app.UGFkZGxl.action.dXBkYXRlX3ByaWNl.option.cHJpY2VfaWQ.short_desc": {
+          "source": "Paddle ID of the price entity to work with",
+          "message": "要操作的價格實體的 Paddle ID"
+        },
+        "app.UGFkZGxl.action.dXBkYXRlX3ByaWNl.option.cXVhbnRpdHk.desc": {
+          "source": "Limits on how many times the related product can be purchased at this price. Useful for discount campaigns.",
+          "message": "相關產品以此價格購買的次數限制。適用於折扣活動。"
+        },
+        "app.UGFkZGxl.action.dXBkYXRlX3ByaWNl.option.cXVhbnRpdHk.display_name": {
+          "source": "Quantity",
+          "message": "數量"
+        },
+        "app.UGFkZGxl.action.dXBkYXRlX3ByaWNl.option.cXVhbnRpdHk.short_desc": {
+          "source": "Limits on how many times the related product can be purchased at this price",
+          "message": "可以此價格購買相關產品的次數限制"
+        },
+        "app.UGFkZGxl.action.dXBkYXRlX3ByaWNl.option.dGF4X21vZGU.allowed-value.c3RyaW5nOmFjY291bnRfc2V0dGluZw.display_name": {
+          "source": "account_setting",
+          "message": "account_setting"
+        },
+        "app.UGFkZGxl.action.dXBkYXRlX3ByaWNl.option.dGF4X21vZGU.allowed-value.c3RyaW5nOmV4dGVybmFs.display_name": {
+          "source": "external",
+          "message": "外部"
+        },
+        "app.UGFkZGxl.action.dXBkYXRlX3ByaWNl.option.dGF4X21vZGU.allowed-value.c3RyaW5nOmludGVybmFs.display_name": {
+          "source": "internal",
+          "message": "內部"
+        },
+        "app.UGFkZGxl.action.dXBkYXRlX3ByaWNl.option.dGF4X21vZGU.allowed-value.c3RyaW5nOmxvY2F0aW9u.display_name": {
+          "source": "location",
+          "message": "地點"
+        },
+        "app.UGFkZGxl.action.dXBkYXRlX3ByaWNl.option.dGF4X21vZGU.desc": {
+          "source": "How tax is calculated for this price.",
+          "message": "此價格計算稅金的方式。"
+        },
+        "app.UGFkZGxl.action.dXBkYXRlX3ByaWNl.option.dGF4X21vZGU.display_name": {
+          "source": "Tax Mode",
+          "message": "稅務模式"
+        },
+        "app.UGFkZGxl.action.dXBkYXRlX3ByaWNl.option.dGF4X21vZGU.short_desc": {
+          "source": "How tax is calculated for this price",
+          "message": "此價格的稅費計算方式"
+        },
+        "app.UGFkZGxl.action.dXBkYXRlX3ByaWNl.option.dHJpYWxfcGVyaW9k.desc": {
+          "source": "Trial period for the product related to this price. The billing cycle begins once the trial period is over. `null` for no trial period. Requires `billing_cycle`.",
+          "message": "與此價格相關產品的試用期。計費週期在試用期結束後開始。無試用期請設為 `null`。需要 `billing_cycle`。"
+        },
+        "app.UGFkZGxl.action.dXBkYXRlX3ByaWNl.option.dHJpYWxfcGVyaW9k.display_name": {
+          "source": "Trial Period",
+          "message": "試用期"
+        },
+        "app.UGFkZGxl.action.dXBkYXRlX3ByaWNl.option.dHJpYWxfcGVyaW9k.short_desc": {
+          "source": "Trial period for the product related to this price",
+          "message": "與此價格相關之產品的試用期"
+        },
+        "app.UGFkZGxl.action.dXBkYXRlX3ByaWNl.option.dHlwZQ.allowed-value.c3RyaW5nOmN1c3RvbQ.display_name": {
+          "source": "custom",
+          "message": "自訂"
+        },
+        "app.UGFkZGxl.action.dXBkYXRlX3ByaWNl.option.dHlwZQ.allowed-value.c3RyaW5nOnN0YW5kYXJk.display_name": {
+          "source": "standard",
+          "message": "標準"
+        },
+        "app.UGFkZGxl.action.dXBkYXRlX3ByaWNl.option.dHlwZQ.desc": {
+          "source": "Type of item. Standard items are considered part of your catalog and are shown in the Paddle dashboard.",
+          "message": "項目類型。標準項目被視為型錄的一部分，並顯示於 Paddle 資訊主頁中。"
+        },
+        "app.UGFkZGxl.action.dXBkYXRlX3ByaWNl.option.dHlwZQ.display_name": {
+          "source": "Type",
+          "message": "類型"
+        },
+        "app.UGFkZGxl.action.dXBkYXRlX3ByaWNl.option.dHlwZQ.short_desc": {
+          "source": "Type of item",
+          "message": "項目類型"
+        },
+        "app.UGFkZGxl.action.dXBkYXRlX3ByaWNl.option.dW5pdF9wcmljZQ.desc": {
+          "source": "Base price. This price applies to all customers, except for customers located in countries where you have `unit_price_overrides`.",
+          "message": "基本價格。此價格適用於所有客戶，但位於您設定有 `unit_price_overrides` 國家/地區的客戶除外。"
+        },
+        "app.UGFkZGxl.action.dXBkYXRlX3ByaWNl.option.dW5pdF9wcmljZQ.display_name": {
+          "source": "Unit Price",
+          "message": "單價"
+        },
+        "app.UGFkZGxl.action.dXBkYXRlX3ByaWNl.option.dW5pdF9wcmljZQ.short_desc": {
+          "source": "The amount, in the smallest unit of its currency",
+          "message": "金額，以該幣別的最小單位表示"
+        },
+        "app.UGFkZGxl.action.dXBkYXRlX3ByaWNl.option.dW5pdF9wcmljZV9vdmVycmlkZXM.desc": {
+          "source": "List of unit price overrides. Use to override the base price with a custom price and currency for a country or group of countries.",
+          "message": "單價覆寫清單。用於以特定國家或國家群組的自訂價格與幣別覆寫基本價格。"
+        },
+        "app.UGFkZGxl.action.dXBkYXRlX3ByaWNl.option.dW5pdF9wcmljZV9vdmVycmlkZXM.display_name": {
+          "source": "Unit Price Overrides",
+          "message": "單價覆寫"
+        },
+        "app.UGFkZGxl.action.dXBkYXRlX3ByaWNl.option.dW5pdF9wcmljZV9vdmVycmlkZXM.short_desc": {
+          "source": "List of unit price overrides",
+          "message": "單價覆寫清單"
+        },
+        "app.UGFkZGxl.action.dXBkYXRlX3ByaWNl.short_desc": {
+          "source": "Update a catalog price",
+          "message": "更新型錄價格"
+        },
+        "app.UGFkZGxl.action.dXBkYXRlX3Byb2R1Y3Q.desc": {
+          "source": "Updates a product. Only the fields supplied are changed.\n\n`tax_category` is fixed at creation and cannot be changed here; a product in the wrong category has to be archived and replaced.\n\n**`custom_data` is replaced, not merged.** Send the whole object, or previously stored keys are lost.",
+          "message": "更新產品。僅變更提供的欄位。\n\n`tax_category` 在建立時固定，無法在此處變更；類別錯誤的產品必須封存並替換。\n\n**`custom_data` 會被取代而非合併。** 請發送整個物件，否則先前儲存的索引鍵將會遺失。"
+        },
+        "app.UGFkZGxl.action.dXBkYXRlX3Byb2R1Y3Q.display_name": {
+          "source": "Update Product",
+          "message": "更新產品"
+        },
+        "app.UGFkZGxl.action.dXBkYXRlX3Byb2R1Y3Q.option.Y3VzdG9tX2RhdGE.desc": {
+          "source": "Your own structured key-value data.",
+          "message": "您自訂的結構化鍵值資料。"
+        },
+        "app.UGFkZGxl.action.dXBkYXRlX3Byb2R1Y3Q.option.Y3VzdG9tX2RhdGE.display_name": {
+          "source": "Custom Data",
+          "message": "自訂資料"
+        },
+        "app.UGFkZGxl.action.dXBkYXRlX3Byb2R1Y3Q.option.Y3VzdG9tX2RhdGE.short_desc": {
+          "source": "Replaces the stored custom data in full",
+          "message": "完整取代已儲存的自訂資料"
+        },
+        "app.UGFkZGxl.action.dXBkYXRlX3Byb2R1Y3Q.option.ZGVzY3JpcHRpb24.desc": {
+          "source": "Short description for this product.",
+          "message": "此產品的簡短描述。"
+        },
+        "app.UGFkZGxl.action.dXBkYXRlX3Byb2R1Y3Q.option.ZGVzY3JpcHRpb24.display_name": {
+          "source": "Description",
+          "message": "描述"
+        },
+        "app.UGFkZGxl.action.dXBkYXRlX3Byb2R1Y3Q.option.ZGVzY3JpcHRpb24.short_desc": {
+          "source": "Short description for this product",
+          "message": "此產品的簡短描述"
+        },
+        "app.UGFkZGxl.action.dXBkYXRlX3Byb2R1Y3Q.option.aW1hZ2VfdXJs.desc": {
+          "source": "Image for this product. Included in the checkout and on some customer documents.",
+          "message": "此產品的圖片。包含在結帳頁面以及某些客戶文件中。"
+        },
+        "app.UGFkZGxl.action.dXBkYXRlX3Byb2R1Y3Q.option.aW1hZ2VfdXJs.display_name": {
+          "source": "Image Url",
+          "message": "圖片 URL"
+        },
+        "app.UGFkZGxl.action.dXBkYXRlX3Byb2R1Y3Q.option.aW1hZ2VfdXJs.short_desc": {
+          "source": "Image for this product",
+          "message": "此產品的圖片"
+        },
+        "app.UGFkZGxl.action.dXBkYXRlX3Byb2R1Y3Q.option.bmFtZQ.desc": {
+          "source": "Name of this product.",
+          "message": "此產品的名稱。"
+        },
+        "app.UGFkZGxl.action.dXBkYXRlX3Byb2R1Y3Q.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "名稱"
+        },
+        "app.UGFkZGxl.action.dXBkYXRlX3Byb2R1Y3Q.option.bmFtZQ.short_desc": {
+          "source": "Name of this product",
+          "message": "此產品的名稱"
+        },
+        "app.UGFkZGxl.action.dXBkYXRlX3Byb2R1Y3Q.option.c3RhdHVz.allowed-value.c3RyaW5nOmFjdGl2ZQ.display_name": {
+          "source": "active",
+          "message": "作用中"
+        },
+        "app.UGFkZGxl.action.dXBkYXRlX3Byb2R1Y3Q.option.c3RhdHVz.allowed-value.c3RyaW5nOmFyY2hpdmVk.display_name": {
+          "source": "archived",
+          "message": "已封存"
+        },
+        "app.UGFkZGxl.action.dXBkYXRlX3Byb2R1Y3Q.option.c3RhdHVz.desc": {
+          "source": "Whether this entity can be used in Paddle.",
+          "message": "此實體是否可在 Paddle 中使用。"
+        },
+        "app.UGFkZGxl.action.dXBkYXRlX3Byb2R1Y3Q.option.c3RhdHVz.display_name": {
+          "source": "Status",
+          "message": "狀態"
+        },
+        "app.UGFkZGxl.action.dXBkYXRlX3Byb2R1Y3Q.option.c3RhdHVz.short_desc": {
+          "source": "Set to \"archived\" to retire the product",
+          "message": "設定為 \"archived\" 以停用產品"
+        },
+        "app.UGFkZGxl.action.dXBkYXRlX3Byb2R1Y3Q.option.cHJvZHVjdF9pZA.desc": {
+          "source": "Paddle ID of the product entity to work with.",
+          "message": "要處理的產品實體的 Paddle ID。"
+        },
+        "app.UGFkZGxl.action.dXBkYXRlX3Byb2R1Y3Q.option.cHJvZHVjdF9pZA.display_name": {
+          "source": "Product",
+          "message": "產品"
+        },
+        "app.UGFkZGxl.action.dXBkYXRlX3Byb2R1Y3Q.option.cHJvZHVjdF9pZA.short_desc": {
+          "source": "Paddle ID of the product entity to work with",
+          "message": "要處理的產品實體的 Paddle ID"
+        },
+        "app.UGFkZGxl.action.dXBkYXRlX3Byb2R1Y3Q.option.dGF4X2NhdGVnb3J5.allowed-value.c3RyaW5nOmRpZ2l0YWwtZ29vZHM.display_name": {
+          "source": "digital-goods",
+          "message": "數位商品"
+        },
+        "app.UGFkZGxl.action.dXBkYXRlX3Byb2R1Y3Q.option.dGF4X2NhdGVnb3J5.allowed-value.c3RyaW5nOmVib29rcw.display_name": {
+          "source": "ebooks",
+          "message": "電子書"
+        },
+        "app.UGFkZGxl.action.dXBkYXRlX3Byb2R1Y3Q.option.dGF4X2NhdGVnb3J5.allowed-value.c3RyaW5nOmltcGxlbWVudGF0aW9uLXNlcnZpY2Vz.display_name": {
+          "source": "implementation-services",
+          "message": "實作服務"
+        },
+        "app.UGFkZGxl.action.dXBkYXRlX3Byb2R1Y3Q.option.dGF4X2NhdGVnb3J5.allowed-value.c3RyaW5nOnByb2Zlc3Npb25hbC1zZXJ2aWNlcw.display_name": {
+          "source": "professional-services",
+          "message": "專業服務"
+        },
+        "app.UGFkZGxl.action.dXBkYXRlX3Byb2R1Y3Q.option.dGF4X2NhdGVnb3J5.allowed-value.c3RyaW5nOnN0YW5kYXJk.display_name": {
+          "source": "standard",
+          "message": "標準"
+        },
+        "app.UGFkZGxl.action.dXBkYXRlX3Byb2R1Y3Q.option.dGF4X2NhdGVnb3J5.allowed-value.c3RyaW5nOnNhYXM.display_name": {
+          "source": "saas",
+          "message": "SaaS"
+        },
+        "app.UGFkZGxl.action.dXBkYXRlX3Byb2R1Y3Q.option.dGF4X2NhdGVnb3J5.allowed-value.c3RyaW5nOnNvZnR3YXJlLXByb2dyYW1taW5nLXNlcnZpY2Vz.display_name": {
+          "source": "software-programming-services",
+          "message": "軟體程式設計服務"
+        },
+        "app.UGFkZGxl.action.dXBkYXRlX3Byb2R1Y3Q.option.dGF4X2NhdGVnb3J5.allowed-value.c3RyaW5nOnRyYWluaW5nLXNlcnZpY2Vz.display_name": {
+          "source": "training-services",
+          "message": "培訓服務"
+        },
+        "app.UGFkZGxl.action.dXBkYXRlX3Byb2R1Y3Q.option.dGF4X2NhdGVnb3J5.allowed-value.c3RyaW5nOndlYnNpdGUtaG9zdGluZw.display_name": {
+          "source": "website-hosting",
+          "message": "網站託管"
+        },
+        "app.UGFkZGxl.action.dXBkYXRlX3Byb2R1Y3Q.option.dGF4X2NhdGVnb3J5.desc": {
+          "source": "Tax category for this product. Used for charging the correct rate of tax. Selected tax category must be enabled on your Paddle account.",
+          "message": "此產品的稅務類別。用於收取正確的稅率。所選的稅務類別必須已在您的 Paddle 帳戶中啟用。"
+        },
+        "app.UGFkZGxl.action.dXBkYXRlX3Byb2R1Y3Q.option.dGF4X2NhdGVnb3J5.display_name": {
+          "source": "Tax Category",
+          "message": "稅務類別"
+        },
+        "app.UGFkZGxl.action.dXBkYXRlX3Byb2R1Y3Q.option.dGF4X2NhdGVnb3J5.short_desc": {
+          "source": "Tax category for this product",
+          "message": "此產品的稅務類別"
+        },
+        "app.UGFkZGxl.action.dXBkYXRlX3Byb2R1Y3Q.option.dHlwZQ.allowed-value.c3RyaW5nOmN1c3RvbQ.display_name": {
+          "source": "custom",
+          "message": "自訂"
+        },
+        "app.UGFkZGxl.action.dXBkYXRlX3Byb2R1Y3Q.option.dHlwZQ.allowed-value.c3RyaW5nOnN0YW5kYXJk.display_name": {
+          "source": "standard",
+          "message": "標準"
+        },
+        "app.UGFkZGxl.action.dXBkYXRlX3Byb2R1Y3Q.option.dHlwZQ.desc": {
+          "source": "Type of item. Standard items are considered part of your catalog and are shown in the Paddle dashboard.",
+          "message": "項目類型。標準項目被視為型錄的一部分，並顯示於 Paddle 資訊主頁中。"
+        },
+        "app.UGFkZGxl.action.dXBkYXRlX3Byb2R1Y3Q.option.dHlwZQ.display_name": {
+          "source": "Type",
+          "message": "類型"
+        },
+        "app.UGFkZGxl.action.dXBkYXRlX3Byb2R1Y3Q.option.dHlwZQ.short_desc": {
+          "source": "Type of item",
+          "message": "項目類型"
+        },
+        "app.UGFkZGxl.action.dXBkYXRlX3Byb2R1Y3Q.short_desc": {
+          "source": "Update a catalog product",
+          "message": "更新型錄產品"
+        },
+        "app.UGFkZGxl.desc": {
+          "source": "Provides access to [Paddle](https://www.paddle.com), the billing platform for software businesses.\n\nPaddle is a **merchant of record**: it sells on your behalf, which means it - not you - handles payment processing, sales tax registration and remittance, invoicing and chargebacks, and then pays out the balance.\n\n**Common use cases**:\n- **Catalog**: create and update the products you sell and the prices they are sold at, including per-country pricing\n- **Customers**: create and update customers, and read the credit they hold\n- **Billing**: raise transactions, bill them, and read what was actually collected\n- **Subscriptions**: read subscriptions and what they are billing for\n- **Reporting**: request a report and download the CSV Paddle generates\n\nAuthentication is a Paddle API key, granted an explicit set of permissions in the Paddle dashboard. **Sandbox and production are separate environments** with separate data and separate keys.\n\nPaddle is a trademark of Paddle.com Market Ltd.",
+          "message": "提供對 [Paddle](https://www.paddle.com) 的存取，這是專為軟體業務打造的計費平台。\n\nPaddle 是一家**名義商戶**：它代表您進行銷售，這意味著由它（而非您）處理付款處理、營業稅登記與繳納、發票開立與退款拒付，然後再將餘額支付給您。\n\n**常見使用案例**：\n- **型錄**：建立並更新您銷售的產品及其售價，包括按國家/地區定價\n- **客戶**：建立並更新客戶，並讀取其擁有的信用額度\n- **計費**：發起交易、開立帳單，並讀取實際收取的款項\n- **訂閱**：讀取訂閱及其計費項目\n- **報表**：請求報表並下載 Paddle 產生的 CSV\n\n身分驗證使用 Paddle API 金鑰，該金鑰在 Paddle 資訊主頁中被授予明確的權限集。**沙盒與生產為獨立環境**，具有獨立的資料和獨立的金鑰。\n\nPaddle 是 Paddle.com Market Ltd. 的商標。"
+        },
+        "app.UGFkZGxl.display_name": {
+          "source": "Paddle",
+          "message": "Paddle"
+        },
+        "app.UGFkZGxl.short_desc": {
+          "source": "Sell software through Paddle and manage the billing around it",
+          "message": "透過 Paddle 銷售軟體並管理相關計費"
+        }
+      }
+    }
+  }
+}

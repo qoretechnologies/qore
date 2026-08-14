@@ -1,0 +1,2729 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "ko": {
+      "messages": {
+        "app.RnJlc2hCb29rcw.action.Y2xpZW50LWNyZWF0ZWQ.desc": {
+          "source": "Fires when a new client is created in FreshBooks. Uses polling to detect new records.",
+          "message": "FreshBooks에서 새 클라이언트가 생성될 때 실행됩니다. 폴링을 사용하여 새 레코드를 감지합니다."
+        },
+        "app.RnJlc2hCb29rcw.action.Y2xpZW50LWNyZWF0ZWQ.display_name": {
+          "source": "New Client",
+          "message": "새 클라이언트"
+        },
+        "app.RnJlc2hCb29rcw.action.Y2xpZW50LWNyZWF0ZWQ.option.YWNjb3VudF9pZA.desc": {
+          "source": "The FreshBooks account ID for accounting API endpoints",
+          "message": "회계 API 엔드포인트용 FreshBooks 계정 ID"
+        },
+        "app.RnJlc2hCb29rcw.action.Y2xpZW50LWNyZWF0ZWQ.option.YWNjb3VudF9pZA.display_name": {
+          "source": "Account ID",
+          "message": "계정 ID"
+        },
+        "app.RnJlc2hCb29rcw.action.Y2xpZW50LWNyZWF0ZWQ.option.YWNjb3VudF9pZA.short_desc": {
+          "source": "FreshBooks account ID",
+          "message": "FreshBooks 계정 ID"
+        },
+        "app.RnJlc2hCb29rcw.action.Y2xpZW50LWNyZWF0ZWQ.option.cG9sbF9pbnRlcnZhbA.desc": {
+          "source": "How often to check for new records (minimum 30 seconds)",
+          "message": "새 레코드를 확인하는 주기(최소 30초)"
+        },
+        "app.RnJlc2hCb29rcw.action.Y2xpZW50LWNyZWF0ZWQ.option.cG9sbF9pbnRlcnZhbA.display_name": {
+          "source": "Poll Interval",
+          "message": "폴링 간격"
+        },
+        "app.RnJlc2hCb29rcw.action.Y2xpZW50LWNyZWF0ZWQ.option.cG9sbF9pbnRlcnZhbA.short_desc": {
+          "source": "Polling interval in seconds",
+          "message": "폴링 간격(초)"
+        },
+        "app.RnJlc2hCb29rcw.action.Y2xpZW50LWNyZWF0ZWQ.short_desc": {
+          "source": "Trigger when a new client is created",
+          "message": "새 클라이언트가 생성될 때 트리거"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLWNsaWVudA.desc": {
+          "source": "Create a new client in FreshBooks",
+          "message": "FreshBooks에서 새 클라이언트 생성"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLWNsaWVudA.display_name": {
+          "source": "Create Client",
+          "message": "클라이언트 생성"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLWNsaWVudA.option.YWNjb3VudF9pZA.desc": {
+          "source": "The FreshBooks account ID for accounting API endpoints",
+          "message": "회계 API 엔드포인트용 FreshBooks 계정 ID"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLWNsaWVudA.option.YWNjb3VudF9pZA.display_name": {
+          "source": "Account ID",
+          "message": "계정 ID"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLWNsaWVudA.option.YWNjb3VudF9pZA.short_desc": {
+          "source": "FreshBooks account ID",
+          "message": "FreshBooks 계정 ID"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLWNsaWVudA.option.ZW1haWw.desc": {
+          "source": "Email address of the client (at least one of fname, lname, email, organization is required)",
+          "message": "클라이언트의 이메일 주소(fname, lname, email, organization 중 하나 이상 필요)"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLWNsaWVudA.option.ZW1haWw.display_name": {
+          "source": "Email",
+          "message": "이메일"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLWNsaWVudA.option.ZW1haWw.short_desc": {
+          "source": "Client email",
+          "message": "클라이언트 이메일"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLWNsaWVudA.option.Zm5hbWU.desc": {
+          "source": "First name of the client",
+          "message": "클라이언트의 이름(First name)"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLWNsaWVudA.option.Zm5hbWU.display_name": {
+          "source": "First Name",
+          "message": "이름"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLWNsaWVudA.option.Zm5hbWU.short_desc": {
+          "source": "Client first name",
+          "message": "클라이언트 이름"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLWNsaWVudA.option.b3JnYW5pemF0aW9u.desc": {
+          "source": "Organization or company name",
+          "message": "조직 또는 회사 이름"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLWNsaWVudA.option.b3JnYW5pemF0aW9u.display_name": {
+          "source": "Organization",
+          "message": "조직"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLWNsaWVudA.option.b3JnYW5pemF0aW9u.short_desc": {
+          "source": "Company name",
+          "message": "회사 이름"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLWNsaWVudA.option.bG5hbWU.desc": {
+          "source": "Last name of the client",
+          "message": "클라이언트의 성(Last name)"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLWNsaWVudA.option.bG5hbWU.display_name": {
+          "source": "Last Name",
+          "message": "성"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLWNsaWVudA.option.bG5hbWU.short_desc": {
+          "source": "Client last name",
+          "message": "클라이언트 성"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLWNsaWVudA.option.bm90ZQ.display_name": {
+          "source": "Notes",
+          "message": "메모"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLWNsaWVudA.option.bm90ZQ.short_desc": {
+          "source": "Notes about the client",
+          "message": "클라이언트에 대한 메모"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLWNsaWVudA.option.cF9jaXR5.display_name": {
+          "source": "City",
+          "message": "도시"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLWNsaWVudA.option.cF9jaXR5.short_desc": {
+          "source": "City",
+          "message": "도시"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLWNsaWVudA.option.cF9jb2Rl.display_name": {
+          "source": "Postal Code",
+          "message": "우편번호"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLWNsaWVudA.option.cF9jb2Rl.short_desc": {
+          "source": "Postal/zip code",
+          "message": "우편번호"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLWNsaWVudA.option.cF9jb3VudHJ5.display_name": {
+          "source": "Country",
+          "message": "국가"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLWNsaWVudA.option.cF9jb3VudHJ5.short_desc": {
+          "source": "Country",
+          "message": "국가"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLWNsaWVudA.option.cF9wcm92aW5jZQ.display_name": {
+          "source": "Province/State",
+          "message": "시/도(Province/State)"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLWNsaWVudA.option.cF9wcm92aW5jZQ.short_desc": {
+          "source": "Province or state",
+          "message": "시/도 또는 주"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLWNsaWVudA.option.cF9zdHJlZXQ.display_name": {
+          "source": "Street",
+          "message": "도로명 주소"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLWNsaWVudA.option.cF9zdHJlZXQ.short_desc": {
+          "source": "Street address",
+          "message": "도로명 주소"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLWNsaWVudA.option.cGhvbmU.display_name": {
+          "source": "Phone",
+          "message": "전화번호"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLWNsaWVudA.option.cGhvbmU.short_desc": {
+          "source": "Business phone",
+          "message": "회사 전화번호"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLWNsaWVudA.short_desc": {
+          "source": "Create a new client",
+          "message": "새 클라이언트 생성"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLWV4cGVuc2U.desc": {
+          "source": "Create a new expense in FreshBooks",
+          "message": "FreshBooks에서 새 비용 생성"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLWV4cGVuc2U.display_name": {
+          "source": "Create Expense",
+          "message": "비용 생성"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLWV4cGVuc2U.option.Y2F0ZWdvcnlpZA.desc": {
+          "source": "The expense category ID",
+          "message": "비용 카테고리 ID"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLWV4cGVuc2U.option.Y2F0ZWdvcnlpZA.display_name": {
+          "source": "Category",
+          "message": "카테고리"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLWV4cGVuc2U.option.Y2F0ZWdvcnlpZA.short_desc": {
+          "source": "Expense category",
+          "message": "비용 카테고리"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLWV4cGVuc2U.option.YW1vdW50.desc": {
+          "source": "Amount object with `amount` (string) and `code` (currency) fields",
+          "message": "`amount`(문자열) 및 `code`(통화) 필드가 있는 금액 객체"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLWV4cGVuc2U.option.YW1vdW50.display_name": {
+          "source": "Amount",
+          "message": "금액"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLWV4cGVuc2U.option.YW1vdW50.short_desc": {
+          "source": "Expense amount",
+          "message": "비용 금액"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLWV4cGVuc2U.option.YWNjb3VudF9pZA.desc": {
+          "source": "The FreshBooks account ID for accounting API endpoints",
+          "message": "회계 API 엔드포인트용 FreshBooks 계정 ID"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLWV4cGVuc2U.option.YWNjb3VudF9pZA.display_name": {
+          "source": "Account ID",
+          "message": "계정 ID"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLWV4cGVuc2U.option.YWNjb3VudF9pZA.short_desc": {
+          "source": "FreshBooks account ID",
+          "message": "FreshBooks 계정 ID"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLWV4cGVuc2U.option.ZGF0ZQ.desc": {
+          "source": "Expense date in YYYY-MM-DD format",
+          "message": "YYYY-MM-DD 형식의 비용 날짜"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLWV4cGVuc2U.option.ZGF0ZQ.display_name": {
+          "source": "Date",
+          "message": "날짜"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLWV4cGVuc2U.option.ZGF0ZQ.short_desc": {
+          "source": "Expense date",
+          "message": "비용 날짜"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLWV4cGVuc2U.option.bm90ZXM.display_name": {
+          "source": "Notes",
+          "message": "메모"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLWV4cGVuc2U.option.bm90ZXM.short_desc": {
+          "source": "Expense notes",
+          "message": "비용 메모"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLWV4cGVuc2U.option.c3RhZmZpZA.desc": {
+          "source": "The ID of the staff member associated with this expense",
+          "message": "이 비용과 연결된 직원 ID"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLWV4cGVuc2U.option.c3RhZmZpZA.display_name": {
+          "source": "Staff Member",
+          "message": "직원"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLWV4cGVuc2U.option.c3RhZmZpZA.short_desc": {
+          "source": "Staff member for this expense",
+          "message": "이 경비의 직원"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLWV4cGVuc2U.option.dGF4TmFtZTE.display_name": {
+          "source": "Tax Name",
+          "message": "세금 이름"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLWV4cGVuc2U.option.dGF4TmFtZTE.short_desc": {
+          "source": "Tax name",
+          "message": "세금 이름"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLWV4cGVuc2U.option.dGF4UGVyY2VudDE.display_name": {
+          "source": "Tax Percent",
+          "message": "세율"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLWV4cGVuc2U.option.dGF4UGVyY2VudDE.short_desc": {
+          "source": "Tax percentage",
+          "message": "세율 백분율"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLWV4cGVuc2U.option.dmVuZG9y.desc": {
+          "source": "Name of the vendor",
+          "message": "공급업체 이름"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLWV4cGVuc2U.option.dmVuZG9y.display_name": {
+          "source": "Vendor",
+          "message": "공급업체"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLWV4cGVuc2U.option.dmVuZG9y.short_desc": {
+          "source": "Vendor name",
+          "message": "공급업체 이름"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLWV4cGVuc2U.short_desc": {
+          "source": "Create a new expense",
+          "message": "새 경비 생성"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLWVzdGltYXRl.desc": {
+          "source": "Create a new estimate/quote in FreshBooks",
+          "message": "FreshBooks에서 새 견적서 생성"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLWVzdGltYXRl.display_name": {
+          "source": "Create Estimate",
+          "message": "견적서 생성"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLWVzdGltYXRl.option.Y3JlYXRlX2RhdGU.desc": {
+          "source": "Estimate date in YYYY-MM-DD format",
+          "message": "YYYY-MM-DD 형식의 견적 날짜"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLWVzdGltYXRl.option.Y3JlYXRlX2RhdGU.display_name": {
+          "source": "Date",
+          "message": "날짜"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLWVzdGltYXRl.option.Y3JlYXRlX2RhdGU.short_desc": {
+          "source": "Estimate date",
+          "message": "견적 날짜"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLWVzdGltYXRl.option.Y3VycmVuY3lfY29kZQ.desc": {
+          "source": "Currency code (e.g. USD, CAD, EUR)",
+          "message": "통화 코드(예: USD, CAD, EUR)"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLWVzdGltYXRl.option.Y3VycmVuY3lfY29kZQ.display_name": {
+          "source": "Currency",
+          "message": "통화"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLWVzdGltYXRl.option.Y3VycmVuY3lfY29kZQ.short_desc": {
+          "source": "Currency code",
+          "message": "통화 코드"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLWVzdGltYXRl.option.Y3VzdG9tZXJpZA.display_name": {
+          "source": "Customer",
+          "message": "고객"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLWVzdGltYXRl.option.Y3VzdG9tZXJpZA.short_desc": {
+          "source": "The customer for the estimate",
+          "message": "견적서 대상 고객"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLWVzdGltYXRl.option.YWNjb3VudF9pZA.desc": {
+          "source": "The FreshBooks account ID for accounting API endpoints",
+          "message": "회계 API 엔드포인트용 FreshBooks 계정 ID"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLWVzdGltYXRl.option.YWNjb3VudF9pZA.display_name": {
+          "source": "Account ID",
+          "message": "계정 ID"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLWVzdGltYXRl.option.YWNjb3VudF9pZA.short_desc": {
+          "source": "FreshBooks account ID",
+          "message": "FreshBooks 계정 ID"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLWVzdGltYXRl.option.ZXN0aW1hdGVfbnVtYmVy.display_name": {
+          "source": "Estimate Number",
+          "message": "견적서 번호"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLWVzdGltYXRl.option.ZXN0aW1hdGVfbnVtYmVy.short_desc": {
+          "source": "Unique estimate number",
+          "message": "고유 견적서 번호"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLWVzdGltYXRl.option.bGluZXM.desc": {
+          "source": "List of line items with fields: description, quantity, unit_cost, taxName1, taxPercent1",
+          "message": "필드가 포함된 품목 항목 목록: description, quantity, unit_cost, taxName1, taxPercent1"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLWVzdGltYXRl.option.bGluZXM.display_name": {
+          "source": "Line Items",
+          "message": "품목"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLWVzdGltYXRl.option.bGluZXM.short_desc": {
+          "source": "Estimate line items",
+          "message": "견적 품목 항목"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLWVzdGltYXRl.option.bm90ZXM.display_name": {
+          "source": "Notes",
+          "message": "메모"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLWVzdGltYXRl.option.bm90ZXM.short_desc": {
+          "source": "Customer notes",
+          "message": "고객 메모"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLWVzdGltYXRl.option.cG9fbnVtYmVy.display_name": {
+          "source": "PO Number",
+          "message": "PO 번호"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLWVzdGltYXRl.option.cG9fbnVtYmVy.short_desc": {
+          "source": "Purchase order number",
+          "message": "구매 주문 번호"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLWVzdGltYXRl.option.dGVybXM.display_name": {
+          "source": "Terms",
+          "message": "조건"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLWVzdGltYXRl.option.dGVybXM.short_desc": {
+          "source": "Terms and conditions",
+          "message": "이용 약관"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLWVzdGltYXRl.short_desc": {
+          "source": "Create a new estimate",
+          "message": "새 견적서 생성"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLWl0ZW0.desc": {
+          "source": "Create a new product or service item in FreshBooks",
+          "message": "FreshBooks에서 새 제품 또는 서비스 항목 생성"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLWl0ZW0.display_name": {
+          "source": "Create Item",
+          "message": "항목 생성"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLWl0ZW0.option.YWNjb3VudF9pZA.desc": {
+          "source": "The FreshBooks account ID for accounting API endpoints",
+          "message": "회계 API 엔드포인트용 FreshBooks 계정 ID"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLWl0ZW0.option.YWNjb3VudF9pZA.display_name": {
+          "source": "Account ID",
+          "message": "계정 ID"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLWl0ZW0.option.YWNjb3VudF9pZA.short_desc": {
+          "source": "FreshBooks account ID",
+          "message": "FreshBooks 계정 ID"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLWl0ZW0.option.ZGVzY3JpcHRpb24.display_name": {
+          "source": "Description",
+          "message": "설명"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLWl0ZW0.option.ZGVzY3JpcHRpb24.short_desc": {
+          "source": "Item description",
+          "message": "품목 설명"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLWl0ZW0.option.aW52ZW50b3J5.display_name": {
+          "source": "Inventory",
+          "message": "재고"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLWl0ZW0.option.aW52ZW50b3J5.short_desc": {
+          "source": "Inventory count",
+          "message": "재고 수량"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLWl0ZW0.option.bmFtZQ.desc": {
+          "source": "The name of the item",
+          "message": "항목 이름"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLWl0ZW0.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "이름"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLWl0ZW0.option.bmFtZQ.short_desc": {
+          "source": "Item name",
+          "message": "항목 이름"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLWl0ZW0.option.c2t1.display_name": {
+          "source": "SKU",
+          "message": "SKU"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLWl0ZW0.option.c2t1.short_desc": {
+          "source": "Stock keeping unit",
+          "message": "재고 관리 단위"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLWl0ZW0.option.cXR5.display_name": {
+          "source": "Quantity",
+          "message": "수량"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLWl0ZW0.option.cXR5.short_desc": {
+          "source": "Default quantity",
+          "message": "기본 수량"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLWl0ZW0.option.dGF4MQ.display_name": {
+          "source": "Tax 1",
+          "message": "세금 1"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLWl0ZW0.option.dGF4MQ.short_desc": {
+          "source": "Default tax 1",
+          "message": "기본 세금 1"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLWl0ZW0.option.dGF4Mg.display_name": {
+          "source": "Tax 2",
+          "message": "세금 2"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLWl0ZW0.option.dGF4Mg.short_desc": {
+          "source": "Default tax 2",
+          "message": "기본 세금 2"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLWl0ZW0.option.dW5pdF9jb3N0.desc": {
+          "source": "Unit cost object with `amount` (string) and `code` (currency) fields",
+          "message": "`amount`(문자열) 및 `code`(통화) 필드가 있는 단가 객체"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLWl0ZW0.option.dW5pdF9jb3N0.display_name": {
+          "source": "Unit Cost",
+          "message": "단가"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLWl0ZW0.option.dW5pdF9jb3N0.short_desc": {
+          "source": "Cost per unit",
+          "message": "단위당 비용"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLWl0ZW0.short_desc": {
+          "source": "Create a new item",
+          "message": "새 항목 생성"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLWludm9pY2U.desc": {
+          "source": "Create a new invoice in FreshBooks for a customer",
+          "message": "FreshBooks에서 고객을 위한 새 인보이스 생성"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLWludm9pY2U.display_name": {
+          "source": "Create Invoice",
+          "message": "인보이스 생성"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLWludm9pY2U.option.Y3JlYXRlX2RhdGU.desc": {
+          "source": "Invoice date in YYYY-MM-DD format",
+          "message": "YYYY-MM-DD 형식의 인보이스 날짜"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLWludm9pY2U.option.Y3JlYXRlX2RhdGU.display_name": {
+          "source": "Date",
+          "message": "날짜"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLWludm9pY2U.option.Y3JlYXRlX2RhdGU.short_desc": {
+          "source": "Invoice date",
+          "message": "인보이스 날짜"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLWludm9pY2U.option.Y3VycmVuY3lfY29kZQ.display_name": {
+          "source": "Currency",
+          "message": "통화"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLWludm9pY2U.option.Y3VycmVuY3lfY29kZQ.short_desc": {
+          "source": "Currency code",
+          "message": "통화 코드"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLWludm9pY2U.option.Y3VzdG9tZXJpZA.display_name": {
+          "source": "Customer",
+          "message": "고객"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLWludm9pY2U.option.Y3VzdG9tZXJpZA.short_desc": {
+          "source": "The customer for the invoice",
+          "message": "송장 대상 고객"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLWludm9pY2U.option.YWNjb3VudF9pZA.desc": {
+          "source": "The FreshBooks account ID for accounting API endpoints",
+          "message": "회계 API 엔드포인트용 FreshBooks 계정 ID"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLWludm9pY2U.option.YWNjb3VudF9pZA.display_name": {
+          "source": "Account ID",
+          "message": "계정 ID"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLWludm9pY2U.option.YWNjb3VudF9pZA.short_desc": {
+          "source": "FreshBooks account ID",
+          "message": "FreshBooks 계정 ID"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLWludm9pY2U.option.ZGlzY291bnRfdmFsdWU.desc": {
+          "source": "Discount amount applied to the invoice",
+          "message": "인보이스에 적용된 할인 금액"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLWludm9pY2U.option.ZGlzY291bnRfdmFsdWU.display_name": {
+          "source": "Discount",
+          "message": "할인"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLWludm9pY2U.option.ZGlzY291bnRfdmFsdWU.short_desc": {
+          "source": "Discount value",
+          "message": "할인 값"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLWludm9pY2U.option.ZHVlX29mZnNldF9kYXlz.desc": {
+          "source": "Number of days from creation until the invoice is due",
+          "message": "생성일로부터 인보이스 만기일까지의 일수"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLWludm9pY2U.option.ZHVlX29mZnNldF9kYXlz.display_name": {
+          "source": "Due in Days",
+          "message": "만기 일수"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLWludm9pY2U.option.ZHVlX29mZnNldF9kYXlz.short_desc": {
+          "source": "Days until due",
+          "message": "만기일까지 남은 일수"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLWludm9pY2U.option.aW52b2ljZV9udW1iZXI.desc": {
+          "source": "A unique invoice number (auto-generated if not provided)",
+          "message": "고유 인보이스 번호(제공되지 않은 경우 자동 생성됨)"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLWludm9pY2U.option.aW52b2ljZV9udW1iZXI.display_name": {
+          "source": "Invoice Number",
+          "message": "인보이스 번호"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLWludm9pY2U.option.aW52b2ljZV9udW1iZXI.short_desc": {
+          "source": "Unique invoice number",
+          "message": "고유 인보이스 번호"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLWludm9pY2U.option.bGluZXM.desc": {
+          "source": "List of line items with fields: description, quantity, unit_cost, taxName1, taxPercent1",
+          "message": "필드가 포함된 품목 항목 목록: description, quantity, unit_cost, taxName1, taxPercent1"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLWludm9pY2U.option.bGluZXM.display_name": {
+          "source": "Line Items",
+          "message": "품목"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLWludm9pY2U.option.bGluZXM.short_desc": {
+          "source": "Invoice line items",
+          "message": "인보이스 품목 항목"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLWludm9pY2U.option.bm90ZXM.display_name": {
+          "source": "Notes",
+          "message": "메모"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLWludm9pY2U.option.bm90ZXM.short_desc": {
+          "source": "Customer notes",
+          "message": "고객 메모"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLWludm9pY2U.option.cG9fbnVtYmVy.display_name": {
+          "source": "PO Number",
+          "message": "PO 번호"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLWludm9pY2U.option.cG9fbnVtYmVy.short_desc": {
+          "source": "Purchase order number",
+          "message": "구매 주문 번호"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLWludm9pY2U.option.dGVybXM.display_name": {
+          "source": "Terms",
+          "message": "조건"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLWludm9pY2U.option.dGVybXM.short_desc": {
+          "source": "Terms and conditions",
+          "message": "이용 약관"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLWludm9pY2U.short_desc": {
+          "source": "Create a new invoice",
+          "message": "새 송장 생성"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLXBheW1lbnQ.desc": {
+          "source": "Record a new payment against an invoice in FreshBooks",
+          "message": "FreshBooks에서 인보이스에 대한 새 결제 기록"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLXBheW1lbnQ.display_name": {
+          "source": "Create Payment",
+          "message": "결제 생성"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLXBheW1lbnQ.option.YW1vdW50.desc": {
+          "source": "Amount object with `amount` (string) and `code` (currency) fields",
+          "message": "`amount`(문자열) 및 `code`(통화) 필드가 있는 금액 객체"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLXBheW1lbnQ.option.YW1vdW50.display_name": {
+          "source": "Amount",
+          "message": "금액"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLXBheW1lbnQ.option.YW1vdW50.short_desc": {
+          "source": "Payment amount",
+          "message": "결제 금액"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLXBheW1lbnQ.option.YWNjb3VudF9pZA.desc": {
+          "source": "The FreshBooks account ID for accounting API endpoints",
+          "message": "회계 API 엔드포인트용 FreshBooks 계정 ID"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLXBheW1lbnQ.option.YWNjb3VudF9pZA.display_name": {
+          "source": "Account ID",
+          "message": "계정 ID"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLXBheW1lbnQ.option.YWNjb3VudF9pZA.short_desc": {
+          "source": "FreshBooks account ID",
+          "message": "FreshBooks 계정 ID"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLXBheW1lbnQ.option.ZGF0ZQ.desc": {
+          "source": "Payment date in YYYY-MM-DD format",
+          "message": "YYYY-MM-DD 형식의 결제 날짜"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLXBheW1lbnQ.option.ZGF0ZQ.display_name": {
+          "source": "Date",
+          "message": "날짜"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLXBheW1lbnQ.option.ZGF0ZQ.short_desc": {
+          "source": "Payment date",
+          "message": "결제일"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLXBheW1lbnQ.option.aW52b2ljZWlk.display_name": {
+          "source": "Invoice",
+          "message": "인보이스"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLXBheW1lbnQ.option.aW52b2ljZWlk.short_desc": {
+          "source": "The invoice for this payment",
+          "message": "이 결제 대상 인보이스"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLXBheW1lbnQ.option.bm90ZQ.display_name": {
+          "source": "Note",
+          "message": "메모"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLXBheW1lbnQ.option.bm90ZQ.short_desc": {
+          "source": "Payment note",
+          "message": "결제 메모"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLXBheW1lbnQ.option.dHlwZQ.allowed-value.c3RyaW5nOk90aGVy.desc": {
+          "source": "Other payment type",
+          "message": "기타 결제 유형"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLXBheW1lbnQ.option.dHlwZQ.allowed-value.c3RyaW5nOkJhbmsgVHJhbnNmZXI.desc": {
+          "source": "Bank transfer payment",
+          "message": "계좌 이체 결제"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLXBheW1lbnQ.option.dHlwZQ.allowed-value.c3RyaW5nOkNhc2g.desc": {
+          "source": "Cash payment",
+          "message": "현금 결제"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLXBheW1lbnQ.option.dHlwZQ.allowed-value.c3RyaW5nOkNoZWNr.desc": {
+          "source": "Check payment",
+          "message": "수표 결제"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLXBheW1lbnQ.option.dHlwZQ.allowed-value.c3RyaW5nOkNyZWRpdCBDYXJk.desc": {
+          "source": "Credit card payment",
+          "message": "신용카드 결제"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLXBheW1lbnQ.option.dHlwZQ.allowed-value.c3RyaW5nOlBheVBhbA.desc": {
+          "source": "PayPal payment",
+          "message": "PayPal 결제"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLXBheW1lbnQ.option.dHlwZQ.desc": {
+          "source": "The payment method type",
+          "message": "결제 수단 유형"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLXBheW1lbnQ.option.dHlwZQ.display_name": {
+          "source": "Type",
+          "message": "유형"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLXBheW1lbnQ.option.dHlwZQ.short_desc": {
+          "source": "Payment type",
+          "message": "결제 유형"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLXBheW1lbnQ.short_desc": {
+          "source": "Record a new payment",
+          "message": "새 결제 기록"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLXNlcnZpY2U.desc": {
+          "source": "Create a new service in FreshBooks for time tracking",
+          "message": "FreshBooks에서 시간 추적을 위한 새 서비스 생성"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLXNlcnZpY2U.display_name": {
+          "source": "Create Service",
+          "message": "서비스 생성"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLXNlcnZpY2U.option.YmlsbGFibGU.desc": {
+          "source": "Whether this service is billable to clients",
+          "message": "이 서비스를 클라이언트에게 청구할 수 있는지 여부"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLXNlcnZpY2U.option.YmlsbGFibGU.display_name": {
+          "source": "Billable",
+          "message": "청구 가능"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLXNlcnZpY2U.option.YmlsbGFibGU.short_desc": {
+          "source": "Whether the service is billable",
+          "message": "서비스 청구 가능 여부"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLXNlcnZpY2U.option.YnVzaW5lc3NfaWQ.desc": {
+          "source": "The FreshBooks business ID for time tracking API endpoints",
+          "message": "시간 추적 API 엔드포인트용 FreshBooks 비즈니스 ID"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLXNlcnZpY2U.option.YnVzaW5lc3NfaWQ.display_name": {
+          "source": "Business ID",
+          "message": "비즈니스 ID"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLXNlcnZpY2U.option.YnVzaW5lc3NfaWQ.short_desc": {
+          "source": "FreshBooks business ID",
+          "message": "FreshBooks 비즈니스 ID"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLXNlcnZpY2U.option.bmFtZQ.desc": {
+          "source": "The name of the service",
+          "message": "서비스의 이름"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLXNlcnZpY2U.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "이름"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLXNlcnZpY2U.option.bmFtZQ.short_desc": {
+          "source": "Service name",
+          "message": "서비스 이름"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLXNlcnZpY2U.short_desc": {
+          "source": "Create a new service",
+          "message": "새 서비스 생성"
+        },
+        "app.RnJlc2hCb29rcw.action.Z2V0LWNsaWVudA.desc": {
+          "source": "Retrieve a single client by ID from FreshBooks",
+          "message": "FreshBooks에서 ID로 단일 고객 조회"
+        },
+        "app.RnJlc2hCb29rcw.action.Z2V0LWNsaWVudA.display_name": {
+          "source": "Get Client",
+          "message": "고객 가져오기"
+        },
+        "app.RnJlc2hCb29rcw.action.Z2V0LWNsaWVudA.option.YWNjb3VudF9pZA.desc": {
+          "source": "The FreshBooks account ID for accounting API endpoints",
+          "message": "회계 API 엔드포인트용 FreshBooks 계정 ID"
+        },
+        "app.RnJlc2hCb29rcw.action.Z2V0LWNsaWVudA.option.YWNjb3VudF9pZA.display_name": {
+          "source": "Account ID",
+          "message": "계정 ID"
+        },
+        "app.RnJlc2hCb29rcw.action.Z2V0LWNsaWVudA.option.YWNjb3VudF9pZA.short_desc": {
+          "source": "FreshBooks account ID",
+          "message": "FreshBooks 계정 ID"
+        },
+        "app.RnJlc2hCb29rcw.action.Z2V0LWNsaWVudA.option.aWQ.display_name": {
+          "source": "Client ID",
+          "message": "클라이언트 ID"
+        },
+        "app.RnJlc2hCb29rcw.action.Z2V0LWNsaWVudA.option.aWQ.short_desc": {
+          "source": "The client ID",
+          "message": "고객 ID"
+        },
+        "app.RnJlc2hCb29rcw.action.Z2V0LWNsaWVudA.short_desc": {
+          "source": "Get a single client by ID",
+          "message": "ID로 단일 고객 가져오기"
+        },
+        "app.RnJlc2hCb29rcw.action.Z2V0LWV4cGVuc2U.desc": {
+          "source": "Retrieve a single expense by ID from FreshBooks",
+          "message": "FreshBooks에서 ID로 단일 비용 조회"
+        },
+        "app.RnJlc2hCb29rcw.action.Z2V0LWV4cGVuc2U.display_name": {
+          "source": "Get Expense",
+          "message": "비용 가져오기"
+        },
+        "app.RnJlc2hCb29rcw.action.Z2V0LWV4cGVuc2U.option.YWNjb3VudF9pZA.desc": {
+          "source": "The FreshBooks account ID for accounting API endpoints",
+          "message": "회계 API 엔드포인트용 FreshBooks 계정 ID"
+        },
+        "app.RnJlc2hCb29rcw.action.Z2V0LWV4cGVuc2U.option.YWNjb3VudF9pZA.display_name": {
+          "source": "Account ID",
+          "message": "계정 ID"
+        },
+        "app.RnJlc2hCb29rcw.action.Z2V0LWV4cGVuc2U.option.YWNjb3VudF9pZA.short_desc": {
+          "source": "FreshBooks account ID",
+          "message": "FreshBooks 계정 ID"
+        },
+        "app.RnJlc2hCb29rcw.action.Z2V0LWV4cGVuc2U.option.aWQ.display_name": {
+          "source": "Expense ID",
+          "message": "비용 ID"
+        },
+        "app.RnJlc2hCb29rcw.action.Z2V0LWV4cGVuc2U.option.aWQ.short_desc": {
+          "source": "The expense ID",
+          "message": "비용 ID"
+        },
+        "app.RnJlc2hCb29rcw.action.Z2V0LWV4cGVuc2U.short_desc": {
+          "source": "Get a single expense by ID",
+          "message": "ID로 단일 비용 가져오기"
+        },
+        "app.RnJlc2hCb29rcw.action.Z2V0LWVzdGltYXRl.desc": {
+          "source": "Retrieve a single estimate by ID from FreshBooks",
+          "message": "FreshBooks에서 ID로 단일 견적서 조회"
+        },
+        "app.RnJlc2hCb29rcw.action.Z2V0LWVzdGltYXRl.display_name": {
+          "source": "Get Estimate",
+          "message": "견적서 가져오기"
+        },
+        "app.RnJlc2hCb29rcw.action.Z2V0LWVzdGltYXRl.option.YWNjb3VudF9pZA.desc": {
+          "source": "The FreshBooks account ID for accounting API endpoints",
+          "message": "회계 API 엔드포인트용 FreshBooks 계정 ID"
+        },
+        "app.RnJlc2hCb29rcw.action.Z2V0LWVzdGltYXRl.option.YWNjb3VudF9pZA.display_name": {
+          "source": "Account ID",
+          "message": "계정 ID"
+        },
+        "app.RnJlc2hCb29rcw.action.Z2V0LWVzdGltYXRl.option.YWNjb3VudF9pZA.short_desc": {
+          "source": "FreshBooks account ID",
+          "message": "FreshBooks 계정 ID"
+        },
+        "app.RnJlc2hCb29rcw.action.Z2V0LWVzdGltYXRl.option.aWQ.display_name": {
+          "source": "Estimate ID",
+          "message": "견적서 ID"
+        },
+        "app.RnJlc2hCb29rcw.action.Z2V0LWVzdGltYXRl.option.aWQ.short_desc": {
+          "source": "The estimate ID",
+          "message": "견적서 ID"
+        },
+        "app.RnJlc2hCb29rcw.action.Z2V0LWVzdGltYXRl.short_desc": {
+          "source": "Get a single estimate by ID",
+          "message": "ID로 단일 견적서 가져오기"
+        },
+        "app.RnJlc2hCb29rcw.action.Z2V0LWl0ZW0.desc": {
+          "source": "Retrieve a single item by ID from FreshBooks",
+          "message": "FreshBooks에서 ID로 단일 품목 조회"
+        },
+        "app.RnJlc2hCb29rcw.action.Z2V0LWl0ZW0.display_name": {
+          "source": "Get Item",
+          "message": "품목 가져오기"
+        },
+        "app.RnJlc2hCb29rcw.action.Z2V0LWl0ZW0.option.YWNjb3VudF9pZA.desc": {
+          "source": "The FreshBooks account ID for accounting API endpoints",
+          "message": "회계 API 엔드포인트용 FreshBooks 계정 ID"
+        },
+        "app.RnJlc2hCb29rcw.action.Z2V0LWl0ZW0.option.YWNjb3VudF9pZA.display_name": {
+          "source": "Account ID",
+          "message": "계정 ID"
+        },
+        "app.RnJlc2hCb29rcw.action.Z2V0LWl0ZW0.option.YWNjb3VudF9pZA.short_desc": {
+          "source": "FreshBooks account ID",
+          "message": "FreshBooks 계정 ID"
+        },
+        "app.RnJlc2hCb29rcw.action.Z2V0LWl0ZW0.option.aWQ.display_name": {
+          "source": "Item ID",
+          "message": "품목 ID"
+        },
+        "app.RnJlc2hCb29rcw.action.Z2V0LWl0ZW0.option.aWQ.short_desc": {
+          "source": "The item ID",
+          "message": "품목 ID"
+        },
+        "app.RnJlc2hCb29rcw.action.Z2V0LWl0ZW0.short_desc": {
+          "source": "Get a single item by ID",
+          "message": "ID로 단일 품목 가져오기"
+        },
+        "app.RnJlc2hCb29rcw.action.Z2V0LWludm9pY2U.desc": {
+          "source": "Retrieve a single invoice by ID from FreshBooks",
+          "message": "FreshBooks에서 ID로 단일 인보이스 조회"
+        },
+        "app.RnJlc2hCb29rcw.action.Z2V0LWludm9pY2U.display_name": {
+          "source": "Get Invoice",
+          "message": "인보이스 가져오기"
+        },
+        "app.RnJlc2hCb29rcw.action.Z2V0LWludm9pY2U.option.YWNjb3VudF9pZA.desc": {
+          "source": "The FreshBooks account ID for accounting API endpoints",
+          "message": "회계 API 엔드포인트용 FreshBooks 계정 ID"
+        },
+        "app.RnJlc2hCb29rcw.action.Z2V0LWludm9pY2U.option.YWNjb3VudF9pZA.display_name": {
+          "source": "Account ID",
+          "message": "계정 ID"
+        },
+        "app.RnJlc2hCb29rcw.action.Z2V0LWludm9pY2U.option.YWNjb3VudF9pZA.short_desc": {
+          "source": "FreshBooks account ID",
+          "message": "FreshBooks 계정 ID"
+        },
+        "app.RnJlc2hCb29rcw.action.Z2V0LWludm9pY2U.option.aWQ.display_name": {
+          "source": "Invoice ID",
+          "message": "인보이스 ID"
+        },
+        "app.RnJlc2hCb29rcw.action.Z2V0LWludm9pY2U.option.aWQ.short_desc": {
+          "source": "The invoice ID",
+          "message": "송장 ID"
+        },
+        "app.RnJlc2hCb29rcw.action.Z2V0LWludm9pY2U.short_desc": {
+          "source": "Get a single invoice by ID",
+          "message": "ID로 단일 송장 가져오기"
+        },
+        "app.RnJlc2hCb29rcw.action.Z2V0LXBheW1lbnQ.desc": {
+          "source": "Retrieve a single payment by ID from FreshBooks",
+          "message": "FreshBooks에서 ID로 단일 결제 조회"
+        },
+        "app.RnJlc2hCb29rcw.action.Z2V0LXBheW1lbnQ.display_name": {
+          "source": "Get Payment",
+          "message": "결제 가져오기"
+        },
+        "app.RnJlc2hCb29rcw.action.Z2V0LXBheW1lbnQ.option.YWNjb3VudF9pZA.desc": {
+          "source": "The FreshBooks account ID for accounting API endpoints",
+          "message": "회계 API 엔드포인트용 FreshBooks 계정 ID"
+        },
+        "app.RnJlc2hCb29rcw.action.Z2V0LXBheW1lbnQ.option.YWNjb3VudF9pZA.display_name": {
+          "source": "Account ID",
+          "message": "계정 ID"
+        },
+        "app.RnJlc2hCb29rcw.action.Z2V0LXBheW1lbnQ.option.YWNjb3VudF9pZA.short_desc": {
+          "source": "FreshBooks account ID",
+          "message": "FreshBooks 계정 ID"
+        },
+        "app.RnJlc2hCb29rcw.action.Z2V0LXBheW1lbnQ.option.aWQ.display_name": {
+          "source": "Payment ID",
+          "message": "결제 ID"
+        },
+        "app.RnJlc2hCb29rcw.action.Z2V0LXBheW1lbnQ.option.aWQ.short_desc": {
+          "source": "The payment ID",
+          "message": "결제 ID"
+        },
+        "app.RnJlc2hCb29rcw.action.Z2V0LXBheW1lbnQ.short_desc": {
+          "source": "Get a single payment by ID",
+          "message": "ID로 단일 결제 가져오기"
+        },
+        "app.RnJlc2hCb29rcw.action.Z2V0LXNlcnZpY2U.desc": {
+          "source": "Retrieve a single service by ID from FreshBooks",
+          "message": "FreshBooks에서 ID로 단일 서비스 조회"
+        },
+        "app.RnJlc2hCb29rcw.action.Z2V0LXNlcnZpY2U.display_name": {
+          "source": "Get Service",
+          "message": "서비스 가져오기"
+        },
+        "app.RnJlc2hCb29rcw.action.Z2V0LXNlcnZpY2U.option.YnVzaW5lc3NfaWQ.desc": {
+          "source": "The FreshBooks business ID for time tracking API endpoints",
+          "message": "시간 추적 API 엔드포인트용 FreshBooks 비즈니스 ID"
+        },
+        "app.RnJlc2hCb29rcw.action.Z2V0LXNlcnZpY2U.option.YnVzaW5lc3NfaWQ.display_name": {
+          "source": "Business ID",
+          "message": "비즈니스 ID"
+        },
+        "app.RnJlc2hCb29rcw.action.Z2V0LXNlcnZpY2U.option.YnVzaW5lc3NfaWQ.short_desc": {
+          "source": "FreshBooks business ID",
+          "message": "FreshBooks 비즈니스 ID"
+        },
+        "app.RnJlc2hCb29rcw.action.Z2V0LXNlcnZpY2U.option.aWQ.display_name": {
+          "source": "Service ID",
+          "message": "서비스 ID"
+        },
+        "app.RnJlc2hCb29rcw.action.Z2V0LXNlcnZpY2U.option.aWQ.short_desc": {
+          "source": "The service ID",
+          "message": "서비스 ID"
+        },
+        "app.RnJlc2hCb29rcw.action.Z2V0LXNlcnZpY2U.short_desc": {
+          "source": "Get a single service by ID",
+          "message": "ID로 단일 서비스 가져오기"
+        },
+        "app.RnJlc2hCb29rcw.action.ZGVsZXRlLWNsaWVudA.desc": {
+          "source": "Soft-delete a client in FreshBooks by setting vis_state to 1",
+          "message": "vis_state를 1로 설정하여 FreshBooks에서 고객을 소프트 삭제합니다"
+        },
+        "app.RnJlc2hCb29rcw.action.ZGVsZXRlLWNsaWVudA.display_name": {
+          "source": "Delete Client",
+          "message": "고객 삭제"
+        },
+        "app.RnJlc2hCb29rcw.action.ZGVsZXRlLWNsaWVudA.option.YWNjb3VudF9pZA.desc": {
+          "source": "The FreshBooks account ID for accounting API endpoints",
+          "message": "회계 API 엔드포인트용 FreshBooks 계정 ID"
+        },
+        "app.RnJlc2hCb29rcw.action.ZGVsZXRlLWNsaWVudA.option.YWNjb3VudF9pZA.display_name": {
+          "source": "Account ID",
+          "message": "계정 ID"
+        },
+        "app.RnJlc2hCb29rcw.action.ZGVsZXRlLWNsaWVudA.option.YWNjb3VudF9pZA.short_desc": {
+          "source": "FreshBooks account ID",
+          "message": "FreshBooks 계정 ID"
+        },
+        "app.RnJlc2hCb29rcw.action.ZGVsZXRlLWNsaWVudA.option.aWQ.display_name": {
+          "source": "Client ID",
+          "message": "클라이언트 ID"
+        },
+        "app.RnJlc2hCb29rcw.action.ZGVsZXRlLWNsaWVudA.option.aWQ.short_desc": {
+          "source": "The client to delete",
+          "message": "삭제할 고객"
+        },
+        "app.RnJlc2hCb29rcw.action.ZGVsZXRlLWNsaWVudA.short_desc": {
+          "source": "Delete a client",
+          "message": "고객 삭제"
+        },
+        "app.RnJlc2hCb29rcw.action.ZGVsZXRlLWV4cGVuc2U.desc": {
+          "source": "Soft-delete an expense in FreshBooks by setting vis_state to 1",
+          "message": "vis_state를 1로 설정하여 FreshBooks에서 비용을 소프트 삭제합니다"
+        },
+        "app.RnJlc2hCb29rcw.action.ZGVsZXRlLWV4cGVuc2U.display_name": {
+          "source": "Delete Expense",
+          "message": "비용 삭제"
+        },
+        "app.RnJlc2hCb29rcw.action.ZGVsZXRlLWV4cGVuc2U.option.YWNjb3VudF9pZA.desc": {
+          "source": "The FreshBooks account ID for accounting API endpoints",
+          "message": "회계 API 엔드포인트용 FreshBooks 계정 ID"
+        },
+        "app.RnJlc2hCb29rcw.action.ZGVsZXRlLWV4cGVuc2U.option.YWNjb3VudF9pZA.display_name": {
+          "source": "Account ID",
+          "message": "계정 ID"
+        },
+        "app.RnJlc2hCb29rcw.action.ZGVsZXRlLWV4cGVuc2U.option.YWNjb3VudF9pZA.short_desc": {
+          "source": "FreshBooks account ID",
+          "message": "FreshBooks 계정 ID"
+        },
+        "app.RnJlc2hCb29rcw.action.ZGVsZXRlLWV4cGVuc2U.option.aWQ.display_name": {
+          "source": "Expense ID",
+          "message": "비용 ID"
+        },
+        "app.RnJlc2hCb29rcw.action.ZGVsZXRlLWV4cGVuc2U.option.aWQ.short_desc": {
+          "source": "The expense to delete",
+          "message": "삭제할 비용"
+        },
+        "app.RnJlc2hCb29rcw.action.ZGVsZXRlLWV4cGVuc2U.short_desc": {
+          "source": "Delete an expense",
+          "message": "비용 삭제"
+        },
+        "app.RnJlc2hCb29rcw.action.ZGVsZXRlLWVzdGltYXRl.desc": {
+          "source": "Soft-delete an estimate in FreshBooks by setting vis_state to 1",
+          "message": "vis_state를 1로 설정하여 FreshBooks에서 견적서를 소프트 삭제합니다"
+        },
+        "app.RnJlc2hCb29rcw.action.ZGVsZXRlLWVzdGltYXRl.display_name": {
+          "source": "Delete Estimate",
+          "message": "견적서 삭제"
+        },
+        "app.RnJlc2hCb29rcw.action.ZGVsZXRlLWVzdGltYXRl.option.YWNjb3VudF9pZA.desc": {
+          "source": "The FreshBooks account ID for accounting API endpoints",
+          "message": "회계 API 엔드포인트용 FreshBooks 계정 ID"
+        },
+        "app.RnJlc2hCb29rcw.action.ZGVsZXRlLWVzdGltYXRl.option.YWNjb3VudF9pZA.display_name": {
+          "source": "Account ID",
+          "message": "계정 ID"
+        },
+        "app.RnJlc2hCb29rcw.action.ZGVsZXRlLWVzdGltYXRl.option.YWNjb3VudF9pZA.short_desc": {
+          "source": "FreshBooks account ID",
+          "message": "FreshBooks 계정 ID"
+        },
+        "app.RnJlc2hCb29rcw.action.ZGVsZXRlLWVzdGltYXRl.option.aWQ.display_name": {
+          "source": "Estimate ID",
+          "message": "견적서 ID"
+        },
+        "app.RnJlc2hCb29rcw.action.ZGVsZXRlLWVzdGltYXRl.option.aWQ.short_desc": {
+          "source": "The estimate to delete",
+          "message": "삭제할 견적서"
+        },
+        "app.RnJlc2hCb29rcw.action.ZGVsZXRlLWVzdGltYXRl.short_desc": {
+          "source": "Delete an estimate",
+          "message": "견적서 삭제"
+        },
+        "app.RnJlc2hCb29rcw.action.ZGVsZXRlLWl0ZW0.desc": {
+          "source": "Soft-delete an item in FreshBooks by setting vis_state to 1",
+          "message": "vis_state를 1로 설정하여 FreshBooks에서 품목을 소프트 삭제합니다"
+        },
+        "app.RnJlc2hCb29rcw.action.ZGVsZXRlLWl0ZW0.display_name": {
+          "source": "Delete Item",
+          "message": "항목 삭제"
+        },
+        "app.RnJlc2hCb29rcw.action.ZGVsZXRlLWl0ZW0.option.YWNjb3VudF9pZA.desc": {
+          "source": "The FreshBooks account ID for accounting API endpoints",
+          "message": "회계 API 엔드포인트용 FreshBooks 계정 ID"
+        },
+        "app.RnJlc2hCb29rcw.action.ZGVsZXRlLWl0ZW0.option.YWNjb3VudF9pZA.display_name": {
+          "source": "Account ID",
+          "message": "계정 ID"
+        },
+        "app.RnJlc2hCb29rcw.action.ZGVsZXRlLWl0ZW0.option.YWNjb3VudF9pZA.short_desc": {
+          "source": "FreshBooks account ID",
+          "message": "FreshBooks 계정 ID"
+        },
+        "app.RnJlc2hCb29rcw.action.ZGVsZXRlLWl0ZW0.option.aWQ.display_name": {
+          "source": "Item ID",
+          "message": "품목 ID"
+        },
+        "app.RnJlc2hCb29rcw.action.ZGVsZXRlLWl0ZW0.option.aWQ.short_desc": {
+          "source": "The item to delete",
+          "message": "삭제할 항목"
+        },
+        "app.RnJlc2hCb29rcw.action.ZGVsZXRlLWl0ZW0.short_desc": {
+          "source": "Delete an item",
+          "message": "품목 삭제"
+        },
+        "app.RnJlc2hCb29rcw.action.ZGVsZXRlLWludm9pY2U.desc": {
+          "source": "Soft-delete an invoice in FreshBooks by setting vis_state to 1",
+          "message": "vis_state를 1로 설정하여 FreshBooks에서 인보이스를 소프트 삭제합니다"
+        },
+        "app.RnJlc2hCb29rcw.action.ZGVsZXRlLWludm9pY2U.display_name": {
+          "source": "Delete Invoice",
+          "message": "인보이스 삭제"
+        },
+        "app.RnJlc2hCb29rcw.action.ZGVsZXRlLWludm9pY2U.option.YWNjb3VudF9pZA.desc": {
+          "source": "The FreshBooks account ID for accounting API endpoints",
+          "message": "회계 API 엔드포인트용 FreshBooks 계정 ID"
+        },
+        "app.RnJlc2hCb29rcw.action.ZGVsZXRlLWludm9pY2U.option.YWNjb3VudF9pZA.display_name": {
+          "source": "Account ID",
+          "message": "계정 ID"
+        },
+        "app.RnJlc2hCb29rcw.action.ZGVsZXRlLWludm9pY2U.option.YWNjb3VudF9pZA.short_desc": {
+          "source": "FreshBooks account ID",
+          "message": "FreshBooks 계정 ID"
+        },
+        "app.RnJlc2hCb29rcw.action.ZGVsZXRlLWludm9pY2U.option.aWQ.display_name": {
+          "source": "Invoice ID",
+          "message": "인보이스 ID"
+        },
+        "app.RnJlc2hCb29rcw.action.ZGVsZXRlLWludm9pY2U.option.aWQ.short_desc": {
+          "source": "The invoice to delete",
+          "message": "삭제할 인보이스"
+        },
+        "app.RnJlc2hCb29rcw.action.ZGVsZXRlLWludm9pY2U.short_desc": {
+          "source": "Delete an invoice",
+          "message": "인보이스 삭제"
+        },
+        "app.RnJlc2hCb29rcw.action.ZGVsZXRlLXBheW1lbnQ.desc": {
+          "source": "Soft-delete a payment in FreshBooks by setting vis_state to 1",
+          "message": "vis_state를 1로 설정하여 FreshBooks에서 결제를 소프트 삭제합니다"
+        },
+        "app.RnJlc2hCb29rcw.action.ZGVsZXRlLXBheW1lbnQ.display_name": {
+          "source": "Delete Payment",
+          "message": "결제 삭제"
+        },
+        "app.RnJlc2hCb29rcw.action.ZGVsZXRlLXBheW1lbnQ.option.YWNjb3VudF9pZA.desc": {
+          "source": "The FreshBooks account ID for accounting API endpoints",
+          "message": "회계 API 엔드포인트용 FreshBooks 계정 ID"
+        },
+        "app.RnJlc2hCb29rcw.action.ZGVsZXRlLXBheW1lbnQ.option.YWNjb3VudF9pZA.display_name": {
+          "source": "Account ID",
+          "message": "계정 ID"
+        },
+        "app.RnJlc2hCb29rcw.action.ZGVsZXRlLXBheW1lbnQ.option.YWNjb3VudF9pZA.short_desc": {
+          "source": "FreshBooks account ID",
+          "message": "FreshBooks 계정 ID"
+        },
+        "app.RnJlc2hCb29rcw.action.ZGVsZXRlLXBheW1lbnQ.option.aWQ.display_name": {
+          "source": "Payment ID",
+          "message": "결제 ID"
+        },
+        "app.RnJlc2hCb29rcw.action.ZGVsZXRlLXBheW1lbnQ.option.aWQ.short_desc": {
+          "source": "The payment to delete",
+          "message": "삭제할 결제"
+        },
+        "app.RnJlc2hCb29rcw.action.ZGVsZXRlLXBheW1lbnQ.short_desc": {
+          "source": "Delete a payment",
+          "message": "결제 삭제"
+        },
+        "app.RnJlc2hCb29rcw.action.ZGVsZXRlLXNlcnZpY2U.desc": {
+          "source": "Delete a service in FreshBooks",
+          "message": "FreshBooks에서 서비스 삭제"
+        },
+        "app.RnJlc2hCb29rcw.action.ZGVsZXRlLXNlcnZpY2U.display_name": {
+          "source": "Delete Service",
+          "message": "서비스 삭제"
+        },
+        "app.RnJlc2hCb29rcw.action.ZGVsZXRlLXNlcnZpY2U.option.YnVzaW5lc3NfaWQ.desc": {
+          "source": "The FreshBooks business ID for time tracking API endpoints",
+          "message": "시간 추적 API 엔드포인트용 FreshBooks 비즈니스 ID"
+        },
+        "app.RnJlc2hCb29rcw.action.ZGVsZXRlLXNlcnZpY2U.option.YnVzaW5lc3NfaWQ.display_name": {
+          "source": "Business ID",
+          "message": "비즈니스 ID"
+        },
+        "app.RnJlc2hCb29rcw.action.ZGVsZXRlLXNlcnZpY2U.option.YnVzaW5lc3NfaWQ.short_desc": {
+          "source": "FreshBooks business ID",
+          "message": "FreshBooks 비즈니스 ID"
+        },
+        "app.RnJlc2hCb29rcw.action.ZGVsZXRlLXNlcnZpY2U.option.aWQ.display_name": {
+          "source": "Service ID",
+          "message": "서비스 ID"
+        },
+        "app.RnJlc2hCb29rcw.action.ZGVsZXRlLXNlcnZpY2U.option.aWQ.short_desc": {
+          "source": "The service to delete",
+          "message": "삭제할 서비스"
+        },
+        "app.RnJlc2hCb29rcw.action.ZGVsZXRlLXNlcnZpY2U.short_desc": {
+          "source": "Delete a service",
+          "message": "서비스 삭제"
+        },
+        "app.RnJlc2hCb29rcw.action.ZXN0aW1hdGUtY3JlYXRlZA.desc": {
+          "source": "Fires when a new estimate is created in FreshBooks. Uses polling to detect new records.",
+          "message": "FreshBooks에서 새 견적서가 생성될 때 실행됩니다. 폴링을 사용하여 새 레코드를 감지합니다."
+        },
+        "app.RnJlc2hCb29rcw.action.ZXN0aW1hdGUtY3JlYXRlZA.display_name": {
+          "source": "New Estimate",
+          "message": "새 견적서"
+        },
+        "app.RnJlc2hCb29rcw.action.ZXN0aW1hdGUtY3JlYXRlZA.option.YWNjb3VudF9pZA.desc": {
+          "source": "The FreshBooks account ID for accounting API endpoints",
+          "message": "회계 API 엔드포인트용 FreshBooks 계정 ID"
+        },
+        "app.RnJlc2hCb29rcw.action.ZXN0aW1hdGUtY3JlYXRlZA.option.YWNjb3VudF9pZA.display_name": {
+          "source": "Account ID",
+          "message": "계정 ID"
+        },
+        "app.RnJlc2hCb29rcw.action.ZXN0aW1hdGUtY3JlYXRlZA.option.YWNjb3VudF9pZA.short_desc": {
+          "source": "FreshBooks account ID",
+          "message": "FreshBooks 계정 ID"
+        },
+        "app.RnJlc2hCb29rcw.action.ZXN0aW1hdGUtY3JlYXRlZA.option.cG9sbF9pbnRlcnZhbA.desc": {
+          "source": "How often to check for new records (minimum 30 seconds)",
+          "message": "새 레코드를 확인하는 주기(최소 30초)"
+        },
+        "app.RnJlc2hCb29rcw.action.ZXN0aW1hdGUtY3JlYXRlZA.option.cG9sbF9pbnRlcnZhbA.display_name": {
+          "source": "Poll Interval",
+          "message": "폴링 간격"
+        },
+        "app.RnJlc2hCb29rcw.action.ZXN0aW1hdGUtY3JlYXRlZA.option.cG9sbF9pbnRlcnZhbA.short_desc": {
+          "source": "Polling interval in seconds",
+          "message": "폴링 간격(초)"
+        },
+        "app.RnJlc2hCb29rcw.action.ZXN0aW1hdGUtY3JlYXRlZA.short_desc": {
+          "source": "Trigger when a new estimate is created",
+          "message": "새 견적서가 생성될 때 트리거"
+        },
+        "app.RnJlc2hCb29rcw.action.ZXhwZW5zZS1jcmVhdGVk.desc": {
+          "source": "Fires when a new expense is recorded in FreshBooks. Uses polling to detect new records.",
+          "message": "FreshBooks에서 새 비용이 기록될 때 실행됩니다. 폴링을 사용하여 새 레코드를 감지합니다."
+        },
+        "app.RnJlc2hCb29rcw.action.ZXhwZW5zZS1jcmVhdGVk.display_name": {
+          "source": "New Expense",
+          "message": "새 비용"
+        },
+        "app.RnJlc2hCb29rcw.action.ZXhwZW5zZS1jcmVhdGVk.option.YWNjb3VudF9pZA.desc": {
+          "source": "The FreshBooks account ID for accounting API endpoints",
+          "message": "회계 API 엔드포인트용 FreshBooks 계정 ID"
+        },
+        "app.RnJlc2hCb29rcw.action.ZXhwZW5zZS1jcmVhdGVk.option.YWNjb3VudF9pZA.display_name": {
+          "source": "Account ID",
+          "message": "계정 ID"
+        },
+        "app.RnJlc2hCb29rcw.action.ZXhwZW5zZS1jcmVhdGVk.option.YWNjb3VudF9pZA.short_desc": {
+          "source": "FreshBooks account ID",
+          "message": "FreshBooks 계정 ID"
+        },
+        "app.RnJlc2hCb29rcw.action.ZXhwZW5zZS1jcmVhdGVk.option.cG9sbF9pbnRlcnZhbA.desc": {
+          "source": "How often to check for new records (minimum 30 seconds)",
+          "message": "새 레코드를 확인하는 주기(최소 30초)"
+        },
+        "app.RnJlc2hCb29rcw.action.ZXhwZW5zZS1jcmVhdGVk.option.cG9sbF9pbnRlcnZhbA.display_name": {
+          "source": "Poll Interval",
+          "message": "폴링 간격"
+        },
+        "app.RnJlc2hCb29rcw.action.ZXhwZW5zZS1jcmVhdGVk.option.cG9sbF9pbnRlcnZhbA.short_desc": {
+          "source": "Polling interval in seconds",
+          "message": "폴링 간격(초)"
+        },
+        "app.RnJlc2hCb29rcw.action.ZXhwZW5zZS1jcmVhdGVk.short_desc": {
+          "source": "Trigger when a new expense is created",
+          "message": "새 비용이 생성될 때 트리거"
+        },
+        "app.RnJlc2hCb29rcw.action.aW52b2ljZS1jcmVhdGVk.desc": {
+          "source": "Fires when a new invoice is created in FreshBooks. Uses polling to detect new records.",
+          "message": "FreshBooks에서 새 인보이스가 생성될 때 실행됩니다. 폴링을 사용하여 새 레코드를 감지합니다."
+        },
+        "app.RnJlc2hCb29rcw.action.aW52b2ljZS1jcmVhdGVk.display_name": {
+          "source": "New Invoice",
+          "message": "새 인보이스"
+        },
+        "app.RnJlc2hCb29rcw.action.aW52b2ljZS1jcmVhdGVk.option.YWNjb3VudF9pZA.desc": {
+          "source": "The FreshBooks account ID for accounting API endpoints",
+          "message": "회계 API 엔드포인트용 FreshBooks 계정 ID"
+        },
+        "app.RnJlc2hCb29rcw.action.aW52b2ljZS1jcmVhdGVk.option.YWNjb3VudF9pZA.display_name": {
+          "source": "Account ID",
+          "message": "계정 ID"
+        },
+        "app.RnJlc2hCb29rcw.action.aW52b2ljZS1jcmVhdGVk.option.YWNjb3VudF9pZA.short_desc": {
+          "source": "FreshBooks account ID",
+          "message": "FreshBooks 계정 ID"
+        },
+        "app.RnJlc2hCb29rcw.action.aW52b2ljZS1jcmVhdGVk.option.cG9sbF9pbnRlcnZhbA.desc": {
+          "source": "How often to check for new records (minimum 30 seconds)",
+          "message": "새 레코드를 확인하는 주기(최소 30초)"
+        },
+        "app.RnJlc2hCb29rcw.action.aW52b2ljZS1jcmVhdGVk.option.cG9sbF9pbnRlcnZhbA.display_name": {
+          "source": "Poll Interval",
+          "message": "폴링 간격"
+        },
+        "app.RnJlc2hCb29rcw.action.aW52b2ljZS1jcmVhdGVk.option.cG9sbF9pbnRlcnZhbA.short_desc": {
+          "source": "Polling interval in seconds",
+          "message": "폴링 간격(초)"
+        },
+        "app.RnJlc2hCb29rcw.action.aW52b2ljZS1jcmVhdGVk.short_desc": {
+          "source": "Trigger when a new invoice is created",
+          "message": "새 인보이스가 생성될 때 트리거"
+        },
+        "app.RnJlc2hCb29rcw.action.bWFrZS1hcGktY2FsbA.desc": {
+          "source": "Make a custom HTTP / REST API call to **FreshBooks** using the configured connection's authentication.\n\nSpecify the HTTP method, the URI path (relative to the connection's API base URL), optional query parameters, headers, and request body. The response is returned as a hash containing the status code, response headers, and response body.\n\nUse this action for endpoints that are not yet exposed as first-class actions on this app.",
+          "message": "구성된 연결의 인증을 사용하여 **FreshBooks**에 커스텀 HTTP / REST API 호출을 수행합니다.\n\nHTTP 메서드, URI 경로(연결의 API 기본 URL 기준 상대 경로), 선택적 쿼리 매개변수, 헤더 및 요청 본문을 지정합니다. 응답은 상태 코드, 응답 헤더 및 응답 본문이 포함된 해시로 반환됩니다.\n\n이 앱에서 기본 액션으로 아직 제공되지 않는 엔드포인트에 이 액션을 사용하세요."
+        },
+        "app.RnJlc2hCb29rcw.action.bWFrZS1hcGktY2FsbA.display_name": {
+          "source": "Make an API call",
+          "message": "API 호출 실행"
+        },
+        "app.RnJlc2hCb29rcw.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.desc": {
+          "source": "The request body. The effective type depends on `body_type`: JSON/form/YAML expect a hash, XML/text expect a string, multipart expects a file structure, binary expects raw bytes.",
+          "message": "요청 본문입니다. 유효한 유형은 `body_type`에 따라 달라집니다. JSON/form/YAML은 해시를, XML/text는 문자열을, multipart는 파일 구조를, binary는 원시 바이트를 요구합니다."
+        },
+        "app.RnJlc2hCb29rcw.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.display_name": {
+          "source": "Body",
+          "message": "본문"
+        },
+        "app.RnJlc2hCb29rcw.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.short_desc": {
+          "source": "The request body",
+          "message": "요청 본문"
+        },
+        "app.RnJlc2hCb29rcw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.desc": {
+          "source": "Upload a file using `multipart/form-data`. The body must be a @ref DataProvider::FileDataType \"FileDataType\" structure (filename + content + mime_type). The framework builds the multipart envelope and sets the boundary header.",
+          "message": "`multipart/form-data`을(를) 사용하여 파일을 업로드합니다. 본문은 @ref DataProvider::FileDataType \"FileDataType\" 구조(filename + content + mime_type)여야 합니다. 프레임워크가 multipart 봉투를 작성하고 boundary 헤더를 설정합니다."
+        },
+        "app.RnJlc2hCb29rcw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.display_name": {
+          "source": "Multipart Form",
+          "message": "멀티파트 폼"
+        },
+        "app.RnJlc2hCb29rcw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.short_desc": {
+          "source": "Upload a file using multipart/form-data",
+          "message": "multipart/form-data를 사용하여 파일 업로드"
+        },
+        "app.RnJlc2hCb29rcw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.desc": {
+          "source": "Pass the body to the REST client unchanged; the client decides serialization based on its configured `data` option and the value type",
+          "message": "본문을 변경하지 않고 REST 클라이언트에 전달합니다. 클라이언트는 구성된 `data` 옵션과 값 유형을 기반으로 직렬화를 결정합니다."
+        },
+        "app.RnJlc2hCb29rcw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.display_name": {
+          "source": "Auto",
+          "message": "자동"
+        },
+        "app.RnJlc2hCb29rcw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.short_desc": {
+          "source": "Pass-through; use connection serialization and let the REST client decide",
+          "message": "패스스루: 연결 직렬화를 사용하고 REST 클라이언트가 결정하도록 합니다."
+        },
+        "app.RnJlc2hCb29rcw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.desc": {
+          "source": "Send the body as raw bytes. The body must be a binary value. Sets `Content-Type: application/octet-stream` unless overridden by `hdr`.",
+          "message": "본문을 원시 바이트로 전송합니다. 본문은 바이너리 값이어야 합니다. `hdr`에 의해 재정의되지 않는 한 `Content-Type: application/octet-stream`을(를) 설정합니다."
+        },
+        "app.RnJlc2hCb29rcw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.display_name": {
+          "source": "Raw Binary",
+          "message": "원시 바이너리"
+        },
+        "app.RnJlc2hCb29rcw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.short_desc": {
+          "source": "Send body as raw bytes",
+          "message": "본문을 원시 바이트로 전송"
+        },
+        "app.RnJlc2hCb29rcw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.desc": {
+          "source": "Serialize a hash of form fields as `application/x-www-form-urlencoded`. The body must be a hash whose values are scalars (strings/numbers/booleans).",
+          "message": "폼 필드의 해시를 `application/x-www-form-urlencoded`(으)로 직렬화합니다. 본문은 값이 스칼라(문자열/숫자/불리언)인 해시여야 합니다."
+        },
+        "app.RnJlc2hCb29rcw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.display_name": {
+          "source": "Form (URL-encoded)",
+          "message": "폼 (URL 인코딩)"
+        },
+        "app.RnJlc2hCb29rcw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.short_desc": {
+          "source": "Serialize body as application/x-www-form-urlencoded form fields",
+          "message": "본문을 application/x-www-form-urlencoded 폼 필드로 직렬화"
+        },
+        "app.RnJlc2hCb29rcw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.desc": {
+          "source": "Serialize the body as JSON; sets `Content-Type: application/json`. The body should be a hash, list, or scalar value.",
+          "message": "본문을 JSON으로 직렬화하며, `Content-Type: application/json`을(를) 설정합니다. 본문은 해시, 리스트 또는 스칼라 값이어야 합니다."
+        },
+        "app.RnJlc2hCb29rcw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.display_name": {
+          "source": "JSON",
+          "message": "JSON"
+        },
+        "app.RnJlc2hCb29rcw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.short_desc": {
+          "source": "Serialize body as JSON",
+          "message": "본문을 JSON으로 직렬화"
+        },
+        "app.RnJlc2hCb29rcw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.desc": {
+          "source": "Send the body as plain text. The body must be a string. Sets `Content-Type: text/plain`.",
+          "message": "본문을 일반 텍스트로 전송합니다. 본문은 문자열이어야 합니다. `Content-Type: text/plain`을(를) 설정합니다."
+        },
+        "app.RnJlc2hCb29rcw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.display_name": {
+          "source": "Plain Text",
+          "message": "일반 텍스트"
+        },
+        "app.RnJlc2hCb29rcw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.short_desc": {
+          "source": "Send body as text/plain",
+          "message": "본문을 text/plain으로 전송"
+        },
+        "app.RnJlc2hCb29rcw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.desc": {
+          "source": "Send the body as XML. If the body is a hash it is serialized to XML; if it is a string it is sent verbatim. Sets `Content-Type: application/xml`.",
+          "message": "본문을 XML로 전송합니다. 본문이 해시인 경우 XML로 직렬화되고, 문자열인 경우 그대로 전송됩니다. `Content-Type: application/xml`을(를) 설정합니다."
+        },
+        "app.RnJlc2hCb29rcw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.display_name": {
+          "source": "XML",
+          "message": "XML"
+        },
+        "app.RnJlc2hCb29rcw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.short_desc": {
+          "source": "Send body as XML",
+          "message": "본문을 XML로 전송"
+        },
+        "app.RnJlc2hCb29rcw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.desc": {
+          "source": "Send the body as YAML. If the body is a hash it is serialized to YAML; if it is a string it is sent verbatim. Sets `Content-Type: application/x-yaml`.",
+          "message": "본문을 YAML로 전송합니다. 본문이 해시인 경우 YAML로 직렬화되고, 문자열인 경우 그대로 전송됩니다. `Content-Type: application/x-yaml`을(를) 설정합니다."
+        },
+        "app.RnJlc2hCb29rcw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.display_name": {
+          "source": "YAML",
+          "message": "YAML"
+        },
+        "app.RnJlc2hCb29rcw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.short_desc": {
+          "source": "Send body as YAML",
+          "message": "본문을 YAML로 전송"
+        },
+        "app.RnJlc2hCb29rcw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.desc": {
+          "source": "Selects the body serialization mode and the corresponding `Content-Type` header. Changing this field reshapes the `body` editor - selecting JSON exposes a JSON editor, selecting Multipart Form exposes a file picker, and so on.",
+          "message": "본문 직렬화 모드 및 해당되는 `Content-Type` 헤더를 선택합니다. 이 필드를 변경하면 `body` 에디터의 형태가 변경됩니다. JSON을 선택하면 JSON 에디터가 표시되고, 멀티파트 폼을 선택하면 파일 선택기가 표시되는 방식입니다."
+        },
+        "app.RnJlc2hCb29rcw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.display_name": {
+          "source": "Body Type",
+          "message": "본문 유형"
+        },
+        "app.RnJlc2hCb29rcw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.short_desc": {
+          "source": "How the body is serialized and what Content-Type is sent",
+          "message": "본문이 직렬화되는 방식 및 전송되는 Content-Type"
+        },
+        "app.RnJlc2hCb29rcw.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.desc": {
+          "source": "If `True`, non-2xx HTTP responses return as the normal response hash (with the actual status code) instead of raising `REST-RESPONSE-ERROR`. Useful for handling 4xx/5xx as data - e.g. checking whether a resource exists. Overrides the connection's `error_passthru` setting for this call only.",
+          "message": "`True`인 경우, 2xx가 아닌 HTTP 응답은 `REST-RESPONSE-ERROR`을(를) 발생시키는 대신 (실제 상태 코드와 함께) 일반 응답 해시로 반환됩니다. 리소스 존재 여부 확인 등 4xx/5xx를 데이터로 처리할 때 유용합니다. 이 호출에 대해서만 연결의 `error_passthru` 설정을 재정의합니다."
+        },
+        "app.RnJlc2hCb29rcw.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.display_name": {
+          "source": "Return Errors as Data",
+          "message": "오류를 데이터로 반환"
+        },
+        "app.RnJlc2hCb29rcw.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.short_desc": {
+          "source": "Return non-2xx responses normally instead of throwing",
+          "message": "예외를 발생시키는 대신 2xx가 아닌 응답을 정상적으로 반환"
+        },
+        "app.RnJlc2hCb29rcw.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.desc": {
+          "source": "Optional list of HTTP status codes treated as success. If set and the response status is not in this list, the action throws `REST-STATUS-ERROR`. When unset, the REST client's default behavior applies (typically: 2xx is success, non-2xx throws).",
+          "message": "성공으로 처리되는 HTTP 상태 코드의 선택적 목록입니다. 설정되어 있고 응답 상태가 이 목록에 없는 경우 작업이 `REST-STATUS-ERROR` 예외를 발생시킵니다. 설정되지 않은 경우 REST 클라이언트의 기본 동작이 적용됩니다(일반적으로 2xx는 성공, 2xx 이외는 예외 발생)."
+        },
+        "app.RnJlc2hCb29rcw.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.display_name": {
+          "source": "Expected Status Codes",
+          "message": "예상되는 상태 코드"
+        },
+        "app.RnJlc2hCb29rcw.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.short_desc": {
+          "source": "Response status codes treated as success",
+          "message": "성공으로 처리되는 응답 상태 코드"
+        },
+        "app.RnJlc2hCb29rcw.action.bWFrZS1hcGktY2FsbA.option.aGRy.desc": {
+          "source": "Hash of custom headers added to the request. These override any default headers set by `body_type` (e.g. supplying `Content-Type` here wins over the body-type default).",
+          "message": "요청에 추가되는 사용자 지정 헤더의 해시입니다. 이는 `body_type`에 의해 설정된 기본 헤더보다 우선합니다(예: 여기에 `Content-Type`을(를) 제공하면 본문 유형 기본값보다 우선 적용됨)."
+        },
+        "app.RnJlc2hCb29rcw.action.bWFrZS1hcGktY2FsbA.option.aGRy.display_name": {
+          "source": "Custom Headers",
+          "message": "사용자 지정 헤더"
+        },
+        "app.RnJlc2hCb29rcw.action.bWFrZS1hcGktY2FsbA.option.aGRy.short_desc": {
+          "source": "Extra request headers",
+          "message": "추가 요청 헤더"
+        },
+        "app.RnJlc2hCb29rcw.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.desc": {
+          "source": "If `True`, the response hash includes a `debug` sub-hash containing the request method/URL/headers (with sensitive values redacted), request and response sizes, and round-trip duration. Useful when investigating slow or failing calls. Off by default to keep responses lean.",
+          "message": "`True`인 경우 응답 해시에 요청 메서드/URL/헤더(민감한 값은 가려짐), 요청 및 응답 크기, 왕복 시간이 포함된 `debug` 하위 해시가 포함됩니다. 느리거나 실패한 호출을 조사할 때 유용합니다. 응답을 가볍게 유지하기 위해 기본적으로 비활성화되어 있습니다."
+        },
+        "app.RnJlc2hCb29rcw.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.display_name": {
+          "source": "Include Debug Info",
+          "message": "디버그 정보 포함"
+        },
+        "app.RnJlc2hCb29rcw.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.short_desc": {
+          "source": "Include request/timing/size debug info in the response",
+          "message": "응답에 요청/타이밍/크기 디버그 정보 포함"
+        },
+        "app.RnJlc2hCb29rcw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.desc": {
+          "source": "HTTP `OPTIONS`",
+          "message": "HTTP `OPTIONS`"
+        },
+        "app.RnJlc2hCb29rcw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.display_name": {
+          "source": "OPTIONS",
+          "message": "OPTIONS"
+        },
+        "app.RnJlc2hCb29rcw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.short_desc": {
+          "source": "HTTP OPTIONS",
+          "message": "HTTP OPTIONS"
+        },
+        "app.RnJlc2hCb29rcw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.desc": {
+          "source": "HTTP `DELETE`",
+          "message": "HTTP `DELETE`"
+        },
+        "app.RnJlc2hCb29rcw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.display_name": {
+          "source": "DELETE",
+          "message": "DELETE"
+        },
+        "app.RnJlc2hCb29rcw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.short_desc": {
+          "source": "HTTP DELETE",
+          "message": "HTTP DELETE"
+        },
+        "app.RnJlc2hCb29rcw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.desc": {
+          "source": "HTTP `GET`",
+          "message": "HTTP `GET`"
+        },
+        "app.RnJlc2hCb29rcw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.display_name": {
+          "source": "GET",
+          "message": "GET"
+        },
+        "app.RnJlc2hCb29rcw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.short_desc": {
+          "source": "HTTP GET",
+          "message": "HTTP GET"
+        },
+        "app.RnJlc2hCb29rcw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.desc": {
+          "source": "HTTP `HEAD`",
+          "message": "HTTP `HEAD`"
+        },
+        "app.RnJlc2hCb29rcw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.display_name": {
+          "source": "HEAD",
+          "message": "HEAD"
+        },
+        "app.RnJlc2hCb29rcw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.short_desc": {
+          "source": "HTTP HEAD",
+          "message": "HTTP HEAD"
+        },
+        "app.RnJlc2hCb29rcw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.desc": {
+          "source": "HTTP `PATCH`",
+          "message": "HTTP `PATCH`"
+        },
+        "app.RnJlc2hCb29rcw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.display_name": {
+          "source": "PATCH",
+          "message": "PATCH"
+        },
+        "app.RnJlc2hCb29rcw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.short_desc": {
+          "source": "HTTP PATCH",
+          "message": "HTTP PATCH"
+        },
+        "app.RnJlc2hCb29rcw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.desc": {
+          "source": "HTTP `POST`",
+          "message": "HTTP `POST`"
+        },
+        "app.RnJlc2hCb29rcw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.display_name": {
+          "source": "POST",
+          "message": "POST"
+        },
+        "app.RnJlc2hCb29rcw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.short_desc": {
+          "source": "HTTP POST",
+          "message": "HTTP POST"
+        },
+        "app.RnJlc2hCb29rcw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.desc": {
+          "source": "HTTP `PUT`",
+          "message": "HTTP `PUT`"
+        },
+        "app.RnJlc2hCb29rcw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.display_name": {
+          "source": "PUT",
+          "message": "PUT"
+        },
+        "app.RnJlc2hCb29rcw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.short_desc": {
+          "source": "HTTP PUT",
+          "message": "HTTP PUT"
+        },
+        "app.RnJlc2hCb29rcw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.desc": {
+          "source": "HTTP `TRACE`",
+          "message": "HTTP `TRACE`"
+        },
+        "app.RnJlc2hCb29rcw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.display_name": {
+          "source": "TRACE",
+          "message": "TRACE"
+        },
+        "app.RnJlc2hCb29rcw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.short_desc": {
+          "source": "HTTP TRACE",
+          "message": "HTTP TRACE"
+        },
+        "app.RnJlc2hCb29rcw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "요청에 사용할 HTTP 메서드"
+        },
+        "app.RnJlc2hCb29rcw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.display_name": {
+          "source": "HTTP Method",
+          "message": "HTTP 메서드"
+        },
+        "app.RnJlc2hCb29rcw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.short_desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "요청에 사용할 HTTP 메서드"
+        },
+        "app.RnJlc2hCb29rcw.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain `{name}` placeholders that are replaced from `path_vars`. Example: `/users/{id}/comments`.",
+          "message": "연결의 API 기본 URL에 대한 상대 URI 경로입니다. `path_vars`에서 대체되는 `{name}` 자리 표시자가 포함될 수 있습니다. 예: `/users/{id}/comments`."
+        },
+        "app.RnJlc2hCb29rcw.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.display_name": {
+          "source": "URI Path",
+          "message": "URI 경로"
+        },
+        "app.RnJlc2hCb29rcw.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.short_desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain '{name}' placeholders that are replaced from 'path_vars'. Example: '/users/{id}/comments'",
+          "message": "연결의 API 기본 URL에 대한 상대 URI 경로입니다. 'path_vars'에서 대체되는 '{name}' 자리 표시자를 포함할 수 있습니다. 예: '/users/{id}/comments'"
+        },
+        "app.RnJlc2hCb29rcw.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.desc": {
+          "source": "Hash of values substituted into `{name}` placeholders in the URI path. Example: with `path = /users/{id}` and `path_vars = {id: 123}` the framework sends `/users/123`. Values are URL-encoded.",
+          "message": "URI 경로의 `{name}` 자리 표시자에 대체되는 값의 해시입니다. 예: `path = /users/{id}` 및 `path_vars = {id: 123}`이 있으면 프레임워크가 `/users/123`을(를) 전송합니다. 값은 URL 인코딩됩니다."
+        },
+        "app.RnJlc2hCb29rcw.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.display_name": {
+          "source": "Path Variables",
+          "message": "경로 변수"
+        },
+        "app.RnJlc2hCb29rcw.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.short_desc": {
+          "source": "Values for {name} placeholders in path",
+          "message": "경로 내 {name} 자리 표시자의 값"
+        },
+        "app.RnJlc2hCb29rcw.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.desc": {
+          "source": "Hash of query string parameters to append to the URI path. Values are URL-encoded; list values are joined with `,`.",
+          "message": "URI 경로에 추가할 쿼리 문자열 매개변수 해시입니다. 값은 URL 인코딩되며, 목록 값은 `,`(으)로 연결됩니다."
+        },
+        "app.RnJlc2hCb29rcw.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.display_name": {
+          "source": "Query Arguments",
+          "message": "쿼리 인수"
+        },
+        "app.RnJlc2hCb29rcw.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.short_desc": {
+          "source": "Query string parameters",
+          "message": "쿼리 문자열 매개변수"
+        },
+        "app.RnJlc2hCb29rcw.action.bWFrZS1hcGktY2FsbA.short_desc": {
+          "source": "Make a custom API call to FreshBooks",
+          "message": "FreshBooks에 커스텀 API 호출 수행"
+        },
+        "app.RnJlc2hCb29rcw.action.c2VhcmNoLWNsaWVudHM.desc": {
+          "source": "Search for clients in FreshBooks with optional filtering",
+          "message": "선택적 필터링을 사용하여 FreshBooks에서 고객 검색"
+        },
+        "app.RnJlc2hCb29rcw.action.c2VhcmNoLWNsaWVudHM.display_name": {
+          "source": "Search Clients",
+          "message": "고객 검색"
+        },
+        "app.RnJlc2hCb29rcw.action.c2VhcmNoLWNsaWVudHM.option.YWNjb3VudF9pZA.desc": {
+          "source": "The FreshBooks account ID for accounting API endpoints",
+          "message": "회계 API 엔드포인트용 FreshBooks 계정 ID"
+        },
+        "app.RnJlc2hCb29rcw.action.c2VhcmNoLWNsaWVudHM.option.YWNjb3VudF9pZA.display_name": {
+          "source": "Account ID",
+          "message": "계정 ID"
+        },
+        "app.RnJlc2hCb29rcw.action.c2VhcmNoLWNsaWVudHM.option.YWNjb3VudF9pZA.short_desc": {
+          "source": "FreshBooks account ID",
+          "message": "FreshBooks 계정 ID"
+        },
+        "app.RnJlc2hCb29rcw.action.c2VhcmNoLWNsaWVudHM.option.ZW1haWw.desc": {
+          "source": "Search for clients by email address",
+          "message": "이메일 주소로 고객 검색"
+        },
+        "app.RnJlc2hCb29rcw.action.c2VhcmNoLWNsaWVudHM.option.ZW1haWw.display_name": {
+          "source": "Email",
+          "message": "이메일"
+        },
+        "app.RnJlc2hCb29rcw.action.c2VhcmNoLWNsaWVudHM.option.ZW1haWw.short_desc": {
+          "source": "Filter by email",
+          "message": "이메일로 필터링"
+        },
+        "app.RnJlc2hCb29rcw.action.c2VhcmNoLWNsaWVudHM.option.aWQ.display_name": {
+          "source": "Client ID",
+          "message": "클라이언트 ID"
+        },
+        "app.RnJlc2hCb29rcw.action.c2VhcmNoLWNsaWVudHM.option.aWQ.short_desc": {
+          "source": "Filter by client ID",
+          "message": "고객 ID로 필터링"
+        },
+        "app.RnJlc2hCb29rcw.action.c2VhcmNoLWNsaWVudHM.option.b3JnYW5pemF0aW9u.desc": {
+          "source": "Search for clients by organization name (partial match)",
+          "message": "조직 이름으로 고객 검색(부분 일치)"
+        },
+        "app.RnJlc2hCb29rcw.action.c2VhcmNoLWNsaWVudHM.option.b3JnYW5pemF0aW9u.display_name": {
+          "source": "Organization",
+          "message": "조직"
+        },
+        "app.RnJlc2hCb29rcw.action.c2VhcmNoLWNsaWVudHM.option.b3JnYW5pemF0aW9u.short_desc": {
+          "source": "Filter by organization name",
+          "message": "조직 이름으로 필터링"
+        },
+        "app.RnJlc2hCb29rcw.action.c2VhcmNoLWNsaWVudHM.option.bGltaXQ.desc": {
+          "source": "Maximum number of results to return (max 100)",
+          "message": "반환할 최대 결과 수(최대 100개)"
+        },
+        "app.RnJlc2hCb29rcw.action.c2VhcmNoLWNsaWVudHM.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "제한"
+        },
+        "app.RnJlc2hCb29rcw.action.c2VhcmNoLWNsaWVudHM.option.bGltaXQ.short_desc": {
+          "source": "Maximum results",
+          "message": "최대 결과 수"
+        },
+        "app.RnJlc2hCb29rcw.action.c2VhcmNoLWNsaWVudHM.short_desc": {
+          "source": "Search for clients",
+          "message": "고객 검색"
+        },
+        "app.RnJlc2hCb29rcw.action.c2VhcmNoLWV4cGVuc2Vz.desc": {
+          "source": "Search for expenses in FreshBooks with optional filtering",
+          "message": "선택적 필터링을 사용하여 FreshBooks에서 비용 검색"
+        },
+        "app.RnJlc2hCb29rcw.action.c2VhcmNoLWV4cGVuc2Vz.display_name": {
+          "source": "Search Expenses",
+          "message": "비용 검색"
+        },
+        "app.RnJlc2hCb29rcw.action.c2VhcmNoLWV4cGVuc2Vz.option.Y2F0ZWdvcnlpZA.display_name": {
+          "source": "Category",
+          "message": "카테고리"
+        },
+        "app.RnJlc2hCb29rcw.action.c2VhcmNoLWV4cGVuc2Vz.option.Y2F0ZWdvcnlpZA.short_desc": {
+          "source": "Filter by category",
+          "message": "카테고리별 필터링"
+        },
+        "app.RnJlc2hCb29rcw.action.c2VhcmNoLWV4cGVuc2Vz.option.YWNjb3VudF9pZA.desc": {
+          "source": "The FreshBooks account ID for accounting API endpoints",
+          "message": "회계 API 엔드포인트용 FreshBooks 계정 ID"
+        },
+        "app.RnJlc2hCb29rcw.action.c2VhcmNoLWV4cGVuc2Vz.option.YWNjb3VudF9pZA.display_name": {
+          "source": "Account ID",
+          "message": "계정 ID"
+        },
+        "app.RnJlc2hCb29rcw.action.c2VhcmNoLWV4cGVuc2Vz.option.YWNjb3VudF9pZA.short_desc": {
+          "source": "FreshBooks account ID",
+          "message": "FreshBooks 계정 ID"
+        },
+        "app.RnJlc2hCb29rcw.action.c2VhcmNoLWV4cGVuc2Vz.option.aWQ.display_name": {
+          "source": "Expense ID",
+          "message": "비용 ID"
+        },
+        "app.RnJlc2hCb29rcw.action.c2VhcmNoLWV4cGVuc2Vz.option.aWQ.short_desc": {
+          "source": "Filter by expense ID",
+          "message": "비용 ID별 필터링"
+        },
+        "app.RnJlc2hCb29rcw.action.c2VhcmNoLWV4cGVuc2Vz.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "제한"
+        },
+        "app.RnJlc2hCb29rcw.action.c2VhcmNoLWV4cGVuc2Vz.option.bGltaXQ.short_desc": {
+          "source": "Maximum results",
+          "message": "최대 결과 수"
+        },
+        "app.RnJlc2hCb29rcw.action.c2VhcmNoLWV4cGVuc2Vz.option.dmVuZG9y.display_name": {
+          "source": "Vendor",
+          "message": "공급업체"
+        },
+        "app.RnJlc2hCb29rcw.action.c2VhcmNoLWV4cGVuc2Vz.option.dmVuZG9y.short_desc": {
+          "source": "Filter by vendor name",
+          "message": "공급업체 이름별 필터링"
+        },
+        "app.RnJlc2hCb29rcw.action.c2VhcmNoLWV4cGVuc2Vz.short_desc": {
+          "source": "Search for expenses",
+          "message": "비용 검색"
+        },
+        "app.RnJlc2hCb29rcw.action.c2VhcmNoLWVzdGltYXRlcw.desc": {
+          "source": "Search for estimates in FreshBooks",
+          "message": "FreshBooks에서 견적서 검색"
+        },
+        "app.RnJlc2hCb29rcw.action.c2VhcmNoLWVzdGltYXRlcw.display_name": {
+          "source": "Search Estimates",
+          "message": "견적서 검색"
+        },
+        "app.RnJlc2hCb29rcw.action.c2VhcmNoLWVzdGltYXRlcw.option.Y3VzdG9tZXJpZA.display_name": {
+          "source": "Customer",
+          "message": "고객"
+        },
+        "app.RnJlc2hCb29rcw.action.c2VhcmNoLWVzdGltYXRlcw.option.Y3VzdG9tZXJpZA.short_desc": {
+          "source": "Filter by customer",
+          "message": "고객별 필터링"
+        },
+        "app.RnJlc2hCb29rcw.action.c2VhcmNoLWVzdGltYXRlcw.option.YWNjb3VudF9pZA.desc": {
+          "source": "The FreshBooks account ID for accounting API endpoints",
+          "message": "회계 API 엔드포인트용 FreshBooks 계정 ID"
+        },
+        "app.RnJlc2hCb29rcw.action.c2VhcmNoLWVzdGltYXRlcw.option.YWNjb3VudF9pZA.display_name": {
+          "source": "Account ID",
+          "message": "계정 ID"
+        },
+        "app.RnJlc2hCb29rcw.action.c2VhcmNoLWVzdGltYXRlcw.option.YWNjb3VudF9pZA.short_desc": {
+          "source": "FreshBooks account ID",
+          "message": "FreshBooks 계정 ID"
+        },
+        "app.RnJlc2hCb29rcw.action.c2VhcmNoLWVzdGltYXRlcw.option.aWQ.display_name": {
+          "source": "Estimate ID",
+          "message": "견적서 ID"
+        },
+        "app.RnJlc2hCb29rcw.action.c2VhcmNoLWVzdGltYXRlcw.option.aWQ.short_desc": {
+          "source": "Filter by estimate ID",
+          "message": "견적서 ID별 필터링"
+        },
+        "app.RnJlc2hCb29rcw.action.c2VhcmNoLWVzdGltYXRlcw.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "제한"
+        },
+        "app.RnJlc2hCb29rcw.action.c2VhcmNoLWVzdGltYXRlcw.option.bGltaXQ.short_desc": {
+          "source": "Maximum results",
+          "message": "최대 결과 수"
+        },
+        "app.RnJlc2hCb29rcw.action.c2VhcmNoLWVzdGltYXRlcw.option.c3RhdHVz.display_name": {
+          "source": "Status",
+          "message": "상태"
+        },
+        "app.RnJlc2hCb29rcw.action.c2VhcmNoLWVzdGltYXRlcw.option.c3RhdHVz.short_desc": {
+          "source": "Filter by status",
+          "message": "상태별 필터"
+        },
+        "app.RnJlc2hCb29rcw.action.c2VhcmNoLWVzdGltYXRlcw.short_desc": {
+          "source": "Search for estimates",
+          "message": "견적서 검색"
+        },
+        "app.RnJlc2hCb29rcw.action.c2VhcmNoLWl0ZW1z.desc": {
+          "source": "Search for items in FreshBooks",
+          "message": "FreshBooks에서 품목 검색"
+        },
+        "app.RnJlc2hCb29rcw.action.c2VhcmNoLWl0ZW1z.display_name": {
+          "source": "Search Items",
+          "message": "품목 검색"
+        },
+        "app.RnJlc2hCb29rcw.action.c2VhcmNoLWl0ZW1z.option.YWNjb3VudF9pZA.desc": {
+          "source": "The FreshBooks account ID for accounting API endpoints",
+          "message": "회계 API 엔드포인트용 FreshBooks 계정 ID"
+        },
+        "app.RnJlc2hCb29rcw.action.c2VhcmNoLWl0ZW1z.option.YWNjb3VudF9pZA.display_name": {
+          "source": "Account ID",
+          "message": "계정 ID"
+        },
+        "app.RnJlc2hCb29rcw.action.c2VhcmNoLWl0ZW1z.option.YWNjb3VudF9pZA.short_desc": {
+          "source": "FreshBooks account ID",
+          "message": "FreshBooks 계정 ID"
+        },
+        "app.RnJlc2hCb29rcw.action.c2VhcmNoLWl0ZW1z.option.aWQ.display_name": {
+          "source": "Item ID",
+          "message": "품목 ID"
+        },
+        "app.RnJlc2hCb29rcw.action.c2VhcmNoLWl0ZW1z.option.aWQ.short_desc": {
+          "source": "Filter by item ID",
+          "message": "품목 ID별 필터링"
+        },
+        "app.RnJlc2hCb29rcw.action.c2VhcmNoLWl0ZW1z.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "제한"
+        },
+        "app.RnJlc2hCb29rcw.action.c2VhcmNoLWl0ZW1z.option.bGltaXQ.short_desc": {
+          "source": "Maximum results",
+          "message": "최대 결과 수"
+        },
+        "app.RnJlc2hCb29rcw.action.c2VhcmNoLWl0ZW1z.short_desc": {
+          "source": "Search for items",
+          "message": "품목 검색"
+        },
+        "app.RnJlc2hCb29rcw.action.c2VhcmNoLWludm9pY2Vz.desc": {
+          "source": "Search for invoices in FreshBooks with optional filtering",
+          "message": "선택적 필터링을 사용하여 FreshBooks에서 인보이스 검색"
+        },
+        "app.RnJlc2hCb29rcw.action.c2VhcmNoLWludm9pY2Vz.display_name": {
+          "source": "Search Invoices",
+          "message": "송장 검색"
+        },
+        "app.RnJlc2hCb29rcw.action.c2VhcmNoLWludm9pY2Vz.option.Y3VzdG9tZXJpZA.display_name": {
+          "source": "Customer",
+          "message": "고객"
+        },
+        "app.RnJlc2hCb29rcw.action.c2VhcmNoLWludm9pY2Vz.option.Y3VzdG9tZXJpZA.short_desc": {
+          "source": "Filter by customer",
+          "message": "고객별 필터링"
+        },
+        "app.RnJlc2hCb29rcw.action.c2VhcmNoLWludm9pY2Vz.option.YWNjb3VudF9pZA.desc": {
+          "source": "The FreshBooks account ID for accounting API endpoints",
+          "message": "회계 API 엔드포인트용 FreshBooks 계정 ID"
+        },
+        "app.RnJlc2hCb29rcw.action.c2VhcmNoLWludm9pY2Vz.option.YWNjb3VudF9pZA.display_name": {
+          "source": "Account ID",
+          "message": "계정 ID"
+        },
+        "app.RnJlc2hCb29rcw.action.c2VhcmNoLWludm9pY2Vz.option.YWNjb3VudF9pZA.short_desc": {
+          "source": "FreshBooks account ID",
+          "message": "FreshBooks 계정 ID"
+        },
+        "app.RnJlc2hCb29rcw.action.c2VhcmNoLWludm9pY2Vz.option.aWQ.display_name": {
+          "source": "Invoice ID",
+          "message": "인보이스 ID"
+        },
+        "app.RnJlc2hCb29rcw.action.c2VhcmNoLWludm9pY2Vz.option.aWQ.short_desc": {
+          "source": "Filter by invoice ID",
+          "message": "송장 ID별 필터링"
+        },
+        "app.RnJlc2hCb29rcw.action.c2VhcmNoLWludm9pY2Vz.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "제한"
+        },
+        "app.RnJlc2hCb29rcw.action.c2VhcmNoLWludm9pY2Vz.option.bGltaXQ.short_desc": {
+          "source": "Maximum results",
+          "message": "최대 결과 수"
+        },
+        "app.RnJlc2hCb29rcw.action.c2VhcmNoLWludm9pY2Vz.option.c3RhdHVz.display_name": {
+          "source": "Status",
+          "message": "상태"
+        },
+        "app.RnJlc2hCb29rcw.action.c2VhcmNoLWludm9pY2Vz.option.c3RhdHVz.short_desc": {
+          "source": "Filter by status",
+          "message": "상태별 필터"
+        },
+        "app.RnJlc2hCb29rcw.action.c2VhcmNoLWludm9pY2Vz.short_desc": {
+          "source": "Search for invoices",
+          "message": "인보이스 검색"
+        },
+        "app.RnJlc2hCb29rcw.action.c2VhcmNoLXBheW1lbnRz.desc": {
+          "source": "Search for payments in FreshBooks with optional filtering",
+          "message": "선택적 필터링을 사용하여 FreshBooks에서 결제 검색"
+        },
+        "app.RnJlc2hCb29rcw.action.c2VhcmNoLXBheW1lbnRz.display_name": {
+          "source": "Search Payments",
+          "message": "결제 검색"
+        },
+        "app.RnJlc2hCb29rcw.action.c2VhcmNoLXBheW1lbnRz.option.YWNjb3VudF9pZA.desc": {
+          "source": "The FreshBooks account ID for accounting API endpoints",
+          "message": "회계 API 엔드포인트용 FreshBooks 계정 ID"
+        },
+        "app.RnJlc2hCb29rcw.action.c2VhcmNoLXBheW1lbnRz.option.YWNjb3VudF9pZA.display_name": {
+          "source": "Account ID",
+          "message": "계정 ID"
+        },
+        "app.RnJlc2hCb29rcw.action.c2VhcmNoLXBheW1lbnRz.option.YWNjb3VudF9pZA.short_desc": {
+          "source": "FreshBooks account ID",
+          "message": "FreshBooks 계정 ID"
+        },
+        "app.RnJlc2hCb29rcw.action.c2VhcmNoLXBheW1lbnRz.option.aW52b2ljZWlk.display_name": {
+          "source": "Invoice",
+          "message": "인보이스"
+        },
+        "app.RnJlc2hCb29rcw.action.c2VhcmNoLXBheW1lbnRz.option.aW52b2ljZWlk.short_desc": {
+          "source": "Filter by invoice",
+          "message": "인보이스별 필터링"
+        },
+        "app.RnJlc2hCb29rcw.action.c2VhcmNoLXBheW1lbnRz.option.aWQ.display_name": {
+          "source": "Payment ID",
+          "message": "결제 ID"
+        },
+        "app.RnJlc2hCb29rcw.action.c2VhcmNoLXBheW1lbnRz.option.aWQ.short_desc": {
+          "source": "Filter by payment ID",
+          "message": "결제 ID별 필터링"
+        },
+        "app.RnJlc2hCb29rcw.action.c2VhcmNoLXBheW1lbnRz.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "제한"
+        },
+        "app.RnJlc2hCb29rcw.action.c2VhcmNoLXBheW1lbnRz.option.bGltaXQ.short_desc": {
+          "source": "Maximum results",
+          "message": "최대 결과 수"
+        },
+        "app.RnJlc2hCb29rcw.action.c2VhcmNoLXBheW1lbnRz.short_desc": {
+          "source": "Search for payments",
+          "message": "결제 검색"
+        },
+        "app.RnJlc2hCb29rcw.action.c2VhcmNoLXNlcnZpY2Vz.desc": {
+          "source": "Search for services in FreshBooks",
+          "message": "FreshBooks에서 서비스 검색"
+        },
+        "app.RnJlc2hCb29rcw.action.c2VhcmNoLXNlcnZpY2Vz.display_name": {
+          "source": "Search Services",
+          "message": "서비스 검색"
+        },
+        "app.RnJlc2hCb29rcw.action.c2VhcmNoLXNlcnZpY2Vz.option.YnVzaW5lc3NfaWQ.desc": {
+          "source": "The FreshBooks business ID for time tracking API endpoints",
+          "message": "시간 추적 API 엔드포인트용 FreshBooks 비즈니스 ID"
+        },
+        "app.RnJlc2hCb29rcw.action.c2VhcmNoLXNlcnZpY2Vz.option.YnVzaW5lc3NfaWQ.display_name": {
+          "source": "Business ID",
+          "message": "비즈니스 ID"
+        },
+        "app.RnJlc2hCb29rcw.action.c2VhcmNoLXNlcnZpY2Vz.option.YnVzaW5lc3NfaWQ.short_desc": {
+          "source": "FreshBooks business ID",
+          "message": "FreshBooks 비즈니스 ID"
+        },
+        "app.RnJlc2hCb29rcw.action.c2VhcmNoLXNlcnZpY2Vz.option.aWQ.display_name": {
+          "source": "Service ID",
+          "message": "서비스 ID"
+        },
+        "app.RnJlc2hCb29rcw.action.c2VhcmNoLXNlcnZpY2Vz.option.aWQ.short_desc": {
+          "source": "Filter by service ID",
+          "message": "서비스 ID별 필터링"
+        },
+        "app.RnJlc2hCb29rcw.action.c2VhcmNoLXNlcnZpY2Vz.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "제한"
+        },
+        "app.RnJlc2hCb29rcw.action.c2VhcmNoLXNlcnZpY2Vz.option.bGltaXQ.short_desc": {
+          "source": "Maximum results",
+          "message": "최대 결과 수"
+        },
+        "app.RnJlc2hCb29rcw.action.c2VhcmNoLXNlcnZpY2Vz.short_desc": {
+          "source": "Search for services",
+          "message": "서비스 검색"
+        },
+        "app.RnJlc2hCb29rcw.action.cGF5bWVudC1jcmVhdGVk.desc": {
+          "source": "Fires when a new payment is recorded in FreshBooks. Uses polling to detect new records.",
+          "message": "FreshBooks에 새 결제가 기록될 때 트리거됩니다. 폴링을 사용하여 새 레코드를 감지합니다."
+        },
+        "app.RnJlc2hCb29rcw.action.cGF5bWVudC1jcmVhdGVk.display_name": {
+          "source": "New Payment",
+          "message": "새 결제"
+        },
+        "app.RnJlc2hCb29rcw.action.cGF5bWVudC1jcmVhdGVk.option.YWNjb3VudF9pZA.desc": {
+          "source": "The FreshBooks account ID for accounting API endpoints",
+          "message": "회계 API 엔드포인트용 FreshBooks 계정 ID"
+        },
+        "app.RnJlc2hCb29rcw.action.cGF5bWVudC1jcmVhdGVk.option.YWNjb3VudF9pZA.display_name": {
+          "source": "Account ID",
+          "message": "계정 ID"
+        },
+        "app.RnJlc2hCb29rcw.action.cGF5bWVudC1jcmVhdGVk.option.YWNjb3VudF9pZA.short_desc": {
+          "source": "FreshBooks account ID",
+          "message": "FreshBooks 계정 ID"
+        },
+        "app.RnJlc2hCb29rcw.action.cGF5bWVudC1jcmVhdGVk.option.cG9sbF9pbnRlcnZhbA.desc": {
+          "source": "How often to check for new records (minimum 30 seconds)",
+          "message": "새 레코드를 확인하는 주기(최소 30초)"
+        },
+        "app.RnJlc2hCb29rcw.action.cGF5bWVudC1jcmVhdGVk.option.cG9sbF9pbnRlcnZhbA.display_name": {
+          "source": "Poll Interval",
+          "message": "폴링 간격"
+        },
+        "app.RnJlc2hCb29rcw.action.cGF5bWVudC1jcmVhdGVk.option.cG9sbF9pbnRlcnZhbA.short_desc": {
+          "source": "Polling interval in seconds",
+          "message": "폴링 간격(초)"
+        },
+        "app.RnJlc2hCb29rcw.action.cGF5bWVudC1jcmVhdGVk.short_desc": {
+          "source": "Trigger when a new payment is received",
+          "message": "새 결제가 수신되면 트리거"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLWNsaWVudA.desc": {
+          "source": "Update an existing client in FreshBooks",
+          "message": "FreshBooks에서 기존 고객 업데이트"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLWNsaWVudA.display_name": {
+          "source": "Update Client",
+          "message": "고객 업데이트"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLWNsaWVudA.option.YWNjb3VudF9pZA.desc": {
+          "source": "The FreshBooks account ID for accounting API endpoints",
+          "message": "회계 API 엔드포인트용 FreshBooks 계정 ID"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLWNsaWVudA.option.YWNjb3VudF9pZA.display_name": {
+          "source": "Account ID",
+          "message": "계정 ID"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLWNsaWVudA.option.YWNjb3VudF9pZA.short_desc": {
+          "source": "FreshBooks account ID",
+          "message": "FreshBooks 계정 ID"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLWNsaWVudA.option.ZW1haWw.display_name": {
+          "source": "Email",
+          "message": "이메일"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLWNsaWVudA.option.ZW1haWw.short_desc": {
+          "source": "Client email",
+          "message": "클라이언트 이메일"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLWNsaWVudA.option.Zm5hbWU.display_name": {
+          "source": "First Name",
+          "message": "이름"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLWNsaWVudA.option.Zm5hbWU.short_desc": {
+          "source": "Client first name",
+          "message": "클라이언트 이름"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLWNsaWVudA.option.aWQ.display_name": {
+          "source": "Client ID",
+          "message": "클라이언트 ID"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLWNsaWVudA.option.aWQ.short_desc": {
+          "source": "The client to update",
+          "message": "업데이트할 고객"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLWNsaWVudA.option.b3JnYW5pemF0aW9u.display_name": {
+          "source": "Organization",
+          "message": "조직"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLWNsaWVudA.option.b3JnYW5pemF0aW9u.short_desc": {
+          "source": "Company name",
+          "message": "회사 이름"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLWNsaWVudA.option.bG5hbWU.display_name": {
+          "source": "Last Name",
+          "message": "성"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLWNsaWVudA.option.bG5hbWU.short_desc": {
+          "source": "Client last name",
+          "message": "클라이언트 성"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLWNsaWVudA.option.bm90ZQ.display_name": {
+          "source": "Notes",
+          "message": "메모"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLWNsaWVudA.option.bm90ZQ.short_desc": {
+          "source": "Notes about the client",
+          "message": "클라이언트에 대한 메모"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLWNsaWVudA.option.cF9jaXR5.display_name": {
+          "source": "City",
+          "message": "도시"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLWNsaWVudA.option.cF9jaXR5.short_desc": {
+          "source": "City",
+          "message": "도시"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLWNsaWVudA.option.cF9jb2Rl.display_name": {
+          "source": "Postal Code",
+          "message": "우편번호"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLWNsaWVudA.option.cF9jb2Rl.short_desc": {
+          "source": "Postal/zip code",
+          "message": "우편번호"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLWNsaWVudA.option.cF9jb3VudHJ5.display_name": {
+          "source": "Country",
+          "message": "국가"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLWNsaWVudA.option.cF9jb3VudHJ5.short_desc": {
+          "source": "Country",
+          "message": "국가"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLWNsaWVudA.option.cF9wcm92aW5jZQ.display_name": {
+          "source": "Province/State",
+          "message": "시/도(Province/State)"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLWNsaWVudA.option.cF9wcm92aW5jZQ.short_desc": {
+          "source": "Province or state",
+          "message": "시/도 또는 주"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLWNsaWVudA.option.cF9zdHJlZXQ.display_name": {
+          "source": "Street",
+          "message": "도로명 주소"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLWNsaWVudA.option.cF9zdHJlZXQ.short_desc": {
+          "source": "Street address",
+          "message": "도로명 주소"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLWNsaWVudA.option.cGhvbmU.display_name": {
+          "source": "Phone",
+          "message": "전화번호"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLWNsaWVudA.option.cGhvbmU.short_desc": {
+          "source": "Business phone",
+          "message": "회사 전화번호"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLWNsaWVudA.short_desc": {
+          "source": "Update an existing client",
+          "message": "기존 고객 업데이트"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLWV4cGVuc2U.desc": {
+          "source": "Update an existing expense in FreshBooks",
+          "message": "FreshBooks에서 기존 비용 업데이트"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLWV4cGVuc2U.display_name": {
+          "source": "Update Expense",
+          "message": "비용 업데이트"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLWV4cGVuc2U.option.Y2F0ZWdvcnlpZA.display_name": {
+          "source": "Category",
+          "message": "카테고리"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLWV4cGVuc2U.option.Y2F0ZWdvcnlpZA.short_desc": {
+          "source": "Expense category",
+          "message": "비용 카테고리"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLWV4cGVuc2U.option.YW1vdW50.desc": {
+          "source": "Amount object with `amount` (string) and `code` (currency) fields",
+          "message": "`amount`(문자열) 및 `code`(통화) 필드가 있는 금액 객체"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLWV4cGVuc2U.option.YW1vdW50.display_name": {
+          "source": "Amount",
+          "message": "금액"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLWV4cGVuc2U.option.YW1vdW50.short_desc": {
+          "source": "Expense amount",
+          "message": "비용 금액"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLWV4cGVuc2U.option.YWNjb3VudF9pZA.desc": {
+          "source": "The FreshBooks account ID for accounting API endpoints",
+          "message": "회계 API 엔드포인트용 FreshBooks 계정 ID"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLWV4cGVuc2U.option.YWNjb3VudF9pZA.display_name": {
+          "source": "Account ID",
+          "message": "계정 ID"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLWV4cGVuc2U.option.YWNjb3VudF9pZA.short_desc": {
+          "source": "FreshBooks account ID",
+          "message": "FreshBooks 계정 ID"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLWV4cGVuc2U.option.ZGF0ZQ.desc": {
+          "source": "Expense date in YYYY-MM-DD format",
+          "message": "YYYY-MM-DD 형식의 비용 날짜"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLWV4cGVuc2U.option.ZGF0ZQ.display_name": {
+          "source": "Date",
+          "message": "날짜"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLWV4cGVuc2U.option.ZGF0ZQ.short_desc": {
+          "source": "Expense date",
+          "message": "비용 날짜"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLWV4cGVuc2U.option.aWQ.display_name": {
+          "source": "Expense ID",
+          "message": "비용 ID"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLWV4cGVuc2U.option.aWQ.short_desc": {
+          "source": "The expense to update",
+          "message": "업데이트할 비용"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLWV4cGVuc2U.option.bm90ZXM.display_name": {
+          "source": "Notes",
+          "message": "메모"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLWV4cGVuc2U.option.bm90ZXM.short_desc": {
+          "source": "Expense notes",
+          "message": "비용 메모"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLWV4cGVuc2U.option.c3RhZmZpZA.desc": {
+          "source": "The ID of the staff member associated with this expense",
+          "message": "이 비용과 연결된 직원 ID"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLWV4cGVuc2U.option.c3RhZmZpZA.display_name": {
+          "source": "Staff Member",
+          "message": "직원"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLWV4cGVuc2U.option.c3RhZmZpZA.short_desc": {
+          "source": "Staff member for this expense",
+          "message": "이 경비의 직원"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLWV4cGVuc2U.option.dGF4TmFtZTE.display_name": {
+          "source": "Tax Name",
+          "message": "세금 이름"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLWV4cGVuc2U.option.dGF4TmFtZTE.short_desc": {
+          "source": "Tax name",
+          "message": "세금 이름"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLWV4cGVuc2U.option.dGF4UGVyY2VudDE.display_name": {
+          "source": "Tax Percent",
+          "message": "세율"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLWV4cGVuc2U.option.dGF4UGVyY2VudDE.short_desc": {
+          "source": "Tax percentage",
+          "message": "세율 백분율"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLWV4cGVuc2U.option.dmVuZG9y.display_name": {
+          "source": "Vendor",
+          "message": "공급업체"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLWV4cGVuc2U.option.dmVuZG9y.short_desc": {
+          "source": "Vendor name",
+          "message": "공급업체 이름"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLWV4cGVuc2U.short_desc": {
+          "source": "Update an existing expense",
+          "message": "기존 비용 업데이트"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLWVzdGltYXRl.desc": {
+          "source": "Update an existing estimate in FreshBooks",
+          "message": "FreshBooks에서 기존 견적서 업데이트"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLWVzdGltYXRl.display_name": {
+          "source": "Update Estimate",
+          "message": "견적서 업데이트"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLWVzdGltYXRl.option.Y3JlYXRlX2RhdGU.desc": {
+          "source": "Estimate date in YYYY-MM-DD format",
+          "message": "YYYY-MM-DD 형식의 견적 날짜"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLWVzdGltYXRl.option.Y3JlYXRlX2RhdGU.display_name": {
+          "source": "Date",
+          "message": "날짜"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLWVzdGltYXRl.option.Y3JlYXRlX2RhdGU.short_desc": {
+          "source": "Estimate date",
+          "message": "견적 날짜"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLWVzdGltYXRl.option.Y3VycmVuY3lfY29kZQ.display_name": {
+          "source": "Currency",
+          "message": "통화"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLWVzdGltYXRl.option.Y3VycmVuY3lfY29kZQ.short_desc": {
+          "source": "Currency code",
+          "message": "통화 코드"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLWVzdGltYXRl.option.Y3VzdG9tZXJpZA.display_name": {
+          "source": "Customer",
+          "message": "고객"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLWVzdGltYXRl.option.Y3VzdG9tZXJpZA.short_desc": {
+          "source": "The customer for the estimate",
+          "message": "견적서 대상 고객"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLWVzdGltYXRl.option.YWNjb3VudF9pZA.desc": {
+          "source": "The FreshBooks account ID for accounting API endpoints",
+          "message": "회계 API 엔드포인트용 FreshBooks 계정 ID"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLWVzdGltYXRl.option.YWNjb3VudF9pZA.display_name": {
+          "source": "Account ID",
+          "message": "계정 ID"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLWVzdGltYXRl.option.YWNjb3VudF9pZA.short_desc": {
+          "source": "FreshBooks account ID",
+          "message": "FreshBooks 계정 ID"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLWVzdGltYXRl.option.ZXN0aW1hdGVfbnVtYmVy.display_name": {
+          "source": "Estimate Number",
+          "message": "견적서 번호"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLWVzdGltYXRl.option.ZXN0aW1hdGVfbnVtYmVy.short_desc": {
+          "source": "The estimate number",
+          "message": "견적서 번호"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLWVzdGltYXRl.option.aWQ.display_name": {
+          "source": "Estimate ID",
+          "message": "견적서 ID"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLWVzdGltYXRl.option.aWQ.short_desc": {
+          "source": "The estimate to update",
+          "message": "업데이트할 견적서"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLWVzdGltYXRl.option.bm90ZXM.display_name": {
+          "source": "Notes",
+          "message": "메모"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLWVzdGltYXRl.option.bm90ZXM.short_desc": {
+          "source": "Estimate notes",
+          "message": "견적서 메모"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLWVzdGltYXRl.option.cG9fbnVtYmVy.display_name": {
+          "source": "PO Number",
+          "message": "PO 번호"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLWVzdGltYXRl.option.cG9fbnVtYmVy.short_desc": {
+          "source": "Purchase order number",
+          "message": "구매 주문 번호"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLWVzdGltYXRl.option.dGVybXM.display_name": {
+          "source": "Terms",
+          "message": "조건"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLWVzdGltYXRl.option.dGVybXM.short_desc": {
+          "source": "Terms and conditions",
+          "message": "이용 약관"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLWVzdGltYXRl.short_desc": {
+          "source": "Update an existing estimate",
+          "message": "기존 견적서 업데이트"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLWl0ZW0.desc": {
+          "source": "Update an existing item in FreshBooks",
+          "message": "FreshBooks에서 기존 품목 업데이트"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLWl0ZW0.display_name": {
+          "source": "Update Item",
+          "message": "항목 업데이트"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLWl0ZW0.option.YWNjb3VudF9pZA.desc": {
+          "source": "The FreshBooks account ID for accounting API endpoints",
+          "message": "회계 API 엔드포인트용 FreshBooks 계정 ID"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLWl0ZW0.option.YWNjb3VudF9pZA.display_name": {
+          "source": "Account ID",
+          "message": "계정 ID"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLWl0ZW0.option.YWNjb3VudF9pZA.short_desc": {
+          "source": "FreshBooks account ID",
+          "message": "FreshBooks 계정 ID"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLWl0ZW0.option.ZGVzY3JpcHRpb24.display_name": {
+          "source": "Description",
+          "message": "설명"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLWl0ZW0.option.ZGVzY3JpcHRpb24.short_desc": {
+          "source": "Item description",
+          "message": "품목 설명"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLWl0ZW0.option.aW52ZW50b3J5.display_name": {
+          "source": "Inventory",
+          "message": "재고"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLWl0ZW0.option.aW52ZW50b3J5.short_desc": {
+          "source": "Inventory count",
+          "message": "재고 수량"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLWl0ZW0.option.aWQ.display_name": {
+          "source": "Item ID",
+          "message": "품목 ID"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLWl0ZW0.option.aWQ.short_desc": {
+          "source": "The item to update",
+          "message": "업데이트할 항목"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLWl0ZW0.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "이름"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLWl0ZW0.option.bmFtZQ.short_desc": {
+          "source": "Item name",
+          "message": "항목 이름"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLWl0ZW0.option.c2t1.display_name": {
+          "source": "SKU",
+          "message": "SKU"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLWl0ZW0.option.c2t1.short_desc": {
+          "source": "Stock keeping unit",
+          "message": "재고 관리 단위"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLWl0ZW0.option.cXR5.display_name": {
+          "source": "Quantity",
+          "message": "수량"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLWl0ZW0.option.cXR5.short_desc": {
+          "source": "Default quantity",
+          "message": "기본 수량"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLWl0ZW0.option.dGF4MQ.display_name": {
+          "source": "Tax 1",
+          "message": "세금 1"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLWl0ZW0.option.dGF4MQ.short_desc": {
+          "source": "Default tax 1",
+          "message": "기본 세금 1"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLWl0ZW0.option.dGF4Mg.display_name": {
+          "source": "Tax 2",
+          "message": "세금 2"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLWl0ZW0.option.dGF4Mg.short_desc": {
+          "source": "Default tax 2",
+          "message": "기본 세금 2"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLWl0ZW0.option.dW5pdF9jb3N0.desc": {
+          "source": "Unit cost object with `amount` (string) and `code` (currency) fields",
+          "message": "`amount`(문자열) 및 `code`(통화) 필드가 있는 단가 객체"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLWl0ZW0.option.dW5pdF9jb3N0.display_name": {
+          "source": "Unit Cost",
+          "message": "단가"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLWl0ZW0.option.dW5pdF9jb3N0.short_desc": {
+          "source": "Cost per unit",
+          "message": "단위당 비용"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLWl0ZW0.short_desc": {
+          "source": "Update an existing item",
+          "message": "기존 품목 업데이트"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLWludm9pY2U.desc": {
+          "source": "Update an existing invoice in FreshBooks",
+          "message": "FreshBooks에서 기존 인보이스 업데이트"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLWludm9pY2U.display_name": {
+          "source": "Update Invoice",
+          "message": "인보이스 업데이트"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLWludm9pY2U.option.Y3JlYXRlX2RhdGU.desc": {
+          "source": "Invoice date in YYYY-MM-DD format",
+          "message": "YYYY-MM-DD 형식의 인보이스 날짜"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLWludm9pY2U.option.Y3JlYXRlX2RhdGU.display_name": {
+          "source": "Date",
+          "message": "날짜"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLWludm9pY2U.option.Y3JlYXRlX2RhdGU.short_desc": {
+          "source": "Invoice date",
+          "message": "인보이스 날짜"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLWludm9pY2U.option.Y3VycmVuY3lfY29kZQ.display_name": {
+          "source": "Currency",
+          "message": "통화"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLWludm9pY2U.option.Y3VycmVuY3lfY29kZQ.short_desc": {
+          "source": "Currency code",
+          "message": "통화 코드"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLWludm9pY2U.option.Y3VzdG9tZXJpZA.display_name": {
+          "source": "Customer",
+          "message": "고객"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLWludm9pY2U.option.Y3VzdG9tZXJpZA.short_desc": {
+          "source": "The customer for the invoice",
+          "message": "송장 대상 고객"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLWludm9pY2U.option.YWNjb3VudF9pZA.desc": {
+          "source": "The FreshBooks account ID for accounting API endpoints",
+          "message": "회계 API 엔드포인트용 FreshBooks 계정 ID"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLWludm9pY2U.option.YWNjb3VudF9pZA.display_name": {
+          "source": "Account ID",
+          "message": "계정 ID"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLWludm9pY2U.option.YWNjb3VudF9pZA.short_desc": {
+          "source": "FreshBooks account ID",
+          "message": "FreshBooks 계정 ID"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLWludm9pY2U.option.ZGlzY291bnRfdmFsdWU.display_name": {
+          "source": "Discount",
+          "message": "할인"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLWludm9pY2U.option.ZGlzY291bnRfdmFsdWU.short_desc": {
+          "source": "Discount value",
+          "message": "할인 값"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLWludm9pY2U.option.ZHVlX29mZnNldF9kYXlz.display_name": {
+          "source": "Due in Days",
+          "message": "만기 일수"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLWludm9pY2U.option.ZHVlX29mZnNldF9kYXlz.short_desc": {
+          "source": "Days until due",
+          "message": "만기일까지 남은 일수"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLWludm9pY2U.option.aW52b2ljZV9udW1iZXI.display_name": {
+          "source": "Invoice Number",
+          "message": "인보이스 번호"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLWludm9pY2U.option.aW52b2ljZV9udW1iZXI.short_desc": {
+          "source": "Unique invoice number",
+          "message": "고유 인보이스 번호"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLWludm9pY2U.option.aWQ.display_name": {
+          "source": "Invoice ID",
+          "message": "인보이스 ID"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLWludm9pY2U.option.aWQ.short_desc": {
+          "source": "The invoice to update",
+          "message": "업데이트할 송장"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLWludm9pY2U.option.bGluZXM.desc": {
+          "source": "List of line items (replaces existing lines - include ALL desired lines)",
+          "message": "품목 라인 목록(기존 라인을 대체함 - 원하는 모든 라인 포함)"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLWludm9pY2U.option.bGluZXM.display_name": {
+          "source": "Line Items",
+          "message": "품목"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLWludm9pY2U.option.bGluZXM.short_desc": {
+          "source": "Invoice line items",
+          "message": "인보이스 품목 항목"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLWludm9pY2U.option.bm90ZXM.display_name": {
+          "source": "Notes",
+          "message": "메모"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLWludm9pY2U.option.bm90ZXM.short_desc": {
+          "source": "Customer notes",
+          "message": "고객 메모"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLWludm9pY2U.option.cG9fbnVtYmVy.display_name": {
+          "source": "PO Number",
+          "message": "PO 번호"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLWludm9pY2U.option.cG9fbnVtYmVy.short_desc": {
+          "source": "Purchase order number",
+          "message": "구매 주문 번호"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLWludm9pY2U.option.dGVybXM.display_name": {
+          "source": "Terms",
+          "message": "조건"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLWludm9pY2U.option.dGVybXM.short_desc": {
+          "source": "Terms and conditions",
+          "message": "이용 약관"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLWludm9pY2U.short_desc": {
+          "source": "Update an existing invoice",
+          "message": "기존 송장 업데이트"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLXBheW1lbnQ.desc": {
+          "source": "Update an existing payment in FreshBooks",
+          "message": "FreshBooks에서 기존 결제 업데이트"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLXBheW1lbnQ.display_name": {
+          "source": "Update Payment",
+          "message": "결제 업데이트"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLXBheW1lbnQ.option.YW1vdW50.desc": {
+          "source": "Amount object with `amount` (string) and `code` (currency) fields",
+          "message": "`amount`(문자열) 및 `code`(통화) 필드가 있는 금액 객체"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLXBheW1lbnQ.option.YW1vdW50.display_name": {
+          "source": "Amount",
+          "message": "금액"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLXBheW1lbnQ.option.YW1vdW50.short_desc": {
+          "source": "Payment amount",
+          "message": "결제 금액"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLXBheW1lbnQ.option.YWNjb3VudF9pZA.desc": {
+          "source": "The FreshBooks account ID for accounting API endpoints",
+          "message": "회계 API 엔드포인트용 FreshBooks 계정 ID"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLXBheW1lbnQ.option.YWNjb3VudF9pZA.display_name": {
+          "source": "Account ID",
+          "message": "계정 ID"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLXBheW1lbnQ.option.YWNjb3VudF9pZA.short_desc": {
+          "source": "FreshBooks account ID",
+          "message": "FreshBooks 계정 ID"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLXBheW1lbnQ.option.ZGF0ZQ.desc": {
+          "source": "Payment date in YYYY-MM-DD format",
+          "message": "YYYY-MM-DD 형식의 결제 날짜"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLXBheW1lbnQ.option.ZGF0ZQ.display_name": {
+          "source": "Date",
+          "message": "날짜"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLXBheW1lbnQ.option.ZGF0ZQ.short_desc": {
+          "source": "Payment date",
+          "message": "결제일"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLXBheW1lbnQ.option.aWQ.display_name": {
+          "source": "Payment ID",
+          "message": "결제 ID"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLXBheW1lbnQ.option.aWQ.short_desc": {
+          "source": "The payment to update",
+          "message": "업데이트할 결제"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLXBheW1lbnQ.option.bm90ZQ.display_name": {
+          "source": "Note",
+          "message": "메모"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLXBheW1lbnQ.option.bm90ZQ.short_desc": {
+          "source": "Payment note",
+          "message": "결제 메모"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLXBheW1lbnQ.option.dHlwZQ.allowed-value.c3RyaW5nOk90aGVy.desc": {
+          "source": "Other payment type",
+          "message": "기타 결제 유형"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLXBheW1lbnQ.option.dHlwZQ.allowed-value.c3RyaW5nOkJhbmsgVHJhbnNmZXI.desc": {
+          "source": "Bank transfer payment",
+          "message": "계좌 이체 결제"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLXBheW1lbnQ.option.dHlwZQ.allowed-value.c3RyaW5nOkNhc2g.desc": {
+          "source": "Cash payment",
+          "message": "현금 결제"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLXBheW1lbnQ.option.dHlwZQ.allowed-value.c3RyaW5nOkNoZWNr.desc": {
+          "source": "Check payment",
+          "message": "수표 결제"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLXBheW1lbnQ.option.dHlwZQ.allowed-value.c3RyaW5nOkNyZWRpdCBDYXJk.desc": {
+          "source": "Credit card payment",
+          "message": "신용카드 결제"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLXBheW1lbnQ.option.dHlwZQ.allowed-value.c3RyaW5nOlBheVBhbA.desc": {
+          "source": "PayPal payment",
+          "message": "PayPal 결제"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLXBheW1lbnQ.option.dHlwZQ.desc": {
+          "source": "The payment method type",
+          "message": "결제 수단 유형"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLXBheW1lbnQ.option.dHlwZQ.display_name": {
+          "source": "Type",
+          "message": "유형"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLXBheW1lbnQ.option.dHlwZQ.short_desc": {
+          "source": "Payment type",
+          "message": "결제 유형"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLXBheW1lbnQ.short_desc": {
+          "source": "Update an existing payment",
+          "message": "기존 결제 업데이트"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLXNlcnZpY2U.desc": {
+          "source": "Update an existing service in FreshBooks",
+          "message": "FreshBooks에서 기존 서비스 업데이트"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLXNlcnZpY2U.display_name": {
+          "source": "Update Service",
+          "message": "서비스 업데이트"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLXNlcnZpY2U.option.YmlsbGFibGU.display_name": {
+          "source": "Billable",
+          "message": "청구 가능"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLXNlcnZpY2U.option.YmlsbGFibGU.short_desc": {
+          "source": "Whether the service is billable",
+          "message": "서비스 청구 가능 여부"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLXNlcnZpY2U.option.YnVzaW5lc3NfaWQ.desc": {
+          "source": "The FreshBooks business ID for time tracking API endpoints",
+          "message": "시간 추적 API 엔드포인트용 FreshBooks 비즈니스 ID"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLXNlcnZpY2U.option.YnVzaW5lc3NfaWQ.display_name": {
+          "source": "Business ID",
+          "message": "비즈니스 ID"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLXNlcnZpY2U.option.YnVzaW5lc3NfaWQ.short_desc": {
+          "source": "FreshBooks business ID",
+          "message": "FreshBooks 비즈니스 ID"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLXNlcnZpY2U.option.aWQ.display_name": {
+          "source": "Service ID",
+          "message": "서비스 ID"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLXNlcnZpY2U.option.aWQ.short_desc": {
+          "source": "The service to update",
+          "message": "업데이트할 서비스"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLXNlcnZpY2U.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "이름"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLXNlcnZpY2U.option.bmFtZQ.short_desc": {
+          "source": "Service name",
+          "message": "서비스 이름"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLXNlcnZpY2U.short_desc": {
+          "source": "Update an existing service",
+          "message": "기존 서비스 업데이트"
+        },
+        "app.RnJlc2hCb29rcw.desc": {
+          "source": "FreshBooks is cloud-based accounting software designed for small businesses and freelancers.\n\nThis integration supports clients, invoices, expenses, estimates, items, and services.",
+          "message": "FreshBooks는 소규모 비즈니스 및 프리랜서를 위해 설계된 클라우드 기반 회계 소프트웨어입니다.\n\n이 통합은 고객, 인보이스, 비용, 견적서, 품목 및 서비스를 지원합니다."
+        },
+        "app.RnJlc2hCb29rcw.display_name": {
+          "source": "FreshBooks",
+          "message": "FreshBooks"
+        },
+        "app.RnJlc2hCb29rcw.short_desc": {
+          "source": "FreshBooks cloud accounting software",
+          "message": "FreshBooks 클라우드 회계 소프트웨어"
+        }
+      }
+    }
+  }
+}

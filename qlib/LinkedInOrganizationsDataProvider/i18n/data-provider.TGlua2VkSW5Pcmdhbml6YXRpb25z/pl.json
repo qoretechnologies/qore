@@ -1,0 +1,1197 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "pl": {
+      "messages": {
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.Z2V0LW9yZ2FuaXphdGlvbg.desc": {
+          "source": "Retrieves one organization's profile: its name, description, tagline, website, logo, cover photo, size, industries, specialties and page URL.",
+          "message": "Pobiera profil organizacji: jej nazwę, opis, slogan, stronę internetową, logo, zdjęcie w tle, wielkość, branże, specjalizacje i adres URL strony."
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.Z2V0LW9yZ2FuaXphdGlvbg.display_name": {
+          "source": "Get Organization",
+          "message": "Pobierz organizację"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.Z2V0LW9yZ2FuaXphdGlvbg.option.b3JnYW5pemF0aW9u.desc": {
+          "source": "The organization whose data is read.  The list offers the organizations the authenticated member administers",
+          "message": "Organizacja, której dane są odczytywane. Lista zawiera organizacje, którymi zarządza uwierzytelniony użytkownik"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.Z2V0LW9yZ2FuaXphdGlvbg.option.b3JnYW5pemF0aW9u.display_name": {
+          "source": "Organization",
+          "message": "Organizacja"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.Z2V0LW9yZ2FuaXphdGlvbg.option.b3JnYW5pemF0aW9u.short_desc": {
+          "source": "The organization whose data is read",
+          "message": "Organizacja, której dane są odczytywane"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.Z2V0LW9yZ2FuaXphdGlvbg.short_desc": {
+          "source": "Get one organization's profile",
+          "message": "Pobierz profil organizacji"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.Z2V0LWN1cnJlbnQtbWVtYmVy.desc": {
+          "source": "Retrieves the profile of the member whose authorization this connection carries.\n\nUseful for confirming which account a connection is bound to; the organizations that account administers are what every other action can reach.",
+          "message": "Pobiera profil użytkownika, którego autoryzację posiada to połączenie.\n\nPrzydatne do potwierdzenia, z którym kontem jest powiązane połączenie; organizacje zarządzane przez to konto są dostępne dla wszystkich pozostałych akcji."
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.Z2V0LWN1cnJlbnQtbWVtYmVy.display_name": {
+          "source": "Get Current Member",
+          "message": "Pobierz bieżącego użytkownika"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.Z2V0LWN1cnJlbnQtbWVtYmVy.short_desc": {
+          "source": "Get the authenticated member's profile",
+          "message": "Pobierz profil uwierzytelnionego użytkownika"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.Z2V0LWZvbGxvd2VyLXN0YXRpc3RpY3M.desc": {
+          "source": "Breaks an organization's current followers down by one member attribute — industry, seniority, job function, company size, country, region, or whether they are an employee — and reports how many followers fall into each value.\n\nThis is a snapshot of the page's followers as they stand now, not a count over a period: LinkedIn ignores any date range for follower analytics. Use **Get Visitor Statistics** for a figure that covers a period.\n\nLinkedIn deliberately protects member privacy in these numbers: a count below an undisclosed threshold is reported as `0`, and the same request repeated can return slightly different values.",
+          "message": "Dzieli bieżących obserwujących organizację według jednego atrybutu użytkownika — branży, szczebla stanowiska, funkcji zawodowej, wielkości firmy, kraju, regionu lub tego, czy jest pracownikiem — i podaje liczbę obserwujących dla każdej wartości.\n\nJest to migawka stanu obserwujących stronę w danej chwili, a nie liczba w określonym przedziale czasu: LinkedIn ignoruje zakres dat dla analityki obserwujących. Użyj akcji **Get Visitor Statistics**, aby uzyskać dane obejmujące dany okres.\n\nLinkedIn celowo chroni prywatność użytkowników w tych danych: liczba poniżej nieujawnionego progu jest zgłaszana jako `0`, a powtórzenie tego samego żądania może zwrócić nieznacznie różniące się wartości."
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.Z2V0LWZvbGxvd2VyLXN0YXRpc3RpY3M.display_name": {
+          "source": "Get Follower Statistics",
+          "message": "Pobierz statystyki obserwujących"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.Z2V0LWZvbGxvd2VyLXN0YXRpc3RpY3M.option.ZGltZW5zaW9uX3R5cGU.allowed-value.c3RyaW5nOkNPVU5UUllfR0VP.desc": {
+          "source": "Break down by the member's country",
+          "message": "Podział według kraju użytkownika"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.Z2V0LWZvbGxvd2VyLXN0YXRpc3RpY3M.option.ZGltZW5zaW9uX3R5cGU.allowed-value.c3RyaW5nOkNPVU5UUllfR0VP.display_name": {
+          "source": "Country",
+          "message": "Kraj"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.Z2V0LWZvbGxvd2VyLXN0YXRpc3RpY3M.option.ZGltZW5zaW9uX3R5cGU.allowed-value.c3RyaW5nOkNPVU5UUllfR0VP.short_desc": {
+          "source": "Break down by the member's country",
+          "message": "Podział według kraju użytkownika"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.Z2V0LWZvbGxvd2VyLXN0YXRpc3RpY3M.option.ZGltZW5zaW9uX3R5cGU.allowed-value.c3RyaW5nOklORFVTVFJZ.desc": {
+          "source": "Break down by the member's industry",
+          "message": "Podział według branży użytkownika"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.Z2V0LWZvbGxvd2VyLXN0YXRpc3RpY3M.option.ZGltZW5zaW9uX3R5cGU.allowed-value.c3RyaW5nOklORFVTVFJZ.display_name": {
+          "source": "Industry",
+          "message": "Branża"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.Z2V0LWZvbGxvd2VyLXN0YXRpc3RpY3M.option.ZGltZW5zaW9uX3R5cGU.allowed-value.c3RyaW5nOklORFVTVFJZ.short_desc": {
+          "source": "Break down by the member's industry",
+          "message": "Podział według branży użytkownika"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.Z2V0LWZvbGxvd2VyLXN0YXRpc3RpY3M.option.ZGltZW5zaW9uX3R5cGU.allowed-value.c3RyaW5nOkpPQl9GVU5DVElPTg.desc": {
+          "source": "Break down by the member's job function",
+          "message": "Podział według funkcji zawodowej użytkownika"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.Z2V0LWZvbGxvd2VyLXN0YXRpc3RpY3M.option.ZGltZW5zaW9uX3R5cGU.allowed-value.c3RyaW5nOkpPQl9GVU5DVElPTg.display_name": {
+          "source": "Job Function",
+          "message": "Funkcja zawodowa"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.Z2V0LWZvbGxvd2VyLXN0YXRpc3RpY3M.option.ZGltZW5zaW9uX3R5cGU.allowed-value.c3RyaW5nOkpPQl9GVU5DVElPTg.short_desc": {
+          "source": "Break down by the member's job function",
+          "message": "Podział według funkcji zawodowej użytkownika"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.Z2V0LWZvbGxvd2VyLXN0YXRpc3RpY3M.option.ZGltZW5zaW9uX3R5cGU.allowed-value.c3RyaW5nOlJFR0lPTl9HRU8.desc": {
+          "source": "Break down by the member's region",
+          "message": "Podziel według regionu członka"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.Z2V0LWZvbGxvd2VyLXN0YXRpc3RpY3M.option.ZGltZW5zaW9uX3R5cGU.allowed-value.c3RyaW5nOlJFR0lPTl9HRU8.display_name": {
+          "source": "Region",
+          "message": "Region"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.Z2V0LWZvbGxvd2VyLXN0YXRpc3RpY3M.option.ZGltZW5zaW9uX3R5cGU.allowed-value.c3RyaW5nOlJFR0lPTl9HRU8.short_desc": {
+          "source": "Break down by the member's region",
+          "message": "Podziel według regionu członka"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.Z2V0LWZvbGxvd2VyLXN0YXRpc3RpY3M.option.ZGltZW5zaW9uX3R5cGU.allowed-value.c3RyaW5nOlJFTEFUSU9OU0hJUA.desc": {
+          "source": "Break down by the member's relationship to the organization, which distinguishes employees from everyone else",
+          "message": "Podziel według relacji członka z organizacją, co pozwala odróżnić pracowników od pozostałych osób"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.Z2V0LWZvbGxvd2VyLXN0YXRpc3RpY3M.option.ZGltZW5zaW9uX3R5cGU.allowed-value.c3RyaW5nOlJFTEFUSU9OU0hJUA.display_name": {
+          "source": "Relationship",
+          "message": "Relacja"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.Z2V0LWZvbGxvd2VyLXN0YXRpc3RpY3M.option.ZGltZW5zaW9uX3R5cGU.allowed-value.c3RyaW5nOlJFTEFUSU9OU0hJUA.short_desc": {
+          "source": "Break down by the member's relationship to the organization",
+          "message": "Podziel według relacji członka z organizacją"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.Z2V0LWZvbGxvd2VyLXN0YXRpc3RpY3M.option.ZGltZW5zaW9uX3R5cGU.allowed-value.c3RyaW5nOlNFTklPUklUWQ.desc": {
+          "source": "Break down by the member's seniority",
+          "message": "Podziel według poziomu stanowiska członka"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.Z2V0LWZvbGxvd2VyLXN0YXRpc3RpY3M.option.ZGltZW5zaW9uX3R5cGU.allowed-value.c3RyaW5nOlNFTklPUklUWQ.display_name": {
+          "source": "Seniority",
+          "message": "Poziom doświadczenia"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.Z2V0LWZvbGxvd2VyLXN0YXRpc3RpY3M.option.ZGltZW5zaW9uX3R5cGU.allowed-value.c3RyaW5nOlNFTklPUklUWQ.short_desc": {
+          "source": "Break down by the member's seniority",
+          "message": "Podziel według poziomu stanowiska członka"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.Z2V0LWZvbGxvd2VyLXN0YXRpc3RpY3M.option.ZGltZW5zaW9uX3R5cGU.allowed-value.c3RyaW5nOlNUQUZGX0NPVU5UX1JBTkdF.desc": {
+          "source": "Break down by the size of the member's company",
+          "message": "Podziel według wielkości firmy członka"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.Z2V0LWZvbGxvd2VyLXN0YXRpc3RpY3M.option.ZGltZW5zaW9uX3R5cGU.allowed-value.c3RyaW5nOlNUQUZGX0NPVU5UX1JBTkdF.display_name": {
+          "source": "Company Size",
+          "message": "Wielkość firmy"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.Z2V0LWZvbGxvd2VyLXN0YXRpc3RpY3M.option.ZGltZW5zaW9uX3R5cGU.allowed-value.c3RyaW5nOlNUQUZGX0NPVU5UX1JBTkdF.short_desc": {
+          "source": "Break down by the size of the member's company",
+          "message": "Podziel według wielkości firmy członka"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.Z2V0LWZvbGxvd2VyLXN0YXRpc3RpY3M.option.ZGltZW5zaW9uX3R5cGU.desc": {
+          "source": "The member attribute to break the followers down by",
+          "message": "Atrybut członka, według którego mają zostać podzieleni obserwujący"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.Z2V0LWZvbGxvd2VyLXN0YXRpc3RpY3M.option.ZGltZW5zaW9uX3R5cGU.display_name": {
+          "source": "Break Down By",
+          "message": "Podziel według"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.Z2V0LWZvbGxvd2VyLXN0YXRpc3RpY3M.option.ZGltZW5zaW9uX3R5cGU.short_desc": {
+          "source": "The member attribute to break the followers down by",
+          "message": "Atrybut członka, według którego mają zostać podzieleni obserwujący"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.Z2V0LWZvbGxvd2VyLXN0YXRpc3RpY3M.option.b3JnYW5pemF0aW9u.desc": {
+          "source": "The organization whose data is read.  The list offers the organizations the authenticated member administers",
+          "message": "Organizacja, której dane są odczytywane. Lista zawiera organizacje, którymi zarządza uwierzytelniony użytkownik"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.Z2V0LWZvbGxvd2VyLXN0YXRpc3RpY3M.option.b3JnYW5pemF0aW9u.display_name": {
+          "source": "Organization",
+          "message": "Organizacja"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.Z2V0LWZvbGxvd2VyLXN0YXRpc3RpY3M.option.b3JnYW5pemF0aW9u.short_desc": {
+          "source": "The organization whose data is read",
+          "message": "Organizacja, której dane są odczytywane"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.Z2V0LWZvbGxvd2VyLXN0YXRpc3RpY3M.short_desc": {
+          "source": "Break an organization's followers down by demographic",
+          "message": "Podziel obserwujących organizację według danych demograficznych"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.Z2V0LXBvc3Q.desc": {
+          "source": "Retrieves one of an organization's posts by URN, with its text, visibility, attached content, distribution and timestamps.\n\nA post is reachable when the organization authored it, or when it reshares a post the organization authored.",
+          "message": "Pobiera jeden z postów organizacji według URN, wraz z jego tekstem, widocznością, załączoną zawartością, dystrybucją i znacznikami czasu.\n\nPost jest dostępny, gdy organizacja jest jego autorem lub gdy ponownie udostępnia post utworzony przez organizację."
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.Z2V0LXBvc3Q.display_name": {
+          "source": "Get Post",
+          "message": "Pobierz wpis"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.Z2V0LXBvc3Q.option.cG9zdA.desc": {
+          "source": "The URN of the post to retrieve, as returned by the **List Posts** action",
+          "message": "URN posta do pobrania, zwrócony przez akcję **List Posts**"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.Z2V0LXBvc3Q.option.cG9zdA.display_name": {
+          "source": "Post URN",
+          "message": "URN posta"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.Z2V0LXBvc3Q.option.cG9zdA.short_desc": {
+          "source": "The URN of the post to retrieve",
+          "message": "URN posta do pobrania"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.Z2V0LXBvc3Q.option.dmlld19jb250ZXh0.allowed-value.c3RyaW5nOkFVVEhPUg.desc": {
+          "source": "The latest version, which may be a draft or a scheduled post; a scheduled post is identified by its `scheduled_at` field being set",
+          "message": "Najnowsza wersja, która może być wersją roboczą lub zaplanowanym postem; zaplanowany post jest identyfikowany przez ustawione pole `scheduled_at`"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.Z2V0LXBvc3Q.option.dmlld19jb250ZXh0.allowed-value.c3RyaW5nOkFVVEhPUg.display_name": {
+          "source": "Author",
+          "message": "Autor"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.Z2V0LXBvc3Q.option.dmlld19jb250ZXh0.allowed-value.c3RyaW5nOkFVVEhPUg.short_desc": {
+          "source": "The latest version, including drafts and scheduled posts",
+          "message": "Najnowsza wersja, w tym wersje robocze i zaplanowane posty"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.Z2V0LXBvc3Q.option.dmlld19jb250ZXh0.allowed-value.c3RyaW5nOlJFQURFUg.desc": {
+          "source": "The published version visible to a general audience",
+          "message": "Opublikowana wersja widoczna dla ogółu odbiorców"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.Z2V0LXBvc3Q.option.dmlld19jb250ZXh0.allowed-value.c3RyaW5nOlJFQURFUg.display_name": {
+          "source": "Reader",
+          "message": "Czytelnik"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.Z2V0LXBvc3Q.option.dmlld19jb250ZXh0.allowed-value.c3RyaW5nOlJFQURFUg.short_desc": {
+          "source": "The published version visible to a general audience",
+          "message": "Opublikowana wersja widoczna dla ogółu odbiorców"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.Z2V0LXBvc3Q.option.dmlld19jb250ZXh0.desc": {
+          "source": "Whether to read the post as its author or as a reader",
+          "message": "Określa, czy odczytywać post jako jego autor, czy jako czytelnik"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.Z2V0LXBvc3Q.option.dmlld19jb250ZXh0.display_name": {
+          "source": "View Context",
+          "message": "Kontekst widoku"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.Z2V0LXBvc3Q.option.dmlld19jb250ZXh0.short_desc": {
+          "source": "Whether to read the post as its author or as a reader",
+          "message": "Określa, czy odczytywać post jako jego autor, czy jako czytelnik"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.Z2V0LXBvc3Q.short_desc": {
+          "source": "Get one of an organization's posts",
+          "message": "Pobierz jeden z postów organizacji"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.Z2V0LXNvY2lhbC1tZXRhZGF0YQ.desc": {
+          "source": "Retrieves how much engagement one or more posts, activities or comments have received: the total number of reactions, the count of each reaction type, the number of comments and whether the comment thread is still open.\n\nSeveral URNs can be summarized in one call, which is far cheaper than listing every reaction on each of them.",
+          "message": "Pobiera poziom zaangażowania wygenerowany przez jeden lub więcej postów, aktywności lub komentarzy: całkowitą liczbę reakcji, liczbę reakcji każdego typu, liczbę komentarzy oraz informację, czy wątek komentarzy jest nadal otwarty.\n\nWiele identyfikatorów URN można podsumować w jednym wywołaniu, co jest znacznie tańsze niż pobieranie listy wszystkich reakcji dla każdego z nich."
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.Z2V0LXNvY2lhbC1tZXRhZGF0YQ.display_name": {
+          "source": "Get Engagement Summary",
+          "message": "Pobierz podsumowanie zaangażowania"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.Z2V0LXNvY2lhbC1tZXRhZGF0YQ.option.ZW50aXRpZXM.desc": {
+          "source": "The URNs of the content to summarize: posts, activities or comments.  Several can be given at once, which is much cheaper than one call each",
+          "message": "Identyfikatory URN treści do podsumowania: postów, aktywności lub komentarzy. Można podać kilka naraz, co jest znacznie tańsze niż jedno wywołanie dla każdego"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.Z2V0LXNvY2lhbC1tZXRhZGF0YQ.option.ZW50aXRpZXM.display_name": {
+          "source": "Content URNs",
+          "message": "Identyfikatory URN treści"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.Z2V0LXNvY2lhbC1tZXRhZGF0YQ.option.ZW50aXRpZXM.short_desc": {
+          "source": "The URNs of the content to summarize",
+          "message": "Identyfikatory URN treści do podsumowania"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.Z2V0LXNvY2lhbC1tZXRhZGF0YQ.short_desc": {
+          "source": "Get the reaction and comment counts of content",
+          "message": "Pobierz liczbę reakcji i komentarzy dla treści"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.Z2V0LXZpc2l0b3Itc3RhdGlzdGljcw.desc": {
+          "source": "Breaks the members who visited an organization's page down by one member attribute, and reports how many visits fall into each value.\n\nUnlike follower statistics, this **does** honour a date range, and it can be narrowed to a single section of the page — the jobs tab, the life tab, and so on — with `source_type`.\n\nThe same privacy protections apply: small counts are reported as `0` and repeated requests can differ slightly.",
+          "message": "Dzieli członków, którzy odwiedzili stronę organizacji, według jednego atrybutu członka i raportuje, ile wizyt przypada na każdą wartość.\n\nW przeciwieństwie do statystyk obserwujących ta opcja **uwzględnia** zakres dat i można ją zawęzić do pojedynczej sekcji strony — zakładki z ofertami pracy, zakładki o życiu w firmie itp. — za pomocą `source_type`.\n\nObowiązują te same zasady ochrony prywatności: małe liczby są raportowane jako `0`, a powtarzane żądania mogą się nieznacznie różnić."
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.Z2V0LXZpc2l0b3Itc3RhdGlzdGljcw.display_name": {
+          "source": "Get Visitor Statistics",
+          "message": "Pobierz statystyki odwiedzających"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.Z2V0LXZpc2l0b3Itc3RhdGlzdGljcw.option.ZGltZW5zaW9uX3R5cGU.allowed-value.c3RyaW5nOkNPVU5UUllfR0VP.desc": {
+          "source": "Break down by the member's country",
+          "message": "Podział według kraju użytkownika"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.Z2V0LXZpc2l0b3Itc3RhdGlzdGljcw.option.ZGltZW5zaW9uX3R5cGU.allowed-value.c3RyaW5nOkNPVU5UUllfR0VP.display_name": {
+          "source": "Country",
+          "message": "Kraj"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.Z2V0LXZpc2l0b3Itc3RhdGlzdGljcw.option.ZGltZW5zaW9uX3R5cGU.allowed-value.c3RyaW5nOkNPVU5UUllfR0VP.short_desc": {
+          "source": "Break down by the member's country",
+          "message": "Podział według kraju użytkownika"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.Z2V0LXZpc2l0b3Itc3RhdGlzdGljcw.option.ZGltZW5zaW9uX3R5cGU.allowed-value.c3RyaW5nOklORFVTVFJZ.desc": {
+          "source": "Break down by the member's industry",
+          "message": "Podział według branży użytkownika"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.Z2V0LXZpc2l0b3Itc3RhdGlzdGljcw.option.ZGltZW5zaW9uX3R5cGU.allowed-value.c3RyaW5nOklORFVTVFJZ.display_name": {
+          "source": "Industry",
+          "message": "Branża"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.Z2V0LXZpc2l0b3Itc3RhdGlzdGljcw.option.ZGltZW5zaW9uX3R5cGU.allowed-value.c3RyaW5nOklORFVTVFJZ.short_desc": {
+          "source": "Break down by the member's industry",
+          "message": "Podział według branży użytkownika"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.Z2V0LXZpc2l0b3Itc3RhdGlzdGljcw.option.ZGltZW5zaW9uX3R5cGU.allowed-value.c3RyaW5nOkpPQl9GVU5DVElPTg.desc": {
+          "source": "Break down by the member's job function",
+          "message": "Podział według funkcji zawodowej użytkownika"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.Z2V0LXZpc2l0b3Itc3RhdGlzdGljcw.option.ZGltZW5zaW9uX3R5cGU.allowed-value.c3RyaW5nOkpPQl9GVU5DVElPTg.display_name": {
+          "source": "Job Function",
+          "message": "Funkcja zawodowa"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.Z2V0LXZpc2l0b3Itc3RhdGlzdGljcw.option.ZGltZW5zaW9uX3R5cGU.allowed-value.c3RyaW5nOkpPQl9GVU5DVElPTg.short_desc": {
+          "source": "Break down by the member's job function",
+          "message": "Podział według funkcji zawodowej użytkownika"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.Z2V0LXZpc2l0b3Itc3RhdGlzdGljcw.option.ZGltZW5zaW9uX3R5cGU.allowed-value.c3RyaW5nOlJFR0lPTl9HRU8.desc": {
+          "source": "Break down by the member's region",
+          "message": "Podziel według regionu członka"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.Z2V0LXZpc2l0b3Itc3RhdGlzdGljcw.option.ZGltZW5zaW9uX3R5cGU.allowed-value.c3RyaW5nOlJFR0lPTl9HRU8.display_name": {
+          "source": "Region",
+          "message": "Region"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.Z2V0LXZpc2l0b3Itc3RhdGlzdGljcw.option.ZGltZW5zaW9uX3R5cGU.allowed-value.c3RyaW5nOlJFR0lPTl9HRU8.short_desc": {
+          "source": "Break down by the member's region",
+          "message": "Podziel według regionu członka"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.Z2V0LXZpc2l0b3Itc3RhdGlzdGljcw.option.ZGltZW5zaW9uX3R5cGU.allowed-value.c3RyaW5nOlJFTEFUSU9OU0hJUA.desc": {
+          "source": "Break down by the member's relationship to the organization, which distinguishes employees from everyone else",
+          "message": "Podziel według relacji członka z organizacją, co pozwala odróżnić pracowników od pozostałych osób"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.Z2V0LXZpc2l0b3Itc3RhdGlzdGljcw.option.ZGltZW5zaW9uX3R5cGU.allowed-value.c3RyaW5nOlJFTEFUSU9OU0hJUA.display_name": {
+          "source": "Relationship",
+          "message": "Relacja"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.Z2V0LXZpc2l0b3Itc3RhdGlzdGljcw.option.ZGltZW5zaW9uX3R5cGU.allowed-value.c3RyaW5nOlJFTEFUSU9OU0hJUA.short_desc": {
+          "source": "Break down by the member's relationship to the organization",
+          "message": "Podziel według relacji członka z organizacją"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.Z2V0LXZpc2l0b3Itc3RhdGlzdGljcw.option.ZGltZW5zaW9uX3R5cGU.allowed-value.c3RyaW5nOlNFTklPUklUWQ.desc": {
+          "source": "Break down by the member's seniority",
+          "message": "Podziel według poziomu stanowiska członka"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.Z2V0LXZpc2l0b3Itc3RhdGlzdGljcw.option.ZGltZW5zaW9uX3R5cGU.allowed-value.c3RyaW5nOlNFTklPUklUWQ.display_name": {
+          "source": "Seniority",
+          "message": "Poziom doświadczenia"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.Z2V0LXZpc2l0b3Itc3RhdGlzdGljcw.option.ZGltZW5zaW9uX3R5cGU.allowed-value.c3RyaW5nOlNFTklPUklUWQ.short_desc": {
+          "source": "Break down by the member's seniority",
+          "message": "Podziel według poziomu stanowiska członka"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.Z2V0LXZpc2l0b3Itc3RhdGlzdGljcw.option.ZGltZW5zaW9uX3R5cGU.allowed-value.c3RyaW5nOlNUQUZGX0NPVU5UX1JBTkdF.desc": {
+          "source": "Break down by the size of the member's company",
+          "message": "Podziel według wielkości firmy członka"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.Z2V0LXZpc2l0b3Itc3RhdGlzdGljcw.option.ZGltZW5zaW9uX3R5cGU.allowed-value.c3RyaW5nOlNUQUZGX0NPVU5UX1JBTkdF.display_name": {
+          "source": "Company Size",
+          "message": "Wielkość firmy"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.Z2V0LXZpc2l0b3Itc3RhdGlzdGljcw.option.ZGltZW5zaW9uX3R5cGU.allowed-value.c3RyaW5nOlNUQUZGX0NPVU5UX1JBTkdF.short_desc": {
+          "source": "Break down by the size of the member's company",
+          "message": "Podziel według wielkości firmy członka"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.Z2V0LXZpc2l0b3Itc3RhdGlzdGljcw.option.ZGltZW5zaW9uX3R5cGU.desc": {
+          "source": "The member attribute to break the visitors down by",
+          "message": "Atrybut członka, według którego mają zostać podzieleni odwiedzający"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.Z2V0LXZpc2l0b3Itc3RhdGlzdGljcw.option.ZGltZW5zaW9uX3R5cGU.display_name": {
+          "source": "Break Down By",
+          "message": "Podziel według"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.Z2V0LXZpc2l0b3Itc3RhdGlzdGljcw.option.ZGltZW5zaW9uX3R5cGU.short_desc": {
+          "source": "The member attribute to break the visitors down by",
+          "message": "Atrybut członka, według którego mają zostać podzieleni odwiedzający"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.Z2V0LXZpc2l0b3Itc3RhdGlzdGljcw.option.ZW5k.desc": {
+          "source": "The end of the period to count visits in (exclusive)",
+          "message": "Koniec okresu zliczania wizyt (z wyłączeniem)"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.Z2V0LXZpc2l0b3Itc3RhdGlzdGljcw.option.ZW5k.display_name": {
+          "source": "To",
+          "message": "Do"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.Z2V0LXZpc2l0b3Itc3RhdGlzdGljcw.option.ZW5k.short_desc": {
+          "source": "The end of the period to count visits in",
+          "message": "Koniec okresu zliczania wizyt"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.Z2V0LXZpc2l0b3Itc3RhdGlzdGljcw.option.b3JnYW5pemF0aW9u.desc": {
+          "source": "The organization whose data is read.  The list offers the organizations the authenticated member administers",
+          "message": "Organizacja, której dane są odczytywane. Lista zawiera organizacje, którymi zarządza uwierzytelniony użytkownik"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.Z2V0LXZpc2l0b3Itc3RhdGlzdGljcw.option.b3JnYW5pemF0aW9u.display_name": {
+          "source": "Organization",
+          "message": "Organizacja"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.Z2V0LXZpc2l0b3Itc3RhdGlzdGljcw.option.b3JnYW5pemF0aW9u.short_desc": {
+          "source": "The organization whose data is read",
+          "message": "Organizacja, której dane są odczytywane"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.Z2V0LXZpc2l0b3Itc3RhdGlzdGljcw.option.c291cmNlX3R5cGU.allowed-value.c3RyaW5nOk9WRVJWSUVX.desc": {
+          "source": "The page's overview tab",
+          "message": "Karta przeglądu strony"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.Z2V0LXZpc2l0b3Itc3RhdGlzdGljcw.option.c291cmNlX3R5cGU.allowed-value.c3RyaW5nOk9WRVJWSUVX.display_name": {
+          "source": "Overview",
+          "message": "Przegląd"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.Z2V0LXZpc2l0b3Itc3RhdGlzdGljcw.option.c291cmNlX3R5cGU.allowed-value.c3RyaW5nOk9WRVJWSUVX.short_desc": {
+          "source": "The page's overview tab",
+          "message": "Karta przeglądu strony"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.Z2V0LXZpc2l0b3Itc3RhdGlzdGljcw.option.c291cmNlX3R5cGU.allowed-value.c3RyaW5nOkFCT1VU.desc": {
+          "source": "The page's about tab",
+          "message": "Karta informacji o stronie"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.Z2V0LXZpc2l0b3Itc3RhdGlzdGljcw.option.c291cmNlX3R5cGU.allowed-value.c3RyaW5nOkFCT1VU.display_name": {
+          "source": "About",
+          "message": "Informacje"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.Z2V0LXZpc2l0b3Itc3RhdGlzdGljcw.option.c291cmNlX3R5cGU.allowed-value.c3RyaW5nOkFCT1VU.short_desc": {
+          "source": "The page's about tab",
+          "message": "Karta informacji o stronie"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.Z2V0LXZpc2l0b3Itc3RhdGlzdGljcw.option.c291cmNlX3R5cGU.allowed-value.c3RyaW5nOkNBUkVFUg.desc": {
+          "source": "The page's careers tab",
+          "message": "Karta kariery na stronie"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.Z2V0LXZpc2l0b3Itc3RhdGlzdGljcw.option.c291cmNlX3R5cGU.allowed-value.c3RyaW5nOkNBUkVFUg.display_name": {
+          "source": "Careers",
+          "message": "Kariera"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.Z2V0LXZpc2l0b3Itc3RhdGlzdGljcw.option.c291cmNlX3R5cGU.allowed-value.c3RyaW5nOkNBUkVFUg.short_desc": {
+          "source": "The page's careers tab",
+          "message": "Karta kariery na stronie"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.Z2V0LXZpc2l0b3Itc3RhdGlzdGljcw.option.c291cmNlX3R5cGU.allowed-value.c3RyaW5nOklOU0lHSFRT.desc": {
+          "source": "The page's insights tab",
+          "message": "Karta statystyk strony"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.Z2V0LXZpc2l0b3Itc3RhdGlzdGljcw.option.c291cmNlX3R5cGU.allowed-value.c3RyaW5nOklOU0lHSFRT.display_name": {
+          "source": "Insights",
+          "message": "Statystyki"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.Z2V0LXZpc2l0b3Itc3RhdGlzdGljcw.option.c291cmNlX3R5cGU.allowed-value.c3RyaW5nOklOU0lHSFRT.short_desc": {
+          "source": "The page's insights tab",
+          "message": "Karta statystyk strony"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.Z2V0LXZpc2l0b3Itc3RhdGlzdGljcw.option.c291cmNlX3R5cGU.allowed-value.c3RyaW5nOkpPQlM.desc": {
+          "source": "The page's jobs tab",
+          "message": "Karta ofert pracy na stronie"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.Z2V0LXZpc2l0b3Itc3RhdGlzdGljcw.option.c291cmNlX3R5cGU.allowed-value.c3RyaW5nOkpPQlM.display_name": {
+          "source": "Jobs",
+          "message": "Oferty pracy"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.Z2V0LXZpc2l0b3Itc3RhdGlzdGljcw.option.c291cmNlX3R5cGU.allowed-value.c3RyaW5nOkpPQlM.short_desc": {
+          "source": "The page's jobs tab",
+          "message": "Karta ofert pracy na stronie"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.Z2V0LXZpc2l0b3Itc3RhdGlzdGljcw.option.c291cmNlX3R5cGU.allowed-value.c3RyaW5nOkxJRkU.desc": {
+          "source": "The page's life tab",
+          "message": "Karta życia w firmie na stronie"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.Z2V0LXZpc2l0b3Itc3RhdGlzdGljcw.option.c291cmNlX3R5cGU.allowed-value.c3RyaW5nOkxJRkU.display_name": {
+          "source": "Life",
+          "message": "Życie w firmie"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.Z2V0LXZpc2l0b3Itc3RhdGlzdGljcw.option.c291cmNlX3R5cGU.allowed-value.c3RyaW5nOkxJRkU.short_desc": {
+          "source": "The page's life tab",
+          "message": "Karta życia w firmie na stronie"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.Z2V0LXZpc2l0b3Itc3RhdGlzdGljcw.option.c291cmNlX3R5cGU.allowed-value.c3RyaW5nOlBFT1BMRQ.desc": {
+          "source": "The page's people tab",
+          "message": "Karta osób na stronie"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.Z2V0LXZpc2l0b3Itc3RhdGlzdGljcw.option.c291cmNlX3R5cGU.allowed-value.c3RyaW5nOlBFT1BMRQ.display_name": {
+          "source": "People",
+          "message": "Osoby"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.Z2V0LXZpc2l0b3Itc3RhdGlzdGljcw.option.c291cmNlX3R5cGU.allowed-value.c3RyaW5nOlBFT1BMRQ.short_desc": {
+          "source": "The page's people tab",
+          "message": "Karta osób na stronie"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.Z2V0LXZpc2l0b3Itc3RhdGlzdGljcw.option.c291cmNlX3R5cGU.allowed-value.c3RyaW5nOlBST0RVQ1RT.desc": {
+          "source": "The page's products tab",
+          "message": "Karta produktów na stronie"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.Z2V0LXZpc2l0b3Itc3RhdGlzdGljcw.option.c291cmNlX3R5cGU.allowed-value.c3RyaW5nOlBST0RVQ1RT.display_name": {
+          "source": "Products",
+          "message": "Produkty"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.Z2V0LXZpc2l0b3Itc3RhdGlzdGljcw.option.c291cmNlX3R5cGU.allowed-value.c3RyaW5nOlBST0RVQ1RT.short_desc": {
+          "source": "The page's products tab",
+          "message": "Karta produktów na stronie"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.Z2V0LXZpc2l0b3Itc3RhdGlzdGljcw.option.c291cmNlX3R5cGU.desc": {
+          "source": "Count visits to one section of the page only; when unset, visits to every section are counted together",
+          "message": "Zliczaj wizyty tylko w jednej sekcji strony; gdy nieustawione, wizyty we wszystkich sekcjach są zliczane łącznie"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.Z2V0LXZpc2l0b3Itc3RhdGlzdGljcw.option.c291cmNlX3R5cGU.display_name": {
+          "source": "Page Section",
+          "message": "Sekcja strony"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.Z2V0LXZpc2l0b3Itc3RhdGlzdGljcw.option.c291cmNlX3R5cGU.short_desc": {
+          "source": "Count visits to one section of the page only",
+          "message": "Zliczaj wizyty tylko w jednej sekcji strony"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.Z2V0LXZpc2l0b3Itc3RhdGlzdGljcw.option.c3RhcnQ.desc": {
+          "source": "The start of the period to count visits in (inclusive)",
+          "message": "Początek okresu zliczania wizyt (włącznie)"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.Z2V0LXZpc2l0b3Itc3RhdGlzdGljcw.option.c3RhcnQ.display_name": {
+          "source": "From",
+          "message": "Od"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.Z2V0LXZpc2l0b3Itc3RhdGlzdGljcw.option.c3RhcnQ.short_desc": {
+          "source": "The start of the period to count visits in",
+          "message": "Początek okresu zliczania wizyt"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.Z2V0LXZpc2l0b3Itc3RhdGlzdGljcw.short_desc": {
+          "source": "Break an organization's page visitors down by demographic",
+          "message": "Podziel odwiedzających stronę organizacji według danych demograficznych"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.bGlzdC1jb21tZW50cw.desc": {
+          "source": "Lists the comments on a post, activity or comment, newest first, with each one's text, author and timestamps.\n\nA comment made by a member who has not opted in to sharing their data arrives without its author **and without its text** — LinkedIn removes both together.",
+          "message": "Wyświetla listę komentarzy do posta, aktywności lub komentarza, od najnowszych, wraz z tekstem, autorem i znacznikami czasu każdego z nich.\n\nKomentarz dodany przez członka, który nie wyraził zgody na udostępnianie swoich danych, jest zwracany bez autora **i bez tekstu** — LinkedIn usuwa oba elementy jednocześnie."
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.bGlzdC1jb21tZW50cw.display_name": {
+          "source": "List Comments",
+          "message": "Pobierz listę komentarzy"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.bGlzdC1jb21tZW50cw.option.Y291bnQ.desc": {
+          "source": "The maximum number of items to return in one page (LinkedIn's maximum is `1000`).  Fewer items may come back even when more are available, so the presence of a `cursor` in the response — not a short page — is what says the listing continues",
+          "message": "Maksymalna liczba elementów do zwrócenia na jednej stronie (maksimum w LinkedIn to `1000`). Mniejsza liczba elementów może zostać zwrócona nawet wtedy, gdy dostępnych jest więcej, dlatego obecność `cursor` w odpowiedzi — a nie krótka strona — wskazuje, że lista jest kontynuowana"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.bGlzdC1jb21tZW50cw.option.Y291bnQ.display_name": {
+          "source": "Count",
+          "message": "Liczba"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.bGlzdC1jb21tZW50cw.option.Y291bnQ.short_desc": {
+          "source": "The maximum number of items to return",
+          "message": "Maksymalna liczba elementów do zwrócenia"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.bGlzdC1jb21tZW50cw.option.Y3Vyc29y.desc": {
+          "source": "The `cursor` returned by a previous call, to retrieve the next page.  Leave it unset to start at the beginning",
+          "message": "Wartość `cursor` zwrócona przez poprzednie wywołanie, aby pobrać następną stronę. Pozostaw nieustawione, aby zacząć od początku"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.bGlzdC1jb21tZW50cw.option.Y3Vyc29y.display_name": {
+          "source": "Cursor",
+          "message": "Kursor"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.bGlzdC1jb21tZW50cw.option.Y3Vyc29y.short_desc": {
+          "source": "The cursor from a previous call, to continue the listing",
+          "message": "Kursor z poprzedniego wywołania, aby kontynuować listę"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.bGlzdC1jb21tZW50cw.option.ZW50aXR5.desc": {
+          "source": "The URN of the content to read engagement for: a post (`urn:li:share:...`, `urn:li:ugcPost:...`), an activity (`urn:li:activity:...`) or a comment (`urn:li:comment:(...)`).  The **List Posts** action returns post URNs in this form",
+          "message": "URN treści, dla której ma zostać odczytane zaangażowanie: posta (`urn:li:share:...`, `urn:li:ugcPost:...`), aktywności (`urn:li:activity:...`) lub komentarza (`urn:li:comment:(...)`). Akcja **List Posts** zwraca identyfikatory URN postów w tym formacie"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.bGlzdC1jb21tZW50cw.option.ZW50aXR5.display_name": {
+          "source": "Content URN",
+          "message": "URN treści"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.bGlzdC1jb21tZW50cw.option.ZW50aXR5.short_desc": {
+          "source": "The URN of the post, comment or activity",
+          "message": "URN posta, komentarza lub aktywności"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.bGlzdC1jb21tZW50cw.short_desc": {
+          "source": "List the comments on a post or comment",
+          "message": "Wyświetl listę komentarzy do posta lub komentarza"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.bGlzdC1mb2xsb3dlcnM.desc": {
+          "source": "Lists who follows an organization's page — members or other pages, chosen with `edge_type` — and when each follow last changed.\n\nA follower who has not opted in to sharing their data arrives with only a timestamp; that setting is off by default, so expect many such entries.",
+          "message": "Wyświetla listę podmiotów obserwujących stronę organizacji — członków lub inne strony, wybranych za pomocą `edge_type` — oraz czas ostatniej zmiany każdej obserwacji.\n\nObserwujący, który nie wyraził zgody na udostępnianie swoich danych, jest zwracany tylko ze znacznikiem czasu; to ustawienie jest domyślnie wyłączone, więc należy spodziewać się wielu takich wpisów."
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.bGlzdC1mb2xsb3dlcnM.display_name": {
+          "source": "List Followers",
+          "message": "Wyświetl listę obserwujących"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.bGlzdC1mb2xsb3dlcnM.option.Y291bnQ.desc": {
+          "source": "The maximum number of items to return in one page (LinkedIn's maximum is `1000`).  Fewer items may come back even when more are available, so the presence of a `cursor` in the response — not a short page — is what says the listing continues",
+          "message": "Maksymalna liczba elementów do zwrócenia na jednej stronie (maksimum w LinkedIn to `1000`). Mniejsza liczba elementów może zostać zwrócona nawet wtedy, gdy dostępnych jest więcej, dlatego obecność `cursor` w odpowiedzi — a nie krótka strona — wskazuje, że lista jest kontynuowana"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.bGlzdC1mb2xsb3dlcnM.option.Y291bnQ.display_name": {
+          "source": "Count",
+          "message": "Liczba"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.bGlzdC1mb2xsb3dlcnM.option.Y291bnQ.short_desc": {
+          "source": "The maximum number of items to return",
+          "message": "Maksymalna liczba elementów do zwrócenia"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.bGlzdC1mb2xsb3dlcnM.option.Y3Vyc29y.desc": {
+          "source": "The `cursor` returned by a previous call, to retrieve the next page.  Leave it unset to start at the beginning",
+          "message": "Wartość `cursor` zwrócona przez poprzednie wywołanie, aby pobrać następną stronę. Pozostaw nieustawione, aby zacząć od początku"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.bGlzdC1mb2xsb3dlcnM.option.Y3Vyc29y.display_name": {
+          "source": "Cursor",
+          "message": "Kursor"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.bGlzdC1mb2xsb3dlcnM.option.Y3Vyc29y.short_desc": {
+          "source": "The cursor from a previous call, to continue the listing",
+          "message": "Kursor z poprzedniego wywołania, aby kontynuować listę"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.bGlzdC1mb2xsb3dlcnM.option.ZWRnZV90eXBl.allowed-value.c3RyaW5nOk1FTUJFUl9GT0xMT1dTX09SR0FOSVpBVElPTkFMX1BBR0U.desc": {
+          "source": "Members who follow the page",
+          "message": "Członkowie obserwujący stronę"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.bGlzdC1mb2xsb3dlcnM.option.ZWRnZV90eXBl.allowed-value.c3RyaW5nOk1FTUJFUl9GT0xMT1dTX09SR0FOSVpBVElPTkFMX1BBR0U.display_name": {
+          "source": "Members",
+          "message": "Członkowie"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.bGlzdC1mb2xsb3dlcnM.option.ZWRnZV90eXBl.allowed-value.c3RyaW5nOk1FTUJFUl9GT0xMT1dTX09SR0FOSVpBVElPTkFMX1BBR0U.short_desc": {
+          "source": "Members who follow the page",
+          "message": "Członkowie obserwujący stronę"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.bGlzdC1mb2xsb3dlcnM.option.ZWRnZV90eXBl.allowed-value.c3RyaW5nOk9SR0FOSVpBVElPTkFMX1BBR0VfRk9MTE9XU19PUkdBTklaQVRJT05BTF9QQUdF.desc": {
+          "source": "Other organizational pages that follow the page",
+          "message": "Inne strony organizacji obserwujące tę stronę"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.bGlzdC1mb2xsb3dlcnM.option.ZWRnZV90eXBl.allowed-value.c3RyaW5nOk9SR0FOSVpBVElPTkFMX1BBR0VfRk9MTE9XU19PUkdBTklaQVRJT05BTF9QQUdF.display_name": {
+          "source": "Organizations",
+          "message": "Organizacje"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.bGlzdC1mb2xsb3dlcnM.option.ZWRnZV90eXBl.allowed-value.c3RyaW5nOk9SR0FOSVpBVElPTkFMX1BBR0VfRk9MTE9XU19PUkdBTklaQVRJT05BTF9QQUdF.short_desc": {
+          "source": "Other organizational pages that follow the page",
+          "message": "Inne strony organizacji obserwujące tę stronę"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.bGlzdC1mb2xsb3dlcnM.option.ZWRnZV90eXBl.desc": {
+          "source": "Whether to list members or other organizational pages as followers",
+          "message": "Określa, czy jako obserwujących wyświetlać członków, czy inne strony organizacji"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.bGlzdC1mb2xsb3dlcnM.option.ZWRnZV90eXBl.display_name": {
+          "source": "Follower Type",
+          "message": "Typ obserwującego"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.bGlzdC1mb2xsb3dlcnM.option.ZWRnZV90eXBl.short_desc": {
+          "source": "Whether to list members or other pages",
+          "message": "Określa, czy wyświetlać członków, czy inne strony"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.bGlzdC1mb2xsb3dlcnM.option.b3JnYW5pemF0aW9u.desc": {
+          "source": "The organization whose data is read.  The list offers the organizations the authenticated member administers",
+          "message": "Organizacja, której dane są odczytywane. Lista zawiera organizacje, którymi zarządza uwierzytelniony użytkownik"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.bGlzdC1mb2xsb3dlcnM.option.b3JnYW5pemF0aW9u.display_name": {
+          "source": "Organization",
+          "message": "Organizacja"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.bGlzdC1mb2xsb3dlcnM.option.b3JnYW5pemF0aW9u.short_desc": {
+          "source": "The organization whose data is read",
+          "message": "Organizacja, której dane są odczytywane"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.bGlzdC1mb2xsb3dlcnM.short_desc": {
+          "source": "List the members and pages following an organization",
+          "message": "Wyświetl członków i strony obserwujące organizację"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.bGlzdC1mb2xsb3dpbmc.desc": {
+          "source": "Lists the organizational pages that an organization's own page follows.",
+          "message": "Wyświetla strony organizacji, które obserwuje strona danej organizacji."
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.bGlzdC1mb2xsb3dpbmc.display_name": {
+          "source": "List Following",
+          "message": "Wyświetl obserwowane"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.bGlzdC1mb2xsb3dpbmc.option.Y291bnQ.desc": {
+          "source": "The maximum number of items to return in one page (LinkedIn's maximum is `1000`).  Fewer items may come back even when more are available, so the presence of a `cursor` in the response — not a short page — is what says the listing continues",
+          "message": "Maksymalna liczba elementów do zwrócenia na jednej stronie (maksimum w LinkedIn to `1000`). Mniejsza liczba elementów może zostać zwrócona nawet wtedy, gdy dostępnych jest więcej, dlatego obecność `cursor` w odpowiedzi — a nie krótka strona — wskazuje, że lista jest kontynuowana"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.bGlzdC1mb2xsb3dpbmc.option.Y291bnQ.display_name": {
+          "source": "Count",
+          "message": "Liczba"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.bGlzdC1mb2xsb3dpbmc.option.Y291bnQ.short_desc": {
+          "source": "The maximum number of items to return",
+          "message": "Maksymalna liczba elementów do zwrócenia"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.bGlzdC1mb2xsb3dpbmc.option.Y3Vyc29y.desc": {
+          "source": "The `cursor` returned by a previous call, to retrieve the next page.  Leave it unset to start at the beginning",
+          "message": "Wartość `cursor` zwrócona przez poprzednie wywołanie, aby pobrać następną stronę. Pozostaw nieustawione, aby zacząć od początku"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.bGlzdC1mb2xsb3dpbmc.option.Y3Vyc29y.display_name": {
+          "source": "Cursor",
+          "message": "Kursor"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.bGlzdC1mb2xsb3dpbmc.option.Y3Vyc29y.short_desc": {
+          "source": "The cursor from a previous call, to continue the listing",
+          "message": "Kursor z poprzedniego wywołania, aby kontynuować listę"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.bGlzdC1mb2xsb3dpbmc.option.b3JnYW5pemF0aW9u.desc": {
+          "source": "The organization whose data is read.  The list offers the organizations the authenticated member administers",
+          "message": "Organizacja, której dane są odczytywane. Lista zawiera organizacje, którymi zarządza uwierzytelniony użytkownik"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.bGlzdC1mb2xsb3dpbmc.option.b3JnYW5pemF0aW9u.display_name": {
+          "source": "Organization",
+          "message": "Organizacja"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.bGlzdC1mb2xsb3dpbmc.option.b3JnYW5pemF0aW9u.short_desc": {
+          "source": "The organization whose data is read",
+          "message": "Organizacja, której dane są odczytywane"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.bGlzdC1mb2xsb3dpbmc.short_desc": {
+          "source": "List the pages an organization follows",
+          "message": "Wyświetl strony obserwowane przez organizację"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.bGlzdC1vcmdhbml6YXRpb25z.desc": {
+          "source": "Lists the organizations the authenticated member administers, with each one's name, description, logo, size, industries and page URL.\n\nThe `id` of an organization here is what every other action takes, and the `organizational_page` URN is what LinkedIn's analytics and follows APIs address.",
+          "message": "Wyświetla organizacje, którymi zarządza uwierzytelniony członek, wraz z nazwą, opisem, logo, wielkością, branżami i adresem URL strony każdej z nich.\n\nWartość `id` organizacji tutaj jest parametrem przyjmowanym przez wszystkie pozostałe akcje, a URN `organizational_page` jest adresem używanym przez API analityki i obserwacji LinkedIn."
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.bGlzdC1vcmdhbml6YXRpb25z.display_name": {
+          "source": "List Organizations",
+          "message": "Wyświetl listę organizacji"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.bGlzdC1vcmdhbml6YXRpb25z.short_desc": {
+          "source": "List the organizations the authenticated member administers",
+          "message": "Wyświetl organizacje, którymi zarządza uwierzytelniony członek"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.bGlzdC1wb3N0cw.desc": {
+          "source": "Lists the posts an organization has published, newest first.\n\nPass the `cursor` from a response back in the next call to continue the listing. A page can come back shorter than `count` even when more posts exist, so it is the **presence of a cursor**, not a full page, that says the listing continues.\n\nReading with the `AUTHOR` view context also returns drafts and scheduled posts; a scheduled post is the one with `scheduled_at` set.",
+          "message": "Wyświetla posty opublikowane przez organizację, od najnowszych.\n\nPrzekaż `cursor` z odpowiedzi w kolejnym wywołaniu, aby kontynuować listowanie. Strona może zawierać mniej elementów niż `count`, nawet jeśli istnieje więcej postów, więc to **obecność kursora**, a nie pełna strona, informuje o kontynuacji listy.\n\nOdczyt z kontekstem widoku `AUTHOR` zwraca również wersje robocze i zaplanowane posty; zaplanowany post to ten z ustawioną wartością `scheduled_at`."
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.bGlzdC1wb3N0cw.display_name": {
+          "source": "List Posts",
+          "message": "Wyświetl listę postów"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.bGlzdC1wb3N0cw.option.Y291bnQ.desc": {
+          "source": "The maximum number of items to return in one page (LinkedIn's maximum is `1000`).  Fewer items may come back even when more are available, so the presence of a `cursor` in the response — not a short page — is what says the listing continues",
+          "message": "Maksymalna liczba elementów do zwrócenia na jednej stronie (maksimum w LinkedIn to `1000`). Mniejsza liczba elementów może zostać zwrócona nawet wtedy, gdy dostępnych jest więcej, dlatego obecność `cursor` w odpowiedzi — a nie krótka strona — wskazuje, że lista jest kontynuowana"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.bGlzdC1wb3N0cw.option.Y291bnQ.display_name": {
+          "source": "Count",
+          "message": "Liczba"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.bGlzdC1wb3N0cw.option.Y291bnQ.short_desc": {
+          "source": "The maximum number of items to return",
+          "message": "Maksymalna liczba elementów do zwrócenia"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.bGlzdC1wb3N0cw.option.Y3Vyc29y.desc": {
+          "source": "The `cursor` returned by a previous call, to retrieve the next page.  Leave it unset to start at the beginning",
+          "message": "Wartość `cursor` zwrócona przez poprzednie wywołanie, aby pobrać następną stronę. Pozostaw nieustawione, aby zacząć od początku"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.bGlzdC1wb3N0cw.option.Y3Vyc29y.display_name": {
+          "source": "Cursor",
+          "message": "Kursor"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.bGlzdC1wb3N0cw.option.Y3Vyc29y.short_desc": {
+          "source": "The cursor from a previous call, to continue the listing",
+          "message": "Kursor z poprzedniego wywołania, aby kontynuować listę"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.bGlzdC1wb3N0cw.option.b3JnYW5pemF0aW9u.desc": {
+          "source": "The organization whose data is read.  The list offers the organizations the authenticated member administers",
+          "message": "Organizacja, której dane są odczytywane. Lista zawiera organizacje, którymi zarządza uwierzytelniony użytkownik"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.bGlzdC1wb3N0cw.option.b3JnYW5pemF0aW9u.display_name": {
+          "source": "Organization",
+          "message": "Organizacja"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.bGlzdC1wb3N0cw.option.b3JnYW5pemF0aW9u.short_desc": {
+          "source": "The organization whose data is read",
+          "message": "Organizacja, której dane są odczytywane"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.bGlzdC1wb3N0cw.option.dmlld19jb250ZXh0.allowed-value.c3RyaW5nOkFVVEhPUg.desc": {
+          "source": "The latest version, which may be a draft or a scheduled post; a scheduled post is identified by its `scheduled_at` field being set",
+          "message": "Najnowsza wersja, która może być wersją roboczą lub zaplanowanym postem; zaplanowany post jest identyfikowany przez ustawione pole `scheduled_at`"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.bGlzdC1wb3N0cw.option.dmlld19jb250ZXh0.allowed-value.c3RyaW5nOkFVVEhPUg.display_name": {
+          "source": "Author",
+          "message": "Autor"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.bGlzdC1wb3N0cw.option.dmlld19jb250ZXh0.allowed-value.c3RyaW5nOkFVVEhPUg.short_desc": {
+          "source": "The latest version, including drafts and scheduled posts",
+          "message": "Najnowsza wersja, w tym wersje robocze i zaplanowane posty"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.bGlzdC1wb3N0cw.option.dmlld19jb250ZXh0.allowed-value.c3RyaW5nOlJFQURFUg.desc": {
+          "source": "The published version visible to a general audience",
+          "message": "Opublikowana wersja widoczna dla ogółu odbiorców"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.bGlzdC1wb3N0cw.option.dmlld19jb250ZXh0.allowed-value.c3RyaW5nOlJFQURFUg.display_name": {
+          "source": "Reader",
+          "message": "Czytelnik"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.bGlzdC1wb3N0cw.option.dmlld19jb250ZXh0.allowed-value.c3RyaW5nOlJFQURFUg.short_desc": {
+          "source": "The published version visible to a general audience",
+          "message": "Opublikowana wersja widoczna dla ogółu odbiorców"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.bGlzdC1wb3N0cw.option.dmlld19jb250ZXh0.desc": {
+          "source": "Whether to read the posts as their author or as a reader.  `AUTHOR` also returns drafts and scheduled posts, which carry a `scheduled_at` value",
+          "message": "Określa, czy czytać posty jako ich autor, czy jako czytelnik. `AUTHOR` zwraca również wersje robocze i zaplanowane posty, które zawierają wartość `scheduled_at`"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.bGlzdC1wb3N0cw.option.dmlld19jb250ZXh0.display_name": {
+          "source": "View Context",
+          "message": "Kontekst widoku"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.bGlzdC1wb3N0cw.option.dmlld19jb250ZXh0.short_desc": {
+          "source": "Whether to read the posts as their author or as a reader",
+          "message": "Czy czytać posty jako ich autor, czy jako czytelnik"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.bGlzdC1wb3N0cw.short_desc": {
+          "source": "List the posts an organization has published",
+          "message": "Wyświetl posty opublikowane przez organizację"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.bGlzdC1yZWFjdGlvbnM.desc": {
+          "source": "Lists the individual reactions on a post, activity or comment, newest first, with which reaction was given and when.\n\n**This list is normally shorter than the true reaction count**, and often much shorter. LinkedIn returns an individual reaction only when the reactor is the organization itself, or a member who has explicitly consented to sharing their data through the Data Portability APIs — and that consent is off by default. A post with eight reactions can therefore yield a single entry here.\n\n**Use Get Engagement Summary for counts.** Its `reaction_count` is the authoritative total and is not reduced by consent; this action is for identifying *who* reacted, as far as LinkedIn will say.",
+          "message": "Wyświetla pojedyncze reakcje na post, aktywność lub komentarz, od najnowszych, wraz z informacją, jaka reakcja została dodana i kiedy.\n\n**Ta lista jest zazwyczaj krótsza niż rzeczywista liczba reakcji**, a często znacznie krótsza. LinkedIn zwraca pojedynczą reakcję tylko wtedy, gdy reagującym jest sama organizacja lub członek, który wyraźnie zgodził się na udostępnianie swoich danych za pośrednictwem API Data Portability — a ta zgoda jest domyślnie wyłączona. Post z ośmioma reakcjami może zatem zwrócić tutaj tylko jeden wpis.\n\n**Użyj Get Engagement Summary, aby uzyskać łączne liczby.** Wartość `reaction_count` w tej akcji jest miarodajną sumą i nie jest pomniejszana przez brak zgody; ta akcja służy do identyfikacji *kto* zareagował, na tyle, na ile ujawnia to LinkedIn."
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.bGlzdC1yZWFjdGlvbnM.display_name": {
+          "source": "List Reactions",
+          "message": "Wyświetl reakcje"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.bGlzdC1yZWFjdGlvbnM.option.Y291bnQ.desc": {
+          "source": "The maximum number of items to return in one page (LinkedIn's maximum is `1000`).  Fewer items may come back even when more are available, so the presence of a `cursor` in the response — not a short page — is what says the listing continues",
+          "message": "Maksymalna liczba elementów do zwrócenia na jednej stronie (maksimum w LinkedIn to `1000`). Mniejsza liczba elementów może zostać zwrócona nawet wtedy, gdy dostępnych jest więcej, dlatego obecność `cursor` w odpowiedzi — a nie krótka strona — wskazuje, że lista jest kontynuowana"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.bGlzdC1yZWFjdGlvbnM.option.Y291bnQ.display_name": {
+          "source": "Count",
+          "message": "Liczba"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.bGlzdC1yZWFjdGlvbnM.option.Y291bnQ.short_desc": {
+          "source": "The maximum number of items to return",
+          "message": "Maksymalna liczba elementów do zwrócenia"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.bGlzdC1yZWFjdGlvbnM.option.Y3Vyc29y.desc": {
+          "source": "The `cursor` returned by a previous call, to retrieve the next page.  Leave it unset to start at the beginning",
+          "message": "Wartość `cursor` zwrócona przez poprzednie wywołanie, aby pobrać następną stronę. Pozostaw nieustawione, aby zacząć od początku"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.bGlzdC1yZWFjdGlvbnM.option.Y3Vyc29y.display_name": {
+          "source": "Cursor",
+          "message": "Kursor"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.bGlzdC1yZWFjdGlvbnM.option.Y3Vyc29y.short_desc": {
+          "source": "The cursor from a previous call, to continue the listing",
+          "message": "Kursor z poprzedniego wywołania, aby kontynuować listę"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.bGlzdC1yZWFjdGlvbnM.option.ZW50aXR5.desc": {
+          "source": "The URN of the content to read engagement for: a post (`urn:li:share:...`, `urn:li:ugcPost:...`), an activity (`urn:li:activity:...`) or a comment (`urn:li:comment:(...)`).  The **List Posts** action returns post URNs in this form",
+          "message": "URN treści, dla której ma zostać odczytane zaangażowanie: posta (`urn:li:share:...`, `urn:li:ugcPost:...`), aktywności (`urn:li:activity:...`) lub komentarza (`urn:li:comment:(...)`). Akcja **List Posts** zwraca identyfikatory URN postów w tym formacie"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.bGlzdC1yZWFjdGlvbnM.option.ZW50aXR5.display_name": {
+          "source": "Content URN",
+          "message": "URN treści"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.bGlzdC1yZWFjdGlvbnM.option.ZW50aXR5.short_desc": {
+          "source": "The URN of the post, comment or activity",
+          "message": "URN posta, komentarza lub aktywności"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.bGlzdC1yZWFjdGlvbnM.short_desc": {
+          "source": "List the reactions on a post or comment",
+          "message": "Wyświetl reakcje na post lub komentarz"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.bWFrZS1hcGktY2FsbA.desc": {
+          "source": "Make a custom HTTP / REST API call to **LinkedIn Organizations** using the configured connection's authentication.\n\nSpecify the HTTP method, the URI path (relative to the connection's API base URL), optional query parameters, headers, and request body. The response is returned as a hash containing the status code, response headers, and response body.\n\nUse this action for endpoints that are not yet exposed as first-class actions on this app.",
+          "message": "Wykonaj niestandardowe wywołanie HTTP / REST API do **LinkedIn Organizations** przy użyciu uwierzytelniania skonfigurowanego połączenia.\n\nOkreśl metodę HTTP, ścieżkę URI (względną wobec bazowego adresu URL API połączenia), opcjonalne parametry zapytania, nagłówki oraz treść żądania. Odpowiedź jest zwracana jako asocjacja zawierająca kod statusu, nagłówki odpowiedzi i treść odpowiedzi.\n\nUżyj tej akcji dla punktów końcowych, które nie są jeszcze udostępnione jako natywne akcje w tej aplikacji."
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.bWFrZS1hcGktY2FsbA.display_name": {
+          "source": "Make an API call",
+          "message": "Wykonaj wywołanie API"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.desc": {
+          "source": "The request body. The effective type depends on `body_type`: JSON/form/YAML expect a hash, XML/text expect a string, multipart expects a file structure, binary expects raw bytes.",
+          "message": "Ciało żądania. Rzeczywisty typ zależy od `body_type`: JSON/form/YAML oczekują hasza, XML/text oczekują ciągu znaków, multipart oczekuje struktury pliku, binary oczekuje surowych bajtów."
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.display_name": {
+          "source": "Body",
+          "message": "Treść"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.short_desc": {
+          "source": "The request body",
+          "message": "Ciało żądania"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.desc": {
+          "source": "Upload a file using `multipart/form-data`. The body must be a @ref DataProvider::FileDataType \"FileDataType\" structure (filename + content + mime_type). The framework builds the multipart envelope and sets the boundary header.",
+          "message": "Przesyłanie pliku za pomocą `multipart/form-data`. Ciało żądania musi być strukturą @ref DataProvider::FileDataType \"FileDataType\" (filename + content + mime_type). Szablon buduje kopertę multipart i ustawia nagłówek boundary."
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.display_name": {
+          "source": "Multipart Form",
+          "message": "Formularz Multipart"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.short_desc": {
+          "source": "Upload a file using multipart/form-data",
+          "message": "Przesyłanie pliku za pomocą multipart/form-data"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.desc": {
+          "source": "Pass the body to the REST client unchanged; the client decides serialization based on its configured `data` option and the value type",
+          "message": "Przekaż ciało żądania do klienta REST bez zmian; klient decyduje o serializacji na podstawie skonfigurowanej opcji `data` i typu wartości"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.display_name": {
+          "source": "Auto",
+          "message": "Auto"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.short_desc": {
+          "source": "Pass-through; use connection serialization and let the REST client decide",
+          "message": "Przekazywanie bez zmian; użyj serializacji połączenia i pozwól klientowi REST zadecydować"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.desc": {
+          "source": "Send the body as raw bytes. The body must be a binary value. Sets `Content-Type: application/octet-stream` unless overridden by `hdr`.",
+          "message": "Wyślij ciało jako surowe bajty. Ciało musi być wartością binarną. Ustawia `Content-Type: application/octet-stream`, chyba że zostanie nadpisane przez `hdr`."
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.display_name": {
+          "source": "Raw Binary",
+          "message": "Surowe dane binarne"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.short_desc": {
+          "source": "Send body as raw bytes",
+          "message": "Wyślij ciało jako surowe bajty"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.desc": {
+          "source": "Serialize a hash of form fields as `application/x-www-form-urlencoded`. The body must be a hash whose values are scalars (strings/numbers/booleans).",
+          "message": "Serializuj hasz pól formularza jako `application/x-www-form-urlencoded`. Ciało musi być haszem, którego wartości są skalarami (ciągi znaków/liczby/wartości logiczne)."
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.display_name": {
+          "source": "Form (URL-encoded)",
+          "message": "Formularz (zakodowany w URL)"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.short_desc": {
+          "source": "Serialize body as application/x-www-form-urlencoded form fields",
+          "message": "Serializuj ciało jako pola formularza application/x-www-form-urlencoded"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.desc": {
+          "source": "Serialize the body as JSON; sets `Content-Type: application/json`. The body should be a hash, list, or scalar value.",
+          "message": "Serializuj ciało jako JSON; ustawia `Content-Type: application/json`. Ciało powinno być haszem, listą lub wartością skalarną."
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.display_name": {
+          "source": "JSON",
+          "message": "JSON"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.short_desc": {
+          "source": "Serialize body as JSON",
+          "message": "Serializuj ciało jako JSON"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.desc": {
+          "source": "Send the body as plain text. The body must be a string. Sets `Content-Type: text/plain`.",
+          "message": "Wyślij ciało jako zwykły tekst. Ciało musi być ciągiem znaków. Ustawia `Content-Type: text/plain`."
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.display_name": {
+          "source": "Plain Text",
+          "message": "Czysty tekst"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.short_desc": {
+          "source": "Send body as text/plain",
+          "message": "Wyślij ciało jako text/plain"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.desc": {
+          "source": "Send the body as XML. If the body is a hash it is serialized to XML; if it is a string it is sent verbatim. Sets `Content-Type: application/xml`.",
+          "message": "Wyślij ciało jako XML. Jeśli ciało jest haszem, jest serializowane do XML; jeśli jest ciągiem znaków, jest wysyłane bez zmian. Ustawia `Content-Type: application/xml`."
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.display_name": {
+          "source": "XML",
+          "message": "XML"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.short_desc": {
+          "source": "Send body as XML",
+          "message": "Wyślij ciało jako XML"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.desc": {
+          "source": "Send the body as YAML. If the body is a hash it is serialized to YAML; if it is a string it is sent verbatim. Sets `Content-Type: application/x-yaml`.",
+          "message": "Wyślij ciało jako YAML. Jeśli ciało jest haszem, jest serializowane do YAML; jeśli jest ciągiem znaków, jest wysyłane bez zmian. Ustawia `Content-Type: application/x-yaml`."
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.display_name": {
+          "source": "YAML",
+          "message": "YAML"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.short_desc": {
+          "source": "Send body as YAML",
+          "message": "Wyślij ciało jako YAML"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.desc": {
+          "source": "Selects the body serialization mode and the corresponding `Content-Type` header. Changing this field reshapes the `body` editor - selecting JSON exposes a JSON editor, selecting Multipart Form exposes a file picker, and so on.",
+          "message": "Wybiera tryb serializacji ciała i odpowiadający mu nagłówek `Content-Type`. Zmiana tego pola zmienia edytor `body` - wybór JSON udostępnia edytor JSON, wybór Multipart Form udostępnia okno wyboru pliku i tak dalej."
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.display_name": {
+          "source": "Body Type",
+          "message": "Typ ciała"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.short_desc": {
+          "source": "How the body is serialized and what Content-Type is sent",
+          "message": "Sposób serializacji ciała i wysyłany Content-Type"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.desc": {
+          "source": "If `True`, non-2xx HTTP responses return as the normal response hash (with the actual status code) instead of raising `REST-RESPONSE-ERROR`. Useful for handling 4xx/5xx as data - e.g. checking whether a resource exists. Overrides the connection's `error_passthru` setting for this call only.",
+          "message": "Jeśli `True`, odpowiedzi HTTP inne niż 2xx są zwracane jako zwykły hasz odpowiedzi (z rzeczywistym kodem stanu) zamiast zgłaszania `REST-RESPONSE-ERROR`. Przydatne do obsługi 4xx/5xx jako danych - np. do sprawdzania, czy zasób istnieje. Nadpisuje ustawienie połączenia `error_passthru` tylko dla tego wywołania."
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.display_name": {
+          "source": "Return Errors as Data",
+          "message": "Zwracaj błędy jako dane"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.short_desc": {
+          "source": "Return non-2xx responses normally instead of throwing",
+          "message": "Zwracaj odpowiedzi inne niż 2xx normalnie zamiast zgłaszać błąd"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.desc": {
+          "source": "Optional list of HTTP status codes treated as success. If set and the response status is not in this list, the action throws `REST-STATUS-ERROR`. When unset, the REST client's default behavior applies (typically: 2xx is success, non-2xx throws).",
+          "message": "Opcjonalna lista kodów stanu HTTP traktowanych jako sukces. Jeśli ustawiono, a kod stanu odpowiedzi nie znajduje się na tej liście, akcja zgłasza `REST-STATUS-ERROR`. Gdy pole nie jest ustawione, stosowane jest domyślne zachowanie klienta REST (zwykle: 2xx to sukces, inne niż 2xx zgłaszają błąd)."
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.display_name": {
+          "source": "Expected Status Codes",
+          "message": "Oczekiwane kody stanu"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.short_desc": {
+          "source": "Response status codes treated as success",
+          "message": "Kody stanu odpowiedzi traktowane jako sukces"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.bWFrZS1hcGktY2FsbA.option.aGRy.desc": {
+          "source": "Hash of custom headers added to the request. These override any default headers set by `body_type` (e.g. supplying `Content-Type` here wins over the body-type default).",
+          "message": "Hasz niestandardowych nagłówków dodawanych do żądania. Nadpisują one wszelkie domyślne nagłówki ustawione przez `body_type` (np. podanie tutaj `Content-Type` zastępuje domyślną wartość dla typu ciała)."
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.bWFrZS1hcGktY2FsbA.option.aGRy.display_name": {
+          "source": "Custom Headers",
+          "message": "Niestandardowe nagłówki"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.bWFrZS1hcGktY2FsbA.option.aGRy.short_desc": {
+          "source": "Extra request headers",
+          "message": "Dodatkowe nagłówki żądania"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.desc": {
+          "source": "If `True`, the response hash includes a `debug` sub-hash containing the request method/URL/headers (with sensitive values redacted), request and response sizes, and round-trip duration. Useful when investigating slow or failing calls. Off by default to keep responses lean.",
+          "message": "Jeśli `True`, hasz odpowiedzi zawiera pod-hasz `debug` zawierający metodę/URL/nagłówki żądania (z zredagowanymi poufnymi wartościami), rozmiary żądania i odpowiedzi oraz czas trwania w obie strony. Przydatne podczas badania wolnych lub nieudanych wywołań. Domyślnie wyłączone, aby odpowiedzi były lekkie."
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.display_name": {
+          "source": "Include Debug Info",
+          "message": "Dołącz informacje diagnostyczne"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.short_desc": {
+          "source": "Include request/timing/size debug info in the response",
+          "message": "Dołącz informacje diagnostyczne dotyczące żądania/czasu/rozmiaru w odpowiedzi"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.desc": {
+          "source": "HTTP `OPTIONS`",
+          "message": "HTTP `OPTIONS`"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.display_name": {
+          "source": "OPTIONS",
+          "message": "OPTIONS"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.short_desc": {
+          "source": "HTTP OPTIONS",
+          "message": "HTTP OPTIONS"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.desc": {
+          "source": "HTTP `DELETE`",
+          "message": "HTTP `DELETE`"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.display_name": {
+          "source": "DELETE",
+          "message": "DELETE"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.short_desc": {
+          "source": "HTTP DELETE",
+          "message": "HTTP DELETE"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.desc": {
+          "source": "HTTP `GET`",
+          "message": "HTTP `GET`"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.display_name": {
+          "source": "GET",
+          "message": "GET"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.short_desc": {
+          "source": "HTTP GET",
+          "message": "HTTP GET"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.desc": {
+          "source": "HTTP `HEAD`",
+          "message": "HTTP `HEAD`"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.display_name": {
+          "source": "HEAD",
+          "message": "HEAD"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.short_desc": {
+          "source": "HTTP HEAD",
+          "message": "HTTP HEAD"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.desc": {
+          "source": "HTTP `PATCH`",
+          "message": "HTTP `PATCH`"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.display_name": {
+          "source": "PATCH",
+          "message": "PATCH"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.short_desc": {
+          "source": "HTTP PATCH",
+          "message": "HTTP PATCH"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.desc": {
+          "source": "HTTP `POST`",
+          "message": "HTTP `POST`"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.display_name": {
+          "source": "POST",
+          "message": "POST"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.short_desc": {
+          "source": "HTTP POST",
+          "message": "HTTP POST"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.desc": {
+          "source": "HTTP `PUT`",
+          "message": "HTTP `PUT`"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.display_name": {
+          "source": "PUT",
+          "message": "PUT"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.short_desc": {
+          "source": "HTTP PUT",
+          "message": "HTTP PUT"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.desc": {
+          "source": "HTTP `TRACE`",
+          "message": "HTTP `TRACE`"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.display_name": {
+          "source": "TRACE",
+          "message": "TRACE"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.short_desc": {
+          "source": "HTTP TRACE",
+          "message": "HTTP TRACE"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "Metoda HTTP do użycia w żądaniu"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.display_name": {
+          "source": "HTTP Method",
+          "message": "Metoda HTTP"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.short_desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "Metoda HTTP do użycia w żądaniu"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain `{name}` placeholders that are replaced from `path_vars`. Example: `/users/{id}/comments`.",
+          "message": "Ścieżka URI względna wobec bazowego URL API połączenia. Może zawierać symbole zastępcze `{name}`, które zostaną zastąpione z `path_vars`. Przykład: `/users/{id}/comments`."
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.display_name": {
+          "source": "URI Path",
+          "message": "Ścieżka URI"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.short_desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain '{name}' placeholders that are replaced from 'path_vars'. Example: '/users/{id}/comments'",
+          "message": "Ścieżka URI względna wobec bazowego adresu URL API połączenia. Może zawierać symbole zastępcze '{name}', które są zastępowane z 'path_vars'. Przykład: '/users/{id}/comments'"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.desc": {
+          "source": "Hash of values substituted into `{name}` placeholders in the URI path. Example: with `path = /users/{id}` and `path_vars = {id: 123}` the framework sends `/users/123`. Values are URL-encoded.",
+          "message": "Hash wartości podstawianych w miejsce symboli zastępczych `{name}` w ścieżce URI. Przykład: dla `path = /users/{id}` i `path_vars = {id: 123}` framework wysyła `/users/123`. Wartości są kodowane w formacie URL."
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.display_name": {
+          "source": "Path Variables",
+          "message": "Zmienne ścieżki"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.short_desc": {
+          "source": "Values for {name} placeholders in path",
+          "message": "Wartości dla symboli zastępczych {name} w ścieżce"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.desc": {
+          "source": "Hash of query string parameters to append to the URI path. Values are URL-encoded; list values are joined with `,`.",
+          "message": "Hash parametrów zapytania do dołączenia do ścieżki URI. Wartości są kodowane w formacie URL; wartości list są łączone za pomocą `,`."
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.display_name": {
+          "source": "Query Arguments",
+          "message": "Argumenty zapytania"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.short_desc": {
+          "source": "Query string parameters",
+          "message": "Parametry zapytania"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.bWFrZS1hcGktY2FsbA.short_desc": {
+          "source": "Make a custom API call to LinkedIn Organizations",
+          "message": "Wykonaj niestandardowe wywołanie API do LinkedIn Organizations"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.bmV3LXBvc3Q.desc": {
+          "source": "Fires when an organization publishes a post, delivering the post itself.\n\nTurning the trigger on establishes a baseline without replaying the organization's history; only posts published afterwards are delivered, oldest first.\n\nLinkedIn rate-limits this API to one request per 60 seconds and its data can be up to 48 hours behind, so a post is not delivered the moment it appears on LinkedIn. Polling faster does not change that.",
+          "message": "Uruchamia się, gdy organizacja publikuje post, dostarczając sam post.\n\nWłączenie wyzwalacza ustala stan początkowy bez odtwarzania historii organizacji; dostarczane są tylko posty opublikowane później, od najstarszych.\n\nLinkedIn ogranicza to API do jednego żądania na 60 sekund, a jego dane mogą mieć do 48 godzin opóźnienia, więc post nie jest dostarczany w momencie pojawienia się na LinkedIn. Częstsze odpytywanie tego nie zmienia."
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.bmV3LXBvc3Q.display_name": {
+          "source": "New Post",
+          "message": "Nowy post"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.bmV3LXBvc3Q.option.b3JnYW5pemF0aW9u.desc": {
+          "source": "The organization whose data is read.  The list offers the organizations the authenticated member administers",
+          "message": "Organizacja, której dane są odczytywane. Lista zawiera organizacje, którymi zarządza uwierzytelniony użytkownik"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.bmV3LXBvc3Q.option.b3JnYW5pemF0aW9u.display_name": {
+          "source": "Organization",
+          "message": "Organizacja"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.bmV3LXBvc3Q.option.b3JnYW5pemF0aW9u.short_desc": {
+          "source": "The organization whose data is read",
+          "message": "Organizacja, której dane są odczytywane"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.bmV3LXBvc3Q.option.cG9sbF9pbnRlcnZhbA.desc": {
+          "source": "Polling interval in seconds (minimum `60`, default `900`).\n\nLinkedIn rate-limits the feed API to **one request per 60 seconds** and serves data that can be up to 48 hours old, so polling faster than the minimum cannot see anything sooner and earns HTTP 429s.",
+          "message": "Interwał odpytywania w sekundach (minimum `60`, domyślnie `900`).\n\nLinkedIn ogranicza API kanału do **jednego żądania na 60 sekund** i udostępnia dane, które mogą mieć do 48 godzin, więc odpytywanie częstsze niż minimalne nie pozwoli zobaczyć niczego wcześniej i spowoduje błędy HTTP 429."
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.bmV3LXBvc3Q.option.cG9sbF9pbnRlcnZhbA.display_name": {
+          "source": "Poll Interval",
+          "message": "Interwał skanowania"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.bmV3LXBvc3Q.option.cG9sbF9pbnRlcnZhbA.short_desc": {
+          "source": "Polling interval in seconds",
+          "message": "Interwał odpytywania w sekundach"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.action.bmV3LXBvc3Q.short_desc": {
+          "source": "Fires when an organization publishes a post",
+          "message": "Uruchamia się, gdy organizacja publikuje post"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.desc": {
+          "source": "Provides access to a [LinkedIn](https://www.linkedin.com) Page's own data through the [Pages Data Portability APIs](https://learn.microsoft.com/en-us/linkedin/dma/pages-data-portability/pages-data-portability-overview), which LinkedIn provides so that Page administrators can retrieve the data their organization has generated on the platform.\n\n**Common use cases**:\n- **Content**: list the posts a Page has published and read any one of them, including drafts and scheduled posts\n- **Engagement**: read the comments and reactions on a post, or a single summary of every reaction and comment count on it\n- **Audience**: list the members and pages that follow a Page, and the pages it follows\n- **Analytics**: break followers or page visitors down by industry, seniority, job function, company size, country, region, or employee relationship\n- **Triggers**: run a flow whenever the Page publishes a post\n\nThis application needs a LinkedIn developer application **approved for the Pages Data Portability API product**, which grants the `r_dma_admin_pages_content` permission. That approval is requested separately from the Page's *Products* tab and takes several business days.\n\n**Two limits are worth designing around**: LinkedIn rate-limits the feed and follows APIs to **one request per 60 seconds**, and the data they return can be up to **48 hours old**. Analytics counts are also deliberately perturbed and floored to zero below an undisclosed threshold, to protect member privacy.\n\nMember identities are shown only where the member has opted in to sharing their data through these APIs — that setting is off by default, so many followers, comments and reactions arrive without an identity attached.\n\nTo publish content as the signed-in member, use the **LinkedIn** application instead.\n\nLinkedIn is a trademark of LinkedIn Corporation",
+          "message": "Zapewnia dostęp do własnych danych strony [LinkedIn](https://www.linkedin.com) za pośrednictwem [Pages Data Portability APIs](https://learn.microsoft.com/en-us/linkedin/dma/pages-data-portability/pages-data-portability-overview), które LinkedIn udostępnia, aby administratorzy stron mogli pobierać dane wygenerowane przez ich organizację na platformie.\n\n**Typowe przypadki użycia**:\n- **Treść**: wyświetlanie postów opublikowanych przez stronę i odczytywanie dowolnego z nich, w tym wersji roboczych i zaplanowanych postów\n- **Zaangażowanie**: odczytywanie komentarzy i reakcji na post lub pojedynczego podsumowania liczby wszystkich reakcji i komentarzy\n- **Odbiorcy**: wyświetlanie członków i stron obserwujących daną stronę oraz stron przez nią obserwowanych\n- **Analityka**: podział obserwujących lub odwiedzających stronę według branży, poziomu stanowiska, funkcji zawodowej, wielkości firmy, kraju, regionu lub relacji pracowniczej\n- **Wyzwalacze**: uruchamianie przepływu za każdym razem, gdy strona opublikuje post\n\nTa aplikacja wymaga aplikacji deweloperskiej LinkedIn **zatwierdzonej dla produktu Pages Data Portability API**, który przyznaje uprawnienie `r_dma_admin_pages_content`. O to zatwierdzenie wnioskuje się osobno w zakładce *Products* strony i trwa to kilka dni roboczych.\n\n**Warto uwzględnić dwa ograniczenia przy projektowaniu**: LinkedIn ogranicza API kanału i obserwacji do **jednego żądania na 60 sekund**, a zwracane dane mogą mieć do **48 godzin opóźnienia**. Wartości analityczne są również celowo zaburzane i zaokrąglane w dół do zera poniżej nieujawnionego progu, aby chronić prywatność członków.\n\nTożsamości członków są widoczne tylko wtedy, gdy członek wyraził zgodę na udostępnianie swoich danych za pośrednictwem tych API — to ustawienie jest domyślnie wyłączone, więc wielu obserwujących, komentarze i reakcje pojawiają się bez powiązanej tożsamości.\n\nAby publikować treści jako zalogowany członek, użyj zamiast tego aplikacji **LinkedIn**.\n\nLinkedIn jest znakiem towarowym firmy LinkedIn Corporation"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.display_name": {
+          "source": "LinkedIn Organizations",
+          "message": "LinkedIn Organizations"
+        },
+        "app.TGlua2VkSW5Pcmdhbml6YXRpb25z.short_desc": {
+          "source": "Read a LinkedIn Page's content, engagement and analytics",
+          "message": "Odczytuj treść, zaangażowanie i analitykę strony LinkedIn"
+        }
+      }
+    }
+  }
+}

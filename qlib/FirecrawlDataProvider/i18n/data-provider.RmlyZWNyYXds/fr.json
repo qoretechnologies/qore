@@ -1,0 +1,2201 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "fr": {
+      "messages": {
+        "app.RmlyZWNyYXds.action.Y2FuY2VsLWFnZW50.desc": {
+          "source": "Cancels an in-progress agent job by its ID.",
+          "message": "Annule une tâche d'agent en cours par son ID."
+        },
+        "app.RmlyZWNyYXds.action.Y2FuY2VsLWFnZW50.display_name": {
+          "source": "Cancel an Agent Job",
+          "message": "Annuler une tâche d'agent"
+        },
+        "app.RmlyZWNyYXds.action.Y2FuY2VsLWFnZW50.option.aWQ.desc": {
+          "source": "The unique identifier of the agent job to cancel",
+          "message": "L'identifiant unique de la tâche d'agent à annuler"
+        },
+        "app.RmlyZWNyYXds.action.Y2FuY2VsLWFnZW50.option.aWQ.display_name": {
+          "source": "Job ID",
+          "message": "ID de la tâche"
+        },
+        "app.RmlyZWNyYXds.action.Y2FuY2VsLWFnZW50.option.aWQ.short_desc": {
+          "source": "The agent job ID to cancel",
+          "message": "L'ID de la tâche d'agent à annuler"
+        },
+        "app.RmlyZWNyYXds.action.Y2FuY2VsLWFnZW50.short_desc": {
+          "source": "Cancel an in-progress agent job",
+          "message": "Annuler une tâche d'agent en cours"
+        },
+        "app.RmlyZWNyYXds.action.Y2FuY2VsLWJhdGNoLXNjcmFwZQ.desc": {
+          "source": "Cancels an in-progress batch scrape job by its ID.",
+          "message": "Annule une tâche de scraping par lot en cours par son ID."
+        },
+        "app.RmlyZWNyYXds.action.Y2FuY2VsLWJhdGNoLXNjcmFwZQ.display_name": {
+          "source": "Cancel a Batch Scrape",
+          "message": "Annuler un scraping par lot"
+        },
+        "app.RmlyZWNyYXds.action.Y2FuY2VsLWJhdGNoLXNjcmFwZQ.option.aWQ.desc": {
+          "source": "The unique identifier of the batch scrape job to cancel",
+          "message": "L'identifiant unique de la tâche de scraping par lot à annuler"
+        },
+        "app.RmlyZWNyYXds.action.Y2FuY2VsLWJhdGNoLXNjcmFwZQ.option.aWQ.display_name": {
+          "source": "Job ID",
+          "message": "ID de la tâche"
+        },
+        "app.RmlyZWNyYXds.action.Y2FuY2VsLWJhdGNoLXNjcmFwZQ.option.aWQ.short_desc": {
+          "source": "The batch scrape job ID to cancel",
+          "message": "L'ID de la tâche de scraping par lot à annuler"
+        },
+        "app.RmlyZWNyYXds.action.Y2FuY2VsLWJhdGNoLXNjcmFwZQ.short_desc": {
+          "source": "Cancel an in-progress batch scrape job",
+          "message": "Annuler une tâche de scraping par lot en cours"
+        },
+        "app.RmlyZWNyYXds.action.Y2FuY2VsLWNyYXds.desc": {
+          "source": "Cancels an in-progress crawl job by its ID.",
+          "message": "Annule une tâche de crawl en cours par son ID."
+        },
+        "app.RmlyZWNyYXds.action.Y2FuY2VsLWNyYXds.display_name": {
+          "source": "Cancel a Crawl",
+          "message": "Annuler un crawl"
+        },
+        "app.RmlyZWNyYXds.action.Y2FuY2VsLWNyYXds.option.aWQ.desc": {
+          "source": "The unique identifier of the crawl job to cancel",
+          "message": "L'identifiant unique de la tâche de crawl à annuler"
+        },
+        "app.RmlyZWNyYXds.action.Y2FuY2VsLWNyYXds.option.aWQ.display_name": {
+          "source": "Job ID",
+          "message": "ID de la tâche"
+        },
+        "app.RmlyZWNyYXds.action.Y2FuY2VsLWNyYXds.option.aWQ.short_desc": {
+          "source": "The crawl job ID to cancel",
+          "message": "L'ID de la tâche de crawl à annuler"
+        },
+        "app.RmlyZWNyYXds.action.Y2FuY2VsLWNyYXds.short_desc": {
+          "source": "Cancel an in-progress crawl job",
+          "message": "Annuler une tâche de crawl en cours"
+        },
+        "app.RmlyZWNyYXds.action.Y3Jhd2w.desc": {
+          "source": "Crawls a website starting from the given URL and returns scraped data for all discovered pages.\n\nThe operation runs asynchronously and automatically polls until the crawl completes. Supports path filtering, depth control, sitemap handling, and webhook notifications.",
+          "message": "Parcourt un site web à partir de l'URL donnée et renvoie les données extraites pour toutes les pages découvertes.\n\nL'opération s'exécute de manière asynchrone et interroge automatiquement jusqu'à la fin du crawl. Prend en charge le filtrage des chemins, le contrôle de la profondeur, la gestion des sitemaps et les notifications webhook."
+        },
+        "app.RmlyZWNyYXds.action.Y3Jhd2w.display_name": {
+          "source": "Crawl a Website",
+          "message": "Explorer un site web"
+        },
+        "app.RmlyZWNyYXds.action.Y3Jhd2w.option.Y3Jhd2xFbnRpcmVEb21haW4.desc": {
+          "source": "If `True`, the entire domain is crawled, including all subdomains",
+          "message": "Si `True`, l'ensemble du domaine est exploré, y compris tous les sous-domaines"
+        },
+        "app.RmlyZWNyYXds.action.Y3Jhd2w.option.Y3Jhd2xFbnRpcmVEb21haW4.display_name": {
+          "source": "Crawl Entire Domain",
+          "message": "Explorer tout le domaine"
+        },
+        "app.RmlyZWNyYXds.action.Y3Jhd2w.option.Y3Jhd2xFbnRpcmVEb21haW4.short_desc": {
+          "source": "Crawl the entire domain",
+          "message": "Explorer tout le domaine"
+        },
+        "app.RmlyZWNyYXds.action.Y3Jhd2w.option.YWxsb3dFeHRlcm5hbExpbmtz.desc": {
+          "source": "If `True`, links to external domains are followed",
+          "message": "Si `True`, les liens vers des domaines externes sont suivis"
+        },
+        "app.RmlyZWNyYXds.action.Y3Jhd2w.option.YWxsb3dFeHRlcm5hbExpbmtz.display_name": {
+          "source": "Allow External Links",
+          "message": "Autoriser les liens externes"
+        },
+        "app.RmlyZWNyYXds.action.Y3Jhd2w.option.YWxsb3dFeHRlcm5hbExpbmtz.short_desc": {
+          "source": "Follow external links",
+          "message": "Suivre les liens externes"
+        },
+        "app.RmlyZWNyYXds.action.Y3Jhd2w.option.YWxsb3dTdWJkb21haW5z.desc": {
+          "source": "If `True`, subdomains of the starting URL are included in crawling",
+          "message": "Si `True`, les sous-domaines de l'URL de départ sont inclus dans l'exploration"
+        },
+        "app.RmlyZWNyYXds.action.Y3Jhd2w.option.YWxsb3dTdWJkb21haW5z.display_name": {
+          "source": "Allow Subdomains",
+          "message": "Autoriser les sous-domaines"
+        },
+        "app.RmlyZWNyYXds.action.Y3Jhd2w.option.YWxsb3dTdWJkb21haW5z.short_desc": {
+          "source": "Allow subdomain crawling",
+          "message": "Autoriser l'exploration des sous-domaines"
+        },
+        "app.RmlyZWNyYXds.action.Y3Jhd2w.option.ZGVkdXBsaWNhdGVTaW1pbGFyVVJMcw.desc": {
+          "source": "If `True`, URL variants (`www.`/non-`www.`, `http`/`https`, trailing slashes, `index.html`) are normalized and treated as duplicates. Defaults to `True`",
+          "message": "Si `True`, les variantes d'URL (`www.`/non-`www.`, `http`/`https`, barres obliques finales, `index.html`) sont normalisées et traitées comme des doublons. Valeur par défaut : `True`"
+        },
+        "app.RmlyZWNyYXds.action.Y3Jhd2w.option.ZGVkdXBsaWNhdGVTaW1pbGFyVVJMcw.display_name": {
+          "source": "Deduplicate Similar URLs",
+          "message": "Dédupliquer les URL similaires"
+        },
+        "app.RmlyZWNyYXds.action.Y3Jhd2w.option.ZGVkdXBsaWNhdGVTaW1pbGFyVVJMcw.short_desc": {
+          "source": "Treat URL variants as duplicates",
+          "message": "Traiter les variantes d'URL comme des doublons"
+        },
+        "app.RmlyZWNyYXds.action.Y3Jhd2w.option.ZGVsYXk.desc": {
+          "source": "Delay in seconds between each request during crawling",
+          "message": "Délai en secondes entre chaque requête pendant l'exploration"
+        },
+        "app.RmlyZWNyYXds.action.Y3Jhd2w.option.ZGVsYXk.display_name": {
+          "source": "Delay",
+          "message": "Délai"
+        },
+        "app.RmlyZWNyYXds.action.Y3Jhd2w.option.ZGVsYXk.short_desc": {
+          "source": "Delay between requests in seconds",
+          "message": "Délai entre les requêtes en secondes"
+        },
+        "app.RmlyZWNyYXds.action.Y3Jhd2w.option.ZXhjbHVkZVBhdGhz.desc": {
+          "source": "List of URL pathname regex patterns; matching URLs are excluded from the crawl (e.g., `^/admin/.*`, `\\.pdf$`)",
+          "message": "Liste de modèles regex de chemin d'URL ; les URL correspondantes sont exclues du crawl (ex. : `^/admin/.*`, `\\.pdf$`)"
+        },
+        "app.RmlyZWNyYXds.action.Y3Jhd2w.option.ZXhjbHVkZVBhdGhz.display_name": {
+          "source": "Exclude Paths",
+          "message": "Exclure des chemins"
+        },
+        "app.RmlyZWNyYXds.action.Y3Jhd2w.option.ZXhjbHVkZVBhdGhz.short_desc": {
+          "source": "URL pathname regex patterns to exclude",
+          "message": "Modèles regex de chemin d'URL à exclure"
+        },
+        "app.RmlyZWNyYXds.action.Y3Jhd2w.option.aW5jbHVkZVBhdGhz.desc": {
+          "source": "List of URL pathname regex patterns; only matching URLs are crawled (e.g., `^/blog/.*`, `^/docs/.*`)",
+          "message": "Liste de modèles regex de chemin d'URL ; seules les URL correspondantes sont explorées (ex. : `^/blog/.*`, `^/docs/.*`)"
+        },
+        "app.RmlyZWNyYXds.action.Y3Jhd2w.option.aW5jbHVkZVBhdGhz.display_name": {
+          "source": "Include Paths",
+          "message": "Inclure des chemins"
+        },
+        "app.RmlyZWNyYXds.action.Y3Jhd2w.option.aW5jbHVkZVBhdGhz.short_desc": {
+          "source": "URL pathname regex patterns to include",
+          "message": "Modèles regex de chemin d'URL à inclure"
+        },
+        "app.RmlyZWNyYXds.action.Y3Jhd2w.option.aWdub3JlUXVlcnlQYXJhbWV0ZXJz.desc": {
+          "source": "If `True`, URLs with different query parameters are treated as the same page",
+          "message": "Si `True`, les URL avec des paramètres de requête différents sont traitées comme la même page"
+        },
+        "app.RmlyZWNyYXds.action.Y3Jhd2w.option.aWdub3JlUXVlcnlQYXJhbWV0ZXJz.display_name": {
+          "source": "Ignore Query Parameters",
+          "message": "Ignorer les paramètres de requête"
+        },
+        "app.RmlyZWNyYXds.action.Y3Jhd2w.option.aWdub3JlUXVlcnlQYXJhbWV0ZXJz.short_desc": {
+          "source": "Ignore URL query parameters",
+          "message": "Ignorer les paramètres de requête d'URL"
+        },
+        "app.RmlyZWNyYXds.action.Y3Jhd2w.option.aWdub3JlUm9ib3RzVHh0.desc": {
+          "source": "If `True`, the crawl ignores `robots.txt` directives. Enterprise feature — contact Firecrawl support to enable",
+          "message": "Si `True`, l'exploration ignore les directives `robots.txt`. Fonctionnalité Entreprise — contactez le support Firecrawl pour l'activer"
+        },
+        "app.RmlyZWNyYXds.action.Y3Jhd2w.option.aWdub3JlUm9ib3RzVHh0.display_name": {
+          "source": "Ignore robots.txt",
+          "message": "Ignorer robots.txt"
+        },
+        "app.RmlyZWNyYXds.action.Y3Jhd2w.option.aWdub3JlUm9ib3RzVHh0.short_desc": {
+          "source": "Bypass robots.txt directives",
+          "message": "Ignorer les directives robots.txt"
+        },
+        "app.RmlyZWNyYXds.action.Y3Jhd2w.option.bGltaXQ.desc": {
+          "source": "Maximum number of pages to crawl. Defaults to `10000`",
+          "message": "Nombre maximal de pages à explorer. Valeur par défaut : `10000`"
+        },
+        "app.RmlyZWNyYXds.action.Y3Jhd2w.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "Limite"
+        },
+        "app.RmlyZWNyYXds.action.Y3Jhd2w.option.bGltaXQ.short_desc": {
+          "source": "Maximum number of pages to crawl",
+          "message": "Nombre maximal de pages à explorer"
+        },
+        "app.RmlyZWNyYXds.action.Y3Jhd2w.option.bWF4Q29uY3VycmVuY3k.desc": {
+          "source": "Maximum number of concurrent requests during crawling",
+          "message": "Nombre maximal de requêtes simultanées pendant l'exploration"
+        },
+        "app.RmlyZWNyYXds.action.Y3Jhd2w.option.bWF4Q29uY3VycmVuY3k.display_name": {
+          "source": "Max Concurrency",
+          "message": "Simultanéité maximale"
+        },
+        "app.RmlyZWNyYXds.action.Y3Jhd2w.option.bWF4Q29uY3VycmVuY3k.short_desc": {
+          "source": "Maximum concurrent requests",
+          "message": "Nombre maximal de requêtes simultanées"
+        },
+        "app.RmlyZWNyYXds.action.Y3Jhd2w.option.bWF4RGlzY292ZXJ5RGVwdGg.desc": {
+          "source": "Maximum depth of links to follow from the starting URL",
+          "message": "Profondeur maximale des liens à suivre depuis l'URL de départ"
+        },
+        "app.RmlyZWNyYXds.action.Y3Jhd2w.option.bWF4RGlzY292ZXJ5RGVwdGg.display_name": {
+          "source": "Max Discovery Depth",
+          "message": "Profondeur max de découverte"
+        },
+        "app.RmlyZWNyYXds.action.Y3Jhd2w.option.bWF4RGlzY292ZXJ5RGVwdGg.short_desc": {
+          "source": "Maximum link depth to follow",
+          "message": "Profondeur maximale de liens à suivre"
+        },
+        "app.RmlyZWNyYXds.action.Y3Jhd2w.option.c2NyYXBlT3B0aW9ucw.desc": {
+          "source": "Options applied when scraping each crawled page, such as `formats`, `onlyMainContent`, `includeTags`, `excludeTags`",
+          "message": "Options appliquées lors du scraping de chaque page explorée, telles que `formats`, `onlyMainContent`, `includeTags`, `excludeTags`"
+        },
+        "app.RmlyZWNyYXds.action.Y3Jhd2w.option.c2NyYXBlT3B0aW9ucw.display_name": {
+          "source": "Scrape Options",
+          "message": "Options de scraping"
+        },
+        "app.RmlyZWNyYXds.action.Y3Jhd2w.option.c2NyYXBlT3B0aW9ucw.short_desc": {
+          "source": "Options for scraping each page",
+          "message": "Options de scraping pour chaque page"
+        },
+        "app.RmlyZWNyYXds.action.Y3Jhd2w.option.c2l0ZW1hcA.allowed-value.c3RyaW5nOm9ubHk.display_name": {
+          "source": "Only",
+          "message": "Uniquement"
+        },
+        "app.RmlyZWNyYXds.action.Y3Jhd2w.option.c2l0ZW1hcA.allowed-value.c3RyaW5nOmluY2x1ZGU.display_name": {
+          "source": "Include",
+          "message": "Inclure"
+        },
+        "app.RmlyZWNyYXds.action.Y3Jhd2w.option.c2l0ZW1hcA.allowed-value.c3RyaW5nOnNraXA.display_name": {
+          "source": "Skip",
+          "message": "Ignorer"
+        },
+        "app.RmlyZWNyYXds.action.Y3Jhd2w.option.c2l0ZW1hcA.desc": {
+          "source": "How to handle the sitemap when crawling",
+          "message": "Comment gérer le sitemap lors de l'exploration"
+        },
+        "app.RmlyZWNyYXds.action.Y3Jhd2w.option.c2l0ZW1hcA.display_name": {
+          "source": "Sitemap",
+          "message": "Sitemap"
+        },
+        "app.RmlyZWNyYXds.action.Y3Jhd2w.option.c2l0ZW1hcA.short_desc": {
+          "source": "Sitemap handling mode",
+          "message": "Mode de gestion du sitemap"
+        },
+        "app.RmlyZWNyYXds.action.Y3Jhd2w.option.cHJvbXB0.desc": {
+          "source": "An optional AI prompt for filtering or processing crawl results",
+          "message": "Un prompt d'IA optionnel pour filtrer ou traiter les résultats d'exploration"
+        },
+        "app.RmlyZWNyYXds.action.Y3Jhd2w.option.cHJvbXB0.display_name": {
+          "source": "Prompt",
+          "message": "Prompt"
+        },
+        "app.RmlyZWNyYXds.action.Y3Jhd2w.option.cHJvbXB0.short_desc": {
+          "source": "AI prompt for filtering results",
+          "message": "Prompt d'IA pour filtrer les résultats"
+        },
+        "app.RmlyZWNyYXds.action.Y3Jhd2w.option.cm9ib3RzVXNlckFnZW50.desc": {
+          "source": "User-agent string used when evaluating `robots.txt` rules. Enterprise feature — contact Firecrawl support to enable",
+          "message": "Chaîne User-agent utilisée lors de l'évaluation des règles `robots.txt`. Fonctionnalité Enterprise — contactez le support Firecrawl pour l'activer"
+        },
+        "app.RmlyZWNyYXds.action.Y3Jhd2w.option.cm9ib3RzVXNlckFnZW50.display_name": {
+          "source": "robots.txt User Agent",
+          "message": "User Agent robots.txt"
+        },
+        "app.RmlyZWNyYXds.action.Y3Jhd2w.option.cm9ib3RzVXNlckFnZW50.short_desc": {
+          "source": "User-agent for robots.txt evaluation",
+          "message": "User-agent pour l'évaluation de robots.txt"
+        },
+        "app.RmlyZWNyYXds.action.Y3Jhd2w.option.cmVnZXhPbkZ1bGxVUkw.desc": {
+          "source": "If `True`, `includePaths` and `excludePaths` patterns are matched against the full URL including query parameters. If `False` (default), patterns are matched against the pathname only",
+          "message": "Si `True`, les motifs `includePaths` et `excludePaths` sont comparés à l'URL complète, y compris les paramètres de requête. Si `False` (par défaut), les motifs sont comparés uniquement au chemin d'accès"
+        },
+        "app.RmlyZWNyYXds.action.Y3Jhd2w.option.cmVnZXhPbkZ1bGxVUkw.display_name": {
+          "source": "Regex on Full URL",
+          "message": "Regex sur l'URL complète"
+        },
+        "app.RmlyZWNyYXds.action.Y3Jhd2w.option.cmVnZXhPbkZ1bGxVUkw.short_desc": {
+          "source": "Match patterns against full URL",
+          "message": "Faire correspondre les motifs avec l'URL complète"
+        },
+        "app.RmlyZWNyYXds.action.Y3Jhd2w.option.d2ViaG9vaw.desc": {
+          "source": "Webhook configuration to receive notifications during the crawl",
+          "message": "Configuration du webhook pour recevoir des notifications pendant l'exploration"
+        },
+        "app.RmlyZWNyYXds.action.Y3Jhd2w.option.d2ViaG9vaw.display_name": {
+          "source": "Webhook",
+          "message": "Webhook"
+        },
+        "app.RmlyZWNyYXds.action.Y3Jhd2w.option.d2ViaG9vaw.short_desc": {
+          "source": "Webhook configuration for notifications",
+          "message": "Configuration du webhook pour les notifications"
+        },
+        "app.RmlyZWNyYXds.action.Y3Jhd2w.option.dXJs.desc": {
+          "source": "The starting URL of the website to crawl",
+          "message": "L'URL de départ du site Web à explorer"
+        },
+        "app.RmlyZWNyYXds.action.Y3Jhd2w.option.dXJs.display_name": {
+          "source": "URL",
+          "message": "URL"
+        },
+        "app.RmlyZWNyYXds.action.Y3Jhd2w.option.dXJs.short_desc": {
+          "source": "The starting URL to crawl",
+          "message": "L'URL de départ à explorer"
+        },
+        "app.RmlyZWNyYXds.action.Y3Jhd2w.option.emVyb0RhdGFSZXRlbnRpb24.desc": {
+          "source": "If `True`, Firecrawl does not retain any crawl data on its servers after returning the response. Enterprise feature — contact Firecrawl support to enable",
+          "message": "Si `True`, Firecrawl ne conserve aucune donnée d'exploration sur ses serveurs après avoir renvoyé la réponse. Fonctionnalité Enterprise — contactez le support Firecrawl pour l'activer"
+        },
+        "app.RmlyZWNyYXds.action.Y3Jhd2w.option.emVyb0RhdGFSZXRlbnRpb24.display_name": {
+          "source": "Zero Data Retention",
+          "message": "Zéro rétention de données"
+        },
+        "app.RmlyZWNyYXds.action.Y3Jhd2w.option.emVyb0RhdGFSZXRlbnRpb24.short_desc": {
+          "source": "Disable Firecrawl-side data retention",
+          "message": "Désactiver la rétention des données côté Firecrawl"
+        },
+        "app.RmlyZWNyYXds.action.Y3Jhd2w.short_desc": {
+          "source": "Crawl a website and return scraped data for all pages",
+          "message": "Explorer un site Web et renvoyer les données scrapées pour toutes les pages"
+        },
+        "app.RmlyZWNyYXds.action.YWdlbnQ.desc": {
+          "source": "Uses an AI agent to find and extract data from the web based on a natural language prompt.\n\nThe agent autonomously browses web pages, follows links, and extracts data matching the prompt. The operation runs asynchronously and automatically polls until the agent completes.",
+          "message": "Utilise un agent IA pour trouver et extraire des données du Web à partir d'un prompt en langage naturel.\n\nL'agent navigue de manière autonome sur les pages Web, suit les liens et extrait les données correspondant au prompt. L'opération s'exécute de manière asynchrone et interroge automatiquement jusqu'à ce que l'agent se termine."
+        },
+        "app.RmlyZWNyYXds.action.YWdlbnQ.display_name": {
+          "source": "Run AI Agent",
+          "message": "Exécuter l'agent IA"
+        },
+        "app.RmlyZWNyYXds.action.YWdlbnQ.option.bW9kZWw.allowed-value.c3RyaW5nOnNwYXJrLTEtbWluaQ.display_name": {
+          "source": "Spark 1 Mini",
+          "message": "Spark 1 Mini"
+        },
+        "app.RmlyZWNyYXds.action.YWdlbnQ.option.bW9kZWw.allowed-value.c3RyaW5nOnNwYXJrLTEtcHJv.display_name": {
+          "source": "Spark 1 Pro",
+          "message": "Spark 1 Pro"
+        },
+        "app.RmlyZWNyYXds.action.YWdlbnQ.option.bW9kZWw.desc": {
+          "source": "The agent model to use for the task",
+          "message": "Le modèle d'agent à utiliser pour la tâche"
+        },
+        "app.RmlyZWNyYXds.action.YWdlbnQ.option.bW9kZWw.display_name": {
+          "source": "Model",
+          "message": "Modèle"
+        },
+        "app.RmlyZWNyYXds.action.YWdlbnQ.option.bW9kZWw.short_desc": {
+          "source": "Agent model to use",
+          "message": "Modèle d'agent à utiliser"
+        },
+        "app.RmlyZWNyYXds.action.YWdlbnQ.option.bWF4Q3JlZGl0cw.desc": {
+          "source": "Maximum number of API credits to use for this agent task. Defaults to `2500`",
+          "message": "Nombre maximal de crédits API à utiliser pour cette tâche d'agent. Valeur par défaut : `2500`"
+        },
+        "app.RmlyZWNyYXds.action.YWdlbnQ.option.bWF4Q3JlZGl0cw.display_name": {
+          "source": "Max Credits",
+          "message": "Crédits max"
+        },
+        "app.RmlyZWNyYXds.action.YWdlbnQ.option.bWF4Q3JlZGl0cw.short_desc": {
+          "source": "Maximum credits to use",
+          "message": "Crédits maximums à utiliser"
+        },
+        "app.RmlyZWNyYXds.action.YWdlbnQ.option.c2NoZW1h.desc": {
+          "source": "A JSON Schema object defining the structure of the output data. Used to guide the agent and validate the output format.\n\n**Example**: `{\"type\": \"object\", \"properties\": {\"name\": {\"type\": \"string\"}, \"price\": {\"type\": \"number\"}}}`",
+          "message": "Un objet JSON Schema définissant la structure des données de sortie. Utilisé pour guider l'agent et valider le format de sortie.\n\n**Exemple** : `{\"type\": \"object\", \"properties\": {\"name\": {\"type\": \"string\"}, \"price\": {\"type\": \"number\"}}}`"
+        },
+        "app.RmlyZWNyYXds.action.YWdlbnQ.option.c2NoZW1h.display_name": {
+          "source": "Schema",
+          "message": "Schéma"
+        },
+        "app.RmlyZWNyYXds.action.YWdlbnQ.option.c2NoZW1h.short_desc": {
+          "source": "JSON Schema for output",
+          "message": "JSON Schema pour la sortie"
+        },
+        "app.RmlyZWNyYXds.action.YWdlbnQ.option.c3RyaWN0Q29uc3RyYWluVG9VUkxz.desc": {
+          "source": "If `True`, the agent is strictly limited to searching only the provided URLs and does not follow links to other pages",
+          "message": "Si `True`, l'agent est strictement limité à la recherche sur les URL fournies et ne suit pas les liens vers d'autres pages"
+        },
+        "app.RmlyZWNyYXds.action.YWdlbnQ.option.c3RyaWN0Q29uc3RyYWluVG9VUkxz.display_name": {
+          "source": "Strict Constrain to URLs",
+          "message": "Contrainte stricte aux URL"
+        },
+        "app.RmlyZWNyYXds.action.YWdlbnQ.option.c3RyaWN0Q29uc3RyYWluVG9VUkxz.short_desc": {
+          "source": "Strictly limit to provided URLs",
+          "message": "Limiter strictement aux URL fournies"
+        },
+        "app.RmlyZWNyYXds.action.YWdlbnQ.option.cHJvbXB0.desc": {
+          "source": "Natural language prompt describing what data to find and extract (maximum 10000 characters)",
+          "message": "Prompt en langage naturel décrivant les données à trouver et à extraire (10 000 caractères maximum)"
+        },
+        "app.RmlyZWNyYXds.action.YWdlbnQ.option.cHJvbXB0.display_name": {
+          "source": "Prompt",
+          "message": "Prompt"
+        },
+        "app.RmlyZWNyYXds.action.YWdlbnQ.option.cHJvbXB0.short_desc": {
+          "source": "The agent prompt",
+          "message": "Le prompt de l'agent"
+        },
+        "app.RmlyZWNyYXds.action.YWdlbnQ.option.dXJscw.desc": {
+          "source": "Optional list of URLs to constrain the agent's search scope",
+          "message": "Liste facultative d'URL pour restreindre le périmètre de recherche de l'agent"
+        },
+        "app.RmlyZWNyYXds.action.YWdlbnQ.option.dXJscw.display_name": {
+          "source": "URLs",
+          "message": "URL"
+        },
+        "app.RmlyZWNyYXds.action.YWdlbnQ.option.dXJscw.short_desc": {
+          "source": "URLs to search",
+          "message": "URL à rechercher"
+        },
+        "app.RmlyZWNyYXds.action.YWdlbnQ.short_desc": {
+          "source": "Use an AI agent to find and extract data from the web",
+          "message": "Utiliser un agent IA pour trouver et extraire des données du Web"
+        },
+        "app.RmlyZWNyYXds.action.YmF0Y2gtc2NyYXBl.desc": {
+          "source": "Scrapes multiple web pages in batch and returns their content. Supports the same scrape options as the single scrape action.\n\nThe operation runs asynchronously and automatically polls until all pages are scraped.",
+          "message": "Scrape plusieurs pages Web par lot et renvoie leur contenu. Prend en charge les mêmes options de scraping que l'action de scraping unique.\n\nL'opération s'exécute de manière asynchrone et interroge automatiquement jusqu'à ce que toutes les pages soient scrapées."
+        },
+        "app.RmlyZWNyYXds.action.YmF0Y2gtc2NyYXBl.display_name": {
+          "source": "Batch Scrape Web Pages",
+          "message": "Scraper des pages Web par lot"
+        },
+        "app.RmlyZWNyYXds.action.YmF0Y2gtc2NyYXBl.option.YWN0aW9ucw.desc": {
+          "source": "List of browser actions to perform before scraping each page. Each action is a hash with a `type` key and action-specific parameters.\n\n**Available actions**:\n- `wait` — wait for duration (`milliseconds`) or element (`selector`)\n- `click` — click an element (`selector`, `all`)\n- `write` — type text into the focused element (`text`)\n- `press` — press a keyboard key (`key`)\n- `scroll` — scroll the page (`direction`: `up`/`down`; optional `selector`)\n- `screenshot` — take a screenshot (`fullPage`, `quality`, `viewport`)\n- `scrape` — capture the page content at its current state\n- `executeJavascript` — run JavaScript code (`script`)\n- `pdf` — generate a PDF (`format`, `landscape`, `scale`)",
+          "message": "Liste des actions de navigateur à effectuer avant de scraper chaque page. Chaque action est un hachage avec une clé `type` et des paramètres spécifiques à l'action.\n\n**Actions disponibles** :\n- `wait` — attendre une durée (`milliseconds`) ou un élément (`selector`)\n- `click` — cliquer sur un élément (`selector`, `all`)\n- `write` — saisir du texte dans l'élément ciblé (`text`)\n- `press` — appuyer sur une touche du clavier (`key`)\n- `scroll` — faire défiler la page (`direction` : `up`/`down` ; `selector` optionnel)\n- `screenshot` — prendre une capture d'écran (`fullPage`, `quality`, `viewport`)\n- `scrape` — capturer le contenu de la page dans son état actuel\n- `executeJavascript` — exécuter du code JavaScript (`script`)\n- `pdf` — générer un PDF (`format`, `landscape`, `scale`)"
+        },
+        "app.RmlyZWNyYXds.action.YmF0Y2gtc2NyYXBl.option.YWN0aW9ucw.display_name": {
+          "source": "Actions",
+          "message": "Actions"
+        },
+        "app.RmlyZWNyYXds.action.YmF0Y2gtc2NyYXBl.option.YWN0aW9ucw.short_desc": {
+          "source": "Browser actions to perform",
+          "message": "Actions de navigateur à exécuter"
+        },
+        "app.RmlyZWNyYXds.action.YmF0Y2gtc2NyYXBl.option.YmxvY2tBZHM.desc": {
+          "source": "If `True`, advertisements are blocked during scraping",
+          "message": "Si `True`, les publicités sont bloquées pendant le scraping"
+        },
+        "app.RmlyZWNyYXds.action.YmF0Y2gtc2NyYXBl.option.YmxvY2tBZHM.display_name": {
+          "source": "Block Ads",
+          "message": "Bloquer les publicités"
+        },
+        "app.RmlyZWNyYXds.action.YmF0Y2gtc2NyYXBl.option.YmxvY2tBZHM.short_desc": {
+          "source": "Block advertisements",
+          "message": "Bloquer les publicités"
+        },
+        "app.RmlyZWNyYXds.action.YmF0Y2gtc2NyYXBl.option.ZXhjbHVkZVRhZ3M.desc": {
+          "source": "List of HTML tags to exclude from the output (e.g., `nav`, `footer`)",
+          "message": "Liste des balises HTML à exclure de la sortie (par ex., `nav`, `footer`)"
+        },
+        "app.RmlyZWNyYXds.action.YmF0Y2gtc2NyYXBl.option.ZXhjbHVkZVRhZ3M.display_name": {
+          "source": "Exclude Tags",
+          "message": "Exclure les balises"
+        },
+        "app.RmlyZWNyYXds.action.YmF0Y2gtc2NyYXBl.option.ZXhjbHVkZVRhZ3M.short_desc": {
+          "source": "HTML tags to exclude",
+          "message": "Balises HTML à exclure"
+        },
+        "app.RmlyZWNyYXds.action.YmF0Y2gtc2NyYXBl.option.Zm9ybWF0cw.allowed-value.c3RyaW5nOm1hcmtkb3du.display_name": {
+          "source": "Markdown",
+          "message": "Markdown"
+        },
+        "app.RmlyZWNyYXds.action.YmF0Y2gtc2NyYXBl.option.Zm9ybWF0cw.allowed-value.c3RyaW5nOmF1ZGlv.display_name": {
+          "source": "Audio",
+          "message": "Audio"
+        },
+        "app.RmlyZWNyYXds.action.YmF0Y2gtc2NyYXBl.option.Zm9ybWF0cw.allowed-value.c3RyaW5nOmJyYW5kaW5n.display_name": {
+          "source": "Branding",
+          "message": "Branding"
+        },
+        "app.RmlyZWNyYXds.action.YmF0Y2gtc2NyYXBl.option.Zm9ybWF0cw.allowed-value.c3RyaW5nOmNoYW5nZVRyYWNraW5n.display_name": {
+          "source": "Change Tracking",
+          "message": "Suivi des modifications"
+        },
+        "app.RmlyZWNyYXds.action.YmF0Y2gtc2NyYXBl.option.Zm9ybWF0cw.allowed-value.c3RyaW5nOmh0bWw.display_name": {
+          "source": "HTML",
+          "message": "HTML"
+        },
+        "app.RmlyZWNyYXds.action.YmF0Y2gtc2NyYXBl.option.Zm9ybWF0cw.allowed-value.c3RyaW5nOmltYWdlcw.display_name": {
+          "source": "Images",
+          "message": "Images"
+        },
+        "app.RmlyZWNyYXds.action.YmF0Y2gtc2NyYXBl.option.Zm9ybWF0cw.allowed-value.c3RyaW5nOmpzb24.display_name": {
+          "source": "JSON",
+          "message": "JSON"
+        },
+        "app.RmlyZWNyYXds.action.YmF0Y2gtc2NyYXBl.option.Zm9ybWF0cw.allowed-value.c3RyaW5nOmxpbmtz.display_name": {
+          "source": "Links",
+          "message": "Liens"
+        },
+        "app.RmlyZWNyYXds.action.YmF0Y2gtc2NyYXBl.option.Zm9ybWF0cw.allowed-value.c3RyaW5nOnJhd0h0bWw.display_name": {
+          "source": "Raw HTML",
+          "message": "HTML brut"
+        },
+        "app.RmlyZWNyYXds.action.YmF0Y2gtc2NyYXBl.option.Zm9ybWF0cw.allowed-value.c3RyaW5nOnN1bW1hcnk.display_name": {
+          "source": "Summary",
+          "message": "Résumé"
+        },
+        "app.RmlyZWNyYXds.action.YmF0Y2gtc2NyYXBl.option.Zm9ybWF0cw.allowed-value.c3RyaW5nOnNjcmVlbnNob3Q.display_name": {
+          "source": "Screenshot",
+          "message": "Capture d'écran"
+        },
+        "app.RmlyZWNyYXds.action.YmF0Y2gtc2NyYXBl.option.Zm9ybWF0cw.desc": {
+          "source": "List of output formats to return from each scrape",
+          "message": "Liste des formats de sortie à renvoyer pour chaque scrape"
+        },
+        "app.RmlyZWNyYXds.action.YmF0Y2gtc2NyYXBl.option.Zm9ybWF0cw.display_name": {
+          "source": "Formats",
+          "message": "Formats"
+        },
+        "app.RmlyZWNyYXds.action.YmF0Y2gtc2NyYXBl.option.Zm9ybWF0cw.short_desc": {
+          "source": "Output formats to return",
+          "message": "Formats de sortie à retourner"
+        },
+        "app.RmlyZWNyYXds.action.YmF0Y2gtc2NyYXBl.option.aGVhZGVycw.desc": {
+          "source": "Custom HTTP headers to send with each scrape request",
+          "message": "En-têtes HTTP personnalisés à envoyer avec chaque requête de scraping"
+        },
+        "app.RmlyZWNyYXds.action.YmF0Y2gtc2NyYXBl.option.aGVhZGVycw.display_name": {
+          "source": "Headers",
+          "message": "En-têtes"
+        },
+        "app.RmlyZWNyYXds.action.YmF0Y2gtc2NyYXBl.option.aGVhZGVycw.short_desc": {
+          "source": "Custom HTTP headers",
+          "message": "En-têtes HTTP personnalisés"
+        },
+        "app.RmlyZWNyYXds.action.YmF0Y2gtc2NyYXBl.option.aW5jbHVkZVRhZ3M.desc": {
+          "source": "List of HTML tags to include in the output (e.g., `article`, `main`). Only content within these tags is returned",
+          "message": "Liste des balises HTML à inclure dans la sortie (par ex., `article`, `main`). Seul le contenu situé à l'intérieur de ces balises est retourné"
+        },
+        "app.RmlyZWNyYXds.action.YmF0Y2gtc2NyYXBl.option.aW5jbHVkZVRhZ3M.display_name": {
+          "source": "Include Tags",
+          "message": "Inclure les balises"
+        },
+        "app.RmlyZWNyYXds.action.YmF0Y2gtc2NyYXBl.option.aW5jbHVkZVRhZ3M.short_desc": {
+          "source": "HTML tags to include",
+          "message": "Balises HTML à inclure"
+        },
+        "app.RmlyZWNyYXds.action.YmF0Y2gtc2NyYXBl.option.aWdub3JlSW52YWxpZFVSTHM.desc": {
+          "source": "If `True`, invalid URLs in the list are skipped instead of causing an error",
+          "message": "Si `True`, les URL non valides de la liste sont ignorées au lieu de provoquer une erreur"
+        },
+        "app.RmlyZWNyYXds.action.YmF0Y2gtc2NyYXBl.option.aWdub3JlSW52YWxpZFVSTHM.display_name": {
+          "source": "Ignore Invalid URLs",
+          "message": "Ignorer les URL non valides"
+        },
+        "app.RmlyZWNyYXds.action.YmF0Y2gtc2NyYXBl.option.aWdub3JlSW52YWxpZFVSTHM.short_desc": {
+          "source": "Ignore invalid URLs",
+          "message": "Ignorer les URL non valides"
+        },
+        "app.RmlyZWNyYXds.action.YmF0Y2gtc2NyYXBl.option.b25seU1haW5Db250ZW50.desc": {
+          "source": "If `True`, only the main content of each page is returned",
+          "message": "Si `True`, seul le contenu principal de chaque page est retourné"
+        },
+        "app.RmlyZWNyYXds.action.YmF0Y2gtc2NyYXBl.option.b25seU1haW5Db250ZW50.display_name": {
+          "source": "Only Main Content",
+          "message": "Contenu principal uniquement"
+        },
+        "app.RmlyZWNyYXds.action.YmF0Y2gtc2NyYXBl.option.b25seU1haW5Db250ZW50.short_desc": {
+          "source": "Extract only the main content",
+          "message": "Extraire uniquement le contenu principal"
+        },
+        "app.RmlyZWNyYXds.action.YmF0Y2gtc2NyYXBl.option.b25seUNsZWFuQ29udGVudA.desc": {
+          "source": "If `True`, an LLM-based cleanup pass is applied to each page to remove navigation, ads, and boilerplate. Defaults to `False`",
+          "message": "Si `True`, une étape de nettoyage basée sur un LLM est appliquée à chaque page pour supprimer la navigation, les publicités et le texte récurrent. Par défaut : `False`"
+        },
+        "app.RmlyZWNyYXds.action.YmF0Y2gtc2NyYXBl.option.b25seUNsZWFuQ29udGVudA.display_name": {
+          "source": "Only Clean Content",
+          "message": "Contenu nettoyé uniquement"
+        },
+        "app.RmlyZWNyYXds.action.YmF0Y2gtc2NyYXBl.option.b25seUNsZWFuQ29udGVudA.short_desc": {
+          "source": "Apply LLM-based content cleanup",
+          "message": "Appliquer un nettoyage de contenu basé sur un LLM"
+        },
+        "app.RmlyZWNyYXds.action.YmF0Y2gtc2NyYXBl.option.bG9jYXRpb24.desc": {
+          "source": "Geolocation settings for the scrape requests",
+          "message": "Paramètres de géolocalisation pour les requêtes de scraping"
+        },
+        "app.RmlyZWNyYXds.action.YmF0Y2gtc2NyYXBl.option.bG9jYXRpb24.display_name": {
+          "source": "Location",
+          "message": "Emplacement"
+        },
+        "app.RmlyZWNyYXds.action.YmF0Y2gtc2NyYXBl.option.bG9jYXRpb24.short_desc": {
+          "source": "Geolocation settings",
+          "message": "Paramètres de géolocalisation"
+        },
+        "app.RmlyZWNyYXds.action.YmF0Y2gtc2NyYXBl.option.bW9iaWxl.desc": {
+          "source": "If `True`, pages are scraped using a mobile user agent",
+          "message": "Si `True`, les pages sont scrapées à l'aide d'un user-agent mobile"
+        },
+        "app.RmlyZWNyYXds.action.YmF0Y2gtc2NyYXBl.option.bW9iaWxl.display_name": {
+          "source": "Mobile",
+          "message": "Mobile"
+        },
+        "app.RmlyZWNyYXds.action.YmF0Y2gtc2NyYXBl.option.bW9iaWxl.short_desc": {
+          "source": "Use mobile user agent",
+          "message": "Utiliser un user-agent mobile"
+        },
+        "app.RmlyZWNyYXds.action.YmF0Y2gtc2NyYXBl.option.bWF4Q29uY3VycmVuY3k.desc": {
+          "source": "Maximum number of concurrent scrape requests",
+          "message": "Nombre maximal de requêtes de scraping simultanées"
+        },
+        "app.RmlyZWNyYXds.action.YmF0Y2gtc2NyYXBl.option.bWF4Q29uY3VycmVuY3k.display_name": {
+          "source": "Max Concurrency",
+          "message": "Simultanéité maximale"
+        },
+        "app.RmlyZWNyYXds.action.YmF0Y2gtc2NyYXBl.option.bWF4Q29uY3VycmVuY3k.short_desc": {
+          "source": "Maximum concurrent requests",
+          "message": "Nombre maximal de requêtes simultanées"
+        },
+        "app.RmlyZWNyYXds.action.YmF0Y2gtc2NyYXBl.option.bWF4QWdl.desc": {
+          "source": "Maximum age in milliseconds for cached content. If a cached version of the page exists and is younger than this value, it is returned instead of re-scraping. Defaults to `172800000` (48 hours)",
+          "message": "Âge maximal en millisecondes pour le contenu en cache. Si une version en cache de la page existe et est plus récente que cette valeur, elle est retournée au lieu de relancer un scraping. Par défaut : `172800000` (48 heures)"
+        },
+        "app.RmlyZWNyYXds.action.YmF0Y2gtc2NyYXBl.option.bWF4QWdl.display_name": {
+          "source": "Max Age",
+          "message": "Âge maximal"
+        },
+        "app.RmlyZWNyYXds.action.YmF0Y2gtc2NyYXBl.option.bWF4QWdl.short_desc": {
+          "source": "Cache freshness threshold in milliseconds",
+          "message": "Seuil de fraîcheur du cache en millisecondes"
+        },
+        "app.RmlyZWNyYXds.action.YmF0Y2gtc2NyYXBl.option.bWluQWdl.desc": {
+          "source": "Minimum age in milliseconds for a cache-only lookup. If set, only cached content older than this value is returned; no fresh scrape is triggered if no cache entry exists",
+          "message": "Âge minimal en millisecondes pour une recherche uniquement dans le cache. S'il est défini, seul le contenu en cache plus ancien que cette valeur est retourné ; aucun nouveau scraping n'est déclenché si aucune entrée n'existe dans le cache"
+        },
+        "app.RmlyZWNyYXds.action.YmF0Y2gtc2NyYXBl.option.bWluQWdl.display_name": {
+          "source": "Min Age",
+          "message": "Âge minimal"
+        },
+        "app.RmlyZWNyYXds.action.YmF0Y2gtc2NyYXBl.option.bWluQWdl.short_desc": {
+          "source": "Minimum cache age in milliseconds",
+          "message": "Âge minimal du cache en millisecondes"
+        },
+        "app.RmlyZWNyYXds.action.YmF0Y2gtc2NyYXBl.option.c2tpcFRsc1ZlcmlmaWNhdGlvbg.desc": {
+          "source": "If `True`, TLS certificate verification is skipped",
+          "message": "Si `True`, la vérification du certificat TLS est ignorée"
+        },
+        "app.RmlyZWNyYXds.action.YmF0Y2gtc2NyYXBl.option.c2tpcFRsc1ZlcmlmaWNhdGlvbg.display_name": {
+          "source": "Skip TLS Verification",
+          "message": "Ignorer la vérification TLS"
+        },
+        "app.RmlyZWNyYXds.action.YmF0Y2gtc2NyYXBl.option.c2tpcFRsc1ZlcmlmaWNhdGlvbg.short_desc": {
+          "source": "Skip TLS certificate verification",
+          "message": "Ignorer la vérification du certificat TLS"
+        },
+        "app.RmlyZWNyYXds.action.YmF0Y2gtc2NyYXBl.option.c3RvcmVJbkNhY2hl.desc": {
+          "source": "If `True`, the scraped content is stored in the Firecrawl cache so that subsequent scrapes within `maxAge` can reuse it. Defaults to `True`",
+          "message": "Si `True`, le contenu scrapé est stocké dans le cache de Firecrawl afin que les scrapings ultérieurs dans la limite de `maxAge` puissent le réutiliser. Par défaut : `True`"
+        },
+        "app.RmlyZWNyYXds.action.YmF0Y2gtc2NyYXBl.option.c3RvcmVJbkNhY2hl.display_name": {
+          "source": "Store In Cache",
+          "message": "Stocker dans le cache"
+        },
+        "app.RmlyZWNyYXds.action.YmF0Y2gtc2NyYXBl.option.c3RvcmVJbkNhY2hl.short_desc": {
+          "source": "Cache the scraped content",
+          "message": "Mettre en cache le contenu scrapé"
+        },
+        "app.RmlyZWNyYXds.action.YmF0Y2gtc2NyYXBl.option.cGFyc2Vycw.desc": {
+          "source": "List of parser configurations for PDF processing. Each entry specifies a parser type and processing options",
+          "message": "Liste des configurations d'analyseur pour le traitement PDF. Chaque entrée spécifie un type d'analyseur et des options de traitement"
+        },
+        "app.RmlyZWNyYXds.action.YmF0Y2gtc2NyYXBl.option.cGFyc2Vycw.display_name": {
+          "source": "Parsers",
+          "message": "Analyseurs"
+        },
+        "app.RmlyZWNyYXds.action.YmF0Y2gtc2NyYXBl.option.cGFyc2Vycw.short_desc": {
+          "source": "PDF parser configuration",
+          "message": "Configuration de l'analyseur PDF"
+        },
+        "app.RmlyZWNyYXds.action.YmF0Y2gtc2NyYXBl.option.cHJvZmlsZQ.desc": {
+          "source": "Named browser profile to reuse session state (cookies, local storage) across scrape requests. Set `saveChanges` to `True` to persist changes back to the profile",
+          "message": "Profil de navigateur nommé pour réutiliser l'état de session (cookies, stockage local) entre les requêtes de scraping. Définissez `saveChanges` sur `True` pour conserver les modifications dans le profil"
+        },
+        "app.RmlyZWNyYXds.action.YmF0Y2gtc2NyYXBl.option.cHJvZmlsZQ.display_name": {
+          "source": "Profile",
+          "message": "Profil"
+        },
+        "app.RmlyZWNyYXds.action.YmF0Y2gtc2NyYXBl.option.cHJvZmlsZQ.short_desc": {
+          "source": "Persistent browser profile",
+          "message": "Profil de navigateur persistant"
+        },
+        "app.RmlyZWNyYXds.action.YmF0Y2gtc2NyYXBl.option.cHJveHk.allowed-value.c3RyaW5nOmF1dG8.display_name": {
+          "source": "Auto",
+          "message": "Auto"
+        },
+        "app.RmlyZWNyYXds.action.YmF0Y2gtc2NyYXBl.option.cHJveHk.allowed-value.c3RyaW5nOmJhc2lj.display_name": {
+          "source": "Basic",
+          "message": "De base"
+        },
+        "app.RmlyZWNyYXds.action.YmF0Y2gtc2NyYXBl.option.cHJveHk.allowed-value.c3RyaW5nOmVuaGFuY2Vk.display_name": {
+          "source": "Enhanced",
+          "message": "Amélioré"
+        },
+        "app.RmlyZWNyYXds.action.YmF0Y2gtc2NyYXBl.option.cHJveHk.desc": {
+          "source": "The proxy configuration to use for scrape requests",
+          "message": "La configuration de proxy à utiliser pour les requêtes de scraping"
+        },
+        "app.RmlyZWNyYXds.action.YmF0Y2gtc2NyYXBl.option.cHJveHk.display_name": {
+          "source": "Proxy",
+          "message": "Proxy"
+        },
+        "app.RmlyZWNyYXds.action.YmF0Y2gtc2NyYXBl.option.cHJveHk.short_desc": {
+          "source": "Proxy configuration",
+          "message": "Configuration du proxy"
+        },
+        "app.RmlyZWNyYXds.action.YmF0Y2gtc2NyYXBl.option.cmVtb3ZlQmFzZTY0SW1hZ2Vz.desc": {
+          "source": "If `True`, base64-encoded images are removed from the output",
+          "message": "Si `True`, les images encodées en base64 sont supprimées de la sortie"
+        },
+        "app.RmlyZWNyYXds.action.YmF0Y2gtc2NyYXBl.option.cmVtb3ZlQmFzZTY0SW1hZ2Vz.display_name": {
+          "source": "Remove Base64 Images",
+          "message": "Supprimer les images en base64"
+        },
+        "app.RmlyZWNyYXds.action.YmF0Y2gtc2NyYXBl.option.cmVtb3ZlQmFzZTY0SW1hZ2Vz.short_desc": {
+          "source": "Remove base64-encoded images",
+          "message": "Supprimer les images encodées en base64"
+        },
+        "app.RmlyZWNyYXds.action.YmF0Y2gtc2NyYXBl.option.d2FpdEZvcg.desc": {
+          "source": "Time to wait in milliseconds for each page to load before scraping. Useful for pages with dynamic content",
+          "message": "Temps d'attente en millisecondes pour le chargement de chaque page avant le scraping. Utile pour les pages au contenu dynamique"
+        },
+        "app.RmlyZWNyYXds.action.YmF0Y2gtc2NyYXBl.option.d2FpdEZvcg.display_name": {
+          "source": "Wait For",
+          "message": "Attendre"
+        },
+        "app.RmlyZWNyYXds.action.YmF0Y2gtc2NyYXBl.option.d2FpdEZvcg.short_desc": {
+          "source": "Wait time in milliseconds",
+          "message": "Temps d'attente en millisecondes"
+        },
+        "app.RmlyZWNyYXds.action.YmF0Y2gtc2NyYXBl.option.d2ViaG9vaw.desc": {
+          "source": "Webhook configuration to receive notifications during the batch scrape",
+          "message": "Configuration du webhook pour recevoir des notifications pendant le scraping par lot"
+        },
+        "app.RmlyZWNyYXds.action.YmF0Y2gtc2NyYXBl.option.d2ViaG9vaw.display_name": {
+          "source": "Webhook",
+          "message": "Webhook"
+        },
+        "app.RmlyZWNyYXds.action.YmF0Y2gtc2NyYXBl.option.d2ViaG9vaw.short_desc": {
+          "source": "Webhook configuration for notifications",
+          "message": "Configuration du webhook pour les notifications"
+        },
+        "app.RmlyZWNyYXds.action.YmF0Y2gtc2NyYXBl.option.dGltZW91dA.desc": {
+          "source": "Maximum time in milliseconds to wait for each scrape to complete. Range: `1000`-`300000`",
+          "message": "Temps maximal en millisecondes à attendre pour que chaque scrape se termine. Plage : `1000`-`300000`"
+        },
+        "app.RmlyZWNyYXds.action.YmF0Y2gtc2NyYXBl.option.dGltZW91dA.display_name": {
+          "source": "Timeout",
+          "message": "Délai d'expiration"
+        },
+        "app.RmlyZWNyYXds.action.YmF0Y2gtc2NyYXBl.option.dGltZW91dA.short_desc": {
+          "source": "Timeout in milliseconds",
+          "message": "Délai d'expiration en millisecondes"
+        },
+        "app.RmlyZWNyYXds.action.YmF0Y2gtc2NyYXBl.option.dXJscw.desc": {
+          "source": "List of URLs to scrape in batch",
+          "message": "Liste d'URL à scraper par lot"
+        },
+        "app.RmlyZWNyYXds.action.YmF0Y2gtc2NyYXBl.option.dXJscw.display_name": {
+          "source": "URLs",
+          "message": "URL"
+        },
+        "app.RmlyZWNyYXds.action.YmF0Y2gtc2NyYXBl.option.dXJscw.short_desc": {
+          "source": "List of URLs to scrape",
+          "message": "Liste d'URL à scraper"
+        },
+        "app.RmlyZWNyYXds.action.YmF0Y2gtc2NyYXBl.option.emVyb0RhdGFSZXRlbnRpb24.desc": {
+          "source": "If `True`, Firecrawl does not retain any scraped data on its servers after returning the response. Useful for privacy/compliance-sensitive workloads. Enterprise feature — contact Firecrawl support to enable",
+          "message": "Si `True`, Firecrawl ne conserve aucune donnée scrapée sur ses serveurs après avoir retourné la réponse. Utile pour les charges de travail sensibles à la confidentialité ou à la conformité. Fonctionnalité Enterprise — contactez le support Firecrawl pour l'activer"
+        },
+        "app.RmlyZWNyYXds.action.YmF0Y2gtc2NyYXBl.option.emVyb0RhdGFSZXRlbnRpb24.display_name": {
+          "source": "Zero Data Retention",
+          "message": "Zéro rétention de données"
+        },
+        "app.RmlyZWNyYXds.action.YmF0Y2gtc2NyYXBl.option.emVyb0RhdGFSZXRlbnRpb24.short_desc": {
+          "source": "Disable Firecrawl-side data retention",
+          "message": "Désactiver la rétention des données côté Firecrawl"
+        },
+        "app.RmlyZWNyYXds.action.YmF0Y2gtc2NyYXBl.short_desc": {
+          "source": "Scrape multiple web pages in batch",
+          "message": "Scraper plusieurs pages Web par lot"
+        },
+        "app.RmlyZWNyYXds.action.Z2V0LWFnZW50LXN0YXR1cw.desc": {
+          "source": "Gets the current status and results of an agent job by its ID.",
+          "message": "Obtient le statut actuel et les résultats d'une tâche d'agent par son ID."
+        },
+        "app.RmlyZWNyYXds.action.Z2V0LWFnZW50LXN0YXR1cw.display_name": {
+          "source": "Get Agent Status",
+          "message": "Obtenir le statut de l'agent"
+        },
+        "app.RmlyZWNyYXds.action.Z2V0LWFnZW50LXN0YXR1cw.option.aWQ.desc": {
+          "source": "The unique identifier of the agent job to check",
+          "message": "L'identifiant unique de la tâche d'agent à vérifier"
+        },
+        "app.RmlyZWNyYXds.action.Z2V0LWFnZW50LXN0YXR1cw.option.aWQ.display_name": {
+          "source": "Job ID",
+          "message": "ID de la tâche"
+        },
+        "app.RmlyZWNyYXds.action.Z2V0LWFnZW50LXN0YXR1cw.option.aWQ.short_desc": {
+          "source": "The agent job ID",
+          "message": "L'ID de tâche d'agent"
+        },
+        "app.RmlyZWNyYXds.action.Z2V0LWFnZW50LXN0YXR1cw.short_desc": {
+          "source": "Get the status and results of an agent job",
+          "message": "Obtenir le statut et les résultats d'une tâche d'agent"
+        },
+        "app.RmlyZWNyYXds.action.Z2V0LWJhdGNoLXNjcmFwZS1zdGF0dXM.desc": {
+          "source": "Gets the current status and results of a batch scrape job by its ID.",
+          "message": "Obtient le statut actuel et les résultats d'une tâche de scraping par lot par son ID."
+        },
+        "app.RmlyZWNyYXds.action.Z2V0LWJhdGNoLXNjcmFwZS1zdGF0dXM.display_name": {
+          "source": "Get Batch Scrape Status",
+          "message": "Obtenir le statut du scraping par lot"
+        },
+        "app.RmlyZWNyYXds.action.Z2V0LWJhdGNoLXNjcmFwZS1zdGF0dXM.option.aWQ.desc": {
+          "source": "The unique identifier of the batch scrape job to check",
+          "message": "L'identifiant unique de la tâche de scraping par lot à vérifier"
+        },
+        "app.RmlyZWNyYXds.action.Z2V0LWJhdGNoLXNjcmFwZS1zdGF0dXM.option.aWQ.display_name": {
+          "source": "Job ID",
+          "message": "ID de la tâche"
+        },
+        "app.RmlyZWNyYXds.action.Z2V0LWJhdGNoLXNjcmFwZS1zdGF0dXM.option.aWQ.short_desc": {
+          "source": "The batch scrape job ID",
+          "message": "L'ID de tâche de scraping par lot"
+        },
+        "app.RmlyZWNyYXds.action.Z2V0LWJhdGNoLXNjcmFwZS1zdGF0dXM.short_desc": {
+          "source": "Get the status and results of a batch scrape job",
+          "message": "Obtenir le statut et les résultats d'une tâche de scraping par lot"
+        },
+        "app.RmlyZWNyYXds.action.Z2V0LWNyYXdsLXN0YXR1cw.desc": {
+          "source": "Gets the current status and results of a crawl job by its ID.",
+          "message": "Obtient le statut actuel et les résultats d'une tâche de crawl par son ID."
+        },
+        "app.RmlyZWNyYXds.action.Z2V0LWNyYXdsLXN0YXR1cw.display_name": {
+          "source": "Get Crawl Status",
+          "message": "Obtenir le statut du crawl"
+        },
+        "app.RmlyZWNyYXds.action.Z2V0LWNyYXdsLXN0YXR1cw.option.aWQ.desc": {
+          "source": "The unique identifier of the crawl job to check",
+          "message": "L'identifiant unique de la tâche de crawl à vérifier"
+        },
+        "app.RmlyZWNyYXds.action.Z2V0LWNyYXdsLXN0YXR1cw.option.aWQ.display_name": {
+          "source": "Job ID",
+          "message": "ID de la tâche"
+        },
+        "app.RmlyZWNyYXds.action.Z2V0LWNyYXdsLXN0YXR1cw.option.aWQ.short_desc": {
+          "source": "The crawl job ID",
+          "message": "L'ID de la tâche de crawl"
+        },
+        "app.RmlyZWNyYXds.action.Z2V0LWNyYXdsLXN0YXR1cw.short_desc": {
+          "source": "Get the status and results of a crawl job",
+          "message": "Obtenir le statut et les résultats d'une tâche de crawl"
+        },
+        "app.RmlyZWNyYXds.action.Z2V0LWV4dHJhY3Qtc3RhdHVz.desc": {
+          "source": "Gets the current status and results of an extraction job by its ID.",
+          "message": "Obtient le statut actuel et les résultats d'une tâche d'extraction par son ID."
+        },
+        "app.RmlyZWNyYXds.action.Z2V0LWV4dHJhY3Qtc3RhdHVz.display_name": {
+          "source": "Get Extraction Status",
+          "message": "Obtenir le statut de l'extraction"
+        },
+        "app.RmlyZWNyYXds.action.Z2V0LWV4dHJhY3Qtc3RhdHVz.option.aWQ.desc": {
+          "source": "The unique identifier of the extraction job to check",
+          "message": "L'identifiant unique de la tâche d'extraction à vérifier"
+        },
+        "app.RmlyZWNyYXds.action.Z2V0LWV4dHJhY3Qtc3RhdHVz.option.aWQ.display_name": {
+          "source": "Job ID",
+          "message": "ID de la tâche"
+        },
+        "app.RmlyZWNyYXds.action.Z2V0LWV4dHJhY3Qtc3RhdHVz.option.aWQ.short_desc": {
+          "source": "The extraction job ID",
+          "message": "L'ID de la tâche d'extraction"
+        },
+        "app.RmlyZWNyYXds.action.Z2V0LWV4dHJhY3Qtc3RhdHVz.short_desc": {
+          "source": "Get the status and results of an extraction job",
+          "message": "Obtenir le statut et les résultats d'une tâche d'extraction"
+        },
+        "app.RmlyZWNyYXds.action.ZXh0cmFjdA.desc": {
+          "source": "Extracts structured data from one or more web pages using AI.\n\nProvide a natural language prompt and/or a JSON Schema to guide the extraction. The operation runs asynchronously and automatically polls until the extraction completes.",
+          "message": "Extrait des données structurées d'une ou plusieurs pages web à l'aide de l'IA.\n\nFournissez une invite en langage naturel et/ou un schéma JSON pour guider l'extraction. L'opération s'exécute de manière asynchrone et effectue des sondages automatiques jusqu'à ce que l'extraction soit terminée."
+        },
+        "app.RmlyZWNyYXds.action.ZXh0cmFjdA.display_name": {
+          "source": "Extract Structured Data",
+          "message": "Extraire des données structurées"
+        },
+        "app.RmlyZWNyYXds.action.ZXh0cmFjdA.option.ZW5hYmxlV2ViU2VhcmNo.desc": {
+          "source": "If `True`, web search is enabled to supplement extraction with additional data from search results",
+          "message": "Si `True`, la recherche web est activée pour compléter l'extraction avec des données supplémentaires issues des résultats de recherche"
+        },
+        "app.RmlyZWNyYXds.action.ZXh0cmFjdA.option.ZW5hYmxlV2ViU2VhcmNo.display_name": {
+          "source": "Enable Web Search",
+          "message": "Activer la recherche web"
+        },
+        "app.RmlyZWNyYXds.action.ZXh0cmFjdA.option.ZW5hYmxlV2ViU2VhcmNo.short_desc": {
+          "source": "Enable web search",
+          "message": "Activer la recherche web"
+        },
+        "app.RmlyZWNyYXds.action.ZXh0cmFjdA.option.aW5jbHVkZVN1YmRvbWFpbnM.desc": {
+          "source": "If `True`, subdomain URLs are included in the extraction",
+          "message": "Si `True`, les URL des sous-domaines sont incluses dans l'extraction"
+        },
+        "app.RmlyZWNyYXds.action.ZXh0cmFjdA.option.aW5jbHVkZVN1YmRvbWFpbnM.display_name": {
+          "source": "Include Subdomains",
+          "message": "Inclure les sous-domaines"
+        },
+        "app.RmlyZWNyYXds.action.ZXh0cmFjdA.option.aW5jbHVkZVN1YmRvbWFpbnM.short_desc": {
+          "source": "Include subdomain URLs",
+          "message": "Inclure les URL des sous-domaines"
+        },
+        "app.RmlyZWNyYXds.action.ZXh0cmFjdA.option.aWdub3JlSW52YWxpZFVSTHM.desc": {
+          "source": "If `True`, invalid URLs in the list are skipped instead of causing an error",
+          "message": "Si `True`, les URL non valides de la liste sont ignorées au lieu de provoquer une erreur"
+        },
+        "app.RmlyZWNyYXds.action.ZXh0cmFjdA.option.aWdub3JlSW52YWxpZFVSTHM.display_name": {
+          "source": "Ignore Invalid URLs",
+          "message": "Ignorer les URL non valides"
+        },
+        "app.RmlyZWNyYXds.action.ZXh0cmFjdA.option.aWdub3JlSW52YWxpZFVSTHM.short_desc": {
+          "source": "Ignore invalid URLs",
+          "message": "Ignorer les URL non valides"
+        },
+        "app.RmlyZWNyYXds.action.ZXh0cmFjdA.option.aWdub3JlU2l0ZW1hcA.desc": {
+          "source": "If `True`, the sitemap is ignored when discovering pages to extract from",
+          "message": "Si `True`, le sitemap est ignoré lors de la découverte des pages d'où extraire les données"
+        },
+        "app.RmlyZWNyYXds.action.ZXh0cmFjdA.option.aWdub3JlU2l0ZW1hcA.display_name": {
+          "source": "Ignore Sitemap",
+          "message": "Ignorer le sitemap"
+        },
+        "app.RmlyZWNyYXds.action.ZXh0cmFjdA.option.aWdub3JlU2l0ZW1hcA.short_desc": {
+          "source": "Ignore the sitemap",
+          "message": "Ignorer le sitemap"
+        },
+        "app.RmlyZWNyYXds.action.ZXh0cmFjdA.option.c2NoZW1h.desc": {
+          "source": "A JSON Schema object defining the structure of the data to extract. Used to guide the extraction and validate the output format.\n\n**Example**: `{\"type\": \"object\", \"properties\": {\"name\": {\"type\": \"string\"}, \"price\": {\"type\": \"number\"}}}`",
+          "message": "Un objet JSON Schema définissant la structure des données à extraire. Utilisé pour guider l'extraction et valider le format de sortie.\n\n**Exemple** : `{\"type\": \"object\", \"properties\": {\"name\": {\"type\": \"string\"}, \"price\": {\"type\": \"number\"}}}`"
+        },
+        "app.RmlyZWNyYXds.action.ZXh0cmFjdA.option.c2NoZW1h.display_name": {
+          "source": "Schema",
+          "message": "Schéma"
+        },
+        "app.RmlyZWNyYXds.action.ZXh0cmFjdA.option.c2NoZW1h.short_desc": {
+          "source": "JSON Schema for extraction",
+          "message": "JSON Schema pour l'extraction"
+        },
+        "app.RmlyZWNyYXds.action.ZXh0cmFjdA.option.c2NyYXBlT3B0aW9ucw.desc": {
+          "source": "Options applied when scraping each page during extraction, such as `formats`, `onlyMainContent`, `includeTags`, `excludeTags`",
+          "message": "Options appliquées lors du scraping de chaque page pendant l'extraction, telles que `formats`, `onlyMainContent`, `includeTags`, `excludeTags`"
+        },
+        "app.RmlyZWNyYXds.action.ZXh0cmFjdA.option.c2NyYXBlT3B0aW9ucw.display_name": {
+          "source": "Scrape Options",
+          "message": "Options de scraping"
+        },
+        "app.RmlyZWNyYXds.action.ZXh0cmFjdA.option.c2NyYXBlT3B0aW9ucw.short_desc": {
+          "source": "Options for scraping pages",
+          "message": "Options pour le scraping des pages"
+        },
+        "app.RmlyZWNyYXds.action.ZXh0cmFjdA.option.c2hvd1NvdXJjZXM.desc": {
+          "source": "If `True`, the source URLs used for extraction are included in the response",
+          "message": "Si `True`, les URL sources utilisées pour l'extraction sont incluses dans la réponse"
+        },
+        "app.RmlyZWNyYXds.action.ZXh0cmFjdA.option.c2hvd1NvdXJjZXM.display_name": {
+          "source": "Show Sources",
+          "message": "Afficher les sources"
+        },
+        "app.RmlyZWNyYXds.action.ZXh0cmFjdA.option.c2hvd1NvdXJjZXM.short_desc": {
+          "source": "Include source URLs",
+          "message": "Inclure les URL sources"
+        },
+        "app.RmlyZWNyYXds.action.ZXh0cmFjdA.option.cHJvbXB0.desc": {
+          "source": "Natural language prompt describing what data to extract from the pages",
+          "message": "Invite en langage naturel décrivant les données à extraire des pages"
+        },
+        "app.RmlyZWNyYXds.action.ZXh0cmFjdA.option.cHJvbXB0.display_name": {
+          "source": "Prompt",
+          "message": "Prompt"
+        },
+        "app.RmlyZWNyYXds.action.ZXh0cmFjdA.option.cHJvbXB0.short_desc": {
+          "source": "Extraction prompt",
+          "message": "Invite d'extraction"
+        },
+        "app.RmlyZWNyYXds.action.ZXh0cmFjdA.option.dXJscw.desc": {
+          "source": "List of URLs to extract data from (supports glob patterns like `https://example.com/blog/*`)",
+          "message": "Liste des URL à partir desquelles extraire des données (prend en charge les motifs globaux comme `https://example.com/blog/*`)"
+        },
+        "app.RmlyZWNyYXds.action.ZXh0cmFjdA.option.dXJscw.display_name": {
+          "source": "URLs",
+          "message": "URL"
+        },
+        "app.RmlyZWNyYXds.action.ZXh0cmFjdA.option.dXJscw.short_desc": {
+          "source": "URLs to extract from",
+          "message": "URL à partir desquelles extraire"
+        },
+        "app.RmlyZWNyYXds.action.ZXh0cmFjdA.short_desc": {
+          "source": "Extract structured data from web pages using AI",
+          "message": "Extraire des données structurées de pages web à l'aide de l'IA"
+        },
+        "app.RmlyZWNyYXds.action.bWFrZS1hcGktY2FsbA.desc": {
+          "source": "Make a custom HTTP / REST API call to **Firecrawl** using the configured connection's authentication.\n\nSpecify the HTTP method, the URI path (relative to the connection's API base URL), optional query parameters, headers, and request body. The response is returned as a hash containing the status code, response headers, and response body.\n\nUse this action for endpoints that are not yet exposed as first-class actions on this app.",
+          "message": "Effectuer un appel API HTTP / REST personnalisé à **Firecrawl** en utilisant l'authentification de la connexion configurée.\n\nSpécifiez la méthode HTTP, le chemin URI (relatif à l'URL de base de l'API de la connexion), les paramètres de requête optionnels, les en-têtes et le corps de la requête. La réponse est renvoyée sous forme de hash contenant le code de statut, les en-têtes de réponse et le corps de réponse.\n\nUtilisez cette action pour les points de terminaison qui ne sont pas encore exposés en tant qu'actions natives sur cette application."
+        },
+        "app.RmlyZWNyYXds.action.bWFrZS1hcGktY2FsbA.display_name": {
+          "source": "Make an API call",
+          "message": "Effectuer un appel API"
+        },
+        "app.RmlyZWNyYXds.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.desc": {
+          "source": "The request body. The effective type depends on `body_type`: JSON/form/YAML expect a hash, XML/text expect a string, multipart expects a file structure, binary expects raw bytes.",
+          "message": "Le corps de la requête. Le type effectif dépend de `body_type` : JSON/form/YAML attendent un hash, XML/texte attendent une chaîne, multipart attend une structure de fichier, binaire attend des octets bruts."
+        },
+        "app.RmlyZWNyYXds.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.display_name": {
+          "source": "Body",
+          "message": "Corps"
+        },
+        "app.RmlyZWNyYXds.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.short_desc": {
+          "source": "The request body",
+          "message": "Le corps de la requête"
+        },
+        "app.RmlyZWNyYXds.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.desc": {
+          "source": "Upload a file using `multipart/form-data`. The body must be a @ref DataProvider::FileDataType \"FileDataType\" structure (filename + content + mime_type). The framework builds the multipart envelope and sets the boundary header.",
+          "message": "Téléverser un fichier en utilisant `multipart/form-data`. Le corps doit être une structure @ref DataProvider::FileDataType \"FileDataType\" (filename + content + mime_type). Le framework construit l'enveloppe multipart et définit l'en-tête de limite (boundary)."
+        },
+        "app.RmlyZWNyYXds.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.display_name": {
+          "source": "Multipart Form",
+          "message": "Formulaire multipart"
+        },
+        "app.RmlyZWNyYXds.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.short_desc": {
+          "source": "Upload a file using multipart/form-data",
+          "message": "Téléverser un fichier en utilisant multipart/form-data"
+        },
+        "app.RmlyZWNyYXds.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.desc": {
+          "source": "Pass the body to the REST client unchanged; the client decides serialization based on its configured `data` option and the value type",
+          "message": "Transmettre le corps au client REST sans modification ; le client décide de la sérialisation en fonction de son option `data` configurée et du type de valeur"
+        },
+        "app.RmlyZWNyYXds.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.display_name": {
+          "source": "Auto",
+          "message": "Auto"
+        },
+        "app.RmlyZWNyYXds.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.short_desc": {
+          "source": "Pass-through; use connection serialization and let the REST client decide",
+          "message": "Passe-plat ; utiliser la sérialisation de la connexion et laisser le client REST décider"
+        },
+        "app.RmlyZWNyYXds.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.desc": {
+          "source": "Send the body as raw bytes. The body must be a binary value. Sets `Content-Type: application/octet-stream` unless overridden by `hdr`.",
+          "message": "Envoyer le corps sous forme d'octets bruts. Le corps doit être une valeur binaire. Définit `Content-Type: application/octet-stream` sauf s'il est remplacé par `hdr`."
+        },
+        "app.RmlyZWNyYXds.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.display_name": {
+          "source": "Raw Binary",
+          "message": "Binaire brut"
+        },
+        "app.RmlyZWNyYXds.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.short_desc": {
+          "source": "Send body as raw bytes",
+          "message": "Envoyer le corps sous forme d'octets bruts"
+        },
+        "app.RmlyZWNyYXds.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.desc": {
+          "source": "Serialize a hash of form fields as `application/x-www-form-urlencoded`. The body must be a hash whose values are scalars (strings/numbers/booleans).",
+          "message": "Sérialiser un hash de champs de formulaire sous forme de `application/x-www-form-urlencoded`. Le corps doit être un hash dont les valeurs sont des scalaires (chaînes/nombres/booléens)."
+        },
+        "app.RmlyZWNyYXds.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.display_name": {
+          "source": "Form (URL-encoded)",
+          "message": "Formulaire (encodé URL)"
+        },
+        "app.RmlyZWNyYXds.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.short_desc": {
+          "source": "Serialize body as application/x-www-form-urlencoded form fields",
+          "message": "Sérialiser le corps sous forme de champs de formulaire application/x-www-form-urlencoded"
+        },
+        "app.RmlyZWNyYXds.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.desc": {
+          "source": "Serialize the body as JSON; sets `Content-Type: application/json`. The body should be a hash, list, or scalar value.",
+          "message": "Sérialiser le corps en JSON ; définit `Content-Type: application/json`. Le corps doit être un hash, une liste ou une valeur scalaire."
+        },
+        "app.RmlyZWNyYXds.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.display_name": {
+          "source": "JSON",
+          "message": "JSON"
+        },
+        "app.RmlyZWNyYXds.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.short_desc": {
+          "source": "Serialize body as JSON",
+          "message": "Sérialiser le corps en JSON"
+        },
+        "app.RmlyZWNyYXds.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.desc": {
+          "source": "Send the body as plain text. The body must be a string. Sets `Content-Type: text/plain`.",
+          "message": "Envoyer le corps en texte brut. Le corps doit être une chaîne. Définit `Content-Type: text/plain`."
+        },
+        "app.RmlyZWNyYXds.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.display_name": {
+          "source": "Plain Text",
+          "message": "Texte brut"
+        },
+        "app.RmlyZWNyYXds.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.short_desc": {
+          "source": "Send body as text/plain",
+          "message": "Envoyer le corps en text/plain"
+        },
+        "app.RmlyZWNyYXds.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.desc": {
+          "source": "Send the body as XML. If the body is a hash it is serialized to XML; if it is a string it is sent verbatim. Sets `Content-Type: application/xml`.",
+          "message": "Envoyer le corps en XML. Si le corps est un hash, il est sérialisé en XML ; s'il s'agit d'une chaîne, il est envoyé tel quel. Définit `Content-Type: application/xml`."
+        },
+        "app.RmlyZWNyYXds.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.display_name": {
+          "source": "XML",
+          "message": "XML"
+        },
+        "app.RmlyZWNyYXds.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.short_desc": {
+          "source": "Send body as XML",
+          "message": "Envoyer le corps en XML"
+        },
+        "app.RmlyZWNyYXds.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.desc": {
+          "source": "Send the body as YAML. If the body is a hash it is serialized to YAML; if it is a string it is sent verbatim. Sets `Content-Type: application/x-yaml`.",
+          "message": "Envoyer le corps en YAML. Si le corps est un hash, il est sérialisé en YAML ; s'il s'agit d'une chaîne, il est envoyé tel quel. Définit `Content-Type: application/x-yaml`."
+        },
+        "app.RmlyZWNyYXds.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.display_name": {
+          "source": "YAML",
+          "message": "YAML"
+        },
+        "app.RmlyZWNyYXds.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.short_desc": {
+          "source": "Send body as YAML",
+          "message": "Envoyer le corps en YAML"
+        },
+        "app.RmlyZWNyYXds.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.desc": {
+          "source": "Selects the body serialization mode and the corresponding `Content-Type` header. Changing this field reshapes the `body` editor - selecting JSON exposes a JSON editor, selecting Multipart Form exposes a file picker, and so on.",
+          "message": "Sélectionne le mode de sérialisation du corps et l'en-tête `Content-Type` correspondant. La modification de ce champ remanie l'éditeur `body` - sélectionner JSON affiche un éditeur JSON, sélectionner Formulaire multipart affiche un sélecteur de fichier, et ainsi de suite."
+        },
+        "app.RmlyZWNyYXds.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.display_name": {
+          "source": "Body Type",
+          "message": "Type de corps"
+        },
+        "app.RmlyZWNyYXds.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.short_desc": {
+          "source": "How the body is serialized and what Content-Type is sent",
+          "message": "Comment le corps est sérialisé et quel Content-Type est envoyé"
+        },
+        "app.RmlyZWNyYXds.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.desc": {
+          "source": "If `True`, non-2xx HTTP responses return as the normal response hash (with the actual status code) instead of raising `REST-RESPONSE-ERROR`. Useful for handling 4xx/5xx as data - e.g. checking whether a resource exists. Overrides the connection's `error_passthru` setting for this call only.",
+          "message": "Si `True`, les réponses HTTP non-2xx sont retournées sous la forme du hash de réponse normal (avec le code d'état réel) au lieu de lever `REST-RESPONSE-ERROR`. Utile pour traiter les codes 4xx/5xx comme des données - par ex. vérifier si une ressource existe. Remplace le paramètre `error_passthru` de la connexion pour cet appel uniquement."
+        },
+        "app.RmlyZWNyYXds.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.display_name": {
+          "source": "Return Errors as Data",
+          "message": "Retourner les erreurs sous forme de données"
+        },
+        "app.RmlyZWNyYXds.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.short_desc": {
+          "source": "Return non-2xx responses normally instead of throwing",
+          "message": "Retourner les réponses non-2xx normalement au lieu de lever une exception"
+        },
+        "app.RmlyZWNyYXds.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.desc": {
+          "source": "Optional list of HTTP status codes treated as success. If set and the response status is not in this list, the action throws `REST-STATUS-ERROR`. When unset, the REST client's default behavior applies (typically: 2xx is success, non-2xx throws).",
+          "message": "Liste optionnelle de codes d'état HTTP traités comme des succès. Si elle est définie et que le statut de la réponse n'est pas dans cette liste, l'action lève `REST-STATUS-ERROR`. Lorsqu'elle n'est pas définie, le comportement par défaut du client REST s'applique (généralement : 2xx est un succès, non-2xx lève une exception)."
+        },
+        "app.RmlyZWNyYXds.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.display_name": {
+          "source": "Expected Status Codes",
+          "message": "Codes d'état attendus"
+        },
+        "app.RmlyZWNyYXds.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.short_desc": {
+          "source": "Response status codes treated as success",
+          "message": "Codes d'état de réponse traités comme un succès"
+        },
+        "app.RmlyZWNyYXds.action.bWFrZS1hcGktY2FsbA.option.aGRy.desc": {
+          "source": "Hash of custom headers added to the request. These override any default headers set by `body_type` (e.g. supplying `Content-Type` here wins over the body-type default).",
+          "message": "Hash d'en-têtes personnalisés ajoutés à la requête. Ils remplacent tous les en-têtes par défaut définis par `body_type` (par ex. fournir `Content-Type` ici prévaut sur la valeur par défaut du type de corps)."
+        },
+        "app.RmlyZWNyYXds.action.bWFrZS1hcGktY2FsbA.option.aGRy.display_name": {
+          "source": "Custom Headers",
+          "message": "En-têtes personnalisés"
+        },
+        "app.RmlyZWNyYXds.action.bWFrZS1hcGktY2FsbA.option.aGRy.short_desc": {
+          "source": "Extra request headers",
+          "message": "En-têtes de requête supplémentaires"
+        },
+        "app.RmlyZWNyYXds.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.desc": {
+          "source": "If `True`, the response hash includes a `debug` sub-hash containing the request method/URL/headers (with sensitive values redacted), request and response sizes, and round-trip duration. Useful when investigating slow or failing calls. Off by default to keep responses lean.",
+          "message": "Si `True`, le hash de réponse inclut un sous-hash `debug` contenant la méthode/URL/en-têtes de la requête (avec les valeurs sensibles masquées), les tailles de requête et de réponse, et la durée d'aller-retour. Utile lors de l'investigation d'appels lents ou en échec. Désactivé par défaut pour conserver des réponses légères."
+        },
+        "app.RmlyZWNyYXds.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.display_name": {
+          "source": "Include Debug Info",
+          "message": "Inclure les informations de débogage"
+        },
+        "app.RmlyZWNyYXds.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.short_desc": {
+          "source": "Include request/timing/size debug info in the response",
+          "message": "Inclure les informations de débogage de requête/temps/taille dans la réponse"
+        },
+        "app.RmlyZWNyYXds.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.desc": {
+          "source": "HTTP `OPTIONS`",
+          "message": "HTTP `OPTIONS`"
+        },
+        "app.RmlyZWNyYXds.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.display_name": {
+          "source": "OPTIONS",
+          "message": "OPTIONS"
+        },
+        "app.RmlyZWNyYXds.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.short_desc": {
+          "source": "HTTP OPTIONS",
+          "message": "HTTP OPTIONS"
+        },
+        "app.RmlyZWNyYXds.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.desc": {
+          "source": "HTTP `DELETE`",
+          "message": "HTTP `DELETE`"
+        },
+        "app.RmlyZWNyYXds.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.display_name": {
+          "source": "DELETE",
+          "message": "DELETE"
+        },
+        "app.RmlyZWNyYXds.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.short_desc": {
+          "source": "HTTP DELETE",
+          "message": "HTTP DELETE"
+        },
+        "app.RmlyZWNyYXds.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.desc": {
+          "source": "HTTP `GET`",
+          "message": "HTTP `GET`"
+        },
+        "app.RmlyZWNyYXds.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.display_name": {
+          "source": "GET",
+          "message": "GET"
+        },
+        "app.RmlyZWNyYXds.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.short_desc": {
+          "source": "HTTP GET",
+          "message": "HTTP GET"
+        },
+        "app.RmlyZWNyYXds.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.desc": {
+          "source": "HTTP `HEAD`",
+          "message": "HTTP `HEAD`"
+        },
+        "app.RmlyZWNyYXds.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.display_name": {
+          "source": "HEAD",
+          "message": "HEAD"
+        },
+        "app.RmlyZWNyYXds.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.short_desc": {
+          "source": "HTTP HEAD",
+          "message": "HTTP HEAD"
+        },
+        "app.RmlyZWNyYXds.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.desc": {
+          "source": "HTTP `PATCH`",
+          "message": "HTTP `PATCH`"
+        },
+        "app.RmlyZWNyYXds.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.display_name": {
+          "source": "PATCH",
+          "message": "PATCH"
+        },
+        "app.RmlyZWNyYXds.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.short_desc": {
+          "source": "HTTP PATCH",
+          "message": "HTTP PATCH"
+        },
+        "app.RmlyZWNyYXds.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.desc": {
+          "source": "HTTP `POST`",
+          "message": "HTTP `POST`"
+        },
+        "app.RmlyZWNyYXds.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.display_name": {
+          "source": "POST",
+          "message": "POST"
+        },
+        "app.RmlyZWNyYXds.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.short_desc": {
+          "source": "HTTP POST",
+          "message": "HTTP POST"
+        },
+        "app.RmlyZWNyYXds.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.desc": {
+          "source": "HTTP `PUT`",
+          "message": "HTTP `PUT`"
+        },
+        "app.RmlyZWNyYXds.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.display_name": {
+          "source": "PUT",
+          "message": "PUT"
+        },
+        "app.RmlyZWNyYXds.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.short_desc": {
+          "source": "HTTP PUT",
+          "message": "HTTP PUT"
+        },
+        "app.RmlyZWNyYXds.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.desc": {
+          "source": "HTTP `TRACE`",
+          "message": "HTTP `TRACE`"
+        },
+        "app.RmlyZWNyYXds.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.display_name": {
+          "source": "TRACE",
+          "message": "TRACE"
+        },
+        "app.RmlyZWNyYXds.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.short_desc": {
+          "source": "HTTP TRACE",
+          "message": "HTTP TRACE"
+        },
+        "app.RmlyZWNyYXds.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "La méthode HTTP à utiliser pour la requête"
+        },
+        "app.RmlyZWNyYXds.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.display_name": {
+          "source": "HTTP Method",
+          "message": "Méthode HTTP"
+        },
+        "app.RmlyZWNyYXds.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.short_desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "La méthode HTTP à utiliser pour la requête"
+        },
+        "app.RmlyZWNyYXds.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain `{name}` placeholders that are replaced from `path_vars`. Example: `/users/{id}/comments`.",
+          "message": "Le chemin URI relatif à l'URL de base de l'API de la connexion. Peut contenir des espaces réservés `{name}` remplacés à partir de `path_vars`. Exemple : `/users/{id}/comments`."
+        },
+        "app.RmlyZWNyYXds.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.display_name": {
+          "source": "URI Path",
+          "message": "Chemin URI"
+        },
+        "app.RmlyZWNyYXds.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.short_desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain '{name}' placeholders that are replaced from 'path_vars'. Example: '/users/{id}/comments'",
+          "message": "Le chemin URI relatif à l'URL de base de l'API de la connexion. Peut contenir des espaces réservés '{name}' qui sont remplacés à partir de 'path_vars'. Exemple : '/users/{id}/comments'"
+        },
+        "app.RmlyZWNyYXds.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.desc": {
+          "source": "Hash of values substituted into `{name}` placeholders in the URI path. Example: with `path = /users/{id}` and `path_vars = {id: 123}` the framework sends `/users/123`. Values are URL-encoded.",
+          "message": "Hachage des valeurs substituées dans les espaces réservés `{name}` dans le chemin URI. Exemple : avec `path = /users/{id}` et `path_vars = {id: 123}`, le framework envoie `/users/123`. Les valeurs sont encodées en URL."
+        },
+        "app.RmlyZWNyYXds.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.display_name": {
+          "source": "Path Variables",
+          "message": "Variables de chemin"
+        },
+        "app.RmlyZWNyYXds.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.short_desc": {
+          "source": "Values for {name} placeholders in path",
+          "message": "Valeurs pour les espaces réservés {name} dans le chemin"
+        },
+        "app.RmlyZWNyYXds.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.desc": {
+          "source": "Hash of query string parameters to append to the URI path. Values are URL-encoded; list values are joined with `,`.",
+          "message": "Hachage des paramètres de chaîne de requête à ajouter au chemin URI. Les valeurs sont encodées en URL ; les valeurs de liste sont jointes avec `,`."
+        },
+        "app.RmlyZWNyYXds.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.display_name": {
+          "source": "Query Arguments",
+          "message": "Arguments de la requête"
+        },
+        "app.RmlyZWNyYXds.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.short_desc": {
+          "source": "Query string parameters",
+          "message": "Paramètres de chaîne de requête"
+        },
+        "app.RmlyZWNyYXds.action.bWFrZS1hcGktY2FsbA.short_desc": {
+          "source": "Make a custom API call to Firecrawl",
+          "message": "Effectuer un appel API personnalisé à Firecrawl"
+        },
+        "app.RmlyZWNyYXds.action.bWFw.desc": {
+          "source": "Maps a website to discover all URLs without scraping page content. Returns a list of discovered links.\n\nSupports search filtering, subdomain inclusion, sitemap usage, and geolocation settings.",
+          "message": "Cartographier un site web pour découvrir toutes les URL sans scraper le contenu des pages. Renvoie une liste de liens découverts.\n\nPrend en charge le filtrage de recherche, l'inclusion de sous-domaines, l'utilisation du sitemap et les paramètres de géolocalisation."
+        },
+        "app.RmlyZWNyYXds.action.bWFw.display_name": {
+          "source": "Map a Website",
+          "message": "Cartographier un site web"
+        },
+        "app.RmlyZWNyYXds.action.bWFw.option.aW5jbHVkZVN1YmRvbWFpbnM.desc": {
+          "source": "If `True`, subdomain URLs are included in the results",
+          "message": "Si `True`, les URL des sous-domaines sont incluses dans les résultats"
+        },
+        "app.RmlyZWNyYXds.action.bWFw.option.aW5jbHVkZVN1YmRvbWFpbnM.display_name": {
+          "source": "Include Subdomains",
+          "message": "Inclure les sous-domaines"
+        },
+        "app.RmlyZWNyYXds.action.bWFw.option.aW5jbHVkZVN1YmRvbWFpbnM.short_desc": {
+          "source": "Include subdomain URLs",
+          "message": "Inclure les URL des sous-domaines"
+        },
+        "app.RmlyZWNyYXds.action.bWFw.option.aWdub3JlQ2FjaGU.desc": {
+          "source": "If `True`, cached results are ignored and a fresh map is generated",
+          "message": "Si `True`, les résultats en cache sont ignorés et une nouvelle cartographie est générée"
+        },
+        "app.RmlyZWNyYXds.action.bWFw.option.aWdub3JlQ2FjaGU.display_name": {
+          "source": "Ignore Cache",
+          "message": "Ignorer le cache"
+        },
+        "app.RmlyZWNyYXds.action.bWFw.option.aWdub3JlQ2FjaGU.short_desc": {
+          "source": "Ignore cached results",
+          "message": "Ignorer les résultats mis en cache"
+        },
+        "app.RmlyZWNyYXds.action.bWFw.option.aWdub3JlUXVlcnlQYXJhbWV0ZXJz.desc": {
+          "source": "If `True`, URLs with different query parameters are treated as the same page",
+          "message": "Si `True`, les URL avec des paramètres de requête différents sont traitées comme la même page"
+        },
+        "app.RmlyZWNyYXds.action.bWFw.option.aWdub3JlUXVlcnlQYXJhbWV0ZXJz.display_name": {
+          "source": "Ignore Query Parameters",
+          "message": "Ignorer les paramètres de requête"
+        },
+        "app.RmlyZWNyYXds.action.bWFw.option.aWdub3JlUXVlcnlQYXJhbWV0ZXJz.short_desc": {
+          "source": "Ignore URL query parameters",
+          "message": "Ignorer les paramètres de requête d'URL"
+        },
+        "app.RmlyZWNyYXds.action.bWFw.option.bG9jYXRpb24.desc": {
+          "source": "Geolocation settings for the map request",
+          "message": "Paramètres de géolocalisation pour la requête de cartographie"
+        },
+        "app.RmlyZWNyYXds.action.bWFw.option.bG9jYXRpb24.display_name": {
+          "source": "Location",
+          "message": "Emplacement"
+        },
+        "app.RmlyZWNyYXds.action.bWFw.option.bG9jYXRpb24.short_desc": {
+          "source": "Geolocation settings",
+          "message": "Paramètres de géolocalisation"
+        },
+        "app.RmlyZWNyYXds.action.bWFw.option.bGltaXQ.desc": {
+          "source": "Maximum number of links to return. Defaults to `5000`",
+          "message": "Nombre maximal de liens à renvoyer. La valeur par défaut est `5000`"
+        },
+        "app.RmlyZWNyYXds.action.bWFw.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "Limite"
+        },
+        "app.RmlyZWNyYXds.action.bWFw.option.bGltaXQ.short_desc": {
+          "source": "Maximum number of links to return",
+          "message": "Nombre maximal de liens à renvoyer"
+        },
+        "app.RmlyZWNyYXds.action.bWFw.option.c2VhcmNo.desc": {
+          "source": "An optional search query to filter the discovered URLs",
+          "message": "Une requête de recherche facultative pour filtrer les URL découvertes"
+        },
+        "app.RmlyZWNyYXds.action.bWFw.option.c2VhcmNo.display_name": {
+          "source": "Search",
+          "message": "Rechercher"
+        },
+        "app.RmlyZWNyYXds.action.bWFw.option.c2VhcmNo.short_desc": {
+          "source": "Search query to filter URLs",
+          "message": "Requête de recherche pour filtrer les URL"
+        },
+        "app.RmlyZWNyYXds.action.bWFw.option.c2l0ZW1hcA.allowed-value.c3RyaW5nOm9ubHk.display_name": {
+          "source": "Only",
+          "message": "Uniquement"
+        },
+        "app.RmlyZWNyYXds.action.bWFw.option.c2l0ZW1hcA.allowed-value.c3RyaW5nOmluY2x1ZGU.display_name": {
+          "source": "Include",
+          "message": "Inclure"
+        },
+        "app.RmlyZWNyYXds.action.bWFw.option.c2l0ZW1hcA.allowed-value.c3RyaW5nOnNraXA.display_name": {
+          "source": "Skip",
+          "message": "Ignorer"
+        },
+        "app.RmlyZWNyYXds.action.bWFw.option.c2l0ZW1hcA.desc": {
+          "source": "How to handle the sitemap when mapping URLs",
+          "message": "Comment gérer le sitemap lors de la cartographie des URL"
+        },
+        "app.RmlyZWNyYXds.action.bWFw.option.c2l0ZW1hcA.display_name": {
+          "source": "Sitemap",
+          "message": "Sitemap"
+        },
+        "app.RmlyZWNyYXds.action.bWFw.option.c2l0ZW1hcA.short_desc": {
+          "source": "Sitemap handling mode",
+          "message": "Mode de gestion du sitemap"
+        },
+        "app.RmlyZWNyYXds.action.bWFw.option.dGltZW91dA.desc": {
+          "source": "Maximum time in milliseconds to wait for the map operation to complete",
+          "message": "Délai maximal en millisecondes à attendre pour que l'opération de cartographie se termine"
+        },
+        "app.RmlyZWNyYXds.action.bWFw.option.dGltZW91dA.display_name": {
+          "source": "Timeout",
+          "message": "Délai d'expiration"
+        },
+        "app.RmlyZWNyYXds.action.bWFw.option.dGltZW91dA.short_desc": {
+          "source": "Timeout in milliseconds",
+          "message": "Délai d'expiration en millisecondes"
+        },
+        "app.RmlyZWNyYXds.action.bWFw.option.dXJs.desc": {
+          "source": "The starting URL of the website to map",
+          "message": "L'URL de départ du site web à cartographier"
+        },
+        "app.RmlyZWNyYXds.action.bWFw.option.dXJs.display_name": {
+          "source": "URL",
+          "message": "URL"
+        },
+        "app.RmlyZWNyYXds.action.bWFw.option.dXJs.short_desc": {
+          "source": "The URL to map",
+          "message": "L'URL à cartographier"
+        },
+        "app.RmlyZWNyYXds.action.bWFw.short_desc": {
+          "source": "Discover all URLs on a website without scraping content",
+          "message": "Découvrir toutes les URL d'un site web sans scraper le contenu"
+        },
+        "app.RmlyZWNyYXds.action.c2NyYXBl.desc": {
+          "source": "Scrapes a single web page at the given URL and returns its content in the requested formats (markdown, HTML, links, images, etc.).\n\nSupports browser actions, geolocation, proxy configuration, and content filtering via include/exclude tags.",
+          "message": "Scrape une seule page web à l'URL indiquée et renvoie son contenu dans les formats demandés (markdown, HTML, liens, images, etc.).\n\nPrend en charge les actions de navigateur, la géolocalisation, la configuration de proxy et le filtrage de contenu via des balises d'inclusion/exclusion."
+        },
+        "app.RmlyZWNyYXds.action.c2NyYXBl.display_name": {
+          "source": "Scrape a Web Page",
+          "message": "Scraper une page web"
+        },
+        "app.RmlyZWNyYXds.action.c2NyYXBl.option.YWN0aW9ucw.desc": {
+          "source": "List of browser actions to perform before scraping. Each action is a hash with a `type` key and action-specific parameters.\n\n**Available actions**:\n- `wait` — wait for duration (`milliseconds`) or element (`selector`)\n- `click` — click an element (`selector`, `all`)\n- `write` — type text into the focused element (`text`)\n- `press` — press a keyboard key (`key`)\n- `scroll` — scroll the page (`direction`: `up`/`down`; optional `selector`)\n- `screenshot` — take a screenshot (`fullPage`, `quality`, `viewport`)\n- `scrape` — capture the page content at its current state\n- `executeJavascript` — run JavaScript code (`script`)\n- `pdf` — generate a PDF (`format`, `landscape`, `scale`)",
+          "message": "Liste des actions de navigateur à effectuer avant le scraping. Chaque action est un hash avec une clé `type` et des paramètres spécifiques à l'action.\n\n**Actions disponibles** :\n- `wait` — attendre une durée (`milliseconds`) ou un élément (`selector`)\n- `click` — cliquer sur un élément (`selector`, `all`)\n- `write` — saisir du texte dans l'élément actif (`text`)\n- `press` — appuyer sur une touche du clavier (`key`)\n- `scroll` — faire défiler la page (`direction` : `up`/`down` ; optionnel `selector`)\n- `screenshot` — prendre une capture d'écran (`fullPage`, `quality`, `viewport`)\n- `scrape` — capturer le contenu de la page dans son état actuel\n- `executeJavascript` — exécuter du code JavaScript (`script`)\n- `pdf` — générer un PDF (`format`, `landscape`, `scale`)"
+        },
+        "app.RmlyZWNyYXds.action.c2NyYXBl.option.YWN0aW9ucw.display_name": {
+          "source": "Actions",
+          "message": "Actions"
+        },
+        "app.RmlyZWNyYXds.action.c2NyYXBl.option.YWN0aW9ucw.short_desc": {
+          "source": "Browser actions to perform",
+          "message": "Actions de navigateur à exécuter"
+        },
+        "app.RmlyZWNyYXds.action.c2NyYXBl.option.YmxvY2tBZHM.desc": {
+          "source": "If `True`, advertisements are blocked during scraping",
+          "message": "Si `True`, les publicités sont bloquées pendant le scraping"
+        },
+        "app.RmlyZWNyYXds.action.c2NyYXBl.option.YmxvY2tBZHM.display_name": {
+          "source": "Block Ads",
+          "message": "Bloquer les publicités"
+        },
+        "app.RmlyZWNyYXds.action.c2NyYXBl.option.YmxvY2tBZHM.short_desc": {
+          "source": "Block advertisements",
+          "message": "Bloquer les publicités"
+        },
+        "app.RmlyZWNyYXds.action.c2NyYXBl.option.ZXhjbHVkZVRhZ3M.desc": {
+          "source": "List of HTML tags to exclude from the output (e.g., `nav`, `footer`)",
+          "message": "Liste des balises HTML à exclure de la sortie (par ex., `nav`, `footer`)"
+        },
+        "app.RmlyZWNyYXds.action.c2NyYXBl.option.ZXhjbHVkZVRhZ3M.display_name": {
+          "source": "Exclude Tags",
+          "message": "Exclure les balises"
+        },
+        "app.RmlyZWNyYXds.action.c2NyYXBl.option.ZXhjbHVkZVRhZ3M.short_desc": {
+          "source": "HTML tags to exclude",
+          "message": "Balises HTML à exclure"
+        },
+        "app.RmlyZWNyYXds.action.c2NyYXBl.option.Zm9ybWF0cw.allowed-value.c3RyaW5nOm1hcmtkb3du.display_name": {
+          "source": "Markdown",
+          "message": "Markdown"
+        },
+        "app.RmlyZWNyYXds.action.c2NyYXBl.option.Zm9ybWF0cw.allowed-value.c3RyaW5nOmF1ZGlv.display_name": {
+          "source": "Audio",
+          "message": "Audio"
+        },
+        "app.RmlyZWNyYXds.action.c2NyYXBl.option.Zm9ybWF0cw.allowed-value.c3RyaW5nOmJyYW5kaW5n.display_name": {
+          "source": "Branding",
+          "message": "Branding"
+        },
+        "app.RmlyZWNyYXds.action.c2NyYXBl.option.Zm9ybWF0cw.allowed-value.c3RyaW5nOmNoYW5nZVRyYWNraW5n.display_name": {
+          "source": "Change Tracking",
+          "message": "Suivi des modifications"
+        },
+        "app.RmlyZWNyYXds.action.c2NyYXBl.option.Zm9ybWF0cw.allowed-value.c3RyaW5nOmh0bWw.display_name": {
+          "source": "HTML",
+          "message": "HTML"
+        },
+        "app.RmlyZWNyYXds.action.c2NyYXBl.option.Zm9ybWF0cw.allowed-value.c3RyaW5nOmltYWdlcw.display_name": {
+          "source": "Images",
+          "message": "Images"
+        },
+        "app.RmlyZWNyYXds.action.c2NyYXBl.option.Zm9ybWF0cw.allowed-value.c3RyaW5nOmpzb24.display_name": {
+          "source": "JSON",
+          "message": "JSON"
+        },
+        "app.RmlyZWNyYXds.action.c2NyYXBl.option.Zm9ybWF0cw.allowed-value.c3RyaW5nOmxpbmtz.display_name": {
+          "source": "Links",
+          "message": "Liens"
+        },
+        "app.RmlyZWNyYXds.action.c2NyYXBl.option.Zm9ybWF0cw.allowed-value.c3RyaW5nOnJhd0h0bWw.display_name": {
+          "source": "Raw HTML",
+          "message": "HTML brut"
+        },
+        "app.RmlyZWNyYXds.action.c2NyYXBl.option.Zm9ybWF0cw.allowed-value.c3RyaW5nOnN1bW1hcnk.display_name": {
+          "source": "Summary",
+          "message": "Résumé"
+        },
+        "app.RmlyZWNyYXds.action.c2NyYXBl.option.Zm9ybWF0cw.allowed-value.c3RyaW5nOnNjcmVlbnNob3Q.display_name": {
+          "source": "Screenshot",
+          "message": "Capture d'écran"
+        },
+        "app.RmlyZWNyYXds.action.c2NyYXBl.option.Zm9ybWF0cw.desc": {
+          "source": "List of output formats to return from the scrape",
+          "message": "Liste des formats de sortie à renvoyer pour le scraping"
+        },
+        "app.RmlyZWNyYXds.action.c2NyYXBl.option.Zm9ybWF0cw.display_name": {
+          "source": "Formats",
+          "message": "Formats"
+        },
+        "app.RmlyZWNyYXds.action.c2NyYXBl.option.Zm9ybWF0cw.short_desc": {
+          "source": "Output formats to return",
+          "message": "Formats de sortie à retourner"
+        },
+        "app.RmlyZWNyYXds.action.c2NyYXBl.option.aGVhZGVycw.desc": {
+          "source": "Custom HTTP headers to send with the scrape request",
+          "message": "En-têtes HTTP personnalisés à envoyer avec la requête de scraping"
+        },
+        "app.RmlyZWNyYXds.action.c2NyYXBl.option.aGVhZGVycw.display_name": {
+          "source": "Headers",
+          "message": "En-têtes"
+        },
+        "app.RmlyZWNyYXds.action.c2NyYXBl.option.aGVhZGVycw.short_desc": {
+          "source": "Custom HTTP headers",
+          "message": "En-têtes HTTP personnalisés"
+        },
+        "app.RmlyZWNyYXds.action.c2NyYXBl.option.aW5jbHVkZVRhZ3M.desc": {
+          "source": "List of HTML tags to include in the output (e.g., `article`, `main`). Only content within these tags is returned",
+          "message": "Liste des balises HTML à inclure dans la sortie (par ex., `article`, `main`). Seul le contenu situé à l'intérieur de ces balises est retourné"
+        },
+        "app.RmlyZWNyYXds.action.c2NyYXBl.option.aW5jbHVkZVRhZ3M.display_name": {
+          "source": "Include Tags",
+          "message": "Inclure les balises"
+        },
+        "app.RmlyZWNyYXds.action.c2NyYXBl.option.aW5jbHVkZVRhZ3M.short_desc": {
+          "source": "HTML tags to include",
+          "message": "Balises HTML à inclure"
+        },
+        "app.RmlyZWNyYXds.action.c2NyYXBl.option.b25seU1haW5Db250ZW50.desc": {
+          "source": "If `True`, only the main content of the page is returned, excluding headers, navigation, footers, etc. Defaults to `True`",
+          "message": "Si `True`, seul le contenu principal de la page est renvoyé, à l'exclusion des en-têtes, de la navigation, des pieds de page, etc. La valeur par défaut est `True`"
+        },
+        "app.RmlyZWNyYXds.action.c2NyYXBl.option.b25seU1haW5Db250ZW50.display_name": {
+          "source": "Only Main Content",
+          "message": "Contenu principal uniquement"
+        },
+        "app.RmlyZWNyYXds.action.c2NyYXBl.option.b25seU1haW5Db250ZW50.short_desc": {
+          "source": "Extract only the main content",
+          "message": "Extraire uniquement le contenu principal"
+        },
+        "app.RmlyZWNyYXds.action.c2NyYXBl.option.b25seUNsZWFuQ29udGVudA.desc": {
+          "source": "If `True`, an LLM-based cleanup pass is applied to remove navigation, ads, and boilerplate. Defaults to `False`",
+          "message": "Si `True`, une passe de nettoyage basée sur un LLM est appliquée pour supprimer la navigation, les publicités et le contenu standard récurrent. La valeur par défaut est `False`"
+        },
+        "app.RmlyZWNyYXds.action.c2NyYXBl.option.b25seUNsZWFuQ29udGVudA.display_name": {
+          "source": "Only Clean Content",
+          "message": "Contenu nettoyé uniquement"
+        },
+        "app.RmlyZWNyYXds.action.c2NyYXBl.option.b25seUNsZWFuQ29udGVudA.short_desc": {
+          "source": "Apply LLM-based content cleanup",
+          "message": "Appliquer un nettoyage de contenu basé sur un LLM"
+        },
+        "app.RmlyZWNyYXds.action.c2NyYXBl.option.bG9jYXRpb24.desc": {
+          "source": "Geolocation settings for the scrape request",
+          "message": "Paramètres de géolocalisation pour la requête de scraping"
+        },
+        "app.RmlyZWNyYXds.action.c2NyYXBl.option.bG9jYXRpb24.display_name": {
+          "source": "Location",
+          "message": "Emplacement"
+        },
+        "app.RmlyZWNyYXds.action.c2NyYXBl.option.bG9jYXRpb24.short_desc": {
+          "source": "Geolocation settings",
+          "message": "Paramètres de géolocalisation"
+        },
+        "app.RmlyZWNyYXds.action.c2NyYXBl.option.bW9iaWxl.desc": {
+          "source": "If `True`, the page is scraped using a mobile user agent",
+          "message": "Si `True`, la page est scrapée à l'aide d'un user-agent mobile"
+        },
+        "app.RmlyZWNyYXds.action.c2NyYXBl.option.bW9iaWxl.display_name": {
+          "source": "Mobile",
+          "message": "Mobile"
+        },
+        "app.RmlyZWNyYXds.action.c2NyYXBl.option.bW9iaWxl.short_desc": {
+          "source": "Use mobile user agent",
+          "message": "Utiliser un user-agent mobile"
+        },
+        "app.RmlyZWNyYXds.action.c2NyYXBl.option.bWF4QWdl.desc": {
+          "source": "Maximum age in milliseconds for cached content. If a cached version of the page exists and is younger than this value, it is returned instead of re-scraping. Defaults to `172800000` (48 hours)",
+          "message": "Âge maximal en millisecondes pour le contenu en cache. Si une version en cache de la page existe et est plus récente que cette valeur, elle est retournée au lieu de relancer un scraping. Par défaut : `172800000` (48 heures)"
+        },
+        "app.RmlyZWNyYXds.action.c2NyYXBl.option.bWF4QWdl.display_name": {
+          "source": "Max Age",
+          "message": "Âge maximal"
+        },
+        "app.RmlyZWNyYXds.action.c2NyYXBl.option.bWF4QWdl.short_desc": {
+          "source": "Cache freshness threshold in milliseconds",
+          "message": "Seuil de fraîcheur du cache en millisecondes"
+        },
+        "app.RmlyZWNyYXds.action.c2NyYXBl.option.bWluQWdl.desc": {
+          "source": "Minimum age in milliseconds for a cache-only lookup. If set, only cached content older than this value is returned; no fresh scrape is triggered if no cache entry exists",
+          "message": "Âge minimal en millisecondes pour une recherche uniquement dans le cache. S'il est défini, seul le contenu en cache plus ancien que cette valeur est retourné ; aucun nouveau scraping n'est déclenché si aucune entrée n'existe dans le cache"
+        },
+        "app.RmlyZWNyYXds.action.c2NyYXBl.option.bWluQWdl.display_name": {
+          "source": "Min Age",
+          "message": "Âge minimal"
+        },
+        "app.RmlyZWNyYXds.action.c2NyYXBl.option.bWluQWdl.short_desc": {
+          "source": "Minimum cache age in milliseconds",
+          "message": "Âge minimal du cache en millisecondes"
+        },
+        "app.RmlyZWNyYXds.action.c2NyYXBl.option.c2tpcFRsc1ZlcmlmaWNhdGlvbg.desc": {
+          "source": "If `True`, TLS certificate verification is skipped",
+          "message": "Si `True`, la vérification du certificat TLS est ignorée"
+        },
+        "app.RmlyZWNyYXds.action.c2NyYXBl.option.c2tpcFRsc1ZlcmlmaWNhdGlvbg.display_name": {
+          "source": "Skip TLS Verification",
+          "message": "Ignorer la vérification TLS"
+        },
+        "app.RmlyZWNyYXds.action.c2NyYXBl.option.c2tpcFRsc1ZlcmlmaWNhdGlvbg.short_desc": {
+          "source": "Skip TLS certificate verification",
+          "message": "Ignorer la vérification du certificat TLS"
+        },
+        "app.RmlyZWNyYXds.action.c2NyYXBl.option.c3RvcmVJbkNhY2hl.desc": {
+          "source": "If `True`, the scraped content is stored in the Firecrawl cache so that subsequent scrapes within `maxAge` can reuse it. Defaults to `True`",
+          "message": "Si `True`, le contenu scrapé est stocké dans le cache de Firecrawl afin que les scrapings ultérieurs dans la limite de `maxAge` puissent le réutiliser. Par défaut : `True`"
+        },
+        "app.RmlyZWNyYXds.action.c2NyYXBl.option.c3RvcmVJbkNhY2hl.display_name": {
+          "source": "Store In Cache",
+          "message": "Stocker dans le cache"
+        },
+        "app.RmlyZWNyYXds.action.c2NyYXBl.option.c3RvcmVJbkNhY2hl.short_desc": {
+          "source": "Cache the scraped content",
+          "message": "Mettre en cache le contenu scrapé"
+        },
+        "app.RmlyZWNyYXds.action.c2NyYXBl.option.cGFyc2Vycw.desc": {
+          "source": "List of parser configurations for PDF processing. Each entry specifies a parser type and processing options",
+          "message": "Liste des configurations d'analyseur pour le traitement PDF. Chaque entrée spécifie un type d'analyseur et des options de traitement"
+        },
+        "app.RmlyZWNyYXds.action.c2NyYXBl.option.cGFyc2Vycw.display_name": {
+          "source": "Parsers",
+          "message": "Analyseurs"
+        },
+        "app.RmlyZWNyYXds.action.c2NyYXBl.option.cGFyc2Vycw.short_desc": {
+          "source": "PDF parser configuration",
+          "message": "Configuration de l'analyseur PDF"
+        },
+        "app.RmlyZWNyYXds.action.c2NyYXBl.option.cHJvZmlsZQ.desc": {
+          "source": "Named browser profile to reuse session state (cookies, local storage) across scrape requests. Set `saveChanges` to `True` to persist changes back to the profile",
+          "message": "Profil de navigateur nommé pour réutiliser l'état de session (cookies, stockage local) entre les requêtes de scraping. Définissez `saveChanges` sur `True` pour conserver les modifications dans le profil"
+        },
+        "app.RmlyZWNyYXds.action.c2NyYXBl.option.cHJvZmlsZQ.display_name": {
+          "source": "Profile",
+          "message": "Profil"
+        },
+        "app.RmlyZWNyYXds.action.c2NyYXBl.option.cHJvZmlsZQ.short_desc": {
+          "source": "Persistent browser profile",
+          "message": "Profil de navigateur persistant"
+        },
+        "app.RmlyZWNyYXds.action.c2NyYXBl.option.cHJveHk.allowed-value.c3RyaW5nOmF1dG8.display_name": {
+          "source": "Auto",
+          "message": "Auto"
+        },
+        "app.RmlyZWNyYXds.action.c2NyYXBl.option.cHJveHk.allowed-value.c3RyaW5nOmJhc2lj.display_name": {
+          "source": "Basic",
+          "message": "De base"
+        },
+        "app.RmlyZWNyYXds.action.c2NyYXBl.option.cHJveHk.allowed-value.c3RyaW5nOmVuaGFuY2Vk.display_name": {
+          "source": "Enhanced",
+          "message": "Amélioré"
+        },
+        "app.RmlyZWNyYXds.action.c2NyYXBl.option.cHJveHk.desc": {
+          "source": "The proxy configuration to use for the scrape request",
+          "message": "La configuration de proxy à utiliser pour la requête de scraping"
+        },
+        "app.RmlyZWNyYXds.action.c2NyYXBl.option.cHJveHk.display_name": {
+          "source": "Proxy",
+          "message": "Proxy"
+        },
+        "app.RmlyZWNyYXds.action.c2NyYXBl.option.cHJveHk.short_desc": {
+          "source": "Proxy configuration",
+          "message": "Configuration du proxy"
+        },
+        "app.RmlyZWNyYXds.action.c2NyYXBl.option.cmVtb3ZlQmFzZTY0SW1hZ2Vz.desc": {
+          "source": "If `True`, base64-encoded images are removed from the output",
+          "message": "Si `True`, les images encodées en base64 sont supprimées de la sortie"
+        },
+        "app.RmlyZWNyYXds.action.c2NyYXBl.option.cmVtb3ZlQmFzZTY0SW1hZ2Vz.display_name": {
+          "source": "Remove Base64 Images",
+          "message": "Supprimer les images en base64"
+        },
+        "app.RmlyZWNyYXds.action.c2NyYXBl.option.cmVtb3ZlQmFzZTY0SW1hZ2Vz.short_desc": {
+          "source": "Remove base64-encoded images",
+          "message": "Supprimer les images encodées en base64"
+        },
+        "app.RmlyZWNyYXds.action.c2NyYXBl.option.d2FpdEZvcg.desc": {
+          "source": "Time to wait in milliseconds for the page to load before scraping. Useful for pages with dynamic content",
+          "message": "Temps d'attente en millisecondes pour le chargement de la page avant le scraping. Utile pour les pages avec du contenu dynamique"
+        },
+        "app.RmlyZWNyYXds.action.c2NyYXBl.option.d2FpdEZvcg.display_name": {
+          "source": "Wait For",
+          "message": "Attendre"
+        },
+        "app.RmlyZWNyYXds.action.c2NyYXBl.option.d2FpdEZvcg.short_desc": {
+          "source": "Wait time in milliseconds",
+          "message": "Temps d'attente en millisecondes"
+        },
+        "app.RmlyZWNyYXds.action.c2NyYXBl.option.dGltZW91dA.desc": {
+          "source": "Maximum time in milliseconds to wait for the scrape to complete",
+          "message": "Délai maximal en millisecondes à attendre pour que le scraping se termine"
+        },
+        "app.RmlyZWNyYXds.action.c2NyYXBl.option.dGltZW91dA.display_name": {
+          "source": "Timeout",
+          "message": "Délai d'expiration"
+        },
+        "app.RmlyZWNyYXds.action.c2NyYXBl.option.dGltZW91dA.short_desc": {
+          "source": "Timeout in milliseconds",
+          "message": "Délai d'expiration en millisecondes"
+        },
+        "app.RmlyZWNyYXds.action.c2NyYXBl.option.dXJs.desc": {
+          "source": "The URL of the web page to scrape",
+          "message": "L'URL de la page web à scraper"
+        },
+        "app.RmlyZWNyYXds.action.c2NyYXBl.option.dXJs.display_name": {
+          "source": "URL",
+          "message": "URL"
+        },
+        "app.RmlyZWNyYXds.action.c2NyYXBl.option.dXJs.short_desc": {
+          "source": "The URL to scrape",
+          "message": "L'URL à scraper"
+        },
+        "app.RmlyZWNyYXds.action.c2NyYXBl.option.emVyb0RhdGFSZXRlbnRpb24.desc": {
+          "source": "If `True`, Firecrawl does not retain any scraped data on its servers after returning the response. Useful for privacy/compliance-sensitive workloads. Enterprise feature — contact Firecrawl support to enable",
+          "message": "Si `True`, Firecrawl ne conserve aucune donnée scrapée sur ses serveurs après avoir retourné la réponse. Utile pour les charges de travail sensibles à la confidentialité ou à la conformité. Fonctionnalité Enterprise — contactez le support Firecrawl pour l'activer"
+        },
+        "app.RmlyZWNyYXds.action.c2NyYXBl.option.emVyb0RhdGFSZXRlbnRpb24.display_name": {
+          "source": "Zero Data Retention",
+          "message": "Zéro rétention de données"
+        },
+        "app.RmlyZWNyYXds.action.c2NyYXBl.option.emVyb0RhdGFSZXRlbnRpb24.short_desc": {
+          "source": "Disable Firecrawl-side data retention",
+          "message": "Désactiver la rétention des données côté Firecrawl"
+        },
+        "app.RmlyZWNyYXds.action.c2NyYXBl.short_desc": {
+          "source": "Scrape a single web page and return its content",
+          "message": "Scraper une seule page web et renvoyer son contenu"
+        },
+        "app.RmlyZWNyYXds.action.c2VhcmNo.desc": {
+          "source": "Searches the web for the given query and returns scraped results for matching pages.\n\nSupports time filtering, geographic location, country codes, and scrape options for result pages.",
+          "message": "Recherche sur le Web pour la requête donnée et renvoie les résultats extraits pour les pages correspondantes.\n\nPrend en charge le filtrage temporel, la localisation géographique, les codes de pays et les options d'extraction pour les pages de résultats."
+        },
+        "app.RmlyZWNyYXds.action.c2VhcmNo.display_name": {
+          "source": "Search the Web",
+          "message": "Rechercher sur le Web"
+        },
+        "app.RmlyZWNyYXds.action.c2VhcmNo.option.Y291bnRyeQ.desc": {
+          "source": "Country code for the search (e.g., `us`, `gb`, `de`)",
+          "message": "Code pays pour la recherche (par ex. `us`, `gb`, `de`)"
+        },
+        "app.RmlyZWNyYXds.action.c2VhcmNo.option.Y291bnRyeQ.display_name": {
+          "source": "Country",
+          "message": "Pays"
+        },
+        "app.RmlyZWNyYXds.action.c2VhcmNo.option.Y291bnRyeQ.short_desc": {
+          "source": "Country code",
+          "message": "Code pays"
+        },
+        "app.RmlyZWNyYXds.action.c2VhcmNo.option.Y2F0ZWdvcmllcw.allowed-value.c3RyaW5nOmdpdGh1Yg.display_name": {
+          "source": "GitHub",
+          "message": "GitHub"
+        },
+        "app.RmlyZWNyYXds.action.c2VhcmNo.option.Y2F0ZWdvcmllcw.allowed-value.c3RyaW5nOnBkZg.display_name": {
+          "source": "PDF",
+          "message": "PDF"
+        },
+        "app.RmlyZWNyYXds.action.c2VhcmNo.option.Y2F0ZWdvcmllcw.allowed-value.c3RyaW5nOnJlc2VhcmNo.display_name": {
+          "source": "Research",
+          "message": "Recherche"
+        },
+        "app.RmlyZWNyYXds.action.c2VhcmNo.option.Y2F0ZWdvcmllcw.desc": {
+          "source": "List of content categories to filter search results",
+          "message": "Liste des catégories de contenu pour filtrer les résultats de recherche"
+        },
+        "app.RmlyZWNyYXds.action.c2VhcmNo.option.Y2F0ZWdvcmllcw.display_name": {
+          "source": "Categories",
+          "message": "Catégories"
+        },
+        "app.RmlyZWNyYXds.action.c2VhcmNo.option.Y2F0ZWdvcmllcw.short_desc": {
+          "source": "Filter results by content category",
+          "message": "Filtrer les résultats par catégorie de contenu"
+        },
+        "app.RmlyZWNyYXds.action.c2VhcmNo.option.ZW50ZXJwcmlzZQ.allowed-value.c3RyaW5nOmFub24.display_name": {
+          "source": "Anonymized Zero Data Retention",
+          "message": "Zero Data Retention anonymisé"
+        },
+        "app.RmlyZWNyYXds.action.c2VhcmNo.option.ZW50ZXJwcmlzZQ.allowed-value.c3RyaW5nOnpkcg.display_name": {
+          "source": "End-to-End Zero Data Retention",
+          "message": "Zero Data Retention de bout en bout"
+        },
+        "app.RmlyZWNyYXds.action.c2VhcmNo.option.ZW50ZXJwcmlzZQ.desc": {
+          "source": "Enterprise search options for Zero Data Retention (ZDR). Must be enabled for your team",
+          "message": "Options de recherche Enterprise pour Zero Data Retention (ZDR). Doit être activé pour votre équipe"
+        },
+        "app.RmlyZWNyYXds.action.c2VhcmNo.option.ZW50ZXJwcmlzZQ.display_name": {
+          "source": "Enterprise",
+          "message": "Enterprise"
+        },
+        "app.RmlyZWNyYXds.action.c2VhcmNo.option.ZW50ZXJwcmlzZQ.short_desc": {
+          "source": "Enterprise search options",
+          "message": "Options de recherche Enterprise"
+        },
+        "app.RmlyZWNyYXds.action.c2VhcmNo.option.aWdub3JlSW52YWxpZFVSTHM.desc": {
+          "source": "If `True`, invalid URLs in results are skipped instead of causing an error",
+          "message": "Si `True`, les URL non valides dans les résultats sont ignorées au lieu de générer une erreur"
+        },
+        "app.RmlyZWNyYXds.action.c2VhcmNo.option.aWdub3JlSW52YWxpZFVSTHM.display_name": {
+          "source": "Ignore Invalid URLs",
+          "message": "Ignorer les URL non valides"
+        },
+        "app.RmlyZWNyYXds.action.c2VhcmNo.option.aWdub3JlSW52YWxpZFVSTHM.short_desc": {
+          "source": "Ignore invalid URLs",
+          "message": "Ignorer les URL non valides"
+        },
+        "app.RmlyZWNyYXds.action.c2VhcmNo.option.bG9jYXRpb24.desc": {
+          "source": "Geographic location for the search query (e.g., `United States`)",
+          "message": "Emplacement géographique pour la requête de recherche (par ex. `United States`)"
+        },
+        "app.RmlyZWNyYXds.action.c2VhcmNo.option.bG9jYXRpb24.display_name": {
+          "source": "Location",
+          "message": "Emplacement"
+        },
+        "app.RmlyZWNyYXds.action.c2VhcmNo.option.bG9jYXRpb24.short_desc": {
+          "source": "Search location",
+          "message": "Emplacement de recherche"
+        },
+        "app.RmlyZWNyYXds.action.c2VhcmNo.option.bGltaXQ.desc": {
+          "source": "Maximum number of results to return. Defaults to `5`, maximum `100`",
+          "message": "Nombre maximal de résultats à renvoyer. Par défaut `5`, maximum `100`"
+        },
+        "app.RmlyZWNyYXds.action.c2VhcmNo.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "Limite"
+        },
+        "app.RmlyZWNyYXds.action.c2VhcmNo.option.bGltaXQ.short_desc": {
+          "source": "Maximum number of results",
+          "message": "Nombre maximal de résultats"
+        },
+        "app.RmlyZWNyYXds.action.c2VhcmNo.option.c291cmNlcw.allowed-value.c3RyaW5nOm5ld3M.display_name": {
+          "source": "News",
+          "message": "Actualités"
+        },
+        "app.RmlyZWNyYXds.action.c2VhcmNo.option.c291cmNlcw.allowed-value.c3RyaW5nOmltYWdlcw.display_name": {
+          "source": "Images",
+          "message": "Images"
+        },
+        "app.RmlyZWNyYXds.action.c2VhcmNo.option.c291cmNlcw.allowed-value.c3RyaW5nOndlYg.display_name": {
+          "source": "Web",
+          "message": "Web"
+        },
+        "app.RmlyZWNyYXds.action.c2VhcmNo.option.c291cmNlcw.desc": {
+          "source": "List of source types to include in search results. Defaults to `web` only if not specified",
+          "message": "Liste des types de sources à inclure dans les résultats de recherche. Par défaut `web` uniquement si non spécifié"
+        },
+        "app.RmlyZWNyYXds.action.c2VhcmNo.option.c291cmNlcw.display_name": {
+          "source": "Sources",
+          "message": "Sources"
+        },
+        "app.RmlyZWNyYXds.action.c2VhcmNo.option.c291cmNlcw.short_desc": {
+          "source": "Filter results by source type",
+          "message": "Filtrer les résultats par type de source"
+        },
+        "app.RmlyZWNyYXds.action.c2VhcmNo.option.c2NyYXBlT3B0aW9ucw.desc": {
+          "source": "Options applied when scraping each search result page, such as `formats`, `onlyMainContent`, `includeTags`, `excludeTags`",
+          "message": "Options appliquées lors du scraping de chaque page de résultat de recherche, telles que `formats`, `onlyMainContent`, `includeTags`, `excludeTags`"
+        },
+        "app.RmlyZWNyYXds.action.c2VhcmNo.option.c2NyYXBlT3B0aW9ucw.display_name": {
+          "source": "Scrape Options",
+          "message": "Options de scraping"
+        },
+        "app.RmlyZWNyYXds.action.c2VhcmNo.option.c2NyYXBlT3B0aW9ucw.short_desc": {
+          "source": "Options for scraping search results",
+          "message": "Options de scraping des résultats de recherche"
+        },
+        "app.RmlyZWNyYXds.action.c2VhcmNo.option.cXVlcnk.desc": {
+          "source": "The search query string (maximum 500 characters)",
+          "message": "Chaîne de requête de recherche (maximum 500 caractères)"
+        },
+        "app.RmlyZWNyYXds.action.c2VhcmNo.option.cXVlcnk.display_name": {
+          "source": "Query",
+          "message": "Requête"
+        },
+        "app.RmlyZWNyYXds.action.c2VhcmNo.option.cXVlcnk.short_desc": {
+          "source": "The search query",
+          "message": "La requête de recherche"
+        },
+        "app.RmlyZWNyYXds.action.c2VhcmNo.option.dGJz.desc": {
+          "source": "Time-based search filter string (e.g., `qdr:d` for past day, `qdr:w` for past week, `qdr:m` for past month)",
+          "message": "Chaîne de filtre de recherche basée sur le temps (par ex. `qdr:d` pour le dernier jour, `qdr:w` pour la semaine passée, `qdr:m` pour le mois dernier)"
+        },
+        "app.RmlyZWNyYXds.action.c2VhcmNo.option.dGJz.display_name": {
+          "source": "Time Filter",
+          "message": "Filtre temporel"
+        },
+        "app.RmlyZWNyYXds.action.c2VhcmNo.option.dGJz.short_desc": {
+          "source": "Time-based search filter",
+          "message": "Filtre de recherche basé sur le temps"
+        },
+        "app.RmlyZWNyYXds.action.c2VhcmNo.option.dGltZW91dA.desc": {
+          "source": "Maximum time in milliseconds to wait for the search to complete",
+          "message": "Délai maximal en millisecondes à attendre pour que la recherche se termine"
+        },
+        "app.RmlyZWNyYXds.action.c2VhcmNo.option.dGltZW91dA.display_name": {
+          "source": "Timeout",
+          "message": "Délai d'expiration"
+        },
+        "app.RmlyZWNyYXds.action.c2VhcmNo.option.dGltZW91dA.short_desc": {
+          "source": "Timeout in milliseconds",
+          "message": "Délai d'expiration en millisecondes"
+        },
+        "app.RmlyZWNyYXds.action.c2VhcmNo.short_desc": {
+          "source": "Search the web and return scraped results",
+          "message": "Rechercher sur le Web et renvoyer les résultats scrapés"
+        },
+        "app.RmlyZWNyYXds.action.cGFyc2U.desc": {
+          "source": "Uploads a local or non-public document (PDF, DOCX, XLSX, HTML, etc.) up to 50 MB and converts it to clean, LLM-ready content in the requested formats.\n\nThe request is sent as `multipart/form-data` with the file binary in a `file` part and the parse options as a JSON-encoded `options` part. Supported file extensions: `.html`, `.htm`, `.pdf`, `.docx`, `.doc`, `.odt`, `.rtf`, `.xlsx`, `.xls`.",
+          "message": "Téléverse un document local ou non public (PDF, DOCX, XLSX, HTML, etc.) jusqu'à 50 Mo et le convertit en contenu propre et prêt pour les LLM dans les formats demandés.\n\nLa requête est envoyée en tant que `multipart/form-data` avec le binaire du fichier dans une partie `file` et les options d'analyse dans une partie `options` encodée en JSON. Extensions de fichiers prises en charge : `.html`, `.htm`, `.pdf`, `.docx`, `.doc`, `.odt`, `.rtf`, `.xlsx`, `.xls`."
+        },
+        "app.RmlyZWNyYXds.action.cGFyc2U.display_name": {
+          "source": "Parse a Document",
+          "message": "Analyser un document"
+        },
+        "app.RmlyZWNyYXds.action.cGFyc2U.option.YmxvY2tBZHM.desc": {
+          "source": "If `True`, advertisements and popups are blocked. Defaults to `True`",
+          "message": "Si `True`, les publicités et les fenêtres pop-up sont bloquées. Par défaut `True`"
+        },
+        "app.RmlyZWNyYXds.action.cGFyc2U.option.YmxvY2tBZHM.display_name": {
+          "source": "Block Ads",
+          "message": "Bloquer les publicités"
+        },
+        "app.RmlyZWNyYXds.action.cGFyc2U.option.YmxvY2tBZHM.short_desc": {
+          "source": "Block advertisements",
+          "message": "Bloquer les publicités"
+        },
+        "app.RmlyZWNyYXds.action.cGFyc2U.option.ZXhjbHVkZVRhZ3M.desc": {
+          "source": "List of HTML tags to exclude from the output (e.g., `nav`, `footer`)",
+          "message": "Liste des balises HTML à exclure de la sortie (par ex., `nav`, `footer`)"
+        },
+        "app.RmlyZWNyYXds.action.cGFyc2U.option.ZXhjbHVkZVRhZ3M.display_name": {
+          "source": "Exclude Tags",
+          "message": "Exclure les balises"
+        },
+        "app.RmlyZWNyYXds.action.cGFyc2U.option.ZXhjbHVkZVRhZ3M.short_desc": {
+          "source": "HTML tags to exclude",
+          "message": "Balises HTML à exclure"
+        },
+        "app.RmlyZWNyYXds.action.cGFyc2U.option.Zm9ybWF0cw.allowed-value.c3RyaW5nOm1hcmtkb3du.display_name": {
+          "source": "Markdown",
+          "message": "Markdown"
+        },
+        "app.RmlyZWNyYXds.action.cGFyc2U.option.Zm9ybWF0cw.allowed-value.c3RyaW5nOmh0bWw.display_name": {
+          "source": "HTML",
+          "message": "HTML"
+        },
+        "app.RmlyZWNyYXds.action.cGFyc2U.option.Zm9ybWF0cw.allowed-value.c3RyaW5nOmltYWdlcw.display_name": {
+          "source": "Images",
+          "message": "Images"
+        },
+        "app.RmlyZWNyYXds.action.cGFyc2U.option.Zm9ybWF0cw.allowed-value.c3RyaW5nOmpzb24.display_name": {
+          "source": "JSON",
+          "message": "JSON"
+        },
+        "app.RmlyZWNyYXds.action.cGFyc2U.option.Zm9ybWF0cw.allowed-value.c3RyaW5nOmxpbmtz.display_name": {
+          "source": "Links",
+          "message": "Liens"
+        },
+        "app.RmlyZWNyYXds.action.cGFyc2U.option.Zm9ybWF0cw.allowed-value.c3RyaW5nOnJhd0h0bWw.display_name": {
+          "source": "Raw HTML",
+          "message": "HTML brut"
+        },
+        "app.RmlyZWNyYXds.action.cGFyc2U.option.Zm9ybWF0cw.allowed-value.c3RyaW5nOnN1bW1hcnk.display_name": {
+          "source": "Summary",
+          "message": "Résumé"
+        },
+        "app.RmlyZWNyYXds.action.cGFyc2U.option.Zm9ybWF0cw.desc": {
+          "source": "List of output formats to return from the parse. Defaults to `markdown`",
+          "message": "Liste des formats de sortie à renvoyer après analyse. Par défaut `markdown`"
+        },
+        "app.RmlyZWNyYXds.action.cGFyc2U.option.Zm9ybWF0cw.display_name": {
+          "source": "Formats",
+          "message": "Formats"
+        },
+        "app.RmlyZWNyYXds.action.cGFyc2U.option.Zm9ybWF0cw.short_desc": {
+          "source": "Output formats to return",
+          "message": "Formats de sortie à retourner"
+        },
+        "app.RmlyZWNyYXds.action.cGFyc2U.option.ZmlsZQ.desc": {
+          "source": "The document to upload and parse. Supported file types: `.html`, `.htm`, `.pdf`, `.docx`, `.doc`, `.odt`, `.rtf`, `.xlsx`, `.xls`. Maximum size: 50 MB",
+          "message": "Le document à téléverser et à analyser. Types de fichiers pris en charge : `.html`, `.htm`, `.pdf`, `.docx`, `.doc`, `.odt`, `.rtf`, `.xlsx`, `.xls`. Taille maximale : 50 Mo"
+        },
+        "app.RmlyZWNyYXds.action.cGFyc2U.option.ZmlsZQ.display_name": {
+          "source": "File",
+          "message": "Fichier"
+        },
+        "app.RmlyZWNyYXds.action.cGFyc2U.option.ZmlsZQ.short_desc": {
+          "source": "The document to parse",
+          "message": "Le document à analyser"
+        },
+        "app.RmlyZWNyYXds.action.cGFyc2U.option.aGVhZGVycw.desc": {
+          "source": "Custom HTTP headers to use for any embedded resource fetches performed during parsing",
+          "message": "En-têtes HTTP personnalisés à utiliser pour toutes les récupérations de ressources intégrées effectuées pendant l'analyse"
+        },
+        "app.RmlyZWNyYXds.action.cGFyc2U.option.aGVhZGVycw.display_name": {
+          "source": "Headers",
+          "message": "En-têtes"
+        },
+        "app.RmlyZWNyYXds.action.cGFyc2U.option.aGVhZGVycw.short_desc": {
+          "source": "Custom HTTP headers",
+          "message": "En-têtes HTTP personnalisés"
+        },
+        "app.RmlyZWNyYXds.action.cGFyc2U.option.aW5jbHVkZVRhZ3M.desc": {
+          "source": "List of HTML tags to include in the output (e.g., `article`, `main`). Only content within these tags is returned",
+          "message": "Liste des balises HTML à inclure dans la sortie (par ex., `article`, `main`). Seul le contenu situé à l'intérieur de ces balises est retourné"
+        },
+        "app.RmlyZWNyYXds.action.cGFyc2U.option.aW5jbHVkZVRhZ3M.display_name": {
+          "source": "Include Tags",
+          "message": "Inclure les balises"
+        },
+        "app.RmlyZWNyYXds.action.cGFyc2U.option.aW5jbHVkZVRhZ3M.short_desc": {
+          "source": "HTML tags to include",
+          "message": "Balises HTML à inclure"
+        },
+        "app.RmlyZWNyYXds.action.cGFyc2U.option.b25seU1haW5Db250ZW50.desc": {
+          "source": "If `True`, only the main content of the document is returned, excluding headers, navigation, footers, etc. Defaults to `True`",
+          "message": "Si `True`, seul le contenu principal du document est renvoyé, à l'exclusion des en-têtes, de la navigation, des pieds de page, etc. Par défaut `True`"
+        },
+        "app.RmlyZWNyYXds.action.cGFyc2U.option.b25seU1haW5Db250ZW50.display_name": {
+          "source": "Only Main Content",
+          "message": "Contenu principal uniquement"
+        },
+        "app.RmlyZWNyYXds.action.cGFyc2U.option.b25seU1haW5Db250ZW50.short_desc": {
+          "source": "Extract only the main content",
+          "message": "Extraire uniquement le contenu principal"
+        },
+        "app.RmlyZWNyYXds.action.cGFyc2U.option.c2tpcFRsc1ZlcmlmaWNhdGlvbg.desc": {
+          "source": "If `True`, TLS certificate verification is skipped for any embedded resource fetches performed during parsing. Defaults to `True`",
+          "message": "Si `True`, la vérification des certificats TLS est ignorée pour toutes les récupérations de ressources intégrées effectuées pendant l'analyse. Par défaut `True`"
+        },
+        "app.RmlyZWNyYXds.action.cGFyc2U.option.c2tpcFRsc1ZlcmlmaWNhdGlvbg.display_name": {
+          "source": "Skip TLS Verification",
+          "message": "Ignorer la vérification TLS"
+        },
+        "app.RmlyZWNyYXds.action.cGFyc2U.option.c2tpcFRsc1ZlcmlmaWNhdGlvbg.short_desc": {
+          "source": "Skip TLS certificate verification",
+          "message": "Ignorer la vérification du certificat TLS"
+        },
+        "app.RmlyZWNyYXds.action.cGFyc2U.option.cGFyc2Vycw.desc": {
+          "source": "List of parser configurations for PDF processing. Each entry specifies a parser type and processing options",
+          "message": "Liste des configurations d'analyseur pour le traitement PDF. Chaque entrée spécifie un type d'analyseur et des options de traitement"
+        },
+        "app.RmlyZWNyYXds.action.cGFyc2U.option.cGFyc2Vycw.display_name": {
+          "source": "Parsers",
+          "message": "Analyseurs"
+        },
+        "app.RmlyZWNyYXds.action.cGFyc2U.option.cGFyc2Vycw.short_desc": {
+          "source": "PDF parser configuration",
+          "message": "Configuration de l'analyseur PDF"
+        },
+        "app.RmlyZWNyYXds.action.cGFyc2U.option.cHJveHk.allowed-value.c3RyaW5nOmF1dG8.display_name": {
+          "source": "Auto",
+          "message": "Auto"
+        },
+        "app.RmlyZWNyYXds.action.cGFyc2U.option.cHJveHk.allowed-value.c3RyaW5nOmJhc2lj.display_name": {
+          "source": "Basic",
+          "message": "De base"
+        },
+        "app.RmlyZWNyYXds.action.cGFyc2U.option.cHJveHk.desc": {
+          "source": "The proxy configuration to use for any embedded resource fetches performed during parsing",
+          "message": "Configuration du proxy à utiliser pour toutes les récupérations de ressources intégrées effectuées pendant l'analyse"
+        },
+        "app.RmlyZWNyYXds.action.cGFyc2U.option.cHJveHk.display_name": {
+          "source": "Proxy",
+          "message": "Proxy"
+        },
+        "app.RmlyZWNyYXds.action.cGFyc2U.option.cHJveHk.short_desc": {
+          "source": "Proxy configuration",
+          "message": "Configuration du proxy"
+        },
+        "app.RmlyZWNyYXds.action.cGFyc2U.option.cmVtb3ZlQmFzZTY0SW1hZ2Vz.desc": {
+          "source": "If `True`, base64-encoded images are stripped from the output (alt text is preserved). Defaults to `True`",
+          "message": "Si `True`, les images encodées en base64 sont supprimées de la sortie (le texte alternatif est conservé). Par défaut `True`"
+        },
+        "app.RmlyZWNyYXds.action.cGFyc2U.option.cmVtb3ZlQmFzZTY0SW1hZ2Vz.display_name": {
+          "source": "Remove Base64 Images",
+          "message": "Supprimer les images en base64"
+        },
+        "app.RmlyZWNyYXds.action.cGFyc2U.option.cmVtb3ZlQmFzZTY0SW1hZ2Vz.short_desc": {
+          "source": "Remove base64-encoded images",
+          "message": "Supprimer les images encodées en base64"
+        },
+        "app.RmlyZWNyYXds.action.cGFyc2U.option.dGltZW91dA.desc": {
+          "source": "Maximum time in milliseconds to wait for the parse to complete. Defaults to `30000` (30 seconds); maximum `300000` (5 minutes)",
+          "message": "Délai maximal en millisecondes à attendre pour que l'analyse se termine. Par défaut `30000` (30 secondes) ; maximum `300000` (5 minutes)"
+        },
+        "app.RmlyZWNyYXds.action.cGFyc2U.option.dGltZW91dA.display_name": {
+          "source": "Timeout",
+          "message": "Délai d'expiration"
+        },
+        "app.RmlyZWNyYXds.action.cGFyc2U.option.dGltZW91dA.short_desc": {
+          "source": "Timeout in milliseconds",
+          "message": "Délai d'expiration en millisecondes"
+        },
+        "app.RmlyZWNyYXds.action.cGFyc2U.option.emVyb0RhdGFSZXRlbnRpb24.desc": {
+          "source": "If `True`, Firecrawl does not retain any parsed data on its servers after returning the response. Enterprise feature — contact Firecrawl support to enable",
+          "message": "Si `True`, Firecrawl ne conserve aucune donnée analysée sur ses serveurs après avoir renvoyé la réponse. Fonctionnalité Enterprise — contactez l'assistance Firecrawl pour l'activer"
+        },
+        "app.RmlyZWNyYXds.action.cGFyc2U.option.emVyb0RhdGFSZXRlbnRpb24.display_name": {
+          "source": "Zero Data Retention",
+          "message": "Zéro rétention de données"
+        },
+        "app.RmlyZWNyYXds.action.cGFyc2U.option.emVyb0RhdGFSZXRlbnRpb24.short_desc": {
+          "source": "Disable Firecrawl-side data retention",
+          "message": "Désactiver la rétention des données côté Firecrawl"
+        },
+        "app.RmlyZWNyYXds.action.cGFyc2U.short_desc": {
+          "source": "Upload a document and convert it to LLM-ready data",
+          "message": "Téléverser un document et le convertir en données prêtes pour les LLM"
+        },
+        "app.RmlyZWNyYXds.desc": {
+          "source": "Firecrawl provides APIs for web scraping, crawling, URL mapping, web search, structured data extraction, and AI agent tasks.\n\nThis integration supports 15 actions covering single-page scraping, multi-page crawling, batch scraping, URL discovery, web search, AI-powered extraction, document parsing, and autonomous agent tasks.",
+          "message": "Firecrawl fournit des API pour le web scraping, le crawling, le mappage d'URL, la recherche web, l'extraction de données structurées et les tâches d'agents IA.\n\nCette intégration prend en charge 15 actions couvrant le scraping de page unique, le crawling multi-pages, le scraping par lot, la découverte d'URL, la recherche web, l'extraction assistée par IA, l'analyse de documents et les tâches d'agents autonomes."
+        },
+        "app.RmlyZWNyYXds.display_name": {
+          "source": "Firecrawl",
+          "message": "Firecrawl"
+        },
+        "app.RmlyZWNyYXds.short_desc": {
+          "source": "Firecrawl web scraping and crawling platform",
+          "message": "Plateforme de web scraping et de crawling Firecrawl"
+        }
+      }
+    }
+  }
+}

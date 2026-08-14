@@ -1,0 +1,2477 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "zh-Hant": {
+      "messages": {
+        "app.T3BlblNlYXJjaA.action.Y3JlYXRlLWRvY3VtZW50.desc": {
+          "source": "Create or index a document in OpenSearch. Use optional pipeline and refresh controls when ingested data must be transformed or made immediately visible to search.",
+          "message": "在 OpenSearch 中建立或索引文件。當擷取的資料必須進行轉換或立即可供搜尋時，請使用選填的 pipeline 和 refresh 控制項。"
+        },
+        "app.T3BlblNlYXJjaA.action.Y3JlYXRlLWRvY3VtZW50.display_name": {
+          "source": "Add Document",
+          "message": "新增文件"
+        },
+        "app.T3BlblNlYXJjaA.action.Y3JlYXRlLWRvY3VtZW50.option.aW5kZXg.desc": {
+          "source": "The name of the index to use",
+          "message": "要使用的索引名稱"
+        },
+        "app.T3BlblNlYXJjaA.action.Y3JlYXRlLWRvY3VtZW50.option.aW5kZXg.display_name": {
+          "source": "Index",
+          "message": "索引"
+        },
+        "app.T3BlblNlYXJjaA.action.Y3JlYXRlLWRvY3VtZW50.option.aW5kZXg.short_desc": {
+          "source": "Target index name",
+          "message": "目標索引名稱"
+        },
+        "app.T3BlblNlYXJjaA.action.Y3JlYXRlLWRvY3VtZW50.option.aWZfc2VxX25v.desc": {
+          "source": "Only perform the operation if the document has this sequence number",
+          "message": "僅在文件具有此序號時執行操作"
+        },
+        "app.T3BlblNlYXJjaA.action.Y3JlYXRlLWRvY3VtZW50.option.aWZfc2VxX25v.display_name": {
+          "source": "If Seq No",
+          "message": "If Seq No"
+        },
+        "app.T3BlblNlYXJjaA.action.Y3JlYXRlLWRvY3VtZW50.option.aWZfc2VxX25v.short_desc": {
+          "source": "Required sequence number",
+          "message": "必要的序號"
+        },
+        "app.T3BlblNlYXJjaA.action.Y3JlYXRlLWRvY3VtZW50.option.aWZfcHJpbWFyeV90ZXJt.desc": {
+          "source": "Only perform the operation if the document has this primary term",
+          "message": "僅在文件具有此主詞項時執行操作"
+        },
+        "app.T3BlblNlYXJjaA.action.Y3JlYXRlLWRvY3VtZW50.option.aWZfcHJpbWFyeV90ZXJt.display_name": {
+          "source": "If Primary Term",
+          "message": "If Primary Term"
+        },
+        "app.T3BlblNlYXJjaA.action.Y3JlYXRlLWRvY3VtZW50.option.aWZfcHJpbWFyeV90ZXJt.short_desc": {
+          "source": "Required primary term",
+          "message": "必要的主詞項"
+        },
+        "app.T3BlblNlYXJjaA.action.Y3JlYXRlLWRvY3VtZW50.option.b3BfdHlwZQ.desc": {
+          "source": "Set to create to only index the document if it does not already exist (put if absent). If a document with the specified `_id` already exists, the indexing operation will fail. Same as using the `<index>/_create` endpoint. Valid values: `index`, `create`. If document id is specified, it defaults to `index`. Otherwise, it defaults to `create`",
+          "message": "設定為 create 以僅在文件尚不存在時索引該文件（若不存在則寫入）。如果具有指定 `_id` 的文件已存在，則索引操作將會失敗。相當於使用 `<index>/_create` 端點。有效值：`index`、`create`。如果指定了文件 ID，則預設為 `index`；否則預設為 `create`"
+        },
+        "app.T3BlblNlYXJjaA.action.Y3JlYXRlLWRvY3VtZW50.option.b3BfdHlwZQ.display_name": {
+          "source": "Operation Type",
+          "message": "操作類型"
+        },
+        "app.T3BlblNlYXJjaA.action.Y3JlYXRlLWRvY3VtZW50.option.b3BfdHlwZQ.short_desc": {
+          "source": "Index or create operation",
+          "message": "索引或建立操作"
+        },
+        "app.T3BlblNlYXJjaA.action.Y3JlYXRlLWRvY3VtZW50.option.cGlwZWxpbmU.desc": {
+          "source": "ID of the pipeline to use to preprocess incoming documents. If the index has a default ingest pipeline specified, then setting the value to _none disables the default ingest pipeline for this request. If a final pipeline is configured it will always run, regardless of the value of this parameter",
+          "message": "用於預處理傳入文件的管線 ID。如果索引指定了預設擷取管線，則將值設為 _none 會停用此請求的預設擷取管線。如果設定了最終管線，無論此參數的值為何，它都將一律執行"
+        },
+        "app.T3BlblNlYXJjaA.action.Y3JlYXRlLWRvY3VtZW50.option.cGlwZWxpbmU.display_name": {
+          "source": "Pipeline",
+          "message": "管道"
+        },
+        "app.T3BlblNlYXJjaA.action.Y3JlYXRlLWRvY3VtZW50.option.cGlwZWxpbmU.short_desc": {
+          "source": "Ingest pipeline ID",
+          "message": "擷取管線 ID"
+        },
+        "app.T3BlblNlYXJjaA.action.Y3JlYXRlLWRvY3VtZW50.option.cm91dGluZw.desc": {
+          "source": "Custom value used to route operations to a specific shard",
+          "message": "用於將操作路由至特定分區的自訂值"
+        },
+        "app.T3BlblNlYXJjaA.action.Y3JlYXRlLWRvY3VtZW50.option.cm91dGluZw.display_name": {
+          "source": "Routing",
+          "message": "路由"
+        },
+        "app.T3BlblNlYXJjaA.action.Y3JlYXRlLWRvY3VtZW50.option.cm91dGluZw.short_desc": {
+          "source": "Custom routing value",
+          "message": "自訂路由值"
+        },
+        "app.T3BlblNlYXJjaA.action.Y3JlYXRlLWRvY3VtZW50.option.cmVmcmVzaA.desc": {
+          "source": "If `true` (default: `false`), OpenSearch refreshes the affected shards to make this operation visible to search, if `wait_for` then wait for a refresh to make this operation visible to search, if `false` do nothing with refreshes. Valid values: `true`, `false`, `wait_for`",
+          "message": "如果為 `true`（預設值：`false`），OpenSearch 會重新整理受影響的分區以使此操作立即可供搜尋；如果為 `wait_for`，則等待重新整理以使此操作可供搜尋；如果為 `false`，則不進行重新整理。有效值：`true`、`false`、`wait_for`"
+        },
+        "app.T3BlblNlYXJjaA.action.Y3JlYXRlLWRvY3VtZW50.option.cmVmcmVzaA.display_name": {
+          "source": "Refresh",
+          "message": "重新整理"
+        },
+        "app.T3BlblNlYXJjaA.action.Y3JlYXRlLWRvY3VtZW50.option.cmVmcmVzaA.short_desc": {
+          "source": "Refresh setting",
+          "message": "重新整理設定"
+        },
+        "app.T3BlblNlYXJjaA.action.Y3JlYXRlLWRvY3VtZW50.option.cmVxdWlyZV9hbGlhcw.desc": {
+          "source": "If `true` (default `false`), the destination must be an index alias",
+          "message": "如果為 `true`（預設為 `false`），則目的地必須是索引別名"
+        },
+        "app.T3BlblNlYXJjaA.action.Y3JlYXRlLWRvY3VtZW50.option.cmVxdWlyZV9hbGlhcw.display_name": {
+          "source": "Require Alias?",
+          "message": "需要別名？"
+        },
+        "app.T3BlblNlYXJjaA.action.Y3JlYXRlLWRvY3VtZW50.option.cmVxdWlyZV9hbGlhcw.short_desc": {
+          "source": "Destination must be alias",
+          "message": "目的地必須是別名"
+        },
+        "app.T3BlblNlYXJjaA.action.Y3JlYXRlLWRvY3VtZW50.option.d2FpdF9mb3JfYWN0aXZlX3NoYXJkcw.desc": {
+          "source": "The number of shard copies that must be active before proceeding with the operation (default `1`). Set to `all` or any positive integer up to the total number of shards in the index (number_of_replicas+1)",
+          "message": "在繼續執行操作之前必須處於作用中的分區複本數（預設為 `1`）。設定為 `all` 或最高至索引中分區總數 (number_of_replicas+1) 的任何正整數"
+        },
+        "app.T3BlblNlYXJjaA.action.Y3JlYXRlLWRvY3VtZW50.option.d2FpdF9mb3JfYWN0aXZlX3NoYXJkcw.display_name": {
+          "source": "Wait For Active Shards",
+          "message": "等待作用中分區"
+        },
+        "app.T3BlblNlYXJjaA.action.Y3JlYXRlLWRvY3VtZW50.option.d2FpdF9mb3JfYWN0aXZlX3NoYXJkcw.short_desc": {
+          "source": "Required active shards",
+          "message": "必要的作用中分區"
+        },
+        "app.T3BlblNlYXJjaA.action.Y3JlYXRlLWRvY3VtZW50.option.dGltZW91dA.desc": {
+          "source": "Period to wait for a response (default: `1m`). If no response is received before the timeout expires, the request fails and returns an error",
+          "message": "等待回應的時限（預設值：`1m`）。如果在逾時前未收到任何回應，則請求失敗並返回錯誤"
+        },
+        "app.T3BlblNlYXJjaA.action.Y3JlYXRlLWRvY3VtZW50.option.dGltZW91dA.display_name": {
+          "source": "Timeout",
+          "message": "逾時"
+        },
+        "app.T3BlblNlYXJjaA.action.Y3JlYXRlLWRvY3VtZW50.option.dGltZW91dA.short_desc": {
+          "source": "Response wait period",
+          "message": "回應等待時間"
+        },
+        "app.T3BlblNlYXJjaA.action.Y3JlYXRlLWRvY3VtZW50.option.dmVyc2lvbg.desc": {
+          "source": "Explicit version number for concurrency control. The specified version must match the current version of the document for the request to succeed",
+          "message": "用於並行控制的明確版本號。指定的版本必須符合文件的目前版本，請求才能成功"
+        },
+        "app.T3BlblNlYXJjaA.action.Y3JlYXRlLWRvY3VtZW50.option.dmVyc2lvbg.display_name": {
+          "source": "Version",
+          "message": "版本"
+        },
+        "app.T3BlblNlYXJjaA.action.Y3JlYXRlLWRvY3VtZW50.option.dmVyc2lvbg.short_desc": {
+          "source": "Document version for concurrency",
+          "message": "用於並行控制的文件版本"
+        },
+        "app.T3BlblNlYXJjaA.action.Y3JlYXRlLWRvY3VtZW50.option.dmVyc2lvbl90eXBl.desc": {
+          "source": "Specific version type: `external`, `external_gte`",
+          "message": "特定版本類型：`external`、`external_gte`"
+        },
+        "app.T3BlblNlYXJjaA.action.Y3JlYXRlLWRvY3VtZW50.option.dmVyc2lvbl90eXBl.display_name": {
+          "source": "Version Type",
+          "message": "版本類型"
+        },
+        "app.T3BlblNlYXJjaA.action.Y3JlYXRlLWRvY3VtZW50.option.dmVyc2lvbl90eXBl.short_desc": {
+          "source": "Version type",
+          "message": "版本類型"
+        },
+        "app.T3BlblNlYXJjaA.action.Y3JlYXRlLWRvY3VtZW50.short_desc": {
+          "source": "Add a document to OpenSearch",
+          "message": "將文件新增至 OpenSearch"
+        },
+        "app.T3BlblNlYXJjaA.action.Y3JlYXRlLXZlY3Rvci1pbmRleA.desc": {
+          "source": "Create an OpenSearch index with `index.knn` enabled and a `knn_vector` field mapping. Add optional text and keyword metadata fields for combined lexical, structured, and vector search.",
+          "message": "建立已啟用 `index.knn` 且具有 `knn_vector` 欄位對應的 OpenSearch 索引。新增選填的文字與關鍵字中繼資料欄位，以進行結合詞彙、結構化與向量的搜尋。"
+        },
+        "app.T3BlblNlYXJjaA.action.Y3JlYXRlLXZlY3Rvci1pbmRleA.display_name": {
+          "source": "Create Vector Index",
+          "message": "建立向量索引"
+        },
+        "app.T3BlblNlYXJjaA.action.Y3JlYXRlLXZlY3Rvci1pbmRleA.option.ZGltZW5zaW9u.desc": {
+          "source": "Number of dimensions in the vector field",
+          "message": "向量欄位中的維度數"
+        },
+        "app.T3BlblNlYXJjaA.action.Y3JlYXRlLXZlY3Rvci1pbmRleA.option.ZGltZW5zaW9u.display_name": {
+          "source": "Dimension",
+          "message": "維度"
+        },
+        "app.T3BlblNlYXJjaA.action.Y3JlYXRlLXZlY3Rvci1pbmRleA.option.ZGltZW5zaW9u.short_desc": {
+          "source": "Vector dimensions",
+          "message": "向量維度"
+        },
+        "app.T3BlblNlYXJjaA.action.Y3JlYXRlLXZlY3Rvci1pbmRleA.option.ZW5naW5l.allowed-value.c3RyaW5nOm5tc2xpYg.display_name": {
+          "source": "NMSLIB",
+          "message": "NMSLIB"
+        },
+        "app.T3BlblNlYXJjaA.action.Y3JlYXRlLXZlY3Rvci1pbmRleA.option.ZW5naW5l.allowed-value.c3RyaW5nOmZhaXNz.display_name": {
+          "source": "Faiss",
+          "message": "Faiss"
+        },
+        "app.T3BlblNlYXJjaA.action.Y3JlYXRlLXZlY3Rvci1pbmRleA.option.ZW5naW5l.allowed-value.c3RyaW5nOmx1Y2VuZQ.display_name": {
+          "source": "Lucene",
+          "message": "Lucene"
+        },
+        "app.T3BlblNlYXJjaA.action.Y3JlYXRlLXZlY3Rvci1pbmRleA.option.ZW5naW5l.desc": {
+          "source": "Optional approximate nearest-neighbor engine, such as `lucene`, `faiss`, or `nmslib`",
+          "message": "選填的近似最近鄰引擎，例如 `lucene`、`faiss` 或 `nmslib`"
+        },
+        "app.T3BlblNlYXJjaA.action.Y3JlYXRlLXZlY3Rvci1pbmRleA.option.ZW5naW5l.display_name": {
+          "source": "Engine",
+          "message": "引擎"
+        },
+        "app.T3BlblNlYXJjaA.action.Y3JlYXRlLXZlY3Rvci1pbmRleA.option.ZW5naW5l.short_desc": {
+          "source": "ANN engine",
+          "message": "ANN 引擎"
+        },
+        "app.T3BlblNlYXJjaA.action.Y3JlYXRlLXZlY3Rvci1pbmRleA.option.ZWZfY29uc3RydWN0aW9u.desc": {
+          "source": "Optional method parameter controlling HNSW construction search depth",
+          "message": "控制 HNSW 建構搜尋深度的選填方法參數"
+        },
+        "app.T3BlblNlYXJjaA.action.Y3JlYXRlLXZlY3Rvci1pbmRleA.option.ZWZfY29uc3RydWN0aW9u.display_name": {
+          "source": "EF Construction",
+          "message": "EF 建構"
+        },
+        "app.T3BlblNlYXJjaA.action.Y3JlYXRlLXZlY3Rvci1pbmRleA.option.ZWZfY29uc3RydWN0aW9u.short_desc": {
+          "source": "HNSW construction depth",
+          "message": "HNSW 建構深度"
+        },
+        "app.T3BlblNlYXJjaA.action.Y3JlYXRlLXZlY3Rvci1pbmRleA.option.ZWZfc2VhcmNo.desc": {
+          "source": "Optional default `knn.algo_param.ef_search` index setting",
+          "message": "選填的預設 `knn.algo_param.ef_search` 索引設定"
+        },
+        "app.T3BlblNlYXJjaA.action.Y3JlYXRlLXZlY3Rvci1pbmRleA.option.ZWZfc2VhcmNo.display_name": {
+          "source": "EF Search",
+          "message": "EF 搜尋"
+        },
+        "app.T3BlblNlYXJjaA.action.Y3JlYXRlLXZlY3Rvci1pbmRleA.option.ZWZfc2VhcmNo.short_desc": {
+          "source": "Default search depth",
+          "message": "預設搜尋深度"
+        },
+        "app.T3BlblNlYXJjaA.action.Y3JlYXRlLXZlY3Rvci1pbmRleA.option.aW5kZXg.desc": {
+          "source": "The name of the vector index to create",
+          "message": "要建立的向量索引名稱"
+        },
+        "app.T3BlblNlYXJjaA.action.Y3JlYXRlLXZlY3Rvci1pbmRleA.option.aW5kZXg.display_name": {
+          "source": "Index",
+          "message": "索引"
+        },
+        "app.T3BlblNlYXJjaA.action.Y3JlYXRlLXZlY3Rvci1pbmRleA.option.aW5kZXg.short_desc": {
+          "source": "Index name to create",
+          "message": "要建立的索引名稱"
+        },
+        "app.T3BlblNlYXJjaA.action.Y3JlYXRlLXZlY3Rvci1pbmRleA.option.bQ.desc": {
+          "source": "Optional method parameter controlling HNSW graph degree",
+          "message": "控制 HNSW 圖形度數的選填方法參數"
+        },
+        "app.T3BlblNlYXJjaA.action.Y3JlYXRlLXZlY3Rvci1pbmRleA.option.bQ.display_name": {
+          "source": "M",
+          "message": "M"
+        },
+        "app.T3BlblNlYXJjaA.action.Y3JlYXRlLXZlY3Rvci1pbmRleA.option.bQ.short_desc": {
+          "source": "HNSW graph degree",
+          "message": "HNSW 圖形度數"
+        },
+        "app.T3BlblNlYXJjaA.action.Y3JlYXRlLXZlY3Rvci1pbmRleA.option.bWFwcGluZ3M.desc": {
+          "source": "Optional additional mappings; the vector field mapping is added automatically",
+          "message": "選填的其他對應；向量欄位對應會自動新增"
+        },
+        "app.T3BlblNlYXJjaA.action.Y3JlYXRlLXZlY3Rvci1pbmRleA.option.bWFwcGluZ3M.display_name": {
+          "source": "Mappings",
+          "message": "對應"
+        },
+        "app.T3BlblNlYXJjaA.action.Y3JlYXRlLXZlY3Rvci1pbmRleA.option.bWFwcGluZ3M.short_desc": {
+          "source": "Additional mappings",
+          "message": "其他對應"
+        },
+        "app.T3BlblNlYXJjaA.action.Y3JlYXRlLXZlY3Rvci1pbmRleA.option.bWFzdGVyX3RpbWVvdXQ.desc": {
+          "source": "Period to wait for a connection to the master node",
+          "message": "等待連接至主節點的期間"
+        },
+        "app.T3BlblNlYXJjaA.action.Y3JlYXRlLXZlY3Rvci1pbmRleA.option.bWFzdGVyX3RpbWVvdXQ.display_name": {
+          "source": "Master Timeout",
+          "message": "主節點逾時"
+        },
+        "app.T3BlblNlYXJjaA.action.Y3JlYXRlLXZlY3Rvci1pbmRleA.option.bWFzdGVyX3RpbWVvdXQ.short_desc": {
+          "source": "Master node timeout",
+          "message": "主節點逾時"
+        },
+        "app.T3BlblNlYXJjaA.action.Y3JlYXRlLXZlY3Rvci1pbmRleA.option.bWV0YWRhdGFfZmllbGRz.desc": {
+          "source": "Optional list of keyword metadata fields to add to the index mapping",
+          "message": "要新增至索引對應的關鍵字中繼資料欄位選填清單"
+        },
+        "app.T3BlblNlYXJjaA.action.Y3JlYXRlLXZlY3Rvci1pbmRleA.option.bWV0YWRhdGFfZmllbGRz.display_name": {
+          "source": "Metadata Fields",
+          "message": "中繼資料欄位"
+        },
+        "app.T3BlblNlYXJjaA.action.Y3JlYXRlLXZlY3Rvci1pbmRleA.option.bWV0YWRhdGFfZmllbGRz.short_desc": {
+          "source": "Keyword metadata fields",
+          "message": "關鍵字中繼資料欄位"
+        },
+        "app.T3BlblNlYXJjaA.action.Y3JlYXRlLXZlY3Rvci1pbmRleA.option.bWV0aG9kX25hbWU.allowed-value.c3RyaW5nOmZsYXQ.display_name": {
+          "source": "Flat",
+          "message": "Flat"
+        },
+        "app.T3BlblNlYXJjaA.action.Y3JlYXRlLXZlY3Rvci1pbmRleA.option.bWV0aG9kX25hbWU.allowed-value.c3RyaW5nOmhuc3c.display_name": {
+          "source": "HNSW",
+          "message": "HNSW"
+        },
+        "app.T3BlblNlYXJjaA.action.Y3JlYXRlLXZlY3Rvci1pbmRleA.option.bWV0aG9kX25hbWU.allowed-value.c3RyaW5nOml2Zg.display_name": {
+          "source": "IVF",
+          "message": "IVF"
+        },
+        "app.T3BlblNlYXJjaA.action.Y3JlYXRlLXZlY3Rvci1pbmRleA.option.bWV0aG9kX25hbWU.desc": {
+          "source": "Optional approximate nearest-neighbor method name, such as `hnsw`, `ivf`, or `flat`",
+          "message": "選填的近似最近鄰方法名稱，例如 `hnsw`、`ivf` 或 `flat`"
+        },
+        "app.T3BlblNlYXJjaA.action.Y3JlYXRlLXZlY3Rvci1pbmRleA.option.bWV0aG9kX25hbWU.display_name": {
+          "source": "Method Name",
+          "message": "方法名稱"
+        },
+        "app.T3BlblNlYXJjaA.action.Y3JlYXRlLXZlY3Rvci1pbmRleA.option.bWV0aG9kX25hbWU.short_desc": {
+          "source": "ANN method",
+          "message": "ANN 方法"
+        },
+        "app.T3BlblNlYXJjaA.action.Y3JlYXRlLXZlY3Rvci1pbmRleA.option.c2V0dGluZ3M.desc": {
+          "source": "Optional additional index settings; `index.knn` is set automatically",
+          "message": "選填的其他索引設定；`index.knn` 會自動設定"
+        },
+        "app.T3BlblNlYXJjaA.action.Y3JlYXRlLXZlY3Rvci1pbmRleA.option.c2V0dGluZ3M.display_name": {
+          "source": "Settings",
+          "message": "設定"
+        },
+        "app.T3BlblNlYXJjaA.action.Y3JlYXRlLXZlY3Rvci1pbmRleA.option.c2V0dGluZ3M.short_desc": {
+          "source": "Additional index settings",
+          "message": "其他索引設定"
+        },
+        "app.T3BlblNlYXJjaA.action.Y3JlYXRlLXZlY3Rvci1pbmRleA.option.c3BhY2VfdHlwZQ.allowed-value.c3RyaW5nOmNvc2luZXNpbWls.display_name": {
+          "source": "Cosine Similarity",
+          "message": "餘弦相似度"
+        },
+        "app.T3BlblNlYXJjaA.action.Y3JlYXRlLXZlY3Rvci1pbmRleA.option.c3BhY2VfdHlwZQ.allowed-value.c3RyaW5nOmlubmVycHJvZHVjdA.display_name": {
+          "source": "Inner Product",
+          "message": "內積"
+        },
+        "app.T3BlblNlYXJjaA.action.Y3JlYXRlLXZlY3Rvci1pbmRleA.option.c3BhY2VfdHlwZQ.allowed-value.c3RyaW5nOmwx.display_name": {
+          "source": "L1",
+          "message": "L1"
+        },
+        "app.T3BlblNlYXJjaA.action.Y3JlYXRlLXZlY3Rvci1pbmRleA.option.c3BhY2VfdHlwZQ.allowed-value.c3RyaW5nOmwy.display_name": {
+          "source": "L2",
+          "message": "L2"
+        },
+        "app.T3BlblNlYXJjaA.action.Y3JlYXRlLXZlY3Rvci1pbmRleA.option.c3BhY2VfdHlwZQ.allowed-value.c3RyaW5nOmxpbmY.display_name": {
+          "source": "L-Infinity",
+          "message": "L-Infinity"
+        },
+        "app.T3BlblNlYXJjaA.action.Y3JlYXRlLXZlY3Rvci1pbmRleA.option.c3BhY2VfdHlwZQ.desc": {
+          "source": "Vector space type, such as `l2`, `cosinesimil`, or `innerproduct`",
+          "message": "向量空間類型，例如 `l2`、`cosinesimil` 或 `innerproduct`"
+        },
+        "app.T3BlblNlYXJjaA.action.Y3JlYXRlLXZlY3Rvci1pbmRleA.option.c3BhY2VfdHlwZQ.display_name": {
+          "source": "Space Type",
+          "message": "空間類型"
+        },
+        "app.T3BlblNlYXJjaA.action.Y3JlYXRlLXZlY3Rvci1pbmRleA.option.c3BhY2VfdHlwZQ.short_desc": {
+          "source": "Vector distance space",
+          "message": "向量距離空間"
+        },
+        "app.T3BlblNlYXJjaA.action.Y3JlYXRlLXZlY3Rvci1pbmRleA.option.d2FpdF9mb3JfYWN0aXZlX3NoYXJkcw.desc": {
+          "source": "The number of shard copies that must be active before proceeding with the operation",
+          "message": "在繼續操作前必須處於作用狀態的分區複本數量"
+        },
+        "app.T3BlblNlYXJjaA.action.Y3JlYXRlLXZlY3Rvci1pbmRleA.option.d2FpdF9mb3JfYWN0aXZlX3NoYXJkcw.display_name": {
+          "source": "Wait For Active Shards",
+          "message": "等待作用中分區"
+        },
+        "app.T3BlblNlYXJjaA.action.Y3JlYXRlLXZlY3Rvci1pbmRleA.option.d2FpdF9mb3JfYWN0aXZlX3NoYXJkcw.short_desc": {
+          "source": "Required active shards",
+          "message": "必要的作用中分區"
+        },
+        "app.T3BlblNlYXJjaA.action.Y3JlYXRlLXZlY3Rvci1pbmRleA.option.dGV4dF9maWVsZHM.desc": {
+          "source": "Optional list of text fields to add to the index mapping",
+          "message": "要新增至索引對應的文字欄位選填清單"
+        },
+        "app.T3BlblNlYXJjaA.action.Y3JlYXRlLXZlY3Rvci1pbmRleA.option.dGV4dF9maWVsZHM.display_name": {
+          "source": "Text Fields",
+          "message": "文字欄位"
+        },
+        "app.T3BlblNlYXJjaA.action.Y3JlYXRlLXZlY3Rvci1pbmRleA.option.dGV4dF9maWVsZHM.short_desc": {
+          "source": "Text fields to add",
+          "message": "要新增的文字欄位"
+        },
+        "app.T3BlblNlYXJjaA.action.Y3JlYXRlLXZlY3Rvci1pbmRleA.option.dGltZW91dA.desc": {
+          "source": "Period to wait for a response",
+          "message": "等待回應的期間"
+        },
+        "app.T3BlblNlYXJjaA.action.Y3JlYXRlLXZlY3Rvci1pbmRleA.option.dGltZW91dA.display_name": {
+          "source": "Timeout",
+          "message": "逾時"
+        },
+        "app.T3BlblNlYXJjaA.action.Y3JlYXRlLXZlY3Rvci1pbmRleA.option.dGltZW91dA.short_desc": {
+          "source": "Response timeout",
+          "message": "回應逾時"
+        },
+        "app.T3BlblNlYXJjaA.action.Y3JlYXRlLXZlY3Rvci1pbmRleA.option.dmVjdG9yX2ZpZWxk.desc": {
+          "source": "The `knn_vector` field to create in the index mapping",
+          "message": "要在索引對應中建立的 `knn_vector` 欄位"
+        },
+        "app.T3BlblNlYXJjaA.action.Y3JlYXRlLXZlY3Rvci1pbmRleA.option.dmVjdG9yX2ZpZWxk.display_name": {
+          "source": "Vector Field",
+          "message": "向量欄位"
+        },
+        "app.T3BlblNlYXJjaA.action.Y3JlYXRlLXZlY3Rvci1pbmRleA.option.dmVjdG9yX2ZpZWxk.short_desc": {
+          "source": "Vector field name",
+          "message": "向量欄位名稱"
+        },
+        "app.T3BlblNlYXJjaA.action.Y3JlYXRlLXZlY3Rvci1pbmRleA.short_desc": {
+          "source": "Create an OpenSearch vector index",
+          "message": "建立 OpenSearch 向量索引"
+        },
+        "app.T3BlblNlYXJjaA.action.YWdncmVnYXRl.desc": {
+          "source": "Compute analytics and aggregations over OpenSearch search results, including terms, histogram, and metric aggregations. Use this action when the output is grouped or summarized data rather than individual hits.",
+          "message": "計算 OpenSearch 搜尋結果的分析與彙總，包括詞彙、長條圖與計量彙總。當輸出為分組或摘要資料而非個別相符項目時，請使用此動作。"
+        },
+        "app.T3BlblNlYXJjaA.action.YWdncmVnYXRl.display_name": {
+          "source": "Aggregations",
+          "message": "聚合"
+        },
+        "app.T3BlblNlYXJjaA.action.YWdncmVnYXRl.option.YWdncmVnYXRpb25z.desc": {
+          "source": "Alias for 'aggs' - the aggregations to compute",
+          "message": "'aggs' 的別名 - 要計算的彙總"
+        },
+        "app.T3BlblNlYXJjaA.action.YWdncmVnYXRl.option.YWdncmVnYXRpb25z.display_name": {
+          "source": "Aggregations (Alias)",
+          "message": "彙總 (別名)"
+        },
+        "app.T3BlblNlYXJjaA.action.YWdncmVnYXRl.option.YWdncmVnYXRpb25z.short_desc": {
+          "source": "Alias for aggs field",
+          "message": "aggs 欄位的別名"
+        },
+        "app.T3BlblNlYXJjaA.action.YWdncmVnYXRl.option.YWdncw.desc": {
+          "source": "The aggregations to compute. Each key is the aggregation name, value is the aggregation definition. Example:\n```\n{\n  \"avg_price\": {\"avg\": {\"field\": \"price\"}},\n  \"by_category\": {\n    \"terms\": {\"field\": \"category\"},\n    \"aggs\": {\n      \"category_avg\": {\"avg\": {\"field\": \"price\"}}\n    }\n  }\n}\n```",
+          "message": "要計算的彙總。每個鍵為彙總名稱，值為彙總定義。範例：\n```\n{\n  \"avg_price\": {\"avg\": {\"field\": \"price\"}},\n  \"by_category\": {\n    \"terms\": {\"field\": \"category\"},\n    \"aggs\": {\n      \"category_avg\": {\"avg\": {\"field\": \"price\"}}\n    }\n  }\n}\n```"
+        },
+        "app.T3BlblNlYXJjaA.action.YWdncmVnYXRl.option.YWdncw.display_name": {
+          "source": "Aggregations",
+          "message": "聚合"
+        },
+        "app.T3BlblNlYXJjaA.action.YWdncmVnYXRl.option.YWdncw.short_desc": {
+          "source": "Aggregation definitions",
+          "message": "彙總定義"
+        },
+        "app.T3BlblNlYXJjaA.action.YWdncmVnYXRl.option.YWxsb3dfbm9faW5kaWNlcw.desc": {
+          "source": "Whether to allow wildcards that match no indices",
+          "message": "是否允許未符合任何索引的萬用字元"
+        },
+        "app.T3BlblNlYXJjaA.action.YWdncmVnYXRl.option.YWxsb3dfbm9faW5kaWNlcw.display_name": {
+          "source": "Allow No Indices?",
+          "message": "允許無索引？"
+        },
+        "app.T3BlblNlYXJjaA.action.YWdncmVnYXRl.option.YWxsb3dfbm9faW5kaWNlcw.short_desc": {
+          "source": "Allow no matching indices",
+          "message": "允許無相符的索引"
+        },
+        "app.T3BlblNlYXJjaA.action.YWdncmVnYXRl.option.ZXhwYW5kX3dpbGRjYXJkcw.desc": {
+          "source": "How to expand wildcards: 'open', 'closed', 'hidden', 'none', 'all'",
+          "message": "如何展開萬用字元：'open'、'closed'、'hidden'、'none'、'all'"
+        },
+        "app.T3BlblNlYXJjaA.action.YWdncmVnYXRl.option.ZXhwYW5kX3dpbGRjYXJkcw.display_name": {
+          "source": "Expand Wildcards",
+          "message": "展開萬用字元"
+        },
+        "app.T3BlblNlYXJjaA.action.YWdncmVnYXRl.option.ZXhwYW5kX3dpbGRjYXJkcw.short_desc": {
+          "source": "Wildcard expansion mode",
+          "message": "萬用字元展開模式"
+        },
+        "app.T3BlblNlYXJjaA.action.YWdncmVnYXRl.option.aW5kZXg.desc": {
+          "source": "The name of the index to search (can include wildcards or comma-separated list)",
+          "message": "要搜尋的索引名稱（可包含萬用字元或以逗號分隔的清單）"
+        },
+        "app.T3BlblNlYXJjaA.action.YWdncmVnYXRl.option.aW5kZXg.display_name": {
+          "source": "Index Name",
+          "message": "索引名稱"
+        },
+        "app.T3BlblNlYXJjaA.action.YWdncmVnYXRl.option.aW5kZXg.short_desc": {
+          "source": "Target index for aggregation",
+          "message": "聚合目標索引"
+        },
+        "app.T3BlblNlYXJjaA.action.YWdncmVnYXRl.option.aWdub3JlX3VuYXZhaWxhYmxl.desc": {
+          "source": "Whether to ignore unavailable indices",
+          "message": "是否忽略不可用的索引"
+        },
+        "app.T3BlblNlYXJjaA.action.YWdncmVnYXRl.option.aWdub3JlX3VuYXZhaWxhYmxl.display_name": {
+          "source": "Ignore Unavailable?",
+          "message": "忽略不可用？"
+        },
+        "app.T3BlblNlYXJjaA.action.YWdncmVnYXRl.option.aWdub3JlX3VuYXZhaWxhYmxl.short_desc": {
+          "source": "Ignore unavailable indices",
+          "message": "忽略不可用的索引"
+        },
+        "app.T3BlblNlYXJjaA.action.YWdncmVnYXRl.option.c2l6ZQ.desc": {
+          "source": "Number of hits to return. Default: 0 (aggregation-only, no documents returned)",
+          "message": "要傳回的相符筆數。預設值：0（僅聚合，不傳回文件）"
+        },
+        "app.T3BlblNlYXJjaA.action.YWdncmVnYXRl.option.c2l6ZQ.display_name": {
+          "source": "Result Size",
+          "message": "結果大小"
+        },
+        "app.T3BlblNlYXJjaA.action.YWdncmVnYXRl.option.c2l6ZQ.short_desc": {
+          "source": "Number of hits to return",
+          "message": "要傳回的相符筆數"
+        },
+        "app.T3BlblNlYXJjaA.action.YWdncmVnYXRl.option.cHJlZmVyZW5jZQ.desc": {
+          "source": "Which shard replicas to execute the search on",
+          "message": "要在哪些分區複本上執行搜尋"
+        },
+        "app.T3BlblNlYXJjaA.action.YWdncmVnYXRl.option.cHJlZmVyZW5jZQ.display_name": {
+          "source": "Preference",
+          "message": "偏好設定"
+        },
+        "app.T3BlblNlYXJjaA.action.YWdncmVnYXRl.option.cHJlZmVyZW5jZQ.short_desc": {
+          "source": "Shard replica preference",
+          "message": "分區複本偏好設定"
+        },
+        "app.T3BlblNlYXJjaA.action.YWdncmVnYXRl.option.cXVlcnk.desc": {
+          "source": "Optional query to filter documents before aggregation (OpenSearch Query DSL)",
+          "message": "在聚合前篩選文件的選用查詢（OpenSearch Query DSL）"
+        },
+        "app.T3BlblNlYXJjaA.action.YWdncmVnYXRl.option.cXVlcnk.display_name": {
+          "source": "Query Filter",
+          "message": "查詢篩選條件"
+        },
+        "app.T3BlblNlYXJjaA.action.YWdncmVnYXRl.option.cXVlcnk.short_desc": {
+          "source": "Filter documents before aggregation",
+          "message": "在聚合前篩選文件"
+        },
+        "app.T3BlblNlYXJjaA.action.YWdncmVnYXRl.option.cm91dGluZw.desc": {
+          "source": "Custom routing value to limit search to specific shards",
+          "message": "將搜尋限制在特定分區的自訂路由值"
+        },
+        "app.T3BlblNlYXJjaA.action.YWdncmVnYXRl.option.cm91dGluZw.display_name": {
+          "source": "Routing",
+          "message": "路由"
+        },
+        "app.T3BlblNlYXJjaA.action.YWdncmVnYXRl.option.cm91dGluZw.short_desc": {
+          "source": "Custom routing value",
+          "message": "自訂路由值"
+        },
+        "app.T3BlblNlYXJjaA.action.YWdncmVnYXRl.option.cmVxdWVzdF9jYWNoZQ.desc": {
+          "source": "Whether to cache the request",
+          "message": "是否快取請求"
+        },
+        "app.T3BlblNlYXJjaA.action.YWdncmVnYXRl.option.cmVxdWVzdF9jYWNoZQ.display_name": {
+          "source": "Request Cache?",
+          "message": "快取請求？"
+        },
+        "app.T3BlblNlYXJjaA.action.YWdncmVnYXRl.option.cmVxdWVzdF9jYWNoZQ.short_desc": {
+          "source": "Cache the request",
+          "message": "快取請求"
+        },
+        "app.T3BlblNlYXJjaA.action.YWdncmVnYXRl.option.dGltZW91dA.desc": {
+          "source": "Search timeout (e.g., '10s' for 10 seconds)",
+          "message": "搜尋逾時（例如，'10s' 代表 10 秒）"
+        },
+        "app.T3BlblNlYXJjaA.action.YWdncmVnYXRl.option.dGltZW91dA.display_name": {
+          "source": "Timeout",
+          "message": "逾時"
+        },
+        "app.T3BlblNlYXJjaA.action.YWdncmVnYXRl.option.dGltZW91dA.short_desc": {
+          "source": "Search timeout",
+          "message": "搜尋逾時"
+        },
+        "app.T3BlblNlYXJjaA.action.YWdncmVnYXRl.short_desc": {
+          "source": "Compute aggregations over search results",
+          "message": "對搜尋結果計算聚合"
+        },
+        "app.T3BlblNlYXJjaA.action.YnVsay1vcGVyYXRpb25z.desc": {
+          "source": "Perform bulk `index`, `create`, `update`, and `delete` operations with OpenSearch's NDJSON bulk API. Use this action for high-throughput ingestion and batch maintenance workloads.",
+          "message": "使用 OpenSearch 的 NDJSON bulk API 執行大量 `index`、`create`、`update` 和 `delete` 操作。將此動作運用於高輸送量的擷取與批次維護工作負載。"
+        },
+        "app.T3BlblNlYXJjaA.action.YnVsay1vcGVyYXRpb25z.display_name": {
+          "source": "Bulk Operations",
+          "message": "批次操作"
+        },
+        "app.T3BlblNlYXJjaA.action.YnVsay1vcGVyYXRpb25z.option.b3BlcmF0aW9ucw.desc": {
+          "source": "List of bulk operations to perform",
+          "message": "要執行的大量操作清單"
+        },
+        "app.T3BlblNlYXJjaA.action.YnVsay1vcGVyYXRpb25z.option.b3BlcmF0aW9ucw.display_name": {
+          "source": "Operations",
+          "message": "操作"
+        },
+        "app.T3BlblNlYXJjaA.action.YnVsay1vcGVyYXRpb25z.option.b3BlcmF0aW9ucw.short_desc": {
+          "source": "List of bulk operations",
+          "message": "大量操作清單"
+        },
+        "app.T3BlblNlYXJjaA.action.YnVsay1vcGVyYXRpb25z.option.cGlwZWxpbmU.desc": {
+          "source": "The default ingest pipeline to use for all operations",
+          "message": "用於所有操作的預設擷取管線"
+        },
+        "app.T3BlblNlYXJjaA.action.YnVsay1vcGVyYXRpb25z.option.cGlwZWxpbmU.display_name": {
+          "source": "Pipeline",
+          "message": "管道"
+        },
+        "app.T3BlblNlYXJjaA.action.YnVsay1vcGVyYXRpb25z.option.cGlwZWxpbmU.short_desc": {
+          "source": "Default ingest pipeline",
+          "message": "預設擷取管線"
+        },
+        "app.T3BlblNlYXJjaA.action.YnVsay1vcGVyYXRpb25z.option.cm91dGluZw.desc": {
+          "source": "Default routing value for all operations",
+          "message": "所有操作的預設路由值"
+        },
+        "app.T3BlblNlYXJjaA.action.YnVsay1vcGVyYXRpb25z.option.cm91dGluZw.display_name": {
+          "source": "Routing",
+          "message": "路由"
+        },
+        "app.T3BlblNlYXJjaA.action.YnVsay1vcGVyYXRpb25z.option.cm91dGluZw.short_desc": {
+          "source": "Default routing value",
+          "message": "預設路由值"
+        },
+        "app.T3BlblNlYXJjaA.action.YnVsay1vcGVyYXRpb25z.option.cmVmcmVzaA.desc": {
+          "source": "Refresh setting: 'true', 'false', or 'wait_for'",
+          "message": "重新整理設定：'true'、'false' 或 'wait_for'"
+        },
+        "app.T3BlblNlYXJjaA.action.YnVsay1vcGVyYXRpb25z.option.cmVmcmVzaA.display_name": {
+          "source": "Refresh",
+          "message": "重新整理"
+        },
+        "app.T3BlblNlYXJjaA.action.YnVsay1vcGVyYXRpb25z.option.cmVmcmVzaA.short_desc": {
+          "source": "Refresh setting",
+          "message": "重新整理設定"
+        },
+        "app.T3BlblNlYXJjaA.action.YnVsay1vcGVyYXRpb25z.option.cmVxdWlyZV9hbGlhcw.desc": {
+          "source": "If true, the destination must be an index alias",
+          "message": "若為 true，目的地必須是索引別名"
+        },
+        "app.T3BlblNlYXJjaA.action.YnVsay1vcGVyYXRpb25z.option.cmVxdWlyZV9hbGlhcw.display_name": {
+          "source": "Require Alias?",
+          "message": "需要別名？"
+        },
+        "app.T3BlblNlYXJjaA.action.YnVsay1vcGVyYXRpb25z.option.cmVxdWlyZV9hbGlhcw.short_desc": {
+          "source": "Destination must be alias",
+          "message": "目的地必須是別名"
+        },
+        "app.T3BlblNlYXJjaA.action.YnVsay1vcGVyYXRpb25z.option.d2FpdF9mb3JfYWN0aXZlX3NoYXJkcw.desc": {
+          "source": "Number of shard copies that must be active before proceeding",
+          "message": "繼續之前必須處於作用中狀態的分區副本數"
+        },
+        "app.T3BlblNlYXJjaA.action.YnVsay1vcGVyYXRpb25z.option.d2FpdF9mb3JfYWN0aXZlX3NoYXJkcw.display_name": {
+          "source": "Wait For Active Shards",
+          "message": "等待作用中分區"
+        },
+        "app.T3BlblNlYXJjaA.action.YnVsay1vcGVyYXRpb25z.option.d2FpdF9mb3JfYWN0aXZlX3NoYXJkcw.short_desc": {
+          "source": "Required active shards",
+          "message": "必要的作用中分區"
+        },
+        "app.T3BlblNlYXJjaA.action.YnVsay1vcGVyYXRpb25z.option.dGltZW91dA.desc": {
+          "source": "Period to wait for a response (default: 1m)",
+          "message": "等待回應的期間（預設：1m）"
+        },
+        "app.T3BlblNlYXJjaA.action.YnVsay1vcGVyYXRpb25z.option.dGltZW91dA.display_name": {
+          "source": "Timeout",
+          "message": "逾時"
+        },
+        "app.T3BlblNlYXJjaA.action.YnVsay1vcGVyYXRpb25z.option.dGltZW91dA.short_desc": {
+          "source": "Response wait period",
+          "message": "回應等待時間"
+        },
+        "app.T3BlblNlYXJjaA.action.YnVsay1vcGVyYXRpb25z.short_desc": {
+          "source": "Perform bulk document operations",
+          "message": "執行批次文件操作"
+        },
+        "app.T3BlblNlYXJjaA.action.a25uLXNlYXJjaA.desc": {
+          "source": "Search an OpenSearch index with a raw query vector against a `knn_vector` field. Use optional filters, method parameters, or radial-search thresholds when supported by the target index and OpenSearch version.",
+          "message": "使用原始查詢向量搜尋 OpenSearch 索引中的 `knn_vector` 欄位。在目標索引與 OpenSearch 版本支援時，使用選用篩選條件、方法參數或半徑搜尋閾值。"
+        },
+        "app.T3BlblNlYXJjaA.action.a25uLXNlYXJjaA.display_name": {
+          "source": "k-NN Search",
+          "message": "k-NN 搜尋"
+        },
+        "app.T3BlblNlYXJjaA.action.a25uLXNlYXJjaA.option.X3NvdXJjZQ.desc": {
+          "source": "Optional `_source` selection for returned documents; accepts OpenSearch-compatible boolean, string, list, or hash values",
+          "message": "傳回文件的選用 `_source` 選取項目；接受相容於 OpenSearch 的布林值、字串、清單或雜湊值"
+        },
+        "app.T3BlblNlYXJjaA.action.a25uLXNlYXJjaA.option.X3NvdXJjZQ.display_name": {
+          "source": "Source Fields",
+          "message": "來源欄位"
+        },
+        "app.T3BlblNlYXJjaA.action.a25uLXNlYXJjaA.option.X3NvdXJjZQ.short_desc": {
+          "source": "Source field selection",
+          "message": "來源欄位選取"
+        },
+        "app.T3BlblNlYXJjaA.action.a25uLXNlYXJjaA.option.ZmllbGQ.desc": {
+          "source": "The `knn_vector` field to search",
+          "message": "要搜尋的 `knn_vector` 欄位"
+        },
+        "app.T3BlblNlYXJjaA.action.a25uLXNlYXJjaA.option.ZmllbGQ.display_name": {
+          "source": "Vector Field",
+          "message": "向量欄位"
+        },
+        "app.T3BlblNlYXJjaA.action.a25uLXNlYXJjaA.option.ZmllbGQ.short_desc": {
+          "source": "Vector field to search",
+          "message": "要搜尋的向量欄位"
+        },
+        "app.T3BlblNlYXJjaA.action.a25uLXNlYXJjaA.option.ZmlsdGVy.desc": {
+          "source": "Optional OpenSearch query DSL filter applied to candidate documents",
+          "message": "套用至候選文件的選用 OpenSearch 查詢 DSL 篩選條件"
+        },
+        "app.T3BlblNlYXJjaA.action.a25uLXNlYXJjaA.option.ZmlsdGVy.display_name": {
+          "source": "Filter",
+          "message": "濾鏡"
+        },
+        "app.T3BlblNlYXJjaA.action.a25uLXNlYXJjaA.option.ZmlsdGVy.short_desc": {
+          "source": "Optional query filter",
+          "message": "選用查詢篩選條件"
+        },
+        "app.T3BlblNlYXJjaA.action.a25uLXNlYXJjaA.option.ZnJvbQ.desc": {
+          "source": "Starting document offset for search results",
+          "message": "搜尋結果的起始文件偏移量"
+        },
+        "app.T3BlblNlYXJjaA.action.a25uLXNlYXJjaA.option.ZnJvbQ.display_name": {
+          "source": "From",
+          "message": "寄件者"
+        },
+        "app.T3BlblNlYXJjaA.action.a25uLXNlYXJjaA.option.ZnJvbQ.short_desc": {
+          "source": "Starting document offset",
+          "message": "起始文件偏移量"
+        },
+        "app.T3BlblNlYXJjaA.action.a25uLXNlYXJjaA.option.aW5kZXg.desc": {
+          "source": "The OpenSearch index to search",
+          "message": "要搜尋的 OpenSearch 索引"
+        },
+        "app.T3BlblNlYXJjaA.action.a25uLXNlYXJjaA.option.aW5kZXg.display_name": {
+          "source": "Index",
+          "message": "索引"
+        },
+        "app.T3BlblNlYXJjaA.action.a25uLXNlYXJjaA.option.aW5kZXg.short_desc": {
+          "source": "Index name to search",
+          "message": "要搜尋的索引名稱"
+        },
+        "app.T3BlblNlYXJjaA.action.a25uLXNlYXJjaA.option.aw.desc": {
+          "source": "The number of nearest neighbors to retrieve",
+          "message": "要擷取的最近鄰居數量"
+        },
+        "app.T3BlblNlYXJjaA.action.a25uLXNlYXJjaA.option.aw.display_name": {
+          "source": "Nearest Neighbors",
+          "message": "最近鄰居"
+        },
+        "app.T3BlblNlYXJjaA.action.a25uLXNlYXJjaA.option.aw.short_desc": {
+          "source": "Number of neighbors",
+          "message": "鄰居數量"
+        },
+        "app.T3BlblNlYXJjaA.action.a25uLXNlYXJjaA.option.bWF4X2Rpc3RhbmNl.desc": {
+          "source": "Optional maximum vector distance threshold",
+          "message": "選用的向量最大距離閾值"
+        },
+        "app.T3BlblNlYXJjaA.action.a25uLXNlYXJjaA.option.bWF4X2Rpc3RhbmNl.display_name": {
+          "source": "Max Distance",
+          "message": "最大距離"
+        },
+        "app.T3BlblNlYXJjaA.action.a25uLXNlYXJjaA.option.bWF4X2Rpc3RhbmNl.short_desc": {
+          "source": "Maximum vector distance",
+          "message": "最大向量距離"
+        },
+        "app.T3BlblNlYXJjaA.action.a25uLXNlYXJjaA.option.bWV0aG9kX3BhcmFtZXRlcnM.desc": {
+          "source": "Optional method parameters such as `ef_search` for approximate nearest-neighbor search",
+          "message": "選用的方法參數，例如用於近似最近鄰搜尋的 `ef_search`"
+        },
+        "app.T3BlblNlYXJjaA.action.a25uLXNlYXJjaA.option.bWV0aG9kX3BhcmFtZXRlcnM.display_name": {
+          "source": "Method Parameters",
+          "message": "方法參數"
+        },
+        "app.T3BlblNlYXJjaA.action.a25uLXNlYXJjaA.option.bWV0aG9kX3BhcmFtZXRlcnM.short_desc": {
+          "source": "k-NN method parameters",
+          "message": "k-NN 方法參數"
+        },
+        "app.T3BlblNlYXJjaA.action.a25uLXNlYXJjaA.option.bWluX3Njb3Jl.desc": {
+          "source": "Optional minimum score threshold",
+          "message": "選用的最低分數閾值"
+        },
+        "app.T3BlblNlYXJjaA.action.a25uLXNlYXJjaA.option.bWluX3Njb3Jl.display_name": {
+          "source": "Min Score",
+          "message": "最低分數"
+        },
+        "app.T3BlblNlYXJjaA.action.a25uLXNlYXJjaA.option.bWluX3Njb3Jl.short_desc": {
+          "source": "Minimum score threshold",
+          "message": "最低分數閾值"
+        },
+        "app.T3BlblNlYXJjaA.action.a25uLXNlYXJjaA.option.c2VhcmNoX3BpcGVsaW5l.desc": {
+          "source": "Optional search pipeline to use when executing the search",
+          "message": "執行搜尋時要使用的選用搜尋管線"
+        },
+        "app.T3BlblNlYXJjaA.action.a25uLXNlYXJjaA.option.c2VhcmNoX3BpcGVsaW5l.display_name": {
+          "source": "Search Pipeline",
+          "message": "搜尋管線"
+        },
+        "app.T3BlblNlYXJjaA.action.a25uLXNlYXJjaA.option.c2VhcmNoX3BpcGVsaW5l.short_desc": {
+          "source": "Search pipeline name",
+          "message": "搜尋管線名稱"
+        },
+        "app.T3BlblNlYXJjaA.action.a25uLXNlYXJjaA.option.c2l6ZQ.desc": {
+          "source": "The number of search hits to return",
+          "message": "要傳回的搜尋相符筆數"
+        },
+        "app.T3BlblNlYXJjaA.action.a25uLXNlYXJjaA.option.c2l6ZQ.display_name": {
+          "source": "Result Size",
+          "message": "結果大小"
+        },
+        "app.T3BlblNlYXJjaA.action.a25uLXNlYXJjaA.option.c2l6ZQ.short_desc": {
+          "source": "Number of hits to return",
+          "message": "要傳回的相符筆數"
+        },
+        "app.T3BlblNlYXJjaA.action.a25uLXNlYXJjaA.option.cHJlZmVyZW5jZQ.desc": {
+          "source": "Which shard replicas to execute the search on",
+          "message": "要在哪些分區複本上執行搜尋"
+        },
+        "app.T3BlblNlYXJjaA.action.a25uLXNlYXJjaA.option.cHJlZmVyZW5jZQ.display_name": {
+          "source": "Preference",
+          "message": "偏好設定"
+        },
+        "app.T3BlblNlYXJjaA.action.a25uLXNlYXJjaA.option.cHJlZmVyZW5jZQ.short_desc": {
+          "source": "Shard replica preference",
+          "message": "分區複本偏好設定"
+        },
+        "app.T3BlblNlYXJjaA.action.a25uLXNlYXJjaA.option.cm91dGluZw.desc": {
+          "source": "Custom routing value to limit search to specific shards",
+          "message": "將搜尋限制在特定分區的自訂路由值"
+        },
+        "app.T3BlblNlYXJjaA.action.a25uLXNlYXJjaA.option.cm91dGluZw.display_name": {
+          "source": "Routing",
+          "message": "路由"
+        },
+        "app.T3BlblNlYXJjaA.action.a25uLXNlYXJjaA.option.cm91dGluZw.short_desc": {
+          "source": "Custom routing value",
+          "message": "自訂路由值"
+        },
+        "app.T3BlblNlYXJjaA.action.a25uLXNlYXJjaA.option.dHJhY2tfdG90YWxfaGl0cw.desc": {
+          "source": "Optional total-hit tracking control; accepts OpenSearch-compatible boolean or integer values",
+          "message": "選用的總相符筆數追蹤控制；接受相容於 OpenSearch 的布林值或整數值"
+        },
+        "app.T3BlblNlYXJjaA.action.a25uLXNlYXJjaA.option.dHJhY2tfdG90YWxfaGl0cw.display_name": {
+          "source": "Track Total Hits",
+          "message": "追蹤總命中數"
+        },
+        "app.T3BlblNlYXJjaA.action.a25uLXNlYXJjaA.option.dHJhY2tfdG90YWxfaGl0cw.short_desc": {
+          "source": "Total hit tracking",
+          "message": "總命中數追蹤"
+        },
+        "app.T3BlblNlYXJjaA.action.a25uLXNlYXJjaA.option.dmVjdG9y.desc": {
+          "source": "The query vector to compare against vectors stored in `field`",
+          "message": "要與儲存在 `field` 中的向量進行比對的查詢向量"
+        },
+        "app.T3BlblNlYXJjaA.action.a25uLXNlYXJjaA.option.dmVjdG9y.display_name": {
+          "source": "Query Vector",
+          "message": "查詢向量"
+        },
+        "app.T3BlblNlYXJjaA.action.a25uLXNlYXJjaA.option.dmVjdG9y.short_desc": {
+          "source": "Vector to compare",
+          "message": "要比較的向量"
+        },
+        "app.T3BlblNlYXJjaA.action.a25uLXNlYXJjaA.short_desc": {
+          "source": "Search an OpenSearch index with a query vector",
+          "message": "使用查詢向量搜尋 OpenSearch 索引"
+        },
+        "app.T3BlblNlYXJjaA.action.aHlicmlkLXNlYXJjaA.desc": {
+          "source": "Search an OpenSearch index with a hybrid query that combines keyword, vector, neural, or other OpenSearch query clauses. Use a search pipeline when score normalization or rank fusion is needed.",
+          "message": "使用結合關鍵字、向量、神經或其他 OpenSearch 查詢子句的混合查詢來搜尋 OpenSearch 索引。需要分數正規化或排名融合時請使用搜尋管線。"
+        },
+        "app.T3BlblNlYXJjaA.action.aHlicmlkLXNlYXJjaA.display_name": {
+          "source": "Hybrid Search",
+          "message": "混合搜尋"
+        },
+        "app.T3BlblNlYXJjaA.action.aHlicmlkLXNlYXJjaA.option.X3NvdXJjZQ.desc": {
+          "source": "Optional `_source` selection for returned documents; accepts OpenSearch-compatible boolean, string, list, or hash values",
+          "message": "傳回文件的選用 `_source` 選取項目；接受相容於 OpenSearch 的布林值、字串、清單或雜湊值"
+        },
+        "app.T3BlblNlYXJjaA.action.aHlicmlkLXNlYXJjaA.option.X3NvdXJjZQ.display_name": {
+          "source": "Source Fields",
+          "message": "來源欄位"
+        },
+        "app.T3BlblNlYXJjaA.action.aHlicmlkLXNlYXJjaA.option.X3NvdXJjZQ.short_desc": {
+          "source": "Source field selection",
+          "message": "來源欄位選取"
+        },
+        "app.T3BlblNlYXJjaA.action.aHlicmlkLXNlYXJjaA.option.ZmlsdGVy.desc": {
+          "source": "Optional OpenSearch query DSL filter applied to all hybrid subqueries",
+          "message": "套用至所有混合子查詢的選填 OpenSearch 查詢 DSL 篩選條件"
+        },
+        "app.T3BlblNlYXJjaA.action.aHlicmlkLXNlYXJjaA.option.ZmlsdGVy.display_name": {
+          "source": "Filter",
+          "message": "濾鏡"
+        },
+        "app.T3BlblNlYXJjaA.action.aHlicmlkLXNlYXJjaA.option.ZmlsdGVy.short_desc": {
+          "source": "Optional query filter",
+          "message": "選用查詢篩選條件"
+        },
+        "app.T3BlblNlYXJjaA.action.aHlicmlkLXNlYXJjaA.option.ZnJvbQ.desc": {
+          "source": "Starting document offset for search results",
+          "message": "搜尋結果的起始文件偏移量"
+        },
+        "app.T3BlblNlYXJjaA.action.aHlicmlkLXNlYXJjaA.option.ZnJvbQ.display_name": {
+          "source": "From",
+          "message": "寄件者"
+        },
+        "app.T3BlblNlYXJjaA.action.aHlicmlkLXNlYXJjaA.option.ZnJvbQ.short_desc": {
+          "source": "Starting document offset",
+          "message": "起始文件偏移量"
+        },
+        "app.T3BlblNlYXJjaA.action.aHlicmlkLXNlYXJjaA.option.aW5kZXg.desc": {
+          "source": "The OpenSearch index to search",
+          "message": "要搜尋的 OpenSearch 索引"
+        },
+        "app.T3BlblNlYXJjaA.action.aHlicmlkLXNlYXJjaA.option.aW5kZXg.display_name": {
+          "source": "Index",
+          "message": "索引"
+        },
+        "app.T3BlblNlYXJjaA.action.aHlicmlkLXNlYXJjaA.option.aW5kZXg.short_desc": {
+          "source": "Index name to search",
+          "message": "要搜尋的索引名稱"
+        },
+        "app.T3BlblNlYXJjaA.action.aHlicmlkLXNlYXJjaA.option.c2VhcmNoX3BpcGVsaW5l.desc": {
+          "source": "Optional search pipeline to use when executing the search",
+          "message": "執行搜尋時要使用的選用搜尋管線"
+        },
+        "app.T3BlblNlYXJjaA.action.aHlicmlkLXNlYXJjaA.option.c2VhcmNoX3BpcGVsaW5l.display_name": {
+          "source": "Search Pipeline",
+          "message": "搜尋管線"
+        },
+        "app.T3BlblNlYXJjaA.action.aHlicmlkLXNlYXJjaA.option.c2VhcmNoX3BpcGVsaW5l.short_desc": {
+          "source": "Search pipeline name",
+          "message": "搜尋管線名稱"
+        },
+        "app.T3BlblNlYXJjaA.action.aHlicmlkLXNlYXJjaA.option.c2l6ZQ.desc": {
+          "source": "The number of search hits to return",
+          "message": "要傳回的搜尋相符筆數"
+        },
+        "app.T3BlblNlYXJjaA.action.aHlicmlkLXNlYXJjaA.option.c2l6ZQ.display_name": {
+          "source": "Result Size",
+          "message": "結果大小"
+        },
+        "app.T3BlblNlYXJjaA.action.aHlicmlkLXNlYXJjaA.option.c2l6ZQ.short_desc": {
+          "source": "Number of hits to return",
+          "message": "要傳回的相符筆數"
+        },
+        "app.T3BlblNlYXJjaA.action.aHlicmlkLXNlYXJjaA.option.cGFnaW5hdGlvbl9kZXB0aA.desc": {
+          "source": "Maximum number of search results to retrieve from each shard for each hybrid subquery",
+          "message": "每個混合子查詢從每個分區檢索的搜尋結果上限"
+        },
+        "app.T3BlblNlYXJjaA.action.aHlicmlkLXNlYXJjaA.option.cGFnaW5hdGlvbl9kZXB0aA.display_name": {
+          "source": "Pagination Depth",
+          "message": "分頁深度"
+        },
+        "app.T3BlblNlYXJjaA.action.aHlicmlkLXNlYXJjaA.option.cGFnaW5hdGlvbl9kZXB0aA.short_desc": {
+          "source": "Hybrid pagination depth",
+          "message": "混合分頁深度"
+        },
+        "app.T3BlblNlYXJjaA.action.aHlicmlkLXNlYXJjaA.option.cHJlZmVyZW5jZQ.desc": {
+          "source": "Which shard replicas to execute the search on",
+          "message": "要在哪些分區複本上執行搜尋"
+        },
+        "app.T3BlblNlYXJjaA.action.aHlicmlkLXNlYXJjaA.option.cHJlZmVyZW5jZQ.display_name": {
+          "source": "Preference",
+          "message": "偏好設定"
+        },
+        "app.T3BlblNlYXJjaA.action.aHlicmlkLXNlYXJjaA.option.cHJlZmVyZW5jZQ.short_desc": {
+          "source": "Shard replica preference",
+          "message": "分區複本偏好設定"
+        },
+        "app.T3BlblNlYXJjaA.action.aHlicmlkLXNlYXJjaA.option.cXVlcmllcw.desc": {
+          "source": "A list of OpenSearch query clauses to combine in a hybrid query",
+          "message": "要在混合查詢中結合的 OpenSearch 查詢子句清單"
+        },
+        "app.T3BlblNlYXJjaA.action.aHlicmlkLXNlYXJjaA.option.cXVlcmllcw.display_name": {
+          "source": "Queries",
+          "message": "查詢"
+        },
+        "app.T3BlblNlYXJjaA.action.aHlicmlkLXNlYXJjaA.option.cXVlcmllcw.short_desc": {
+          "source": "Query clauses to combine",
+          "message": "要結合的查詢子句"
+        },
+        "app.T3BlblNlYXJjaA.action.aHlicmlkLXNlYXJjaA.option.cm91dGluZw.desc": {
+          "source": "Custom routing value to limit search to specific shards",
+          "message": "將搜尋限制在特定分區的自訂路由值"
+        },
+        "app.T3BlblNlYXJjaA.action.aHlicmlkLXNlYXJjaA.option.cm91dGluZw.display_name": {
+          "source": "Routing",
+          "message": "路由"
+        },
+        "app.T3BlblNlYXJjaA.action.aHlicmlkLXNlYXJjaA.option.cm91dGluZw.short_desc": {
+          "source": "Custom routing value",
+          "message": "自訂路由值"
+        },
+        "app.T3BlblNlYXJjaA.action.aHlicmlkLXNlYXJjaA.option.dHJhY2tfdG90YWxfaGl0cw.desc": {
+          "source": "Optional total-hit tracking control; accepts OpenSearch-compatible boolean or integer values",
+          "message": "選用的總相符筆數追蹤控制；接受相容於 OpenSearch 的布林值或整數值"
+        },
+        "app.T3BlblNlYXJjaA.action.aHlicmlkLXNlYXJjaA.option.dHJhY2tfdG90YWxfaGl0cw.display_name": {
+          "source": "Track Total Hits",
+          "message": "追蹤總命中數"
+        },
+        "app.T3BlblNlYXJjaA.action.aHlicmlkLXNlYXJjaA.option.dHJhY2tfdG90YWxfaGl0cw.short_desc": {
+          "source": "Total hit tracking",
+          "message": "總命中數追蹤"
+        },
+        "app.T3BlblNlYXJjaA.action.aHlicmlkLXNlYXJjaA.short_desc": {
+          "source": "Combine multiple OpenSearch query clauses",
+          "message": "結合多個 OpenSearch 查詢子句"
+        },
+        "app.T3BlblNlYXJjaA.action.bWFrZS1hcGktY2FsbA.desc": {
+          "source": "Make a custom HTTP / REST API call to **OpenSearch Server** using the configured connection's authentication.\n\nSpecify the HTTP method, the URI path (relative to the connection's API base URL), optional query parameters, headers, and request body. The response is returned as a hash containing the status code, response headers, and response body.\n\nUse this action for endpoints that are not yet exposed as first-class actions on this app.",
+          "message": "使用已設定連線的驗證向 **OpenSearch Server** 發出自訂 HTTP / REST API 呼叫。\n\n指定 HTTP 方法、URI 路徑（相對於連線的 API 基本 URL）、選填查詢參數、標頭和請求主體。回應會以包含狀態碼、回應標頭和回應主體的雜湊形式返回。\n\n針對此應用程式上尚未公開為頂級動作的端點使用此動作。"
+        },
+        "app.T3BlblNlYXJjaA.action.bWFrZS1hcGktY2FsbA.display_name": {
+          "source": "Make an API call",
+          "message": "發出 API 呼叫"
+        },
+        "app.T3BlblNlYXJjaA.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.desc": {
+          "source": "The request body. The effective type depends on `body_type`: JSON/form/YAML expect a hash, XML/text expect a string, multipart expects a file structure, binary expects raw bytes.",
+          "message": "請求主體。有效類型取決於 `body_type`：JSON/form/YAML 期望雜湊，XML/text 期望字串，multipart 期望檔案結構，binary 期望原始位元組。"
+        },
+        "app.T3BlblNlYXJjaA.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.display_name": {
+          "source": "Body",
+          "message": "內文"
+        },
+        "app.T3BlblNlYXJjaA.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.short_desc": {
+          "source": "The request body",
+          "message": "請求主體"
+        },
+        "app.T3BlblNlYXJjaA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.desc": {
+          "source": "Upload a file using `multipart/form-data`. The body must be a @ref DataProvider::FileDataType \"FileDataType\" structure (filename + content + mime_type). The framework builds the multipart envelope and sets the boundary header.",
+          "message": "使用 `multipart/form-data` 上傳檔案。主體必須是 @ref DataProvider::FileDataType \"FileDataType\" 結構（filename + content + mime_type）。架構會建立 multipart 封套並設定 boundary 標頭。"
+        },
+        "app.T3BlblNlYXJjaA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.display_name": {
+          "source": "Multipart Form",
+          "message": "Multipart 表單"
+        },
+        "app.T3BlblNlYXJjaA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.short_desc": {
+          "source": "Upload a file using multipart/form-data",
+          "message": "使用 multipart/form-data 上傳檔案"
+        },
+        "app.T3BlblNlYXJjaA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.desc": {
+          "source": "Pass the body to the REST client unchanged; the client decides serialization based on its configured `data` option and the value type",
+          "message": "原封不動地將主體傳遞給 REST 用戶端；用戶端會根據其設定的 `data` 選項和值類型來決定序列化方式"
+        },
+        "app.T3BlblNlYXJjaA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.display_name": {
+          "source": "Auto",
+          "message": "自動"
+        },
+        "app.T3BlblNlYXJjaA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.short_desc": {
+          "source": "Pass-through; use connection serialization and let the REST client decide",
+          "message": "透傳；使用連線序列化並由 REST 用戶端決定"
+        },
+        "app.T3BlblNlYXJjaA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.desc": {
+          "source": "Send the body as raw bytes. The body must be a binary value. Sets `Content-Type: application/octet-stream` unless overridden by `hdr`.",
+          "message": "將主體作為原始位元組傳送。主體必須是二進位值。除非被 `hdr` 覆蓋，否則會設定 `Content-Type: application/octet-stream`。"
+        },
+        "app.T3BlblNlYXJjaA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.display_name": {
+          "source": "Raw Binary",
+          "message": "原始二進位"
+        },
+        "app.T3BlblNlYXJjaA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.short_desc": {
+          "source": "Send body as raw bytes",
+          "message": "將主體作為原始位元組傳送"
+        },
+        "app.T3BlblNlYXJjaA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.desc": {
+          "source": "Serialize a hash of form fields as `application/x-www-form-urlencoded`. The body must be a hash whose values are scalars (strings/numbers/booleans).",
+          "message": "將表單欄位的雜湊序列化為 `application/x-www-form-urlencoded`。主體必須是值為純量（字串/數字/布林值）的雜湊。"
+        },
+        "app.T3BlblNlYXJjaA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.display_name": {
+          "source": "Form (URL-encoded)",
+          "message": "表單 (URL 編碼)"
+        },
+        "app.T3BlblNlYXJjaA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.short_desc": {
+          "source": "Serialize body as application/x-www-form-urlencoded form fields",
+          "message": "將主體序列化為 application/x-www-form-urlencoded 表單欄位"
+        },
+        "app.T3BlblNlYXJjaA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.desc": {
+          "source": "Serialize the body as JSON; sets `Content-Type: application/json`. The body should be a hash, list, or scalar value.",
+          "message": "將主體序列化為 JSON；設定 `Content-Type: application/json`。主體應為雜湊、清單或純量值。"
+        },
+        "app.T3BlblNlYXJjaA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.display_name": {
+          "source": "JSON",
+          "message": "JSON"
+        },
+        "app.T3BlblNlYXJjaA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.short_desc": {
+          "source": "Serialize body as JSON",
+          "message": "將主體序列化為 JSON"
+        },
+        "app.T3BlblNlYXJjaA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.desc": {
+          "source": "Send the body as plain text. The body must be a string. Sets `Content-Type: text/plain`.",
+          "message": "將主體作為純文字傳送。主體必須是字串。設定 `Content-Type: text/plain`。"
+        },
+        "app.T3BlblNlYXJjaA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.display_name": {
+          "source": "Plain Text",
+          "message": "純文字"
+        },
+        "app.T3BlblNlYXJjaA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.short_desc": {
+          "source": "Send body as text/plain",
+          "message": "將主體作為 text/plain 傳送"
+        },
+        "app.T3BlblNlYXJjaA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.desc": {
+          "source": "Send the body as XML. If the body is a hash it is serialized to XML; if it is a string it is sent verbatim. Sets `Content-Type: application/xml`.",
+          "message": "將主體作為 XML 傳送。若主體為雜湊，則會序列化為 XML；若為字串，則原樣傳送。設定 `Content-Type: application/xml`。"
+        },
+        "app.T3BlblNlYXJjaA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.display_name": {
+          "source": "XML",
+          "message": "XML"
+        },
+        "app.T3BlblNlYXJjaA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.short_desc": {
+          "source": "Send body as XML",
+          "message": "將主體作為 XML 傳送"
+        },
+        "app.T3BlblNlYXJjaA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.desc": {
+          "source": "Send the body as YAML. If the body is a hash it is serialized to YAML; if it is a string it is sent verbatim. Sets `Content-Type: application/x-yaml`.",
+          "message": "將主體作為 YAML 傳送。若主體為雜湊，則會序列化為 YAML；若為字串，則原樣傳送。設定 `Content-Type: application/x-yaml`。"
+        },
+        "app.T3BlblNlYXJjaA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.display_name": {
+          "source": "YAML",
+          "message": "YAML"
+        },
+        "app.T3BlblNlYXJjaA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.short_desc": {
+          "source": "Send body as YAML",
+          "message": "將主體作為 YAML 傳送"
+        },
+        "app.T3BlblNlYXJjaA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.desc": {
+          "source": "Selects the body serialization mode and the corresponding `Content-Type` header. Changing this field reshapes the `body` editor - selecting JSON exposes a JSON editor, selecting Multipart Form exposes a file picker, and so on.",
+          "message": "選擇主體序列化模式及對應的 `Content-Type` 標頭。變更此欄位會重新配置 `body` 編輯器 — 選擇 JSON 會顯示 JSON 編輯器，選擇 Multipart 表單會顯示檔案選擇器，依此類推。"
+        },
+        "app.T3BlblNlYXJjaA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.display_name": {
+          "source": "Body Type",
+          "message": "主體類型"
+        },
+        "app.T3BlblNlYXJjaA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.short_desc": {
+          "source": "How the body is serialized and what Content-Type is sent",
+          "message": "主體如何序列化以及傳送何種 Content-Type"
+        },
+        "app.T3BlblNlYXJjaA.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.desc": {
+          "source": "If `True`, non-2xx HTTP responses return as the normal response hash (with the actual status code) instead of raising `REST-RESPONSE-ERROR`. Useful for handling 4xx/5xx as data - e.g. checking whether a resource exists. Overrides the connection's `error_passthru` setting for this call only.",
+          "message": "若為 `True`，非 2xx HTTP 回應會作為正常的相應雜湊傳回（帶有實際狀態碼），而非引發 `REST-RESPONSE-ERROR`。有助於將 4xx/5xx 作為資料處理 — 例如檢查資源是否存在。僅針對本次呼叫覆蓋連線的 `error_passthru` 設定。"
+        },
+        "app.T3BlblNlYXJjaA.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.display_name": {
+          "source": "Return Errors as Data",
+          "message": "將錯誤作為資料傳回"
+        },
+        "app.T3BlblNlYXJjaA.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.short_desc": {
+          "source": "Return non-2xx responses normally instead of throwing",
+          "message": "正常傳回非 2xx 回應而非拋出例外"
+        },
+        "app.T3BlblNlYXJjaA.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.desc": {
+          "source": "Optional list of HTTP status codes treated as success. If set and the response status is not in this list, the action throws `REST-STATUS-ERROR`. When unset, the REST client's default behavior applies (typically: 2xx is success, non-2xx throws).",
+          "message": "視為成功的 HTTP 狀態碼選擇性清單。若有設定且回應狀態不在此清單中，該動作會拋出 `REST-STATUS-ERROR`。若未設定，則套用 REST 用戶端的預設行為（通常：2xx 為成功，非 2xx 則拋出例外）。"
+        },
+        "app.T3BlblNlYXJjaA.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.display_name": {
+          "source": "Expected Status Codes",
+          "message": "預期的狀態碼"
+        },
+        "app.T3BlblNlYXJjaA.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.short_desc": {
+          "source": "Response status codes treated as success",
+          "message": "視為成功的回應狀態碼"
+        },
+        "app.T3BlblNlYXJjaA.action.bWFrZS1hcGktY2FsbA.option.aGRy.desc": {
+          "source": "Hash of custom headers added to the request. These override any default headers set by `body_type` (e.g. supplying `Content-Type` here wins over the body-type default).",
+          "message": "新增至請求的自訂標頭雜湊。這些標頭會覆蓋由 `body_type` 設定的任何預設標頭（例如，在此處提供 `Content-Type` 會優先於主體類型的預設值）。"
+        },
+        "app.T3BlblNlYXJjaA.action.bWFrZS1hcGktY2FsbA.option.aGRy.display_name": {
+          "source": "Custom Headers",
+          "message": "自訂標頭"
+        },
+        "app.T3BlblNlYXJjaA.action.bWFrZS1hcGktY2FsbA.option.aGRy.short_desc": {
+          "source": "Extra request headers",
+          "message": "額外的請求標頭"
+        },
+        "app.T3BlblNlYXJjaA.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.desc": {
+          "source": "If `True`, the response hash includes a `debug` sub-hash containing the request method/URL/headers (with sensitive values redacted), request and response sizes, and round-trip duration. Useful when investigating slow or failing calls. Off by default to keep responses lean.",
+          "message": "若為 `True`，回應雜湊包含 `debug` 子雜湊，其中含有請求方法/URL/標頭（敏感值已被隱藏）、請求與回應大小以及來回時間。在調查過慢或失敗的呼叫時很有用。預設為關閉以保持回應精簡。"
+        },
+        "app.T3BlblNlYXJjaA.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.display_name": {
+          "source": "Include Debug Info",
+          "message": "包含除錯資訊"
+        },
+        "app.T3BlblNlYXJjaA.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.short_desc": {
+          "source": "Include request/timing/size debug info in the response",
+          "message": "在回應中包含請求/計時/大小等除錯資訊"
+        },
+        "app.T3BlblNlYXJjaA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.desc": {
+          "source": "HTTP `OPTIONS`",
+          "message": "HTTP `OPTIONS`"
+        },
+        "app.T3BlblNlYXJjaA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.display_name": {
+          "source": "OPTIONS",
+          "message": "OPTIONS"
+        },
+        "app.T3BlblNlYXJjaA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.short_desc": {
+          "source": "HTTP OPTIONS",
+          "message": "HTTP OPTIONS"
+        },
+        "app.T3BlblNlYXJjaA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.desc": {
+          "source": "HTTP `DELETE`",
+          "message": "HTTP `DELETE`"
+        },
+        "app.T3BlblNlYXJjaA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.display_name": {
+          "source": "DELETE",
+          "message": "DELETE"
+        },
+        "app.T3BlblNlYXJjaA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.short_desc": {
+          "source": "HTTP DELETE",
+          "message": "HTTP DELETE"
+        },
+        "app.T3BlblNlYXJjaA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.desc": {
+          "source": "HTTP `GET`",
+          "message": "HTTP `GET`"
+        },
+        "app.T3BlblNlYXJjaA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.display_name": {
+          "source": "GET",
+          "message": "GET"
+        },
+        "app.T3BlblNlYXJjaA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.short_desc": {
+          "source": "HTTP GET",
+          "message": "HTTP GET"
+        },
+        "app.T3BlblNlYXJjaA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.desc": {
+          "source": "HTTP `HEAD`",
+          "message": "HTTP `HEAD`"
+        },
+        "app.T3BlblNlYXJjaA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.display_name": {
+          "source": "HEAD",
+          "message": "HEAD"
+        },
+        "app.T3BlblNlYXJjaA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.short_desc": {
+          "source": "HTTP HEAD",
+          "message": "HTTP HEAD"
+        },
+        "app.T3BlblNlYXJjaA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.desc": {
+          "source": "HTTP `PATCH`",
+          "message": "HTTP `PATCH`"
+        },
+        "app.T3BlblNlYXJjaA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.display_name": {
+          "source": "PATCH",
+          "message": "PATCH"
+        },
+        "app.T3BlblNlYXJjaA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.short_desc": {
+          "source": "HTTP PATCH",
+          "message": "HTTP PATCH"
+        },
+        "app.T3BlblNlYXJjaA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.desc": {
+          "source": "HTTP `POST`",
+          "message": "HTTP `POST`"
+        },
+        "app.T3BlblNlYXJjaA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.display_name": {
+          "source": "POST",
+          "message": "POST"
+        },
+        "app.T3BlblNlYXJjaA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.short_desc": {
+          "source": "HTTP POST",
+          "message": "HTTP POST"
+        },
+        "app.T3BlblNlYXJjaA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.desc": {
+          "source": "HTTP `PUT`",
+          "message": "HTTP `PUT`"
+        },
+        "app.T3BlblNlYXJjaA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.display_name": {
+          "source": "PUT",
+          "message": "PUT"
+        },
+        "app.T3BlblNlYXJjaA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.short_desc": {
+          "source": "HTTP PUT",
+          "message": "HTTP PUT"
+        },
+        "app.T3BlblNlYXJjaA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.desc": {
+          "source": "HTTP `TRACE`",
+          "message": "HTTP `TRACE`"
+        },
+        "app.T3BlblNlYXJjaA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.display_name": {
+          "source": "TRACE",
+          "message": "TRACE"
+        },
+        "app.T3BlblNlYXJjaA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.short_desc": {
+          "source": "HTTP TRACE",
+          "message": "HTTP TRACE"
+        },
+        "app.T3BlblNlYXJjaA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "用於請求的 HTTP 方法"
+        },
+        "app.T3BlblNlYXJjaA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.display_name": {
+          "source": "HTTP Method",
+          "message": "HTTP 方法"
+        },
+        "app.T3BlblNlYXJjaA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.short_desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "用於請求的 HTTP 方法"
+        },
+        "app.T3BlblNlYXJjaA.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain `{name}` placeholders that are replaced from `path_vars`. Example: `/users/{id}/comments`.",
+          "message": "相於連線 API 基底 URL 的 URI 路徑。可能包含從 `path_vars` 替換的 `{name}` 預留位置。範例：`/users/{id}/comments`。"
+        },
+        "app.T3BlblNlYXJjaA.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.display_name": {
+          "source": "URI Path",
+          "message": "URI 路徑"
+        },
+        "app.T3BlblNlYXJjaA.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.short_desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain '{name}' placeholders that are replaced from 'path_vars'. Example: '/users/{id}/comments'",
+          "message": "相對於連線 API 根 URL 的 URI 路徑。可能包含從 'path_vars' 替換的 '{name}' 預留位置。範例：'/users/{id}/comments'"
+        },
+        "app.T3BlblNlYXJjaA.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.desc": {
+          "source": "Hash of values substituted into `{name}` placeholders in the URI path. Example: with `path = /users/{id}` and `path_vars = {id: 123}` the framework sends `/users/123`. Values are URL-encoded.",
+          "message": "代入 URI 路徑中 `{name}` 預留位置的值 Hash。範例：使用 `path = /users/{id}` 與 `path_vars = {id: 123}`，框架會傳送 `/users/123`。值均經過 URL 編碼。"
+        },
+        "app.T3BlblNlYXJjaA.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.display_name": {
+          "source": "Path Variables",
+          "message": "路徑變數"
+        },
+        "app.T3BlblNlYXJjaA.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.short_desc": {
+          "source": "Values for {name} placeholders in path",
+          "message": "路徑中 {name} 預留位置的值"
+        },
+        "app.T3BlblNlYXJjaA.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.desc": {
+          "source": "Hash of query string parameters to append to the URI path. Values are URL-encoded; list values are joined with `,`.",
+          "message": "要附加至 URI 路徑的查詢字串參數 Hash。值均經過 URL 編碼；清單值會以 `,` 連接。"
+        },
+        "app.T3BlblNlYXJjaA.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.display_name": {
+          "source": "Query Arguments",
+          "message": "查詢引數"
+        },
+        "app.T3BlblNlYXJjaA.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.short_desc": {
+          "source": "Query string parameters",
+          "message": "查詢字串參數"
+        },
+        "app.T3BlblNlYXJjaA.action.bWFrZS1hcGktY2FsbA.short_desc": {
+          "source": "Make a custom API call to OpenSearch Server",
+          "message": "向 OpenSearch Server 發出自訂 API 呼叫"
+        },
+        "app.T3BlblNlYXJjaA.action.bmV1cmFsLXNlYXJjaA.desc": {
+          "source": "Search an OpenSearch vector or semantic field with OpenSearch neural search. Use this action when the cluster is configured with the required model, semantic field, or neural-search plugin support.",
+          "message": "使用 OpenSearch 神經搜尋來搜尋 OpenSearch 向量或語意欄位。當叢集已設定所需的模型、語意欄位或 neural-search 外掛程式支援時，請使用此動作。"
+        },
+        "app.T3BlblNlYXJjaA.action.bmV1cmFsLXNlYXJjaA.display_name": {
+          "source": "Neural Search",
+          "message": "神經搜尋"
+        },
+        "app.T3BlblNlYXJjaA.action.bmV1cmFsLXNlYXJjaA.option.X3NvdXJjZQ.desc": {
+          "source": "Optional `_source` selection for returned documents; accepts OpenSearch-compatible boolean, string, list, or hash values",
+          "message": "傳回文件的選用 `_source` 選取項目；接受相容於 OpenSearch 的布林值、字串、清單或雜湊值"
+        },
+        "app.T3BlblNlYXJjaA.action.bmV1cmFsLXNlYXJjaA.option.X3NvdXJjZQ.display_name": {
+          "source": "Source Fields",
+          "message": "來源欄位"
+        },
+        "app.T3BlblNlYXJjaA.action.bmV1cmFsLXNlYXJjaA.option.X3NvdXJjZQ.short_desc": {
+          "source": "Source field selection",
+          "message": "來源欄位選取"
+        },
+        "app.T3BlblNlYXJjaA.action.bmV1cmFsLXNlYXJjaA.option.ZXhwYW5kX25lc3RlZF9kb2Nz.desc": {
+          "source": "When true, retrieves scores for nested field documents within each parent document",
+          "message": "設為 true 時，檢索每個父文件內巢狀欄位文件的分數"
+        },
+        "app.T3BlblNlYXJjaA.action.bmV1cmFsLXNlYXJjaA.option.ZXhwYW5kX25lc3RlZF9kb2Nz.display_name": {
+          "source": "Expand Nested Docs?",
+          "message": "展開巢狀文件？"
+        },
+        "app.T3BlblNlYXJjaA.action.bmV1cmFsLXNlYXJjaA.option.ZXhwYW5kX25lc3RlZF9kb2Nz.short_desc": {
+          "source": "Return nested scores",
+          "message": "返回巢狀分數"
+        },
+        "app.T3BlblNlYXJjaA.action.bmV1cmFsLXNlYXJjaA.option.ZmllbGQ.desc": {
+          "source": "The vector or semantic field to search",
+          "message": "要搜尋的向量或語意欄位"
+        },
+        "app.T3BlblNlYXJjaA.action.bmV1cmFsLXNlYXJjaA.option.ZmllbGQ.display_name": {
+          "source": "Vector Field",
+          "message": "向量欄位"
+        },
+        "app.T3BlblNlYXJjaA.action.bmV1cmFsLXNlYXJjaA.option.ZmllbGQ.short_desc": {
+          "source": "Vector or semantic field",
+          "message": "向量或語意欄位"
+        },
+        "app.T3BlblNlYXJjaA.action.bmV1cmFsLXNlYXJjaA.option.ZmlsdGVy.desc": {
+          "source": "Optional OpenSearch query DSL filter applied to candidate documents",
+          "message": "套用至候選文件的選用 OpenSearch 查詢 DSL 篩選條件"
+        },
+        "app.T3BlblNlYXJjaA.action.bmV1cmFsLXNlYXJjaA.option.ZmlsdGVy.display_name": {
+          "source": "Filter",
+          "message": "濾鏡"
+        },
+        "app.T3BlblNlYXJjaA.action.bmV1cmFsLXNlYXJjaA.option.ZmlsdGVy.short_desc": {
+          "source": "Optional query filter",
+          "message": "選用查詢篩選條件"
+        },
+        "app.T3BlblNlYXJjaA.action.bmV1cmFsLXNlYXJjaA.option.ZnJvbQ.desc": {
+          "source": "Starting document offset for search results",
+          "message": "搜尋結果的起始文件偏移量"
+        },
+        "app.T3BlblNlYXJjaA.action.bmV1cmFsLXNlYXJjaA.option.ZnJvbQ.display_name": {
+          "source": "From",
+          "message": "寄件者"
+        },
+        "app.T3BlblNlYXJjaA.action.bmV1cmFsLXNlYXJjaA.option.ZnJvbQ.short_desc": {
+          "source": "Starting document offset",
+          "message": "起始文件偏移量"
+        },
+        "app.T3BlblNlYXJjaA.action.bmV1cmFsLXNlYXJjaA.option.aW5kZXg.desc": {
+          "source": "The OpenSearch index to search",
+          "message": "要搜尋的 OpenSearch 索引"
+        },
+        "app.T3BlblNlYXJjaA.action.bmV1cmFsLXNlYXJjaA.option.aW5kZXg.display_name": {
+          "source": "Index",
+          "message": "索引"
+        },
+        "app.T3BlblNlYXJjaA.action.bmV1cmFsLXNlYXJjaA.option.aW5kZXg.short_desc": {
+          "source": "Index name to search",
+          "message": "要搜尋的索引名稱"
+        },
+        "app.T3BlblNlYXJjaA.action.bmV1cmFsLXNlYXJjaA.option.aw.desc": {
+          "source": "The number of nearest neighbors to retrieve",
+          "message": "要擷取的最近鄰居數量"
+        },
+        "app.T3BlblNlYXJjaA.action.bmV1cmFsLXNlYXJjaA.option.aw.display_name": {
+          "source": "Nearest Neighbors",
+          "message": "最近鄰居"
+        },
+        "app.T3BlblNlYXJjaA.action.bmV1cmFsLXNlYXJjaA.option.aw.short_desc": {
+          "source": "Number of neighbors",
+          "message": "鄰居數量"
+        },
+        "app.T3BlblNlYXJjaA.action.bmV1cmFsLXNlYXJjaA.option.bW9kZWxfaWQ.desc": {
+          "source": "The OpenSearch model ID used to generate query embeddings; optional for semantic fields",
+          "message": "用於產生查詢嵌入的 OpenSearch 模型 ID；對語意欄位為選填"
+        },
+        "app.T3BlblNlYXJjaA.action.bmV1cmFsLXNlYXJjaA.option.bW9kZWxfaWQ.display_name": {
+          "source": "Model ID",
+          "message": "模型 ID"
+        },
+        "app.T3BlblNlYXJjaA.action.bmV1cmFsLXNlYXJjaA.option.bW9kZWxfaWQ.short_desc": {
+          "source": "Embedding model ID",
+          "message": "嵌入模型 ID"
+        },
+        "app.T3BlblNlYXJjaA.action.bmV1cmFsLXNlYXJjaA.option.bWF4X2Rpc3RhbmNl.desc": {
+          "source": "Optional maximum vector distance threshold",
+          "message": "選用的向量最大距離閾值"
+        },
+        "app.T3BlblNlYXJjaA.action.bmV1cmFsLXNlYXJjaA.option.bWF4X2Rpc3RhbmNl.display_name": {
+          "source": "Max Distance",
+          "message": "最大距離"
+        },
+        "app.T3BlblNlYXJjaA.action.bmV1cmFsLXNlYXJjaA.option.bWF4X2Rpc3RhbmNl.short_desc": {
+          "source": "Maximum vector distance",
+          "message": "最大向量距離"
+        },
+        "app.T3BlblNlYXJjaA.action.bmV1cmFsLXNlYXJjaA.option.bWV0aG9kX3BhcmFtZXRlcnM.desc": {
+          "source": "Optional method parameters such as `ef_search` for approximate nearest-neighbor search",
+          "message": "選用的方法參數，例如用於近似最近鄰搜尋的 `ef_search`"
+        },
+        "app.T3BlblNlYXJjaA.action.bmV1cmFsLXNlYXJjaA.option.bWV0aG9kX3BhcmFtZXRlcnM.display_name": {
+          "source": "Method Parameters",
+          "message": "方法參數"
+        },
+        "app.T3BlblNlYXJjaA.action.bmV1cmFsLXNlYXJjaA.option.bWV0aG9kX3BhcmFtZXRlcnM.short_desc": {
+          "source": "k-NN method parameters",
+          "message": "k-NN 方法參數"
+        },
+        "app.T3BlblNlYXJjaA.action.bmV1cmFsLXNlYXJjaA.option.bWluX3Njb3Jl.desc": {
+          "source": "Optional minimum score threshold",
+          "message": "選用的最低分數閾值"
+        },
+        "app.T3BlblNlYXJjaA.action.bmV1cmFsLXNlYXJjaA.option.bWluX3Njb3Jl.display_name": {
+          "source": "Min Score",
+          "message": "最低分數"
+        },
+        "app.T3BlblNlYXJjaA.action.bmV1cmFsLXNlYXJjaA.option.bWluX3Njb3Jl.short_desc": {
+          "source": "Minimum score threshold",
+          "message": "最低分數閾值"
+        },
+        "app.T3BlblNlYXJjaA.action.bmV1cmFsLXNlYXJjaA.option.c2VhcmNoX3BpcGVsaW5l.desc": {
+          "source": "Optional search pipeline to use when executing the search",
+          "message": "執行搜尋時要使用的選用搜尋管線"
+        },
+        "app.T3BlblNlYXJjaA.action.bmV1cmFsLXNlYXJjaA.option.c2VhcmNoX3BpcGVsaW5l.display_name": {
+          "source": "Search Pipeline",
+          "message": "搜尋管線"
+        },
+        "app.T3BlblNlYXJjaA.action.bmV1cmFsLXNlYXJjaA.option.c2VhcmNoX3BpcGVsaW5l.short_desc": {
+          "source": "Search pipeline name",
+          "message": "搜尋管線名稱"
+        },
+        "app.T3BlblNlYXJjaA.action.bmV1cmFsLXNlYXJjaA.option.c2VtYW50aWNfZmllbGRfc2VhcmNoX2FuYWx5emVy.desc": {
+          "source": "Analyzer for tokenizing `query_text` when using a sparse encoding model",
+          "message": "使用稀疏編碼模型時用於對 `query_text` 進行分詞的分析器"
+        },
+        "app.T3BlblNlYXJjaA.action.bmV1cmFsLXNlYXJjaA.option.c2VtYW50aWNfZmllbGRfc2VhcmNoX2FuYWx5emVy.display_name": {
+          "source": "Semantic Field Analyzer",
+          "message": "語意欄位分析器"
+        },
+        "app.T3BlblNlYXJjaA.action.bmV1cmFsLXNlYXJjaA.option.c2VtYW50aWNfZmllbGRfc2VhcmNoX2FuYWx5emVy.short_desc": {
+          "source": "Semantic field analyzer",
+          "message": "語意欄位分析器"
+        },
+        "app.T3BlblNlYXJjaA.action.bmV1cmFsLXNlYXJjaA.option.c2l6ZQ.desc": {
+          "source": "The number of search hits to return",
+          "message": "要傳回的搜尋相符筆數"
+        },
+        "app.T3BlblNlYXJjaA.action.bmV1cmFsLXNlYXJjaA.option.c2l6ZQ.display_name": {
+          "source": "Result Size",
+          "message": "結果大小"
+        },
+        "app.T3BlblNlYXJjaA.action.bmV1cmFsLXNlYXJjaA.option.c2l6ZQ.short_desc": {
+          "source": "Number of hits to return",
+          "message": "要傳回的相符筆數"
+        },
+        "app.T3BlblNlYXJjaA.action.bmV1cmFsLXNlYXJjaA.option.cHJlZmVyZW5jZQ.desc": {
+          "source": "Which shard replicas to execute the search on",
+          "message": "要在哪些分區複本上執行搜尋"
+        },
+        "app.T3BlblNlYXJjaA.action.bmV1cmFsLXNlYXJjaA.option.cHJlZmVyZW5jZQ.display_name": {
+          "source": "Preference",
+          "message": "偏好設定"
+        },
+        "app.T3BlblNlYXJjaA.action.bmV1cmFsLXNlYXJjaA.option.cHJlZmVyZW5jZQ.short_desc": {
+          "source": "Shard replica preference",
+          "message": "分區複本偏好設定"
+        },
+        "app.T3BlblNlYXJjaA.action.bmV1cmFsLXNlYXJjaA.option.cXVlcnlfaW1hZ2U.desc": {
+          "source": "Base64-encoded image data used by OpenSearch to generate query embeddings",
+          "message": "OpenSearch 用於產生查詢嵌入的 Base64 編碼影像資料"
+        },
+        "app.T3BlblNlYXJjaA.action.bmV1cmFsLXNlYXJjaA.option.cXVlcnlfaW1hZ2U.display_name": {
+          "source": "Query Image",
+          "message": "查詢影像"
+        },
+        "app.T3BlblNlYXJjaA.action.bmV1cmFsLXNlYXJjaA.option.cXVlcnlfaW1hZ2U.short_desc": {
+          "source": "Base64 image data",
+          "message": "Base64 影像資料"
+        },
+        "app.T3BlblNlYXJjaA.action.bmV1cmFsLXNlYXJjaA.option.cXVlcnlfdG9rZW5z.desc": {
+          "source": "Sparse-vector query tokens and weights",
+          "message": "稀疏向量查詢 Token 與權重"
+        },
+        "app.T3BlblNlYXJjaA.action.bmV1cmFsLXNlYXJjaA.option.cXVlcnlfdG9rZW5z.display_name": {
+          "source": "Query Tokens",
+          "message": "查詢 Token"
+        },
+        "app.T3BlblNlYXJjaA.action.bmV1cmFsLXNlYXJjaA.option.cXVlcnlfdG9rZW5z.short_desc": {
+          "source": "Sparse query tokens",
+          "message": "稀疏查詢 Token"
+        },
+        "app.T3BlblNlYXJjaA.action.bmV1cmFsLXNlYXJjaA.option.cXVlcnlfdGV4dA.desc": {
+          "source": "Text used by OpenSearch to generate query embeddings",
+          "message": "OpenSearch 用於產生查詢嵌入的文字"
+        },
+        "app.T3BlblNlYXJjaA.action.bmV1cmFsLXNlYXJjaA.option.cXVlcnlfdGV4dA.display_name": {
+          "source": "Query Text",
+          "message": "查詢文字"
+        },
+        "app.T3BlblNlYXJjaA.action.bmV1cmFsLXNlYXJjaA.option.cXVlcnlfdGV4dA.short_desc": {
+          "source": "Text to embed",
+          "message": "要嵌入的文字"
+        },
+        "app.T3BlblNlYXJjaA.action.bmV1cmFsLXNlYXJjaA.option.cm91dGluZw.desc": {
+          "source": "Custom routing value to limit search to specific shards",
+          "message": "將搜尋限制在特定分區的自訂路由值"
+        },
+        "app.T3BlblNlYXJjaA.action.bmV1cmFsLXNlYXJjaA.option.cm91dGluZw.display_name": {
+          "source": "Routing",
+          "message": "路由"
+        },
+        "app.T3BlblNlYXJjaA.action.bmV1cmFsLXNlYXJjaA.option.cm91dGluZw.short_desc": {
+          "source": "Custom routing value",
+          "message": "自訂路由值"
+        },
+        "app.T3BlblNlYXJjaA.action.bmV1cmFsLXNlYXJjaA.option.cmVzY29yZQ.desc": {
+          "source": "Optional OpenSearch-compatible rescore setting for neural search",
+          "message": "神經搜尋的選填 OpenSearch 相容重新評分設定"
+        },
+        "app.T3BlblNlYXJjaA.action.bmV1cmFsLXNlYXJjaA.option.cmVzY29yZQ.display_name": {
+          "source": "Rescore",
+          "message": "重新評分"
+        },
+        "app.T3BlblNlYXJjaA.action.bmV1cmFsLXNlYXJjaA.option.cmVzY29yZQ.short_desc": {
+          "source": "Vector rescore control",
+          "message": "向量重新評分控制"
+        },
+        "app.T3BlblNlYXJjaA.action.bmV1cmFsLXNlYXJjaA.option.dHJhY2tfdG90YWxfaGl0cw.desc": {
+          "source": "Optional total-hit tracking control; accepts OpenSearch-compatible boolean or integer values",
+          "message": "選用的總相符筆數追蹤控制；接受相容於 OpenSearch 的布林值或整數值"
+        },
+        "app.T3BlblNlYXJjaA.action.bmV1cmFsLXNlYXJjaA.option.dHJhY2tfdG90YWxfaGl0cw.display_name": {
+          "source": "Track Total Hits",
+          "message": "追蹤總命中數"
+        },
+        "app.T3BlblNlYXJjaA.action.bmV1cmFsLXNlYXJjaA.option.dHJhY2tfdG90YWxfaGl0cw.short_desc": {
+          "source": "Total hit tracking",
+          "message": "總命中數追蹤"
+        },
+        "app.T3BlblNlYXJjaA.action.bmV1cmFsLXNlYXJjaA.short_desc": {
+          "source": "Search an OpenSearch index with text or sparse tokens",
+          "message": "使用文字或稀疏 Token 搜尋 OpenSearch 索引"
+        },
+        "app.T3BlblNlYXJjaA.action.c2Nyb2xsLXNlYXJjaA.desc": {
+          "source": "Search an OpenSearch index using the Scroll API for efficient iteration over large result sets. Use this action when ordinary `from` and `size` pagination is not appropriate.",
+          "message": "使用 Scroll API 搜尋 OpenSearch 索引以有效反覆運算大量結果集。當一般 `from` 和 `size` 分頁不適用時，請使用此動作。"
+        },
+        "app.T3BlblNlYXJjaA.action.c2Nyb2xsLXNlYXJjaA.display_name": {
+          "source": "Scroll Search",
+          "message": "滾動搜尋"
+        },
+        "app.T3BlblNlYXJjaA.action.c2Nyb2xsLXNlYXJjaA.option.Y2xlYXI.desc": {
+          "source": "If true, clears the scroll context (requires scroll_id). Use this when done scrolling to free up resources.",
+          "message": "設為 true 時，清除滾動上下文 (需要 scroll_id)。滾動完成時請使用此選項以釋放資源。"
+        },
+        "app.T3BlblNlYXJjaA.action.c2Nyb2xsLXNlYXJjaA.option.Y2xlYXI.display_name": {
+          "source": "Clear Scroll?",
+          "message": "清除滾動？"
+        },
+        "app.T3BlblNlYXJjaA.action.c2Nyb2xsLXNlYXJjaA.option.Y2xlYXI.short_desc": {
+          "source": "Clear scroll context",
+          "message": "清除滾動上下文"
+        },
+        "app.T3BlblNlYXJjaA.action.c2Nyb2xsLXNlYXJjaA.option.aW5kZXg.desc": {
+          "source": "The name of the index to search (required for initial scroll, not needed for continue/clear)",
+          "message": "要搜尋的索引名稱（初始滾動時必填，繼續/清除時不需要）"
+        },
+        "app.T3BlblNlYXJjaA.action.c2Nyb2xsLXNlYXJjaA.option.aW5kZXg.display_name": {
+          "source": "Index",
+          "message": "索引"
+        },
+        "app.T3BlblNlYXJjaA.action.c2Nyb2xsLXNlYXJjaA.option.aW5kZXg.short_desc": {
+          "source": "Index to search",
+          "message": "要搜尋的索引"
+        },
+        "app.T3BlblNlYXJjaA.action.c2Nyb2xsLXNlYXJjaA.option.c2Nyb2xs.desc": {
+          "source": "How long to keep the scroll context alive (e.g., '1m' for 1 minute, '5m' for 5 minutes). Default: '1m'",
+          "message": "保持滾動上下文有效的時間（例如「1m」代表 1 分鐘，「5m」代表 5 分鐘）。預設值：「1m」"
+        },
+        "app.T3BlblNlYXJjaA.action.c2Nyb2xsLXNlYXJjaA.option.c2Nyb2xs.display_name": {
+          "source": "Scroll Timeout",
+          "message": "滾動逾時"
+        },
+        "app.T3BlblNlYXJjaA.action.c2Nyb2xsLXNlYXJjaA.option.c2Nyb2xs.short_desc": {
+          "source": "Scroll context lifetime",
+          "message": "滾動上下文生命週期"
+        },
+        "app.T3BlblNlYXJjaA.action.c2Nyb2xsLXNlYXJjaA.option.c2Nyb2xsX2lk.desc": {
+          "source": "The scroll ID from a previous scroll response. If provided, continues the scroll. If not provided, starts a new scroll.",
+          "message": "來自先前滾動回應的滾動 ID。如果提供，則繼續滾動。如果未提供，則開始新的滾動。"
+        },
+        "app.T3BlblNlYXJjaA.action.c2Nyb2xsLXNlYXJjaA.option.c2Nyb2xsX2lk.display_name": {
+          "source": "Scroll ID",
+          "message": "滾動 ID"
+        },
+        "app.T3BlblNlYXJjaA.action.c2Nyb2xsLXNlYXJjaA.option.c2Nyb2xsX2lk.short_desc": {
+          "source": "Previous scroll ID",
+          "message": "先前的滾動 ID"
+        },
+        "app.T3BlblNlYXJjaA.action.c2Nyb2xsLXNlYXJjaA.option.c2l6ZQ.desc": {
+          "source": "The number of hits to return per scroll page. Default: 1000",
+          "message": "每頁滾動返回的命中數。預設值：1000"
+        },
+        "app.T3BlblNlYXJjaA.action.c2Nyb2xsLXNlYXJjaA.option.c2l6ZQ.display_name": {
+          "source": "Page Size",
+          "message": "頁面大小"
+        },
+        "app.T3BlblNlYXJjaA.action.c2Nyb2xsLXNlYXJjaA.option.c2l6ZQ.short_desc": {
+          "source": "Hits per scroll page",
+          "message": "每頁滾動命中數"
+        },
+        "app.T3BlblNlYXJjaA.action.c2Nyb2xsLXNlYXJjaA.option.cHJlZmVyZW5jZQ.desc": {
+          "source": "Specifies which shard replicas to execute the search request on (for initial scroll only)",
+          "message": "指定要在哪些分區複本上執行搜尋請求（僅適用於初始滾動）"
+        },
+        "app.T3BlblNlYXJjaA.action.c2Nyb2xsLXNlYXJjaA.option.cHJlZmVyZW5jZQ.display_name": {
+          "source": "Preference",
+          "message": "偏好設定"
+        },
+        "app.T3BlblNlYXJjaA.action.c2Nyb2xsLXNlYXJjaA.option.cHJlZmVyZW5jZQ.short_desc": {
+          "source": "Shard preference",
+          "message": "分區偏好設定"
+        },
+        "app.T3BlblNlYXJjaA.action.c2Nyb2xsLXNlYXJjaA.option.cXVlcnk.desc": {
+          "source": "The query to execute using OpenSearch Query DSL (for initial scroll only)",
+          "message": "使用 OpenSearch 查詢 DSL 執行的查詢（僅適用於初始滾動）"
+        },
+        "app.T3BlblNlYXJjaA.action.c2Nyb2xsLXNlYXJjaA.option.cXVlcnk.display_name": {
+          "source": "Query",
+          "message": "查詢"
+        },
+        "app.T3BlblNlYXJjaA.action.c2Nyb2xsLXNlYXJjaA.option.cXVlcnk.short_desc": {
+          "source": "Search query DSL",
+          "message": "搜尋查詢 DSL"
+        },
+        "app.T3BlblNlYXJjaA.action.c2Nyb2xsLXNlYXJjaA.option.cm91dGluZw.desc": {
+          "source": "Custom routing value (for initial scroll only)",
+          "message": "自訂路由值（僅適用於初始滾動）"
+        },
+        "app.T3BlblNlYXJjaA.action.c2Nyb2xsLXNlYXJjaA.option.cm91dGluZw.display_name": {
+          "source": "Routing",
+          "message": "路由"
+        },
+        "app.T3BlblNlYXJjaA.action.c2Nyb2xsLXNlYXJjaA.option.cm91dGluZw.short_desc": {
+          "source": "Custom routing value",
+          "message": "自訂路由值"
+        },
+        "app.T3BlblNlYXJjaA.action.c2Nyb2xsLXNlYXJjaA.option.cmVxdWVzdF9jYWNoZQ.desc": {
+          "source": "Whether to cache the request (for initial scroll only)",
+          "message": "是否快取請求（僅適用於初始滾動）"
+        },
+        "app.T3BlblNlYXJjaA.action.c2Nyb2xsLXNlYXJjaA.option.cmVxdWVzdF9jYWNoZQ.display_name": {
+          "source": "Request Cache?",
+          "message": "快取請求？"
+        },
+        "app.T3BlblNlYXJjaA.action.c2Nyb2xsLXNlYXJjaA.option.cmVxdWVzdF9jYWNoZQ.short_desc": {
+          "source": "Cache the request",
+          "message": "快取請求"
+        },
+        "app.T3BlblNlYXJjaA.action.c2Nyb2xsLXNlYXJjaA.short_desc": {
+          "source": "Search with scroll API for large result sets",
+          "message": "使用滾動 API 搜尋大型結果集"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.desc": {
+          "source": "Search an OpenSearch index with the query DSL and optional query-string parameters. Use this action for precise document lookup, log search, analytics inputs, and pagination through ordinary search results.",
+          "message": "使用查詢 DSL 和選填查詢字串參數搜尋 OpenSearch 索引。使用此動作進行精確文件查詢、記錄搜尋、分析輸入以及對一般搜尋結果進行分頁。"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.display_name": {
+          "source": "Search Index",
+          "message": "搜尋索引"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.X3NvdXJjZQ.desc": {
+          "source": "Indicates which source fields are returned for matching documents. These fields are returned in the `hits._source` property of the search response.\n\nValid values for `_source`:\n- `true`: (Boolean - the default) The entire document source is returned\n- `false`: (Boolean) The document source is not returned\n- `<wildcard_pattern>`: (string or array of strings) Wildcard (*) pattern or array of patterns containing source fields to return\n- `<object>`: (object) Object containing a list of source fields to include or exclude\n  Properties for `<object>`:\n  - `excludes`: (string or array of strings) Wildcard (*) pattern or array of patterns containing source fields to exclude from the response\n\n    You can also use this property to exclude fields from the subset specified in the `includes` property\n  - `includes`: (string or array of strings) Wildcard (*) pattern or array of patterns containing source fields to return\n\n    If this property is specified, only these source fields are returned. You can exclude fields from this subset using the `excludes` property",
+          "message": "指出相符文件要返回哪些來源欄位。這些欄位會在搜尋回應的 `hits._source` 屬性中返回。\n\n`_source` 的有效值：\n- `true`：（布林值 - 預設）返回完整的文件來源\n- `false`：（布林值）不返回文件來源\n- `<wildcard_pattern>`：（字串或字串陣列）萬用字元 (*) 模式或包含要返回來源欄位的模式陣列\n- `<object>`：（物件）包含要包含或排除之來源欄位清單的物件\n  `<object>` 的屬性：\n  - `excludes`：（字串或字串陣列）萬用字元 (*) 模式或包含要從回應中排除之來源欄位的模式陣列\n\n    您也可以使用此屬性從 `includes` 屬性指定的子集中排除欄位\n  - `includes`：（字串或字串陣列）萬用字元 (*) 模式或包含要返回之來源欄位的模式陣列\n\n    如果指定了此屬性，則僅返回這些來源欄位。您可以使用 `excludes` 屬性從此子集中排除欄位"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.X3NvdXJjZQ.display_name": {
+          "source": "Source",
+          "message": "來源"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.X3NvdXJjZQ.short_desc": {
+          "source": "Source field control",
+          "message": "來源欄位控制"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.X3NvdXJjZV9leGNsdWRlcw.desc": {
+          "source": "A comma-separated list of source fields to exclude from the response.\n\nYou can also use this parameter to exclude fields from the subset specified in `_source_includes` query parameter.\n\nIf the `_source` parameter is `false`, this parameter is ignored",
+          "message": "要從回應中排除的來源欄位以逗號分隔的清單。\n\n您也可以使用此參數從 `_source_includes` 查詢參數中指定的子集中排除欄位。\n\n如果 `_source` 參數為 `false`，則會忽略此參數"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.X3NvdXJjZV9leGNsdWRlcw.display_name": {
+          "source": "Source Excludes",
+          "message": "來源排除項"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.X3NvdXJjZV9leGNsdWRlcw.short_desc": {
+          "source": "Fields to exclude",
+          "message": "要排除的欄位"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.X3NvdXJjZV9pbmNsdWRlcw.desc": {
+          "source": "A comma-separated list of source fields to include in the response.\n\nIf this parameter is specified, only these source fields are returned. You can exclude fields from this subset using the `_source_excludes` query parameter.\n\nIf the `_source` parameter is `false`, this parameter is ignored",
+          "message": "要包含在回應中的來源欄位以逗號分隔的清單。\n\n如果指定了此參數，則僅傳回這些來源欄位。您可以使用 `_source_excludes` 查詢參數從此子集中排除欄位。\n\n如果 `_source` 參數為 `false`，則會忽略此參數"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.X3NvdXJjZV9pbmNsdWRlcw.display_name": {
+          "source": "Source Includes",
+          "message": "來源包含項"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.X3NvdXJjZV9pbmNsdWRlcw.short_desc": {
+          "source": "Fields to include",
+          "message": "要包含的欄位"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.X3NvdXJjZV9xdWVyeQ.desc": {
+          "source": "Indicates which source fields are returned for matching documents. These fields are returned in the `hits._source` property of the search response. Defaults to `true`.\n\nValid values for `_source`:\n- `true`: The entire document source is returned\n- `false`: The document source is not returned\n- `<string>`: Comma-separated list of source fields to return. Wildcard (*) patterns are supported",
+          "message": "指出比對文件要傳回哪些來源欄位。這些欄位會在搜尋回應的 `hits._source` 屬性中傳回。預設為 `true`。\n\n`_source` 的有效值：\n- `true`：傳回整個文件來源\n- `false`：不傳回文件來源\n- `<string>`：要傳回的來源欄位以逗號分隔的清單。支援萬用字元 (*) 模式"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.X3NvdXJjZV9xdWVyeQ.display_name": {
+          "source": "Source Query",
+          "message": "來源查詢"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.X3NvdXJjZV9xdWVyeQ.short_desc": {
+          "source": "Source fields to return",
+          "message": "要傳回的來源欄位"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.Y2NzX21pbmltaXplX3JvdW5kdHJpcHM.desc": {
+          "source": "If `true` (the default), network round-trips between the coordinating node and the remote clusters are minimized when executing cross-cluster search (CCS) requests",
+          "message": "若為 `true`（預設值），則在執行跨叢集搜尋 (CCS) 請求時，協調節點與遠端叢集之間的網路往返次數將會最小化"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.Y2NzX21pbmltaXplX3JvdW5kdHJpcHM.display_name": {
+          "source": "CCS Minimize Roundtrips?",
+          "message": "CCS 最小化往返次數？"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.Y2NzX21pbmltaXplX3JvdW5kdHJpcHM.short_desc": {
+          "source": "Minimize CCS roundtrips",
+          "message": "最小化 CCS 往返次數"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.YW5hbHl6ZV93aWxkY2FyZA.desc": {
+          "source": "If `true` (default `false`), wildcard and prefix queries are analyzed.\n\nThis parameter can only be used when the `q` query string parameter is specified",
+          "message": "若為 `true`（預設為 `false`），則會分析萬用字元與前綴查詢。\n\n僅在指定了 `q` 查詢字串參數時才能使用此參數"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.YW5hbHl6ZV93aWxkY2FyZA.display_name": {
+          "source": "Analyze Wildcard?",
+          "message": "分析萬用字元？"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.YW5hbHl6ZV93aWxkY2FyZA.short_desc": {
+          "source": "Analyze wildcards",
+          "message": "分析萬用字元"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.YW5hbHl6ZXI.desc": {
+          "source": "Analyzer to use for the query string.\n\nThis parameter can only be used when the `q` query string parameter is specified",
+          "message": "用於查詢字串的分析器。\n\n僅在指定了 `q` 查詢字串參數時才能使用此參數"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.YW5hbHl6ZXI.display_name": {
+          "source": "Analyzer",
+          "message": "分析器"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.YW5hbHl6ZXI.short_desc": {
+          "source": "Query string analyzer",
+          "message": "查詢字串分析器"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.YWxsb3dfbm9faW5kaWNlcw.desc": {
+          "source": "If `false` (default `true`), the request returns an error if any wildcard expression, index alias, or `_all` value targets only missing or closed indices. This behavior applies even if the request targets other open indices. For example, a request targeting `foo*,bar*` returns an error if an index starts with `foo` but no index starts with `bar`",
+          "message": "若為 `false`（預設為 `true`），當任何萬用字元運算式、索引別名或 `_all` 值僅以遺失或已關閉的索引為目標時，請求將傳回錯誤。即使請求以其他開啟的索引為目標，此行為仍適用。例如，如果某個索引以 `foo` 開頭但沒有索引以 `bar` 開頭，則以 `foo*,bar*` 為目標的請求將傳回錯誤"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.YWxsb3dfbm9faW5kaWNlcw.display_name": {
+          "source": "Allow No Indices?",
+          "message": "允許無索引？"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.YWxsb3dfbm9faW5kaWNlcw.short_desc": {
+          "source": "Allow no matching indices",
+          "message": "允許無相符的索引"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.YWxsb3dfcGFydGlhbF9zZWFyY2hfcmVzdWx0cw.desc": {
+          "source": "If `true`, returns partial results if there are shard request timeouts or shard failures. If `false`, returns an error with no partial results.\n\nTo override the default for this field, set the `search.default_allow_partial_results` cluster setting to `false`",
+          "message": "若為 `true`，則在發生分區請求逾時或分區失敗時傳回部分結果。若為 `false`，則傳回錯誤且不傳回部分結果。\n\n若要覆寫此欄位的預設值，請將 `search.default_allow_partial_results` 叢集設定設為 `false`"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.YWxsb3dfcGFydGlhbF9zZWFyY2hfcmVzdWx0cw.display_name": {
+          "source": "Allow Partial Results?",
+          "message": "允許部分結果？"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.YWxsb3dfcGFydGlhbF9zZWFyY2hfcmVzdWx0cw.short_desc": {
+          "source": "Return partial results",
+          "message": "傳回部分結果"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.YmF0Y2hlZF9yZWR1Y2Vfc2l6ZQ.desc": {
+          "source": "The number of shard results (default `512`) that should be reduced at once on the coordinating node. This value should be used as a protection mechanism to reduce the memory overhead per search request if the potential number of shards in the request can be large",
+          "message": "協調節點上應一次縮減 (reduce) 的分區結果數量（預設為 `512`）。如果請求中潛在的分區數量可能很大，此值應用作保護機制以減少每次搜尋請求的記憶體額外負荷"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.YmF0Y2hlZF9yZWR1Y2Vfc2l6ZQ.display_name": {
+          "source": "Batched Reduce Size",
+          "message": "批次縮減大小"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.YmF0Y2hlZF9yZWR1Y2Vfc2l6ZQ.short_desc": {
+          "source": "Shard results batch size",
+          "message": "分區結果批次大小"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.ZG9jdmFsdWVfZmllbGRz.desc": {
+          "source": "Array of field patterns. The request returns values for field names matching these patterns in the `hits.fields` property of the response.\n\nYou can specify items in the array as a string or object.\n\nProperties of docvalue_fields objects:\n- `field`: (Required, string) Wildcard pattern. The request returns doc values for field names matching this pattern.\n- `format`: (Optional, string) Format in which the doc values are returned.\n\nFor date fields, you can specify a date date format. For numeric fields fields, you can specify a DecimalFormat pattern.\n\nFor other field data types, this parameter is not supported",
+          "message": "欄位模式陣列。請求會在回應的 `hits.fields` 屬性中傳回與這些模式比對相符的欄位名稱的值。\n\n您可以將陣列中的項目指定為字串或物件。\n\ndocvalue_fields 物件的屬性：\n- `field`：（必填，字串）萬用字元模式。請求會傳回與此模式比對相符的欄位名稱的 doc values。\n- `format`：（選填，字串）傳回 doc values 的格式。\n\n對於日期欄位，您可以指定日期格式。對於數值欄位，您可以指定 DecimalFormat 模式。\n\n對於其他欄位資料類型，不支援此參數"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.ZG9jdmFsdWVfZmllbGRz.display_name": {
+          "source": "Doc Value Fields",
+          "message": "Doc Value 欄位"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.ZG9jdmFsdWVfZmllbGRz.short_desc": {
+          "source": "Doc value fields array",
+          "message": "Doc value 欄位陣列"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.ZG9jdmFsdWVfZmllbGRzX3F1ZXJ5.desc": {
+          "source": "A comma-separated list of fields to return as the docvalue representation of a field for each hit",
+          "message": "為每個命中傳回作為欄位 docvalue 表示法之欄位的以逗號分隔清單"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.ZG9jdmFsdWVfZmllbGRzX3F1ZXJ5.display_name": {
+          "source": "Doc Value Fields Query",
+          "message": "Doc Value 欄位查詢"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.ZG9jdmFsdWVfZmllbGRzX3F1ZXJ5.short_desc": {
+          "source": "Doc value fields list",
+          "message": "Doc value 欄位清單"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.ZGVmYXVsdF9vcGVyYXRvcg.desc": {
+          "source": "The default operator for query string query: `AND` or `OR`\n\nThis parameter can only be used when the `q` query string parameter is specified",
+          "message": "查詢字串查詢的預設運算子：`AND` 或 `OR`\n\n僅在指定了 `q` 查詢字串參數時才能使用此參數"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.ZGVmYXVsdF9vcGVyYXRvcg.display_name": {
+          "source": "Default Operator",
+          "message": "預設運算子"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.ZGVmYXVsdF9vcGVyYXRvcg.short_desc": {
+          "source": "Query string operator",
+          "message": "查詢字串運算子"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.ZGY.desc": {
+          "source": "Field to use as default where no field prefix is given in the query string.\n\nThis parameter can only be used when the `q` query string parameter is specified",
+          "message": "當查詢字串中未給定欄位前綴時用作預設的欄位。\n\n僅在指定了 `q` 查詢字串參數時才能使用此參數"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.ZGY.display_name": {
+          "source": "Default Field",
+          "message": "預設欄位"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.ZGY.short_desc": {
+          "source": "Default query field",
+          "message": "預設查詢欄位"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.ZXhwYW5kX3dpbGRjYXJkcw.desc": {
+          "source": "Type of index that wildcard patterns can match. If the request can target data streams, this argument determines whether wildcard expressions match hidden data streams. Supports comma-separated values, such as open,hidden. Valid values are:\n- `all`: Match any data stream or index, including hidden ones\n- `open`: (default) Match open, non-hidden indices. Also matches any non-hidden data stream\n- `closed`: Match closed, non-hidden indices. Also matches any non-hidden data stream. Data streams cannot be closed\n- `hidden`: Match hidden data streams and hidden indices. Must be combined with `open`, `closed`, or both\n- `none`: Wildcard patterns are not accepted",
+          "message": "萬用字元模式可比對的索引類型。如果請求可以以資料串流為目標，此引數會決定萬用字元運算式是否比對隱藏的資料串流。支援以逗號分隔的值，例如 open,hidden。有效值為：\n- `all`：比對任何資料串流或索引，包括隱藏的項目\n- `open`：（預設）比對開啟且未隱藏的索引。亦比對任何未隱藏的資料串流\n- `closed`：比對已關閉且未隱藏的索引。亦比對任何未隱藏的資料串流。資料串流無法關閉\n- `hidden`：比對隱藏的資料串流和隱藏的索引。必須與 `open`、`closed` 或兩者結合使用\n- `none`：不接受萬用字元模式"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.ZXhwYW5kX3dpbGRjYXJkcw.display_name": {
+          "source": "Expand Wildcards",
+          "message": "展開萬用字元"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.ZXhwYW5kX3dpbGRjYXJkcw.short_desc": {
+          "source": "Wildcard expansion mode",
+          "message": "萬用字元展開模式"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.ZXhwbGFpbg.desc": {
+          "source": "If `true` (default `false`), returns detailed information about score computation as part of a hit",
+          "message": "若為 `true`（預設為 `false`），則傳回有關分數計算的詳細資訊作為命中項目的一部分"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.ZXhwbGFpbg.display_name": {
+          "source": "Explain?",
+          "message": "解釋？"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.ZXhwbGFpbg.short_desc": {
+          "source": "Explain scoring",
+          "message": "解釋評分"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.ZXhwbGFpbl9xdWVyeQ.desc": {
+          "source": "If `true` (default `false`), returns detailed information about score computation as part of a hit",
+          "message": "若為 `true`（預設為 `false`），則傳回有關分數計算的詳細資訊作為命中項目的一部分"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.ZXhwbGFpbl9xdWVyeQ.display_name": {
+          "source": "Explain Query?",
+          "message": "解釋查詢？"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.ZXhwbGFpbl9xdWVyeQ.short_desc": {
+          "source": "Return score details",
+          "message": "傳回分數詳細資料"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.ZmllbGRz.desc": {
+          "source": "Array of field patterns. The request returns values for field names matching these patterns in the `hits.fields` property of the response.\n\nYou can specify items in the array as a string or object.\n\nProperties of fields objects:\n- `field`: (Required, string) Field to return. Supports wildcards (*)\n- `format`: (Optional, string) Format for date and geospatial fields. Other field data types do not support this parameter.\n\n  `date` and `date_nanos` fields accept a date format.\n\n  `geo_point` and `geo_shape` fields accept:\n  - `geojson (default)`: GeoJSON\n  - `wkt`: Well Known Text\n  - `mvt(<spec>)`: Binary Mapbox vector tile. The API returns the tile as a base64-encoded     string. `<spec>` has the format `<zoom>/<x>/<y>` with two optional suffixes:     `@<extent>` and/or `:<buffer>`. For example, `2/0/1` or `2/0/1@4096:5`.\n\n    mvt parameters:\n    - `<zoom>`: (Required, integer) Zoom level for the tile. Accepts `0-29`\n    - `<x>`: (Required, integer) X coordinate for the tile\n    - `<y>`: (Required, integer) Y coordinate for the tile\n    - `<extent>`: (Optional, integer) Size, in pixels, of a side of the tile. Vector tiles are       square with equal sides. Defaults to `4096`\n    - `<buffer>`: (Optional, integer) Size, in pixels, of a clipping buffer outside the tile.       This allows renderers to avoid outline artifacts from geometries that extend past the       extent of the tile. Defaults to `5`",
+          "message": "欄位模式陣列。請求會在回應的 `hits.fields` 屬性中傳回與這些模式比對相符的欄位名稱的值。\n\n您可以將陣列中的項目指定為字串或物件。\n\nfields 物件的屬性：\n- `field`：（必填，字串）要傳回的欄位。支援萬用字元 (*)\n- `format`：（選填，字串）日期與地理空間欄位的格式。其他欄位資料類型不支援此參數。\n\n  `date` 與 `date_nanos` 欄位接受日期格式。\n\n  `geo_point` 與 `geo_shape` 欄位接受：\n  - `geojson (default)`：GeoJSON\n  - `wkt`：Well Known Text\n  - `mvt(<spec>)`：二進位 Mapbox 向量圖塊。API 會將圖塊傳回為 base64 編碼字串。`<spec>` 格式為 `<zoom>/<x>/<y>`，並帶有兩個選填後綴：`@<extent>` 和/或 `:<buffer>`。例如 `2/0/1` 或 `2/0/1@4096:5`。\n\n    mvt 參數：\n    - `<zoom>`：（必填，整數）圖塊的縮放層級。接受 `0-29`\n    - `<x>`：（必填，整數）圖塊的 X 座標\n    - `<y>`：（必填，整數）圖塊的 Y 座標\n    - `<extent>`：（選填，整數）圖塊一邊的像素大小。向量圖塊為等邊正方形。預設為 `4096`\n    - `<buffer>`：（選填，整數）圖塊外部裁剪緩衝區的像素大小。這可讓算繪器避免超出圖塊範圍的幾何形狀產生輪廓瑕疵。預設為 `5`"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.ZmllbGRz.display_name": {
+          "source": "Fields",
+          "message": "欄位"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.ZmllbGRz.short_desc": {
+          "source": "Fields to return",
+          "message": "要傳回的欄位"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.ZnJvbQ.desc": {
+          "source": "Starting document offset (default `0`). Needs to be non-negative and defaults to `0`.\n\nBy default, you cannot page through more than 10,000 hits using the from and size parameters. To page through more hits, use the `search_after` parameter",
+          "message": "起始文件位移（預設為 `0`）。必須為非負數且預設為 `0`。\n\n預設情況下，您無法使用 from 和 size 參數分頁瀏覽超過 10,000 個命中項目。若要分頁瀏覽更多命中項目，請使用 `search_after` 參數"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.ZnJvbQ.display_name": {
+          "source": "From",
+          "message": "寄件者"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.ZnJvbQ.short_desc": {
+          "source": "Starting offset",
+          "message": "起始位移"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.ZnJvbV9xdWVyeQ.desc": {
+          "source": "Starting document offset. Needs to be non-negative and defaults to 0.\n\nBy default, you cannot page through more than 10,000 hits using the from and size parameters. To page through more hits, use the `search_after` parameter",
+          "message": "起始文件位移。必須為非負數且預設為 0。\n\n預設情況下，您無法使用 from 和 size 參數分頁瀏覽超過 10,000 個命中項目。若要分頁瀏覽更多命中項目，請使用 `search_after` 參數"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.ZnJvbV9xdWVyeQ.display_name": {
+          "source": "From Query",
+          "message": "From 查詢"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.ZnJvbV9xdWVyeQ.short_desc": {
+          "source": "Starting document offset",
+          "message": "起始文件偏移量"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.a25u.desc": {
+          "source": "Defines the kNN query to run.\n\nProperties of `knn` object:\n- `field`: (Required, string) The name of the vector field to search against. Must be a `dense_vector` field with indexing enabled\n- `filter`: (Optional, Query DSL object) Query to filter the documents that can match. The kNN search will return the top k documents that also match this filter. The value can be a single query or a list of queries. If filter is not provided, all documents are allowed to match.\n- `k`: (Required, integer) Number of nearest neighbors to return as top hits. This value must be less than `num_candidates`\n- `num_candidates`: (Required, integer) The number of nearest neighbor candidates to consider per shard. Cannot exceed 10,000. OpenSearch collects `num_candidates` results from each shard, then merges them to find the top k results. Increasing `num_candidates` tends to improve the accuracy of the final k results\n- `query_vector`: (Optional, array of floats) Query vector. Must have the same number of dimensions as the vector field you are searching against\n- `query_vector_builder`: (Optional, object) A configuration object indicating how to build a `query_vector` before executing the request. You must provide a `query_vector_builder` or `query_vector`, but not both\n- `similarity`: (Optional, float) The minimum similarity required for a document to be considered a match. The similarity value calculated relates to the raw similarity used. Not the document score. The matched documents are then scored according to similarity and the provided boost is applied\n\n  The similarity parameter is the direct vector similarity calculation.\n\n  - `l2_norm`: also known as Euclidean, will include documents where the vector is within the     dims dimensional hypersphere with radius similarity with origin at query_vector\n  - `cosine` & `dot_product`: Only return vectors where the cosine similarity or dot-product     are at least the provided similarity",
+          "message": "定義要執行的 kNN 查詢。\n\n`knn` 物件的屬性：\n- `field`：（必填，字串）要搜尋的向量欄位名稱。必須是已啟用索引編制的 `dense_vector` 欄位\n- `filter`：（選填，Query DSL 物件）用於篩選可相符文件的查詢。kNN 搜尋將傳回同樣符合此篩選條件的前 k 個文件。該值可以是單一查詢或查詢清單。如果未提供篩選條件，則允許所有文件比對相符。\n- `k`：（必填，整數）作為熱門命中傳回的最近鄰居數量。此值必須小於 `num_candidates`\n- `num_candidates`：（必填，整數）每個分區要考慮的最近鄰居候選數量。不能超過 10,000。OpenSearch 會從每個分區收集 `num_candidates` 個結果，然後合併它們以找出前 k 個結果。增加 `num_candidates` 通常會提高最終 k 個結果的精確度\n- `query_vector`：（選填，浮點數陣列）查詢向量。必須與您要搜尋的向量欄位具有相同的維度數\n- `query_vector_builder`：（選填，物件）一個設定物件，指出在執行請求之前如何建立 `query_vector`。您必須提供 `query_vector_builder` 或 `query_vector`，但不能同時提供兩者\n- `similarity`：（選填，浮點數）文件被視為相符所需的最低相似度。計算出的相似度值與所使用的原始相似度相關，而非文件分數。接著會根據相似度對符合的文件進行評分並套用提供的 boost\n\n  similarity 參數是直接向量相似度計算。\n\n  - `l2_norm`：亦稱為歐幾里得 (Euclidean)，將包含向量位於以 query_vector 為原點、半徑為 similarity 的 dims 維超球體內的文件\n  - `cosine` 與 `dot_product`：僅傳回餘弦相似度或點積至少為所提供相似度的向量"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.a25u.display_name": {
+          "source": "kNN Query",
+          "message": "kNN 查詢"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.a25u.short_desc": {
+          "source": "k-Nearest neighbors",
+          "message": "k 近鄰"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.aW5kZXg.desc": {
+          "source": "The name of the index to search",
+          "message": "要搜尋的索引名稱"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.aW5kZXg.display_name": {
+          "source": "Index",
+          "message": "索引"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.aW5kZXg.short_desc": {
+          "source": "Index name to search",
+          "message": "要搜尋的索引名稱"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.aW5kaWNlc19ib29zdA.desc": {
+          "source": "Boosts the `_score` of documents from specified indices.\n\nProperties of `indices_boost` objects:\n- `<index>: <boost-value>`: (Required, float)\n  - `<index>` is the name of the index or index alias. Wildcard (*) expressions are supported\n  - `<boost-value>` is the factor by which scores are multiplied. A boost value greater than     `1.0` increases the score. A boost value between `0` and `1.0` decreases the score",
+          "message": "提高來自指定索引文件的 `_score`。\n\n`indices_boost` 物件的屬性：\n- `<index>: <boost-value>`：（必填，浮點數）\n  - `<index>` 為索引名稱或索引別名。支援萬用字元 (*) 運算式\n  - `<boost-value>` 為分數相乘的因子。大於 `1.0` 的 boost 值會增加分數。介於 `0` 與 `1.0` 之間的 boost 值會降低分數"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.aW5kaWNlc19ib29zdA.display_name": {
+          "source": "Indices Boost",
+          "message": "索引權重 (Boost)"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.aW5kaWNlc19ib29zdA.short_desc": {
+          "source": "Index score boost",
+          "message": "索引分數提升"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.aWdub3JlX3Rocm90dGxlZA.desc": {
+          "source": "If `true` (the default), concrete, expanded or aliased indices will be ignored when frozen",
+          "message": "若為 `true`（預設值），具體、展開或別名索引在凍結時將會被忽略"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.aWdub3JlX3Rocm90dGxlZA.display_name": {
+          "source": "Ignore Throttled?",
+          "message": "忽略受節流限制的項目？"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.aWdub3JlX3Rocm90dGxlZA.short_desc": {
+          "source": "Ignore frozen indices",
+          "message": "忽略已凍結的索引"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.aWdub3JlX3VuYXZhaWxhYmxl.desc": {
+          "source": "If `false` (the default), the request returns an error if it targets a missing or closed index",
+          "message": "若為 `false`（預設值），當請求以遺失或已關閉的索引為目標時將傳回錯誤"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.aWdub3JlX3VuYXZhaWxhYmxl.display_name": {
+          "source": "Ignore Unavailable?",
+          "message": "忽略不可用？"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.aWdub3JlX3VuYXZhaWxhYmxl.short_desc": {
+          "source": "Ignore missing indices",
+          "message": "忽略遺失的索引"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.bGVuaWVudA.desc": {
+          "source": "If `true` (default `false`), format-based query failures (such as providing text to a numeric field) in the query string will be ignored.\n\nThis parameter can only be used when the `q` query string parameter is specified",
+          "message": "若為 `true`（預設為 `false`），查詢字串中基於格式的查詢失敗（例如向數值欄位提供文字）將會被忽略。\n\n僅在指定了 `q` 查詢字串參數時才能使用此參數"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.bGVuaWVudA.display_name": {
+          "source": "Lenient?",
+          "message": "寬容？"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.bGVuaWVudA.short_desc": {
+          "source": "Ignore format errors",
+          "message": "忽略格式錯誤"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.bWF4X2NvbmN1cnJlbnRfc2hhcmRfcmVxdWVzdHM.desc": {
+          "source": "Defines the number of concurrent shard requests per node this search executes concurrently (default `5`). This value should be used to limit the impact of the search on the cluster in order to limit the number of concurrent shard requests",
+          "message": "定義此搜尋在每個節點上並行執行的並行分片請求數量（預設為 `5`）。此值應當用於限制搜尋對叢集的影響，以限制並行分片請求的數量"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.bWF4X2NvbmN1cnJlbnRfc2hhcmRfcmVxdWVzdHM.display_name": {
+          "source": "Max Concurrent Shards",
+          "message": "最大並行分片數"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.bWF4X2NvbmN1cnJlbnRfc2hhcmRfcmVxdWVzdHM.short_desc": {
+          "source": "Max concurrent requests",
+          "message": "最大並行請求數"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.bWluX3Njb3Jl.desc": {
+          "source": "Minimum `_score` for matching documents. Documents with a lower `_score` are not included in the search results",
+          "message": "匹配文件的最小 `_score`。`_score` 較低的文件不會包含在搜尋結果中"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.bWluX3Njb3Jl.display_name": {
+          "source": "Min Score",
+          "message": "最低分數"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.bWluX3Njb3Jl.short_desc": {
+          "source": "Minimum score filter",
+          "message": "最低評分篩選條件"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.c29ydA.desc": {
+          "source": "A comma-separated list of `<field>:<direction>` pairs",
+          "message": "以逗號分隔的 `<field>:<direction>` 配對清單"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.c29ydA.display_name": {
+          "source": "Sort",
+          "message": "排序"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.c29ydA.short_desc": {
+          "source": "Sort order",
+          "message": "排序順序"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.c2Nyb2xs.desc": {
+          "source": "Period to retain the search context for scrolling.\n\nBy default, this value cannot exceed `1d` (24 hours). You can change this limit using the `search.max_keep_alive` cluster-level setting",
+          "message": "用於滾動保留搜尋上下文的時長。\n\n預設情況下，此值不能超過 `1d`（24 小時）。您可以使用 `search.max_keep_alive` 叢集層級設定來更改此限制"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.c2Nyb2xs.display_name": {
+          "source": "Scroll",
+          "message": "滾動"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.c2Nyb2xs.short_desc": {
+          "source": "Scroll context timeout",
+          "message": "滾動上下文逾時"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.c2VhcmNoX3R5cGU.desc": {
+          "source": "How distributed term frequencies are calculated for relevance scoring.\n\nValid values for search_type:\n- `query_then_fetch`: (Default) Distributed term frequencies are calculated locally for each shard running the search. We recommend this option for faster searches with potentially less accurate scoring\n- `dfs_query_then_fetch`: Distributed term frequencies are calculated globally, using information gathered from all shards running the search. While this option increases the accuracy of scoring, it adds a round-trip to each shard, which can result in slower searches",
+          "message": "如何計算分散式詞頻以進行相關性評分。\n\nsearch_type 的有效值：\n- `query_then_fetch`：（預設）針對執行搜尋的每個分片在本地計算分散式詞頻。建議使用此選項以獲得更快的搜尋速度，但評分準確性可能較低\n- `dfs_query_then_fetch`：使用從所有執行搜尋的分片收集的資訊全域計算分散式詞頻。雖然此選項提高了評分準確性，但它會增加對每個分片的往返通訊，從而可能導致搜尋速度變慢"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.c2VhcmNoX3R5cGU.display_name": {
+          "source": "Search Type",
+          "message": "搜尋類型"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.c2VhcmNoX3R5cGU.short_desc": {
+          "source": "Search type",
+          "message": "搜尋類型"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.c2VxX25vX3ByaW1hcnlfdGVybQ.desc": {
+          "source": "If `true`, returns sequence number and primary term of the last modification of each hit",
+          "message": "若為 `true`，則傳回每個匹配項最後一次修改的序號和 primary term"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.c2VxX25vX3ByaW1hcnlfdGVybQ.display_name": {
+          "source": "Seq No Primary Term?",
+          "message": "包含序號與 Primary Term？"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.c2VxX25vX3ByaW1hcnlfdGVybQ.short_desc": {
+          "source": "Return seq_no/primary_term",
+          "message": "傳回 seq_no/primary_term"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.c2VxX25vX3ByaW1hcnlfdGVybV9xdWVyeQ.desc": {
+          "source": "If `true`, returns sequence number and primary term of the last modification of each hit",
+          "message": "若為 `true`，則傳回每個匹配項最後一次修改的序號和 primary term"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.c2VxX25vX3ByaW1hcnlfdGVybV9xdWVyeQ.display_name": {
+          "source": "Seq No Primary Term?",
+          "message": "包含序號與 Primary Term？"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.c2VxX25vX3ByaW1hcnlfdGVybV9xdWVyeQ.short_desc": {
+          "source": "Return seq_no/primary_term",
+          "message": "傳回 seq_no/primary_term"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.c2l6ZQ.desc": {
+          "source": "The number of hits to return. Needs to be non-negative and defaults to `10`.\n\nBy default, you cannot page through more than 10,000 hits using the `from` and `size` parameters. To page through more hits, use the `search_after` parameter",
+          "message": "要傳回的匹配項目數量。必須為非負數且預設為 `10`。\n\n預設情況下，您無法使用 `from` 和 `size` 參數翻頁超過 10,000 個匹配項。若要翻頁瀏覽更多匹配項，請使用 `search_after` 參數"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.c2l6ZQ.display_name": {
+          "source": "Size",
+          "message": "大小"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.c2l6ZQ.short_desc": {
+          "source": "Number of hits",
+          "message": "匹配項目數"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.c2l6ZV9xdWVyeQ.desc": {
+          "source": "Defines the number of hits to return.\n\nBy default, you cannot page through more than 10,000 hits using the `from` and `size` parameters. To page through more hits, use the `search_after` parameter",
+          "message": "定義要傳回的匹配項目數量。\n\n預設情況下，您無法使用 `from` 和 `size` 參數翻頁超過 10,000 個匹配項。若要翻頁瀏覽更多匹配項，請使用 `search_after` 參數"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.c2l6ZV9xdWVyeQ.display_name": {
+          "source": "Size Query",
+          "message": "Size 查詢"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.c2l6ZV9xdWVyeQ.short_desc": {
+          "source": "Number of hits",
+          "message": "匹配項目數"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.c3RhdHM.desc": {
+          "source": "Stats groups to associate with the search. Each group maintains a statistics aggregation for its associated searches",
+          "message": "要與搜尋關聯的統計群組。每個群組為其關聯的搜尋維護統計聚合"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.c3RhdHM.display_name": {
+          "source": "Stats",
+          "message": "統計資訊"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.c3RhdHM.short_desc": {
+          "source": "Stats groups",
+          "message": "統計群組"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.c3RhdHNfcXVlcnk.desc": {
+          "source": "Specific tag of the request for logging and statistical purposes",
+          "message": "用於記錄和統計目的的特定請求標籤"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.c3RhdHNfcXVlcnk.display_name": {
+          "source": "Stats Query",
+          "message": "統計查詢"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.c3RhdHNfcXVlcnk.short_desc": {
+          "source": "Stats tag",
+          "message": "統計標籤"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.c3RvcmVkX2ZpZWxkc19xdWVyeQ.desc": {
+          "source": "A comma-separated list of stored fields to return as part of a hit. If no fields are specified, no stored fields are included in the response.\n\nIf this field is specified, the `_source` parameter defaults to `false`. You can pass `_source=true` to return both source fields and stored fields in the search response",
+          "message": "以逗號分隔的儲存欄位清單，作為匹配項的一部分傳回。如果未指定欄位，則回應中不包含任何儲存欄位。\n\n如果指定了此欄位，`_source` 參數預設為 `false`。您可以傳入 `_source=true` 以在搜尋回應中同時傳回來源欄位和儲存欄位"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.c3RvcmVkX2ZpZWxkc19xdWVyeQ.display_name": {
+          "source": "Stored Fields Query",
+          "message": "儲存欄位查詢"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.c3RvcmVkX2ZpZWxkc19xdWVyeQ.short_desc": {
+          "source": "Stored fields to return",
+          "message": "要傳回的儲存欄位"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.c3RvcmVkX2ZpZWxkcw.desc": {
+          "source": "A comma-separated list of stored fields to return as part of a hit. If no fields are specified, no stored fields are included in the response.\n\nIf this option is specified, the `_source` parameter defaults to `false`. You can pass `_source: true` to return both source fields and stored fields in the search response",
+          "message": "以逗號分隔的儲存欄位清單，作為匹配項的一部分傳回。如果未指定欄位，則回應中不包含任何儲存欄位。\n\n如果指定了此選項，`_source` 參數預設為 `false`。您可以傳入 `_source: true` 以在搜尋回應中同時傳回來源欄位和儲存欄位"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.c3RvcmVkX2ZpZWxkcw.display_name": {
+          "source": "Stored Fields",
+          "message": "儲存欄位"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.c3RvcmVkX2ZpZWxkcw.short_desc": {
+          "source": "Stored fields list",
+          "message": "儲存欄位清單"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.c3VnZ2VzdF90ZXh0.desc": {
+          "source": "The source text for which the suggestions should be returned.\n\nThis parameter can only be used when the `suggest_field` query string parameter is specified",
+          "message": "應為其傳回建議的來源文字。\n\n此參數僅能在指定了 `suggest_field` 查詢字串參數時使用"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.c3VnZ2VzdF90ZXh0.display_name": {
+          "source": "Suggest Text",
+          "message": "建議文字"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.c3VnZ2VzdF90ZXh0.short_desc": {
+          "source": "Text for suggestions",
+          "message": "用於建議的文字"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.c3VnZ2VzdF9maWVsZA.desc": {
+          "source": "Specifies which field to use for suggestions",
+          "message": "指定用於建議的欄位"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.c3VnZ2VzdF9maWVsZA.display_name": {
+          "source": "Suggest Field",
+          "message": "建議欄位"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.c3VnZ2VzdF9maWVsZA.short_desc": {
+          "source": "Field for suggestions",
+          "message": "用於建議的欄位"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.c3VnZ2VzdF9tb2Rl.desc": {
+          "source": "Specifies the suggest mode. Available options:\n- `always`\n- `missing`\n- `popular`\n\nThis parameter can only be used when the `suggest_field` and `suggest_text` query string parameters are specified",
+          "message": "指定建議模式。可用選項：\n- `always`\n- `missing`\n- `popular`\n\n此參數僅能在指定了 `suggest_field` 和 `suggest_text` 查詢字串參數時使用"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.c3VnZ2VzdF9tb2Rl.display_name": {
+          "source": "Suggest Mode",
+          "message": "建議模式"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.c3VnZ2VzdF9tb2Rl.short_desc": {
+          "source": "Suggestion mode",
+          "message": "建議模式"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.c3VnZ2VzdF9zaXpl.desc": {
+          "source": "Number of suggestions to return.\n\nThis parameter can only be used when the `suggest_field` and `suggest_text` query string parameters are specified",
+          "message": "要傳回的建議數量。\n\n此參數僅能在指定了 `suggest_field` 和 `suggest_text` 查詢字串參數時使用"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.c3VnZ2VzdF9zaXpl.display_name": {
+          "source": "Suggest Size",
+          "message": "建議數量"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.c3VnZ2VzdF9zaXpl.short_desc": {
+          "source": "Number of suggestions",
+          "message": "建議數量"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.cGl0.desc": {
+          "source": "Limits the search to a point in time (PIT). If you provide a `pit`, you cannot specify a `<target>` in the request path.\n\nProperties of `pit`:\n- `id`: (Required*, string) ID for the PIT to search. If you provide a `pit` object, this   parameter is required\n- `keep_alive`: (Optional, time value) Period of time used to extend the life of the PIT",
+          "message": "將搜尋限制在時間點 (PIT)。如果您提供 `pit`，則無法在請求路徑中指定 `<target>`。\n\n`pit` 的屬性：\n- `id`：（必填*，字串）要搜尋的 PIT 的 ID。如果您提供 `pit` 物件，則此參數為必填項\n- `keep_alive`：（可選，時間值）用於延長 PIT 生命週期的時長"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.cGl0.display_name": {
+          "source": "Point in Time",
+          "message": "時間點"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.cGl0.short_desc": {
+          "source": "PIT for search",
+          "message": "用於搜尋的 PIT"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.cHJlX2ZpbHRlcl9zaGFyZF9zaXpl.desc": {
+          "source": "Defines a threshold that enforces a pre-filter roundtrip to prefilter search shards based on query rewriting if the number of shards the search request expands to exceeds the threshold. This filter roundtrip can limit the number of shards significantly if for instance a shard can not match any documents based on its rewrite method ie. if date filters are mandatory to match but the shard bounds and the query are disjoint. When unspecified, the pre-filter phase is executed if any of these conditions is met:\n- The request targets more than 128 shards\n- The request targets one or more read-only index\n- The primary sort of the query targets an indexed field",
+          "message": "定義一個閾值，如果搜尋請求擴展到的分片數量超過該閾值，則強制進行預先篩選往返，以根據查詢重寫預先篩選搜尋分片。例如，如果分片無法根據其重寫方法匹配任何文件（即如果必須匹配日期篩選條件但分片邊界與查詢不相交），則此篩選往返可以顯著限制分片數量。未指定時，如果滿足以下任一條件，將執行預先篩選階段：\n- 請求以超過 128 個分片為目標\n- 請求以一個或多個唯讀索引為目標\n- 查詢的主要排序以已建立索引的欄位為目標"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.cHJlX2ZpbHRlcl9zaGFyZF9zaXpl.display_name": {
+          "source": "Pre-filter Shard Size",
+          "message": "預先篩選分片大小"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.cHJlX2ZpbHRlcl9zaGFyZF9zaXpl.short_desc": {
+          "source": "Pre-filter threshold",
+          "message": "預先篩選閾值"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.cHJlZmVyZW5jZQ.desc": {
+          "source": "Nodes and shards used for the search. By default, OpenSearch selects from eligible nodes and shards using adaptive replica selection, accounting for allocation awareness.\n\nValid values for preference:\n- `_only_local`: Run the search only on shards on the local node\n- `_local`: If possible, run the search on shards on the local node. If not, select shards using the default method\n- `_only_nodes:<node-id>,<node-id>`: Run the search on only the specified nodes IDs. If suitable shards exist on more than one selected node, use shards on those nodes using the default method. If none of the specified nodes are available, select shards from any available node using the default method\n- `_prefer_nodes:<node-id>,<node-id>`: If possible, run the search on the specified nodes IDs. If not, select shards using the default method.\n- `_shards:<shard>,<shard>`: Run the search only on the specified shards. You can combine this value with other preference values. However, the `_shards` value must come first. For example: `_shards:2,3|_local`\n- `<custom-string>`: Any string that does not start with `_`. If the cluster state and selected shards do not change, searches using the same `<custom-string>` value are routed to the same shards in the same order",
+          "message": "用於搜尋的節點和分片。預設情況下，OpenSearch 使用自適應副本選擇並考量分配感知，從合格的節點和分片中進行選擇。\n\npreference 的有效值：\n- `_only_local`：僅在本地節點上的分片執行搜尋\n- `_local`：如有可能，在本地節點上的分片執行搜尋。若不行，則使用預設方法選擇分片\n- `_only_nodes:<node-id>,<node-id>`：僅在指定的節點 ID 上執行搜尋。如果多個選定節點上存在合適的分片，則使用預設方法使用這些節點上的分片。如果指定的節點都不可用，則使用預設方法從任何可用節點中選擇分片\n- `_prefer_nodes:<node-id>,<node-id>`：如有可能，在指定的節點 ID 上執行搜尋。若不行，則使用預設方法選擇分片。\n- `_shards:<shard>,<shard>`：僅在指定的分片上執行搜尋。您可以將此值與其他 preference 值結合使用。但是，`_shards` 值必須放在最前面。例如：`_shards:2,3|_local`\n- `<custom-string>`：任何不以 `_` 開頭的字串。如果叢集狀態和選定的分片沒有變更，則使用相同 `<custom-string>` 值的搜尋將以相同的順序路由到相同的分片"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.cHJlZmVyZW5jZQ.display_name": {
+          "source": "Preference",
+          "message": "偏好設定"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.cHJlZmVyZW5jZQ.short_desc": {
+          "source": "Shard preference",
+          "message": "分區偏好設定"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.cQ.desc": {
+          "source": "Query in the Lucene query string syntax.\n\nYou can use the `q` parameter to run a query parameter search. Query parameter searches do not support the full OpenSearch Query DSL but are handy for testing.\n\nThe `q` parameter overrides the query parameter in the request body",
+          "message": "使用 Lucene 查詢字串語法的查詢。\n\n您可以使用 `q` 參數來執行查詢參數搜尋。查詢參數搜尋不支援完整的 OpenSearch Query DSL，但便於測試。\n\n`q` 參數會覆寫請求主體中的 query 參數"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.cQ.display_name": {
+          "source": "Query String",
+          "message": "查詢字串"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.cQ.short_desc": {
+          "source": "Lucene query string",
+          "message": "Lucene 查詢字串"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.cXVlcnk.desc": {
+          "source": "Specifies the search using the Query DSL",
+          "message": "使用 Query DSL 指定搜尋"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.cXVlcnk.display_name": {
+          "source": "Query",
+          "message": "查詢"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.cXVlcnk.short_desc": {
+          "source": "Query DSL object",
+          "message": "Query DSL 物件"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.cm91dGluZw.desc": {
+          "source": "Value used to route indexing and search operations to a specific shard",
+          "message": "用於將索引和搜尋操作路由至特定分片的值"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.cm91dGluZw.display_name": {
+          "source": "Routing",
+          "message": "路由"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.cm91dGluZw.short_desc": {
+          "source": "Routing value",
+          "message": "路由值"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.cmFuaw.desc": {
+          "source": "Defines a method for combining and ranking result sets from either:\n- 1 query and 1 or more kNN searches\n- 2 or more kNN searches\n\nRanking methods:\n- `rrf`: (Optional, object) Sets the ranking method to reciprocal rank fusion (RRF)",
+          "message": "定義合併及排序結果集的方法，結果集可來自：\n- 1 個查詢和 1 個或多個 kNN 搜尋\n- 2 個或多個 kNN 搜尋\n\n排序方法：\n- `rrf`：（可選，物件）將排序方法設定為倒數排名融合 (RRF)"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.cmFuaw.display_name": {
+          "source": "Rank",
+          "message": "排序"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.cmFuaw.short_desc": {
+          "source": "Ranking method",
+          "message": "排序方法"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.cmVxdWVzdF9jYWNoZQ.desc": {
+          "source": "If `true`, the caching of search results is enabled for requests where size is `0`. Defaults to index level settings",
+          "message": "若為 `true`，則對 size 為 `0` 的請求啟用搜尋結果快取。預設為索引層級設定"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.cmVxdWVzdF9jYWNoZQ.display_name": {
+          "source": "Request Cache?",
+          "message": "快取請求？"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.cmVxdWVzdF9jYWNoZQ.short_desc": {
+          "source": "Enable result caching",
+          "message": "啟用結果快取"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.cmVzdF90b3RhbF9oaXRzX2FzX2ludA.desc": {
+          "source": "Indicates whether `hits.total` should be rendered as an integer or an object in the rest search response (default `false`)",
+          "message": "指示在 REST 搜尋回應中 `hits.total` 應呈現為整數還是物件（預設為 `false`）"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.cmVzdF90b3RhbF9oaXRzX2FzX2ludA.display_name": {
+          "source": "Total Hits as Int?",
+          "message": "總匹配數為整數？"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.cmVzdF90b3RhbF9oaXRzX2FzX2ludA.short_desc": {
+          "source": "Return total as integer",
+          "message": "以整數形式傳回總數"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.cnVudGltZV9tYXBwaW5ncw.desc": {
+          "source": "Defines one or more runtime fields in the search request. These fields take precedence over mapped fields with the same name.\n\nProperties of `runtime_mappings` objects:\n- `<field-name>`: (Required, object) Configuration for the runtime field. The key is the field name.\n\n  Properties of <field-name>:\n  - `type`: (Required, string) Field type, which can be any of the following:\n    - `boolean`\n    - `composite`\n    - `date`\n    - `double`\n    - `geo_point`\n    - `ip`\n    - `keyword`\n    - `long`\n    - `lookup`\n  - `script`: (Optional, string) Painless script executed at query time. The script has access to the entire context of a document, including the original `_source` and any mapped fields plus their values.\n\n    This script must include emit to return calculated values. For example:\n    `\"script\": \"emit(doc['@timestamp'].value.dayOfWeekEnum.toString())\"`",
+          "message": "在搜尋請求中定義一個或多個執行階段欄位。這些欄位優先於同名的對應欄位。\n\n`runtime_mappings` 物件的屬性：\n- `<field-name>`：（必填，物件）執行階段欄位的設定。鍵為欄位名稱。\n\n  <field-name> 的屬性：\n  - `type`：（必填，字串）欄位類型，可以為以下任一項：\n    - `boolean`\n    - `composite`\n    - `date`\n    - `double`\n    - `geo_point`\n    - `ip`\n    - `keyword`\n    - `long`\n    - `lookup`\n  - `script`：（可選，字串）在查詢時執行的 Painless 指令碼。該指令碼可以存取文件的完整上下文，包括原始 `_source` 以及任何已對應欄位及其值。\n\n    此指令碼必須包含 emit 才能傳回計算值。例如：\n    `\"script\": \"emit(doc['@timestamp'].value.dayOfWeekEnum.toString())\"`"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.cnVudGltZV9tYXBwaW5ncw.display_name": {
+          "source": "Runtime Mappings",
+          "message": "執行階段對應"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.cnVudGltZV9tYXBwaW5ncw.short_desc": {
+          "source": "Runtime field mappings",
+          "message": "執行階段欄位對應"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.dGVybWluYXRlX2FmdGVy.desc": {
+          "source": "Maximum number of documents to collect for each shard. If a query reaches this limit, OpenSearch terminates the query early. OpenSearch collects documents before sorting.\n\nUse with caution. OpenSearch applies this parameter to each shard handling the request. When possible, let OpenSearch perform early termination automatically. Avoid specifying this parameter for requests that target data streams with backing indices across multiple data tiers.\n\nDefaults to `0`, which does not terminate query execution early",
+          "message": "每個分片要收集的文件數上限。如果查詢達到此限制，OpenSearch 會提早終止查詢。OpenSearch 會在排序前收集文件。\n\n請謹慎使用。OpenSearch 會將此參數套用至處理該請求的每個分片。在可能的情況下，讓 OpenSearch 自動執行提早終止。針對目標為跨多個資料層支援索引之資料串流的請求，請避免指定此參數。\n\n預設為 `0`，不會提早終止查詢執行"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.dGVybWluYXRlX2FmdGVy.display_name": {
+          "source": "Terminate After",
+          "message": "提早終止"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.dGVybWluYXRlX2FmdGVy.short_desc": {
+          "source": "Max docs to collect",
+          "message": "收集文件數上限"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.dGVybWluYXRlX2FmdGVyX3F1ZXJ5.desc": {
+          "source": "Maximum number of documents to collect for each shard. If a query reaches this limit, OpenSearch terminates the query early. OpenSearch collects documents before sorting.\n\nUse with caution. OpenSearch applies this parameter to each shard handling the request. When possible, let OpenSearch perform early termination automatically. Avoid specifying this parameter for requests that target data streams with backing indices across multiple data tiers.\n\nDefaults to `0`, which does not terminate query execution early",
+          "message": "每個分片要收集的文件數上限。如果查詢達到此限制，OpenSearch 會提早終止查詢。OpenSearch 會在排序前收集文件。\n\n請謹慎使用。OpenSearch 會將此參數套用至處理該請求的每個分片。在可能的情況下，讓 OpenSearch 自動執行提早終止。針對目標為跨多個資料層支援索引之資料串流的請求，請避免指定此參數。\n\n預設為 `0`，不會提早終止查詢執行"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.dGVybWluYXRlX2FmdGVyX3F1ZXJ5.display_name": {
+          "source": "Terminate After Query",
+          "message": "查詢提早終止"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.dGVybWluYXRlX2FmdGVyX3F1ZXJ5.short_desc": {
+          "source": "Max docs per shard",
+          "message": "每個分片的文件數上限"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.dGltZW91dA.desc": {
+          "source": "Specifies the period of time to wait for a response from each shard. If no response is received before the timeout expires, the request fails and returns an error. Defaults to no timeout",
+          "message": "指定等待每個分片回應的時間。如果在逾時前未收到任何回應，請求將失敗並傳回錯誤。預設為不逾時"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.dGltZW91dA.display_name": {
+          "source": "Timeout",
+          "message": "逾時"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.dGltZW91dA.short_desc": {
+          "source": "Search timeout",
+          "message": "搜尋逾時"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.dGltZW91dF9xdWVyeQ.desc": {
+          "source": "Specifies the period of time to wait for a response from each shard. If no response is received before the timeout expires, the request fails and returns an error. Defaults to no timeout",
+          "message": "指定等待每個分片回應的時間。如果在逾時前未收到任何回應，請求將失敗並傳回錯誤。預設為不逾時"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.dGltZW91dF9xdWVyeQ.display_name": {
+          "source": "Timeout Query",
+          "message": "查詢逾時"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.dGltZW91dF9xdWVyeQ.short_desc": {
+          "source": "Shard response timeout",
+          "message": "分片回應逾時"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.dHJhY2tfc2NvcmVz.desc": {
+          "source": "If `true` (default `false`), calculate and return document scores, even if the scores are not used for sorting",
+          "message": "若為 `true`（預設為 `false`），即使分數不用於排序，也會計算並傳回文件分數"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.dHJhY2tfc2NvcmVz.display_name": {
+          "source": "Track Scores?",
+          "message": "追蹤分數？"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.dHJhY2tfc2NvcmVz.short_desc": {
+          "source": "Calculate scores",
+          "message": "計算分數"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.dHJhY2tfdG90YWxfaGl0cw.desc": {
+          "source": "Number of hits matching the query to count accurately (default `\"10000\"`).\n\nIf `true`, the exact number of hits is returned at the cost of some performance. If `false`, the response does not include the total number of hits matching the query",
+          "message": "要準確計數的符合查詢命中數（預設為 `\"10000\"`）。\n\n若為 `true`，將傳回精確的命中數（會犧牲部分效能）。若為 `false`，回應中將不包含符合查詢的總命中數"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.dHJhY2tfdG90YWxfaGl0cw.display_name": {
+          "source": "Track Total Hits",
+          "message": "追蹤總命中數"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.dHJhY2tfdG90YWxfaGl0cw.short_desc": {
+          "source": "Count matching docs",
+          "message": "計算相符文件數"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.dHlwZWRfa2V5cw.desc": {
+          "source": "If `true` (the default), aggregation and suggester names are be prefixed by their respective types in the response",
+          "message": "若為 `true`（預設值），回應中的聚合與建議器名稱會加上各自類型的字首"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.dHlwZWRfa2V5cw.display_name": {
+          "source": "Typed Keys?",
+          "message": "包含類型索引鍵？"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.dHlwZWRfa2V5cw.short_desc": {
+          "source": "Prefix agg names",
+          "message": "前綴聚合名稱"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.dmVyc2lvbg.desc": {
+          "source": "If `true` (default `false`), returns document version as part of a hit",
+          "message": "若為 `true`（預設為 `false`），將文件版本作為命中結果的一部分傳回"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.dmVyc2lvbg.display_name": {
+          "source": "Version?",
+          "message": "版本？"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.dmVyc2lvbg.short_desc": {
+          "source": "Return doc version",
+          "message": "傳回文件版本"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.dmVyc2lvbl9xdWVyeQ.desc": {
+          "source": "If `true`, returns document version as part of a hit",
+          "message": "若為 `true`，將文件版本作為命中結果的一部分傳回"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.dmVyc2lvbl9xdWVyeQ.display_name": {
+          "source": "Version Query?",
+          "message": "查詢版本？"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.option.dmVyc2lvbl9xdWVyeQ.short_desc": {
+          "source": "Return doc version",
+          "message": "傳回文件版本"
+        },
+        "app.T3BlblNlYXJjaA.action.c2VhcmNoLWluZGV4.short_desc": {
+          "source": "Search for data in an OpenSearch index",
+          "message": "在 OpenSearch 索引中搜尋資料"
+        },
+        "app.T3BlblNlYXJjaA.desc": {
+          "source": "OpenSearch is an Apache 2.0-licensed search, analytics, and observability platform.\n\nUse this app to work with:\n- **Document indexes** for search and analytics workloads\n- **Bulk ingestion** for high-volume document writes\n- **Pipelines** for document ingestion and search result processing\n- **Vector, neural, and hybrid search** when the OpenSearch cluster is configured with the required plugins and models",
+          "message": "OpenSearch 是一個採用 Apache 2.0 授權的搜尋、分析與可觀測性平台。\n\n使用此應用程式來處理：\n- 用於搜尋與分析工作負載的**文件索引**\n- 用於大量文件寫入的**批次擷取**\n- 用於文件擷取與搜尋結果處理的**管道**\n- 當 OpenSearch 叢集配置了所需的插件和模型時的**向量、神經網路與混合搜尋**"
+        },
+        "app.T3BlblNlYXJjaA.display_name": {
+          "source": "OpenSearch Server",
+          "message": "OpenSearch 伺服器"
+        },
+        "app.T3BlblNlYXJjaA.short_desc": {
+          "source": "OpenSearch search and analytics server",
+          "message": "OpenSearch 搜尋與分析伺服器"
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,2169 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "ja": {
+      "messages": {
+        "app.UGVycGxleGl0eQ.action.bWFrZS1hcGktY2FsbA.desc": {
+          "source": "Make a custom HTTP / REST API call to **Perplexity AI** using the configured connection's authentication.\n\nSpecify the HTTP method, the URI path (relative to the connection's API base URL), optional query parameters, headers, and request body. The response is returned as a hash containing the status code, response headers, and response body.\n\nUse this action for endpoints that are not yet exposed as first-class actions on this app.",
+          "message": "設定された接続の認証情報を使用して、**Perplexity AI** へのカスタムHTTP / REST API呼び出しを実行します。\n\nHTTPメソッド、URIパス（接続のAPIベースURLに対する相対パス）、任意のクエリパラメータ、ヘッダー、およびリクエスト本文を指定します。応答はステータスコード、レスポンスヘッダー、レスポンス本文を含むハッシュとして返されます。\n\nこのアプリでファーストクラスのアクションとしてまだ公開されていないエンドポイントには、このアクションを使用します。"
+        },
+        "app.UGVycGxleGl0eQ.action.bWFrZS1hcGktY2FsbA.display_name": {
+          "source": "Make an API call",
+          "message": "API コールを実行"
+        },
+        "app.UGVycGxleGl0eQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.desc": {
+          "source": "The request body. The effective type depends on `body_type`: JSON/form/YAML expect a hash, XML/text expect a string, multipart expects a file structure, binary expects raw bytes.",
+          "message": "リクエストボディ。有効な型は`body_type`に依存します。JSON/form/YAMLはハッシュを期待し、XML/textは文字列を期待し、multipartはファイル構造を期待し、binaryは生バイトを期待します。"
+        },
+        "app.UGVycGxleGl0eQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.display_name": {
+          "source": "Body",
+          "message": "ボディ"
+        },
+        "app.UGVycGxleGl0eQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.short_desc": {
+          "source": "The request body",
+          "message": "リクエストボディ"
+        },
+        "app.UGVycGxleGl0eQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.desc": {
+          "source": "Upload a file using `multipart/form-data`. The body must be a @ref DataProvider::FileDataType \"FileDataType\" structure (filename + content + mime_type). The framework builds the multipart envelope and sets the boundary header.",
+          "message": "`multipart/form-data`を使用してファイルをアップロードします。ボディは@ref DataProvider::FileDataType \"FileDataType\"構造（filename + content + mime_type）である必要があります。フレームワークがmultipartエンベロープを構築し、boundaryヘッダーを設定します。"
+        },
+        "app.UGVycGxleGl0eQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.display_name": {
+          "source": "Multipart Form",
+          "message": "マルチパートフォーム"
+        },
+        "app.UGVycGxleGl0eQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.short_desc": {
+          "source": "Upload a file using multipart/form-data",
+          "message": "multipart/form-dataを使用してファイルをアップロード"
+        },
+        "app.UGVycGxleGl0eQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.desc": {
+          "source": "Pass the body to the REST client unchanged; the client decides serialization based on its configured `data` option and the value type",
+          "message": "ボディを変更せずにRESTクライアントに渡します。クライアントは設定された`data`オプションと値の型に基づいてシリアライズを決定します"
+        },
+        "app.UGVycGxleGl0eQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.display_name": {
+          "source": "Auto",
+          "message": "自動"
+        },
+        "app.UGVycGxleGl0eQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.short_desc": {
+          "source": "Pass-through; use connection serialization and let the REST client decide",
+          "message": "パススルー。接続のシリアライズを使用し、RESTクライアントに決定させます"
+        },
+        "app.UGVycGxleGl0eQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.desc": {
+          "source": "Send the body as raw bytes. The body must be a binary value. Sets `Content-Type: application/octet-stream` unless overridden by `hdr`.",
+          "message": "ボディを生バイトとして送信します。ボディはバイナリ値である必要があります。`hdr`によってオーバーライドされない限り、`Content-Type: application/octet-stream`を設定します。"
+        },
+        "app.UGVycGxleGl0eQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.display_name": {
+          "source": "Raw Binary",
+          "message": "生バイナリ"
+        },
+        "app.UGVycGxleGl0eQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.short_desc": {
+          "source": "Send body as raw bytes",
+          "message": "ボディを生バイトとして送信"
+        },
+        "app.UGVycGxleGl0eQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.desc": {
+          "source": "Serialize a hash of form fields as `application/x-www-form-urlencoded`. The body must be a hash whose values are scalars (strings/numbers/booleans).",
+          "message": "フォームフィールドのハッシュを`application/x-www-form-urlencoded`としてシリアライズします。ボディは値がスカラー（文字列/数値/ブール値）のハッシュである必要があります。"
+        },
+        "app.UGVycGxleGl0eQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.display_name": {
+          "source": "Form (URL-encoded)",
+          "message": "フォーム (URLエンコード)"
+        },
+        "app.UGVycGxleGl0eQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.short_desc": {
+          "source": "Serialize body as application/x-www-form-urlencoded form fields",
+          "message": "ボディをapplication/x-www-form-urlencodedフォームフィールドとしてシリアライズ"
+        },
+        "app.UGVycGxleGl0eQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.desc": {
+          "source": "Serialize the body as JSON; sets `Content-Type: application/json`. The body should be a hash, list, or scalar value.",
+          "message": "ボディをJSONとしてシリアライズします。`Content-Type: application/json`を設定します。ボディはハッシュ、リスト、またはスカラー値である必要があります。"
+        },
+        "app.UGVycGxleGl0eQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.display_name": {
+          "source": "JSON",
+          "message": "JSON"
+        },
+        "app.UGVycGxleGl0eQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.short_desc": {
+          "source": "Serialize body as JSON",
+          "message": "ボディをJSONとしてシリアライズ"
+        },
+        "app.UGVycGxleGl0eQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.desc": {
+          "source": "Send the body as plain text. The body must be a string. Sets `Content-Type: text/plain`.",
+          "message": "ボディをプレーンテキストとして送信します。ボディは文字列である必要があります。`Content-Type: text/plain`を設定します。"
+        },
+        "app.UGVycGxleGl0eQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.display_name": {
+          "source": "Plain Text",
+          "message": "プレーンテキスト"
+        },
+        "app.UGVycGxleGl0eQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.short_desc": {
+          "source": "Send body as text/plain",
+          "message": "ボディをtext/plainとして送信"
+        },
+        "app.UGVycGxleGl0eQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.desc": {
+          "source": "Send the body as XML. If the body is a hash it is serialized to XML; if it is a string it is sent verbatim. Sets `Content-Type: application/xml`.",
+          "message": "ボディをXMLとして送信します。ボディがハッシュの場合はXMLにシリアライズされ、文字列の場合はそのまま送信されます。`Content-Type: application/xml`を設定します。"
+        },
+        "app.UGVycGxleGl0eQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.display_name": {
+          "source": "XML",
+          "message": "XML"
+        },
+        "app.UGVycGxleGl0eQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.short_desc": {
+          "source": "Send body as XML",
+          "message": "ボディをXMLとして送信"
+        },
+        "app.UGVycGxleGl0eQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.desc": {
+          "source": "Send the body as YAML. If the body is a hash it is serialized to YAML; if it is a string it is sent verbatim. Sets `Content-Type: application/x-yaml`.",
+          "message": "ボディをYAMLとして送信します。ボディがハッシュの場合はYAMLにシリアライズされ、文字列の場合はそのまま送信されます。`Content-Type: application/x-yaml`を設定します。"
+        },
+        "app.UGVycGxleGl0eQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.display_name": {
+          "source": "YAML",
+          "message": "YAML"
+        },
+        "app.UGVycGxleGl0eQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.short_desc": {
+          "source": "Send body as YAML",
+          "message": "ボディをYAMLとして送信"
+        },
+        "app.UGVycGxleGl0eQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.desc": {
+          "source": "Selects the body serialization mode and the corresponding `Content-Type` header. Changing this field reshapes the `body` editor - selecting JSON exposes a JSON editor, selecting Multipart Form exposes a file picker, and so on.",
+          "message": "ボディのシリアライズモードと対応する`Content-Type`ヘッダーを選択します。このフィールドを変更すると`body`エディターの形状が変わります。JSONを選択するとJSONエディターが表示され、マルチパートフォームを選択するとファイルピッカーが表示される、などです。"
+        },
+        "app.UGVycGxleGl0eQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.display_name": {
+          "source": "Body Type",
+          "message": "ボディタイプ"
+        },
+        "app.UGVycGxleGl0eQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.short_desc": {
+          "source": "How the body is serialized and what Content-Type is sent",
+          "message": "ボディのシリアライズ方法および送信されるContent-Type"
+        },
+        "app.UGVycGxleGl0eQ.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.desc": {
+          "source": "If `True`, non-2xx HTTP responses return as the normal response hash (with the actual status code) instead of raising `REST-RESPONSE-ERROR`. Useful for handling 4xx/5xx as data - e.g. checking whether a resource exists. Overrides the connection's `error_passthru` setting for this call only.",
+          "message": "`True`の場合、2xx以外のHTTPレスポンスは`REST-RESPONSE-ERROR`を発生させる代わりに（実際のステータスコードを含む）通常のレスポンスハッシュとして返されます。リソースが存在するかどうかの確認など、4xx/5xxをデータとして処理する場合に便利です。この呼び出しに限り、接続の`error_passthru`設定をオーバーライドします。"
+        },
+        "app.UGVycGxleGl0eQ.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.display_name": {
+          "source": "Return Errors as Data",
+          "message": "エラーをデータとして返す"
+        },
+        "app.UGVycGxleGl0eQ.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.short_desc": {
+          "source": "Return non-2xx responses normally instead of throwing",
+          "message": "例外をスローする代わりに2xx以外のレスポンスを通常通り返す"
+        },
+        "app.UGVycGxleGl0eQ.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.desc": {
+          "source": "Optional list of HTTP status codes treated as success. If set and the response status is not in this list, the action throws `REST-STATUS-ERROR`. When unset, the REST client's default behavior applies (typically: 2xx is success, non-2xx throws).",
+          "message": "成功として扱われるHTTPステータスコードのオプションリスト。設定されていてレスポンスステータスがこのリストに含まれない場合、アクションは`REST-STATUS-ERROR`をスローします。未設定の場合、RESTクライアントのデフォルト動作が適用されます（通常：2xxは成功、2xx以外はスロー）。"
+        },
+        "app.UGVycGxleGl0eQ.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.display_name": {
+          "source": "Expected Status Codes",
+          "message": "期待されるステータスコード"
+        },
+        "app.UGVycGxleGl0eQ.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.short_desc": {
+          "source": "Response status codes treated as success",
+          "message": "成功として扱われるレスポンスステータスコード"
+        },
+        "app.UGVycGxleGl0eQ.action.bWFrZS1hcGktY2FsbA.option.aGRy.desc": {
+          "source": "Hash of custom headers added to the request. These override any default headers set by `body_type` (e.g. supplying `Content-Type` here wins over the body-type default).",
+          "message": "リクエストに追加されるカスタムヘッダーのハッシュ。これらは`body_type`によって設定されたデフォルトヘッダーをオーバーライドします（例：ここで`Content-Type`を指定すると、ボディタイプのデフォルトより優先されます）。"
+        },
+        "app.UGVycGxleGl0eQ.action.bWFrZS1hcGktY2FsbA.option.aGRy.display_name": {
+          "source": "Custom Headers",
+          "message": "カスタムヘッダー"
+        },
+        "app.UGVycGxleGl0eQ.action.bWFrZS1hcGktY2FsbA.option.aGRy.short_desc": {
+          "source": "Extra request headers",
+          "message": "追加のリクエストヘッダー"
+        },
+        "app.UGVycGxleGl0eQ.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.desc": {
+          "source": "If `True`, the response hash includes a `debug` sub-hash containing the request method/URL/headers (with sensitive values redacted), request and response sizes, and round-trip duration. Useful when investigating slow or failing calls. Off by default to keep responses lean.",
+          "message": "`True`の場合、レスポンスハッシュにはリクエストメソッド/URL/ヘッダー（機密値は伏字処理済み）、リクエストとレスポンスのサイズ、およびラウンドトリップ時間を含む`debug`サブハッシュが含まれます。遅い呼び出しや失敗した呼び出しを調査する際に便利です。レスポンスを軽量に保つため、デフォルトではオフになっています。"
+        },
+        "app.UGVycGxleGl0eQ.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.display_name": {
+          "source": "Include Debug Info",
+          "message": "デバッグ情報を含める"
+        },
+        "app.UGVycGxleGl0eQ.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.short_desc": {
+          "source": "Include request/timing/size debug info in the response",
+          "message": "レスポンスにリクエスト/タイミング/サイズのデバッグ情報を含める"
+        },
+        "app.UGVycGxleGl0eQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.desc": {
+          "source": "HTTP `OPTIONS`",
+          "message": "HTTP `OPTIONS`"
+        },
+        "app.UGVycGxleGl0eQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.display_name": {
+          "source": "OPTIONS",
+          "message": "OPTIONS"
+        },
+        "app.UGVycGxleGl0eQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.short_desc": {
+          "source": "HTTP OPTIONS",
+          "message": "HTTP OPTIONS"
+        },
+        "app.UGVycGxleGl0eQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.desc": {
+          "source": "HTTP `DELETE`",
+          "message": "HTTP `DELETE`"
+        },
+        "app.UGVycGxleGl0eQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.display_name": {
+          "source": "DELETE",
+          "message": "DELETE"
+        },
+        "app.UGVycGxleGl0eQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.short_desc": {
+          "source": "HTTP DELETE",
+          "message": "HTTP DELETE"
+        },
+        "app.UGVycGxleGl0eQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.desc": {
+          "source": "HTTP `GET`",
+          "message": "HTTP `GET`"
+        },
+        "app.UGVycGxleGl0eQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.display_name": {
+          "source": "GET",
+          "message": "GET"
+        },
+        "app.UGVycGxleGl0eQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.short_desc": {
+          "source": "HTTP GET",
+          "message": "HTTP GET"
+        },
+        "app.UGVycGxleGl0eQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.desc": {
+          "source": "HTTP `HEAD`",
+          "message": "HTTP `HEAD`"
+        },
+        "app.UGVycGxleGl0eQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.display_name": {
+          "source": "HEAD",
+          "message": "HEAD"
+        },
+        "app.UGVycGxleGl0eQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.short_desc": {
+          "source": "HTTP HEAD",
+          "message": "HTTP HEAD"
+        },
+        "app.UGVycGxleGl0eQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.desc": {
+          "source": "HTTP `PATCH`",
+          "message": "HTTP `PATCH`"
+        },
+        "app.UGVycGxleGl0eQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.display_name": {
+          "source": "PATCH",
+          "message": "PATCH"
+        },
+        "app.UGVycGxleGl0eQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.short_desc": {
+          "source": "HTTP PATCH",
+          "message": "HTTP PATCH"
+        },
+        "app.UGVycGxleGl0eQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.desc": {
+          "source": "HTTP `POST`",
+          "message": "HTTP `POST`"
+        },
+        "app.UGVycGxleGl0eQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.display_name": {
+          "source": "POST",
+          "message": "POST"
+        },
+        "app.UGVycGxleGl0eQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.short_desc": {
+          "source": "HTTP POST",
+          "message": "HTTP POST"
+        },
+        "app.UGVycGxleGl0eQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.desc": {
+          "source": "HTTP `PUT`",
+          "message": "HTTP `PUT`"
+        },
+        "app.UGVycGxleGl0eQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.display_name": {
+          "source": "PUT",
+          "message": "PUT"
+        },
+        "app.UGVycGxleGl0eQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.short_desc": {
+          "source": "HTTP PUT",
+          "message": "HTTP PUT"
+        },
+        "app.UGVycGxleGl0eQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.desc": {
+          "source": "HTTP `TRACE`",
+          "message": "HTTP `TRACE`"
+        },
+        "app.UGVycGxleGl0eQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.display_name": {
+          "source": "TRACE",
+          "message": "TRACE"
+        },
+        "app.UGVycGxleGl0eQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.short_desc": {
+          "source": "HTTP TRACE",
+          "message": "HTTP TRACE"
+        },
+        "app.UGVycGxleGl0eQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "リクエストに使用するHTTPメソッド"
+        },
+        "app.UGVycGxleGl0eQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.display_name": {
+          "source": "HTTP Method",
+          "message": "HTTPメソッド"
+        },
+        "app.UGVycGxleGl0eQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.short_desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "リクエストに使用するHTTPメソッド"
+        },
+        "app.UGVycGxleGl0eQ.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain `{name}` placeholders that are replaced from `path_vars`. Example: `/users/{id}/comments`.",
+          "message": "接続のAPIベースURLに対する相対URIパス。`path_vars`から置換される`{name}`プレースホルダーを含めることができます。例: `/users/{id}/comments`。"
+        },
+        "app.UGVycGxleGl0eQ.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.display_name": {
+          "source": "URI Path",
+          "message": "URIパス"
+        },
+        "app.UGVycGxleGl0eQ.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.short_desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain '{name}' placeholders that are replaced from 'path_vars'. Example: '/users/{id}/comments'",
+          "message": "接続のAPIベースURLに対する相対URIパス。'path_vars' から置換される '{name}' プレースホルダーを含めることができます。例: '/users/{id}/comments'"
+        },
+        "app.UGVycGxleGl0eQ.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.desc": {
+          "source": "Hash of values substituted into `{name}` placeholders in the URI path. Example: with `path = /users/{id}` and `path_vars = {id: 123}` the framework sends `/users/123`. Values are URL-encoded.",
+          "message": "URIパス内の `{name}` プレースホルダーに置換される値のハッシュ。例: `path = /users/{id}` と `path_vars = {id: 123}` を指定すると、フレームワークは `/users/123` を送信します。値はURLエンコードされます。"
+        },
+        "app.UGVycGxleGl0eQ.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.display_name": {
+          "source": "Path Variables",
+          "message": "パス変数"
+        },
+        "app.UGVycGxleGl0eQ.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.short_desc": {
+          "source": "Values for {name} placeholders in path",
+          "message": "パス内の {name} プレースホルダーの値"
+        },
+        "app.UGVycGxleGl0eQ.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.desc": {
+          "source": "Hash of query string parameters to append to the URI path. Values are URL-encoded; list values are joined with `,`.",
+          "message": "URIパスに追加するクエリ文字列パラメータのハッシュ。値はURLエンコードされます。リスト値は `,` で結合されます。"
+        },
+        "app.UGVycGxleGl0eQ.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.display_name": {
+          "source": "Query Arguments",
+          "message": "クエリ引数"
+        },
+        "app.UGVycGxleGl0eQ.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.short_desc": {
+          "source": "Query string parameters",
+          "message": "クエリ文字列パラメータ"
+        },
+        "app.UGVycGxleGl0eQ.action.bWFrZS1hcGktY2FsbA.short_desc": {
+          "source": "Make a custom API call to Perplexity AI",
+          "message": "Perplexity AI へのカスタムAPI呼び出しを作成"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.desc": {
+          "source": "Chat with a Perplexity AI model by sending multiple messages at once and getting web-grounded responses with citations",
+          "message": "複数のメッセージを一度に送信し、引用付きのWeb検索に基づく回答を取得してPerplexity AIモデルとチャットします"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.display_name": {
+          "source": "Multi Chat",
+          "message": "マルチチャット"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.ZGlzYWJsZV9zZWFyY2g.desc": {
+          "source": "If set to `True`, the model will not search the web and will only use its training data to generate a response",
+          "message": "`True` に設定されている場合、モデルはWebを検索せず、トレーニングデータのみを使用して回答を生成します"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.ZGlzYWJsZV9zZWFyY2g.display_name": {
+          "source": "Disable Search?",
+          "message": "検索を無効化しますか？"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.ZGlzYWJsZV9zZWFyY2g.short_desc": {
+          "source": "Restrict response to training data only",
+          "message": "回答をトレーニングデータのみに制限"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.ZW5hYmxlX3NlYXJjaF9jbGFzc2lmaWVy.desc": {
+          "source": "If set to `True`, uses a classifier to determine whether a web search is needed for the query before performing one",
+          "message": "`True` に設定されている場合、クエリに対してWeb検索が必要かどうかを分類器を使用して判断してから検索を実行します"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.ZW5hYmxlX3NlYXJjaF9jbGFzc2lmaWVy.display_name": {
+          "source": "Enable Search Classifier?",
+          "message": "検索分類器を有効化しますか？"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.ZW5hYmxlX3NlYXJjaF9jbGFzc2lmaWVy.short_desc": {
+          "source": "Use a classifier to determine if search is needed",
+          "message": "検索が必要かどうかを分類器を使用して判断"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.aW1hZ2VfZG9tYWluX2ZpbHRlcg.desc": {
+          "source": "A list of domains to limit image search results to. Only applies when `return_images` is set to `True`",
+          "message": "画像検索結果を制限するドメインのリスト。`return_images` が `True` に設定されている場合にのみ適用されます"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.aW1hZ2VfZG9tYWluX2ZpbHRlcg.display_name": {
+          "source": "Image Domain Filter",
+          "message": "画像ドメインフィルター"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.aW1hZ2VfZG9tYWluX2ZpbHRlcg.short_desc": {
+          "source": "Limit image sources to specific domains",
+          "message": "画像ソースを特定のドメインに制限"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.aW1hZ2VfZm9ybWF0X2ZpbHRlcg.desc": {
+          "source": "A list of image formats to include in image results (e.g., `png`, `jpg`). Only applies when `return_images` is set to `True`",
+          "message": "画像検索結果に含める画像形式のリスト（例: `png`、`jpg`）。`return_images` が `True` に設定されている場合にのみ適用されます"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.aW1hZ2VfZm9ybWF0X2ZpbHRlcg.display_name": {
+          "source": "Image Format Filter",
+          "message": "画像形式フィルター"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.aW1hZ2VfZm9ybWF0X2ZpbHRlcg.short_desc": {
+          "source": "Filter image results by format",
+          "message": "画像検索結果を形式でフィルター"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.bGFuZ3VhZ2VfcHJlZmVyZW5jZQ.desc": {
+          "source": "An ISO 639-1 language code specifying the preferred language for the response",
+          "message": "回答の優先言語を指定するISO 639-1言語コード"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.bGFuZ3VhZ2VfcHJlZmVyZW5jZQ.display_name": {
+          "source": "Language Preference",
+          "message": "優先言語"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.bGFuZ3VhZ2VfcHJlZmVyZW5jZQ.short_desc": {
+          "source": "ISO 639-1 language code for the response",
+          "message": "回答用のISO 639-1言語コード"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.bGFzdF91cGRhdGVkX2FmdGVyX2ZpbHRlcg.desc": {
+          "source": "Only include sources that were last updated after this date. Format: `MM/DD/YYYY`",
+          "message": "この日付以降に最終更新されたソースのみを含めます。形式: `MM/DD/YYYY`"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.bGFzdF91cGRhdGVkX2FmdGVyX2ZpbHRlcg.display_name": {
+          "source": "Last Updated After",
+          "message": "最終更新日時の下限"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.bGFzdF91cGRhdGVkX2FmdGVyX2ZpbHRlcg.short_desc": {
+          "source": "Only include sources updated after this date",
+          "message": "この日付以降に更新されたソースのみを含める"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.bGFzdF91cGRhdGVkX2JlZm9yZV9maWx0ZXI.desc": {
+          "source": "Only include sources that were last updated before this date. Format: `MM/DD/YYYY`",
+          "message": "この日付以前に最終更新されたソースのみを含めます。形式: `MM/DD/YYYY`"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.bGFzdF91cGRhdGVkX2JlZm9yZV9maWx0ZXI.display_name": {
+          "source": "Last Updated Before",
+          "message": "最終更新日時の上限"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.bGFzdF91cGRhdGVkX2JlZm9yZV9maWx0ZXI.short_desc": {
+          "source": "Only include sources updated before this date",
+          "message": "この日付以前に更新されたソースのみを含める"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.bW9kZWw.allowed-value.c3RyaW5nOnNvbmFy.desc": {
+          "source": "Lightweight, cost-effective search model based on Llama 3.3 70B",
+          "message": "Llama 3.3 70Bベースの軽量で費用対効果の高い検索モデル"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.bW9kZWw.allowed-value.c3RyaW5nOnNvbmFy.display_name": {
+          "source": "Sonar",
+          "message": "Sonar"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.bW9kZWw.allowed-value.c3RyaW5nOnNvbmFy.short_desc": {
+          "source": "Lightweight, cost-effective search model",
+          "message": "軽量で費用対効果の高い検索モデル"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.bW9kZWw.allowed-value.c3RyaW5nOnNvbmFyLWRlZXAtcmVzZWFyY2g.desc": {
+          "source": "Expert-level research with autonomous source evaluation and report generation",
+          "message": "自律的な情報源の評価とレポート生成を備えた専門家レベルのリサーチ"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.bW9kZWw.allowed-value.c3RyaW5nOnNvbmFyLWRlZXAtcmVzZWFyY2g.display_name": {
+          "source": "Sonar Deep Research",
+          "message": "Sonar Deep Research"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.bW9kZWw.allowed-value.c3RyaW5nOnNvbmFyLWRlZXAtcmVzZWFyY2g.short_desc": {
+          "source": "Expert-level autonomous research",
+          "message": "専門家レベルの自律型リサーチ"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.bW9kZWw.allowed-value.c3RyaW5nOnNvbmFyLXBybw.desc": {
+          "source": "Advanced search with deeper retrieval and double citations",
+          "message": "より深い検索と2重引用を備えた高度な検索"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.bW9kZWw.allowed-value.c3RyaW5nOnNvbmFyLXBybw.display_name": {
+          "source": "Sonar Pro",
+          "message": "Sonar Pro"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.bW9kZWw.allowed-value.c3RyaW5nOnNvbmFyLXBybw.short_desc": {
+          "source": "Advanced search with deeper retrieval",
+          "message": "より深い検索を備えた高度な検索"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.bW9kZWw.allowed-value.c3RyaW5nOnNvbmFyLXJlYXNvbmluZy1wcm8.desc": {
+          "source": "Chain of Thought reasoning model based on DeepSeek-R1 with multi-query search",
+          "message": "マルチクエリ検索を備えたDeepSeek-R1ベースの思考連鎖（Chain of Thought）推論モデル"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.bW9kZWw.allowed-value.c3RyaW5nOnNvbmFyLXJlYXNvbmluZy1wcm8.display_name": {
+          "source": "Sonar Reasoning Pro",
+          "message": "Sonar Reasoning Pro"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.bW9kZWw.allowed-value.c3RyaW5nOnNvbmFyLXJlYXNvbmluZy1wcm8.short_desc": {
+          "source": "Chain of Thought reasoning model",
+          "message": "思考連鎖（Chain of Thought）推論モデル"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.bW9kZWw.desc": {
+          "source": "Model to use for the chat completion",
+          "message": "チャット補完に使用するモデル"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.bW9kZWw.display_name": {
+          "source": "Model ID",
+          "message": "モデルID"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.bW9kZWw.short_desc": {
+          "source": "Model to use for the chat completion",
+          "message": "チャット補完に使用するモデル"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.bWF4X3Rva2Vucw.desc": {
+          "source": "The maximum number of tokens that can be generated in the chat completion. Up to 128,000 tokens supported",
+          "message": "チャット補完で生成可能な最大トークン数。最大128,000トークンまでサポート"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.bWF4X3Rva2Vucw.display_name": {
+          "source": "Max Tokens",
+          "message": "最大トークン数"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.bWF4X3Rva2Vucw.short_desc": {
+          "source": "The maximum number of tokens to generate",
+          "message": "生成する最大トークン数"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.bWVzc2FnZXM.desc": {
+          "source": "A list of messages comprising the conversation so far",
+          "message": "これまでの会話を構成するメッセージのリスト"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.bWVzc2FnZXM.display_name": {
+          "source": "Messages",
+          "message": "メッセージ"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.bWVzc2FnZXM.short_desc": {
+          "source": "A list of messages comprising the conversation so far",
+          "message": "これまでの会話を構成するメッセージのリスト"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.c2VhcmNoX21vZGU.allowed-value.c3RyaW5nOmFjYWRlbWlj.desc": {
+          "source": "Search academic and research papers",
+          "message": "学術論文や研究論文を検索"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.c2VhcmNoX21vZGU.allowed-value.c3RyaW5nOmFjYWRlbWlj.display_name": {
+          "source": "Academic",
+          "message": "学術"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.c2VhcmNoX21vZGU.allowed-value.c3RyaW5nOmFjYWRlbWlj.short_desc": {
+          "source": "Academic and research papers",
+          "message": "学術論文および研究論文"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.c2VhcmNoX21vZGU.allowed-value.c3RyaW5nOnNlYw.desc": {
+          "source": "Search US SEC regulatory filings",
+          "message": "米国SEC（証券取引委員会）の提出書類を検索"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.c2VhcmNoX21vZGU.allowed-value.c3RyaW5nOnNlYw.display_name": {
+          "source": "SEC",
+          "message": "SEC"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.c2VhcmNoX21vZGU.allowed-value.c3RyaW5nOnNlYw.short_desc": {
+          "source": "SEC filings",
+          "message": "SEC提出書類"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.c2VhcmNoX21vZGU.allowed-value.c3RyaW5nOndlYg.desc": {
+          "source": "General web search for grounding",
+          "message": "グラウンディングのための一般的なウェブ検索"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.c2VhcmNoX21vZGU.allowed-value.c3RyaW5nOndlYg.display_name": {
+          "source": "Web",
+          "message": "Web"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.c2VhcmNoX21vZGU.allowed-value.c3RyaW5nOndlYg.short_desc": {
+          "source": "General web search",
+          "message": "一般的なウェブ検索"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.c2VhcmNoX21vZGU.desc": {
+          "source": "The type of search to perform for grounding the response",
+          "message": "回答をグラウンディングするために実行する検索のタイプ"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.c2VhcmNoX21vZGU.display_name": {
+          "source": "Search Mode",
+          "message": "検索モード"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.c2VhcmNoX21vZGU.short_desc": {
+          "source": "The type of search to perform",
+          "message": "実行する検索のタイプ"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.c2VhcmNoX2FmdGVyX2RhdGVfZmlsdGVy.desc": {
+          "source": "Only include sources published after this date. Format: `MM/DD/YYYY`",
+          "message": "この日付以降に公開された情報源のみを含めます。形式: `MM/DD/YYYY`"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.c2VhcmNoX2FmdGVyX2RhdGVfZmlsdGVy.display_name": {
+          "source": "Search After Date",
+          "message": "検索開始日"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.c2VhcmNoX2FmdGVyX2RhdGVfZmlsdGVy.short_desc": {
+          "source": "Only include sources published after this date",
+          "message": "この日付以降に公開された情報源のみを含める"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.c2VhcmNoX2JlZm9yZV9kYXRlX2ZpbHRlcg.desc": {
+          "source": "Only include sources published before this date. Format: `MM/DD/YYYY`",
+          "message": "この日付以前に公開された情報源のみを含めます。形式: `MM/DD/YYYY`"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.c2VhcmNoX2JlZm9yZV9kYXRlX2ZpbHRlcg.display_name": {
+          "source": "Search Before Date",
+          "message": "検索終了日"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.c2VhcmNoX2JlZm9yZV9kYXRlX2ZpbHRlcg.short_desc": {
+          "source": "Only include sources published before this date",
+          "message": "この日付以前に公開された情報源のみを含める"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.c2VhcmNoX2RvbWFpbl9maWx0ZXI.desc": {
+          "source": "A list of domains to include or exclude from search results. Prefix with `-` to exclude. Maximum of 20 domains",
+          "message": "検索結果に含めるか除外するドメインのリスト。除外する場合はプレフィックスに `-` を付けます。最大20ドメイン"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.c2VhcmNoX2RvbWFpbl9maWx0ZXI.display_name": {
+          "source": "Search Domain Filter",
+          "message": "検索ドメインフィルター"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.c2VhcmNoX2RvbWFpbl9maWx0ZXI.short_desc": {
+          "source": "Domain allowlist or denylist for search (max 20)",
+          "message": "検索用のドメイン許可リストまたは拒否リスト（最大20件）"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.c2VhcmNoX2xhbmd1YWdlX2ZpbHRlcg.desc": {
+          "source": "A list of ISO 639-1 language codes to filter search results. Maximum of 10 languages",
+          "message": "検索結果をフィルタリングするためのISO 639-1言語コードのリスト。最大10言語"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.c2VhcmNoX2xhbmd1YWdlX2ZpbHRlcg.display_name": {
+          "source": "Search Language Filter",
+          "message": "検索言語フィルター"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.c2VhcmNoX2xhbmd1YWdlX2ZpbHRlcg.short_desc": {
+          "source": "ISO 639-1 language codes to filter search results (max 10)",
+          "message": "検索結果をフィルタリングするISO 639-1言語コード（最大10件）"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.c2VhcmNoX3JlY2VuY3lfZmlsdGVy.allowed-value.c3RyaW5nOm1vbnRo.desc": {
+          "source": "Only include sources from the last month",
+          "message": "過去1か月以内の情報源のみを含める"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.c2VhcmNoX3JlY2VuY3lfZmlsdGVy.allowed-value.c3RyaW5nOm1vbnRo.display_name": {
+          "source": "Last Month",
+          "message": "先月"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.c2VhcmNoX3JlY2VuY3lfZmlsdGVy.allowed-value.c3RyaW5nOm1vbnRo.short_desc": {
+          "source": "Sources from the last month",
+          "message": "過去1か月以内の情報源"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.c2VhcmNoX3JlY2VuY3lfZmlsdGVy.allowed-value.c3RyaW5nOmRheQ.desc": {
+          "source": "Only include sources from the last day",
+          "message": "過去1日以内の情報源のみを含める"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.c2VhcmNoX3JlY2VuY3lfZmlsdGVy.allowed-value.c3RyaW5nOmRheQ.display_name": {
+          "source": "Last Day",
+          "message": "過去1日"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.c2VhcmNoX3JlY2VuY3lfZmlsdGVy.allowed-value.c3RyaW5nOmRheQ.short_desc": {
+          "source": "Sources from the last day",
+          "message": "過去1日以内の情報源"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.c2VhcmNoX3JlY2VuY3lfZmlsdGVy.allowed-value.c3RyaW5nOmhvdXI.desc": {
+          "source": "Only include sources from the last hour",
+          "message": "過去1時間以内の情報源のみを含める"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.c2VhcmNoX3JlY2VuY3lfZmlsdGVy.allowed-value.c3RyaW5nOmhvdXI.display_name": {
+          "source": "Last Hour",
+          "message": "過去1時間"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.c2VhcmNoX3JlY2VuY3lfZmlsdGVy.allowed-value.c3RyaW5nOmhvdXI.short_desc": {
+          "source": "Sources from the last hour",
+          "message": "過去1時間以内の情報源"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.c2VhcmNoX3JlY2VuY3lfZmlsdGVy.allowed-value.c3RyaW5nOndlZWs.desc": {
+          "source": "Only include sources from the last week",
+          "message": "過去1週間以内の情報源のみを含める"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.c2VhcmNoX3JlY2VuY3lfZmlsdGVy.allowed-value.c3RyaW5nOndlZWs.display_name": {
+          "source": "Last Week",
+          "message": "過去1週間"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.c2VhcmNoX3JlY2VuY3lfZmlsdGVy.allowed-value.c3RyaW5nOndlZWs.short_desc": {
+          "source": "Sources from the last week",
+          "message": "過去1週間以内の情報源"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.c2VhcmNoX3JlY2VuY3lfZmlsdGVy.allowed-value.c3RyaW5nOnllYXI.desc": {
+          "source": "Only include sources from the last year",
+          "message": "過去1年以内の情報源のみを含める"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.c2VhcmNoX3JlY2VuY3lfZmlsdGVy.allowed-value.c3RyaW5nOnllYXI.display_name": {
+          "source": "Last Year",
+          "message": "過去1年"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.c2VhcmNoX3JlY2VuY3lfZmlsdGVy.allowed-value.c3RyaW5nOnllYXI.short_desc": {
+          "source": "Sources from the last year",
+          "message": "過去1年以内の情報源"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.c2VhcmNoX3JlY2VuY3lfZmlsdGVy.desc": {
+          "source": "Filter search results to only include sources from a specific time period",
+          "message": "特定の期間の情報源のみを含むように検索結果をフィルタリングします"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.c2VhcmNoX3JlY2VuY3lfZmlsdGVy.display_name": {
+          "source": "Search Recency Filter",
+          "message": "検索新近度フィルター"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.c2VhcmNoX3JlY2VuY3lfZmlsdGVy.short_desc": {
+          "source": "Filter search results by recency",
+          "message": "最新性に基づいて検索結果をフィルタリング"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.c3RvcA.desc": {
+          "source": "Up to 4 sequences where the API will stop generating further tokens",
+          "message": "APIがそれ以上のトークン生成を停止する最大4つのシーケンス"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.c3RvcA.display_name": {
+          "source": "Stop Sequences",
+          "message": "停止シーケンス"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.c3RvcA.short_desc": {
+          "source": "Sequences where the API will stop generating tokens",
+          "message": "APIがトークンの生成を停止するシーケンス"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.c3RyZWFt.desc": {
+          "source": "If set to `True`, partial message deltas will be sent as data-only server-sent events as they become available, with the stream terminated by a `data: [DONE]` message",
+          "message": "`True` に設定すると、メッセージの差分が利用可能になり次第データのみのServer-Sent Eventsとして送信され、ストリームは `data: [DONE]` メッセージで終了します"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.c3RyZWFt.display_name": {
+          "source": "Stream?",
+          "message": "ストリーム？"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.c3RyZWFt.short_desc": {
+          "source": "Enable streaming via Server-Sent Events",
+          "message": "Server-Sent Eventsによるストリーミングを有効化"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.c3RyZWFtX21vZGU.allowed-value.c3RyaW5nOmNvbmNpc2U.desc": {
+          "source": "Provides separate reasoning events during streaming",
+          "message": "ストリーミング中に個別の推論イベントを提供します"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.c3RyZWFtX21vZGU.allowed-value.c3RyaW5nOmNvbmNpc2U.display_name": {
+          "source": "Concise",
+          "message": "簡潔"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.c3RyZWFtX21vZGU.allowed-value.c3RyaW5nOmNvbmNpc2U.short_desc": {
+          "source": "Separate reasoning events",
+          "message": "個別の推論イベント"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.c3RyZWFtX21vZGU.allowed-value.c3RyaW5nOmZ1bGw.desc": {
+          "source": "Metadata inline with no separate reasoning events",
+          "message": "個別の推論イベントなしのインラインメタデータ"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.c3RyZWFtX21vZGU.allowed-value.c3RyaW5nOmZ1bGw.display_name": {
+          "source": "Full",
+          "message": "完全"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.c3RyZWFtX21vZGU.allowed-value.c3RyaW5nOmZ1bGw.short_desc": {
+          "source": "Metadata inline, no reasoning events",
+          "message": "インラインメタデータ、推論イベントなし"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.c3RyZWFtX21vZGU.desc": {
+          "source": "Controls the streaming format. `full` includes metadata inline with no separate reasoning events. `concise` provides separate reasoning events",
+          "message": "ストリーミング形式を制御します。`full` は個別の推論イベントなしでメタデータをインラインで含めます。`concise` は個別の推論イベントを提供します"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.c3RyZWFtX21vZGU.display_name": {
+          "source": "Stream Mode",
+          "message": "ストリームモード"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.c3RyZWFtX21vZGU.short_desc": {
+          "source": "Controls the streaming format",
+          "message": "ストリーミング形式を制御"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.cmV0dXJuX2ltYWdlcw.desc": {
+          "source": "If set to `True`, image results from the web search will be included in the response",
+          "message": "`True` に設定すると、ウェブ検索からの画像結果が応答に含まれます"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.cmV0dXJuX2ltYWdlcw.display_name": {
+          "source": "Return Images?",
+          "message": "画像を返しますか？"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.cmV0dXJuX2ltYWdlcw.short_desc": {
+          "source": "Include image results from search",
+          "message": "検索結果からの画像を含める"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.cmV0dXJuX3JlbGF0ZWRfcXVlc3Rpb25z.desc": {
+          "source": "If set to `True`, the response will include suggested follow-up questions",
+          "message": "`True` に設定すると、推奨されるフォローアップの質問が応答に含まれます"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.cmV0dXJuX3JlbGF0ZWRfcXVlc3Rpb25z.display_name": {
+          "source": "Return Related Questions?",
+          "message": "関連する質問を返しますか？"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.cmV0dXJuX3JlbGF0ZWRfcXVlc3Rpb25z.short_desc": {
+          "source": "Generate follow-up question suggestions",
+          "message": "フォローアップの質問候補を生成"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.cmVhc29uaW5nX2VmZm9ydA.allowed-value.c3RyaW5nOm1lZGl1bQ.desc": {
+          "source": "Medium reasoning effort (default)",
+          "message": "中程度の推論労力（デフォルト）"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.cmVhc29uaW5nX2VmZm9ydA.allowed-value.c3RyaW5nOm1lZGl1bQ.display_name": {
+          "source": "Medium",
+          "message": "中"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.cmVhc29uaW5nX2VmZm9ydA.allowed-value.c3RyaW5nOm1lZGl1bQ.short_desc": {
+          "source": "Medium reasoning effort",
+          "message": "中程度の推論エフォート"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.cmVhc29uaW5nX2VmZm9ydA.allowed-value.c3RyaW5nOm1pbmltYWw.desc": {
+          "source": "Minimal reasoning effort for fast responses",
+          "message": "高速な応答のための最小限の推論労力"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.cmVhc29uaW5nX2VmZm9ydA.allowed-value.c3RyaW5nOm1pbmltYWw.display_name": {
+          "source": "Minimal",
+          "message": "最小"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.cmVhc29uaW5nX2VmZm9ydA.allowed-value.c3RyaW5nOm1pbmltYWw.short_desc": {
+          "source": "Minimal reasoning effort",
+          "message": "最小限の推論エフォート"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.cmVhc29uaW5nX2VmZm9ydA.allowed-value.c3RyaW5nOmhpZ2g.desc": {
+          "source": "Maximum reasoning effort for thorough analysis",
+          "message": "徹底的な分析のための最大限の推論エフォート"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.cmVhc29uaW5nX2VmZm9ydA.allowed-value.c3RyaW5nOmhpZ2g.display_name": {
+          "source": "High",
+          "message": "高"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.cmVhc29uaW5nX2VmZm9ydA.allowed-value.c3RyaW5nOmhpZ2g.short_desc": {
+          "source": "High reasoning effort",
+          "message": "高い推論エフォート"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.cmVhc29uaW5nX2VmZm9ydA.allowed-value.c3RyaW5nOmxvdw.desc": {
+          "source": "Low reasoning effort",
+          "message": "低い推論エフォート"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.cmVhc29uaW5nX2VmZm9ydA.allowed-value.c3RyaW5nOmxvdw.display_name": {
+          "source": "Low",
+          "message": "低"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.cmVhc29uaW5nX2VmZm9ydA.allowed-value.c3RyaW5nOmxvdw.short_desc": {
+          "source": "Low reasoning effort",
+          "message": "低い推論エフォート"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.cmVhc29uaW5nX2VmZm9ydA.desc": {
+          "source": "Controls the depth of reasoning for `sonar-reasoning` and `sonar-reasoning-pro` models",
+          "message": "`sonar-reasoning` および `sonar-reasoning-pro` モデルの推論の深さを制御します"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.cmVhc29uaW5nX2VmZm9ydA.display_name": {
+          "source": "Reasoning Effort",
+          "message": "推論エフォート"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.cmVhc29uaW5nX2VmZm9ydA.short_desc": {
+          "source": "Control the reasoning effort for reasoning models",
+          "message": "推論モデルの推論エフォートを制御します"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.cmVzcG9uc2VfZm9ybWF0.desc": {
+          "source": "An object specifying the format that the model must output. Set `type` to `json_schema` and provide a `json_schema` object to enable structured JSON output",
+          "message": "モデルが出力する必要がある形式を指定するオブジェクト。構造化JSON出力を有効にするには、`type` を `json_schema` に設定し、`json_schema` オブジェクトを指定します"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.cmVzcG9uc2VfZm9ybWF0.display_name": {
+          "source": "Response Format",
+          "message": "レスポンス形式"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.cmVzcG9uc2VfZm9ybWF0.short_desc": {
+          "source": "Specify the output format (e.g., JSON schema)",
+          "message": "出力形式を指定します（例: JSONスキーマ）"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.d2ViX3NlYXJjaF9vcHRpb25z.desc": {
+          "source": "Advanced web search configuration options such as search context size",
+          "message": "検索コンテキストサイズなどの高度なWeb検索設定オプション"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.d2ViX3NlYXJjaF9vcHRpb25z.display_name": {
+          "source": "Web Search Options",
+          "message": "Web検索オプション"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.d2ViX3NlYXJjaF9vcHRpb25z.short_desc": {
+          "source": "Advanced web search configuration",
+          "message": "高度なWeb検索設定"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.dG9wX3A.desc": {
+          "source": "An alternative to sampling with temperature, called nucleus sampling, where the model considers the results of the tokens with `top_p` probability mass. So `0.1` means only the tokens comprising the top 10% probability mass are considered",
+          "message": "temperature によるサンプリングの代替手段である nucleus sampling。モデルは `top_p` の確率質量を持つトークンの結果を考慮します。したがって、`0.1` は上位10%の確率質量を構成するトークンのみが考慮されることを意味します"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.dG9wX3A.display_name": {
+          "source": "Top P",
+          "message": "Top P"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.dG9wX3A.short_desc": {
+          "source": "Nucleus sampling value",
+          "message": "Nucleus sampling値"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.dGVtcGVyYXR1cmU.desc": {
+          "source": "What sampling temperature to use, between `0` and `2`. Higher values like `0.8` will make the output more random, while lower values like `0.2` will make it more focused and deterministic",
+          "message": "使用するサンプリング temperature（`0` から `2` の間）。`0.8` のような高い値は出力をよりランダムにし、`0.2` のような低い値は出力をより集中させ決定論的にします"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.dGVtcGVyYXR1cmU.display_name": {
+          "source": "Sampling Temperature",
+          "message": "サンプリング温度"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.dGVtcGVyYXR1cmU.short_desc": {
+          "source": "The sampling temperature to use, between 0 and 2",
+          "message": "使用するサンプリング温度（0から2の間）"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.short_desc": {
+          "source": "Chat with a Perplexity AI model by sending multiple messages at once and getting web-grounded responses with citations",
+          "message": "複数のメッセージを一度に送信し、引用付きのWeb検索に基づく回答を取得してPerplexity AIモデルとチャットします"
+        },
+        "app.UGVycGxleGl0eQ.action.c2VhcmNo.desc": {
+          "source": "Search the web using Perplexity's dedicated search API returning structured results with titles, URLs, and snippets",
+          "message": "Perplexity専用の検索APIを使用してWebを検索し、タイトル、URL、スニペットを含む構造化された結果を返します"
+        },
+        "app.UGVycGxleGl0eQ.action.c2VhcmNo.display_name": {
+          "source": "Web Search",
+          "message": "Web検索"
+        },
+        "app.UGVycGxleGl0eQ.action.c2VhcmNo.option.Y291bnRyeQ.desc": {
+          "source": "ISO country code to localize search results",
+          "message": "検索結果をローカライズするためのISO国コード"
+        },
+        "app.UGVycGxleGl0eQ.action.c2VhcmNo.option.Y291bnRyeQ.display_name": {
+          "source": "Country",
+          "message": "国"
+        },
+        "app.UGVycGxleGl0eQ.action.c2VhcmNo.option.Y291bnRyeQ.short_desc": {
+          "source": "ISO country code for search localization",
+          "message": "検索ローカライズ用のISO国コード"
+        },
+        "app.UGVycGxleGl0eQ.action.c2VhcmNo.option.bWF4X3Jlc3VsdHM.desc": {
+          "source": "Maximum number of search results to return. Range: 1-20, default: 10",
+          "message": "返される検索結果の最大数。範囲: 1〜20、デフォルト: 10"
+        },
+        "app.UGVycGxleGl0eQ.action.c2VhcmNo.option.bWF4X3Jlc3VsdHM.display_name": {
+          "source": "Max Results",
+          "message": "最大結果数"
+        },
+        "app.UGVycGxleGl0eQ.action.c2VhcmNo.option.bWF4X3Jlc3VsdHM.short_desc": {
+          "source": "Maximum number of results to return (1-20)",
+          "message": "返される結果の最大数（1〜20）"
+        },
+        "app.UGVycGxleGl0eQ.action.c2VhcmNo.option.bWF4X3Rva2Vuc19wZXJfcGFnZQ.desc": {
+          "source": "Maximum tokens extracted from each page in results. Default: 4,096",
+          "message": "結果内の各ページから抽出される最大トークン数。デフォルト: 4,096"
+        },
+        "app.UGVycGxleGl0eQ.action.c2VhcmNo.option.bWF4X3Rva2Vuc19wZXJfcGFnZQ.display_name": {
+          "source": "Max Tokens Per Page",
+          "message": "ページあたりの最大トークン数"
+        },
+        "app.UGVycGxleGl0eQ.action.c2VhcmNo.option.bWF4X3Rva2Vuc19wZXJfcGFnZQ.short_desc": {
+          "source": "Maximum tokens extracted per page",
+          "message": "ページあたりに抽出される最大トークン数"
+        },
+        "app.UGVycGxleGl0eQ.action.c2VhcmNo.option.bWF4X3Rva2Vucw.desc": {
+          "source": "Maximum tokens per search response. Default: 10,000, maximum: 1,000,000",
+          "message": "検索レスポンスあたりの最大トークン数。デフォルト: 10,000、最大: 1,000,000"
+        },
+        "app.UGVycGxleGl0eQ.action.c2VhcmNo.option.bWF4X3Rva2Vucw.display_name": {
+          "source": "Max Tokens",
+          "message": "最大トークン数"
+        },
+        "app.UGVycGxleGl0eQ.action.c2VhcmNo.option.bWF4X3Rva2Vucw.short_desc": {
+          "source": "Maximum tokens per search response",
+          "message": "検索レスポンスあたりの最大トークン数"
+        },
+        "app.UGVycGxleGl0eQ.action.c2VhcmNo.option.c2VhcmNoX2RvbWFpbl9maWx0ZXI.desc": {
+          "source": "A list of domains to include or exclude from search results. Prefix with `-` to exclude",
+          "message": "検索結果に含めるか除外するドメインのリスト。除外するには先頭に `-` を付けます"
+        },
+        "app.UGVycGxleGl0eQ.action.c2VhcmNo.option.c2VhcmNoX2RvbWFpbl9maWx0ZXI.display_name": {
+          "source": "Search Domain Filter",
+          "message": "検索ドメインフィルター"
+        },
+        "app.UGVycGxleGl0eQ.action.c2VhcmNo.option.c2VhcmNoX2RvbWFpbl9maWx0ZXI.short_desc": {
+          "source": "Domain allowlist or denylist for search",
+          "message": "検索用のドメイン許可リストまたは拒否リスト"
+        },
+        "app.UGVycGxleGl0eQ.action.c2VhcmNo.option.c2VhcmNoX2xhbmd1YWdlX2ZpbHRlcg.desc": {
+          "source": "A list of ISO 639-1 language codes to filter search results",
+          "message": "検索結果をフィルタリングするためのISO 639-1言語コードのリスト"
+        },
+        "app.UGVycGxleGl0eQ.action.c2VhcmNo.option.c2VhcmNoX2xhbmd1YWdlX2ZpbHRlcg.display_name": {
+          "source": "Search Language Filter",
+          "message": "検索言語フィルター"
+        },
+        "app.UGVycGxleGl0eQ.action.c2VhcmNo.option.c2VhcmNoX2xhbmd1YWdlX2ZpbHRlcg.short_desc": {
+          "source": "ISO 639-1 language codes to filter results",
+          "message": "結果をフィルタリングするためのISO 639-1言語コード"
+        },
+        "app.UGVycGxleGl0eQ.action.c2VhcmNo.option.c2VhcmNoX3JlY2VuY3lfZmlsdGVy.allowed-value.c3RyaW5nOm1vbnRo.desc": {
+          "source": "Only include sources from the last month",
+          "message": "過去1か月以内の情報源のみを含める"
+        },
+        "app.UGVycGxleGl0eQ.action.c2VhcmNo.option.c2VhcmNoX3JlY2VuY3lfZmlsdGVy.allowed-value.c3RyaW5nOm1vbnRo.display_name": {
+          "source": "Last Month",
+          "message": "先月"
+        },
+        "app.UGVycGxleGl0eQ.action.c2VhcmNo.option.c2VhcmNoX3JlY2VuY3lfZmlsdGVy.allowed-value.c3RyaW5nOm1vbnRo.short_desc": {
+          "source": "Sources from the last month",
+          "message": "過去1か月以内の情報源"
+        },
+        "app.UGVycGxleGl0eQ.action.c2VhcmNo.option.c2VhcmNoX3JlY2VuY3lfZmlsdGVy.allowed-value.c3RyaW5nOmRheQ.desc": {
+          "source": "Only include sources from the last day",
+          "message": "過去1日以内の情報源のみを含める"
+        },
+        "app.UGVycGxleGl0eQ.action.c2VhcmNo.option.c2VhcmNoX3JlY2VuY3lfZmlsdGVy.allowed-value.c3RyaW5nOmRheQ.display_name": {
+          "source": "Last Day",
+          "message": "過去1日"
+        },
+        "app.UGVycGxleGl0eQ.action.c2VhcmNo.option.c2VhcmNoX3JlY2VuY3lfZmlsdGVy.allowed-value.c3RyaW5nOmRheQ.short_desc": {
+          "source": "Sources from the last day",
+          "message": "過去1日以内の情報源"
+        },
+        "app.UGVycGxleGl0eQ.action.c2VhcmNo.option.c2VhcmNoX3JlY2VuY3lfZmlsdGVy.allowed-value.c3RyaW5nOmhvdXI.desc": {
+          "source": "Only include sources from the last hour",
+          "message": "過去1時間以内の情報源のみを含める"
+        },
+        "app.UGVycGxleGl0eQ.action.c2VhcmNo.option.c2VhcmNoX3JlY2VuY3lfZmlsdGVy.allowed-value.c3RyaW5nOmhvdXI.display_name": {
+          "source": "Last Hour",
+          "message": "過去1時間"
+        },
+        "app.UGVycGxleGl0eQ.action.c2VhcmNo.option.c2VhcmNoX3JlY2VuY3lfZmlsdGVy.allowed-value.c3RyaW5nOmhvdXI.short_desc": {
+          "source": "Sources from the last hour",
+          "message": "過去1時間以内の情報源"
+        },
+        "app.UGVycGxleGl0eQ.action.c2VhcmNo.option.c2VhcmNoX3JlY2VuY3lfZmlsdGVy.allowed-value.c3RyaW5nOndlZWs.desc": {
+          "source": "Only include sources from the last week",
+          "message": "過去1週間以内の情報源のみを含める"
+        },
+        "app.UGVycGxleGl0eQ.action.c2VhcmNo.option.c2VhcmNoX3JlY2VuY3lfZmlsdGVy.allowed-value.c3RyaW5nOndlZWs.display_name": {
+          "source": "Last Week",
+          "message": "過去1週間"
+        },
+        "app.UGVycGxleGl0eQ.action.c2VhcmNo.option.c2VhcmNoX3JlY2VuY3lfZmlsdGVy.allowed-value.c3RyaW5nOndlZWs.short_desc": {
+          "source": "Sources from the last week",
+          "message": "過去1週間以内の情報源"
+        },
+        "app.UGVycGxleGl0eQ.action.c2VhcmNo.option.c2VhcmNoX3JlY2VuY3lfZmlsdGVy.allowed-value.c3RyaW5nOnllYXI.desc": {
+          "source": "Only include sources from the last year",
+          "message": "過去1年以内の情報源のみを含める"
+        },
+        "app.UGVycGxleGl0eQ.action.c2VhcmNo.option.c2VhcmNoX3JlY2VuY3lfZmlsdGVy.allowed-value.c3RyaW5nOnllYXI.display_name": {
+          "source": "Last Year",
+          "message": "過去1年"
+        },
+        "app.UGVycGxleGl0eQ.action.c2VhcmNo.option.c2VhcmNoX3JlY2VuY3lfZmlsdGVy.allowed-value.c3RyaW5nOnllYXI.short_desc": {
+          "source": "Sources from the last year",
+          "message": "過去1年以内の情報源"
+        },
+        "app.UGVycGxleGl0eQ.action.c2VhcmNo.option.c2VhcmNoX3JlY2VuY3lfZmlsdGVy.desc": {
+          "source": "Filter search results to only include sources from a specific time period",
+          "message": "特定の期間の情報源のみを含むように検索結果をフィルタリングします"
+        },
+        "app.UGVycGxleGl0eQ.action.c2VhcmNo.option.c2VhcmNoX3JlY2VuY3lfZmlsdGVy.display_name": {
+          "source": "Search Recency Filter",
+          "message": "検索新近度フィルター"
+        },
+        "app.UGVycGxleGl0eQ.action.c2VhcmNo.option.c2VhcmNoX3JlY2VuY3lfZmlsdGVy.short_desc": {
+          "source": "Filter search results by recency",
+          "message": "最新性に基づいて検索結果をフィルタリング"
+        },
+        "app.UGVycGxleGl0eQ.action.c2VhcmNo.option.cXVlcnk.desc": {
+          "source": "The search query string; automatically wrapped in an array for the API",
+          "message": "検索クエリ文字列。API用に配列に自動ラップされます"
+        },
+        "app.UGVycGxleGl0eQ.action.c2VhcmNo.option.cXVlcnk.display_name": {
+          "source": "Query",
+          "message": "クエリ"
+        },
+        "app.UGVycGxleGl0eQ.action.c2VhcmNo.option.cXVlcnk.short_desc": {
+          "source": "The search query",
+          "message": "検索クエリ"
+        },
+        "app.UGVycGxleGl0eQ.action.c2VhcmNo.short_desc": {
+          "source": "Search the web using Perplexity's dedicated search API",
+          "message": "Perplexity専用の検索APIを使用してWebを検索します"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.desc": {
+          "source": "Chat with a Perplexity AI model by sending a single message and receiving a single web-grounded reply with citations",
+          "message": "1つのメッセージを送信して、引用付きのWeb情報に基づいた1つの返答を受信することで、Perplexity AIモデルとチャットします"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.display_name": {
+          "source": "Simple Chat",
+          "message": "シンプルチャット"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.Y29udGVudA.desc": {
+          "source": "The contents of the message",
+          "message": "メッセージの内容"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.Y29udGVudA.display_name": {
+          "source": "Content",
+          "message": "コンテンツ"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.Y29udGVudA.short_desc": {
+          "source": "The contents of the message",
+          "message": "メッセージの内容"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.ZGlzYWJsZV9zZWFyY2g.desc": {
+          "source": "If set to `True`, the model will not search the web and will only use its training data to generate a response",
+          "message": "`True` に設定されている場合、モデルはWebを検索せず、トレーニングデータのみを使用して回答を生成します"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.ZGlzYWJsZV9zZWFyY2g.display_name": {
+          "source": "Disable Search?",
+          "message": "検索を無効化しますか？"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.ZGlzYWJsZV9zZWFyY2g.short_desc": {
+          "source": "Restrict response to training data only",
+          "message": "回答をトレーニングデータのみに制限"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.ZW5hYmxlX3NlYXJjaF9jbGFzc2lmaWVy.desc": {
+          "source": "If set to `True`, uses a classifier to determine whether a web search is needed for the query before performing one",
+          "message": "`True` に設定されている場合、クエリに対してWeb検索が必要かどうかを分類器を使用して判断してから検索を実行します"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.ZW5hYmxlX3NlYXJjaF9jbGFzc2lmaWVy.display_name": {
+          "source": "Enable Search Classifier?",
+          "message": "検索分類器を有効化しますか？"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.ZW5hYmxlX3NlYXJjaF9jbGFzc2lmaWVy.short_desc": {
+          "source": "Use a classifier to determine if search is needed",
+          "message": "検索が必要かどうかを分類器を使用して判断"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.aW1hZ2VfZG9tYWluX2ZpbHRlcg.desc": {
+          "source": "A list of domains to limit image search results to. Only applies when `return_images` is set to `True`",
+          "message": "画像検索結果を制限するドメインのリスト。`return_images` が `True` に設定されている場合にのみ適用されます"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.aW1hZ2VfZG9tYWluX2ZpbHRlcg.display_name": {
+          "source": "Image Domain Filter",
+          "message": "画像ドメインフィルター"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.aW1hZ2VfZG9tYWluX2ZpbHRlcg.short_desc": {
+          "source": "Limit image sources to specific domains",
+          "message": "画像ソースを特定のドメインに制限"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.aW1hZ2VfZm9ybWF0X2ZpbHRlcg.desc": {
+          "source": "A list of image formats to include in image results (e.g., `png`, `jpg`). Only applies when `return_images` is set to `True`",
+          "message": "画像検索結果に含める画像形式のリスト（例: `png`、`jpg`）。`return_images` が `True` に設定されている場合にのみ適用されます"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.aW1hZ2VfZm9ybWF0X2ZpbHRlcg.display_name": {
+          "source": "Image Format Filter",
+          "message": "画像形式フィルター"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.aW1hZ2VfZm9ybWF0X2ZpbHRlcg.short_desc": {
+          "source": "Filter image results by format",
+          "message": "画像検索結果を形式でフィルター"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.bGFuZ3VhZ2VfcHJlZmVyZW5jZQ.desc": {
+          "source": "An ISO 639-1 language code specifying the preferred language for the response",
+          "message": "回答の優先言語を指定するISO 639-1言語コード"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.bGFuZ3VhZ2VfcHJlZmVyZW5jZQ.display_name": {
+          "source": "Language Preference",
+          "message": "優先言語"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.bGFuZ3VhZ2VfcHJlZmVyZW5jZQ.short_desc": {
+          "source": "ISO 639-1 language code for the response",
+          "message": "回答用のISO 639-1言語コード"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.bGFzdF91cGRhdGVkX2FmdGVyX2ZpbHRlcg.desc": {
+          "source": "Only include sources that were last updated after this date. Format: `MM/DD/YYYY`",
+          "message": "この日付以降に最終更新されたソースのみを含めます。形式: `MM/DD/YYYY`"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.bGFzdF91cGRhdGVkX2FmdGVyX2ZpbHRlcg.display_name": {
+          "source": "Last Updated After",
+          "message": "最終更新日時の下限"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.bGFzdF91cGRhdGVkX2FmdGVyX2ZpbHRlcg.short_desc": {
+          "source": "Only include sources updated after this date",
+          "message": "この日付以降に更新されたソースのみを含める"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.bGFzdF91cGRhdGVkX2JlZm9yZV9maWx0ZXI.desc": {
+          "source": "Only include sources that were last updated before this date. Format: `MM/DD/YYYY`",
+          "message": "この日付以前に最終更新されたソースのみを含めます。形式: `MM/DD/YYYY`"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.bGFzdF91cGRhdGVkX2JlZm9yZV9maWx0ZXI.display_name": {
+          "source": "Last Updated Before",
+          "message": "最終更新日時の上限"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.bGFzdF91cGRhdGVkX2JlZm9yZV9maWx0ZXI.short_desc": {
+          "source": "Only include sources updated before this date",
+          "message": "この日付以前に更新されたソースのみを含める"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.bW9kZWw.allowed-value.c3RyaW5nOnNvbmFy.desc": {
+          "source": "Lightweight, cost-effective search model based on Llama 3.3 70B",
+          "message": "Llama 3.3 70Bベースの軽量で費用対効果の高い検索モデル"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.bW9kZWw.allowed-value.c3RyaW5nOnNvbmFy.display_name": {
+          "source": "Sonar",
+          "message": "Sonar"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.bW9kZWw.allowed-value.c3RyaW5nOnNvbmFy.short_desc": {
+          "source": "Lightweight, cost-effective search model",
+          "message": "軽量で費用対効果の高い検索モデル"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.bW9kZWw.allowed-value.c3RyaW5nOnNvbmFyLWRlZXAtcmVzZWFyY2g.desc": {
+          "source": "Expert-level research with autonomous source evaluation and report generation",
+          "message": "自律的な情報源の評価とレポート生成を備えた専門家レベルのリサーチ"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.bW9kZWw.allowed-value.c3RyaW5nOnNvbmFyLWRlZXAtcmVzZWFyY2g.display_name": {
+          "source": "Sonar Deep Research",
+          "message": "Sonar Deep Research"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.bW9kZWw.allowed-value.c3RyaW5nOnNvbmFyLWRlZXAtcmVzZWFyY2g.short_desc": {
+          "source": "Expert-level autonomous research",
+          "message": "専門家レベルの自律型リサーチ"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.bW9kZWw.allowed-value.c3RyaW5nOnNvbmFyLXBybw.desc": {
+          "source": "Advanced search with deeper retrieval and double citations",
+          "message": "より深い検索と2重引用を備えた高度な検索"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.bW9kZWw.allowed-value.c3RyaW5nOnNvbmFyLXBybw.display_name": {
+          "source": "Sonar Pro",
+          "message": "Sonar Pro"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.bW9kZWw.allowed-value.c3RyaW5nOnNvbmFyLXBybw.short_desc": {
+          "source": "Advanced search with deeper retrieval",
+          "message": "より深い検索を備えた高度な検索"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.bW9kZWw.allowed-value.c3RyaW5nOnNvbmFyLXJlYXNvbmluZy1wcm8.desc": {
+          "source": "Chain of Thought reasoning model based on DeepSeek-R1 with multi-query search",
+          "message": "マルチクエリ検索を備えたDeepSeek-R1ベースの思考連鎖（Chain of Thought）推論モデル"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.bW9kZWw.allowed-value.c3RyaW5nOnNvbmFyLXJlYXNvbmluZy1wcm8.display_name": {
+          "source": "Sonar Reasoning Pro",
+          "message": "Sonar Reasoning Pro"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.bW9kZWw.allowed-value.c3RyaW5nOnNvbmFyLXJlYXNvbmluZy1wcm8.short_desc": {
+          "source": "Chain of Thought reasoning model",
+          "message": "思考連鎖（Chain of Thought）推論モデル"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.bW9kZWw.desc": {
+          "source": "Model to use for the chat completion",
+          "message": "チャット補完に使用するモデル"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.bW9kZWw.display_name": {
+          "source": "Model ID",
+          "message": "モデルID"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.bW9kZWw.short_desc": {
+          "source": "Model to use for the chat completion",
+          "message": "チャット補完に使用するモデル"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.bWF4X3Rva2Vucw.desc": {
+          "source": "The maximum number of tokens that can be generated in the chat completion. Up to 128,000 tokens supported",
+          "message": "チャット補完で生成可能な最大トークン数。最大128,000トークンまでサポート"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.bWF4X3Rva2Vucw.display_name": {
+          "source": "Max Tokens",
+          "message": "最大トークン数"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.bWF4X3Rva2Vucw.short_desc": {
+          "source": "The maximum number of tokens to generate",
+          "message": "生成する最大トークン数"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.c2VhcmNoX21vZGU.allowed-value.c3RyaW5nOmFjYWRlbWlj.desc": {
+          "source": "Search academic and research papers",
+          "message": "学術論文や研究論文を検索"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.c2VhcmNoX21vZGU.allowed-value.c3RyaW5nOmFjYWRlbWlj.display_name": {
+          "source": "Academic",
+          "message": "学術"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.c2VhcmNoX21vZGU.allowed-value.c3RyaW5nOmFjYWRlbWlj.short_desc": {
+          "source": "Academic and research papers",
+          "message": "学術論文および研究論文"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.c2VhcmNoX21vZGU.allowed-value.c3RyaW5nOnNlYw.desc": {
+          "source": "Search US SEC regulatory filings",
+          "message": "米国SEC（証券取引委員会）の提出書類を検索"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.c2VhcmNoX21vZGU.allowed-value.c3RyaW5nOnNlYw.display_name": {
+          "source": "SEC",
+          "message": "SEC"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.c2VhcmNoX21vZGU.allowed-value.c3RyaW5nOnNlYw.short_desc": {
+          "source": "SEC filings",
+          "message": "SEC提出書類"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.c2VhcmNoX21vZGU.allowed-value.c3RyaW5nOndlYg.desc": {
+          "source": "General web search for grounding",
+          "message": "グラウンディングのための一般的なウェブ検索"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.c2VhcmNoX21vZGU.allowed-value.c3RyaW5nOndlYg.display_name": {
+          "source": "Web",
+          "message": "Web"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.c2VhcmNoX21vZGU.allowed-value.c3RyaW5nOndlYg.short_desc": {
+          "source": "General web search",
+          "message": "一般的なウェブ検索"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.c2VhcmNoX21vZGU.desc": {
+          "source": "The type of search to perform for grounding the response",
+          "message": "回答をグラウンディングするために実行する検索のタイプ"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.c2VhcmNoX21vZGU.display_name": {
+          "source": "Search Mode",
+          "message": "検索モード"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.c2VhcmNoX21vZGU.short_desc": {
+          "source": "The type of search to perform",
+          "message": "実行する検索のタイプ"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.c2VhcmNoX2FmdGVyX2RhdGVfZmlsdGVy.desc": {
+          "source": "Only include sources published after this date. Format: `MM/DD/YYYY`",
+          "message": "この日付以降に公開された情報源のみを含めます。形式: `MM/DD/YYYY`"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.c2VhcmNoX2FmdGVyX2RhdGVfZmlsdGVy.display_name": {
+          "source": "Search After Date",
+          "message": "検索開始日"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.c2VhcmNoX2FmdGVyX2RhdGVfZmlsdGVy.short_desc": {
+          "source": "Only include sources published after this date",
+          "message": "この日付以降に公開された情報源のみを含める"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.c2VhcmNoX2JlZm9yZV9kYXRlX2ZpbHRlcg.desc": {
+          "source": "Only include sources published before this date. Format: `MM/DD/YYYY`",
+          "message": "この日付以前に公開された情報源のみを含めます。形式: `MM/DD/YYYY`"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.c2VhcmNoX2JlZm9yZV9kYXRlX2ZpbHRlcg.display_name": {
+          "source": "Search Before Date",
+          "message": "検索終了日"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.c2VhcmNoX2JlZm9yZV9kYXRlX2ZpbHRlcg.short_desc": {
+          "source": "Only include sources published before this date",
+          "message": "この日付以前に公開された情報源のみを含める"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.c2VhcmNoX2RvbWFpbl9maWx0ZXI.desc": {
+          "source": "A list of domains to include or exclude from search results. Prefix with `-` to exclude. Maximum of 20 domains",
+          "message": "検索結果に含めるか除外するドメインのリスト。除外する場合はプレフィックスに `-` を付けます。最大20ドメイン"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.c2VhcmNoX2RvbWFpbl9maWx0ZXI.display_name": {
+          "source": "Search Domain Filter",
+          "message": "検索ドメインフィルター"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.c2VhcmNoX2RvbWFpbl9maWx0ZXI.short_desc": {
+          "source": "Domain allowlist or denylist for search (max 20)",
+          "message": "検索用のドメイン許可リストまたは拒否リスト（最大20件）"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.c2VhcmNoX2xhbmd1YWdlX2ZpbHRlcg.desc": {
+          "source": "A list of ISO 639-1 language codes to filter search results. Maximum of 10 languages",
+          "message": "検索結果をフィルタリングするためのISO 639-1言語コードのリスト。最大10言語"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.c2VhcmNoX2xhbmd1YWdlX2ZpbHRlcg.display_name": {
+          "source": "Search Language Filter",
+          "message": "検索言語フィルター"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.c2VhcmNoX2xhbmd1YWdlX2ZpbHRlcg.short_desc": {
+          "source": "ISO 639-1 language codes to filter search results (max 10)",
+          "message": "検索結果をフィルタリングするISO 639-1言語コード（最大10件）"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.c2VhcmNoX3JlY2VuY3lfZmlsdGVy.allowed-value.c3RyaW5nOm1vbnRo.desc": {
+          "source": "Only include sources from the last month",
+          "message": "過去1か月以内の情報源のみを含める"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.c2VhcmNoX3JlY2VuY3lfZmlsdGVy.allowed-value.c3RyaW5nOm1vbnRo.display_name": {
+          "source": "Last Month",
+          "message": "先月"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.c2VhcmNoX3JlY2VuY3lfZmlsdGVy.allowed-value.c3RyaW5nOm1vbnRo.short_desc": {
+          "source": "Sources from the last month",
+          "message": "過去1か月以内の情報源"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.c2VhcmNoX3JlY2VuY3lfZmlsdGVy.allowed-value.c3RyaW5nOmRheQ.desc": {
+          "source": "Only include sources from the last day",
+          "message": "過去1日以内の情報源のみを含める"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.c2VhcmNoX3JlY2VuY3lfZmlsdGVy.allowed-value.c3RyaW5nOmRheQ.display_name": {
+          "source": "Last Day",
+          "message": "過去1日"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.c2VhcmNoX3JlY2VuY3lfZmlsdGVy.allowed-value.c3RyaW5nOmRheQ.short_desc": {
+          "source": "Sources from the last day",
+          "message": "過去1日以内の情報源"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.c2VhcmNoX3JlY2VuY3lfZmlsdGVy.allowed-value.c3RyaW5nOmhvdXI.desc": {
+          "source": "Only include sources from the last hour",
+          "message": "過去1時間以内の情報源のみを含める"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.c2VhcmNoX3JlY2VuY3lfZmlsdGVy.allowed-value.c3RyaW5nOmhvdXI.display_name": {
+          "source": "Last Hour",
+          "message": "過去1時間"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.c2VhcmNoX3JlY2VuY3lfZmlsdGVy.allowed-value.c3RyaW5nOmhvdXI.short_desc": {
+          "source": "Sources from the last hour",
+          "message": "過去1時間以内の情報源"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.c2VhcmNoX3JlY2VuY3lfZmlsdGVy.allowed-value.c3RyaW5nOndlZWs.desc": {
+          "source": "Only include sources from the last week",
+          "message": "過去1週間以内の情報源のみを含める"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.c2VhcmNoX3JlY2VuY3lfZmlsdGVy.allowed-value.c3RyaW5nOndlZWs.display_name": {
+          "source": "Last Week",
+          "message": "過去1週間"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.c2VhcmNoX3JlY2VuY3lfZmlsdGVy.allowed-value.c3RyaW5nOndlZWs.short_desc": {
+          "source": "Sources from the last week",
+          "message": "過去1週間以内の情報源"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.c2VhcmNoX3JlY2VuY3lfZmlsdGVy.allowed-value.c3RyaW5nOnllYXI.desc": {
+          "source": "Only include sources from the last year",
+          "message": "過去1年以内の情報源のみを含める"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.c2VhcmNoX3JlY2VuY3lfZmlsdGVy.allowed-value.c3RyaW5nOnllYXI.display_name": {
+          "source": "Last Year",
+          "message": "過去1年"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.c2VhcmNoX3JlY2VuY3lfZmlsdGVy.allowed-value.c3RyaW5nOnllYXI.short_desc": {
+          "source": "Sources from the last year",
+          "message": "過去1年以内の情報源"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.c2VhcmNoX3JlY2VuY3lfZmlsdGVy.desc": {
+          "source": "Filter search results to only include sources from a specific time period",
+          "message": "特定の期間の情報源のみを含むように検索結果をフィルタリングします"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.c2VhcmNoX3JlY2VuY3lfZmlsdGVy.display_name": {
+          "source": "Search Recency Filter",
+          "message": "検索新近度フィルター"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.c2VhcmNoX3JlY2VuY3lfZmlsdGVy.short_desc": {
+          "source": "Filter search results by recency",
+          "message": "最新性に基づいて検索結果をフィルタリング"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.c3RvcA.desc": {
+          "source": "Up to 4 sequences where the API will stop generating further tokens",
+          "message": "APIがそれ以上のトークン生成を停止する最大4つのシーケンス"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.c3RvcA.display_name": {
+          "source": "Stop Sequences",
+          "message": "停止シーケンス"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.c3RvcA.short_desc": {
+          "source": "Sequences where the API will stop generating tokens",
+          "message": "APIがトークンの生成を停止するシーケンス"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.c3RyZWFt.desc": {
+          "source": "If set to `True`, partial message deltas will be sent as data-only server-sent events as they become available, with the stream terminated by a `data: [DONE]` message",
+          "message": "`True` に設定すると、メッセージの差分が利用可能になり次第データのみのServer-Sent Eventsとして送信され、ストリームは `data: [DONE]` メッセージで終了します"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.c3RyZWFt.display_name": {
+          "source": "Stream?",
+          "message": "ストリーム？"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.c3RyZWFt.short_desc": {
+          "source": "Enable streaming via Server-Sent Events",
+          "message": "Server-Sent Eventsによるストリーミングを有効化"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.c3RyZWFtX21vZGU.allowed-value.c3RyaW5nOmNvbmNpc2U.desc": {
+          "source": "Provides separate reasoning events during streaming",
+          "message": "ストリーミング中に個別の推論イベントを提供します"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.c3RyZWFtX21vZGU.allowed-value.c3RyaW5nOmNvbmNpc2U.display_name": {
+          "source": "Concise",
+          "message": "簡潔"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.c3RyZWFtX21vZGU.allowed-value.c3RyaW5nOmNvbmNpc2U.short_desc": {
+          "source": "Separate reasoning events",
+          "message": "個別の推論イベント"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.c3RyZWFtX21vZGU.allowed-value.c3RyaW5nOmZ1bGw.desc": {
+          "source": "Metadata inline with no separate reasoning events",
+          "message": "個別の推論イベントなしのインラインメタデータ"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.c3RyZWFtX21vZGU.allowed-value.c3RyaW5nOmZ1bGw.display_name": {
+          "source": "Full",
+          "message": "完全"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.c3RyZWFtX21vZGU.allowed-value.c3RyaW5nOmZ1bGw.short_desc": {
+          "source": "Metadata inline, no reasoning events",
+          "message": "インラインメタデータ、推論イベントなし"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.c3RyZWFtX21vZGU.desc": {
+          "source": "Controls the streaming format. `full` includes metadata inline with no separate reasoning events. `concise` provides separate reasoning events",
+          "message": "ストリーミング形式を制御します。`full` は個別の推論イベントなしでメタデータをインラインで含めます。`concise` は個別の推論イベントを提供します"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.c3RyZWFtX21vZGU.display_name": {
+          "source": "Stream Mode",
+          "message": "ストリームモード"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.c3RyZWFtX21vZGU.short_desc": {
+          "source": "Controls the streaming format",
+          "message": "ストリーミング形式を制御"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.cm9sZQ.allowed-value.c3RyaW5nOmFzc2lzdGFudA.desc": {
+          "source": "The author of the message is an assistant",
+          "message": "メッセージの作成者はアシスタントです"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.cm9sZQ.allowed-value.c3RyaW5nOmFzc2lzdGFudA.display_name": {
+          "source": "Assistant",
+          "message": "アシスタント"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.cm9sZQ.allowed-value.c3RyaW5nOmFzc2lzdGFudA.short_desc": {
+          "source": "The author of the message is an assistant",
+          "message": "メッセージの作成者はアシスタントです"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.cm9sZQ.allowed-value.c3RyaW5nOnN5c3RlbQ.desc": {
+          "source": "The author of the message is the system",
+          "message": "メッセージの作成者はシステムです"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.cm9sZQ.allowed-value.c3RyaW5nOnN5c3RlbQ.display_name": {
+          "source": "System",
+          "message": "システム"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.cm9sZQ.allowed-value.c3RyaW5nOnN5c3RlbQ.short_desc": {
+          "source": "The author of the message is the system",
+          "message": "メッセージの作成者はシステムです"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.cm9sZQ.allowed-value.c3RyaW5nOnVzZXI.desc": {
+          "source": "The author of the message is the user",
+          "message": "メッセージの作成者はユーザーです"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.cm9sZQ.allowed-value.c3RyaW5nOnVzZXI.display_name": {
+          "source": "User",
+          "message": "ユーザー"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.cm9sZQ.allowed-value.c3RyaW5nOnVzZXI.short_desc": {
+          "source": "The author of the message is the user",
+          "message": "メッセージの作成者はユーザーです"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.cm9sZQ.desc": {
+          "source": "The role of the author of this message",
+          "message": "このメッセージの作成者のロール"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.cm9sZQ.display_name": {
+          "source": "Role",
+          "message": "役割"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.cm9sZQ.short_desc": {
+          "source": "The role of the author of this message",
+          "message": "このメッセージの作成者のロール"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.cmV0dXJuX2ltYWdlcw.desc": {
+          "source": "If set to `True`, image results from the web search will be included in the response",
+          "message": "`True` に設定すると、ウェブ検索からの画像結果が応答に含まれます"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.cmV0dXJuX2ltYWdlcw.display_name": {
+          "source": "Return Images?",
+          "message": "画像を返しますか？"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.cmV0dXJuX2ltYWdlcw.short_desc": {
+          "source": "Include image results from search",
+          "message": "検索結果からの画像を含める"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.cmV0dXJuX3JlbGF0ZWRfcXVlc3Rpb25z.desc": {
+          "source": "If set to `True`, the response will include suggested follow-up questions",
+          "message": "`True` に設定すると、推奨されるフォローアップの質問が応答に含まれます"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.cmV0dXJuX3JlbGF0ZWRfcXVlc3Rpb25z.display_name": {
+          "source": "Return Related Questions?",
+          "message": "関連する質問を返しますか？"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.cmV0dXJuX3JlbGF0ZWRfcXVlc3Rpb25z.short_desc": {
+          "source": "Generate follow-up question suggestions",
+          "message": "フォローアップの質問候補を生成"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.cmVhc29uaW5nX2VmZm9ydA.allowed-value.c3RyaW5nOm1lZGl1bQ.desc": {
+          "source": "Medium reasoning effort (default)",
+          "message": "中程度の推論労力（デフォルト）"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.cmVhc29uaW5nX2VmZm9ydA.allowed-value.c3RyaW5nOm1lZGl1bQ.display_name": {
+          "source": "Medium",
+          "message": "中"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.cmVhc29uaW5nX2VmZm9ydA.allowed-value.c3RyaW5nOm1lZGl1bQ.short_desc": {
+          "source": "Medium reasoning effort",
+          "message": "中程度の推論エフォート"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.cmVhc29uaW5nX2VmZm9ydA.allowed-value.c3RyaW5nOm1pbmltYWw.desc": {
+          "source": "Minimal reasoning effort for fast responses",
+          "message": "高速な応答のための最小限の推論労力"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.cmVhc29uaW5nX2VmZm9ydA.allowed-value.c3RyaW5nOm1pbmltYWw.display_name": {
+          "source": "Minimal",
+          "message": "最小"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.cmVhc29uaW5nX2VmZm9ydA.allowed-value.c3RyaW5nOm1pbmltYWw.short_desc": {
+          "source": "Minimal reasoning effort",
+          "message": "最小限の推論エフォート"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.cmVhc29uaW5nX2VmZm9ydA.allowed-value.c3RyaW5nOmhpZ2g.desc": {
+          "source": "Maximum reasoning effort for thorough analysis",
+          "message": "徹底的な分析のための最大限の推論エフォート"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.cmVhc29uaW5nX2VmZm9ydA.allowed-value.c3RyaW5nOmhpZ2g.display_name": {
+          "source": "High",
+          "message": "高"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.cmVhc29uaW5nX2VmZm9ydA.allowed-value.c3RyaW5nOmhpZ2g.short_desc": {
+          "source": "High reasoning effort",
+          "message": "高い推論エフォート"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.cmVhc29uaW5nX2VmZm9ydA.allowed-value.c3RyaW5nOmxvdw.desc": {
+          "source": "Low reasoning effort",
+          "message": "低い推論エフォート"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.cmVhc29uaW5nX2VmZm9ydA.allowed-value.c3RyaW5nOmxvdw.display_name": {
+          "source": "Low",
+          "message": "低"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.cmVhc29uaW5nX2VmZm9ydA.allowed-value.c3RyaW5nOmxvdw.short_desc": {
+          "source": "Low reasoning effort",
+          "message": "低い推論エフォート"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.cmVhc29uaW5nX2VmZm9ydA.desc": {
+          "source": "Controls the depth of reasoning for `sonar-reasoning` and `sonar-reasoning-pro` models",
+          "message": "`sonar-reasoning` および `sonar-reasoning-pro` モデルの推論の深さを制御します"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.cmVhc29uaW5nX2VmZm9ydA.display_name": {
+          "source": "Reasoning Effort",
+          "message": "推論エフォート"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.cmVhc29uaW5nX2VmZm9ydA.short_desc": {
+          "source": "Control the reasoning effort for reasoning models",
+          "message": "推論モデルの推論エフォートを制御します"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.cmVzcG9uc2VfZm9ybWF0.desc": {
+          "source": "An object specifying the format that the model must output. Set `type` to `json_schema` and provide a `json_schema` object to enable structured JSON output",
+          "message": "モデルが出力する必要がある形式を指定するオブジェクト。構造化JSON出力を有効にするには、`type` を `json_schema` に設定し、`json_schema` オブジェクトを指定します"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.cmVzcG9uc2VfZm9ybWF0.display_name": {
+          "source": "Response Format",
+          "message": "レスポンス形式"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.cmVzcG9uc2VfZm9ybWF0.short_desc": {
+          "source": "Specify the output format (e.g., JSON schema)",
+          "message": "出力形式を指定します（例: JSONスキーマ）"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.d2ViX3NlYXJjaF9vcHRpb25z.desc": {
+          "source": "Advanced web search configuration options such as search context size",
+          "message": "検索コンテキストサイズなどの高度なWeb検索設定オプション"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.d2ViX3NlYXJjaF9vcHRpb25z.display_name": {
+          "source": "Web Search Options",
+          "message": "Web検索オプション"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.d2ViX3NlYXJjaF9vcHRpb25z.short_desc": {
+          "source": "Advanced web search configuration",
+          "message": "高度なWeb検索設定"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.dG9wX3A.desc": {
+          "source": "An alternative to sampling with temperature, called nucleus sampling, where the model considers the results of the tokens with `top_p` probability mass. So `0.1` means only the tokens comprising the top 10% probability mass are considered",
+          "message": "temperature によるサンプリングの代替手段である nucleus sampling。モデルは `top_p` の確率質量を持つトークンの結果を考慮します。したがって、`0.1` は上位10%の確率質量を構成するトークンのみが考慮されることを意味します"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.dG9wX3A.display_name": {
+          "source": "Top P",
+          "message": "Top P"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.dG9wX3A.short_desc": {
+          "source": "Nucleus sampling value",
+          "message": "Nucleus sampling値"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.dGVtcGVyYXR1cmU.desc": {
+          "source": "What sampling temperature to use, between `0` and `2`. Higher values like `0.8` will make the output more random, while lower values like `0.2` will make it more focused and deterministic",
+          "message": "使用するサンプリング temperature（`0` から `2` の間）。`0.8` のような高い値は出力をよりランダムにし、`0.2` のような低い値は出力をより集中させ決定論的にします"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.dGVtcGVyYXR1cmU.display_name": {
+          "source": "Sampling Temperature",
+          "message": "サンプリング温度"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.dGVtcGVyYXR1cmU.short_desc": {
+          "source": "The sampling temperature to use, between 0 and 2",
+          "message": "使用するサンプリング温度（0から2の間）"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.short_desc": {
+          "source": "Chat with a Perplexity AI model by sending a single message and receiving a single web-grounded reply with citations",
+          "message": "1つのメッセージを送信して、引用付きのWeb情報に基づいた1つの返答を受信することで、Perplexity AIモデルとチャットします"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.desc": {
+          "source": "Stream a chat response from Perplexity AI via Server-Sent Events with real-time token delivery",
+          "message": "リアルタイムのトークン配信を伴うServer-Sent Events経由でPerplexity AIからのチャットレスポンスをストリーミングします"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.display_name": {
+          "source": "Stream Chat",
+          "message": "ストリームチャット"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.ZGlzYWJsZV9zZWFyY2g.desc": {
+          "source": "If set to `True`, the model will not search the web and will only use its training data to generate a response",
+          "message": "`True` に設定されている場合、モデルはWebを検索せず、トレーニングデータのみを使用して回答を生成します"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.ZGlzYWJsZV9zZWFyY2g.display_name": {
+          "source": "Disable Search?",
+          "message": "検索を無効化しますか？"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.ZGlzYWJsZV9zZWFyY2g.short_desc": {
+          "source": "Restrict response to training data only",
+          "message": "回答をトレーニングデータのみに制限"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.ZW5hYmxlX3NlYXJjaF9jbGFzc2lmaWVy.desc": {
+          "source": "If set to `True`, uses a classifier to determine whether a web search is needed for the query before performing one",
+          "message": "`True` に設定されている場合、クエリに対してWeb検索が必要かどうかを分類器を使用して判断してから検索を実行します"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.ZW5hYmxlX3NlYXJjaF9jbGFzc2lmaWVy.display_name": {
+          "source": "Enable Search Classifier?",
+          "message": "検索分類器を有効化しますか？"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.ZW5hYmxlX3NlYXJjaF9jbGFzc2lmaWVy.short_desc": {
+          "source": "Use a classifier to determine if search is needed",
+          "message": "検索が必要かどうかを分類器を使用して判断"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.aW1hZ2VfZG9tYWluX2ZpbHRlcg.desc": {
+          "source": "A list of domains to limit image search results to. Only applies when `return_images` is set to `True`",
+          "message": "画像検索結果を制限するドメインのリスト。`return_images` が `True` に設定されている場合にのみ適用されます"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.aW1hZ2VfZG9tYWluX2ZpbHRlcg.display_name": {
+          "source": "Image Domain Filter",
+          "message": "画像ドメインフィルター"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.aW1hZ2VfZG9tYWluX2ZpbHRlcg.short_desc": {
+          "source": "Limit image sources to specific domains",
+          "message": "画像ソースを特定のドメインに制限"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.aW1hZ2VfZm9ybWF0X2ZpbHRlcg.desc": {
+          "source": "A list of image formats to include in image results (e.g., `png`, `jpg`). Only applies when `return_images` is set to `True`",
+          "message": "画像検索結果に含める画像形式のリスト（例: `png`、`jpg`）。`return_images` が `True` に設定されている場合にのみ適用されます"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.aW1hZ2VfZm9ybWF0X2ZpbHRlcg.display_name": {
+          "source": "Image Format Filter",
+          "message": "画像形式フィルター"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.aW1hZ2VfZm9ybWF0X2ZpbHRlcg.short_desc": {
+          "source": "Filter image results by format",
+          "message": "画像検索結果を形式でフィルター"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.bGFuZ3VhZ2VfcHJlZmVyZW5jZQ.desc": {
+          "source": "An ISO 639-1 language code specifying the preferred language for the response",
+          "message": "回答の優先言語を指定するISO 639-1言語コード"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.bGFuZ3VhZ2VfcHJlZmVyZW5jZQ.display_name": {
+          "source": "Language Preference",
+          "message": "優先言語"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.bGFuZ3VhZ2VfcHJlZmVyZW5jZQ.short_desc": {
+          "source": "ISO 639-1 language code for the response",
+          "message": "回答用のISO 639-1言語コード"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.bGFzdF91cGRhdGVkX2FmdGVyX2ZpbHRlcg.desc": {
+          "source": "Only include sources that were last updated after this date. Format: `MM/DD/YYYY`",
+          "message": "この日付以降に最終更新されたソースのみを含めます。形式: `MM/DD/YYYY`"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.bGFzdF91cGRhdGVkX2FmdGVyX2ZpbHRlcg.display_name": {
+          "source": "Last Updated After",
+          "message": "最終更新日時の下限"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.bGFzdF91cGRhdGVkX2FmdGVyX2ZpbHRlcg.short_desc": {
+          "source": "Only include sources updated after this date",
+          "message": "この日付以降に更新されたソースのみを含める"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.bGFzdF91cGRhdGVkX2JlZm9yZV9maWx0ZXI.desc": {
+          "source": "Only include sources that were last updated before this date. Format: `MM/DD/YYYY`",
+          "message": "この日付以前に最終更新されたソースのみを含めます。形式: `MM/DD/YYYY`"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.bGFzdF91cGRhdGVkX2JlZm9yZV9maWx0ZXI.display_name": {
+          "source": "Last Updated Before",
+          "message": "最終更新日時の上限"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.bGFzdF91cGRhdGVkX2JlZm9yZV9maWx0ZXI.short_desc": {
+          "source": "Only include sources updated before this date",
+          "message": "この日付以前に更新されたソースのみを含める"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.bW9kZWw.allowed-value.c3RyaW5nOnNvbmFy.desc": {
+          "source": "Lightweight, cost-effective search model based on Llama 3.3 70B",
+          "message": "Llama 3.3 70Bベースの軽量で費用対効果の高い検索モデル"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.bW9kZWw.allowed-value.c3RyaW5nOnNvbmFy.display_name": {
+          "source": "Sonar",
+          "message": "Sonar"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.bW9kZWw.allowed-value.c3RyaW5nOnNvbmFy.short_desc": {
+          "source": "Lightweight, cost-effective search model",
+          "message": "軽量で費用対効果の高い検索モデル"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.bW9kZWw.allowed-value.c3RyaW5nOnNvbmFyLWRlZXAtcmVzZWFyY2g.desc": {
+          "source": "Expert-level research with autonomous source evaluation and report generation",
+          "message": "自律的な情報源の評価とレポート生成を備えた専門家レベルのリサーチ"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.bW9kZWw.allowed-value.c3RyaW5nOnNvbmFyLWRlZXAtcmVzZWFyY2g.display_name": {
+          "source": "Sonar Deep Research",
+          "message": "Sonar Deep Research"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.bW9kZWw.allowed-value.c3RyaW5nOnNvbmFyLWRlZXAtcmVzZWFyY2g.short_desc": {
+          "source": "Expert-level autonomous research",
+          "message": "専門家レベルの自律型リサーチ"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.bW9kZWw.allowed-value.c3RyaW5nOnNvbmFyLXBybw.desc": {
+          "source": "Advanced search with deeper retrieval and double citations",
+          "message": "より深い検索と2重引用を備えた高度な検索"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.bW9kZWw.allowed-value.c3RyaW5nOnNvbmFyLXBybw.display_name": {
+          "source": "Sonar Pro",
+          "message": "Sonar Pro"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.bW9kZWw.allowed-value.c3RyaW5nOnNvbmFyLXBybw.short_desc": {
+          "source": "Advanced search with deeper retrieval",
+          "message": "より深い検索を備えた高度な検索"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.bW9kZWw.allowed-value.c3RyaW5nOnNvbmFyLXJlYXNvbmluZy1wcm8.desc": {
+          "source": "Chain of Thought reasoning model based on DeepSeek-R1 with multi-query search",
+          "message": "マルチクエリ検索を備えたDeepSeek-R1ベースの思考連鎖（Chain of Thought）推論モデル"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.bW9kZWw.allowed-value.c3RyaW5nOnNvbmFyLXJlYXNvbmluZy1wcm8.display_name": {
+          "source": "Sonar Reasoning Pro",
+          "message": "Sonar Reasoning Pro"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.bW9kZWw.allowed-value.c3RyaW5nOnNvbmFyLXJlYXNvbmluZy1wcm8.short_desc": {
+          "source": "Chain of Thought reasoning model",
+          "message": "思考連鎖（Chain of Thought）推論モデル"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.bW9kZWw.desc": {
+          "source": "Model to use for the chat completion",
+          "message": "チャット補完に使用するモデル"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.bW9kZWw.display_name": {
+          "source": "Model ID",
+          "message": "モデルID"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.bW9kZWw.short_desc": {
+          "source": "Model to use for the chat completion",
+          "message": "チャット補完に使用するモデル"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.bWF4X3Rva2Vucw.desc": {
+          "source": "The maximum number of tokens that can be generated in the chat completion. Up to 128,000 tokens supported",
+          "message": "チャット補完で生成可能な最大トークン数。最大128,000トークンまでサポート"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.bWF4X3Rva2Vucw.display_name": {
+          "source": "Max Tokens",
+          "message": "最大トークン数"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.bWF4X3Rva2Vucw.short_desc": {
+          "source": "The maximum number of tokens to generate",
+          "message": "生成する最大トークン数"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.bWVzc2FnZXM.desc": {
+          "source": "A list of messages comprising the conversation so far",
+          "message": "これまでの会話を構成するメッセージのリスト"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.bWVzc2FnZXM.display_name": {
+          "source": "Messages",
+          "message": "メッセージ"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.bWVzc2FnZXM.short_desc": {
+          "source": "A list of messages comprising the conversation so far",
+          "message": "これまでの会話を構成するメッセージのリスト"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.c2VhcmNoX21vZGU.allowed-value.c3RyaW5nOmFjYWRlbWlj.desc": {
+          "source": "Search academic and research papers",
+          "message": "学術論文や研究論文を検索"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.c2VhcmNoX21vZGU.allowed-value.c3RyaW5nOmFjYWRlbWlj.display_name": {
+          "source": "Academic",
+          "message": "学術"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.c2VhcmNoX21vZGU.allowed-value.c3RyaW5nOmFjYWRlbWlj.short_desc": {
+          "source": "Academic and research papers",
+          "message": "学術論文および研究論文"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.c2VhcmNoX21vZGU.allowed-value.c3RyaW5nOnNlYw.desc": {
+          "source": "Search US SEC regulatory filings",
+          "message": "米国SEC（証券取引委員会）の提出書類を検索"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.c2VhcmNoX21vZGU.allowed-value.c3RyaW5nOnNlYw.display_name": {
+          "source": "SEC",
+          "message": "SEC"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.c2VhcmNoX21vZGU.allowed-value.c3RyaW5nOnNlYw.short_desc": {
+          "source": "SEC filings",
+          "message": "SEC提出書類"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.c2VhcmNoX21vZGU.allowed-value.c3RyaW5nOndlYg.desc": {
+          "source": "General web search for grounding",
+          "message": "グラウンディングのための一般的なウェブ検索"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.c2VhcmNoX21vZGU.allowed-value.c3RyaW5nOndlYg.display_name": {
+          "source": "Web",
+          "message": "Web"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.c2VhcmNoX21vZGU.allowed-value.c3RyaW5nOndlYg.short_desc": {
+          "source": "General web search",
+          "message": "一般的なウェブ検索"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.c2VhcmNoX21vZGU.desc": {
+          "source": "The type of search to perform for grounding the response",
+          "message": "回答をグラウンディングするために実行する検索のタイプ"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.c2VhcmNoX21vZGU.display_name": {
+          "source": "Search Mode",
+          "message": "検索モード"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.c2VhcmNoX21vZGU.short_desc": {
+          "source": "The type of search to perform",
+          "message": "実行する検索のタイプ"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.c2VhcmNoX2FmdGVyX2RhdGVfZmlsdGVy.desc": {
+          "source": "Only include sources published after this date. Format: `MM/DD/YYYY`",
+          "message": "この日付以降に公開された情報源のみを含めます。形式: `MM/DD/YYYY`"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.c2VhcmNoX2FmdGVyX2RhdGVfZmlsdGVy.display_name": {
+          "source": "Search After Date",
+          "message": "検索開始日"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.c2VhcmNoX2FmdGVyX2RhdGVfZmlsdGVy.short_desc": {
+          "source": "Only include sources published after this date",
+          "message": "この日付以降に公開された情報源のみを含める"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.c2VhcmNoX2JlZm9yZV9kYXRlX2ZpbHRlcg.desc": {
+          "source": "Only include sources published before this date. Format: `MM/DD/YYYY`",
+          "message": "この日付以前に公開された情報源のみを含めます。形式: `MM/DD/YYYY`"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.c2VhcmNoX2JlZm9yZV9kYXRlX2ZpbHRlcg.display_name": {
+          "source": "Search Before Date",
+          "message": "検索終了日"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.c2VhcmNoX2JlZm9yZV9kYXRlX2ZpbHRlcg.short_desc": {
+          "source": "Only include sources published before this date",
+          "message": "この日付以前に公開された情報源のみを含める"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.c2VhcmNoX2RvbWFpbl9maWx0ZXI.desc": {
+          "source": "A list of domains to include or exclude from search results. Prefix with `-` to exclude. Maximum of 20 domains",
+          "message": "検索結果に含めるか除外するドメインのリスト。除外する場合はプレフィックスに `-` を付けます。最大20ドメイン"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.c2VhcmNoX2RvbWFpbl9maWx0ZXI.display_name": {
+          "source": "Search Domain Filter",
+          "message": "検索ドメインフィルター"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.c2VhcmNoX2RvbWFpbl9maWx0ZXI.short_desc": {
+          "source": "Domain allowlist or denylist for search (max 20)",
+          "message": "検索用のドメイン許可リストまたは拒否リスト（最大20件）"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.c2VhcmNoX2xhbmd1YWdlX2ZpbHRlcg.desc": {
+          "source": "A list of ISO 639-1 language codes to filter search results. Maximum of 10 languages",
+          "message": "検索結果をフィルタリングするためのISO 639-1言語コードのリスト。最大10言語"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.c2VhcmNoX2xhbmd1YWdlX2ZpbHRlcg.display_name": {
+          "source": "Search Language Filter",
+          "message": "検索言語フィルター"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.c2VhcmNoX2xhbmd1YWdlX2ZpbHRlcg.short_desc": {
+          "source": "ISO 639-1 language codes to filter search results (max 10)",
+          "message": "検索結果をフィルタリングするISO 639-1言語コード（最大10件）"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.c2VhcmNoX3JlY2VuY3lfZmlsdGVy.allowed-value.c3RyaW5nOm1vbnRo.desc": {
+          "source": "Only include sources from the last month",
+          "message": "過去1か月以内の情報源のみを含める"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.c2VhcmNoX3JlY2VuY3lfZmlsdGVy.allowed-value.c3RyaW5nOm1vbnRo.display_name": {
+          "source": "Last Month",
+          "message": "先月"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.c2VhcmNoX3JlY2VuY3lfZmlsdGVy.allowed-value.c3RyaW5nOm1vbnRo.short_desc": {
+          "source": "Sources from the last month",
+          "message": "過去1か月以内の情報源"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.c2VhcmNoX3JlY2VuY3lfZmlsdGVy.allowed-value.c3RyaW5nOmRheQ.desc": {
+          "source": "Only include sources from the last day",
+          "message": "過去1日以内の情報源のみを含める"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.c2VhcmNoX3JlY2VuY3lfZmlsdGVy.allowed-value.c3RyaW5nOmRheQ.display_name": {
+          "source": "Last Day",
+          "message": "過去1日"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.c2VhcmNoX3JlY2VuY3lfZmlsdGVy.allowed-value.c3RyaW5nOmRheQ.short_desc": {
+          "source": "Sources from the last day",
+          "message": "過去1日以内の情報源"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.c2VhcmNoX3JlY2VuY3lfZmlsdGVy.allowed-value.c3RyaW5nOmhvdXI.desc": {
+          "source": "Only include sources from the last hour",
+          "message": "過去1時間以内の情報源のみを含める"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.c2VhcmNoX3JlY2VuY3lfZmlsdGVy.allowed-value.c3RyaW5nOmhvdXI.display_name": {
+          "source": "Last Hour",
+          "message": "過去1時間"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.c2VhcmNoX3JlY2VuY3lfZmlsdGVy.allowed-value.c3RyaW5nOmhvdXI.short_desc": {
+          "source": "Sources from the last hour",
+          "message": "過去1時間以内の情報源"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.c2VhcmNoX3JlY2VuY3lfZmlsdGVy.allowed-value.c3RyaW5nOndlZWs.desc": {
+          "source": "Only include sources from the last week",
+          "message": "過去1週間以内の情報源のみを含める"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.c2VhcmNoX3JlY2VuY3lfZmlsdGVy.allowed-value.c3RyaW5nOndlZWs.display_name": {
+          "source": "Last Week",
+          "message": "過去1週間"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.c2VhcmNoX3JlY2VuY3lfZmlsdGVy.allowed-value.c3RyaW5nOndlZWs.short_desc": {
+          "source": "Sources from the last week",
+          "message": "過去1週間以内の情報源"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.c2VhcmNoX3JlY2VuY3lfZmlsdGVy.allowed-value.c3RyaW5nOnllYXI.desc": {
+          "source": "Only include sources from the last year",
+          "message": "過去1年以内の情報源のみを含める"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.c2VhcmNoX3JlY2VuY3lfZmlsdGVy.allowed-value.c3RyaW5nOnllYXI.display_name": {
+          "source": "Last Year",
+          "message": "過去1年"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.c2VhcmNoX3JlY2VuY3lfZmlsdGVy.allowed-value.c3RyaW5nOnllYXI.short_desc": {
+          "source": "Sources from the last year",
+          "message": "過去1年以内の情報源"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.c2VhcmNoX3JlY2VuY3lfZmlsdGVy.desc": {
+          "source": "Filter search results to only include sources from a specific time period",
+          "message": "特定の期間の情報源のみを含むように検索結果をフィルタリングします"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.c2VhcmNoX3JlY2VuY3lfZmlsdGVy.display_name": {
+          "source": "Search Recency Filter",
+          "message": "検索新近度フィルター"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.c2VhcmNoX3JlY2VuY3lfZmlsdGVy.short_desc": {
+          "source": "Filter search results by recency",
+          "message": "最新性に基づいて検索結果をフィルタリング"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.c3RvcA.desc": {
+          "source": "Up to 4 sequences where the API will stop generating further tokens",
+          "message": "APIがそれ以上のトークン生成を停止する最大4つのシーケンス"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.c3RvcA.display_name": {
+          "source": "Stop Sequences",
+          "message": "停止シーケンス"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.c3RvcA.short_desc": {
+          "source": "Sequences where the API will stop generating tokens",
+          "message": "APIがトークンの生成を停止するシーケンス"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.c3RyZWFtX21vZGU.allowed-value.c3RyaW5nOmNvbmNpc2U.desc": {
+          "source": "Provides separate reasoning events during streaming",
+          "message": "ストリーミング中に個別の推論イベントを提供します"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.c3RyZWFtX21vZGU.allowed-value.c3RyaW5nOmNvbmNpc2U.display_name": {
+          "source": "Concise",
+          "message": "簡潔"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.c3RyZWFtX21vZGU.allowed-value.c3RyaW5nOmNvbmNpc2U.short_desc": {
+          "source": "Separate reasoning events",
+          "message": "個別の推論イベント"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.c3RyZWFtX21vZGU.allowed-value.c3RyaW5nOmZ1bGw.desc": {
+          "source": "Metadata inline with no separate reasoning events",
+          "message": "個別の推論イベントなしのインラインメタデータ"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.c3RyZWFtX21vZGU.allowed-value.c3RyaW5nOmZ1bGw.display_name": {
+          "source": "Full",
+          "message": "完全"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.c3RyZWFtX21vZGU.allowed-value.c3RyaW5nOmZ1bGw.short_desc": {
+          "source": "Metadata inline, no reasoning events",
+          "message": "インラインメタデータ、推論イベントなし"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.c3RyZWFtX21vZGU.desc": {
+          "source": "Controls the streaming format. `full` includes metadata inline with no separate reasoning events. `concise` provides separate reasoning events",
+          "message": "ストリーミング形式を制御します。`full` は個別の推論イベントなしでメタデータをインラインで含めます。`concise` は個別の推論イベントを提供します"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.c3RyZWFtX21vZGU.display_name": {
+          "source": "Stream Mode",
+          "message": "ストリームモード"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.c3RyZWFtX21vZGU.short_desc": {
+          "source": "Controls the streaming format",
+          "message": "ストリーミング形式を制御"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.cmV0dXJuX2ltYWdlcw.desc": {
+          "source": "If set to `True`, image results from the web search will be included in the response",
+          "message": "`True` に設定すると、ウェブ検索からの画像結果が応答に含まれます"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.cmV0dXJuX2ltYWdlcw.display_name": {
+          "source": "Return Images?",
+          "message": "画像を返しますか？"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.cmV0dXJuX2ltYWdlcw.short_desc": {
+          "source": "Include image results from search",
+          "message": "検索結果からの画像を含める"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.cmV0dXJuX3JlbGF0ZWRfcXVlc3Rpb25z.desc": {
+          "source": "If set to `True`, the response will include suggested follow-up questions",
+          "message": "`True` に設定すると、推奨されるフォローアップの質問が応答に含まれます"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.cmV0dXJuX3JlbGF0ZWRfcXVlc3Rpb25z.display_name": {
+          "source": "Return Related Questions?",
+          "message": "関連する質問を返しますか？"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.cmV0dXJuX3JlbGF0ZWRfcXVlc3Rpb25z.short_desc": {
+          "source": "Generate follow-up question suggestions",
+          "message": "フォローアップの質問候補を生成"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.cmVhc29uaW5nX2VmZm9ydA.allowed-value.c3RyaW5nOm1lZGl1bQ.desc": {
+          "source": "Medium reasoning effort (default)",
+          "message": "中程度の推論労力（デフォルト）"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.cmVhc29uaW5nX2VmZm9ydA.allowed-value.c3RyaW5nOm1lZGl1bQ.display_name": {
+          "source": "Medium",
+          "message": "中"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.cmVhc29uaW5nX2VmZm9ydA.allowed-value.c3RyaW5nOm1lZGl1bQ.short_desc": {
+          "source": "Medium reasoning effort",
+          "message": "中程度の推論エフォート"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.cmVhc29uaW5nX2VmZm9ydA.allowed-value.c3RyaW5nOm1pbmltYWw.desc": {
+          "source": "Minimal reasoning effort for fast responses",
+          "message": "高速な応答のための最小限の推論労力"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.cmVhc29uaW5nX2VmZm9ydA.allowed-value.c3RyaW5nOm1pbmltYWw.display_name": {
+          "source": "Minimal",
+          "message": "最小"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.cmVhc29uaW5nX2VmZm9ydA.allowed-value.c3RyaW5nOm1pbmltYWw.short_desc": {
+          "source": "Minimal reasoning effort",
+          "message": "最小限の推論エフォート"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.cmVhc29uaW5nX2VmZm9ydA.allowed-value.c3RyaW5nOmhpZ2g.desc": {
+          "source": "Maximum reasoning effort for thorough analysis",
+          "message": "徹底的な分析のための最大限の推論エフォート"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.cmVhc29uaW5nX2VmZm9ydA.allowed-value.c3RyaW5nOmhpZ2g.display_name": {
+          "source": "High",
+          "message": "高"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.cmVhc29uaW5nX2VmZm9ydA.allowed-value.c3RyaW5nOmhpZ2g.short_desc": {
+          "source": "High reasoning effort",
+          "message": "高い推論エフォート"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.cmVhc29uaW5nX2VmZm9ydA.allowed-value.c3RyaW5nOmxvdw.desc": {
+          "source": "Low reasoning effort",
+          "message": "低い推論エフォート"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.cmVhc29uaW5nX2VmZm9ydA.allowed-value.c3RyaW5nOmxvdw.display_name": {
+          "source": "Low",
+          "message": "低"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.cmVhc29uaW5nX2VmZm9ydA.allowed-value.c3RyaW5nOmxvdw.short_desc": {
+          "source": "Low reasoning effort",
+          "message": "低い推論エフォート"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.cmVhc29uaW5nX2VmZm9ydA.desc": {
+          "source": "Controls the depth of reasoning for `sonar-reasoning` and `sonar-reasoning-pro` models",
+          "message": "`sonar-reasoning` および `sonar-reasoning-pro` モデルの推論の深さを制御します"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.cmVhc29uaW5nX2VmZm9ydA.display_name": {
+          "source": "Reasoning Effort",
+          "message": "推論エフォート"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.cmVhc29uaW5nX2VmZm9ydA.short_desc": {
+          "source": "Control the reasoning effort for reasoning models",
+          "message": "推論モデルの推論エフォートを制御します"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.cmVzcG9uc2VfZm9ybWF0.desc": {
+          "source": "An object specifying the format that the model must output. Set `type` to `json_schema` and provide a `json_schema` object to enable structured JSON output",
+          "message": "モデルが出力する必要がある形式を指定するオブジェクト。構造化JSON出力を有効にするには、`type` を `json_schema` に設定し、`json_schema` オブジェクトを指定します"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.cmVzcG9uc2VfZm9ybWF0.display_name": {
+          "source": "Response Format",
+          "message": "レスポンス形式"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.cmVzcG9uc2VfZm9ybWF0.short_desc": {
+          "source": "Specify the output format (e.g., JSON schema)",
+          "message": "出力形式を指定します（例: JSONスキーマ）"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.d2ViX3NlYXJjaF9vcHRpb25z.desc": {
+          "source": "Advanced web search configuration options such as search context size",
+          "message": "検索コンテキストサイズなどの高度なWeb検索設定オプション"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.d2ViX3NlYXJjaF9vcHRpb25z.display_name": {
+          "source": "Web Search Options",
+          "message": "Web検索オプション"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.d2ViX3NlYXJjaF9vcHRpb25z.short_desc": {
+          "source": "Advanced web search configuration",
+          "message": "高度なWeb検索設定"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.dG9wX3A.desc": {
+          "source": "An alternative to sampling with temperature, called nucleus sampling, where the model considers the results of the tokens with `top_p` probability mass. So `0.1` means only the tokens comprising the top 10% probability mass are considered",
+          "message": "temperature によるサンプリングの代替手段である nucleus sampling。モデルは `top_p` の確率質量を持つトークンの結果を考慮します。したがって、`0.1` は上位10%の確率質量を構成するトークンのみが考慮されることを意味します"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.dG9wX3A.display_name": {
+          "source": "Top P",
+          "message": "Top P"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.dG9wX3A.short_desc": {
+          "source": "Nucleus sampling value",
+          "message": "Nucleus sampling値"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.dGVtcGVyYXR1cmU.desc": {
+          "source": "What sampling temperature to use, between `0` and `2`. Higher values like `0.8` will make the output more random, while lower values like `0.2` will make it more focused and deterministic",
+          "message": "使用するサンプリング temperature（`0` から `2` の間）。`0.8` のような高い値は出力をよりランダムにし、`0.2` のような低い値は出力をより集中させ決定論的にします"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.dGVtcGVyYXR1cmU.display_name": {
+          "source": "Sampling Temperature",
+          "message": "サンプリング温度"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.dGVtcGVyYXR1cmU.short_desc": {
+          "source": "The sampling temperature to use, between 0 and 2",
+          "message": "使用するサンプリング温度（0から2の間）"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.short_desc": {
+          "source": "Stream a chat response from Perplexity AI via Server-Sent Events",
+          "message": "Server-Sent Events経由でPerplexity AIからのチャットレスポンスをストリーミングします"
+        },
+        "app.UGVycGxleGl0eQ.desc": {
+          "source": "Perplexity AI provides web-grounded AI search and chat completions with citations.\n\n**Key Features:**\n- Real-time web search grounding for up-to-date responses\n- Automatic citation of sources\n- Multiple search modes: web, academic, and SEC filings\n- Streaming support via Server-Sent Events\n- Structured JSON output with schema validation",
+          "message": "Perplexity AIは、引用付きのWeb情報に基づいたAI検索およびチャット補完を提供します。\n\n**主な機能:**\n- 最新のレスポンスを得るためのリアルタイムWeb検索グラウンディング\n- 出典の自動引用\n- 複数の検索モード: Web、学術、SEC提出書類\n- Server-Sent Eventsによるストリーミングサポート\n- スキーマ検証を伴う構造化JSON出力"
+        },
+        "app.UGVycGxleGl0eQ.display_name": {
+          "source": "Perplexity AI",
+          "message": "Perplexity AI"
+        },
+        "app.UGVycGxleGl0eQ.short_desc": {
+          "source": "Perplexity AI services",
+          "message": "Perplexity AIサービス"
+        }
+      }
+    }
+  }
+}

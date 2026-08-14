@@ -1,0 +1,273 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "ko": {
+      "messages": {
+        "app.Rml4ZWRMZW5ndGg.action.cmVhZA.desc": {
+          "source": "Read fixed-length file data from a specific file location",
+          "message": "특정 파일 위치에서 고정 길이 파일 데이터 읽기"
+        },
+        "app.Rml4ZWRMZW5ndGg.action.cmVhZA.display_name": {
+          "source": "Read Fixed-Length Data",
+          "message": "고정 길이 데이터 읽기"
+        },
+        "app.Rml4ZWRMZW5ndGg.action.cmVhZA.option.ZGF0ZV9mb3JtYXQ.desc": {
+          "source": "The default date format for parsing `date` fields; see [Date Mask Format](https://qoretechnologies.com/manual/qorus/current/qore/lang/html/group__date__and__time__functions.html#date_mask) for more information on this option (ex: `DD/MM/YYYY HH:mm:SS`)",
+          "message": "`date` 필드를 파싱하기 위한 기본 날짜 형식입니다. 이 옵션에 대한 자세한 내용은 [Date Mask Format](https://qoretechnologies.com/manual/qorus/current/qore/lang/html/group__date__and__time__functions.html#date_mask)을 참조하세요(예: `DD/MM/YYYY HH:mm:SS`)."
+        },
+        "app.Rml4ZWRMZW5ndGg.action.cmVhZA.option.ZGF0ZV9mb3JtYXQ.display_name": {
+          "source": "Date Format",
+          "message": "날짜 형식"
+        },
+        "app.Rml4ZWRMZW5ndGg.action.cmVhZA.option.ZGF0ZV9mb3JtYXQ.short_desc": {
+          "source": "The default mask for date value input parsing",
+          "message": "날짜 값 입력 파싱을 위한 기본 마스크"
+        },
+        "app.Rml4ZWRMZW5ndGg.action.cmVhZA.option.ZW5jb2Rpbmc.desc": {
+          "source": "Character encoding for the input file (and output data)",
+          "message": "입력 파일(및 출력 데이터)의 문자 인코딩"
+        },
+        "app.Rml4ZWRMZW5ndGg.action.cmVhZA.option.ZW5jb2Rpbmc.display_name": {
+          "source": "Input Character Encoding",
+          "message": "입력 문자 인코딩"
+        },
+        "app.Rml4ZWRMZW5ndGg.action.cmVhZA.option.ZW5jb2Rpbmc.short_desc": {
+          "source": "The Character encoding for the input file",
+          "message": "입력 파일의 문자 인코딩"
+        },
+        "app.Rml4ZWRMZW5ndGg.action.cmVhZA.option.ZW9s.desc": {
+          "source": "The end of line character(s); if not specified, then the end-of-line characters will be auto detected",
+          "message": "줄 끝 문자입니다. 지정하지 않으면 줄 끝 문자가 자동으로 감지됩니다."
+        },
+        "app.Rml4ZWRMZW5ndGg.action.cmVhZA.option.ZW9s.display_name": {
+          "source": "End Of Line Chars",
+          "message": "줄 끝 문자"
+        },
+        "app.Rml4ZWRMZW5ndGg.action.cmVhZA.option.ZW9s.short_desc": {
+          "source": "The end of line / record character(s)",
+          "message": "줄 끝 / 레코드 문자"
+        },
+        "app.Rml4ZWRMZW5ndGg.action.cmVhZA.option.aWdub3JlX2VtcHR5.desc": {
+          "source": "If `true`, empty lines will be ignored",
+          "message": "`true`인 경우 빈 줄은 무시됩니다."
+        },
+        "app.Rml4ZWRMZW5ndGg.action.cmVhZA.option.aWdub3JlX2VtcHR5.display_name": {
+          "source": "Ignore Empty Lines",
+          "message": "빈 줄 무시"
+        },
+        "app.Rml4ZWRMZW5ndGg.action.cmVhZA.option.aWdub3JlX2VtcHR5.short_desc": {
+          "source": "If true, empty lines will be ignored",
+          "message": "true인 경우 빈 줄을 무시합니다."
+        },
+        "app.Rml4ZWRMZW5ndGg.action.cmVhZA.option.bnVtYmVyX2Zvcm1hdA.desc": {
+          "source": "The default format for `int`, `float`, and `number` fields as a string giving the thousands separator character followed by the decimal separator character (ex: `.,` for continental-European-style numbers)",
+          "message": "천 단위 구분 기호와 소수점 구분 기호 순으로 지정된 문자열 형태의 `int`, `float` 및 `number` 필드용 기본 형식입니다(예: 유럽 대륙 스타일 숫자의 경우 `.,`)."
+        },
+        "app.Rml4ZWRMZW5ndGg.action.cmVhZA.option.bnVtYmVyX2Zvcm1hdA.display_name": {
+          "source": "Number Format",
+          "message": "숫자 형식"
+        },
+        "app.Rml4ZWRMZW5ndGg.action.cmVhZA.option.bnVtYmVyX2Zvcm1hdA.short_desc": {
+          "source": "The default number format for parsing int, float, and number fields",
+          "message": "int, float 및 number 필드를 파싱하기 위한 기본 숫자 형식"
+        },
+        "app.Rml4ZWRMZW5ndGg.action.cmVhZA.option.c3BlYw.desc": {
+          "source": "The fixed-length record specification hash",
+          "message": "고정 길이 레코드 사양 해시"
+        },
+        "app.Rml4ZWRMZW5ndGg.action.cmVhZA.option.c3BlYw.display_name": {
+          "source": "Record Descriptions",
+          "message": "레코드 설명"
+        },
+        "app.Rml4ZWRMZW5ndGg.action.cmVhZA.option.c3BlYw.short_desc": {
+          "source": "The fixed-length record specification hash",
+          "message": "고정 길이 레코드 사양 해시"
+        },
+        "app.Rml4ZWRMZW5ndGg.action.cmVhZA.option.c3RyZWFt.desc": {
+          "source": "The input stream for fixed-length data; mutually exclusive with \"path\"",
+          "message": "고정 길이 데이터용 입력 스트림; \"path\"와 상호 배타적임"
+        },
+        "app.Rml4ZWRMZW5ndGg.action.cmVhZA.option.c3RyZWFt.display_name": {
+          "source": "Input Stream",
+          "message": "입력 스트림"
+        },
+        "app.Rml4ZWRMZW5ndGg.action.cmVhZA.option.c3RyZWFt.short_desc": {
+          "source": "An input stream object for fixed-length data",
+          "message": "고정 길이 데이터용 입력 스트림 객체"
+        },
+        "app.Rml4ZWRMZW5ndGg.action.cmVhZA.option.cGF0aA.desc": {
+          "source": "The path to the fixed-length data; mutually exclusive with \"stream\"; resolved with a call to [FileLocationHandler::getBinaryStreamFromLocation()](https://qoretechnologies.com/manual/qorus/current/qore/modules/FileLocationHandler/html/class_file_location_handler_1_1_file_location_handler.html#a29c2338efc901a6b8f24542505e2a094)",
+          "message": "고정 길이 데이터의 경로; \"stream\"과 상호 배타적임; [FileLocationHandler::getBinaryStreamFromLocation()](https://qoretechnologies.com/manual/qorus/current/qore/modules/FileLocationHandler/html/class_file_location_handler_1_1_file_location_handler.html#a29c2338efc901a6b8f24542505e2a094) 호출로 확인됨"
+        },
+        "app.Rml4ZWRMZW5ndGg.action.cmVhZA.option.cGF0aA.display_name": {
+          "source": "Input Location",
+          "message": "입력 위치"
+        },
+        "app.Rml4ZWRMZW5ndGg.action.cmVhZA.option.cGF0aA.short_desc": {
+          "source": "The location of the input file",
+          "message": "입력 파일의 위치"
+        },
+        "app.Rml4ZWRMZW5ndGg.action.cmVhZA.option.dGltZXpvbmU.desc": {
+          "source": "The timezone region to use when parsing dates (ex: `Europe/Prague`); see [TZ indentifier](https://en.wikipedia.org/wiki/List_of_tz_database_time_zones) for valid values",
+          "message": "날짜 파싱 시 사용할 표준 시간대 지역입니다(예: `Europe/Prague`). 유효한 값은 [TZ indentifier](https://en.wikipedia.org/wiki/List_of_tz_database_time_zones)를 참조하세요."
+        },
+        "app.Rml4ZWRMZW5ndGg.action.cmVhZA.option.dGltZXpvbmU.display_name": {
+          "source": "Timezone Region",
+          "message": "시간대 지역"
+        },
+        "app.Rml4ZWRMZW5ndGg.action.cmVhZA.option.dGltZXpvbmU.short_desc": {
+          "source": "The timezone region to use when parsing dates",
+          "message": "날짜를 구문 분석할 때 사용할 시간대 지역"
+        },
+        "app.Rml4ZWRMZW5ndGg.action.cmVhZA.short_desc": {
+          "source": "Read fixed-length file data from a specific file location",
+          "message": "특정 파일 위치에서 고정 길이 파일 데이터 읽기"
+        },
+        "app.Rml4ZWRMZW5ndGg.action.d3JpdGU.desc": {
+          "source": "Write fixed-length file data to a specific file location",
+          "message": "특정 파일 위치에 고정 길이 파일 데이터 쓰기"
+        },
+        "app.Rml4ZWRMZW5ndGg.action.d3JpdGU.display_name": {
+          "source": "Write Fixed-Length Data",
+          "message": "고정 길이 데이터 쓰기"
+        },
+        "app.Rml4ZWRMZW5ndGg.action.d3JpdGU.option.ZGF0ZV9mb3JtYXQ.desc": {
+          "source": "The default mask for `date` value output formatting; see [Date Formatting Codes](https://qoretechnologies.com/manual/qorus/current/qore/lang/html/group__date__and__time__functions.html#date_formatting) for more information",
+          "message": "`date` 값 출력 서식 지정을 위한 기본 마스크; 자세한 내용은 [날짜 서식 지정 코드](https://qoretechnologies.com/manual/qorus/current/qore/lang/html/group__date__and__time__functions.html#date_formatting)를 참조하세요"
+        },
+        "app.Rml4ZWRMZW5ndGg.action.d3JpdGU.option.ZGF0ZV9mb3JtYXQ.display_name": {
+          "source": "Date Format",
+          "message": "날짜 형식"
+        },
+        "app.Rml4ZWRMZW5ndGg.action.d3JpdGU.option.ZGF0ZV9mb3JtYXQ.short_desc": {
+          "source": "The default mask for date value output formatting",
+          "message": "날짜 값 출력 서식 지정을 위한 기본 마스크"
+        },
+        "app.Rml4ZWRMZW5ndGg.action.d3JpdGU.option.ZW5jb2Rpbmc.desc": {
+          "source": "The output character encoding for the data",
+          "message": "데이터의 출력 문자 인코딩"
+        },
+        "app.Rml4ZWRMZW5ndGg.action.d3JpdGU.option.ZW5jb2Rpbmc.display_name": {
+          "source": "Character Encoding",
+          "message": "문자 인코딩"
+        },
+        "app.Rml4ZWRMZW5ndGg.action.d3JpdGU.option.ZW5jb2Rpbmc.short_desc": {
+          "source": "The output character encoding",
+          "message": "출력 문자 인코딩"
+        },
+        "app.Rml4ZWRMZW5ndGg.action.d3JpdGU.option.ZW9s.desc": {
+          "source": "The end of line / record character(s); if not present, the current platform standard will be used",
+          "message": "줄 끝 / 레코드 문자입니다. 지정되지 않은 경우 현재 플랫폼 표준이 사용됩니다."
+        },
+        "app.Rml4ZWRMZW5ndGg.action.d3JpdGU.option.ZW9s.display_name": {
+          "source": "End Of Line Chars",
+          "message": "줄 끝 문자"
+        },
+        "app.Rml4ZWRMZW5ndGg.action.d3JpdGU.option.ZW9s.short_desc": {
+          "source": "The end of line / record character(s)",
+          "message": "줄 끝 / 레코드 문자"
+        },
+        "app.Rml4ZWRMZW5ndGg.action.d3JpdGU.option.ZmlsZV9mbGFncw.desc": {
+          "source": "Additional writer file open flags; `O_WRONLY | O_CREAT` is used by default; use `O_EXCL` to ensure not to overwrite the target or `O_TRUNC` to replace any existing file or `O_APPEND` to append to an existing file",
+          "message": "추가 작성기 파일 열기 플래그; 기본적으로 `O_WRONLY | O_CREAT`이 사용됩니다. 대상을 덮어쓰지 않으려면 `O_EXCL`을 사용하고, 기존 파일을 바꾸려면 `O_TRUNC`를 사용하며, 기존 파일에 추가하려면 `O_APPEND`을 사용하세요"
+        },
+        "app.Rml4ZWRMZW5ndGg.action.d3JpdGU.option.ZmlsZV9mbGFncw.display_name": {
+          "source": "File Flags",
+          "message": "파일 플래그"
+        },
+        "app.Rml4ZWRMZW5ndGg.action.d3JpdGU.option.ZmlsZV9mbGFncw.short_desc": {
+          "source": "Additional writer file open flags",
+          "message": "추가 작성기 파일 열기 플래그"
+        },
+        "app.Rml4ZWRMZW5ndGg.action.d3JpdGU.option.bnVtYmVyX2Zvcm1hdA.desc": {
+          "source": "The default output format for `int`, `float`, and `number` fields; it is a number format string with 1 to 3 fields as follows: *<thousands_separator>*[*<decimal_separator>*[*<decimals>*]]; ex: `\".,3\"` (= `.` for the thousands separator, `,` for the decimal separator, and 3 digits after the decimal place)",
+          "message": "`int`, `float` 및 `number` 필드의 기본 출력 형식입니다. 다음과 같이 1~3개의 필드가 포함된 숫자 형식 문자열입니다: *<thousands_separator>*[*<decimal_separator>*[*<decimals>*]]. 예: `\".,3\"` (천 단위 구분 기호로 `.`, 소수점 구분 기호로 `,`, 소수점 이하 3자리)"
+        },
+        "app.Rml4ZWRMZW5ndGg.action.d3JpdGU.option.bnVtYmVyX2Zvcm1hdA.display_name": {
+          "source": "Output Number Format",
+          "message": "출력 숫자 형식"
+        },
+        "app.Rml4ZWRMZW5ndGg.action.d3JpdGU.option.bnVtYmVyX2Zvcm1hdA.short_desc": {
+          "source": "The default output format for 'int', 'float', and 'number' fields",
+          "message": "'int', 'float' 및 'number' 필드의 기본 출력 형식"
+        },
+        "app.Rml4ZWRMZW5ndGg.action.d3JpdGU.option.c3BlYw.desc": {
+          "source": "The fixed-length record specification hash",
+          "message": "고정 길이 레코드 사양 해시"
+        },
+        "app.Rml4ZWRMZW5ndGg.action.d3JpdGU.option.c3BlYw.display_name": {
+          "source": "Record Descriptions",
+          "message": "레코드 설명"
+        },
+        "app.Rml4ZWRMZW5ndGg.action.d3JpdGU.option.c3BlYw.short_desc": {
+          "source": "The fixed-length record specification hash",
+          "message": "고정 길이 레코드 사양 해시"
+        },
+        "app.Rml4ZWRMZW5ndGg.action.d3JpdGU.option.c3RyZWFt.desc": {
+          "source": "an output stream for fixed-length data; mutually exclusive with \"path\"",
+          "message": "고정 길이 데이터용 출력 스트림; \"path\"와 상호 배타적임"
+        },
+        "app.Rml4ZWRMZW5ndGg.action.d3JpdGU.option.c3RyZWFt.display_name": {
+          "source": "Output Stream",
+          "message": "출력 스트림"
+        },
+        "app.Rml4ZWRMZW5ndGg.action.d3JpdGU.option.c3RyZWFt.short_desc": {
+          "source": "An output stream object for the fixed-length data",
+          "message": "고정 길이 데이터용 출력 스트림 객체"
+        },
+        "app.Rml4ZWRMZW5ndGg.action.d3JpdGU.option.cGF0aA.desc": {
+          "source": "The path to the fixed-length data; mutually exclusive with \"stream\"; the output location is handled by a call to [FileLocationHandler::getOutputStreamForLocation()](https://qoretechnologies.com/manual/qorus/current/qore/modules/FileLocationHandler/html/class_file_location_handler_1_1_file_location_handler.html#a9d1ca411ea23126280b9d2e4b4b3ede9",
+          "message": "고정 길이 데이터의 경로; \"stream\"과 상호 배타적임; 출력 위치는 [FileLocationHandler::getOutputStreamForLocation()](https://qoretechnologies.com/manual/qorus/current/qore/modules/FileLocationHandler/html/class_file_location_handler_1_1_file_location_handler.html#a9d1ca411ea23126280b9d2e4b4b3ede9 호출로 처리됨"
+        },
+        "app.Rml4ZWRMZW5ndGg.action.d3JpdGU.option.cGF0aA.display_name": {
+          "source": "Output Path",
+          "message": "출력 경로"
+        },
+        "app.Rml4ZWRMZW5ndGg.action.d3JpdGU.option.cGF0aA.short_desc": {
+          "source": "Where to write the output file",
+          "message": "출력 파일을 쓸 위치"
+        },
+        "app.Rml4ZWRMZW5ndGg.action.d3JpdGU.option.dGFiMnNwYWNl.desc": {
+          "source": "Controls whether to replace tabs with spaces, and its value determines how many spaces to output in place of one tab character",
+          "message": "탭을 공백으로 바꿀지 여부를 제어하며, 해당 값은 탭 문자 하나 대신 출력할 공백 수를 결정합니다"
+        },
+        "app.Rml4ZWRMZW5ndGg.action.d3JpdGU.option.dGFiMnNwYWNl.display_name": {
+          "source": "Convert Tabs to Spaces",
+          "message": "탭을 공백으로 변환"
+        },
+        "app.Rml4ZWRMZW5ndGg.action.d3JpdGU.option.dGFiMnNwYWNl.short_desc": {
+          "source": "Convert tabs to spaces automatically",
+          "message": "탭을 공백으로 자동 변환"
+        },
+        "app.Rml4ZWRMZW5ndGg.action.d3JpdGU.option.dHJ1bmNhdGU.desc": {
+          "source": "Controls whether to truncate an output field value if it's bigger than its specified `length`; the default is `false`",
+          "message": "출력 필드 값이 지정된 `length`보다 큰 경우 자를지 여부를 제어합니다. 기본값은 `false`입니다"
+        },
+        "app.Rml4ZWRMZW5ndGg.action.d3JpdGU.option.dHJ1bmNhdGU.display_name": {
+          "source": "Truncate Long Fields",
+          "message": "긴 필드 자르기"
+        },
+        "app.Rml4ZWRMZW5ndGg.action.d3JpdGU.option.dHJ1bmNhdGU.short_desc": {
+          "source": "Truncate field values automatically",
+          "message": "필드 값 자동 자르기"
+        },
+        "app.Rml4ZWRMZW5ndGg.action.d3JpdGU.short_desc": {
+          "source": "Write fixed-length file data to a specific file location",
+          "message": "특정 파일 위치에 고정 길이 파일 데이터 쓰기"
+        },
+        "app.Rml4ZWRMZW5ndGg.desc": {
+          "source": "Read and write fixed-length file data",
+          "message": "고정 길이 파일 데이터 읽기 및 쓰기"
+        },
+        "app.Rml4ZWRMZW5ndGg.display_name": {
+          "source": "Fixed-Length Files",
+          "message": "고정 길이 파일"
+        },
+        "app.Rml4ZWRMZW5ndGg.short_desc": {
+          "source": "Read and write fixed-length file data",
+          "message": "고정 길이 파일 데이터 읽기 및 쓰기"
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,1225 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "zh-TW": {
+      "messages": {
+        "app.U2hpcHBv.action.Y3JlYXRlLW9yZGVy.desc": {
+          "source": "Create a new order in Shippo with shipping and billing addresses, and line items. Orders can be used to manage fulfillment workflows.",
+          "message": "在 Shippo 中建立包含寄送與帳單地址及明細項目的新訂單。訂單可用於管理履約工作流程。"
+        },
+        "app.U2hpcHBv.action.Y3JlYXRlLW9yZGVy.display_name": {
+          "source": "Create Order",
+          "message": "建立訂單"
+        },
+        "app.U2hpcHBv.action.Y3JlYXRlLW9yZGVy.option.Y3VycmVuY3k.desc": {
+          "source": "Three-letter ISO currency code for prices",
+          "message": "價格的三位字母 ISO 貨幣代碼"
+        },
+        "app.U2hpcHBv.action.Y3JlYXRlLW9yZGVy.option.Y3VycmVuY3k.display_name": {
+          "source": "Currency",
+          "message": "貨幣"
+        },
+        "app.U2hpcHBv.action.Y3JlYXRlLW9yZGVy.option.Y3VycmVuY3k.short_desc": {
+          "source": "Price currency",
+          "message": "價格貨幣"
+        },
+        "app.U2hpcHBv.action.Y3JlYXRlLW9yZGVy.option.ZnJvbV9hZGRyZXNz.desc": {
+          "source": "The origin address for the order (optional)",
+          "message": "訂單的寄件地址（選填）"
+        },
+        "app.U2hpcHBv.action.Y3JlYXRlLW9yZGVy.option.ZnJvbV9hZGRyZXNz.display_name": {
+          "source": "From Address",
+          "message": "寄件地址"
+        },
+        "app.U2hpcHBv.action.Y3JlYXRlLW9yZGVy.option.ZnJvbV9hZGRyZXNz.short_desc": {
+          "source": "Sender address",
+          "message": "寄件人地址"
+        },
+        "app.U2hpcHBv.action.Y3JlYXRlLW9yZGVy.option.b3JkZXJfbnVtYmVy.desc": {
+          "source": "Your internal order number or reference",
+          "message": "您的內部訂單編號或參考編號"
+        },
+        "app.U2hpcHBv.action.Y3JlYXRlLW9yZGVy.option.b3JkZXJfbnVtYmVy.display_name": {
+          "source": "Order Number",
+          "message": "訂單編號"
+        },
+        "app.U2hpcHBv.action.Y3JlYXRlLW9yZGVy.option.b3JkZXJfbnVtYmVy.short_desc": {
+          "source": "Your order number",
+          "message": "您的訂單編號"
+        },
+        "app.U2hpcHBv.action.Y3JlYXRlLW9yZGVy.option.b3JkZXJfc3RhdHVz.allowed-value.c3RyaW5nOkNBTkNFTExFRA.desc": {
+          "source": "Order was cancelled",
+          "message": "訂單已取消"
+        },
+        "app.U2hpcHBv.action.Y3JlYXRlLW9yZGVy.option.b3JkZXJfc3RhdHVz.allowed-value.c3RyaW5nOkRFTElWRVJFRA.desc": {
+          "source": "Order has been delivered",
+          "message": "訂單已送達"
+        },
+        "app.U2hpcHBv.action.Y3JlYXRlLW9yZGVy.option.b3JkZXJfc3RhdHVz.allowed-value.c3RyaW5nOlBBSUQ.desc": {
+          "source": "Order has been paid",
+          "message": "訂單已付款"
+        },
+        "app.U2hpcHBv.action.Y3JlYXRlLW9yZGVy.option.b3JkZXJfc3RhdHVz.allowed-value.c3RyaW5nOlJFVFVSTkVE.desc": {
+          "source": "Order was returned",
+          "message": "訂單已退回"
+        },
+        "app.U2hpcHBv.action.Y3JlYXRlLW9yZGVy.option.b3JkZXJfc3RhdHVz.allowed-value.c3RyaW5nOlNISVBQRUQ.desc": {
+          "source": "Order has been shipped",
+          "message": "訂單已出貨"
+        },
+        "app.U2hpcHBv.action.Y3JlYXRlLW9yZGVy.option.b3JkZXJfc3RhdHVz.allowed-value.c3RyaW5nOlVOS05PV04.desc": {
+          "source": "Unknown status",
+          "message": "未知狀態"
+        },
+        "app.U2hpcHBv.action.Y3JlYXRlLW9yZGVy.option.b3JkZXJfc3RhdHVz.desc": {
+          "source": "The current status of the order",
+          "message": "訂單的目前狀態"
+        },
+        "app.U2hpcHBv.action.Y3JlYXRlLW9yZGVy.option.b3JkZXJfc3RhdHVz.display_name": {
+          "source": "Order Status",
+          "message": "訂單狀態"
+        },
+        "app.U2hpcHBv.action.Y3JlYXRlLW9yZGVy.option.b3JkZXJfc3RhdHVz.short_desc": {
+          "source": "Order status",
+          "message": "訂單狀態"
+        },
+        "app.U2hpcHBv.action.Y3JlYXRlLW9yZGVy.option.bGluZV9pdGVtcw.desc": {
+          "source": "Array of line items in the order",
+          "message": "訂單中明細項目的陣列"
+        },
+        "app.U2hpcHBv.action.Y3JlYXRlLW9yZGVy.option.bGluZV9pdGVtcw.display_name": {
+          "source": "Line Items",
+          "message": "明細項目"
+        },
+        "app.U2hpcHBv.action.Y3JlYXRlLW9yZGVy.option.bGluZV9pdGVtcw.short_desc": {
+          "source": "Order items",
+          "message": "訂單項目"
+        },
+        "app.U2hpcHBv.action.Y3JlYXRlLW9yZGVy.option.bm90ZXM.desc": {
+          "source": "Any notes or special instructions for the order",
+          "message": "訂單的任何備註或特別說明"
+        },
+        "app.U2hpcHBv.action.Y3JlYXRlLW9yZGVy.option.bm90ZXM.display_name": {
+          "source": "Notes",
+          "message": "備忘錄"
+        },
+        "app.U2hpcHBv.action.Y3JlYXRlLW9yZGVy.option.bm90ZXM.short_desc": {
+          "source": "Order notes",
+          "message": "訂單備註"
+        },
+        "app.U2hpcHBv.action.Y3JlYXRlLW9yZGVy.option.c2hpcHBpbmdfY29zdA.desc": {
+          "source": "The shipping cost charged to the customer",
+          "message": "向客戶收取的運費"
+        },
+        "app.U2hpcHBv.action.Y3JlYXRlLW9yZGVy.option.c2hpcHBpbmdfY29zdA.display_name": {
+          "source": "Shipping Cost",
+          "message": "運費"
+        },
+        "app.U2hpcHBv.action.Y3JlYXRlLW9yZGVy.option.c2hpcHBpbmdfY29zdA.short_desc": {
+          "source": "Customer shipping cost",
+          "message": "客戶運費"
+        },
+        "app.U2hpcHBv.action.Y3JlYXRlLW9yZGVy.option.c2hpcHBpbmdfY29zdF9jdXJyZW5jeQ.desc": {
+          "source": "Three-letter ISO currency code for shipping cost",
+          "message": "運費的三位字母 ISO 貨幣代碼"
+        },
+        "app.U2hpcHBv.action.Y3JlYXRlLW9yZGVy.option.c2hpcHBpbmdfY29zdF9jdXJyZW5jeQ.display_name": {
+          "source": "Shipping Cost Currency",
+          "message": "運費幣別"
+        },
+        "app.U2hpcHBv.action.Y3JlYXRlLW9yZGVy.option.c2hpcHBpbmdfY29zdF9jdXJyZW5jeQ.short_desc": {
+          "source": "Currency code",
+          "message": "貨幣代碼"
+        },
+        "app.U2hpcHBv.action.Y3JlYXRlLW9yZGVy.option.c2hpcHBpbmdfbWV0aG9k.desc": {
+          "source": "The shipping method selected by the customer",
+          "message": "客戶選擇的運送方式"
+        },
+        "app.U2hpcHBv.action.Y3JlYXRlLW9yZGVy.option.c2hpcHBpbmdfbWV0aG9k.display_name": {
+          "source": "Shipping Method",
+          "message": "運送方式"
+        },
+        "app.U2hpcHBv.action.Y3JlYXRlLW9yZGVy.option.c2hpcHBpbmdfbWV0aG9k.short_desc": {
+          "source": "Selected shipping method",
+          "message": "所選運送方式"
+        },
+        "app.U2hpcHBv.action.Y3JlYXRlLW9yZGVy.option.c3VidG90YWxfcHJpY2U.desc": {
+          "source": "The subtotal price of the order (before shipping and tax)",
+          "message": "訂單小計金額（未含運費和稅金）"
+        },
+        "app.U2hpcHBv.action.Y3JlYXRlLW9yZGVy.option.c3VidG90YWxfcHJpY2U.display_name": {
+          "source": "Subtotal",
+          "message": "小計"
+        },
+        "app.U2hpcHBv.action.Y3JlYXRlLW9yZGVy.option.c3VidG90YWxfcHJpY2U.short_desc": {
+          "source": "Order subtotal",
+          "message": "訂單小計"
+        },
+        "app.U2hpcHBv.action.Y3JlYXRlLW9yZGVy.option.cGxhY2VkX2F0.desc": {
+          "source": "The date/time when the order was placed",
+          "message": "下單的日期／時間"
+        },
+        "app.U2hpcHBv.action.Y3JlYXRlLW9yZGVy.option.cGxhY2VkX2F0.display_name": {
+          "source": "Placed At",
+          "message": "下單時間"
+        },
+        "app.U2hpcHBv.action.Y3JlYXRlLW9yZGVy.option.cGxhY2VkX2F0.short_desc": {
+          "source": "Order placement date",
+          "message": "下單日期"
+        },
+        "app.U2hpcHBv.action.Y3JlYXRlLW9yZGVy.option.d2VpZ2h0.desc": {
+          "source": "The total weight of the order",
+          "message": "訂單總重量"
+        },
+        "app.U2hpcHBv.action.Y3JlYXRlLW9yZGVy.option.d2VpZ2h0.display_name": {
+          "source": "Weight",
+          "message": "重量"
+        },
+        "app.U2hpcHBv.action.Y3JlYXRlLW9yZGVy.option.d2VpZ2h0.short_desc": {
+          "source": "Total weight",
+          "message": "總重量"
+        },
+        "app.U2hpcHBv.action.Y3JlYXRlLW9yZGVy.option.d2VpZ2h0X3VuaXQ.allowed-value.c3RyaW5nOm96.desc": {
+          "source": "Ounces",
+          "message": "盎司"
+        },
+        "app.U2hpcHBv.action.Y3JlYXRlLW9yZGVy.option.d2VpZ2h0X3VuaXQ.allowed-value.c3RyaW5nOmc.desc": {
+          "source": "Grams",
+          "message": "公克"
+        },
+        "app.U2hpcHBv.action.Y3JlYXRlLW9yZGVy.option.d2VpZ2h0X3VuaXQ.allowed-value.c3RyaW5nOmtn.desc": {
+          "source": "Kilograms",
+          "message": "公斤"
+        },
+        "app.U2hpcHBv.action.Y3JlYXRlLW9yZGVy.option.d2VpZ2h0X3VuaXQ.allowed-value.c3RyaW5nOmxi.desc": {
+          "source": "Pounds",
+          "message": "磅"
+        },
+        "app.U2hpcHBv.action.Y3JlYXRlLW9yZGVy.option.d2VpZ2h0X3VuaXQ.desc": {
+          "source": "The unit of measurement for weight (g, oz, lb, kg)",
+          "message": "重量的度量單位 (g, oz, lb, kg)"
+        },
+        "app.U2hpcHBv.action.Y3JlYXRlLW9yZGVy.option.d2VpZ2h0X3VuaXQ.display_name": {
+          "source": "Weight Unit",
+          "message": "重量單位"
+        },
+        "app.U2hpcHBv.action.Y3JlYXRlLW9yZGVy.option.d2VpZ2h0X3VuaXQ.short_desc": {
+          "source": "Weight unit",
+          "message": "重量單位"
+        },
+        "app.U2hpcHBv.action.Y3JlYXRlLW9yZGVy.option.dG90YWxfcHJpY2U.desc": {
+          "source": "The total price of the order",
+          "message": "訂單總金額"
+        },
+        "app.U2hpcHBv.action.Y3JlYXRlLW9yZGVy.option.dG90YWxfcHJpY2U.display_name": {
+          "source": "Total Price",
+          "message": "總金額"
+        },
+        "app.U2hpcHBv.action.Y3JlYXRlLW9yZGVy.option.dG90YWxfcHJpY2U.short_desc": {
+          "source": "Order total",
+          "message": "訂單總計"
+        },
+        "app.U2hpcHBv.action.Y3JlYXRlLW9yZGVy.option.dG90YWxfdGF4.desc": {
+          "source": "The total tax amount for the order",
+          "message": "訂單總稅額"
+        },
+        "app.U2hpcHBv.action.Y3JlYXRlLW9yZGVy.option.dG90YWxfdGF4.display_name": {
+          "source": "Total Tax",
+          "message": "總稅額"
+        },
+        "app.U2hpcHBv.action.Y3JlYXRlLW9yZGVy.option.dG90YWxfdGF4.short_desc": {
+          "source": "Tax amount",
+          "message": "稅額"
+        },
+        "app.U2hpcHBv.action.Y3JlYXRlLW9yZGVy.option.dG9fYWRkcmVzcw.desc": {
+          "source": "The destination address for the order",
+          "message": "訂單的目的地地址"
+        },
+        "app.U2hpcHBv.action.Y3JlYXRlLW9yZGVy.option.dG9fYWRkcmVzcw.display_name": {
+          "source": "Shipping Address",
+          "message": "運送地址"
+        },
+        "app.U2hpcHBv.action.Y3JlYXRlLW9yZGVy.option.dG9fYWRkcmVzcw.short_desc": {
+          "source": "Customer shipping address",
+          "message": "客戶運送地址"
+        },
+        "app.U2hpcHBv.action.Y3JlYXRlLW9yZGVy.short_desc": {
+          "source": "Create a new order",
+          "message": "建立新訂單"
+        },
+        "app.U2hpcHBv.action.Y3JlYXRlLWxhYmVsLWJ5LXJhdGU.desc": {
+          "source": "Create a shipping label (transaction) using a rate object ID obtained from a shipment. This generates a printable label and tracking number.",
+          "message": "使用從貨件取得的費率物件識別碼建立貨運標籤 (交易)。這會產生可列印的標籤和追蹤號碼。"
+        },
+        "app.U2hpcHBv.action.Y3JlYXRlLWxhYmVsLWJ5LXJhdGU.display_name": {
+          "source": "Create Label by Rate",
+          "message": "依費率建立標籤"
+        },
+        "app.U2hpcHBv.action.Y3JlYXRlLWxhYmVsLWJ5LXJhdGU.option.YXN5bmM.desc": {
+          "source": "If `True`, the label will be generated asynchronously. Default is `False`.",
+          "message": "若為 `True`，標籤將非同步產生。預設為 `False`。"
+        },
+        "app.U2hpcHBv.action.Y3JlYXRlLWxhYmVsLWJ5LXJhdGU.option.YXN5bmM.display_name": {
+          "source": "Async",
+          "message": "非同步"
+        },
+        "app.U2hpcHBv.action.Y3JlYXRlLWxhYmVsLWJ5LXJhdGU.option.YXN5bmM.short_desc": {
+          "source": "Asynchronous processing",
+          "message": "非同步處理"
+        },
+        "app.U2hpcHBv.action.Y3JlYXRlLWxhYmVsLWJ5LXJhdGU.option.bGFiZWxfZmlsZV90eXBl.allowed-value.c3RyaW5nOlBERg.desc": {
+          "source": "PDF document",
+          "message": "PDF 文件"
+        },
+        "app.U2hpcHBv.action.Y3JlYXRlLWxhYmVsLWJ5LXJhdGU.option.bGFiZWxfZmlsZV90eXBl.allowed-value.c3RyaW5nOlBERl80eDY.desc": {
+          "source": "PDF 4x6 inches",
+          "message": "PDF 4x6 英吋"
+        },
+        "app.U2hpcHBv.action.Y3JlYXRlLWxhYmVsLWJ5LXJhdGU.option.bGFiZWxfZmlsZV90eXBl.allowed-value.c3RyaW5nOlBERl80eDg.desc": {
+          "source": "PDF 4x8 inches",
+          "message": "PDF 4x8 英吋"
+        },
+        "app.U2hpcHBv.action.Y3JlYXRlLWxhYmVsLWJ5LXJhdGU.option.bGFiZWxfZmlsZV90eXBl.allowed-value.c3RyaW5nOlBERl8yLjN4Ny41.desc": {
+          "source": "PDF 2.3x7.5 inches",
+          "message": "PDF 2.3x7.5 英吋"
+        },
+        "app.U2hpcHBv.action.Y3JlYXRlLWxhYmVsLWJ5LXJhdGU.option.bGFiZWxfZmlsZV90eXBl.allowed-value.c3RyaW5nOlBERl9BNA.desc": {
+          "source": "PDF A4",
+          "message": "PDF A4"
+        },
+        "app.U2hpcHBv.action.Y3JlYXRlLWxhYmVsLWJ5LXJhdGU.option.bGFiZWxfZmlsZV90eXBl.allowed-value.c3RyaW5nOlBERl9BNQ.desc": {
+          "source": "PDF A5",
+          "message": "PDF A5"
+        },
+        "app.U2hpcHBv.action.Y3JlYXRlLWxhYmVsLWJ5LXJhdGU.option.bGFiZWxfZmlsZV90eXBl.allowed-value.c3RyaW5nOlBERl9BNg.desc": {
+          "source": "PDF A6",
+          "message": "PDF A6"
+        },
+        "app.U2hpcHBv.action.Y3JlYXRlLWxhYmVsLWJ5LXJhdGU.option.bGFiZWxfZmlsZV90eXBl.allowed-value.c3RyaW5nOlBOR18yLjN4Ny41.desc": {
+          "source": "PNG 2.3x7.5 inches",
+          "message": "PNG 2.3x7.5 英吋"
+        },
+        "app.U2hpcHBv.action.Y3JlYXRlLWxhYmVsLWJ5LXJhdGU.option.bGFiZWxfZmlsZV90eXBl.allowed-value.c3RyaW5nOlBORw.desc": {
+          "source": "PNG image",
+          "message": "PNG 圖片"
+        },
+        "app.U2hpcHBv.action.Y3JlYXRlLWxhYmVsLWJ5LXJhdGU.option.bGFiZWxfZmlsZV90eXBl.allowed-value.c3RyaW5nOlpQTElJ.desc": {
+          "source": "ZPL thermal printer format",
+          "message": "ZPL 熱感應印表機格式"
+        },
+        "app.U2hpcHBv.action.Y3JlYXRlLWxhYmVsLWJ5LXJhdGU.option.bGFiZWxfZmlsZV90eXBl.desc": {
+          "source": "The file format for the shipping label",
+          "message": "貨運標籤的檔案格式"
+        },
+        "app.U2hpcHBv.action.Y3JlYXRlLWxhYmVsLWJ5LXJhdGU.option.bGFiZWxfZmlsZV90eXBl.display_name": {
+          "source": "Label File Type",
+          "message": "標籤檔案類型"
+        },
+        "app.U2hpcHBv.action.Y3JlYXRlLWxhYmVsLWJ5LXJhdGU.option.bGFiZWxfZmlsZV90eXBl.short_desc": {
+          "source": "Label format",
+          "message": "標籤格式"
+        },
+        "app.U2hpcHBv.action.Y3JlYXRlLWxhYmVsLWJ5LXJhdGU.option.bWV0YWRhdGE.desc": {
+          "source": "A string of up to 100 characters for storing additional information",
+          "message": "用於儲存額外資訊的字串（最多 100 個字元）"
+        },
+        "app.U2hpcHBv.action.Y3JlYXRlLWxhYmVsLWJ5LXJhdGU.option.bWV0YWRhdGE.display_name": {
+          "source": "Metadata",
+          "message": "元資料"
+        },
+        "app.U2hpcHBv.action.Y3JlYXRlLWxhYmVsLWJ5LXJhdGU.option.bWV0YWRhdGE.short_desc": {
+          "source": "Custom metadata",
+          "message": "自訂中繼資料"
+        },
+        "app.U2hpcHBv.action.Y3JlYXRlLWxhYmVsLWJ5LXJhdGU.option.cmF0ZQ.desc": {
+          "source": "The object ID of the rate to use for creating the label. Get this from a shipment's rates array.",
+          "message": "用於建立標籤的費率物件識別碼。可從貨件的 rates 陣列取得。"
+        },
+        "app.U2hpcHBv.action.Y3JlYXRlLWxhYmVsLWJ5LXJhdGU.option.cmF0ZQ.display_name": {
+          "source": "Rate ID",
+          "message": "費率識別碼"
+        },
+        "app.U2hpcHBv.action.Y3JlYXRlLWxhYmVsLWJ5LXJhdGU.option.cmF0ZQ.short_desc": {
+          "source": "The rate object ID",
+          "message": "費率物件識別碼"
+        },
+        "app.U2hpcHBv.action.Y3JlYXRlLWxhYmVsLWJ5LXJhdGU.short_desc": {
+          "source": "Create a shipping label from a rate",
+          "message": "從費率建立貨運標籤"
+        },
+        "app.U2hpcHBv.action.Y3JlYXRlLXNoaXBtZW50.desc": {
+          "source": "Create a new shipment in Shippo with origin, destination, and parcel details to receive shipping rates from multiple carriers.",
+          "message": "在 Shippo 中使用起點、目的地和包裹詳細資訊建立新貨件，以接收來自多家貨運業者的運費費率。"
+        },
+        "app.U2hpcHBv.action.Y3JlYXRlLXNoaXBtZW50.display_name": {
+          "source": "Create Shipment",
+          "message": "建立出貨"
+        },
+        "app.U2hpcHBv.action.Y3JlYXRlLXNoaXBtZW50.option.Y3VzdG9tc19kZWNsYXJhdGlvbg.desc": {
+          "source": "Object ID of the customs declaration for international shipments",
+          "message": "國際貨件報關單的物件識別碼"
+        },
+        "app.U2hpcHBv.action.Y3JlYXRlLXNoaXBtZW50.option.Y3VzdG9tc19kZWNsYXJhdGlvbg.display_name": {
+          "source": "Customs Declaration",
+          "message": "報關單"
+        },
+        "app.U2hpcHBv.action.Y3JlYXRlLXNoaXBtZW50.option.Y3VzdG9tc19kZWNsYXJhdGlvbg.short_desc": {
+          "source": "Customs declaration ID",
+          "message": "報關單識別碼"
+        },
+        "app.U2hpcHBv.action.Y3JlYXRlLXNoaXBtZW50.option.YWRkcmVzc190bw.desc": {
+          "source": "The destination/recipient address for the shipment",
+          "message": "貨件的目的地／收件人地址"
+        },
+        "app.U2hpcHBv.action.Y3JlYXRlLXNoaXBtZW50.option.YWRkcmVzc190bw.display_name": {
+          "source": "To Address",
+          "message": "收件地址"
+        },
+        "app.U2hpcHBv.action.Y3JlYXRlLXNoaXBtZW50.option.YWRkcmVzc190bw.short_desc": {
+          "source": "Recipient address",
+          "message": "收件人地址"
+        },
+        "app.U2hpcHBv.action.Y3JlYXRlLXNoaXBtZW50.option.YWRkcmVzc19mcm9t.desc": {
+          "source": "The origin/sender address for the shipment",
+          "message": "貨件的起點／寄件人地址"
+        },
+        "app.U2hpcHBv.action.Y3JlYXRlLXNoaXBtZW50.option.YWRkcmVzc19mcm9t.display_name": {
+          "source": "From Address",
+          "message": "寄件地址"
+        },
+        "app.U2hpcHBv.action.Y3JlYXRlLXNoaXBtZW50.option.YWRkcmVzc19mcm9t.short_desc": {
+          "source": "Sender address",
+          "message": "寄件人地址"
+        },
+        "app.U2hpcHBv.action.Y3JlYXRlLXNoaXBtZW50.option.YWRkcmVzc19yZXR1cm4.desc": {
+          "source": "The return address (defaults to `address_from` if not specified)",
+          "message": "退貨地址（若未指定，則預設為 `address_from`）"
+        },
+        "app.U2hpcHBv.action.Y3JlYXRlLXNoaXBtZW50.option.YWRkcmVzc19yZXR1cm4.display_name": {
+          "source": "Return Address",
+          "message": "退貨地址"
+        },
+        "app.U2hpcHBv.action.Y3JlYXRlLXNoaXBtZW50.option.YWRkcmVzc19yZXR1cm4.short_desc": {
+          "source": "Return address",
+          "message": "退貨地址"
+        },
+        "app.U2hpcHBv.action.Y3JlYXRlLXNoaXBtZW50.option.YXN5bmM.desc": {
+          "source": "If `True`, rates will be generated asynchronously. Default is `False`.",
+          "message": "若為 `True`，費率將非同步產生。預設為 `False`。"
+        },
+        "app.U2hpcHBv.action.Y3JlYXRlLXNoaXBtZW50.option.YXN5bmM.display_name": {
+          "source": "Async",
+          "message": "非同步"
+        },
+        "app.U2hpcHBv.action.Y3JlYXRlLXNoaXBtZW50.option.YXN5bmM.short_desc": {
+          "source": "Asynchronous processing",
+          "message": "非同步處理"
+        },
+        "app.U2hpcHBv.action.Y3JlYXRlLXNoaXBtZW50.option.ZXh0cmE.desc": {
+          "source": "Extra shipment options including insurance, signature confirmation, billing, COD, and more",
+          "message": "額外的貨件選項，包括保險、簽名確認、帳單、貨到付款等"
+        },
+        "app.U2hpcHBv.action.Y3JlYXRlLXNoaXBtZW50.option.ZXh0cmE.display_name": {
+          "source": "Extra Options",
+          "message": "額外選項"
+        },
+        "app.U2hpcHBv.action.Y3JlYXRlLXNoaXBtZW50.option.ZXh0cmE.short_desc": {
+          "source": "Additional options",
+          "message": "其他選項"
+        },
+        "app.U2hpcHBv.action.Y3JlYXRlLXNoaXBtZW50.option.bWV0YWRhdGE.desc": {
+          "source": "A string of up to 100 characters for storing additional information",
+          "message": "用於儲存額外資訊的字串（最多 100 個字元）"
+        },
+        "app.U2hpcHBv.action.Y3JlYXRlLXNoaXBtZW50.option.bWV0YWRhdGE.display_name": {
+          "source": "Metadata",
+          "message": "元資料"
+        },
+        "app.U2hpcHBv.action.Y3JlYXRlLXNoaXBtZW50.option.bWV0YWRhdGE.short_desc": {
+          "source": "Custom metadata",
+          "message": "自訂中繼資料"
+        },
+        "app.U2hpcHBv.action.Y3JlYXRlLXNoaXBtZW50.option.c2hpcG1lbnRfZGF0ZQ.desc": {
+          "source": "The date the shipment will be sent. Defaults to current date.",
+          "message": "貨件寄送日期。預設為當前日期。"
+        },
+        "app.U2hpcHBv.action.Y3JlYXRlLXNoaXBtZW50.option.c2hpcG1lbnRfZGF0ZQ.display_name": {
+          "source": "Shipment Date",
+          "message": "出貨日期"
+        },
+        "app.U2hpcHBv.action.Y3JlYXRlLXNoaXBtZW50.option.c2hpcG1lbnRfZGF0ZQ.short_desc": {
+          "source": "Expected shipment date",
+          "message": "預計出貨日期"
+        },
+        "app.U2hpcHBv.action.Y3JlYXRlLXNoaXBtZW50.option.cGFyY2Vscw.desc": {
+          "source": "Array of parcel objects describing the packages to ship",
+          "message": "描述要運送包裹的包裹物件陣列"
+        },
+        "app.U2hpcHBv.action.Y3JlYXRlLXNoaXBtZW50.option.cGFyY2Vscw.display_name": {
+          "source": "Parcels",
+          "message": "包裹"
+        },
+        "app.U2hpcHBv.action.Y3JlYXRlLXNoaXBtZW50.option.cGFyY2Vscw.short_desc": {
+          "source": "Package details",
+          "message": "包裹詳細資訊"
+        },
+        "app.U2hpcHBv.action.Y3JlYXRlLXNoaXBtZW50.short_desc": {
+          "source": "Create a new shipment to get rates",
+          "message": "建立新運送以取得運費費率"
+        },
+        "app.U2hpcHBv.action.Z2V0LW9yZGVy.desc": {
+          "source": "Retrieve detailed information about a specific order including addresses, line items, and fulfillment status.",
+          "message": "擷取特定訂單的詳細資訊，包含地址、品項與履約狀態。"
+        },
+        "app.U2hpcHBv.action.Z2V0LW9yZGVy.display_name": {
+          "source": "Get Order",
+          "message": "取得訂單"
+        },
+        "app.U2hpcHBv.action.Z2V0LW9yZGVy.option.b3JkZXJfaWQ.desc": {
+          "source": "The unique identifier of the order to retrieve",
+          "message": "要擷取的訂單唯一識別碼"
+        },
+        "app.U2hpcHBv.action.Z2V0LW9yZGVy.option.b3JkZXJfaWQ.display_name": {
+          "source": "Order ID",
+          "message": "訂單 ID"
+        },
+        "app.U2hpcHBv.action.Z2V0LW9yZGVy.option.b3JkZXJfaWQ.short_desc": {
+          "source": "The order object ID",
+          "message": "訂單物件 ID"
+        },
+        "app.U2hpcHBv.action.Z2V0LW9yZGVy.short_desc": {
+          "source": "Get an order by ID",
+          "message": "依 ID 取得訂單"
+        },
+        "app.U2hpcHBv.action.Z2V0LXNoaXBtZW50.desc": {
+          "source": "Retrieve detailed information about a specific shipment including addresses, parcels, and available rates.",
+          "message": "擷取特定運送的詳細資訊，包含地址、包裹與可用費率。"
+        },
+        "app.U2hpcHBv.action.Z2V0LXNoaXBtZW50.display_name": {
+          "source": "Get Shipment",
+          "message": "取得貨件"
+        },
+        "app.U2hpcHBv.action.Z2V0LXNoaXBtZW50.option.c2hpcG1lbnRfaWQ.desc": {
+          "source": "The unique identifier of the shipment to retrieve",
+          "message": "要擷取的運送唯一識別碼"
+        },
+        "app.U2hpcHBv.action.Z2V0LXNoaXBtZW50.option.c2hpcG1lbnRfaWQ.display_name": {
+          "source": "Shipment ID",
+          "message": "貨件 ID"
+        },
+        "app.U2hpcHBv.action.Z2V0LXNoaXBtZW50.option.c2hpcG1lbnRfaWQ.short_desc": {
+          "source": "The shipment object ID",
+          "message": "運送物件 ID"
+        },
+        "app.U2hpcHBv.action.Z2V0LXNoaXBtZW50.short_desc": {
+          "source": "Get a shipment by ID",
+          "message": "依 ID 取得運送"
+        },
+        "app.U2hpcHBv.action.Z2V0LXNoaXBwaW5nLWxhYmVs.desc": {
+          "source": "Retrieve detailed information about a specific shipping label (transaction) including tracking number, label URL, and status.",
+          "message": "擷取特定貨運標籤 (交易) 的詳細資訊，包含追蹤號碼、標籤 URL 與狀態。"
+        },
+        "app.U2hpcHBv.action.Z2V0LXNoaXBwaW5nLWxhYmVs.display_name": {
+          "source": "Get Shipping Label",
+          "message": "取得貨運標籤"
+        },
+        "app.U2hpcHBv.action.Z2V0LXNoaXBwaW5nLWxhYmVs.option.dHJhbnNhY3Rpb25faWQ.desc": {
+          "source": "The unique identifier of the transaction (shipping label) to retrieve",
+          "message": "要擷取的交易 (貨運標籤) 唯一識別碼"
+        },
+        "app.U2hpcHBv.action.Z2V0LXNoaXBwaW5nLWxhYmVs.option.dHJhbnNhY3Rpb25faWQ.display_name": {
+          "source": "Transaction ID",
+          "message": "交易 ID"
+        },
+        "app.U2hpcHBv.action.Z2V0LXNoaXBwaW5nLWxhYmVs.option.dHJhbnNhY3Rpb25faWQ.short_desc": {
+          "source": "The transaction object ID",
+          "message": "交易物件 ID"
+        },
+        "app.U2hpcHBv.action.Z2V0LXNoaXBwaW5nLWxhYmVs.short_desc": {
+          "source": "Get a shipping label by ID",
+          "message": "依 ID 取得貨運標籤"
+        },
+        "app.U2hpcHBv.action.bGlzdC1vcmRlcnM.desc": {
+          "source": "Retrieve a list of orders from Shippo with optional filtering by creation date, shop app, or order status.",
+          "message": "從 Shippo 擷取訂單清單，可選擇依建立日期、商店應用程式或訂單狀態進行篩選。"
+        },
+        "app.U2hpcHBv.action.bGlzdC1vcmRlcnM.display_name": {
+          "source": "List Orders",
+          "message": "列出訂單"
+        },
+        "app.U2hpcHBv.action.bGlzdC1vcmRlcnM.option.b3JkZXJfc3RhdHVz.allowed-value.c3RyaW5nOkFXQUlUUEFZ.desc": {
+          "source": "Awaiting payment",
+          "message": "等待付款"
+        },
+        "app.U2hpcHBv.action.bGlzdC1vcmRlcnM.option.b3JkZXJfc3RhdHVz.allowed-value.c3RyaW5nOkNBTkNFTExFRA.desc": {
+          "source": "Cancelled",
+          "message": "已取消"
+        },
+        "app.U2hpcHBv.action.bGlzdC1vcmRlcnM.option.b3JkZXJfc3RhdHVz.allowed-value.c3RyaW5nOlBBSUQ.desc": {
+          "source": "Paid",
+          "message": "已付款"
+        },
+        "app.U2hpcHBv.action.bGlzdC1vcmRlcnM.option.b3JkZXJfc3RhdHVz.allowed-value.c3RyaW5nOlBBUlRJQUxMWV9GVUxGSUxMRUQ.desc": {
+          "source": "Partially fulfilled",
+          "message": "部分已履約"
+        },
+        "app.U2hpcHBv.action.bGlzdC1vcmRlcnM.option.b3JkZXJfc3RhdHVz.allowed-value.c3RyaW5nOlJFRlVOREVE.desc": {
+          "source": "Refunded",
+          "message": "已退款"
+        },
+        "app.U2hpcHBv.action.bGlzdC1vcmRlcnM.option.b3JkZXJfc3RhdHVz.allowed-value.c3RyaW5nOlNISVBQRUQ.desc": {
+          "source": "Shipped",
+          "message": "已發貨"
+        },
+        "app.U2hpcHBv.action.bGlzdC1vcmRlcnM.option.b3JkZXJfc3RhdHVz.allowed-value.c3RyaW5nOlVOS05PV04.desc": {
+          "source": "Unknown status",
+          "message": "未知狀態"
+        },
+        "app.U2hpcHBv.action.bGlzdC1vcmRlcnM.option.b3JkZXJfc3RhdHVz.desc": {
+          "source": "Filter orders by their status",
+          "message": "依狀態篩選訂單"
+        },
+        "app.U2hpcHBv.action.bGlzdC1vcmRlcnM.option.b3JkZXJfc3RhdHVz.display_name": {
+          "source": "Order Status",
+          "message": "訂單狀態"
+        },
+        "app.U2hpcHBv.action.bGlzdC1vcmRlcnM.option.b3JkZXJfc3RhdHVz.short_desc": {
+          "source": "Filter by order status",
+          "message": "依訂單狀態篩選"
+        },
+        "app.U2hpcHBv.action.bGlzdC1vcmRlcnM.short_desc": {
+          "source": "List and search orders",
+          "message": "列出並搜尋訂單"
+        },
+        "app.U2hpcHBv.action.bWFrZS1hcGktY2FsbA.desc": {
+          "source": "Make a custom HTTP / REST API call to **Shippo** using the configured connection's authentication.\n\nSpecify the HTTP method, the URI path (relative to the connection's API base URL), optional query parameters, headers, and request body. The response is returned as a hash containing the status code, response headers, and response body.\n\nUse this action for endpoints that are not yet exposed as first-class actions on this app.",
+          "message": "使用已設定連線的驗證向 **Shippo** 發出自訂 HTTP / REST API 呼叫。\n\n指定 HTTP 方法、URI 路徑 (相對於連線的 API 基本 URL)、可選的查詢參數、標頭以及請求內文。回應會以包含狀態碼、回應標頭和回應內文的雜湊傳回。\n\n當端點尚未在此應用程式中以第一類動作形式提供時，請使用此動作。"
+        },
+        "app.U2hpcHBv.action.bWFrZS1hcGktY2FsbA.display_name": {
+          "source": "Make an API call",
+          "message": "進行 API 呼叫"
+        },
+        "app.U2hpcHBv.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.desc": {
+          "source": "The request body. The effective type depends on `body_type`: JSON/form/YAML expect a hash, XML/text expect a string, multipart expects a file structure, binary expects raw bytes.",
+          "message": "請求主體。有效類型取決於 `body_type`：JSON/表單/YAML 預期為雜湊，XML/文字預期為字串，multipart 預期為檔案結構，二進位預期為原始位元組。"
+        },
+        "app.U2hpcHBv.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.display_name": {
+          "source": "Body",
+          "message": "內文"
+        },
+        "app.U2hpcHBv.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.short_desc": {
+          "source": "The request body",
+          "message": "請求主體"
+        },
+        "app.U2hpcHBv.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.desc": {
+          "source": "Upload a file using `multipart/form-data`. The body must be a @ref DataProvider::FileDataType \"FileDataType\" structure (filename + content + mime_type). The framework builds the multipart envelope and sets the boundary header.",
+          "message": "使用 `multipart/form-data` 上傳檔案。主體必須是 @ref DataProvider::FileDataType \"FileDataType\" 結構 (filename + content + mime_type)。框架會建立 multipart 信封並設定 boundary 標頭。"
+        },
+        "app.U2hpcHBv.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.display_name": {
+          "source": "Multipart Form",
+          "message": "Multipart 表單"
+        },
+        "app.U2hpcHBv.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.short_desc": {
+          "source": "Upload a file using multipart/form-data",
+          "message": "使用 multipart/form-data 上傳檔案"
+        },
+        "app.U2hpcHBv.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.desc": {
+          "source": "Pass the body to the REST client unchanged; the client decides serialization based on its configured `data` option and the value type",
+          "message": "將主體原封不動地傳遞給 REST 用戶端；用戶端會根據其設定的 `data` 選項與數值類型來決定序列化方式"
+        },
+        "app.U2hpcHBv.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.display_name": {
+          "source": "Auto",
+          "message": "自動"
+        },
+        "app.U2hpcHBv.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.short_desc": {
+          "source": "Pass-through; use connection serialization and let the REST client decide",
+          "message": "透傳；使用連線序列化並由 REST 用戶端決定"
+        },
+        "app.U2hpcHBv.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.desc": {
+          "source": "Send the body as raw bytes. The body must be a binary value. Sets `Content-Type: application/octet-stream` unless overridden by `hdr`.",
+          "message": "將主體作為原始位元組傳送。主體必須是二進位值。除非被 `hdr` 覆寫，否則會設定 `Content-Type: application/octet-stream`。"
+        },
+        "app.U2hpcHBv.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.display_name": {
+          "source": "Raw Binary",
+          "message": "原始二進位"
+        },
+        "app.U2hpcHBv.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.short_desc": {
+          "source": "Send body as raw bytes",
+          "message": "將主體作為原始位元組傳送"
+        },
+        "app.U2hpcHBv.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.desc": {
+          "source": "Serialize a hash of form fields as `application/x-www-form-urlencoded`. The body must be a hash whose values are scalars (strings/numbers/booleans).",
+          "message": "將表單欄位的雜湊序列化為 `application/x-www-form-urlencoded`。主體必須是值為純量 (字串/數字/布林值) 的雜湊。"
+        },
+        "app.U2hpcHBv.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.display_name": {
+          "source": "Form (URL-encoded)",
+          "message": "表單 (URL 編碼)"
+        },
+        "app.U2hpcHBv.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.short_desc": {
+          "source": "Serialize body as application/x-www-form-urlencoded form fields",
+          "message": "將主體序列化為 application/x-www-form-urlencoded 表單欄位"
+        },
+        "app.U2hpcHBv.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.desc": {
+          "source": "Serialize the body as JSON; sets `Content-Type: application/json`. The body should be a hash, list, or scalar value.",
+          "message": "將主體序列化為 JSON；設定 `Content-Type: application/json`。主體應為雜湊、清單或純量值。"
+        },
+        "app.U2hpcHBv.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.display_name": {
+          "source": "JSON",
+          "message": "JSON"
+        },
+        "app.U2hpcHBv.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.short_desc": {
+          "source": "Serialize body as JSON",
+          "message": "將主體序列化為 JSON"
+        },
+        "app.U2hpcHBv.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.desc": {
+          "source": "Send the body as plain text. The body must be a string. Sets `Content-Type: text/plain`.",
+          "message": "將主體作為純文字傳送。主體必須是字串。設定 `Content-Type: text/plain`。"
+        },
+        "app.U2hpcHBv.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.display_name": {
+          "source": "Plain Text",
+          "message": "純文字"
+        },
+        "app.U2hpcHBv.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.short_desc": {
+          "source": "Send body as text/plain",
+          "message": "將主體作為 text/plain 傳送"
+        },
+        "app.U2hpcHBv.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.desc": {
+          "source": "Send the body as XML. If the body is a hash it is serialized to XML; if it is a string it is sent verbatim. Sets `Content-Type: application/xml`.",
+          "message": "將主體作為 XML 傳送。若主體為雜湊，則會序列化為 XML；若為字串，則原樣傳送。設定 `Content-Type: application/xml`。"
+        },
+        "app.U2hpcHBv.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.display_name": {
+          "source": "XML",
+          "message": "XML"
+        },
+        "app.U2hpcHBv.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.short_desc": {
+          "source": "Send body as XML",
+          "message": "將主體作為 XML 傳送"
+        },
+        "app.U2hpcHBv.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.desc": {
+          "source": "Send the body as YAML. If the body is a hash it is serialized to YAML; if it is a string it is sent verbatim. Sets `Content-Type: application/x-yaml`.",
+          "message": "將主體作為 YAML 傳送。若主體為雜湊，則會序列化為 YAML；若為字串，則原樣傳送。設定 `Content-Type: application/x-yaml`。"
+        },
+        "app.U2hpcHBv.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.display_name": {
+          "source": "YAML",
+          "message": "YAML"
+        },
+        "app.U2hpcHBv.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.short_desc": {
+          "source": "Send body as YAML",
+          "message": "將主體作為 YAML 傳送"
+        },
+        "app.U2hpcHBv.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.desc": {
+          "source": "Selects the body serialization mode and the corresponding `Content-Type` header. Changing this field reshapes the `body` editor - selecting JSON exposes a JSON editor, selecting Multipart Form exposes a file picker, and so on.",
+          "message": "選擇主體序列化模式與相應的 `Content-Type` 標頭。變更此欄位會重塑 `body` 編輯器 - 選擇 JSON 會顯示 JSON 編輯器，選擇 Multipart Form 會顯示檔案選擇器，依此類推。"
+        },
+        "app.U2hpcHBv.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.display_name": {
+          "source": "Body Type",
+          "message": "主體類型"
+        },
+        "app.U2hpcHBv.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.short_desc": {
+          "source": "How the body is serialized and what Content-Type is sent",
+          "message": "主體如何序列化以及傳送何種 Content-Type"
+        },
+        "app.U2hpcHBv.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.desc": {
+          "source": "If `True`, non-2xx HTTP responses return as the normal response hash (with the actual status code) instead of raising `REST-RESPONSE-ERROR`. Useful for handling 4xx/5xx as data - e.g. checking whether a resource exists. Overrides the connection's `error_passthru` setting for this call only.",
+          "message": "若為 `True`，非 2xx 的 HTTP 回應將作為正常的回應雜湊 (包含實際狀態碼) 返回，而不是引發 `REST-RESPONSE-ERROR`。適用於將 4xx/5xx 作為資料處理 - 例如檢查資源是否存在。僅針對本次呼叫覆寫連線的 `error_passthru` 設定。"
+        },
+        "app.U2hpcHBv.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.display_name": {
+          "source": "Return Errors as Data",
+          "message": "將錯誤作為資料返回"
+        },
+        "app.U2hpcHBv.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.short_desc": {
+          "source": "Return non-2xx responses normally instead of throwing",
+          "message": "正常返回非 2xx 回應，而不是拋出例外"
+        },
+        "app.U2hpcHBv.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.desc": {
+          "source": "Optional list of HTTP status codes treated as success. If set and the response status is not in this list, the action throws `REST-STATUS-ERROR`. When unset, the REST client's default behavior applies (typically: 2xx is success, non-2xx throws).",
+          "message": "視為成功的選擇性 HTTP 狀態碼清單。若已設定且回應狀態不在此清單中，該動作將拋出 `REST-STATUS-ERROR`。未設定時，套用 REST 用戶端的預設行為 (通常：2xx 代表成功，非 2xx 拋出例外)。"
+        },
+        "app.U2hpcHBv.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.display_name": {
+          "source": "Expected Status Codes",
+          "message": "預期的狀態碼"
+        },
+        "app.U2hpcHBv.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.short_desc": {
+          "source": "Response status codes treated as success",
+          "message": "視為成功的回應狀態碼"
+        },
+        "app.U2hpcHBv.action.bWFrZS1hcGktY2FsbA.option.aGRy.desc": {
+          "source": "Hash of custom headers added to the request. These override any default headers set by `body_type` (e.g. supplying `Content-Type` here wins over the body-type default).",
+          "message": "新增至請求的自訂標頭雜湊。這些會覆寫由 `body_type` 設定的任何預設標頭 (例如：在此處提供 `Content-Type` 會優先於主體類型的預設值)。"
+        },
+        "app.U2hpcHBv.action.bWFrZS1hcGktY2FsbA.option.aGRy.display_name": {
+          "source": "Custom Headers",
+          "message": "自訂標頭"
+        },
+        "app.U2hpcHBv.action.bWFrZS1hcGktY2FsbA.option.aGRy.short_desc": {
+          "source": "Extra request headers",
+          "message": "額外的請求標頭"
+        },
+        "app.U2hpcHBv.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.desc": {
+          "source": "If `True`, the response hash includes a `debug` sub-hash containing the request method/URL/headers (with sensitive values redacted), request and response sizes, and round-trip duration. Useful when investigating slow or failing calls. Off by default to keep responses lean.",
+          "message": "若為 `True`，回應雜湊包含一個 `debug` 子雜湊，其中包含請求方法/URL/標頭 (敏感值已遮蔽)、請求與回應大小以及來回時間。在調查過慢或失敗的呼叫時很有用。預設關閉以維持回應精簡。"
+        },
+        "app.U2hpcHBv.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.display_name": {
+          "source": "Include Debug Info",
+          "message": "包含除錯資訊"
+        },
+        "app.U2hpcHBv.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.short_desc": {
+          "source": "Include request/timing/size debug info in the response",
+          "message": "在回應中包含請求/時序/大小除錯資訊"
+        },
+        "app.U2hpcHBv.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.desc": {
+          "source": "HTTP `OPTIONS`",
+          "message": "HTTP `OPTIONS`"
+        },
+        "app.U2hpcHBv.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.display_name": {
+          "source": "OPTIONS",
+          "message": "OPTIONS"
+        },
+        "app.U2hpcHBv.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.short_desc": {
+          "source": "HTTP OPTIONS",
+          "message": "HTTP OPTIONS"
+        },
+        "app.U2hpcHBv.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.desc": {
+          "source": "HTTP `DELETE`",
+          "message": "HTTP `DELETE`"
+        },
+        "app.U2hpcHBv.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.display_name": {
+          "source": "DELETE",
+          "message": "DELETE"
+        },
+        "app.U2hpcHBv.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.short_desc": {
+          "source": "HTTP DELETE",
+          "message": "HTTP DELETE"
+        },
+        "app.U2hpcHBv.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.desc": {
+          "source": "HTTP `GET`",
+          "message": "HTTP `GET`"
+        },
+        "app.U2hpcHBv.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.display_name": {
+          "source": "GET",
+          "message": "GET"
+        },
+        "app.U2hpcHBv.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.short_desc": {
+          "source": "HTTP GET",
+          "message": "HTTP GET"
+        },
+        "app.U2hpcHBv.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.desc": {
+          "source": "HTTP `HEAD`",
+          "message": "HTTP `HEAD`"
+        },
+        "app.U2hpcHBv.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.display_name": {
+          "source": "HEAD",
+          "message": "HEAD"
+        },
+        "app.U2hpcHBv.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.short_desc": {
+          "source": "HTTP HEAD",
+          "message": "HTTP HEAD"
+        },
+        "app.U2hpcHBv.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.desc": {
+          "source": "HTTP `PATCH`",
+          "message": "HTTP `PATCH`"
+        },
+        "app.U2hpcHBv.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.display_name": {
+          "source": "PATCH",
+          "message": "PATCH"
+        },
+        "app.U2hpcHBv.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.short_desc": {
+          "source": "HTTP PATCH",
+          "message": "HTTP PATCH"
+        },
+        "app.U2hpcHBv.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.desc": {
+          "source": "HTTP `POST`",
+          "message": "HTTP `POST`"
+        },
+        "app.U2hpcHBv.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.display_name": {
+          "source": "POST",
+          "message": "POST"
+        },
+        "app.U2hpcHBv.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.short_desc": {
+          "source": "HTTP POST",
+          "message": "HTTP POST"
+        },
+        "app.U2hpcHBv.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.desc": {
+          "source": "HTTP `PUT`",
+          "message": "HTTP `PUT`"
+        },
+        "app.U2hpcHBv.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.display_name": {
+          "source": "PUT",
+          "message": "PUT"
+        },
+        "app.U2hpcHBv.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.short_desc": {
+          "source": "HTTP PUT",
+          "message": "HTTP PUT"
+        },
+        "app.U2hpcHBv.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.desc": {
+          "source": "HTTP `TRACE`",
+          "message": "HTTP `TRACE`"
+        },
+        "app.U2hpcHBv.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.display_name": {
+          "source": "TRACE",
+          "message": "TRACE"
+        },
+        "app.U2hpcHBv.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.short_desc": {
+          "source": "HTTP TRACE",
+          "message": "HTTP TRACE"
+        },
+        "app.U2hpcHBv.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "用於請求的 HTTP 方法"
+        },
+        "app.U2hpcHBv.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.display_name": {
+          "source": "HTTP Method",
+          "message": "HTTP 方法"
+        },
+        "app.U2hpcHBv.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.short_desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "用於請求的 HTTP 方法"
+        },
+        "app.U2hpcHBv.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain `{name}` placeholders that are replaced from `path_vars`. Example: `/users/{id}/comments`.",
+          "message": "相於連線 API 基本 URL 的 URI 路徑。可能包含從 `path_vars` 替換的 `{name}` 預留位置。範例：`/users/{id}/comments`。"
+        },
+        "app.U2hpcHBv.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.display_name": {
+          "source": "URI Path",
+          "message": "URI 路徑"
+        },
+        "app.U2hpcHBv.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.short_desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain '{name}' placeholders that are replaced from 'path_vars'. Example: '/users/{id}/comments'",
+          "message": "相對於連線 API 基底 URL 的 URI 路徑。可能包含從 'path_vars' 替換的 '{name}' 預留位置。範例：'/users/{id}/comments'"
+        },
+        "app.U2hpcHBv.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.desc": {
+          "source": "Hash of values substituted into `{name}` placeholders in the URI path. Example: with `path = /users/{id}` and `path_vars = {id: 123}` the framework sends `/users/123`. Values are URL-encoded.",
+          "message": "替換至 URI 路徑中 `{name}` 預留位置的值 Hash。範例：使用 `path = /users/{id}` 與 `path_vars = {id: 123}` 時，框架會傳送 `/users/123`。數值均經過 URL 編碼。"
+        },
+        "app.U2hpcHBv.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.display_name": {
+          "source": "Path Variables",
+          "message": "路徑變數"
+        },
+        "app.U2hpcHBv.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.short_desc": {
+          "source": "Values for {name} placeholders in path",
+          "message": "路徑中 {name} 預留位置的值"
+        },
+        "app.U2hpcHBv.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.desc": {
+          "source": "Hash of query string parameters to append to the URI path. Values are URL-encoded; list values are joined with `,`.",
+          "message": "要附加至 URI 路徑的查詢字串參數 Hash。數值均經過 URL 編碼；清單值會使用 `,` 連接。"
+        },
+        "app.U2hpcHBv.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.display_name": {
+          "source": "Query Arguments",
+          "message": "查詢引數"
+        },
+        "app.U2hpcHBv.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.short_desc": {
+          "source": "Query string parameters",
+          "message": "查詢字串參數"
+        },
+        "app.U2hpcHBv.action.bWFrZS1hcGktY2FsbA.short_desc": {
+          "source": "Make a custom API call to Shippo",
+          "message": "向 Shippo 發出自訂 API 呼叫"
+        },
+        "app.U2hpcHBv.action.bmV3LW9yZGVy.desc": {
+          "source": "Fires when a new order is detected in Shippo via polling. Provides order details including shipping address, line items, and order status.",
+          "message": "透過輪詢在 Shippo 中偵測到新訂單時觸發。提供訂單詳細資訊，包含收件地址、品項與訂單狀態。"
+        },
+        "app.U2hpcHBv.action.bmV3LW9yZGVy.display_name": {
+          "source": "New Order",
+          "message": "新訂單"
+        },
+        "app.U2hpcHBv.action.bmV3LW9yZGVy.short_desc": {
+          "source": "Trigger when a new order is created",
+          "message": "當建立新訂單時觸發"
+        },
+        "app.U2hpcHBv.action.bmV3LWxhYmVs.desc": {
+          "source": "Fires when a new shipping label (transaction) is detected in Shippo via polling. Provides label details including tracking number and label URL.",
+          "message": "透過輪詢在 Shippo 中偵測到新貨運標籤 (交易) 時觸發。提供標籤詳細資訊，包含追蹤號碼與標籤 URL。"
+        },
+        "app.U2hpcHBv.action.bmV3LWxhYmVs.display_name": {
+          "source": "New Shipping Label",
+          "message": "新增貨運標籤"
+        },
+        "app.U2hpcHBv.action.bmV3LWxhYmVs.short_desc": {
+          "source": "Trigger when a new shipping label is created",
+          "message": "在建立新貨運標籤時觸發"
+        },
+        "app.U2hpcHBv.action.bmV3LXBhcmNlbA.desc": {
+          "source": "Fires when a new parcel is detected in Shippo via polling. Provides parcel details including dimensions and weight.",
+          "message": "透過輪詢在 Shippo 中偵測到新包裹時觸發。提供包裹詳細資訊，包含尺寸與重量。"
+        },
+        "app.U2hpcHBv.action.bmV3LXBhcmNlbA.display_name": {
+          "source": "New Parcel",
+          "message": "新增包裹"
+        },
+        "app.U2hpcHBv.action.bmV3LXBhcmNlbA.short_desc": {
+          "source": "Trigger when a new parcel is created",
+          "message": "在建立新包裹時觸發"
+        },
+        "app.U2hpcHBv.action.bmV3LXNoaXBtZW50.desc": {
+          "source": "Fires when a new shipment is detected in Shippo via polling. Provides shipment details including addresses, parcels, and available rates.",
+          "message": "透過輪詢在 Shippo 中偵測到新運送時觸發。提供運送詳細資訊，包含地址、包裹與可用費率。"
+        },
+        "app.U2hpcHBv.action.bmV3LXNoaXBtZW50.display_name": {
+          "source": "New Shipment",
+          "message": "新增運送"
+        },
+        "app.U2hpcHBv.action.bmV3LXNoaXBtZW50.short_desc": {
+          "source": "Trigger when a new shipment is created",
+          "message": "建立新出貨時觸發"
+        },
+        "app.U2hpcHBv.action.c2VhcmNoLXNoaXBtZW50cw.desc": {
+          "source": "Retrieve a list of shipments from Shippo with optional filtering by creation date.",
+          "message": "從 Shippo 擷取運送清單，可選擇依建立日期篩選。"
+        },
+        "app.U2hpcHBv.action.c2VhcmNoLXNoaXBtZW50cw.display_name": {
+          "source": "Search Shipments",
+          "message": "搜尋出貨"
+        },
+        "app.U2hpcHBv.action.c2VhcmNoLXNoaXBtZW50cw.short_desc": {
+          "source": "List and search shipments",
+          "message": "列出並搜尋貨件"
+        },
+        "app.U2hpcHBv.action.c2VhcmNoLXNoaXBwaW5nLWxhYmVscw.desc": {
+          "source": "Retrieve a list of shipping labels (transactions) from Shippo with optional filtering by creation date, status, or tracking status.",
+          "message": "從 Shippo 擷取貨運標籤 (交易) 清單，可選擇依建立日期、狀態或追蹤狀態篩選。"
+        },
+        "app.U2hpcHBv.action.c2VhcmNoLXNoaXBwaW5nLWxhYmVscw.display_name": {
+          "source": "Search Shipping Labels",
+          "message": "搜尋貨運標籤"
+        },
+        "app.U2hpcHBv.action.c2VhcmNoLXNoaXBwaW5nLWxhYmVscw.option.b2JqZWN0X3N0YXR1cw.allowed-value.c3RyaW5nOkVSUk9S.desc": {
+          "source": "Label creation failed",
+          "message": "標籤建立失敗"
+        },
+        "app.U2hpcHBv.action.c2VhcmNoLXNoaXBwaW5nLWxhYmVscw.option.b2JqZWN0X3N0YXR1cw.allowed-value.c3RyaW5nOlFVRVVFRA.desc": {
+          "source": "Label creation pending",
+          "message": "標籤建立擱置中"
+        },
+        "app.U2hpcHBv.action.c2VhcmNoLXNoaXBwaW5nLWxhYmVscw.option.b2JqZWN0X3N0YXR1cw.allowed-value.c3RyaW5nOlJFRlVOREVE.desc": {
+          "source": "Label has been refunded",
+          "message": "標籤已退款"
+        },
+        "app.U2hpcHBv.action.c2VhcmNoLXNoaXBwaW5nLWxhYmVscw.option.b2JqZWN0X3N0YXR1cw.allowed-value.c3RyaW5nOlNVQ0NFU1M.desc": {
+          "source": "Label created successfully",
+          "message": "標籤建立成功"
+        },
+        "app.U2hpcHBv.action.c2VhcmNoLXNoaXBwaW5nLWxhYmVscw.option.b2JqZWN0X3N0YXR1cw.desc": {
+          "source": "Filter transactions by their creation status",
+          "message": "依建立狀態篩選交易"
+        },
+        "app.U2hpcHBv.action.c2VhcmNoLXNoaXBwaW5nLWxhYmVscw.option.b2JqZWN0X3N0YXR1cw.display_name": {
+          "source": "Label Status",
+          "message": "標籤狀態"
+        },
+        "app.U2hpcHBv.action.c2VhcmNoLXNoaXBwaW5nLWxhYmVscw.option.b2JqZWN0X3N0YXR1cw.short_desc": {
+          "source": "Filter by label status",
+          "message": "依標籤狀態篩選"
+        },
+        "app.U2hpcHBv.action.c2VhcmNoLXNoaXBwaW5nLWxhYmVscw.option.dHJhY2tpbmdfc3RhdHVz.allowed-value.c3RyaW5nOkRFTElWRVJFRA.desc": {
+          "source": "Delivered",
+          "message": "已送達"
+        },
+        "app.U2hpcHBv.action.c2VhcmNoLXNoaXBwaW5nLWxhYmVscw.option.dHJhY2tpbmdfc3RhdHVz.allowed-value.c3RyaW5nOkZBSUxVUkU.desc": {
+          "source": "Delivery failed",
+          "message": "運送失敗"
+        },
+        "app.U2hpcHBv.action.c2VhcmNoLXNoaXBwaW5nLWxhYmVscw.option.dHJhY2tpbmdfc3RhdHVz.allowed-value.c3RyaW5nOlBSRV9UUkFOU0lU.desc": {
+          "source": "Pre-transit",
+          "message": "運送前準備中"
+        },
+        "app.U2hpcHBv.action.c2VhcmNoLXNoaXBwaW5nLWxhYmVscw.option.dHJhY2tpbmdfc3RhdHVz.allowed-value.c3RyaW5nOlJFVFVSTkVE.desc": {
+          "source": "Returned",
+          "message": "已退回"
+        },
+        "app.U2hpcHBv.action.c2VhcmNoLXNoaXBwaW5nLWxhYmVscw.option.dHJhY2tpbmdfc3RhdHVz.allowed-value.c3RyaW5nOlRSQU5TSVQ.desc": {
+          "source": "In transit",
+          "message": "運送中"
+        },
+        "app.U2hpcHBv.action.c2VhcmNoLXNoaXBwaW5nLWxhYmVscw.option.dHJhY2tpbmdfc3RhdHVz.allowed-value.c3RyaW5nOlVOS05PV04.desc": {
+          "source": "Unknown tracking status",
+          "message": "未知的追蹤狀態"
+        },
+        "app.U2hpcHBv.action.c2VhcmNoLXNoaXBwaW5nLWxhYmVscw.option.dHJhY2tpbmdfc3RhdHVz.desc": {
+          "source": "Filter transactions by their tracking status",
+          "message": "依追蹤狀態篩選交易"
+        },
+        "app.U2hpcHBv.action.c2VhcmNoLXNoaXBwaW5nLWxhYmVscw.option.dHJhY2tpbmdfc3RhdHVz.display_name": {
+          "source": "Tracking Status",
+          "message": "追蹤狀態"
+        },
+        "app.U2hpcHBv.action.c2VhcmNoLXNoaXBwaW5nLWxhYmVscw.option.dHJhY2tpbmdfc3RhdHVz.short_desc": {
+          "source": "Filter by tracking status",
+          "message": "依追蹤狀態篩選"
+        },
+        "app.U2hpcHBv.action.c2VhcmNoLXNoaXBwaW5nLWxhYmVscw.short_desc": {
+          "source": "List and search shipping labels",
+          "message": "列出並搜尋貨運標籤"
+        },
+        "app.U2hpcHBv.action.dmFsaWRhdGUtYWRkcmVzcw.desc": {
+          "source": "Validates a shipping address using Shippo's address validation service. Returns the validated address with any corrections and validation status.",
+          "message": "使用 Shippo 的地址驗證服務驗證收件地址。傳回已驗證的地址以及任何更正和驗證狀態。"
+        },
+        "app.U2hpcHBv.action.dmFsaWRhdGUtYWRkcmVzcw.display_name": {
+          "source": "Validate Address",
+          "message": "驗證地址"
+        },
+        "app.U2hpcHBv.action.dmFsaWRhdGUtYWRkcmVzcw.option.Y291bnRyeQ.desc": {
+          "source": "Two-letter ISO 3166-1 alpha-2 country code (e.g., US, CA, GB)",
+          "message": "雙字母 ISO 3166-1 alpha-2 國家/地區代碼 (例如：US、CA、GB)"
+        },
+        "app.U2hpcHBv.action.dmFsaWRhdGUtYWRkcmVzcw.option.Y291bnRyeQ.display_name": {
+          "source": "Country",
+          "message": "國家/地區"
+        },
+        "app.U2hpcHBv.action.dmFsaWRhdGUtYWRkcmVzcw.option.Y291bnRyeQ.short_desc": {
+          "source": "ISO country code",
+          "message": "ISO 國家/地區代碼"
+        },
+        "app.U2hpcHBv.action.dmFsaWRhdGUtYWRkcmVzcw.option.Y29tcGFueQ.desc": {
+          "source": "Company name (optional)",
+          "message": "公司名稱 (選填)"
+        },
+        "app.U2hpcHBv.action.dmFsaWRhdGUtYWRkcmVzcw.option.Y29tcGFueQ.display_name": {
+          "source": "Company",
+          "message": "公司"
+        },
+        "app.U2hpcHBv.action.dmFsaWRhdGUtYWRkcmVzcw.option.Y29tcGFueQ.short_desc": {
+          "source": "Company or organization name",
+          "message": "公司或組織名稱"
+        },
+        "app.U2hpcHBv.action.dmFsaWRhdGUtYWRkcmVzcw.option.Y2l0eQ.desc": {
+          "source": "Name of the city",
+          "message": "城市名稱"
+        },
+        "app.U2hpcHBv.action.dmFsaWRhdGUtYWRkcmVzcw.option.Y2l0eQ.display_name": {
+          "source": "City",
+          "message": "城市"
+        },
+        "app.U2hpcHBv.action.dmFsaWRhdGUtYWRkcmVzcw.option.Y2l0eQ.short_desc": {
+          "source": "City name",
+          "message": "城市名稱"
+        },
+        "app.U2hpcHBv.action.dmFsaWRhdGUtYWRkcmVzcw.option.ZW1haWw.desc": {
+          "source": "Email address for shipment notifications",
+          "message": "運送通知的電子郵件地址"
+        },
+        "app.U2hpcHBv.action.dmFsaWRhdGUtYWRkcmVzcw.option.ZW1haWw.display_name": {
+          "source": "Email",
+          "message": "電子郵件"
+        },
+        "app.U2hpcHBv.action.dmFsaWRhdGUtYWRkcmVzcw.option.ZW1haWw.short_desc": {
+          "source": "Email address",
+          "message": "電子郵件地址"
+        },
+        "app.U2hpcHBv.action.dmFsaWRhdGUtYWRkcmVzcw.option.aXNfcmVzaWRlbnRpYWw.desc": {
+          "source": "Indicates whether the address is a residential location",
+          "message": "指出該地址是否為住宅地址"
+        },
+        "app.U2hpcHBv.action.dmFsaWRhdGUtYWRkcmVzcw.option.aXNfcmVzaWRlbnRpYWw.display_name": {
+          "source": "Residential",
+          "message": "住宅"
+        },
+        "app.U2hpcHBv.action.dmFsaWRhdGUtYWRkcmVzcw.option.aXNfcmVzaWRlbnRpYWw.short_desc": {
+          "source": "Is residential address",
+          "message": "是否為住宅地址"
+        },
+        "app.U2hpcHBv.action.dmFsaWRhdGUtYWRkcmVzcw.option.bmFtZQ.desc": {
+          "source": "First and last name of the person at this address",
+          "message": "此地址收件人的姓名"
+        },
+        "app.U2hpcHBv.action.dmFsaWRhdGUtYWRkcmVzcw.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "名稱"
+        },
+        "app.U2hpcHBv.action.dmFsaWRhdGUtYWRkcmVzcw.option.bmFtZQ.short_desc": {
+          "source": "Full name of the person",
+          "message": "此人的全名"
+        },
+        "app.U2hpcHBv.action.dmFsaWRhdGUtYWRkcmVzcw.option.c3RhdGU.desc": {
+          "source": "State, province, or region code (e.g., CA for California)",
+          "message": "州、省或地區代碼 (例如：加州的 CA)"
+        },
+        "app.U2hpcHBv.action.dmFsaWRhdGUtYWRkcmVzcw.option.c3RhdGU.display_name": {
+          "source": "State/Province",
+          "message": "州/省"
+        },
+        "app.U2hpcHBv.action.dmFsaWRhdGUtYWRkcmVzcw.option.c3RhdGU.short_desc": {
+          "source": "State or province code",
+          "message": "州或省代碼"
+        },
+        "app.U2hpcHBv.action.dmFsaWRhdGUtYWRkcmVzcw.option.c3RyZWV0MQ.desc": {
+          "source": "First line of the street address",
+          "message": "街道地址第一行"
+        },
+        "app.U2hpcHBv.action.dmFsaWRhdGUtYWRkcmVzcw.option.c3RyZWV0MQ.display_name": {
+          "source": "Street Address 1",
+          "message": "街道地址 1"
+        },
+        "app.U2hpcHBv.action.dmFsaWRhdGUtYWRkcmVzcw.option.c3RyZWV0MQ.short_desc": {
+          "source": "Primary street address",
+          "message": "主要街道地址"
+        },
+        "app.U2hpcHBv.action.dmFsaWRhdGUtYWRkcmVzcw.option.c3RyZWV0Mg.desc": {
+          "source": "Second line of the street address (apartment, suite, etc.)",
+          "message": "街道地址第二行（公寓、套房等）"
+        },
+        "app.U2hpcHBv.action.dmFsaWRhdGUtYWRkcmVzcw.option.c3RyZWV0Mg.display_name": {
+          "source": "Street Address 2",
+          "message": "街道地址 2"
+        },
+        "app.U2hpcHBv.action.dmFsaWRhdGUtYWRkcmVzcw.option.c3RyZWV0Mg.short_desc": {
+          "source": "Secondary street address",
+          "message": "次要街道地址"
+        },
+        "app.U2hpcHBv.action.dmFsaWRhdGUtYWRkcmVzcw.option.c3RyZWV0Mw.desc": {
+          "source": "Third line of the street address (optional)",
+          "message": "街道地址第三行（可選）"
+        },
+        "app.U2hpcHBv.action.dmFsaWRhdGUtYWRkcmVzcw.option.c3RyZWV0Mw.display_name": {
+          "source": "Street Address 3",
+          "message": "街道地址 3"
+        },
+        "app.U2hpcHBv.action.dmFsaWRhdGUtYWRkcmVzcw.option.c3RyZWV0Mw.short_desc": {
+          "source": "Additional street address",
+          "message": "其他街道地址"
+        },
+        "app.U2hpcHBv.action.dmFsaWRhdGUtYWRkcmVzcw.option.cGhvbmU.desc": {
+          "source": "Phone number including country code",
+          "message": "包含國碼的電話號碼"
+        },
+        "app.U2hpcHBv.action.dmFsaWRhdGUtYWRkcmVzcw.option.cGhvbmU.display_name": {
+          "source": "Phone",
+          "message": "電話"
+        },
+        "app.U2hpcHBv.action.dmFsaWRhdGUtYWRkcmVzcw.option.cGhvbmU.short_desc": {
+          "source": "Phone number",
+          "message": "電話號碼"
+        },
+        "app.U2hpcHBv.action.dmFsaWRhdGUtYWRkcmVzcw.option.emlw.desc": {
+          "source": "ZIP or postal code",
+          "message": "郵遞區號"
+        },
+        "app.U2hpcHBv.action.dmFsaWRhdGUtYWRkcmVzcw.option.emlw.display_name": {
+          "source": "ZIP/Postal Code",
+          "message": "郵遞區號"
+        },
+        "app.U2hpcHBv.action.dmFsaWRhdGUtYWRkcmVzcw.option.emlw.short_desc": {
+          "source": "Postal code",
+          "message": "郵遞區號"
+        },
+        "app.U2hpcHBv.action.dmFsaWRhdGUtYWRkcmVzcw.short_desc": {
+          "source": "Validate a shipping address",
+          "message": "驗證運送地址"
+        },
+        "app.U2hpcHBv.desc": {
+          "source": "Shippo is a multi-carrier shipping API and web application that simplifies the shipping process for e-commerce businesses. This integration enables creating shipments, generating shipping labels, managing orders, and tracking packages.\n\n**Features:**\n- Create shipments and get shipping rates from multiple carriers\n- Generate shipping labels for USPS, UPS, FedEx, DHL, and more\n- Track packages with real-time tracking updates\n- Manage orders and their fulfillment\n- Polling triggers for new parcels, shipments, and labels",
+          "message": "Shippo 是一個多物流商運輸 API 與網頁應用程式，可為電子商務企業簡化運輸流程。此整合支援建立貨件、產生運送標籤、管理訂單以及追蹤包裹。\n\n**功能：**\n- 建立貨件並取得來自多家物流商的運費報價\n- 產生適用於 USPS、UPS、FedEx、DHL 等物流商的運送標籤\n- 透過即時追蹤更新追蹤包裹\n- 管理訂單及其履約狀態\n- 輪詢觸發新包裹、貨件與標籤"
+        },
+        "app.U2hpcHBv.display_name": {
+          "source": "Shippo",
+          "message": "Shippo"
+        },
+        "app.U2hpcHBv.short_desc": {
+          "source": "Shippo shipping platform",
+          "message": "Shippo 運輸平台"
+        }
+      }
+    }
+  }
+}

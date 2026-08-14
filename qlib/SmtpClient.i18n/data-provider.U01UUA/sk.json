@@ -1,0 +1,157 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "sk": {
+      "messages": {
+        "app.U01UUA.action.c2VuZC1lbWFpbA.desc": {
+          "source": "Send an email through a generic SMTP server",
+          "message": "Odoslať e-mail cez všeobecný SMTP server"
+        },
+        "app.U01UUA.action.c2VuZC1lbWFpbA.display_name": {
+          "source": "Send an Email With SMTP",
+          "message": "Odoslať e-mail pomocou SMTP"
+        },
+        "app.U01UUA.action.c2VuZC1lbWFpbA.option.Y2M.desc": {
+          "source": "One or more `Cc:` addresses for the email",
+          "message": "Jedna alebo viacero adries `Cc:` pre e-mail"
+        },
+        "app.U01UUA.action.c2VuZC1lbWFpbA.option.Y2M.display_name": {
+          "source": "CC",
+          "message": "Kópia"
+        },
+        "app.U01UUA.action.c2VuZC1lbWFpbA.option.Y2M.short_desc": {
+          "source": "Carbon copy addresses",
+          "message": "Adresy kópie (Cc)"
+        },
+        "app.U01UUA.action.c2VuZC1lbWFpbA.option.YXR0YWNobWVudHM.desc": {
+          "source": "Any attachments for the message",
+          "message": "Akékoľvek prílohy správy"
+        },
+        "app.U01UUA.action.c2VuZC1lbWFpbA.option.YXR0YWNobWVudHM.display_name": {
+          "source": "Attachments",
+          "message": "Prílohy"
+        },
+        "app.U01UUA.action.c2VuZC1lbWFpbA.option.YXR0YWNobWVudHM.short_desc": {
+          "source": "Message attachments",
+          "message": "Prílohy správy"
+        },
+        "app.U01UUA.action.c2VuZC1lbWFpbA.option.Ym9keQ.desc": {
+          "source": "The message body",
+          "message": "Telo správy"
+        },
+        "app.U01UUA.action.c2VuZC1lbWFpbA.option.Ym9keQ.display_name": {
+          "source": "Message Body",
+          "message": "Telo správy"
+        },
+        "app.U01UUA.action.c2VuZC1lbWFpbA.option.Ym9keQ.short_desc": {
+          "source": "The message body",
+          "message": "Telo správy"
+        },
+        "app.U01UUA.action.c2VuZC1lbWFpbA.option.Ym9keS1lbmNvZGluZw.allowed-value.c3RyaW5nOm5vbmU.desc": {
+          "source": "No content encoding (not recommended)",
+          "message": "Bez kódovania obsahu (neodporúča sa)"
+        },
+        "app.U01UUA.action.c2VuZC1lbWFpbA.option.Ym9keS1lbmNvZGluZw.allowed-value.c3RyaW5nOmJhc2U2NA.desc": {
+          "source": "Base64 encoding",
+          "message": "Kódovanie Base64"
+        },
+        "app.U01UUA.action.c2VuZC1lbWFpbA.option.Ym9keS1lbmNvZGluZw.allowed-value.c3RyaW5nOmRlZmF1bHQ.desc": {
+          "source": "`quoted-printable` for string data, `base64` for binary data",
+          "message": "`quoted-printable` pre reťazcové dáta, `base64` pre binárne dáta"
+        },
+        "app.U01UUA.action.c2VuZC1lbWFpbA.option.Ym9keS1lbmNvZGluZw.allowed-value.c3RyaW5nOnF1b3RlZC1wcmludGFibGU.desc": {
+          "source": "Quoted printable encoding",
+          "message": "Kódovanie Quoted-printable"
+        },
+        "app.U01UUA.action.c2VuZC1lbWFpbA.option.Ym9keS1lbmNvZGluZw.desc": {
+          "source": "The encoding to use for the message body",
+          "message": "Kódovanie, ktoré sa má použiť pre telo správy"
+        },
+        "app.U01UUA.action.c2VuZC1lbWFpbA.option.Ym9keS1lbmNvZGluZw.display_name": {
+          "source": "Body Encoding",
+          "message": "Kódovanie tela"
+        },
+        "app.U01UUA.action.c2VuZC1lbWFpbA.option.Ym9keS1lbmNvZGluZw.short_desc": {
+          "source": "The encoding to use for the body",
+          "message": "Kódovanie, ktoré sa má použiť pre telo"
+        },
+        "app.U01UUA.action.c2VuZC1lbWFpbA.option.Ym9keS1taW1lLXR5cGU.desc": {
+          "source": "The MIME type of the message body",
+          "message": "Typ MIME tela správy"
+        },
+        "app.U01UUA.action.c2VuZC1lbWFpbA.option.Ym9keS1taW1lLXR5cGU.display_name": {
+          "source": "Body Mime Type",
+          "message": "Typ MIME tela"
+        },
+        "app.U01UUA.action.c2VuZC1lbWFpbA.option.Ym9keS1taW1lLXR5cGU.short_desc": {
+          "source": "The MIME type of the message body",
+          "message": "Typ MIME tela správy"
+        },
+        "app.U01UUA.action.c2VuZC1lbWFpbA.option.YmNj.desc": {
+          "source": "One or more `Bcc:` addresses for the email",
+          "message": "Jedna alebo viacero adries `Bcc:` pre e-mail"
+        },
+        "app.U01UUA.action.c2VuZC1lbWFpbA.option.YmNj.display_name": {
+          "source": "BCC",
+          "message": "Skrytá kópia"
+        },
+        "app.U01UUA.action.c2VuZC1lbWFpbA.option.YmNj.short_desc": {
+          "source": "Blind carbon copy addresses",
+          "message": "Adresy skrytej kópie"
+        },
+        "app.U01UUA.action.c2VuZC1lbWFpbA.option.c2VuZGVy.desc": {
+          "source": "The sender's address for the email",
+          "message": "Adresa odosielateľa e-mailu"
+        },
+        "app.U01UUA.action.c2VuZC1lbWFpbA.option.c2VuZGVy.display_name": {
+          "source": "Sender",
+          "message": "Odosielateľ"
+        },
+        "app.U01UUA.action.c2VuZC1lbWFpbA.option.c2VuZGVy.short_desc": {
+          "source": "The sender's address for the email",
+          "message": "Adresa odosielateľa e-mailu"
+        },
+        "app.U01UUA.action.c2VuZC1lbWFpbA.option.c3ViamVjdA.desc": {
+          "source": "The subject for the email",
+          "message": "Predmet e-mailu"
+        },
+        "app.U01UUA.action.c2VuZC1lbWFpbA.option.c3ViamVjdA.display_name": {
+          "source": "Subject",
+          "message": "Predmet"
+        },
+        "app.U01UUA.action.c2VuZC1lbWFpbA.option.c3ViamVjdA.short_desc": {
+          "source": "The subject for the email",
+          "message": "Predmet e-mailu"
+        },
+        "app.U01UUA.action.c2VuZC1lbWFpbA.option.dG8.desc": {
+          "source": "One or more `To:` addresses for the email",
+          "message": "Jedna alebo viacero adries `To:` pre e-mail"
+        },
+        "app.U01UUA.action.c2VuZC1lbWFpbA.option.dG8.display_name": {
+          "source": "To",
+          "message": "Komu"
+        },
+        "app.U01UUA.action.c2VuZC1lbWFpbA.option.dG8.short_desc": {
+          "source": "Message recipient addresses",
+          "message": "Adresy príjemcov správy"
+        },
+        "app.U01UUA.action.c2VuZC1lbWFpbA.short_desc": {
+          "source": "Send an email through a generic SMTP server",
+          "message": "Odoslať e-mail cez všeobecný SMTP server"
+        },
+        "app.U01UUA.desc": {
+          "source": "Generic SMTP server for sending emails",
+          "message": "Všeobecný SMTP server na odosielanie e-mailov"
+        },
+        "app.U01UUA.display_name": {
+          "source": "SMTP Server",
+          "message": "SMTP server"
+        },
+        "app.U01UUA.short_desc": {
+          "source": "Generic SMTP server for sending emails",
+          "message": "Všeobecný SMTP server na odosielanie e-mailov"
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,549 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "uk": {
+      "messages": {
+        "app.QXp1cmVPcGVuQUk.action.Y2hhdC1jb21wbGV0aW9u.desc": {
+          "source": "Generate a chat completion via an Azure OpenAI Service deployment. The deployment name in the request body is resolved into the URL (`/openai/deployments/{deployment}/chat/completions?api-version=...`); the body is otherwise identical to the public OpenAI chat-completions API.",
+          "message": "Згенерувати доповнення чату через розгортання Azure OpenAI Service. Ім'я розгортання в тілі запиту підставляється в URL (`/openai/deployments/{deployment}/chat/completions?api-version=...`); в іншому тіло ідентичне публічному API доповнення чату OpenAI."
+        },
+        "app.QXp1cmVPcGVuQUk.action.Y2hhdC1jb21wbGV0aW9u.display_name": {
+          "source": "Chat Completion",
+          "message": "Доповнення чату"
+        },
+        "app.QXp1cmVPcGVuQUk.action.Y2hhdC1jb21wbGV0aW9u.option.ZGVwbG95bWVudA.desc": {
+          "source": "The Azure OpenAI deployment name to call. Each Azure resource defines one or more deployments, each bound to a specific underlying OpenAI model (e.g. `gpt-4o`, `gpt-4o-mini`, `o3`)",
+          "message": "Ім'я розгортання Azure OpenAI для виклику. Кожен ресурс Azure визначає одне або кілька розгортань, кожне з яких прив'язане до конкретної базової моделі OpenAI (наприклад, `gpt-4o`, `gpt-4o-mini`, `o3`)"
+        },
+        "app.QXp1cmVPcGVuQUk.action.Y2hhdC1jb21wbGV0aW9u.option.ZGVwbG95bWVudA.display_name": {
+          "source": "Deployment",
+          "message": "Розгортання"
+        },
+        "app.QXp1cmVPcGVuQUk.action.Y2hhdC1jb21wbGV0aW9u.option.ZGVwbG95bWVudA.short_desc": {
+          "source": "Azure OpenAI deployment name",
+          "message": "Ім'я розгортання Azure OpenAI"
+        },
+        "app.QXp1cmVPcGVuQUk.action.Y2hhdC1jb21wbGV0aW9u.option.bWF4X3Rva2Vucw.desc": {
+          "source": "Maximum tokens to generate in the response",
+          "message": "Максимальна кількість токенів для генерації у відповіді"
+        },
+        "app.QXp1cmVPcGVuQUk.action.Y2hhdC1jb21wbGV0aW9u.option.bWF4X3Rva2Vucw.display_name": {
+          "source": "Max Tokens",
+          "message": "Максимум токенів"
+        },
+        "app.QXp1cmVPcGVuQUk.action.Y2hhdC1jb21wbGV0aW9u.option.bWF4X3Rva2Vucw.short_desc": {
+          "source": "Maximum tokens to generate",
+          "message": "Максимальна кількість токенів для генерації"
+        },
+        "app.QXp1cmVPcGVuQUk.action.Y2hhdC1jb21wbGV0aW9u.option.bWVzc2FnZXM.desc": {
+          "source": "Conversation history in OpenAI chat-completion shape; each entry is a hash with `role` (`system` / `user` / `assistant` / `tool`) and `content` (string or list of content parts for multimodal)",
+          "message": "Історія розмови у форматі chat-completion OpenAI; кожен запис є хешем із `role` (`system` / `user` / `assistant` / `tool`) та `content` (рядок або список частин вмісту для мультимодальних даних)"
+        },
+        "app.QXp1cmVPcGVuQUk.action.Y2hhdC1jb21wbGV0aW9u.option.bWVzc2FnZXM.display_name": {
+          "source": "Messages",
+          "message": "Повідомлення"
+        },
+        "app.QXp1cmVPcGVuQUk.action.Y2hhdC1jb21wbGV0aW9u.option.bWVzc2FnZXM.short_desc": {
+          "source": "OpenAI chat-completion messages",
+          "message": "Повідомлення chat-completion OpenAI"
+        },
+        "app.QXp1cmVPcGVuQUk.action.Y2hhdC1jb21wbGV0aW9u.option.c2VlZA.desc": {
+          "source": "Seed for deterministic sampling (best-effort)",
+          "message": "Seed для детермінованої вибірки (на основі найкращих спроб)"
+        },
+        "app.QXp1cmVPcGVuQUk.action.Y2hhdC1jb21wbGV0aW9u.option.c2VlZA.display_name": {
+          "source": "Seed",
+          "message": "Seed"
+        },
+        "app.QXp1cmVPcGVuQUk.action.Y2hhdC1jb21wbGV0aW9u.option.c2VlZA.short_desc": {
+          "source": "Deterministic-sampling seed",
+          "message": "Seed детермінованої вибірки"
+        },
+        "app.QXp1cmVPcGVuQUk.action.Y2hhdC1jb21wbGV0aW9u.option.c3RvcA.desc": {
+          "source": "Up to four stop sequences that terminate generation",
+          "message": "До чотирьох стоп-послідовностей, що переривають генерацію"
+        },
+        "app.QXp1cmVPcGVuQUk.action.Y2hhdC1jb21wbGV0aW9u.option.c3RvcA.display_name": {
+          "source": "Stop Sequences",
+          "message": "Послідовності зупинки"
+        },
+        "app.QXp1cmVPcGVuQUk.action.Y2hhdC1jb21wbGV0aW9u.option.c3RvcA.short_desc": {
+          "source": "Stop sequences",
+          "message": "Стоп-послідовності"
+        },
+        "app.QXp1cmVPcGVuQUk.action.Y2hhdC1jb21wbGV0aW9u.option.cmVzcG9uc2VfZm9ybWF0.desc": {
+          "source": "Structured-output shape; `{\"type\": \"json_object\"}` for JSON mode or `{\"type\": \"json_schema\", \"json_schema\": {...}}` for strict-schema responses",
+          "message": "Формат структурованого виводу; `{\"type\": \"json_object\"}` для режиму JSON або `{\"type\": \"json_schema\", \"json_schema\": {...}}` для відповідей із суворою схемою"
+        },
+        "app.QXp1cmVPcGVuQUk.action.Y2hhdC1jb21wbGV0aW9u.option.cmVzcG9uc2VfZm9ybWF0.display_name": {
+          "source": "Response Format",
+          "message": "Формат відповіді"
+        },
+        "app.QXp1cmVPcGVuQUk.action.Y2hhdC1jb21wbGV0aW9u.option.cmVzcG9uc2VfZm9ybWF0.short_desc": {
+          "source": "Structured-output shape",
+          "message": "Формат структурованого виводу"
+        },
+        "app.QXp1cmVPcGVuQUk.action.Y2hhdC1jb21wbGV0aW9u.option.dG9vbF9jaG9pY2U.desc": {
+          "source": "Tool-selection policy: `\"auto\"`, `\"none\"`, `\"required\"`, or `{type:\"function\",function:{name}}`",
+          "message": "Політика вибору інструментів: `\"auto\"`, `\"none\"`, `\"required\"` або `{type:\"function\",function:{name}}`"
+        },
+        "app.QXp1cmVPcGVuQUk.action.Y2hhdC1jb21wbGV0aW9u.option.dG9vbF9jaG9pY2U.display_name": {
+          "source": "Tool Choice",
+          "message": "Вибір інструмента"
+        },
+        "app.QXp1cmVPcGVuQUk.action.Y2hhdC1jb21wbGV0aW9u.option.dG9vbF9jaG9pY2U.short_desc": {
+          "source": "Tool-selection policy",
+          "message": "Політика вибору інструментів"
+        },
+        "app.QXp1cmVPcGVuQUk.action.Y2hhdC1jb21wbGV0aW9u.option.dG9vbHM.desc": {
+          "source": "Function-calling tool definitions; each tool is `{\"type\": \"function\", \"function\": {name, description, parameters: <JSON schema>}}`",
+          "message": "Визначення інструментів виклику функцій; кожен інструмент має вигляд `{\"type\": \"function\", \"function\": {name, description, parameters: <JSON schema>}}`"
+        },
+        "app.QXp1cmVPcGVuQUk.action.Y2hhdC1jb21wbGV0aW9u.option.dG9vbHM.display_name": {
+          "source": "Tools",
+          "message": "Інструменти"
+        },
+        "app.QXp1cmVPcGVuQUk.action.Y2hhdC1jb21wbGV0aW9u.option.dG9vbHM.short_desc": {
+          "source": "Function-calling tool definitions",
+          "message": "Визначення інструментів виклику функцій"
+        },
+        "app.QXp1cmVPcGVuQUk.action.Y2hhdC1jb21wbGV0aW9u.option.dG9wX3A.desc": {
+          "source": "Nucleus sampling probability mass (0..1)",
+          "message": "Ймовірнісна маса для вибірки за ядром (top-p) (0..1)"
+        },
+        "app.QXp1cmVPcGVuQUk.action.Y2hhdC1jb21wbGV0aW9u.option.dG9wX3A.display_name": {
+          "source": "Top-P",
+          "message": "Top-P"
+        },
+        "app.QXp1cmVPcGVuQUk.action.Y2hhdC1jb21wbGV0aW9u.option.dG9wX3A.short_desc": {
+          "source": "Nucleus sampling probability mass",
+          "message": "Ймовірнісна маса вибірки за ядром (top-p)"
+        },
+        "app.QXp1cmVPcGVuQUk.action.Y2hhdC1jb21wbGV0aW9u.option.dGVtcGVyYXR1cmU.desc": {
+          "source": "Sampling temperature (0..2); 0 is deterministic",
+          "message": "Температура вибірки (0..2); 0 є детермінованим"
+        },
+        "app.QXp1cmVPcGVuQUk.action.Y2hhdC1jb21wbGV0aW9u.option.dGVtcGVyYXR1cmU.display_name": {
+          "source": "Temperature",
+          "message": "Температура"
+        },
+        "app.QXp1cmVPcGVuQUk.action.Y2hhdC1jb21wbGV0aW9u.option.dGVtcGVyYXR1cmU.short_desc": {
+          "source": "Sampling temperature",
+          "message": "Температура вибірки"
+        },
+        "app.QXp1cmVPcGVuQUk.action.Y2hhdC1jb21wbGV0aW9u.option.dXNlcg.desc": {
+          "source": "Stable identifier for the end-user making the request (passed to Azure abuse monitoring)",
+          "message": "Стабільний ідентифікатор кінцевого користувача, який робить запит (передається в систему моніторингу зловживань Azure)"
+        },
+        "app.QXp1cmVPcGVuQUk.action.Y2hhdC1jb21wbGV0aW9u.option.dXNlcg.display_name": {
+          "source": "User",
+          "message": "Користувач"
+        },
+        "app.QXp1cmVPcGVuQUk.action.Y2hhdC1jb21wbGV0aW9u.option.dXNlcg.short_desc": {
+          "source": "End-user identifier for abuse tracking",
+          "message": "Ідентифікатор кінцевого користувача для відстеження зловживань"
+        },
+        "app.QXp1cmVPcGVuQUk.action.Y2hhdC1jb21wbGV0aW9u.short_desc": {
+          "source": "Generate a chat completion via an Azure OpenAI deployment",
+          "message": "Згенерувати завершення чату через розгортання Azure OpenAI"
+        },
+        "app.QXp1cmVPcGVuQUk.action.ZW1iZWRkaW5n.desc": {
+          "source": "Generate dense vector embeddings via an Azure OpenAI Service deployment bound to a `text-embedding-*` model. Accepts either a single string or a list of strings as `input` for batch embedding; supports the `dimensions` knob on `text-embedding-3-*` models for shorter (cheaper) vectors.",
+          "message": "Генеруйте щільні векторні ембедінги через розгортання Azure OpenAI Service, прив'язане до моделі `text-embedding-*`. Приймає або один рядок, або список рядків як `input` для пакетного створення ембедінгів; підтримує параметр `dimensions` у моделях `text-embedding-3-*` для коротших (дешевших) векторів."
+        },
+        "app.QXp1cmVPcGVuQUk.action.ZW1iZWRkaW5n.display_name": {
+          "source": "Embedding",
+          "message": "Ембедінг"
+        },
+        "app.QXp1cmVPcGVuQUk.action.ZW1iZWRkaW5n.option.ZGVwbG95bWVudA.desc": {
+          "source": "The Azure OpenAI deployment name bound to an embedding model (e.g. `text-embedding-3-small`, `text-embedding-3-large`, `text-embedding-ada-002`)",
+          "message": "Назва розгортання Azure OpenAI, прив'язаного до моделі ембедінгів (наприклад, `text-embedding-3-small`, `text-embedding-3-large`, `text-embedding-ada-002`)"
+        },
+        "app.QXp1cmVPcGVuQUk.action.ZW1iZWRkaW5n.option.ZGVwbG95bWVudA.display_name": {
+          "source": "Deployment",
+          "message": "Розгортання"
+        },
+        "app.QXp1cmVPcGVuQUk.action.ZW1iZWRkaW5n.option.ZGVwbG95bWVudA.short_desc": {
+          "source": "Azure OpenAI embedding-model deployment name",
+          "message": "Назва розгортання моделі ембедінгів Azure OpenAI"
+        },
+        "app.QXp1cmVPcGVuQUk.action.ZW1iZWRkaW5n.option.ZGltZW5zaW9ucw.desc": {
+          "source": "Number of dimensions in the output embedding (supported by `text-embedding-3-*` models)",
+          "message": "Кількість вимірів у вихідному ембедінгу (підтримується моделями `text-embedding-3-*`)"
+        },
+        "app.QXp1cmVPcGVuQUk.action.ZW1iZWRkaW5n.option.ZGltZW5zaW9ucw.display_name": {
+          "source": "Dimensions",
+          "message": "Параметри"
+        },
+        "app.QXp1cmVPcGVuQUk.action.ZW1iZWRkaW5n.option.ZGltZW5zaW9ucw.short_desc": {
+          "source": "Output embedding dimension",
+          "message": "Розмірність вихідного ембедінгу"
+        },
+        "app.QXp1cmVPcGVuQUk.action.ZW1iZWRkaW5n.option.aW5wdXQ.desc": {
+          "source": "Text to embed; either a single string or a list of strings for batch embedding",
+          "message": "Текст для створення ембедінгу; один рядок або список рядків для пакетної обробки"
+        },
+        "app.QXp1cmVPcGVuQUk.action.ZW1iZWRkaW5n.option.aW5wdXQ.display_name": {
+          "source": "Input",
+          "message": "Вхідні дані"
+        },
+        "app.QXp1cmVPcGVuQUk.action.ZW1iZWRkaW5n.option.aW5wdXQ.short_desc": {
+          "source": "Text(s) to embed",
+          "message": "Текст(и) для створення ембедінгу"
+        },
+        "app.QXp1cmVPcGVuQUk.action.ZW1iZWRkaW5n.option.dXNlcg.desc": {
+          "source": "Stable end-user identifier passed to abuse monitoring",
+          "message": "Стабільний ідентифікатор кінцевого користувача, що передається в систему моніторингу зловживань"
+        },
+        "app.QXp1cmVPcGVuQUk.action.ZW1iZWRkaW5n.option.dXNlcg.display_name": {
+          "source": "User",
+          "message": "Користувач"
+        },
+        "app.QXp1cmVPcGVuQUk.action.ZW1iZWRkaW5n.option.dXNlcg.short_desc": {
+          "source": "End-user identifier",
+          "message": "Ідентифікатор кінцевого користувача"
+        },
+        "app.QXp1cmVPcGVuQUk.action.ZW1iZWRkaW5n.short_desc": {
+          "source": "Generate text embeddings via an Azure OpenAI deployment",
+          "message": "Згенерувати текстові ембедінги через розгортання Azure OpenAI"
+        },
+        "app.QXp1cmVPcGVuQUk.action.bWFrZS1hcGktY2FsbA.desc": {
+          "source": "Make a custom HTTP / REST API call to **Azure OpenAI** using the configured connection's authentication.\n\nSpecify the HTTP method, the URI path (relative to the connection's API base URL), optional query parameters, headers, and request body. The response is returned as a hash containing the status code, response headers, and response body.\n\nUse this action for endpoints that are not yet exposed as first-class actions on this app.",
+          "message": "Виконати довільний виклик HTTP / REST API до **Azure OpenAI**, використовуючи автентифікацію налаштованого з'єднання.\n\nВкажіть HTTP-метод, шлях URI (відносно базової URL-адреси API з'єднання), необов'язкові параметри запиту, заголовки та тіло запиту. Відповідь повертається у вигляді хешу, що містить код стану, заголовки відповіді та тіло відповіді.\n\nВикористовуйте цю дію для ендпоінтів, які ще не представлені як окремі дії в цьому додатку."
+        },
+        "app.QXp1cmVPcGVuQUk.action.bWFrZS1hcGktY2FsbA.display_name": {
+          "source": "Make an API call",
+          "message": "Зробити виклик API"
+        },
+        "app.QXp1cmVPcGVuQUk.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.desc": {
+          "source": "The request body. The effective type depends on `body_type`: JSON/form/YAML expect a hash, XML/text expect a string, multipart expects a file structure, binary expects raw bytes.",
+          "message": "Тіло запиту. Ефективний тип залежить від `body_type`: JSON/form/YAML очікують хеш, XML/text очікують рядок, multipart очікує структуру файлу, binary очікує необроблені байти."
+        },
+        "app.QXp1cmVPcGVuQUk.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.display_name": {
+          "source": "Body",
+          "message": "Тіло"
+        },
+        "app.QXp1cmVPcGVuQUk.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.short_desc": {
+          "source": "The request body",
+          "message": "Тіло запиту"
+        },
+        "app.QXp1cmVPcGVuQUk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.desc": {
+          "source": "Upload a file using `multipart/form-data`. The body must be a @ref DataProvider::FileDataType \"FileDataType\" structure (filename + content + mime_type). The framework builds the multipart envelope and sets the boundary header.",
+          "message": "Завантажити файл за допомогою `multipart/form-data`. Тіло має бути структурою @ref DataProvider::FileDataType \"FileDataType\" (filename + content + mime_type). Фреймворк створює конверт multipart і встановлює заголовок boundary."
+        },
+        "app.QXp1cmVPcGVuQUk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.display_name": {
+          "source": "Multipart Form",
+          "message": "Форма Multipart"
+        },
+        "app.QXp1cmVPcGVuQUk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.short_desc": {
+          "source": "Upload a file using multipart/form-data",
+          "message": "Завантажити файл за допомогою multipart/form-data"
+        },
+        "app.QXp1cmVPcGVuQUk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.desc": {
+          "source": "Pass the body to the REST client unchanged; the client decides serialization based on its configured `data` option and the value type",
+          "message": "Передати тіло REST-клієнту без змін; клієнт визначає серіалізацію на основі налаштованого параметра `data` та типу значення"
+        },
+        "app.QXp1cmVPcGVuQUk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.display_name": {
+          "source": "Auto",
+          "message": "Авто"
+        },
+        "app.QXp1cmVPcGVuQUk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.short_desc": {
+          "source": "Pass-through; use connection serialization and let the REST client decide",
+          "message": "Пряма передача; використовувати серіалізацію з'єднання та дозволити REST-клієнту приймати рішення"
+        },
+        "app.QXp1cmVPcGVuQUk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.desc": {
+          "source": "Send the body as raw bytes. The body must be a binary value. Sets `Content-Type: application/octet-stream` unless overridden by `hdr`.",
+          "message": "Надіслати тіло як необроблені байти. Тіло має бути бінарним значенням. Установлює `Content-Type: application/octet-stream`, якщо не перевизначено через `hdr`."
+        },
+        "app.QXp1cmVPcGVuQUk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.display_name": {
+          "source": "Raw Binary",
+          "message": "Необроблені бінарні дані"
+        },
+        "app.QXp1cmVPcGVuQUk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.short_desc": {
+          "source": "Send body as raw bytes",
+          "message": "Надіслати тіло як необроблені байти"
+        },
+        "app.QXp1cmVPcGVuQUk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.desc": {
+          "source": "Serialize a hash of form fields as `application/x-www-form-urlencoded`. The body must be a hash whose values are scalars (strings/numbers/booleans).",
+          "message": "Серіалізувати хеш полів форми як `application/x-www-form-urlencoded`. Тіло має бути хешем, значеннями якого є скаляри (рядки/числа/булеві значення)."
+        },
+        "app.QXp1cmVPcGVuQUk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.display_name": {
+          "source": "Form (URL-encoded)",
+          "message": "Форма (URL-encoded)"
+        },
+        "app.QXp1cmVPcGVuQUk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.short_desc": {
+          "source": "Serialize body as application/x-www-form-urlencoded form fields",
+          "message": "Серіалізувати тіло як поля форми application/x-www-form-urlencoded"
+        },
+        "app.QXp1cmVPcGVuQUk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.desc": {
+          "source": "Serialize the body as JSON; sets `Content-Type: application/json`. The body should be a hash, list, or scalar value.",
+          "message": "Серіалізувати тіло як JSON; встановлює `Content-Type: application/json`. Тіло має бути хешем, списком або скалярним значенням."
+        },
+        "app.QXp1cmVPcGVuQUk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.display_name": {
+          "source": "JSON",
+          "message": "JSON"
+        },
+        "app.QXp1cmVPcGVuQUk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.short_desc": {
+          "source": "Serialize body as JSON",
+          "message": "Серіалізувати тіло як JSON"
+        },
+        "app.QXp1cmVPcGVuQUk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.desc": {
+          "source": "Send the body as plain text. The body must be a string. Sets `Content-Type: text/plain`.",
+          "message": "Надіслати тіло як простий текст. Тіло має бути рядком. Установлює `Content-Type: text/plain`."
+        },
+        "app.QXp1cmVPcGVuQUk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.display_name": {
+          "source": "Plain Text",
+          "message": "Простий текст"
+        },
+        "app.QXp1cmVPcGVuQUk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.short_desc": {
+          "source": "Send body as text/plain",
+          "message": "Надіслати тіло як text/plain"
+        },
+        "app.QXp1cmVPcGVuQUk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.desc": {
+          "source": "Send the body as XML. If the body is a hash it is serialized to XML; if it is a string it is sent verbatim. Sets `Content-Type: application/xml`.",
+          "message": "Надіслати тіло як XML. Якщо тіло є хешем, воно серіалізується в XML; якщо це рядок, воно надсилається без змін. Установлює `Content-Type: application/xml`."
+        },
+        "app.QXp1cmVPcGVuQUk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.display_name": {
+          "source": "XML",
+          "message": "XML"
+        },
+        "app.QXp1cmVPcGVuQUk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.short_desc": {
+          "source": "Send body as XML",
+          "message": "Надіслати тіло як XML"
+        },
+        "app.QXp1cmVPcGVuQUk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.desc": {
+          "source": "Send the body as YAML. If the body is a hash it is serialized to YAML; if it is a string it is sent verbatim. Sets `Content-Type: application/x-yaml`.",
+          "message": "Надіслати тіло як YAML. Якщо тіло є хешем, воно серіалізується в YAML; якщо це рядок, воно надсилається без змін. Установлює `Content-Type: application/x-yaml`."
+        },
+        "app.QXp1cmVPcGVuQUk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.display_name": {
+          "source": "YAML",
+          "message": "YAML"
+        },
+        "app.QXp1cmVPcGVuQUk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.short_desc": {
+          "source": "Send body as YAML",
+          "message": "Надіслати тіло як YAML"
+        },
+        "app.QXp1cmVPcGVuQUk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.desc": {
+          "source": "Selects the body serialization mode and the corresponding `Content-Type` header. Changing this field reshapes the `body` editor - selecting JSON exposes a JSON editor, selecting Multipart Form exposes a file picker, and so on.",
+          "message": "Вибирає режим серіалізації тіла та відповідний заголовок `Content-Type`. Зміна цього поля змінює вигляд редактора `body` — вибір JSON відкриває редактор JSON, вибір Multipart Form відкриває вибір файлу тощо."
+        },
+        "app.QXp1cmVPcGVuQUk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.display_name": {
+          "source": "Body Type",
+          "message": "Тип тіла"
+        },
+        "app.QXp1cmVPcGVuQUk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.short_desc": {
+          "source": "How the body is serialized and what Content-Type is sent",
+          "message": "Як серіалізується тіло та який Content-Type надсилається"
+        },
+        "app.QXp1cmVPcGVuQUk.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.desc": {
+          "source": "If `True`, non-2xx HTTP responses return as the normal response hash (with the actual status code) instead of raising `REST-RESPONSE-ERROR`. Useful for handling 4xx/5xx as data - e.g. checking whether a resource exists. Overrides the connection's `error_passthru` setting for this call only.",
+          "message": "Якщо `True`, HTTP-відповіді з кодом, відмінним від 2xx, повертаються як звичайний хеш відповіді (з фактичним кодом стану) замість генерації `REST-RESPONSE-ERROR`. Корисно для обробки 4xx/5xx як даних — наприклад, перевірки існування ресурсу. Перевизначає налаштування `error_passthru` з'єднання лише для цього виклику."
+        },
+        "app.QXp1cmVPcGVuQUk.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.display_name": {
+          "source": "Return Errors as Data",
+          "message": "Повертати помилки як дані"
+        },
+        "app.QXp1cmVPcGVuQUk.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.short_desc": {
+          "source": "Return non-2xx responses normally instead of throwing",
+          "message": "Повертати відповіді з кодом, відмінним від 2xx, у звичайному режимі замість генерації помилки"
+        },
+        "app.QXp1cmVPcGVuQUk.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.desc": {
+          "source": "Optional list of HTTP status codes treated as success. If set and the response status is not in this list, the action throws `REST-STATUS-ERROR`. When unset, the REST client's default behavior applies (typically: 2xx is success, non-2xx throws).",
+          "message": "Необов'язковий список кодів стану HTTP, які вважаються успішними. Якщо задано і код стану відповіді відсутній у цьому списку, дія генерує `REST-STATUS-ERROR`. Якщо не задано, застосовується поведінка REST-клієнта за замовчуванням (зазвичай: 2xx — успіх, не-2xx генерує помилку)."
+        },
+        "app.QXp1cmVPcGVuQUk.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.display_name": {
+          "source": "Expected Status Codes",
+          "message": "Очікувані коди стану"
+        },
+        "app.QXp1cmVPcGVuQUk.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.short_desc": {
+          "source": "Response status codes treated as success",
+          "message": "Коди стану відповіді, які вважаються успішними"
+        },
+        "app.QXp1cmVPcGVuQUk.action.bWFrZS1hcGktY2FsbA.option.aGRy.desc": {
+          "source": "Hash of custom headers added to the request. These override any default headers set by `body_type` (e.g. supplying `Content-Type` here wins over the body-type default).",
+          "message": "Хеш користувацьких заголовків, доданих до запиту. Вони перевизначають будь-які заголовки за замовчуванням, встановлені `body_type` (наприклад, передання `Content-Type` тут має перевагу над замовчуваним значенням для типу тіла)."
+        },
+        "app.QXp1cmVPcGVuQUk.action.bWFrZS1hcGktY2FsbA.option.aGRy.display_name": {
+          "source": "Custom Headers",
+          "message": "Користувацькі заголовки"
+        },
+        "app.QXp1cmVPcGVuQUk.action.bWFrZS1hcGktY2FsbA.option.aGRy.short_desc": {
+          "source": "Extra request headers",
+          "message": "Додаткові заголовки запиту"
+        },
+        "app.QXp1cmVPcGVuQUk.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.desc": {
+          "source": "If `True`, the response hash includes a `debug` sub-hash containing the request method/URL/headers (with sensitive values redacted), request and response sizes, and round-trip duration. Useful when investigating slow or failing calls. Off by default to keep responses lean.",
+          "message": "Якщо `True`, хеш відповіді містить підхеш `debug`, що містить метод/URL/заголовки запиту (з відредагованими конфіденційними значеннями), розміри запиту та відповіді, а також тривалість виконання. Корисно під час дослідження повільних або невдалих викликів. Вимкнено за замовчуванням для зменшення обсягу відповідей."
+        },
+        "app.QXp1cmVPcGVuQUk.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.display_name": {
+          "source": "Include Debug Info",
+          "message": "Включати зневаджувальну інформацію"
+        },
+        "app.QXp1cmVPcGVuQUk.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.short_desc": {
+          "source": "Include request/timing/size debug info in the response",
+          "message": "Включати зневаджувальну інформацію про запит/час/розмір у відповідь"
+        },
+        "app.QXp1cmVPcGVuQUk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.desc": {
+          "source": "HTTP `OPTIONS`",
+          "message": "HTTP `OPTIONS`"
+        },
+        "app.QXp1cmVPcGVuQUk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.display_name": {
+          "source": "OPTIONS",
+          "message": "OPTIONS"
+        },
+        "app.QXp1cmVPcGVuQUk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.short_desc": {
+          "source": "HTTP OPTIONS",
+          "message": "HTTP OPTIONS"
+        },
+        "app.QXp1cmVPcGVuQUk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.desc": {
+          "source": "HTTP `DELETE`",
+          "message": "HTTP `DELETE`"
+        },
+        "app.QXp1cmVPcGVuQUk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.display_name": {
+          "source": "DELETE",
+          "message": "DELETE"
+        },
+        "app.QXp1cmVPcGVuQUk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.short_desc": {
+          "source": "HTTP DELETE",
+          "message": "HTTP DELETE"
+        },
+        "app.QXp1cmVPcGVuQUk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.desc": {
+          "source": "HTTP `GET`",
+          "message": "HTTP `GET`"
+        },
+        "app.QXp1cmVPcGVuQUk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.display_name": {
+          "source": "GET",
+          "message": "GET"
+        },
+        "app.QXp1cmVPcGVuQUk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.short_desc": {
+          "source": "HTTP GET",
+          "message": "HTTP GET"
+        },
+        "app.QXp1cmVPcGVuQUk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.desc": {
+          "source": "HTTP `HEAD`",
+          "message": "HTTP `HEAD`"
+        },
+        "app.QXp1cmVPcGVuQUk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.display_name": {
+          "source": "HEAD",
+          "message": "HEAD"
+        },
+        "app.QXp1cmVPcGVuQUk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.short_desc": {
+          "source": "HTTP HEAD",
+          "message": "HTTP HEAD"
+        },
+        "app.QXp1cmVPcGVuQUk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.desc": {
+          "source": "HTTP `PATCH`",
+          "message": "HTTP `PATCH`"
+        },
+        "app.QXp1cmVPcGVuQUk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.display_name": {
+          "source": "PATCH",
+          "message": "PATCH"
+        },
+        "app.QXp1cmVPcGVuQUk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.short_desc": {
+          "source": "HTTP PATCH",
+          "message": "HTTP PATCH"
+        },
+        "app.QXp1cmVPcGVuQUk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.desc": {
+          "source": "HTTP `POST`",
+          "message": "HTTP `POST`"
+        },
+        "app.QXp1cmVPcGVuQUk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.display_name": {
+          "source": "POST",
+          "message": "POST"
+        },
+        "app.QXp1cmVPcGVuQUk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.short_desc": {
+          "source": "HTTP POST",
+          "message": "HTTP POST"
+        },
+        "app.QXp1cmVPcGVuQUk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.desc": {
+          "source": "HTTP `PUT`",
+          "message": "HTTP `PUT`"
+        },
+        "app.QXp1cmVPcGVuQUk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.display_name": {
+          "source": "PUT",
+          "message": "PUT"
+        },
+        "app.QXp1cmVPcGVuQUk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.short_desc": {
+          "source": "HTTP PUT",
+          "message": "HTTP PUT"
+        },
+        "app.QXp1cmVPcGVuQUk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.desc": {
+          "source": "HTTP `TRACE`",
+          "message": "HTTP `TRACE`"
+        },
+        "app.QXp1cmVPcGVuQUk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.display_name": {
+          "source": "TRACE",
+          "message": "TRACE"
+        },
+        "app.QXp1cmVPcGVuQUk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.short_desc": {
+          "source": "HTTP TRACE",
+          "message": "HTTP TRACE"
+        },
+        "app.QXp1cmVPcGVuQUk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "Метод HTTP для використання в запиті"
+        },
+        "app.QXp1cmVPcGVuQUk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.display_name": {
+          "source": "HTTP Method",
+          "message": "Метод HTTP"
+        },
+        "app.QXp1cmVPcGVuQUk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.short_desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "Метод HTTP для використання в запиті"
+        },
+        "app.QXp1cmVPcGVuQUk.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain `{name}` placeholders that are replaced from `path_vars`. Example: `/users/{id}/comments`.",
+          "message": "Шлях URI відносно базового URL API з'єднання. Може містити заповнювачі `{name}`, які замінюються з `path_vars`. Приклад: `/users/{id}/comments`."
+        },
+        "app.QXp1cmVPcGVuQUk.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.display_name": {
+          "source": "URI Path",
+          "message": "Шлях URI"
+        },
+        "app.QXp1cmVPcGVuQUk.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.short_desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain '{name}' placeholders that are replaced from 'path_vars'. Example: '/users/{id}/comments'",
+          "message": "Шлях URI відносно базового URL API підключення. Може містити заповнювачі '{name}', які замінюються з 'path_vars'. Приклад: '/users/{id}/comments'"
+        },
+        "app.QXp1cmVPcGVuQUk.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.desc": {
+          "source": "Hash of values substituted into `{name}` placeholders in the URI path. Example: with `path = /users/{id}` and `path_vars = {id: 123}` the framework sends `/users/123`. Values are URL-encoded.",
+          "message": "Хеш значень, що підставляються замість заповнювачів `{name}` у шляху URI. Приклад: із `path = /users/{id}` та `path_vars = {id: 123}` фреймворк надсилає `/users/123`. Значення кодуються у форматі URL."
+        },
+        "app.QXp1cmVPcGVuQUk.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.display_name": {
+          "source": "Path Variables",
+          "message": "Змінні шляху"
+        },
+        "app.QXp1cmVPcGVuQUk.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.short_desc": {
+          "source": "Values for {name} placeholders in path",
+          "message": "Значення для заповнювачів {name} у шляху"
+        },
+        "app.QXp1cmVPcGVuQUk.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.desc": {
+          "source": "Hash of query string parameters to append to the URI path. Values are URL-encoded; list values are joined with `,`.",
+          "message": "Хеш параметрів рядка запиту для додавання до шляху URI. Значення кодуються у форматі URL; значення списку об'єднуються за допомогою `,`."
+        },
+        "app.QXp1cmVPcGVuQUk.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.display_name": {
+          "source": "Query Arguments",
+          "message": "Аргументи запиту"
+        },
+        "app.QXp1cmVPcGVuQUk.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.short_desc": {
+          "source": "Query string parameters",
+          "message": "Параметри рядка запиту"
+        },
+        "app.QXp1cmVPcGVuQUk.action.bWFrZS1hcGktY2FsbA.short_desc": {
+          "source": "Make a custom API call to Azure OpenAI",
+          "message": "Виконати користувацький виклик API до Azure OpenAI"
+        },
+        "app.QXp1cmVPcGVuQUk.desc": {
+          "source": "**Azure OpenAI Service** is Microsoft's enterprise-hosted offering of the OpenAI models (GPT-4o, GPT-4o-mini, o3, text-embedding-3) with Azure-grade compliance, networking, and identity:\n\n- **Chat completions** — same wire shape as the public OpenAI API, accessed through deployment-routed URLs\n- **Embeddings** — `text-embedding-3-small` / `-large` / `ada-002` deployments\n- **Three authentication modes** — api-key header, Entra ID (Azure AD) client credentials, or managed-identity (system or user-assigned)\n- **Azure Content Safety** annotations on the prompt and completion side returned alongside the OpenAI-shape response\n- **Per-deployment routing** — one connection can target any deployment defined in the resource without re-authentication\n\nTokens for Entra modes are cached and refreshed transparently by `AzureAuth` so callers pay the token-exchange cost once per refresh window.\n\nProject: <https://azure.microsoft.com/en-us/products/ai-services/openai-service/>",
+          "message": "**Azure OpenAI Service** — це корпоративна пропозиція моделей OpenAI (GPT-4o, GPT-4o-mini, o3, text-embedding-3) від Microsoft із рівнем відповідності стандартам, мережевою безпекою та керуванням ідентифікаційними даними корпоративного класу Azure:\n\n- **Chat completions** — той самий формат передачі даних, що й у публічному OpenAI API, доступний за URL-адресами з маршрутизацією розгортання\n- **Embeddings** — розгортання `text-embedding-3-small` / `-large` / `ada-002`\n- **Три режими автентифікації** — заголовок api-key, облікові дані клієнта Entra ID (Azure AD) або керована ідентичність (system-assigned чи user-assigned)\n- **Azure Content Safety** — анотації для промпту та відповіді, що повертаються разом із відповіддю у форматі OpenAI\n- **Маршрутизація для кожного розгортання** — одне з'єднання може бути націлене на будь-яке розгортання, визначене в ресурсі, без повторної автентифікації\n\nТокени для режимів Entra кешуються та прозоро оновлюються `AzureAuth`, тому витрати на обмін токенів здійснюються лише раз на вікно оновлення.\n\nПроєкт: <https://azure.microsoft.com/en-us/products/ai-services/openai-service/>"
+        },
+        "app.QXp1cmVPcGVuQUk.display_name": {
+          "source": "Azure OpenAI",
+          "message": "Azure OpenAI"
+        },
+        "app.QXp1cmVPcGVuQUk.short_desc": {
+          "source": "Microsoft Azure OpenAI Service",
+          "message": "Microsoft Azure OpenAI Service"
+        }
+      }
+    }
+  }
+}

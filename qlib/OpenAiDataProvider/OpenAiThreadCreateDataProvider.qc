@@ -106,7 +106,7 @@ public class OpenAiThreadCreateRequestType inherits HashDataType {
                 "display_name": "Tool Resources",
                 "short_desc": "A set of resources that are used by the thread's tools",
                 "desc": "A set of resources that are used by the thread's tools. The resources are specific to "
-                    "the type of tool. For example, the code_interpreter` tool requires a list of file IDs, while "
+                    "the type of tool. For example, the `code_interpreter` tool requires a list of file IDs, while "
                     "the `file_search` tool requires a list of vector store IDs",
                 "type": OpenAiToolResourcesDataType.getOrNothingType(),
             },

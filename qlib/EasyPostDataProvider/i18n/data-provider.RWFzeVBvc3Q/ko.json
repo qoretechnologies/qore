@@ -1,0 +1,3597 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "ko": {
+      "messages": {
+        "app.RWFzeVBvc3Q.action.Y2FuY2VsLXBpY2t1cA.desc": {
+          "source": "Cancel a scheduled pickup.",
+          "message": "예약된 픽업을 취소합니다."
+        },
+        "app.RWFzeVBvc3Q.action.Y2FuY2VsLXBpY2t1cA.display_name": {
+          "source": "Cancel Pickup",
+          "message": "픽업 취소"
+        },
+        "app.RWFzeVBvc3Q.action.Y2FuY2VsLXBpY2t1cA.option.cGlja3VwX2lk.desc": {
+          "source": "Pickup to cancel",
+          "message": "취소할 픽업"
+        },
+        "app.RWFzeVBvc3Q.action.Y2FuY2VsLXBpY2t1cA.option.cGlja3VwX2lk.display_name": {
+          "source": "Pickup ID",
+          "message": "픽업 ID"
+        },
+        "app.RWFzeVBvc3Q.action.Y2FuY2VsLXBpY2t1cA.option.cGlja3VwX2lk.short_desc": {
+          "source": "Pickup ID (pickup_xxx)",
+          "message": "픽업 ID (pickup_xxx)"
+        },
+        "app.RWFzeVBvc3Q.action.Y2FuY2VsLXBpY2t1cA.short_desc": {
+          "source": "Cancel a pickup",
+          "message": "픽업 취소"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLW9yZGVy.desc": {
+          "source": "Create a new multi-shipment order.",
+          "message": "새 다중 발송 주문을 생성합니다."
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLW9yZGVy.display_name": {
+          "source": "Create Order",
+          "message": "주문 생성"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLW9yZGVy.option.Y2Fycmllcg.desc": {
+          "source": "Carrier name",
+          "message": "운송업체 이름"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLW9yZGVy.option.Y2Fycmllcg.display_name": {
+          "source": "Carrier",
+          "message": "배송업체"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLW9yZGVy.option.Y2Fycmllcg.short_desc": {
+          "source": "Carrier name",
+          "message": "운송업체 이름"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLW9yZGVy.option.Y2Fycmllcl9hY2NvdW50cw.desc": {
+          "source": "Carrier account IDs to use for rating",
+          "message": "요금 계산에 사용할 운송업체 계정 ID"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLW9yZGVy.option.Y2Fycmllcl9hY2NvdW50cw.display_name": {
+          "source": "Carrier Accounts",
+          "message": "운송업체 계정"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLW9yZGVy.option.Y2Fycmllcl9hY2NvdW50cw.short_desc": {
+          "source": "Carrier accounts",
+          "message": "운송업체 계정"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLW9yZGVy.option.YnV5ZXJfYWRkcmVzcw.desc": {
+          "source": "Buyer address (when different from `to_address`)",
+          "message": "구매자 주소 (`to_address`과 다른 경우)"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLW9yZGVy.option.YnV5ZXJfYWRkcmVzcw.display_name": {
+          "source": "Buyer Address",
+          "message": "구매자 주소"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLW9yZGVy.option.YnV5ZXJfYWRkcmVzcw.short_desc": {
+          "source": "Buyer address",
+          "message": "구매자 주소"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLW9yZGVy.option.ZnJvbV9hZGRyZXNz.desc": {
+          "source": "Origin address (or `{id: adr_xxx}`)",
+          "message": "출발지 주소 (또는 `{id: adr_xxx}`)"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLW9yZGVy.option.ZnJvbV9hZGRyZXNz.display_name": {
+          "source": "From Address",
+          "message": "보내는 사람 주소"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLW9yZGVy.option.ZnJvbV9hZGRyZXNz.short_desc": {
+          "source": "Origin address",
+          "message": "출발지 주소"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLW9yZGVy.option.aXNfcmV0dXJu.desc": {
+          "source": "Set to `True` if this is a return order",
+          "message": "반품 주문인 경우 `True`(으)로 설정"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLW9yZGVy.option.aXNfcmV0dXJu.display_name": {
+          "source": "Is Return",
+          "message": "반품 여부"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLW9yZGVy.option.aXNfcmV0dXJu.short_desc": {
+          "source": "Mark as return order",
+          "message": "반품 주문으로 표시"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLW9yZGVy.option.c2VydmljZQ.desc": {
+          "source": "Carrier service code",
+          "message": "운송업체 서비스 코드"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLW9yZGVy.option.c2VydmljZQ.display_name": {
+          "source": "Service",
+          "message": "서비스"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLW9yZGVy.option.c2VydmljZQ.short_desc": {
+          "source": "Carrier service",
+          "message": "운송업체 서비스"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLW9yZGVy.option.c2hpcG1lbnRz.desc": {
+          "source": "List of shipments to include in the order (each contains a parcel, etc.)",
+          "message": "주문에 포함할 배송 건 목록 (각각 소포 등을 포함)"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLW9yZGVy.option.c2hpcG1lbnRz.display_name": {
+          "source": "Shipments",
+          "message": "배송건"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLW9yZGVy.option.c2hpcG1lbnRz.short_desc": {
+          "source": "Shipments in the order",
+          "message": "주문 내 배송건"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLW9yZGVy.option.cmV0dXJuX2FkZHJlc3M.desc": {
+          "source": "Return address",
+          "message": "반송 주소"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLW9yZGVy.option.cmV0dXJuX2FkZHJlc3M.display_name": {
+          "source": "Return Address",
+          "message": "반송 주소"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLW9yZGVy.option.cmV0dXJuX2FkZHJlc3M.short_desc": {
+          "source": "Return address",
+          "message": "반송 주소"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLW9yZGVy.option.cmVmZXJlbmNl.desc": {
+          "source": "Caller-supplied reference",
+          "message": "호출자 제공 참조"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLW9yZGVy.option.cmVmZXJlbmNl.display_name": {
+          "source": "Reference",
+          "message": "참조"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLW9yZGVy.option.cmVmZXJlbmNl.short_desc": {
+          "source": "Caller-supplied reference",
+          "message": "호출자 제공 참조"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLW9yZGVy.option.dG9fYWRkcmVzcw.desc": {
+          "source": "Destination address (or `{id: adr_xxx}`)",
+          "message": "도착지 주소 (또는 `{id: adr_xxx}`)"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLW9yZGVy.option.dG9fYWRkcmVzcw.display_name": {
+          "source": "To Address",
+          "message": "도착지 주소"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLW9yZGVy.option.dG9fYWRkcmVzcw.short_desc": {
+          "source": "Destination address",
+          "message": "도착지 주소"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLW9yZGVy.short_desc": {
+          "source": "Create a multi-shipment order",
+          "message": "다중 배송 주문 생성"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWFkZHJlc3M.desc": {
+          "source": "Create a new address. Optionally request lenient or strict verification of the address.",
+          "message": "새 주소를 생성합니다. 선택적으로 주소의 유연한(lenient) 검증 또는 엄격한(strict) 검증을 요청할 수 있습니다."
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWFkZHJlc3M.display_name": {
+          "source": "Create Address",
+          "message": "주소 생성"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWFkZHJlc3M.option.Y291bnRyeQ.desc": {
+          "source": "ISO 2-letter country code (e.g. `US`, `GB`). Defaults to `US`.",
+          "message": "ISO 2자리 국가 코드 (예: `US`, `GB`). 기본값은 `US`입니다."
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWFkZHJlc3M.option.Y291bnRyeQ.display_name": {
+          "source": "Country",
+          "message": "국가"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWFkZHJlc3M.option.Y291bnRyeQ.short_desc": {
+          "source": "ISO 2-letter country code",
+          "message": "ISO 2자리 국가 코드"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWFkZHJlc3M.option.Y29tcGFueQ.desc": {
+          "source": "Company name",
+          "message": "회사 이름"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWFkZHJlc3M.option.Y29tcGFueQ.display_name": {
+          "source": "Company",
+          "message": "회사"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWFkZHJlc3M.option.Y29tcGFueQ.short_desc": {
+          "source": "Company name",
+          "message": "회사 이름"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWFkZHJlc3M.option.Y2Fycmllcl9mYWNpbGl0eQ.desc": {
+          "source": "Optional carrier facility identifier",
+          "message": "선택적 운송업체 시설 식별자"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWFkZHJlc3M.option.Y2Fycmllcl9mYWNpbGl0eQ.display_name": {
+          "source": "Carrier Facility",
+          "message": "운송업체 시설"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWFkZHJlc3M.option.Y2Fycmllcl9mYWNpbGl0eQ.short_desc": {
+          "source": "Carrier facility name",
+          "message": "운송업체 시설 이름"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWFkZHJlc3M.option.Y2l0eQ.desc": {
+          "source": "City name",
+          "message": "도시 이름"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWFkZHJlc3M.option.Y2l0eQ.display_name": {
+          "source": "City",
+          "message": "도시"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWFkZHJlc3M.option.Y2l0eQ.short_desc": {
+          "source": "City",
+          "message": "도시"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWFkZHJlc3M.option.ZW1haWw.desc": {
+          "source": "Email address",
+          "message": "이메일 주소"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWFkZHJlc3M.option.ZW1haWw.display_name": {
+          "source": "Email",
+          "message": "이메일"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWFkZHJlc3M.option.ZW1haWw.short_desc": {
+          "source": "Email address",
+          "message": "이메일 주소"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWFkZHJlc3M.option.ZmVkZXJhbF90YXhfaWQ.desc": {
+          "source": "Federal tax identifier",
+          "message": "연방 세금 식별자"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWFkZHJlc3M.option.ZmVkZXJhbF90YXhfaWQ.display_name": {
+          "source": "Federal Tax ID",
+          "message": "연방 세금 ID"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWFkZHJlc3M.option.ZmVkZXJhbF90YXhfaWQ.short_desc": {
+          "source": "Federal tax identifier",
+          "message": "연방 세금 식별자"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWFkZHJlc3M.option.bmFtZQ.desc": {
+          "source": "Recipient name",
+          "message": "수취인 이름"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWFkZHJlc3M.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "이름"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWFkZHJlc3M.option.bmFtZQ.short_desc": {
+          "source": "Recipient name",
+          "message": "수취인 이름"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWFkZHJlc3M.option.c3RhdGU.desc": {
+          "source": "State or province code (e.g. `CA`, `NY`)",
+          "message": "주 또는 도 코드 (예: `CA`, `NY`)"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWFkZHJlc3M.option.c3RhdGU.display_name": {
+          "source": "State",
+          "message": "주/도"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWFkZHJlc3M.option.c3RhdGU.short_desc": {
+          "source": "State or province code",
+          "message": "주 또는 도/시 코드"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWFkZHJlc3M.option.c3RhdGVfdGF4X2lk.desc": {
+          "source": "State tax identifier",
+          "message": "주 세금 식별자"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWFkZHJlc3M.option.c3RhdGVfdGF4X2lk.display_name": {
+          "source": "State Tax ID",
+          "message": "주 세금 ID"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWFkZHJlc3M.option.c3RhdGVfdGF4X2lk.short_desc": {
+          "source": "State tax identifier",
+          "message": "주 세금 식별자"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWFkZHJlc3M.option.c3RyZWV0MQ.desc": {
+          "source": "First line of the street address",
+          "message": "도로명 주소 첫 번째 줄"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWFkZHJlc3M.option.c3RyZWV0MQ.display_name": {
+          "source": "Street 1",
+          "message": "거리 주소 1"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWFkZHJlc3M.option.c3RyZWV0MQ.short_desc": {
+          "source": "First line of the street address",
+          "message": "도로명 주소 첫 번째 줄"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWFkZHJlc3M.option.c3RyZWV0Mg.desc": {
+          "source": "Second line of the street address (apartment, suite, etc.)",
+          "message": "상세 주소 두 번째 줄(아파트, 호수 등)"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWFkZHJlc3M.option.c3RyZWV0Mg.display_name": {
+          "source": "Street 2",
+          "message": "거리 주소 2"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWFkZHJlc3M.option.c3RyZWV0Mg.short_desc": {
+          "source": "Second line of the street address",
+          "message": "도로명 주소 두 번째 줄"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWFkZHJlc3M.option.cGhvbmU.desc": {
+          "source": "Phone number",
+          "message": "전화번호"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWFkZHJlc3M.option.cGhvbmU.display_name": {
+          "source": "Phone",
+          "message": "전화번호"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWFkZHJlc3M.option.cGhvbmU.short_desc": {
+          "source": "Phone number",
+          "message": "전화번호"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWFkZHJlc3M.option.cmVzaWRlbnRpYWw.desc": {
+          "source": "Set to `True` if the address is residential",
+          "message": "주소가 주거용인 경우 `True`(으)로 설정"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWFkZHJlc3M.option.cmVzaWRlbnRpYWw.display_name": {
+          "source": "Residential",
+          "message": "주거용"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWFkZHJlc3M.option.cmVzaWRlbnRpYWw.short_desc": {
+          "source": "Whether the address is residential",
+          "message": "주소의 주거용 여부"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWFkZHJlc3M.option.dmVyaWZ5.allowed-value.c3RyaW5nOmRlbGl2ZXJ5.desc": {
+          "source": "Delivery verification",
+          "message": "배송 검증"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWFkZHJlc3M.option.dmVyaWZ5.allowed-value.c3RyaW5nOnppcDQ.desc": {
+          "source": "ZIP+4 verification (USPS)",
+          "message": "ZIP+4 검증 (USPS)"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWFkZHJlc3M.option.dmVyaWZ5.desc": {
+          "source": "Verifications to perform; the API still creates the address even if verification fails. Allowed entries: `delivery`, `zip4`.",
+          "message": "수행할 검증 목록입니다. 검증이 실패하더라도 API는 주소를 생성합니다. 허용되는 항목: `delivery`, `zip4`."
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWFkZHJlc3M.option.dmVyaWZ5.display_name": {
+          "source": "Verify",
+          "message": "검증"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWFkZHJlc3M.option.dmVyaWZ5.short_desc": {
+          "source": "Verifications to perform (lenient)",
+          "message": "수행할 검증 (유연함)"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWFkZHJlc3M.option.dmVyaWZ5X2NhcnJpZXI.allowed-value.c3RyaW5nOmZlZGV4.desc": {
+          "source": "FedEx",
+          "message": "FedEx"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWFkZHJlc3M.option.dmVyaWZ5X2NhcnJpZXI.allowed-value.c3RyaW5nOnVwcw.desc": {
+          "source": "UPS",
+          "message": "UPS"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWFkZHJlc3M.option.dmVyaWZ5X2NhcnJpZXI.desc": {
+          "source": "Optional carrier name for carrier-specific verification",
+          "message": "운송업체별 검증을 위한 선택적 운송업체 이름"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWFkZHJlc3M.option.dmVyaWZ5X2NhcnJpZXI.display_name": {
+          "source": "Verify Carrier",
+          "message": "운송업체 검증"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWFkZHJlc3M.option.dmVyaWZ5X2NhcnJpZXI.short_desc": {
+          "source": "Carrier-specific address verification",
+          "message": "운송업체별 주소 검증"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWFkZHJlc3M.option.dmVyaWZ5X3N0cmljdA.allowed-value.c3RyaW5nOmRlbGl2ZXJ5.desc": {
+          "source": "Delivery verification",
+          "message": "배송 검증"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWFkZHJlc3M.option.dmVyaWZ5X3N0cmljdA.allowed-value.c3RyaW5nOnppcDQ.desc": {
+          "source": "ZIP+4 verification (USPS)",
+          "message": "ZIP+4 검증 (USPS)"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWFkZHJlc3M.option.dmVyaWZ5X3N0cmljdA.desc": {
+          "source": "Verifications to perform; the API rejects the request if any strict verification fails. Allowed entries: `delivery`, `zip4`.",
+          "message": "수행할 검증 목록입니다. 엄격한 검증이 하나라도 실패하면 API가 요청을 거부합니다. 허용되는 항목: `delivery`, `zip4`."
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWFkZHJlc3M.option.dmVyaWZ5X3N0cmljdA.display_name": {
+          "source": "Verify Strict",
+          "message": "엄격한 검증"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWFkZHJlc3M.option.dmVyaWZ5X3N0cmljdA.short_desc": {
+          "source": "Verifications to perform (strict)",
+          "message": "수행할 검증 (엄격함)"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWFkZHJlc3M.option.emlw.desc": {
+          "source": "ZIP / postal code",
+          "message": "우편번호"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWFkZHJlc3M.option.emlw.display_name": {
+          "source": "ZIP / Postal Code",
+          "message": "우편번호"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWFkZHJlc3M.option.emlw.short_desc": {
+          "source": "ZIP or postal code",
+          "message": "우편번호"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWFkZHJlc3M.short_desc": {
+          "source": "Create a new EasyPost address",
+          "message": "새 EasyPost 주소 생성"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWFuZC12ZXJpZnktYWRkcmVzcw.desc": {
+          "source": "Create a new address and verify it in a single API call.",
+          "message": "단일 API 호출로 새 주소를 생성하고 검증합니다."
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWFuZC12ZXJpZnktYWRkcmVzcw.display_name": {
+          "source": "Create and Verify Address",
+          "message": "주소 생성 및 검증"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWFuZC12ZXJpZnktYWRkcmVzcw.option.Y291bnRyeQ.desc": {
+          "source": "ISO 2-letter country code (e.g. `US`, `GB`). Defaults to `US`.",
+          "message": "ISO 2자리 국가 코드 (예: `US`, `GB`). 기본값은 `US`입니다."
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWFuZC12ZXJpZnktYWRkcmVzcw.option.Y291bnRyeQ.display_name": {
+          "source": "Country",
+          "message": "국가"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWFuZC12ZXJpZnktYWRkcmVzcw.option.Y291bnRyeQ.short_desc": {
+          "source": "ISO 2-letter country code",
+          "message": "ISO 2자리 국가 코드"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWFuZC12ZXJpZnktYWRkcmVzcw.option.Y29tcGFueQ.desc": {
+          "source": "Company name",
+          "message": "회사 이름"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWFuZC12ZXJpZnktYWRkcmVzcw.option.Y29tcGFueQ.display_name": {
+          "source": "Company",
+          "message": "회사"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWFuZC12ZXJpZnktYWRkcmVzcw.option.Y29tcGFueQ.short_desc": {
+          "source": "Company name",
+          "message": "회사 이름"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWFuZC12ZXJpZnktYWRkcmVzcw.option.Y2Fycmllcl9mYWNpbGl0eQ.desc": {
+          "source": "Optional carrier facility identifier",
+          "message": "선택적 운송업체 시설 식별자"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWFuZC12ZXJpZnktYWRkcmVzcw.option.Y2Fycmllcl9mYWNpbGl0eQ.display_name": {
+          "source": "Carrier Facility",
+          "message": "운송업체 시설"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWFuZC12ZXJpZnktYWRkcmVzcw.option.Y2Fycmllcl9mYWNpbGl0eQ.short_desc": {
+          "source": "Carrier facility name",
+          "message": "운송업체 시설 이름"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWFuZC12ZXJpZnktYWRkcmVzcw.option.Y2l0eQ.desc": {
+          "source": "City name",
+          "message": "도시 이름"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWFuZC12ZXJpZnktYWRkcmVzcw.option.Y2l0eQ.display_name": {
+          "source": "City",
+          "message": "도시"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWFuZC12ZXJpZnktYWRkcmVzcw.option.Y2l0eQ.short_desc": {
+          "source": "City",
+          "message": "도시"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWFuZC12ZXJpZnktYWRkcmVzcw.option.ZW1haWw.desc": {
+          "source": "Email address",
+          "message": "이메일 주소"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWFuZC12ZXJpZnktYWRkcmVzcw.option.ZW1haWw.display_name": {
+          "source": "Email",
+          "message": "이메일"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWFuZC12ZXJpZnktYWRkcmVzcw.option.ZW1haWw.short_desc": {
+          "source": "Email address",
+          "message": "이메일 주소"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWFuZC12ZXJpZnktYWRkcmVzcw.option.ZmVkZXJhbF90YXhfaWQ.desc": {
+          "source": "Federal tax identifier",
+          "message": "연방 세금 식별자"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWFuZC12ZXJpZnktYWRkcmVzcw.option.ZmVkZXJhbF90YXhfaWQ.display_name": {
+          "source": "Federal Tax ID",
+          "message": "연방 세금 ID"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWFuZC12ZXJpZnktYWRkcmVzcw.option.ZmVkZXJhbF90YXhfaWQ.short_desc": {
+          "source": "Federal tax identifier",
+          "message": "연방 세금 식별자"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWFuZC12ZXJpZnktYWRkcmVzcw.option.bmFtZQ.desc": {
+          "source": "Recipient name",
+          "message": "수취인 이름"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWFuZC12ZXJpZnktYWRkcmVzcw.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "이름"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWFuZC12ZXJpZnktYWRkcmVzcw.option.bmFtZQ.short_desc": {
+          "source": "Recipient name",
+          "message": "수취인 이름"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWFuZC12ZXJpZnktYWRkcmVzcw.option.c3RhdGU.desc": {
+          "source": "State or province code (e.g. `CA`, `NY`)",
+          "message": "주 또는 도 코드 (예: `CA`, `NY`)"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWFuZC12ZXJpZnktYWRkcmVzcw.option.c3RhdGU.display_name": {
+          "source": "State",
+          "message": "주/도"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWFuZC12ZXJpZnktYWRkcmVzcw.option.c3RhdGU.short_desc": {
+          "source": "State or province code",
+          "message": "주 또는 도/시 코드"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWFuZC12ZXJpZnktYWRkcmVzcw.option.c3RhdGVfdGF4X2lk.desc": {
+          "source": "State tax identifier",
+          "message": "주 세금 식별자"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWFuZC12ZXJpZnktYWRkcmVzcw.option.c3RhdGVfdGF4X2lk.display_name": {
+          "source": "State Tax ID",
+          "message": "주 세금 ID"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWFuZC12ZXJpZnktYWRkcmVzcw.option.c3RhdGVfdGF4X2lk.short_desc": {
+          "source": "State tax identifier",
+          "message": "주 세금 식별자"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWFuZC12ZXJpZnktYWRkcmVzcw.option.c3RyZWV0MQ.desc": {
+          "source": "First line of the street address",
+          "message": "도로명 주소 첫 번째 줄"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWFuZC12ZXJpZnktYWRkcmVzcw.option.c3RyZWV0MQ.display_name": {
+          "source": "Street 1",
+          "message": "거리 주소 1"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWFuZC12ZXJpZnktYWRkcmVzcw.option.c3RyZWV0MQ.short_desc": {
+          "source": "First line of the street address",
+          "message": "도로명 주소 첫 번째 줄"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWFuZC12ZXJpZnktYWRkcmVzcw.option.c3RyZWV0Mg.desc": {
+          "source": "Second line of the street address (apartment, suite, etc.)",
+          "message": "상세 주소 두 번째 줄(아파트, 호수 등)"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWFuZC12ZXJpZnktYWRkcmVzcw.option.c3RyZWV0Mg.display_name": {
+          "source": "Street 2",
+          "message": "거리 주소 2"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWFuZC12ZXJpZnktYWRkcmVzcw.option.c3RyZWV0Mg.short_desc": {
+          "source": "Second line of the street address",
+          "message": "도로명 주소 두 번째 줄"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWFuZC12ZXJpZnktYWRkcmVzcw.option.cGhvbmU.desc": {
+          "source": "Phone number",
+          "message": "전화번호"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWFuZC12ZXJpZnktYWRkcmVzcw.option.cGhvbmU.display_name": {
+          "source": "Phone",
+          "message": "전화번호"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWFuZC12ZXJpZnktYWRkcmVzcw.option.cGhvbmU.short_desc": {
+          "source": "Phone number",
+          "message": "전화번호"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWFuZC12ZXJpZnktYWRkcmVzcw.option.cmVzaWRlbnRpYWw.desc": {
+          "source": "Set to `True` if the address is residential",
+          "message": "주소가 주거용인 경우 `True`(으)로 설정"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWFuZC12ZXJpZnktYWRkcmVzcw.option.cmVzaWRlbnRpYWw.display_name": {
+          "source": "Residential",
+          "message": "주거용"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWFuZC12ZXJpZnktYWRkcmVzcw.option.cmVzaWRlbnRpYWw.short_desc": {
+          "source": "Whether the address is residential",
+          "message": "주소의 주거용 여부"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWFuZC12ZXJpZnktYWRkcmVzcw.option.dmVyaWZ5.allowed-value.c3RyaW5nOmRlbGl2ZXJ5.desc": {
+          "source": "Delivery verification",
+          "message": "배송 검증"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWFuZC12ZXJpZnktYWRkcmVzcw.option.dmVyaWZ5.allowed-value.c3RyaW5nOnppcDQ.desc": {
+          "source": "ZIP+4 verification (USPS)",
+          "message": "ZIP+4 검증 (USPS)"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWFuZC12ZXJpZnktYWRkcmVzcw.option.dmVyaWZ5.desc": {
+          "source": "Verifications to perform; the API still creates the address even if verification fails. Allowed entries: `delivery`, `zip4`.",
+          "message": "수행할 검증 목록입니다. 검증이 실패하더라도 API는 주소를 생성합니다. 허용되는 항목: `delivery`, `zip4`."
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWFuZC12ZXJpZnktYWRkcmVzcw.option.dmVyaWZ5.display_name": {
+          "source": "Verify",
+          "message": "검증"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWFuZC12ZXJpZnktYWRkcmVzcw.option.dmVyaWZ5.short_desc": {
+          "source": "Verifications to perform (lenient)",
+          "message": "수행할 검증 (유연함)"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWFuZC12ZXJpZnktYWRkcmVzcw.option.dmVyaWZ5X2NhcnJpZXI.allowed-value.c3RyaW5nOmZlZGV4.desc": {
+          "source": "FedEx",
+          "message": "FedEx"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWFuZC12ZXJpZnktYWRkcmVzcw.option.dmVyaWZ5X2NhcnJpZXI.allowed-value.c3RyaW5nOnVwcw.desc": {
+          "source": "UPS",
+          "message": "UPS"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWFuZC12ZXJpZnktYWRkcmVzcw.option.dmVyaWZ5X2NhcnJpZXI.desc": {
+          "source": "Optional carrier name for carrier-specific verification",
+          "message": "운송업체별 검증을 위한 선택적 운송업체 이름"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWFuZC12ZXJpZnktYWRkcmVzcw.option.dmVyaWZ5X2NhcnJpZXI.display_name": {
+          "source": "Verify Carrier",
+          "message": "운송업체 검증"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWFuZC12ZXJpZnktYWRkcmVzcw.option.dmVyaWZ5X2NhcnJpZXI.short_desc": {
+          "source": "Carrier-specific address verification",
+          "message": "운송업체별 주소 검증"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWFuZC12ZXJpZnktYWRkcmVzcw.option.dmVyaWZ5X3N0cmljdA.allowed-value.c3RyaW5nOmRlbGl2ZXJ5.desc": {
+          "source": "Delivery verification",
+          "message": "배송 검증"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWFuZC12ZXJpZnktYWRkcmVzcw.option.dmVyaWZ5X3N0cmljdA.allowed-value.c3RyaW5nOnppcDQ.desc": {
+          "source": "ZIP+4 verification (USPS)",
+          "message": "ZIP+4 검증 (USPS)"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWFuZC12ZXJpZnktYWRkcmVzcw.option.dmVyaWZ5X3N0cmljdA.desc": {
+          "source": "Verifications to perform; the API rejects the request if any strict verification fails. Allowed entries: `delivery`, `zip4`.",
+          "message": "수행할 검증 목록입니다. 엄격한 검증이 하나라도 실패하면 API가 요청을 거부합니다. 허용되는 항목: `delivery`, `zip4`."
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWFuZC12ZXJpZnktYWRkcmVzcw.option.dmVyaWZ5X3N0cmljdA.display_name": {
+          "source": "Verify Strict",
+          "message": "엄격한 검증"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWFuZC12ZXJpZnktYWRkcmVzcw.option.dmVyaWZ5X3N0cmljdA.short_desc": {
+          "source": "Verifications to perform (strict)",
+          "message": "수행할 검증 (엄격함)"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWFuZC12ZXJpZnktYWRkcmVzcw.option.emlw.desc": {
+          "source": "ZIP / postal code",
+          "message": "우편번호"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWFuZC12ZXJpZnktYWRkcmVzcw.option.emlw.display_name": {
+          "source": "ZIP / Postal Code",
+          "message": "우편번호"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWFuZC12ZXJpZnktYWRkcmVzcw.option.emlw.short_desc": {
+          "source": "ZIP or postal code",
+          "message": "우편번호"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWFuZC12ZXJpZnktYWRkcmVzcw.short_desc": {
+          "source": "Create and verify an address in one call",
+          "message": "한 번의 호출로 주소 생성 및 검증"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWJhdGNo.desc": {
+          "source": "Create a new batch of shipments.",
+          "message": "새 배송 배치를 생성합니다."
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWJhdGNo.display_name": {
+          "source": "Create Batch",
+          "message": "배치 생성"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWJhdGNo.option.c2hpcG1lbnRz.desc": {
+          "source": "List of shipment references (each `{id: shp_xxx}`) to include in the new batch",
+          "message": "새 배치에 포함할 배송 참조(각각 `{id: shp_xxx}`) 목록"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWJhdGNo.option.c2hpcG1lbnRz.display_name": {
+          "source": "Shipments",
+          "message": "배송건"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWJhdGNo.option.c2hpcG1lbnRz.short_desc": {
+          "source": "Shipments to include in the batch",
+          "message": "배치에 포함할 배송건"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWJhdGNo.option.cmVmZXJlbmNl.desc": {
+          "source": "Caller-supplied reference",
+          "message": "호출자 제공 참조"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWJhdGNo.option.cmVmZXJlbmNl.display_name": {
+          "source": "Reference",
+          "message": "참조"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWJhdGNo.option.cmVmZXJlbmNl.short_desc": {
+          "source": "Caller-supplied reference",
+          "message": "호출자 제공 참조"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWJhdGNo.short_desc": {
+          "source": "Create a batch",
+          "message": "배치 생성"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWN1c3RvbXMtaW5mbw.desc": {
+          "source": "Create a customs info object for use with international shipments.",
+          "message": "해외 배송에 사용할 세관 정보 객체를 생성합니다."
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWN1c3RvbXMtaW5mbw.display_name": {
+          "source": "Create Customs Info",
+          "message": "세관 정보 생성"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWN1c3RvbXMtaW5mbw.option.Y29udGVudHNfZXhwbGFuYXRpb24.desc": {
+          "source": "Free-text explanation of contents (required when `contents_type` is `other`)",
+          "message": "내용물에 대한 자유 형식 설명(`contents_type`이(가) `other`인 경우 필수)"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWN1c3RvbXMtaW5mbw.option.Y29udGVudHNfZXhwbGFuYXRpb24.display_name": {
+          "source": "Contents Explanation",
+          "message": "내용물 설명"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWN1c3RvbXMtaW5mbw.option.Y29udGVudHNfZXhwbGFuYXRpb24.short_desc": {
+          "source": "Required if contents_type is other",
+          "message": "contents_type이 other인 경우 필수"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWN1c3RvbXMtaW5mbw.option.Y29udGVudHNfdHlwZQ.allowed-value.c3RyaW5nOm1lcmNoYW5kaXNl.desc": {
+          "source": "Merchandise",
+          "message": "상품"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWN1c3RvbXMtaW5mbw.option.Y29udGVudHNfdHlwZQ.allowed-value.c3RyaW5nOm90aGVy.desc": {
+          "source": "Other (requires `contents_explanation`)",
+          "message": "기타 (`contents_explanation` 필요)"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWN1c3RvbXMtaW5mbw.option.Y29udGVudHNfdHlwZQ.allowed-value.c3RyaW5nOmRhbmdlcm91c19nb29kcw.desc": {
+          "source": "Dangerous goods",
+          "message": "위험물"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWN1c3RvbXMtaW5mbw.option.Y29udGVudHNfdHlwZQ.allowed-value.c3RyaW5nOmRvY3VtZW50cw.desc": {
+          "source": "Documents",
+          "message": "문서"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWN1c3RvbXMtaW5mbw.option.Y29udGVudHNfdHlwZQ.allowed-value.c3RyaW5nOmdpZnQ.desc": {
+          "source": "Gift",
+          "message": "선물"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWN1c3RvbXMtaW5mbw.option.Y29udGVudHNfdHlwZQ.allowed-value.c3RyaW5nOmh1bWFuaXRhcmlhbl9kb25hdGlvbg.desc": {
+          "source": "Humanitarian donation",
+          "message": "인도적 기부"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWN1c3RvbXMtaW5mbw.option.Y29udGVudHNfdHlwZQ.allowed-value.c3RyaW5nOnJldHVybmVkX2dvb2Rz.desc": {
+          "source": "Returned goods",
+          "message": "반품 상품"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWN1c3RvbXMtaW5mbw.option.Y29udGVudHNfdHlwZQ.allowed-value.c3RyaW5nOnNhbXBsZQ.desc": {
+          "source": "Sample",
+          "message": "샘플"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWN1c3RvbXMtaW5mbw.option.Y29udGVudHNfdHlwZQ.desc": {
+          "source": "Type of contents being shipped",
+          "message": "배송되는 내용물 유형"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWN1c3RvbXMtaW5mbw.option.Y29udGVudHNfdHlwZQ.display_name": {
+          "source": "Contents Type",
+          "message": "내용물 유형"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWN1c3RvbXMtaW5mbw.option.Y29udGVudHNfdHlwZQ.short_desc": {
+          "source": "Type of contents",
+          "message": "내용물의 유형"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWN1c3RvbXMtaW5mbw.option.Y3VzdG9tc19jZXJ0aWZ5.desc": {
+          "source": "Set to `True` to certify the customs declarations",
+          "message": "세관 신고를 인증하려면 `True`(으)로 설정하십시오"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWN1c3RvbXMtaW5mbw.option.Y3VzdG9tc19jZXJ0aWZ5.display_name": {
+          "source": "Customs Certify",
+          "message": "세관 인증"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWN1c3RvbXMtaW5mbw.option.Y3VzdG9tc19jZXJ0aWZ5.short_desc": {
+          "source": "Certify customs",
+          "message": "세관 인증"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWN1c3RvbXMtaW5mbw.option.Y3VzdG9tc19pdGVtcw.desc": {
+          "source": "List of customs items in the shipment",
+          "message": "배송물의 세관 품목 목록"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWN1c3RvbXMtaW5mbw.option.Y3VzdG9tc19pdGVtcw.display_name": {
+          "source": "Customs Items",
+          "message": "세관 품목"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWN1c3RvbXMtaW5mbw.option.Y3VzdG9tc19pdGVtcw.short_desc": {
+          "source": "List of items in the shipment",
+          "message": "배송물의 품목 목록"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWN1c3RvbXMtaW5mbw.option.Y3VzdG9tc19zaWduZXI.desc": {
+          "source": "Name of the person certifying the customs declarations",
+          "message": "세관 신고를 인증하는 사람의 이름"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWN1c3RvbXMtaW5mbw.option.Y3VzdG9tc19zaWduZXI.display_name": {
+          "source": "Customs Signer",
+          "message": "세관 서명인"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWN1c3RvbXMtaW5mbw.option.Y3VzdG9tc19zaWduZXI.short_desc": {
+          "source": "Signer name",
+          "message": "서명인 이름"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWN1c3RvbXMtaW5mbw.option.ZGVjbGFyYXRpb24.desc": {
+          "source": "Free-form customs declaration text",
+          "message": "자유 형식 세관 신고 텍스트"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWN1c3RvbXMtaW5mbw.option.ZGVjbGFyYXRpb24.display_name": {
+          "source": "Declaration",
+          "message": "신고서"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWN1c3RvbXMtaW5mbw.option.ZGVjbGFyYXRpb24.short_desc": {
+          "source": "Free-form declaration text",
+          "message": "자유 형식 신고 텍스트"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWN1c3RvbXMtaW5mbw.option.ZWVsX3BmYw.desc": {
+          "source": "Either an EEL code or a Proof of Filing Citation. Use `NOEEI 30.37(a)` for shipments under USD $2,500.",
+          "message": "EEL 코드 또는 신고 증명 인용문(PFC)입니다. USD $2,500 미만의 배송물에는 `NOEEI 30.37(a)`(을)를 사용하십시오."
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWN1c3RvbXMtaW5mbw.option.ZWVsX3BmYw.display_name": {
+          "source": "EEL/PFC",
+          "message": "EEL/PFC"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWN1c3RvbXMtaW5mbw.option.ZWVsX3BmYw.short_desc": {
+          "source": "EEL or PFC value",
+          "message": "EEL 또는 PFC 값"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWN1c3RvbXMtaW5mbw.option.bm9uX2RlbGl2ZXJ5X29wdGlvbg.allowed-value.c3RyaW5nOmFiYW5kb24.desc": {
+          "source": "Abandon",
+          "message": "폐기"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWN1c3RvbXMtaW5mbw.option.bm9uX2RlbGl2ZXJ5X29wdGlvbg.allowed-value.c3RyaW5nOnJldHVybg.desc": {
+          "source": "Return to sender",
+          "message": "발송인에게 반송"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWN1c3RvbXMtaW5mbw.option.bm9uX2RlbGl2ZXJ5X29wdGlvbg.desc": {
+          "source": "Action to take if the shipment cannot be delivered. Defaults to `return` if not specified.",
+          "message": "배송물을 배달할 수 없을 때 취할 조치입니다. 지정하지 않으면 기본값은 `return`입니다."
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWN1c3RvbXMtaW5mbw.option.bm9uX2RlbGl2ZXJ5X29wdGlvbg.display_name": {
+          "source": "Non-Delivery Option",
+          "message": "미배달 시 처리 옵션"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWN1c3RvbXMtaW5mbw.option.bm9uX2RlbGl2ZXJ5X29wdGlvbg.short_desc": {
+          "source": "What to do if delivery fails",
+          "message": "배송 실패 시 처리 방법"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWN1c3RvbXMtaW5mbw.option.cmVzdHJpY3Rpb25fY29tbWVudHM.desc": {
+          "source": "Comments on the restriction (required when `restriction_type` is not `none`)",
+          "message": "제한 사항에 대한 코멘트(`restriction_type`(이)가 `none`(이)가 아닐 때 필수)"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWN1c3RvbXMtaW5mbw.option.cmVzdHJpY3Rpb25fY29tbWVudHM.display_name": {
+          "source": "Restriction Comments",
+          "message": "제한 사항 코멘트"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWN1c3RvbXMtaW5mbw.option.cmVzdHJpY3Rpb25fY29tbWVudHM.short_desc": {
+          "source": "Comments on the restriction",
+          "message": "제한 사항에 대한 코멘트"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWN1c3RvbXMtaW5mbw.option.cmVzdHJpY3Rpb25fdHlwZQ.allowed-value.c3RyaW5nOm5vbmU.desc": {
+          "source": "None",
+          "message": "없음"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWN1c3RvbXMtaW5mbw.option.cmVzdHJpY3Rpb25fdHlwZQ.allowed-value.c3RyaW5nOm90aGVy.desc": {
+          "source": "Other",
+          "message": "기타"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWN1c3RvbXMtaW5mbw.option.cmVzdHJpY3Rpb25fdHlwZQ.allowed-value.c3RyaW5nOnF1YXJhbnRpbmU.desc": {
+          "source": "Quarantine",
+          "message": "검역"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWN1c3RvbXMtaW5mbw.option.cmVzdHJpY3Rpb25fdHlwZQ.allowed-value.c3RyaW5nOnNhbml0YXJ5X3BoeXRvc2FuaXRhcnlfaW5zcGVjdGlvbg.desc": {
+          "source": "Sanitary / phytosanitary inspection",
+          "message": "위생 / 식물위생 검사"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWN1c3RvbXMtaW5mbw.option.cmVzdHJpY3Rpb25fdHlwZQ.desc": {
+          "source": "Type of customs restriction",
+          "message": "세관 제한 유형"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWN1c3RvbXMtaW5mbw.option.cmVzdHJpY3Rpb25fdHlwZQ.display_name": {
+          "source": "Restriction Type",
+          "message": "제한 유형"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWN1c3RvbXMtaW5mbw.option.cmVzdHJpY3Rpb25fdHlwZQ.short_desc": {
+          "source": "Restriction category",
+          "message": "제한 카테고리"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWN1c3RvbXMtaW5mbw.short_desc": {
+          "source": "Create a customs info object",
+          "message": "세관 정보 개체 생성"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWN1c3RvbXMtaXRlbQ.desc": {
+          "source": "Create a customs item for use in customs info objects.",
+          "message": "세관 정보 개체에서 사용할 세관 품목을 생성합니다."
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWN1c3RvbXMtaXRlbQ.display_name": {
+          "source": "Create Customs Item",
+          "message": "세관 품목 생성"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWN1c3RvbXMtaXRlbQ.option.Y29kZQ.desc": {
+          "source": "Internal reference code",
+          "message": "내부 참조 코드"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWN1c3RvbXMtaXRlbQ.option.Y29kZQ.display_name": {
+          "source": "Code",
+          "message": "코드"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWN1c3RvbXMtaXRlbQ.option.Y29kZQ.short_desc": {
+          "source": "Internal item code",
+          "message": "내부 품목 코드"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWN1c3RvbXMtaXRlbQ.option.Y3VycmVuY3k.desc": {
+          "source": "ISO 4217 currency code",
+          "message": "ISO 4217 통화 코드"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWN1c3RvbXMtaXRlbQ.option.Y3VycmVuY3k.display_name": {
+          "source": "Currency",
+          "message": "통화"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWN1c3RvbXMtaXRlbQ.option.Y3VycmVuY3k.short_desc": {
+          "source": "ISO currency code",
+          "message": "ISO 통화 코드"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWN1c3RvbXMtaXRlbQ.option.ZGVzY3JpcHRpb24.desc": {
+          "source": "Description of the item being shipped",
+          "message": "배송 품목에 대한 설명"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWN1c3RvbXMtaXRlbQ.option.ZGVzY3JpcHRpb24.display_name": {
+          "source": "Description",
+          "message": "설명"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWN1c3RvbXMtaXRlbQ.option.ZGVzY3JpcHRpb24.short_desc": {
+          "source": "Item description",
+          "message": "품목 설명"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWN1c3RvbXMtaXRlbQ.option.ZWNjbg.desc": {
+          "source": "Export Control Classification Number",
+          "message": "수출통제분류번호"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWN1c3RvbXMtaXRlbQ.option.ZWNjbg.display_name": {
+          "source": "ECCN",
+          "message": "ECCN"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWN1c3RvbXMtaXRlbQ.option.ZWNjbg.short_desc": {
+          "source": "Export Control Classification Number",
+          "message": "수출통제분류번호"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWN1c3RvbXMtaXRlbQ.option.aHNfdGFyaWZmX251bWJlcg.desc": {
+          "source": "Six-digit Harmonized System tariff number",
+          "message": "6자리 HS 관세 번호"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWN1c3RvbXMtaXRlbQ.option.aHNfdGFyaWZmX251bWJlcg.display_name": {
+          "source": "HS Tariff Number",
+          "message": "HS 관세 번호"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWN1c3RvbXMtaXRlbQ.option.aHNfdGFyaWZmX251bWJlcg.short_desc": {
+          "source": "HS tariff number",
+          "message": "HS 관세 번호"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWN1c3RvbXMtaXRlbQ.option.b3JpZ2luX2NvdW50cnk.desc": {
+          "source": "ISO 2-letter country code of origin",
+          "message": "원산지 ISO 2자리 국가 코드"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWN1c3RvbXMtaXRlbQ.option.b3JpZ2luX2NvdW50cnk.display_name": {
+          "source": "Origin Country",
+          "message": "출발 국가"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWN1c3RvbXMtaXRlbQ.option.b3JpZ2luX2NvdW50cnk.short_desc": {
+          "source": "ISO 2-letter origin country",
+          "message": "ISO 2자리 원산지 국가 코드"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWN1c3RvbXMtaXRlbQ.option.bWFudWZhY3R1cmVy.desc": {
+          "source": "Manufacturer of the item",
+          "message": "품목의 제조업체"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWN1c3RvbXMtaXRlbQ.option.bWFudWZhY3R1cmVy.display_name": {
+          "source": "Manufacturer",
+          "message": "제조업체"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWN1c3RvbXMtaXRlbQ.option.bWFudWZhY3R1cmVy.short_desc": {
+          "source": "Manufacturer name",
+          "message": "제조업체 이름"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWN1c3RvbXMtaXRlbQ.option.cHJpbnRlZF9jb21tb2RpdHlfaWRlbnRpZmllcg.desc": {
+          "source": "Optional identifier printed on customs forms",
+          "message": "세관 서식에 인쇄되는 선택적 식별자"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWN1c3RvbXMtaXRlbQ.option.cHJpbnRlZF9jb21tb2RpdHlfaWRlbnRpZmllcg.display_name": {
+          "source": "Printed Commodity Identifier",
+          "message": "인쇄된 상품 식별자"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWN1c3RvbXMtaXRlbQ.option.cHJpbnRlZF9jb21tb2RpdHlfaWRlbnRpZmllcg.short_desc": {
+          "source": "Identifier printed on label",
+          "message": "라벨에 인쇄되는 식별자"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWN1c3RvbXMtaXRlbQ.option.cXVhbnRpdHk.desc": {
+          "source": "Number of units being shipped",
+          "message": "배송되는 수량"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWN1c3RvbXMtaXRlbQ.option.cXVhbnRpdHk.display_name": {
+          "source": "Quantity",
+          "message": "수량"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWN1c3RvbXMtaXRlbQ.option.cXVhbnRpdHk.short_desc": {
+          "source": "Number of units",
+          "message": "단위 수"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWN1c3RvbXMtaXRlbQ.option.d2VpZ2h0.desc": {
+          "source": "Total weight in ounces",
+          "message": "온스(oz) 단위 총 중량"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWN1c3RvbXMtaXRlbQ.option.d2VpZ2h0.display_name": {
+          "source": "Weight",
+          "message": "무게"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWN1c3RvbXMtaXRlbQ.option.d2VpZ2h0.short_desc": {
+          "source": "Weight in ounces",
+          "message": "온스(oz) 단위 중량"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWN1c3RvbXMtaXRlbQ.option.dmFsdWU.desc": {
+          "source": "Total value of all items as a string (e.g. `\"12.50\"`)",
+          "message": "모든 품목의 총 금액(문자열, 예: `\"12.50\"`)"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWN1c3RvbXMtaXRlbQ.option.dmFsdWU.display_name": {
+          "source": "Value",
+          "message": "값"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWN1c3RvbXMtaXRlbQ.option.dmFsdWU.short_desc": {
+          "source": "Total value as a string",
+          "message": "문자열 형식의 총 금액"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWN1c3RvbXMtaXRlbQ.short_desc": {
+          "source": "Create a customs item",
+          "message": "세관 품목 생성"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWNhcnJpZXItYWNjb3VudA.desc": {
+          "source": "Create a new carrier account. Selecting a carrier type populates the `credentials` and `test_credentials` fields with that carrier's specific schema.",
+          "message": "새 운송업체 계정을 생성합니다. 운송업체 유형을 선택하면 `credentials` 및 `test_credentials` 필드가 해당 운송업체의 특정 스키마로 채워집니다."
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWNhcnJpZXItYWNjb3VudA.display_name": {
+          "source": "Create Carrier Account",
+          "message": "운송업체 계정 생성"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWNhcnJpZXItYWNjb3VudA.option.Y3JlZGVudGlhbHM.desc": {
+          "source": "Carrier-specific credentials hash for production. Required for most carrier types (except `custom_workflow`). The shape varies per carrier - select a `type` to populate this field with the carrier's specific schema.\n\n**Example (UPS)**: `{\"account_number\": \"...\", \"user_id\": \"...\", \"password\": \"...\"}`",
+          "message": "프로덕션용 운송업체별 자격 증명 해시입니다. 대부분의 운송업체 유형(`custom_workflow` 제외)에 필요합니다. 구조는 운송업체마다 다릅니다. 이 필드를 운송업체의 특정 스키마로 채우려면 `type`(을)를 선택하십시오.\n\n**예시(UPS)**: `{\"account_number\": \"...\", \"user_id\": \"...\", \"password\": \"...\"}`"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWNhcnJpZXItYWNjb3VudA.option.Y3JlZGVudGlhbHM.display_name": {
+          "source": "Credentials",
+          "message": "자격 증명"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWNhcnJpZXItYWNjb3VudA.option.Y3JlZGVudGlhbHM.short_desc": {
+          "source": "Production credentials hash",
+          "message": "프로덕션 자격 증명 해시"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWNhcnJpZXItYWNjb3VudA.option.ZGVzY3JpcHRpb24.desc": {
+          "source": "Human-readable description for this account",
+          "message": "이 계정에 대해 사람이 읽을 수 있는 설명"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWNhcnJpZXItYWNjb3VudA.option.ZGVzY3JpcHRpb24.display_name": {
+          "source": "Description",
+          "message": "설명"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWNhcnJpZXItYWNjb3VudA.option.ZGVzY3JpcHRpb24.short_desc": {
+          "source": "Account description",
+          "message": "계정 설명"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWNhcnJpZXItYWNjb3VudA.option.cmVmZXJlbmNl.desc": {
+          "source": "Caller-supplied reference",
+          "message": "호출자 제공 참조"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWNhcnJpZXItYWNjb3VudA.option.cmVmZXJlbmNl.display_name": {
+          "source": "Reference",
+          "message": "참조"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWNhcnJpZXItYWNjb3VudA.option.cmVmZXJlbmNl.short_desc": {
+          "source": "Caller-supplied reference",
+          "message": "호출자 제공 참조"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWNhcnJpZXItYWNjb3VudA.option.dGVzdF9jcmVkZW50aWFscw.desc": {
+          "source": "Carrier-specific credentials hash for the test environment. Same shape as `credentials` - select a `type` to populate this field with the carrier's specific schema.",
+          "message": "테스트 환경을 위한 운송업체별 자격 증명 해시입니다. `credentials`과(와) 형태가 동일합니다. 운송업체의 특정 스키마로 이 필드를 채우려면 `type`을(를) 선택하세요."
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWNhcnJpZXItYWNjb3VudA.option.dGVzdF9jcmVkZW50aWFscw.display_name": {
+          "source": "Test Credentials",
+          "message": "테스트 자격 증명"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWNhcnJpZXItYWNjb3VudA.option.dGVzdF9jcmVkZW50aWFscw.short_desc": {
+          "source": "Test credentials hash",
+          "message": "테스트 자격 증명 해시"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWNhcnJpZXItYWNjb3VudA.option.dHlwZQ.desc": {
+          "source": "Carrier account type (e.g. `UpsAccount`, `FedExAccount`, `DhlExpressAccount`). Selecting a carrier type updates the `credentials` and `test_credentials` fields to match that carrier's schema. See [carrier types](https://docs.easypost.com/docs/carrier-types) for the full list.",
+          "message": "운송업체 계정 유형(예: `UpsAccount`, `FedExAccount`, `DhlExpressAccount`). 운송업체 유형을 선택하면 해당 운송업체의 스키마와 일치하도록 `credentials` 및 `test_credentials` 필드가 업데이트됩니다. 전체 목록은 [carrier types](https://docs.easypost.com/docs/carrier-types)를 참조하세요."
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWNhcnJpZXItYWNjb3VudA.option.dHlwZQ.display_name": {
+          "source": "Type",
+          "message": "유형"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWNhcnJpZXItYWNjb3VudA.option.dHlwZQ.short_desc": {
+          "source": "Carrier account type",
+          "message": "운송업체 계정 유형"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWNhcnJpZXItYWNjb3VudA.short_desc": {
+          "source": "Create a carrier account",
+          "message": "운송업체 계정 생성"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWluc3VyYW5jZQ.desc": {
+          "source": "Create a standalone insurance record for a tracking code.",
+          "message": "추적 코드에 대한 독립형 보험 레코드를 생성합니다."
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWluc3VyYW5jZQ.display_name": {
+          "source": "Create Insurance",
+          "message": "보험 생성"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWluc3VyYW5jZQ.option.Y2Fycmllcg.desc": {
+          "source": "Carrier name (e.g. `USPS`, `UPS`, `FedEx`). EasyPost will auto-detect from `tracking_code` when omitted.",
+          "message": "운송업체 이름(예: `USPS`, `UPS`, `FedEx`). 생략 시 EasyPost가 `tracking_code`에서 자동으로 감지합니다."
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWluc3VyYW5jZQ.option.Y2Fycmllcg.display_name": {
+          "source": "Carrier",
+          "message": "배송업체"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWluc3VyYW5jZQ.option.Y2Fycmllcg.short_desc": {
+          "source": "Carrier name",
+          "message": "운송업체 이름"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWluc3VyYW5jZQ.option.YW1vdW50.desc": {
+          "source": "Amount to insure as a string (e.g. `\"100.00\"`)",
+          "message": "문자열 형식의 보험 가입 금액(예: `\"100.00\"`)"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWluc3VyYW5jZQ.option.YW1vdW50.display_name": {
+          "source": "Amount",
+          "message": "금액"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWluc3VyYW5jZQ.option.YW1vdW50.short_desc": {
+          "source": "Amount to insure (string)",
+          "message": "보험 가입 금액(문자열)"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWluc3VyYW5jZQ.option.ZnJvbV9hZGRyZXNz.desc": {
+          "source": "Origin address (or `{id: adr_xxx}`)",
+          "message": "출발지 주소 (또는 `{id: adr_xxx}`)"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWluc3VyYW5jZQ.option.ZnJvbV9hZGRyZXNz.display_name": {
+          "source": "From Address",
+          "message": "보내는 사람 주소"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWluc3VyYW5jZQ.option.ZnJvbV9hZGRyZXNz.short_desc": {
+          "source": "Origin address",
+          "message": "출발지 주소"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWluc3VyYW5jZQ.option.cmVmZXJlbmNl.desc": {
+          "source": "Caller-supplied reference",
+          "message": "호출자 제공 참조"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWluc3VyYW5jZQ.option.cmVmZXJlbmNl.display_name": {
+          "source": "Reference",
+          "message": "참조"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWluc3VyYW5jZQ.option.cmVmZXJlbmNl.short_desc": {
+          "source": "Caller-supplied reference",
+          "message": "호출자 제공 참조"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWluc3VyYW5jZQ.option.dG9fYWRkcmVzcw.desc": {
+          "source": "Destination address (or `{id: adr_xxx}`)",
+          "message": "도착지 주소 (또는 `{id: adr_xxx}`)"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWluc3VyYW5jZQ.option.dG9fYWRkcmVzcw.display_name": {
+          "source": "To Address",
+          "message": "도착지 주소"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWluc3VyYW5jZQ.option.dG9fYWRkcmVzcw.short_desc": {
+          "source": "Destination address",
+          "message": "도착지 주소"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWluc3VyYW5jZQ.option.dHJhY2tpbmdfY29kZQ.desc": {
+          "source": "Carrier tracking code for the shipment being insured",
+          "message": "보험에 가입할 배송물의 운송업체 추적 코드"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWluc3VyYW5jZQ.option.dHJhY2tpbmdfY29kZQ.display_name": {
+          "source": "Tracking Code",
+          "message": "추적 코드"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWluc3VyYW5jZQ.option.dHJhY2tpbmdfY29kZQ.short_desc": {
+          "source": "Carrier tracking code",
+          "message": "운송업체 추적 코드"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWluc3VyYW5jZQ.short_desc": {
+          "source": "Create a standalone insurance record",
+          "message": "독립형 보험 레코드 생성"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXBhcmNlbA.desc": {
+          "source": "Create a new EasyPost parcel by dimensions and weight, or with a `predefined_package`.",
+          "message": "치수 및 중량 또는 `predefined_package`(으)로 새 EasyPost 소포를 생성합니다."
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXBhcmNlbA.display_name": {
+          "source": "Create Parcel",
+          "message": "소포 생성"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXBhcmNlbA.option.aGVpZ2h0.desc": {
+          "source": "Parcel height in inches",
+          "message": "소포 높이(인치 단위)"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXBhcmNlbA.option.aGVpZ2h0.display_name": {
+          "source": "Height",
+          "message": "높이"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXBhcmNlbA.option.aGVpZ2h0.short_desc": {
+          "source": "Height in inches",
+          "message": "높이(인치 단위)"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXBhcmNlbA.option.bGVuZ3Ro.desc": {
+          "source": "Parcel length in inches",
+          "message": "소포 길이(인치 단위)"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXBhcmNlbA.option.bGVuZ3Ro.display_name": {
+          "source": "Length",
+          "message": "길이"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXBhcmNlbA.option.bGVuZ3Ro.short_desc": {
+          "source": "Length in inches",
+          "message": "길이(인치 단위)"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXBhcmNlbA.option.cHJlZGVmaW5lZF9wYWNrYWdl.allowed-value.c3RyaW5nOk1lZGl1bUV4cHJlc3NCb3g.desc": {
+          "source": "Medium Express Box",
+          "message": "Medium Express Box"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXBhcmNlbA.option.cHJlZGVmaW5lZF9wYWNrYWdl.allowed-value.c3RyaW5nOk1lZGl1bUZsYXRSYXRlQm94.desc": {
+          "source": "USPS Medium Flat Rate Box",
+          "message": "USPS Medium Flat Rate Box"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXBhcmNlbA.option.cHJlZGVmaW5lZF9wYWNrYWdl.allowed-value.c3RyaW5nOk1lZGl1bVBhY2thZ2U.desc": {
+          "source": "Medium Package",
+          "message": "Medium Package"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXBhcmNlbA.option.cHJlZGVmaW5lZF9wYWNrYWdl.allowed-value.c3RyaW5nOkNhcmQ.desc": {
+          "source": "Card",
+          "message": "카드"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXBhcmNlbA.option.cHJlZGVmaW5lZF9wYWNrYWdl.allowed-value.c3RyaW5nOkRITEV4cHJlc3NFbnZlbG9wZQ.desc": {
+          "source": "DHL Express Envelope",
+          "message": "DHL Express Envelope"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXBhcmNlbA.option.cHJlZGVmaW5lZF9wYWNrYWdl.allowed-value.c3RyaW5nOkRITEZseWVy.desc": {
+          "source": "DHL Flyer",
+          "message": "DHL Flyer"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXBhcmNlbA.option.cHJlZGVmaW5lZF9wYWNrYWdl.allowed-value.c3RyaW5nOkRvY3VtZW50.desc": {
+          "source": "Document",
+          "message": "문서"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXBhcmNlbA.option.cHJlZGVmaW5lZF9wYWNrYWdl.allowed-value.c3RyaW5nOkRvbWVzdGlj.desc": {
+          "source": "Domestic",
+          "message": "Domestic"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXBhcmNlbA.option.cHJlZGVmaW5lZF9wYWNrYWdl.allowed-value.c3RyaW5nOkV4cHJlc3NEb2N1bWVudA.desc": {
+          "source": "Express Document",
+          "message": "Express Document"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXBhcmNlbA.option.cHJlZGVmaW5lZF9wYWNrYWdl.allowed-value.c3RyaW5nOkZlZEV4MTBrZ0JveA.desc": {
+          "source": "FedEx 10kg Box",
+          "message": "FedEx 10kg Box"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXBhcmNlbA.option.cHJlZGVmaW5lZF9wYWNrYWdl.allowed-value.c3RyaW5nOkZlZEV4MjVrZ0JveA.desc": {
+          "source": "FedEx 25kg Box",
+          "message": "FedEx 25kg Box"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXBhcmNlbA.option.cHJlZGVmaW5lZF9wYWNrYWdl.allowed-value.c3RyaW5nOkZlZEV4Qm94.desc": {
+          "source": "FedEx Box",
+          "message": "FedEx Box"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXBhcmNlbA.option.cHJlZGVmaW5lZF9wYWNrYWdl.allowed-value.c3RyaW5nOkZlZEV4RW52ZWxvcGU.desc": {
+          "source": "FedEx Envelope",
+          "message": "FedEx Envelope"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXBhcmNlbA.option.cHJlZGVmaW5lZF9wYWNrYWdl.allowed-value.c3RyaW5nOkZlZEV4TGFyZ2VCb3g.desc": {
+          "source": "FedEx Large Box",
+          "message": "FedEx Large Box"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXBhcmNlbA.option.cHJlZGVmaW5lZF9wYWNrYWdl.allowed-value.c3RyaW5nOkZlZEV4TWVkaXVtQm94.desc": {
+          "source": "FedEx Medium Box",
+          "message": "FedEx Medium Box"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXBhcmNlbA.option.cHJlZGVmaW5lZF9wYWNrYWdl.allowed-value.c3RyaW5nOkZlZEV4U21hbGxCb3g.desc": {
+          "source": "FedEx Small Box",
+          "message": "FedEx Small Box"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXBhcmNlbA.option.cHJlZGVmaW5lZF9wYWNrYWdl.allowed-value.c3RyaW5nOkZlZEV4UGFr.desc": {
+          "source": "FedEx Pak",
+          "message": "FedEx Pak"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXBhcmNlbA.option.cHJlZGVmaW5lZF9wYWNrYWdl.allowed-value.c3RyaW5nOkZlZEV4VHViZQ.desc": {
+          "source": "FedEx Tube",
+          "message": "FedEx Tube"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXBhcmNlbA.option.cHJlZGVmaW5lZF9wYWNrYWdl.allowed-value.c3RyaW5nOkZsYXQ.desc": {
+          "source": "Flat",
+          "message": "Flat"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXBhcmNlbA.option.cHJlZGVmaW5lZF9wYWNrYWdl.allowed-value.c3RyaW5nOkZsYXRSYXRlRW52ZWxvcGU.desc": {
+          "source": "USPS Flat Rate Envelope",
+          "message": "USPS Flat Rate Envelope"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXBhcmNlbA.option.cHJlZGVmaW5lZF9wYWNrYWdl.allowed-value.c3RyaW5nOkp1bWJvRG9jdW1lbnQ.desc": {
+          "source": "Jumbo Document",
+          "message": "Jumbo Document"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXBhcmNlbA.option.cHJlZGVmaW5lZF9wYWNrYWdl.allowed-value.c3RyaW5nOkp1bWJvUGFyY2Vs.desc": {
+          "source": "Jumbo Parcel",
+          "message": "Jumbo Parcel"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXBhcmNlbA.option.cHJlZGVmaW5lZF9wYWNrYWdl.allowed-value.c3RyaW5nOkxhcmdlRXhwcmVzc0JveA.desc": {
+          "source": "Large Express Box",
+          "message": "Large Express Box"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXBhcmNlbA.option.cHJlZGVmaW5lZF9wYWNrYWdl.allowed-value.c3RyaW5nOkxhcmdlRmxhdFJhdGVCb3g.desc": {
+          "source": "USPS Large Flat Rate Box",
+          "message": "USPS Large Flat Rate Box"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXBhcmNlbA.option.cHJlZGVmaW5lZF9wYWNrYWdl.allowed-value.c3RyaW5nOkxhcmdlUGFja2FnZQ.desc": {
+          "source": "Large Package",
+          "message": "Large Package"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXBhcmNlbA.option.cHJlZGVmaW5lZF9wYWNrYWdl.allowed-value.c3RyaW5nOkxlZ2FsRmxhdFJhdGVFbnZlbG9wZQ.desc": {
+          "source": "USPS Legal Flat Rate Envelope",
+          "message": "USPS Legal Flat Rate Envelope"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXBhcmNlbA.option.cHJlZGVmaW5lZF9wYWNrYWdl.allowed-value.c3RyaW5nOkxldHRlcg.desc": {
+          "source": "Letter",
+          "message": "Letter"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXBhcmNlbA.option.cHJlZGVmaW5lZF9wYWNrYWdl.allowed-value.c3RyaW5nOlBhZGRlZEZsYXRSYXRlRW52ZWxvcGU.desc": {
+          "source": "USPS Padded Flat Rate Envelope",
+          "message": "USPS Padded Flat Rate Envelope"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXBhcmNlbA.option.cHJlZGVmaW5lZF9wYWNrYWdl.allowed-value.c3RyaW5nOlBhaw.desc": {
+          "source": "Pak",
+          "message": "Pak"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXBhcmNlbA.option.cHJlZGVmaW5lZF9wYWNrYWdl.allowed-value.c3RyaW5nOlBhcmNlbA.desc": {
+          "source": "Generic Parcel",
+          "message": "일반 소포"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXBhcmNlbA.option.cHJlZGVmaW5lZF9wYWNrYWdl.allowed-value.c3RyaW5nOlJlZ2lvbmFsUmF0ZUJveEE.desc": {
+          "source": "USPS Regional Rate Box A",
+          "message": "USPS Regional Rate Box A"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXBhcmNlbA.option.cHJlZGVmaW5lZF9wYWNrYWdl.allowed-value.c3RyaW5nOlJlZ2lvbmFsUmF0ZUJveEI.desc": {
+          "source": "USPS Regional Rate Box B",
+          "message": "USPS Regional Rate Box B"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXBhcmNlbA.option.cHJlZGVmaW5lZF9wYWNrYWdl.allowed-value.c3RyaW5nOlNtYWxsRXhwcmVzc0JveA.desc": {
+          "source": "Small Express Box",
+          "message": "Small Express Box"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXBhcmNlbA.option.cHJlZGVmaW5lZF9wYWNrYWdl.allowed-value.c3RyaW5nOlNtYWxsRmxhdFJhdGVCb3g.desc": {
+          "source": "USPS Small Flat Rate Box",
+          "message": "USPS Small Flat Rate Box"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXBhcmNlbA.option.cHJlZGVmaW5lZF9wYWNrYWdl.allowed-value.c3RyaW5nOlNtYWxsUGFja2FnZQ.desc": {
+          "source": "Small Package",
+          "message": "Small Package"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXBhcmNlbA.option.cHJlZGVmaW5lZF9wYWNrYWdl.allowed-value.c3RyaW5nOlNvZnRQYWNr.desc": {
+          "source": "Soft Pack",
+          "message": "Soft Pack"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXBhcmNlbA.option.cHJlZGVmaW5lZF9wYWNrYWdl.allowed-value.c3RyaW5nOlR1YmU.desc": {
+          "source": "Tube",
+          "message": "Tube"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXBhcmNlbA.option.cHJlZGVmaW5lZF9wYWNrYWdl.allowed-value.c3RyaW5nOlVQU0V4cHJlc3NCb3g.desc": {
+          "source": "UPS Express Box",
+          "message": "UPS Express Box"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXBhcmNlbA.option.cHJlZGVmaW5lZF9wYWNrYWdl.allowed-value.c3RyaW5nOlVQU0xldHRlcg.desc": {
+          "source": "UPS Letter",
+          "message": "UPS Letter"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXBhcmNlbA.option.cHJlZGVmaW5lZF9wYWNrYWdl.desc": {
+          "source": "Carrier-specific predefined package identifier",
+          "message": "운송업체별 사전 정의된 패키지 식별자"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXBhcmNlbA.option.cHJlZGVmaW5lZF9wYWNrYWdl.display_name": {
+          "source": "Predefined Package",
+          "message": "사전 정의된 패키지"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXBhcmNlbA.option.cHJlZGVmaW5lZF9wYWNrYWdl.short_desc": {
+          "source": "Carrier-defined package code",
+          "message": "운송업체 정의 패키지 코드"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXBhcmNlbA.option.d2VpZ2h0.desc": {
+          "source": "Parcel weight in ounces",
+          "message": "소포 중량(온스 단위)"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXBhcmNlbA.option.d2VpZ2h0.display_name": {
+          "source": "Weight",
+          "message": "무게"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXBhcmNlbA.option.d2VpZ2h0.short_desc": {
+          "source": "Weight in ounces",
+          "message": "온스(oz) 단위 중량"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXBhcmNlbA.option.d2lkdGg.desc": {
+          "source": "Parcel width in inches",
+          "message": "소포 너비(인치 단위)"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXBhcmNlbA.option.d2lkdGg.display_name": {
+          "source": "Width",
+          "message": "너비"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXBhcmNlbA.option.d2lkdGg.short_desc": {
+          "source": "Width in inches",
+          "message": "너비(인치)"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXBhcmNlbA.short_desc": {
+          "source": "Create a new parcel",
+          "message": "새 소포 생성"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXBpY2t1cA.desc": {
+          "source": "Schedule a new pickup for a shipment.",
+          "message": "배송 건에 대한 새 픽업을 예약합니다."
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXBpY2t1cA.display_name": {
+          "source": "Create Pickup",
+          "message": "픽업 생성"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXBpY2t1cA.option.Y2Fycmllcl9hY2NvdW50cw.desc": {
+          "source": "Carrier account IDs to use for rating the pickup",
+          "message": "픽업 요금 산정에 사용할 운송업체 계정 ID"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXBpY2t1cA.option.Y2Fycmllcl9hY2NvdW50cw.display_name": {
+          "source": "Carrier Accounts",
+          "message": "운송업체 계정"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXBpY2t1cA.option.Y2Fycmllcl9hY2NvdW50cw.short_desc": {
+          "source": "Carrier account IDs",
+          "message": "운송업체 계정 ID"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXBpY2t1cA.option.YWRkcmVzcw.desc": {
+          "source": "Pickup address - full address or address reference",
+          "message": "픽업 주소 - 전체 주소 또는 주소 참조"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXBpY2t1cA.option.YWRkcmVzcw.display_name": {
+          "source": "Pickup Address",
+          "message": "픽업 주소"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXBpY2t1cA.option.YWRkcmVzcw.short_desc": {
+          "source": "Pickup address (or {id: adr_xxx})",
+          "message": "픽업 주소(또는 {id: adr_xxx})"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXBpY2t1cA.option.YmF0Y2g.desc": {
+          "source": "Fully-purchased batch to pick up - reference by `id`. Provide either `shipment` or `batch`, but not both.",
+          "message": "픽업할 구매 완료된 배치 - `id` 기준 참조입니다. `shipment` 또는 `batch` 중 하나만 제공해야 합니다."
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXBpY2t1cA.option.YmF0Y2g.display_name": {
+          "source": "Batch",
+          "message": "배치"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXBpY2t1cA.option.YmF0Y2g.short_desc": {
+          "source": "Batch to pick up ({id: batch_xxx})",
+          "message": "픽업할 배치({id: batch_xxx})"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXBpY2t1cA.option.aW5zdHJ1Y3Rpb25z.desc": {
+          "source": "Special pickup instructions for the carrier",
+          "message": "운송업체를 위한 특별 픽업 지침"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXBpY2t1cA.option.aW5zdHJ1Y3Rpb25z.display_name": {
+          "source": "Instructions",
+          "message": "지침"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXBpY2t1cA.option.aW5zdHJ1Y3Rpb25z.short_desc": {
+          "source": "Pickup instructions",
+          "message": "픽업 지침"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXBpY2t1cA.option.aXNfYWNjb3VudF9hZGRyZXNz.desc": {
+          "source": "Set to `True` if the pickup address matches the EasyPost account address",
+          "message": "픽업 주소가 EasyPost 계정 주소와 일치하는 경우 `True`(으)로 설정합니다"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXBpY2t1cA.option.aXNfYWNjb3VudF9hZGRyZXNz.display_name": {
+          "source": "Is Account Address",
+          "message": "계정 주소 여부"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXBpY2t1cA.option.aXNfYWNjb3VudF9hZGRyZXNz.short_desc": {
+          "source": "Pickup at the account address",
+          "message": "계정 주소에서 픽업"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXBpY2t1cA.option.bWF4X2RhdGV0aW1l.desc": {
+          "source": "Latest acceptable pickup datetime (ISO 8601)",
+          "message": "가능한 가장 늦은 픽업 일시 (ISO 8601)"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXBpY2t1cA.option.bWF4X2RhdGV0aW1l.display_name": {
+          "source": "Max Datetime",
+          "message": "최대 일시"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXBpY2t1cA.option.bWF4X2RhdGV0aW1l.short_desc": {
+          "source": "Latest pickup datetime",
+          "message": "가장 늦은 픽업 일시"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXBpY2t1cA.option.bWluX2RhdGV0aW1l.desc": {
+          "source": "Earliest acceptable pickup datetime (ISO 8601)",
+          "message": "가능한 가장 빠른 픽업 일시 (ISO 8601)"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXBpY2t1cA.option.bWluX2RhdGV0aW1l.display_name": {
+          "source": "Min Datetime",
+          "message": "최소 일시"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXBpY2t1cA.option.bWluX2RhdGV0aW1l.short_desc": {
+          "source": "Earliest pickup datetime",
+          "message": "가장 빠른 픽업 일시"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXBpY2t1cA.option.c2hpcG1lbnQ.desc": {
+          "source": "Shipment to pick up - reference by `id`. Provide either `shipment` or `batch`, but not both.",
+          "message": "픽업할 배송 건 - `id` 기준 참조입니다. `shipment` 또는 `batch` 중 하나만 제공해야 합니다."
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXBpY2t1cA.option.c2hpcG1lbnQ.display_name": {
+          "source": "Shipment",
+          "message": "배송 건"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXBpY2t1cA.option.c2hpcG1lbnQ.short_desc": {
+          "source": "Shipment to pick up ({id: shp_xxx})",
+          "message": "픽업할 배송 건({id: shp_xxx})"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXBpY2t1cA.option.cmVmZXJlbmNl.desc": {
+          "source": "Caller-supplied reference",
+          "message": "호출자 제공 참조"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXBpY2t1cA.option.cmVmZXJlbmNl.display_name": {
+          "source": "Reference",
+          "message": "참조"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXBpY2t1cA.option.cmVmZXJlbmNl.short_desc": {
+          "source": "Caller-supplied reference",
+          "message": "호출자 제공 참조"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXBpY2t1cA.short_desc": {
+          "source": "Schedule a pickup",
+          "message": "픽업 예약"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXJlZnVuZA.desc": {
+          "source": "Submit one or more refund requests by carrier and tracking code.",
+          "message": "운송업체 및 추적 코드로 하나 이상의 환불 요청을 제출합니다."
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXJlZnVuZA.display_name": {
+          "source": "Create Refund",
+          "message": "환불 생성"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXJlZnVuZA.option.Y2Fycmllcg.desc": {
+          "source": "Carrier name (e.g. `USPS`, `UPS`, `FedEx`) of the labels being refunded",
+          "message": "환불할 라벨의 운송업체 이름(예: `USPS`, `UPS`, `FedEx`)"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXJlZnVuZA.option.Y2Fycmllcg.display_name": {
+          "source": "Carrier",
+          "message": "배송업체"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXJlZnVuZA.option.Y2Fycmllcg.short_desc": {
+          "source": "Carrier name",
+          "message": "운송업체 이름"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXJlZnVuZA.option.dHJhY2tpbmdfY29kZXM.desc": {
+          "source": "List of tracking codes to refund",
+          "message": "환불할 추적 코드 목록"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXJlZnVuZA.option.dHJhY2tpbmdfY29kZXM.display_name": {
+          "source": "Tracking Codes",
+          "message": "추적 코드"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXJlZnVuZA.option.dHJhY2tpbmdfY29kZXM.short_desc": {
+          "source": "Tracking codes to refund",
+          "message": "환불할 추적 코드"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXJlZnVuZA.short_desc": {
+          "source": "Request a refund",
+          "message": "환불 요청"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXNoaXBtZW50.desc": {
+          "source": "Create a new shipment. The response contains a list of available rates that can be used to purchase a label via `buy-shipment`.",
+          "message": "새 배송 건을 생성합니다. 응답에는 `buy-shipment`을(를) 통해 라벨을 구매하는 데 사용할 수 있는 요금 목록이 포함됩니다."
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXNoaXBtZW50.display_name": {
+          "source": "Create Shipment",
+          "message": "배송 생성"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXNoaXBtZW50.option.Y2Fycmllcg.desc": {
+          "source": "Carrier name (e.g. `USPS`, `UPS`, `FedEx`)",
+          "message": "운송업체 이름(예: `USPS`, `UPS`, `FedEx`)"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXNoaXBtZW50.option.Y2Fycmllcg.display_name": {
+          "source": "Carrier",
+          "message": "배송업체"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXNoaXBtZW50.option.Y2Fycmllcg.short_desc": {
+          "source": "Carrier name",
+          "message": "운송업체 이름"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXNoaXBtZW50.option.Y2Fycmllcl9hY2NvdW50cw.desc": {
+          "source": "List of carrier account IDs to use for rating this shipment",
+          "message": "이 배송 건의 요금 산정에 사용할 운송업체 계정 ID 목록"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXNoaXBtZW50.option.Y2Fycmllcl9hY2NvdW50cw.display_name": {
+          "source": "Carrier Accounts",
+          "message": "운송업체 계정"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXNoaXBtZW50.option.Y2Fycmllcl9hY2NvdW50cw.short_desc": {
+          "source": "Carrier accounts to use for rating",
+          "message": "요금 산정에 사용할 운송업체 계정"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXNoaXBtZW50.option.Y3VzdG9tc19pbmZv.desc": {
+          "source": "Customs information for international shipments",
+          "message": "국제 배송을 위한 세관 정보"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXNoaXBtZW50.option.Y3VzdG9tc19pbmZv.display_name": {
+          "source": "Customs Info",
+          "message": "세관 정보"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXNoaXBtZW50.option.Y3VzdG9tc19pbmZv.short_desc": {
+          "source": "Customs information for international shipments",
+          "message": "국제 배송을 위한 세관 정보"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXNoaXBtZW50.option.YnV5ZXJfYWRkcmVzcw.desc": {
+          "source": "Buyer address (when different from `to_address`)",
+          "message": "구매자 주소 (`to_address`과 다른 경우)"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXNoaXBtZW50.option.YnV5ZXJfYWRkcmVzcw.display_name": {
+          "source": "Buyer Address",
+          "message": "구매자 주소"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXNoaXBtZW50.option.YnV5ZXJfYWRkcmVzcw.short_desc": {
+          "source": "Buyer address",
+          "message": "구매자 주소"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXNoaXBtZW50.option.ZnJvbV9hZGRyZXNz.desc": {
+          "source": "Origin address - either a full address object or a reference by `id`",
+          "message": "출발지 주소 - 전체 주소 객체 또는 `id` 기준 참조"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXNoaXBtZW50.option.ZnJvbV9hZGRyZXNz.display_name": {
+          "source": "From Address",
+          "message": "보내는 사람 주소"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXNoaXBtZW50.option.ZnJvbV9hZGRyZXNz.short_desc": {
+          "source": "Origin address (or {id: adr_xxx})",
+          "message": "출발지 주소(또는 {id: adr_xxx})"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXNoaXBtZW50.option.aW5zdXJhbmNl.desc": {
+          "source": "Insurance amount as a string (e.g. `\"100.00\"`). Used by the one-call buy flow.",
+          "message": "문자열 형식의 보험 금액(예: `\"100.00\"`). 단일 호출 구매(one-call buy) 플로우에서 사용됩니다."
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXNoaXBtZW50.option.aW5zdXJhbmNl.display_name": {
+          "source": "Insurance",
+          "message": "보험"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXNoaXBtZW50.option.aW5zdXJhbmNl.short_desc": {
+          "source": "Insurance amount for one-call buy",
+          "message": "단일 호출 구매(one-call buy)를 위한 보험 금액"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXNoaXBtZW50.option.aXNfcmV0dXJu.desc": {
+          "source": "Set to `True` to mark this as a return shipment",
+          "message": "반품 배송으로 표시하려면 `True`(으)로 설정합니다"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXNoaXBtZW50.option.aXNfcmV0dXJu.display_name": {
+          "source": "Is Return",
+          "message": "반품 여부"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXNoaXBtZW50.option.aXNfcmV0dXJu.short_desc": {
+          "source": "Mark as return shipment",
+          "message": "반품 배송으로 표시"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXNoaXBtZW50.option.b3B0aW9ucw.desc": {
+          "source": "Shipment options (e.g. `delivery_confirmation`, `label_format`)",
+          "message": "배송 옵션(예: `delivery_confirmation`, `label_format`)"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXNoaXBtZW50.option.b3B0aW9ucw.display_name": {
+          "source": "Options",
+          "message": "옵션"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXNoaXBtZW50.option.b3B0aW9ucw.short_desc": {
+          "source": "Shipment options",
+          "message": "배송 옵션"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXNoaXBtZW50.option.c2VydmljZQ.desc": {
+          "source": "Carrier service code (e.g. `Priority`, `Ground`)",
+          "message": "운송업체 서비스 코드(예: `Priority`, `Ground`)"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXNoaXBtZW50.option.c2VydmljZQ.display_name": {
+          "source": "Service",
+          "message": "서비스"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXNoaXBtZW50.option.c2VydmljZQ.short_desc": {
+          "source": "Carrier service",
+          "message": "운송업체 서비스"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXNoaXBtZW50.option.cGFyY2Vs.desc": {
+          "source": "Parcel details - either a full parcel object or a reference by `id`",
+          "message": "소포 세부 정보 - 전체 소포 객체 또는 `id` 기준 참조"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXNoaXBtZW50.option.cGFyY2Vs.display_name": {
+          "source": "Parcel",
+          "message": "소포"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXNoaXBtZW50.option.cGFyY2Vs.short_desc": {
+          "source": "Parcel details (or {id: prcl_xxx})",
+          "message": "소포 세부 정보(또는 {id: prcl_xxx})"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXNoaXBtZW50.option.cmV0dXJuX2FkZHJlc3M.desc": {
+          "source": "Return address (used for return shipments)",
+          "message": "반송 주소(반품 배송에 사용)"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXNoaXBtZW50.option.cmV0dXJuX2FkZHJlc3M.display_name": {
+          "source": "Return Address",
+          "message": "반송 주소"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXNoaXBtZW50.option.cmV0dXJuX2FkZHJlc3M.short_desc": {
+          "source": "Return address",
+          "message": "반송 주소"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXNoaXBtZW50.option.cmVmZXJlbmNl.desc": {
+          "source": "Caller-supplied reference",
+          "message": "호출자 제공 참조"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXNoaXBtZW50.option.cmVmZXJlbmNl.display_name": {
+          "source": "Reference",
+          "message": "참조"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXNoaXBtZW50.option.cmVmZXJlbmNl.short_desc": {
+          "source": "Caller-supplied reference",
+          "message": "호출자 제공 참조"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXNoaXBtZW50.option.dG9fYWRkcmVzcw.desc": {
+          "source": "Destination address - either a full address object or a reference by `id`",
+          "message": "도착지 주소 - 전체 주소 객체 또는 `id` 기준 참조"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXNoaXBtZW50.option.dG9fYWRkcmVzcw.display_name": {
+          "source": "To Address",
+          "message": "도착지 주소"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXNoaXBtZW50.option.dG9fYWRkcmVzcw.short_desc": {
+          "source": "Destination address (or {id: adr_xxx})",
+          "message": "도착지 주소(또는 {id: adr_xxx})"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXNoaXBtZW50.option.dGF4X2lkZW50aWZpZXJz.desc": {
+          "source": "List of tax identifiers (e.g. VAT, EIN)",
+          "message": "세금 식별자 목록(예: VAT, EIN)"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXNoaXBtZW50.option.dGF4X2lkZW50aWZpZXJz.display_name": {
+          "source": "Tax Identifiers",
+          "message": "세금 식별자"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXNoaXBtZW50.option.dGF4X2lkZW50aWZpZXJz.short_desc": {
+          "source": "Tax identifiers for international shipments",
+          "message": "국제 배송을 위한 세금 식별자"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXNoaXBtZW50.short_desc": {
+          "source": "Create a new shipment (returns rate options)",
+          "message": "새 배송 건 생성(요금 옵션 반환)"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXRyYWNrZXI.desc": {
+          "source": "Create a new tracker for a carrier tracking code.",
+          "message": "운송업체 추적 코드에 대한 새 트래커를 생성합니다."
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXRyYWNrZXI.display_name": {
+          "source": "Create Tracker",
+          "message": "트래커 생성"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXRyYWNrZXI.option.Y2Fycmllcg.desc": {
+          "source": "Carrier name (e.g. `USPS`, `FedEx`); EasyPost auto-detects when omitted",
+          "message": "운송업체 이름(예: `USPS`, `FedEx`). 생략 시 EasyPost가 자동으로 감지합니다"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXRyYWNrZXI.option.Y2Fycmllcg.display_name": {
+          "source": "Carrier",
+          "message": "배송업체"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXRyYWNrZXI.option.Y2Fycmllcg.short_desc": {
+          "source": "Carrier name",
+          "message": "운송업체 이름"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXRyYWNrZXI.option.dHJhY2tpbmdfY29kZQ.desc": {
+          "source": "Carrier tracking number to monitor",
+          "message": "모니터링할 운송업체 추적 번호"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXRyYWNrZXI.option.dHJhY2tpbmdfY29kZQ.display_name": {
+          "source": "Tracking Code",
+          "message": "추적 코드"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXRyYWNrZXI.option.dHJhY2tpbmdfY29kZQ.short_desc": {
+          "source": "Carrier tracking code",
+          "message": "운송업체 추적 코드"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXRyYWNrZXI.short_desc": {
+          "source": "Create a tracker",
+          "message": "트래커 생성"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXdlYmhvb2s.desc": {
+          "source": "Create a new webhook subscription.",
+          "message": "새 웹훅 구독을 생성합니다."
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXdlYmhvb2s.display_name": {
+          "source": "Create Webhook",
+          "message": "웹훅 생성"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXdlYmhvb2s.option.Y3VzdG9tX2hlYWRlcnM.desc": {
+          "source": "Custom HTTP headers to send with webhook callbacks",
+          "message": "웹훅 콜백과 함께 보낼 커스텀 HTTP 헤더"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXdlYmhvb2s.option.Y3VzdG9tX2hlYWRlcnM.display_name": {
+          "source": "Custom Headers",
+          "message": "사용자 지정 헤더"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXdlYmhvb2s.option.Y3VzdG9tX2hlYWRlcnM.short_desc": {
+          "source": "Custom HTTP headers",
+          "message": "커스텀 HTTP 헤더"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXdlYmhvb2s.option.d2ViaG9va19zZWNyZXQ.desc": {
+          "source": "Optional shared secret used to sign webhook payloads (HMAC-SHA-256)",
+          "message": "웹훅 페이로드 서명에 사용되는 선택적 공유 암호(HMAC-SHA-256)"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXdlYmhvb2s.option.d2ViaG9va19zZWNyZXQ.display_name": {
+          "source": "Webhook Secret",
+          "message": "웹훅 시크릿"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXdlYmhvb2s.option.d2ViaG9va19zZWNyZXQ.short_desc": {
+          "source": "Optional shared secret",
+          "message": "선택적 공유 암호"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXdlYmhvb2s.option.dXJs.desc": {
+          "source": "URL to receive webhook callbacks",
+          "message": "웹훅 콜백을 수신할 URL"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXdlYmhvb2s.option.dXJs.display_name": {
+          "source": "URL",
+          "message": "URL"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXdlYmhvb2s.option.dXJs.short_desc": {
+          "source": "Webhook target URL",
+          "message": "웹훅 대상 URL"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXdlYmhvb2s.short_desc": {
+          "source": "Create a webhook",
+          "message": "웹훅 생성"
+        },
+        "app.RWFzeVBvc3Q.action.YmF0Y2gtYWRkLXNoaXBtZW50cw.desc": {
+          "source": "Add shipments to an existing batch.",
+          "message": "기존 배치에 발송물을 추가합니다."
+        },
+        "app.RWFzeVBvc3Q.action.YmF0Y2gtYWRkLXNoaXBtZW50cw.display_name": {
+          "source": "Add Shipments to Batch",
+          "message": "배치에 발송물 추가"
+        },
+        "app.RWFzeVBvc3Q.action.YmF0Y2gtYWRkLXNoaXBtZW50cw.option.YmF0Y2hfaWQ.desc": {
+          "source": "Batch to add shipments to",
+          "message": "발송물을 추가할 배치"
+        },
+        "app.RWFzeVBvc3Q.action.YmF0Y2gtYWRkLXNoaXBtZW50cw.option.YmF0Y2hfaWQ.display_name": {
+          "source": "Batch ID",
+          "message": "배치 ID"
+        },
+        "app.RWFzeVBvc3Q.action.YmF0Y2gtYWRkLXNoaXBtZW50cw.option.YmF0Y2hfaWQ.short_desc": {
+          "source": "Batch ID (batch_xxx)",
+          "message": "배치 ID(batch_xxx)"
+        },
+        "app.RWFzeVBvc3Q.action.YmF0Y2gtYWRkLXNoaXBtZW50cw.option.c2hpcG1lbnRz.desc": {
+          "source": "List of shipment references to add to the batch (each `{id: shp_xxx}`)",
+          "message": "배치에 추가할 발송물 참조 목록(각각 `{id: shp_xxx}`)"
+        },
+        "app.RWFzeVBvc3Q.action.YmF0Y2gtYWRkLXNoaXBtZW50cw.option.c2hpcG1lbnRz.display_name": {
+          "source": "Shipments",
+          "message": "배송건"
+        },
+        "app.RWFzeVBvc3Q.action.YmF0Y2gtYWRkLXNoaXBtZW50cw.option.c2hpcG1lbnRz.short_desc": {
+          "source": "Shipments to add (each {id: shp_xxx})",
+          "message": "추가할 발송물(각각 {id: shp_xxx})"
+        },
+        "app.RWFzeVBvc3Q.action.YmF0Y2gtYWRkLXNoaXBtZW50cw.short_desc": {
+          "source": "Add shipments to a batch",
+          "message": "배치에 발송물 추가"
+        },
+        "app.RWFzeVBvc3Q.action.YmF0Y2gtYnV5.desc": {
+          "source": "Purchase labels for all shipments in a batch.",
+          "message": "배치 내 모든 발송물의 라벨을 구매합니다."
+        },
+        "app.RWFzeVBvc3Q.action.YmF0Y2gtYnV5.display_name": {
+          "source": "Buy Batch",
+          "message": "배치 구매"
+        },
+        "app.RWFzeVBvc3Q.action.YmF0Y2gtYnV5.option.YmF0Y2hfaWQ.desc": {
+          "source": "Batch to buy (purchase labels for all shipments)",
+          "message": "구매할 배치(모든 발송물의 라벨 구매)"
+        },
+        "app.RWFzeVBvc3Q.action.YmF0Y2gtYnV5.option.YmF0Y2hfaWQ.display_name": {
+          "source": "Batch ID",
+          "message": "배치 ID"
+        },
+        "app.RWFzeVBvc3Q.action.YmF0Y2gtYnV5.option.YmF0Y2hfaWQ.short_desc": {
+          "source": "Batch ID (batch_xxx)",
+          "message": "배치 ID(batch_xxx)"
+        },
+        "app.RWFzeVBvc3Q.action.YmF0Y2gtYnV5.short_desc": {
+          "source": "Buy a batch",
+          "message": "배치 구매"
+        },
+        "app.RWFzeVBvc3Q.action.YmF0Y2gtbGFiZWw.desc": {
+          "source": "Generate a single combined label file for all shipments in a batch.",
+          "message": "배치 내 모든 발송물에 대한 단일 통합 라벨 파일을 생성합니다."
+        },
+        "app.RWFzeVBvc3Q.action.YmF0Y2gtbGFiZWw.display_name": {
+          "source": "Get Batch Label",
+          "message": "배치 라벨 가져오기"
+        },
+        "app.RWFzeVBvc3Q.action.YmF0Y2gtbGFiZWw.option.YmF0Y2hfaWQ.desc": {
+          "source": "Batch to generate combined labels for",
+          "message": "통합 라벨을 생성할 배치"
+        },
+        "app.RWFzeVBvc3Q.action.YmF0Y2gtbGFiZWw.option.YmF0Y2hfaWQ.display_name": {
+          "source": "Batch ID",
+          "message": "배치 ID"
+        },
+        "app.RWFzeVBvc3Q.action.YmF0Y2gtbGFiZWw.option.YmF0Y2hfaWQ.short_desc": {
+          "source": "Batch ID (batch_xxx)",
+          "message": "배치 ID(batch_xxx)"
+        },
+        "app.RWFzeVBvc3Q.action.YmF0Y2gtbGFiZWw.option.ZmlsZV9mb3JtYXQ.allowed-value.c3RyaW5nOkVQTDI.desc": {
+          "source": "Eltron EPL2",
+          "message": "Eltron EPL2"
+        },
+        "app.RWFzeVBvc3Q.action.YmF0Y2gtbGFiZWw.option.ZmlsZV9mb3JtYXQ.allowed-value.c3RyaW5nOlBERg.desc": {
+          "source": "PDF",
+          "message": "PDF"
+        },
+        "app.RWFzeVBvc3Q.action.YmF0Y2gtbGFiZWw.option.ZmlsZV9mb3JtYXQ.allowed-value.c3RyaW5nOlpQTA.desc": {
+          "source": "Zebra ZPL",
+          "message": "Zebra ZPL"
+        },
+        "app.RWFzeVBvc3Q.action.YmF0Y2gtbGFiZWw.option.ZmlsZV9mb3JtYXQ.desc": {
+          "source": "Output format for the combined label file",
+          "message": "통합 라벨 파일의 출력 형식"
+        },
+        "app.RWFzeVBvc3Q.action.YmF0Y2gtbGFiZWw.option.ZmlsZV9mb3JtYXQ.display_name": {
+          "source": "File Format",
+          "message": "파일 형식"
+        },
+        "app.RWFzeVBvc3Q.action.YmF0Y2gtbGFiZWw.option.ZmlsZV9mb3JtYXQ.short_desc": {
+          "source": "Combined label file format",
+          "message": "통합 라벨 파일 형식"
+        },
+        "app.RWFzeVBvc3Q.action.YmF0Y2gtbGFiZWw.short_desc": {
+          "source": "Generate a combined batch label",
+          "message": "통합 배치 라벨 생성"
+        },
+        "app.RWFzeVBvc3Q.action.YmF0Y2gtc2Nhbi1mb3Jt.desc": {
+          "source": "Generate a scan form for all shipments in a batch.",
+          "message": "배치 내 모든 발송물에 대한 스캔 양식을 생성합니다."
+        },
+        "app.RWFzeVBvc3Q.action.YmF0Y2gtc2Nhbi1mb3Jt.display_name": {
+          "source": "Generate Batch Scan Form",
+          "message": "배치 스캔 양식 생성"
+        },
+        "app.RWFzeVBvc3Q.action.YmF0Y2gtc2Nhbi1mb3Jt.option.YmF0Y2hfaWQ.desc": {
+          "source": "Batch to generate a scan form for",
+          "message": "스캔 양식을 생성할 배치"
+        },
+        "app.RWFzeVBvc3Q.action.YmF0Y2gtc2Nhbi1mb3Jt.option.YmF0Y2hfaWQ.display_name": {
+          "source": "Batch ID",
+          "message": "배치 ID"
+        },
+        "app.RWFzeVBvc3Q.action.YmF0Y2gtc2Nhbi1mb3Jt.option.YmF0Y2hfaWQ.short_desc": {
+          "source": "Batch ID (batch_xxx)",
+          "message": "배치 ID(batch_xxx)"
+        },
+        "app.RWFzeVBvc3Q.action.YmF0Y2gtc2Nhbi1mb3Jt.short_desc": {
+          "source": "Generate a scan form",
+          "message": "스캔 양식 생성"
+        },
+        "app.RWFzeVBvc3Q.action.YmF0Y2gtcmVtb3ZlLXNoaXBtZW50cw.desc": {
+          "source": "Remove shipments from an existing batch.",
+          "message": "기존 배치에서 발송물을 제거합니다."
+        },
+        "app.RWFzeVBvc3Q.action.YmF0Y2gtcmVtb3ZlLXNoaXBtZW50cw.display_name": {
+          "source": "Remove Shipments from Batch",
+          "message": "배치에서 발송물 제거"
+        },
+        "app.RWFzeVBvc3Q.action.YmF0Y2gtcmVtb3ZlLXNoaXBtZW50cw.option.YmF0Y2hfaWQ.desc": {
+          "source": "Batch to remove shipments from",
+          "message": "발송물을 제거할 배치"
+        },
+        "app.RWFzeVBvc3Q.action.YmF0Y2gtcmVtb3ZlLXNoaXBtZW50cw.option.YmF0Y2hfaWQ.display_name": {
+          "source": "Batch ID",
+          "message": "배치 ID"
+        },
+        "app.RWFzeVBvc3Q.action.YmF0Y2gtcmVtb3ZlLXNoaXBtZW50cw.option.YmF0Y2hfaWQ.short_desc": {
+          "source": "Batch ID (batch_xxx)",
+          "message": "배치 ID(batch_xxx)"
+        },
+        "app.RWFzeVBvc3Q.action.YmF0Y2gtcmVtb3ZlLXNoaXBtZW50cw.option.c2hpcG1lbnRz.desc": {
+          "source": "List of shipment references to remove from the batch (each `{id: shp_xxx}`)",
+          "message": "배치에서 제거할 발송물 참조 목록(각각 `{id: shp_xxx}`)"
+        },
+        "app.RWFzeVBvc3Q.action.YmF0Y2gtcmVtb3ZlLXNoaXBtZW50cw.option.c2hpcG1lbnRz.display_name": {
+          "source": "Shipments",
+          "message": "배송건"
+        },
+        "app.RWFzeVBvc3Q.action.YmF0Y2gtcmVtb3ZlLXNoaXBtZW50cw.option.c2hpcG1lbnRz.short_desc": {
+          "source": "Shipments to remove (each {id: shp_xxx})",
+          "message": "제거할 발송물(각각 {id: shp_xxx})"
+        },
+        "app.RWFzeVBvc3Q.action.YmF0Y2gtcmVtb3ZlLXNoaXBtZW50cw.short_desc": {
+          "source": "Remove shipments from a batch",
+          "message": "배치에서 발송물 제거"
+        },
+        "app.RWFzeVBvc3Q.action.YnV5LW9yZGVy.desc": {
+          "source": "Buy all shipments in an order with a single carrier and service.",
+          "message": "단일 운송업체 및 서비스로 주문 내 모든 발송물을 구매합니다."
+        },
+        "app.RWFzeVBvc3Q.action.YnV5LW9yZGVy.display_name": {
+          "source": "Buy Order",
+          "message": "주문 구매"
+        },
+        "app.RWFzeVBvc3Q.action.YnV5LW9yZGVy.option.Y2Fycmllcg.desc": {
+          "source": "Carrier name (e.g. `FedEx`, `UPS`) — must match a `carrier` returned in the Order's `rates`",
+          "message": "운송업체 이름(예: `FedEx`, `UPS`) — 주문의 `rates`에서 반환된 `carrier`와 일치해야 함"
+        },
+        "app.RWFzeVBvc3Q.action.YnV5LW9yZGVy.option.Y2Fycmllcg.display_name": {
+          "source": "Carrier",
+          "message": "배송업체"
+        },
+        "app.RWFzeVBvc3Q.action.YnV5LW9yZGVy.option.Y2Fycmllcg.short_desc": {
+          "source": "Carrier name",
+          "message": "운송업체 이름"
+        },
+        "app.RWFzeVBvc3Q.action.YnV5LW9yZGVy.option.b3JkZXJfaWQ.desc": {
+          "source": "Order to buy",
+          "message": "구매할 주문"
+        },
+        "app.RWFzeVBvc3Q.action.YnV5LW9yZGVy.option.b3JkZXJfaWQ.display_name": {
+          "source": "Order ID",
+          "message": "주문 ID"
+        },
+        "app.RWFzeVBvc3Q.action.YnV5LW9yZGVy.option.b3JkZXJfaWQ.short_desc": {
+          "source": "Order ID (order_xxx)",
+          "message": "주문 ID(order_xxx)"
+        },
+        "app.RWFzeVBvc3Q.action.YnV5LW9yZGVy.option.c2VydmljZQ.desc": {
+          "source": "Carrier service code",
+          "message": "운송업체 서비스 코드"
+        },
+        "app.RWFzeVBvc3Q.action.YnV5LW9yZGVy.option.c2VydmljZQ.display_name": {
+          "source": "Service",
+          "message": "서비스"
+        },
+        "app.RWFzeVBvc3Q.action.YnV5LW9yZGVy.option.c2VydmljZQ.short_desc": {
+          "source": "Carrier service",
+          "message": "운송업체 서비스"
+        },
+        "app.RWFzeVBvc3Q.action.YnV5LW9yZGVy.short_desc": {
+          "source": "Buy an order",
+          "message": "주문 구매"
+        },
+        "app.RWFzeVBvc3Q.action.YnV5LXBpY2t1cA.desc": {
+          "source": "Confirm/buy a previously scheduled pickup.",
+          "message": "이전에 예약된 픽업을 확인/구매합니다."
+        },
+        "app.RWFzeVBvc3Q.action.YnV5LXBpY2t1cA.display_name": {
+          "source": "Buy Pickup",
+          "message": "픽업 구매"
+        },
+        "app.RWFzeVBvc3Q.action.YnV5LXBpY2t1cA.option.Y2Fycmllcg.desc": {
+          "source": "Carrier name (e.g. `UPS`, `FedEx`) — must match a `carrier` returned in the Pickup's `pickup_rates`",
+          "message": "운송업체 이름(예: `UPS`, `FedEx`) — 픽업의 `pickup_rates`에서 반환된 `carrier`와 일치해야 함"
+        },
+        "app.RWFzeVBvc3Q.action.YnV5LXBpY2t1cA.option.Y2Fycmllcg.display_name": {
+          "source": "Carrier",
+          "message": "배송업체"
+        },
+        "app.RWFzeVBvc3Q.action.YnV5LXBpY2t1cA.option.Y2Fycmllcg.short_desc": {
+          "source": "Carrier name",
+          "message": "운송업체 이름"
+        },
+        "app.RWFzeVBvc3Q.action.YnV5LXBpY2t1cA.option.c2VydmljZQ.desc": {
+          "source": "Pickup service code returned in `pickup_rates`",
+          "message": "`pickup_rates`에서 반환된 픽업 서비스 코드"
+        },
+        "app.RWFzeVBvc3Q.action.YnV5LXBpY2t1cA.option.c2VydmljZQ.display_name": {
+          "source": "Service",
+          "message": "서비스"
+        },
+        "app.RWFzeVBvc3Q.action.YnV5LXBpY2t1cA.option.c2VydmljZQ.short_desc": {
+          "source": "Pickup service code",
+          "message": "픽업 서비스 코드"
+        },
+        "app.RWFzeVBvc3Q.action.YnV5LXBpY2t1cA.option.cGlja3VwX2lk.desc": {
+          "source": "Pickup to confirm/buy",
+          "message": "확인/구매할 픽업"
+        },
+        "app.RWFzeVBvc3Q.action.YnV5LXBpY2t1cA.option.cGlja3VwX2lk.display_name": {
+          "source": "Pickup ID",
+          "message": "픽업 ID"
+        },
+        "app.RWFzeVBvc3Q.action.YnV5LXBpY2t1cA.option.cGlja3VwX2lk.short_desc": {
+          "source": "Pickup ID (pickup_xxx)",
+          "message": "픽업 ID (pickup_xxx)"
+        },
+        "app.RWFzeVBvc3Q.action.YnV5LXBpY2t1cA.short_desc": {
+          "source": "Confirm a pickup",
+          "message": "픽업 확인"
+        },
+        "app.RWFzeVBvc3Q.action.YnV5LXNoaXBtZW50.desc": {
+          "source": "Purchase a shipping label by selecting one of the rates returned by `create-shipment`.",
+          "message": "`create-shipment`에서 반환된 요금 중 하나를 선택하여 배송 라벨을 구매합니다."
+        },
+        "app.RWFzeVBvc3Q.action.YnV5LXNoaXBtZW50.display_name": {
+          "source": "Buy Shipment",
+          "message": "발송물 구매"
+        },
+        "app.RWFzeVBvc3Q.action.YnV5LXNoaXBtZW50.option.Y2FyYm9uX29mZnNldA.desc": {
+          "source": "Set to `True` to apply EasyPost's carbon offset surcharge",
+          "message": "EasyPost의 탄소 상쇄 추가 요금을 적용하려면 `True`(으)로 설정하세요"
+        },
+        "app.RWFzeVBvc3Q.action.YnV5LXNoaXBtZW50.option.Y2FyYm9uX29mZnNldA.display_name": {
+          "source": "Carbon Offset",
+          "message": "탄소 상쇄"
+        },
+        "app.RWFzeVBvc3Q.action.YnV5LXNoaXBtZW50.option.Y2FyYm9uX29mZnNldA.short_desc": {
+          "source": "Apply carbon offset",
+          "message": "탄소 상쇄 적용"
+        },
+        "app.RWFzeVBvc3Q.action.YnV5LXNoaXBtZW50.option.ZW5kX3NoaXBwZXJfaWQ.desc": {
+          "source": "End shipper ID for the purchase",
+          "message": "구매를 위한 최종 발송인 ID"
+        },
+        "app.RWFzeVBvc3Q.action.YnV5LXNoaXBtZW50.option.ZW5kX3NoaXBwZXJfaWQ.display_name": {
+          "source": "End Shipper ID",
+          "message": "최종 발송인 ID"
+        },
+        "app.RWFzeVBvc3Q.action.YnV5LXNoaXBtZW50.option.ZW5kX3NoaXBwZXJfaWQ.short_desc": {
+          "source": "End shipper ID (es_xxx)",
+          "message": "최종 발송인 ID(es_xxx)"
+        },
+        "app.RWFzeVBvc3Q.action.YnV5LXNoaXBtZW50.option.aW5zdXJhbmNl.desc": {
+          "source": "Insure the shipment for this amount (string, e.g. `\"100.00\"`)",
+          "message": "이 금액으로 발송물에 대해 보험을 가입합니다(문자열, 예: `\"100.00\"`)"
+        },
+        "app.RWFzeVBvc3Q.action.YnV5LXNoaXBtZW50.option.aW5zdXJhbmNl.display_name": {
+          "source": "Insurance",
+          "message": "보험"
+        },
+        "app.RWFzeVBvc3Q.action.YnV5LXNoaXBtZW50.option.aW5zdXJhbmNl.short_desc": {
+          "source": "Insurance amount (string)",
+          "message": "보험 금액(문자열)"
+        },
+        "app.RWFzeVBvc3Q.action.YnV5LXNoaXBtZW50.option.c2hpcG1lbnRfaWQ.desc": {
+          "source": "Shipment to purchase a label for",
+          "message": "라벨을 구매할 배송 건"
+        },
+        "app.RWFzeVBvc3Q.action.YnV5LXNoaXBtZW50.option.c2hpcG1lbnRfaWQ.display_name": {
+          "source": "Shipment ID",
+          "message": "배송 ID"
+        },
+        "app.RWFzeVBvc3Q.action.YnV5LXNoaXBtZW50.option.c2hpcG1lbnRfaWQ.short_desc": {
+          "source": "Shipment ID (shp_xxx)",
+          "message": "배송 ID (shp_xxx)"
+        },
+        "app.RWFzeVBvc3Q.action.YnV5LXNoaXBtZW50.option.cmF0ZQ.desc": {
+          "source": "Rate to purchase - select one of the rates returned by `create-shipment`",
+          "message": "구매할 요금 - `create-shipment`에서 반환된 요금 중 하나를 선택하십시오"
+        },
+        "app.RWFzeVBvc3Q.action.YnV5LXNoaXBtZW50.option.cmF0ZQ.display_name": {
+          "source": "Rate",
+          "message": "요금"
+        },
+        "app.RWFzeVBvc3Q.action.YnV5LXNoaXBtZW50.option.cmF0ZQ.short_desc": {
+          "source": "Selected rate ({id: rate_xxx})",
+          "message": "선택한 요금 ({id: rate_xxx})"
+        },
+        "app.RWFzeVBvc3Q.action.YnV5LXNoaXBtZW50.short_desc": {
+          "source": "Purchase a shipping label",
+          "message": "배송 라벨 구매"
+        },
+        "app.RWFzeVBvc3Q.action.YnVsay1jcmVhdGUtdHJhY2tlcnM.desc": {
+          "source": "Create up to 100 trackers in a single request.",
+          "message": "단일 요청으로 최대 100개의 트래커를 생성합니다."
+        },
+        "app.RWFzeVBvc3Q.action.YnVsay1jcmVhdGUtdHJhY2tlcnM.display_name": {
+          "source": "Bulk Create Trackers",
+          "message": "트래커 대량 생성"
+        },
+        "app.RWFzeVBvc3Q.action.YnVsay1jcmVhdGUtdHJhY2tlcnM.option.dHJhY2tlcnM.desc": {
+          "source": "List of tracker entries to create in a single batch",
+          "message": "단일 배치로 생성할 트래커 항목 목록"
+        },
+        "app.RWFzeVBvc3Q.action.YnVsay1jcmVhdGUtdHJhY2tlcnM.option.dHJhY2tlcnM.display_name": {
+          "source": "Trackers",
+          "message": "트래커"
+        },
+        "app.RWFzeVBvc3Q.action.YnVsay1jcmVhdGUtdHJhY2tlcnM.option.dHJhY2tlcnM.short_desc": {
+          "source": "List of tracker entries",
+          "message": "트래커 항목 목록"
+        },
+        "app.RWFzeVBvc3Q.action.YnVsay1jcmVhdGUtdHJhY2tlcnM.short_desc": {
+          "source": "Bulk-create trackers",
+          "message": "트래커 대량 생성"
+        },
+        "app.RWFzeVBvc3Q.action.Z2V0LW9yZGVy.desc": {
+          "source": "Retrieve an EasyPost order by ID.",
+          "message": "ID로 EasyPost 주문을 조회합니다."
+        },
+        "app.RWFzeVBvc3Q.action.Z2V0LW9yZGVy.display_name": {
+          "source": "Get Order",
+          "message": "주문 가져오기"
+        },
+        "app.RWFzeVBvc3Q.action.Z2V0LW9yZGVy.option.b3JkZXJfaWQ.desc": {
+          "source": "Order to retrieve",
+          "message": "조회할 주문"
+        },
+        "app.RWFzeVBvc3Q.action.Z2V0LW9yZGVy.option.b3JkZXJfaWQ.display_name": {
+          "source": "Order ID",
+          "message": "주문 ID"
+        },
+        "app.RWFzeVBvc3Q.action.Z2V0LW9yZGVy.option.b3JkZXJfaWQ.short_desc": {
+          "source": "Order ID (order_xxx)",
+          "message": "주문 ID(order_xxx)"
+        },
+        "app.RWFzeVBvc3Q.action.Z2V0LW9yZGVy.short_desc": {
+          "source": "Retrieve an order",
+          "message": "주문 조회"
+        },
+        "app.RWFzeVBvc3Q.action.Z2V0LWFkZHJlc3M.desc": {
+          "source": "Retrieve an EasyPost address by ID.",
+          "message": "ID로 EasyPost 주소를 조회합니다."
+        },
+        "app.RWFzeVBvc3Q.action.Z2V0LWFkZHJlc3M.display_name": {
+          "source": "Get Address",
+          "message": "주소 조회"
+        },
+        "app.RWFzeVBvc3Q.action.Z2V0LWFkZHJlc3M.option.YWRkcmVzc19pZA.desc": {
+          "source": "Address to retrieve",
+          "message": "조회할 주소"
+        },
+        "app.RWFzeVBvc3Q.action.Z2V0LWFkZHJlc3M.option.YWRkcmVzc19pZA.display_name": {
+          "source": "Address ID",
+          "message": "주소 ID"
+        },
+        "app.RWFzeVBvc3Q.action.Z2V0LWFkZHJlc3M.option.YWRkcmVzc19pZA.short_desc": {
+          "source": "Address ID (adr_xxx)",
+          "message": "주소 ID (adr_xxx)"
+        },
+        "app.RWFzeVBvc3Q.action.Z2V0LWFkZHJlc3M.short_desc": {
+          "source": "Retrieve an address by ID",
+          "message": "ID로 주소 조회"
+        },
+        "app.RWFzeVBvc3Q.action.Z2V0LWJhdGNo.desc": {
+          "source": "Retrieve an EasyPost batch by ID.",
+          "message": "ID로 EasyPost 배치를 조회합니다."
+        },
+        "app.RWFzeVBvc3Q.action.Z2V0LWJhdGNo.display_name": {
+          "source": "Get Batch",
+          "message": "배치 조회"
+        },
+        "app.RWFzeVBvc3Q.action.Z2V0LWJhdGNo.option.YmF0Y2hfaWQ.desc": {
+          "source": "Batch to retrieve",
+          "message": "조회할 배치"
+        },
+        "app.RWFzeVBvc3Q.action.Z2V0LWJhdGNo.option.YmF0Y2hfaWQ.display_name": {
+          "source": "Batch ID",
+          "message": "배치 ID"
+        },
+        "app.RWFzeVBvc3Q.action.Z2V0LWJhdGNo.option.YmF0Y2hfaWQ.short_desc": {
+          "source": "Batch ID (batch_xxx)",
+          "message": "배치 ID(batch_xxx)"
+        },
+        "app.RWFzeVBvc3Q.action.Z2V0LWJhdGNo.short_desc": {
+          "source": "Retrieve a batch by ID",
+          "message": "ID로 배치 조회"
+        },
+        "app.RWFzeVBvc3Q.action.Z2V0LWN1c3RvbXMtaW5mbw.desc": {
+          "source": "Retrieve a customs info object by ID.",
+          "message": "ID로 세관 정보 객체를 조회합니다."
+        },
+        "app.RWFzeVBvc3Q.action.Z2V0LWN1c3RvbXMtaW5mbw.display_name": {
+          "source": "Get Customs Info",
+          "message": "세관 정보 조회"
+        },
+        "app.RWFzeVBvc3Q.action.Z2V0LWN1c3RvbXMtaW5mbw.option.Y3VzdG9tc19pbmZvX2lk.desc": {
+          "source": "Customs info ID to retrieve",
+          "message": "조회할 세관 정보 ID"
+        },
+        "app.RWFzeVBvc3Q.action.Z2V0LWN1c3RvbXMtaW5mbw.option.Y3VzdG9tc19pbmZvX2lk.display_name": {
+          "source": "Customs Info ID",
+          "message": "세관 정보 ID"
+        },
+        "app.RWFzeVBvc3Q.action.Z2V0LWN1c3RvbXMtaW5mbw.option.Y3VzdG9tc19pbmZvX2lk.short_desc": {
+          "source": "Customs info ID (cstinfo_xxx)",
+          "message": "세관 정보 ID (cstinfo_xxx)"
+        },
+        "app.RWFzeVBvc3Q.action.Z2V0LWN1c3RvbXMtaW5mbw.short_desc": {
+          "source": "Retrieve a customs info object",
+          "message": "세관 정보 객체 조회"
+        },
+        "app.RWFzeVBvc3Q.action.Z2V0LWN1c3RvbXMtaXRlbQ.desc": {
+          "source": "Retrieve a customs item by ID.",
+          "message": "ID로 세관 품목을 조회합니다."
+        },
+        "app.RWFzeVBvc3Q.action.Z2V0LWN1c3RvbXMtaXRlbQ.display_name": {
+          "source": "Get Customs Item",
+          "message": "세관 품목 조회"
+        },
+        "app.RWFzeVBvc3Q.action.Z2V0LWN1c3RvbXMtaXRlbQ.option.Y3VzdG9tc19pdGVtX2lk.desc": {
+          "source": "Customs item to retrieve",
+          "message": "조회할 세관 품목"
+        },
+        "app.RWFzeVBvc3Q.action.Z2V0LWN1c3RvbXMtaXRlbQ.option.Y3VzdG9tc19pdGVtX2lk.display_name": {
+          "source": "Customs Item ID",
+          "message": "세관 품목 ID"
+        },
+        "app.RWFzeVBvc3Q.action.Z2V0LWN1c3RvbXMtaXRlbQ.option.Y3VzdG9tc19pdGVtX2lk.short_desc": {
+          "source": "Customs item ID (cstitem_xxx)",
+          "message": "세관 품목 ID (cstitem_xxx)"
+        },
+        "app.RWFzeVBvc3Q.action.Z2V0LWN1c3RvbXMtaXRlbQ.short_desc": {
+          "source": "Retrieve a customs item",
+          "message": "세관 품목 조회"
+        },
+        "app.RWFzeVBvc3Q.action.Z2V0LWNhcnJpZXItYWNjb3VudA.desc": {
+          "source": "Retrieve a carrier account by ID.",
+          "message": "ID로 운송업체 계정을 조회합니다."
+        },
+        "app.RWFzeVBvc3Q.action.Z2V0LWNhcnJpZXItYWNjb3VudA.display_name": {
+          "source": "Get Carrier Account",
+          "message": "운송업체 계정 조회"
+        },
+        "app.RWFzeVBvc3Q.action.Z2V0LWNhcnJpZXItYWNjb3VudA.option.Y2Fycmllcl9hY2NvdW50X2lk.desc": {
+          "source": "Carrier account to retrieve",
+          "message": "조회할 운송업체 계정"
+        },
+        "app.RWFzeVBvc3Q.action.Z2V0LWNhcnJpZXItYWNjb3VudA.option.Y2Fycmllcl9hY2NvdW50X2lk.display_name": {
+          "source": "Carrier Account ID",
+          "message": "운송업체 계정 ID"
+        },
+        "app.RWFzeVBvc3Q.action.Z2V0LWNhcnJpZXItYWNjb3VudA.option.Y2Fycmllcl9hY2NvdW50X2lk.short_desc": {
+          "source": "Carrier account ID (ca_xxx)",
+          "message": "운송업체 계정 ID (ca_xxx)"
+        },
+        "app.RWFzeVBvc3Q.action.Z2V0LWNhcnJpZXItYWNjb3VudA.short_desc": {
+          "source": "Retrieve a carrier account",
+          "message": "운송업체 계정 조회"
+        },
+        "app.RWFzeVBvc3Q.action.Z2V0LWV2ZW50.desc": {
+          "source": "Retrieve a webhook event by ID.",
+          "message": "ID로 웹훅 이벤트를 조회합니다."
+        },
+        "app.RWFzeVBvc3Q.action.Z2V0LWV2ZW50.display_name": {
+          "source": "Get Event",
+          "message": "이벤트 가져오기"
+        },
+        "app.RWFzeVBvc3Q.action.Z2V0LWV2ZW50.option.ZXZlbnRfaWQ.desc": {
+          "source": "Event to retrieve",
+          "message": "조회할 이벤트"
+        },
+        "app.RWFzeVBvc3Q.action.Z2V0LWV2ZW50.option.ZXZlbnRfaWQ.display_name": {
+          "source": "Event ID",
+          "message": "일정 ID"
+        },
+        "app.RWFzeVBvc3Q.action.Z2V0LWV2ZW50.option.ZXZlbnRfaWQ.short_desc": {
+          "source": "Event ID (evt_xxx)",
+          "message": "이벤트 ID (evt_xxx)"
+        },
+        "app.RWFzeVBvc3Q.action.Z2V0LWV2ZW50.short_desc": {
+          "source": "Retrieve an event",
+          "message": "이벤트 조회"
+        },
+        "app.RWFzeVBvc3Q.action.Z2V0LWV2ZW50LXBheWxvYWQ.desc": {
+          "source": "Retrieve a single webhook delivery payload.",
+          "message": "단일 웹훅 전송 페이로드를 조회합니다."
+        },
+        "app.RWFzeVBvc3Q.action.Z2V0LWV2ZW50LXBheWxvYWQ.display_name": {
+          "source": "Get Event Payload",
+          "message": "이벤트 페이로드 조회"
+        },
+        "app.RWFzeVBvc3Q.action.Z2V0LWV2ZW50LXBheWxvYWQ.option.ZXZlbnRfaWQ.desc": {
+          "source": "Parent event ID",
+          "message": "상위 이벤트 ID"
+        },
+        "app.RWFzeVBvc3Q.action.Z2V0LWV2ZW50LXBheWxvYWQ.option.ZXZlbnRfaWQ.display_name": {
+          "source": "Event ID",
+          "message": "일정 ID"
+        },
+        "app.RWFzeVBvc3Q.action.Z2V0LWV2ZW50LXBheWxvYWQ.option.ZXZlbnRfaWQ.short_desc": {
+          "source": "Event ID (evt_xxx)",
+          "message": "이벤트 ID (evt_xxx)"
+        },
+        "app.RWFzeVBvc3Q.action.Z2V0LWV2ZW50LXBheWxvYWQ.option.cGF5bG9hZF9pZA.desc": {
+          "source": "Payload to retrieve",
+          "message": "조회할 페이로드"
+        },
+        "app.RWFzeVBvc3Q.action.Z2V0LWV2ZW50LXBheWxvYWQ.option.cGF5bG9hZF9pZA.display_name": {
+          "source": "Payload ID",
+          "message": "페이로드 ID"
+        },
+        "app.RWFzeVBvc3Q.action.Z2V0LWV2ZW50LXBheWxvYWQ.option.cGF5bG9hZF9pZA.short_desc": {
+          "source": "Payload ID (payload_xxx)",
+          "message": "페이로드 ID (payload_xxx)"
+        },
+        "app.RWFzeVBvc3Q.action.Z2V0LWV2ZW50LXBheWxvYWQ.short_desc": {
+          "source": "Retrieve a single payload",
+          "message": "단일 페이로드 조회"
+        },
+        "app.RWFzeVBvc3Q.action.Z2V0LWluc3VyYW5jZQ.desc": {
+          "source": "Retrieve an EasyPost insurance record by ID.",
+          "message": "ID로 EasyPost 보험 레코드를 조회합니다."
+        },
+        "app.RWFzeVBvc3Q.action.Z2V0LWluc3VyYW5jZQ.display_name": {
+          "source": "Get Insurance",
+          "message": "보험 조회"
+        },
+        "app.RWFzeVBvc3Q.action.Z2V0LWluc3VyYW5jZQ.option.aW5zdXJhbmNlX2lk.desc": {
+          "source": "Insurance record to retrieve",
+          "message": "조회할 보험 레코드"
+        },
+        "app.RWFzeVBvc3Q.action.Z2V0LWluc3VyYW5jZQ.option.aW5zdXJhbmNlX2lk.display_name": {
+          "source": "Insurance ID",
+          "message": "보험 ID"
+        },
+        "app.RWFzeVBvc3Q.action.Z2V0LWluc3VyYW5jZQ.option.aW5zdXJhbmNlX2lk.short_desc": {
+          "source": "Insurance ID (ins_xxx)",
+          "message": "보험 ID (ins_xxx)"
+        },
+        "app.RWFzeVBvc3Q.action.Z2V0LWluc3VyYW5jZQ.short_desc": {
+          "source": "Retrieve an insurance record by ID",
+          "message": "ID로 보험 레코드 조회"
+        },
+        "app.RWFzeVBvc3Q.action.Z2V0LXBhcmNlbA.desc": {
+          "source": "Retrieve an EasyPost parcel by ID.",
+          "message": "ID로 EasyPost 소포를 조회합니다."
+        },
+        "app.RWFzeVBvc3Q.action.Z2V0LXBhcmNlbA.display_name": {
+          "source": "Get Parcel",
+          "message": "소포 조회"
+        },
+        "app.RWFzeVBvc3Q.action.Z2V0LXBhcmNlbA.option.cGFyY2VsX2lk.desc": {
+          "source": "Existing EasyPost parcel ID to retrieve",
+          "message": "조회할 기존 EasyPost 소포 ID"
+        },
+        "app.RWFzeVBvc3Q.action.Z2V0LXBhcmNlbA.option.cGFyY2VsX2lk.display_name": {
+          "source": "Parcel ID",
+          "message": "소포 ID"
+        },
+        "app.RWFzeVBvc3Q.action.Z2V0LXBhcmNlbA.option.cGFyY2VsX2lk.short_desc": {
+          "source": "Parcel ID (prcl_xxx)",
+          "message": "소포 ID (prcl_xxx)"
+        },
+        "app.RWFzeVBvc3Q.action.Z2V0LXBhcmNlbA.short_desc": {
+          "source": "Retrieve a parcel by ID",
+          "message": "ID로 소포 조회"
+        },
+        "app.RWFzeVBvc3Q.action.Z2V0LXBpY2t1cA.desc": {
+          "source": "Retrieve an EasyPost pickup by ID.",
+          "message": "ID로 EasyPost 픽업을 조회합니다."
+        },
+        "app.RWFzeVBvc3Q.action.Z2V0LXBpY2t1cA.display_name": {
+          "source": "Get Pickup",
+          "message": "픽업 가져오기"
+        },
+        "app.RWFzeVBvc3Q.action.Z2V0LXBpY2t1cA.option.cGlja3VwX2lk.desc": {
+          "source": "Pickup to retrieve",
+          "message": "조회할 픽업"
+        },
+        "app.RWFzeVBvc3Q.action.Z2V0LXBpY2t1cA.option.cGlja3VwX2lk.display_name": {
+          "source": "Pickup ID",
+          "message": "픽업 ID"
+        },
+        "app.RWFzeVBvc3Q.action.Z2V0LXBpY2t1cA.option.cGlja3VwX2lk.short_desc": {
+          "source": "Pickup ID (pickup_xxx)",
+          "message": "픽업 ID (pickup_xxx)"
+        },
+        "app.RWFzeVBvc3Q.action.Z2V0LXBpY2t1cA.short_desc": {
+          "source": "Retrieve a pickup by ID",
+          "message": "ID로 픽업 조회"
+        },
+        "app.RWFzeVBvc3Q.action.Z2V0LXJlZnVuZA.desc": {
+          "source": "Retrieve an EasyPost refund by ID.",
+          "message": "ID로 EasyPost 환불을 조회합니다."
+        },
+        "app.RWFzeVBvc3Q.action.Z2V0LXJlZnVuZA.display_name": {
+          "source": "Get Refund",
+          "message": "환불 가져오기"
+        },
+        "app.RWFzeVBvc3Q.action.Z2V0LXJlZnVuZA.option.cmVmdW5kX2lk.desc": {
+          "source": "Refund to retrieve",
+          "message": "조회할 환불"
+        },
+        "app.RWFzeVBvc3Q.action.Z2V0LXJlZnVuZA.option.cmVmdW5kX2lk.display_name": {
+          "source": "Refund ID",
+          "message": "환불 ID"
+        },
+        "app.RWFzeVBvc3Q.action.Z2V0LXJlZnVuZA.option.cmVmdW5kX2lk.short_desc": {
+          "source": "Refund ID (rfnd_xxx)",
+          "message": "환불 ID (rfnd_xxx)"
+        },
+        "app.RWFzeVBvc3Q.action.Z2V0LXJlZnVuZA.short_desc": {
+          "source": "Retrieve a refund by ID",
+          "message": "ID로 환불 조회"
+        },
+        "app.RWFzeVBvc3Q.action.Z2V0LXNoaXBtZW50.desc": {
+          "source": "Retrieve an EasyPost shipment by ID.",
+          "message": "ID로 EasyPost 배송을 조회합니다."
+        },
+        "app.RWFzeVBvc3Q.action.Z2V0LXNoaXBtZW50.display_name": {
+          "source": "Get Shipment",
+          "message": "배송 가져오기"
+        },
+        "app.RWFzeVBvc3Q.action.Z2V0LXNoaXBtZW50.option.c2hpcG1lbnRfaWQ.desc": {
+          "source": "Shipment to retrieve",
+          "message": "조회할 배송"
+        },
+        "app.RWFzeVBvc3Q.action.Z2V0LXNoaXBtZW50.option.c2hpcG1lbnRfaWQ.display_name": {
+          "source": "Shipment ID",
+          "message": "배송 ID"
+        },
+        "app.RWFzeVBvc3Q.action.Z2V0LXNoaXBtZW50.option.c2hpcG1lbnRfaWQ.short_desc": {
+          "source": "Shipment ID (shp_xxx)",
+          "message": "배송 ID (shp_xxx)"
+        },
+        "app.RWFzeVBvc3Q.action.Z2V0LXNoaXBtZW50.short_desc": {
+          "source": "Retrieve a shipment by ID",
+          "message": "ID로 배송 조회"
+        },
+        "app.RWFzeVBvc3Q.action.Z2V0LXNoaXBtZW50LWxhYmVs.desc": {
+          "source": "Retrieve a shipment label in a specific format (PDF, ZPL, EPL2, or PNG).",
+          "message": "특정 형식(PDF, ZPL, EPL2 또는 PNG)으로 배송 라벨을 조회합니다."
+        },
+        "app.RWFzeVBvc3Q.action.Z2V0LXNoaXBtZW50LWxhYmVs.display_name": {
+          "source": "Get Shipment Label",
+          "message": "배송 라벨 가져오기"
+        },
+        "app.RWFzeVBvc3Q.action.Z2V0LXNoaXBtZW50LWxhYmVs.option.ZmlsZV9mb3JtYXQ.allowed-value.c3RyaW5nOkVQTDI.desc": {
+          "source": "Eltron EPL2",
+          "message": "Eltron EPL2"
+        },
+        "app.RWFzeVBvc3Q.action.Z2V0LXNoaXBtZW50LWxhYmVs.option.ZmlsZV9mb3JtYXQ.allowed-value.c3RyaW5nOlBERg.desc": {
+          "source": "PDF",
+          "message": "PDF"
+        },
+        "app.RWFzeVBvc3Q.action.Z2V0LXNoaXBtZW50LWxhYmVs.option.ZmlsZV9mb3JtYXQ.allowed-value.c3RyaW5nOlBORw.desc": {
+          "source": "PNG image",
+          "message": "PNG 이미지"
+        },
+        "app.RWFzeVBvc3Q.action.Z2V0LXNoaXBtZW50LWxhYmVs.option.ZmlsZV9mb3JtYXQ.allowed-value.c3RyaW5nOlpQTA.desc": {
+          "source": "Zebra ZPL",
+          "message": "Zebra ZPL"
+        },
+        "app.RWFzeVBvc3Q.action.Z2V0LXNoaXBtZW50LWxhYmVs.option.ZmlsZV9mb3JtYXQ.desc": {
+          "source": "Format of the label file to retrieve",
+          "message": "조회할 라벨 파일 형식"
+        },
+        "app.RWFzeVBvc3Q.action.Z2V0LXNoaXBtZW50LWxhYmVs.option.ZmlsZV9mb3JtYXQ.display_name": {
+          "source": "File Format",
+          "message": "파일 형식"
+        },
+        "app.RWFzeVBvc3Q.action.Z2V0LXNoaXBtZW50LWxhYmVs.option.ZmlsZV9mb3JtYXQ.short_desc": {
+          "source": "Label file format",
+          "message": "라벨 파일 형식"
+        },
+        "app.RWFzeVBvc3Q.action.Z2V0LXNoaXBtZW50LWxhYmVs.option.c2hpcG1lbnRfaWQ.desc": {
+          "source": "Shipment to fetch the label for",
+          "message": "라벨을 가져올 배송"
+        },
+        "app.RWFzeVBvc3Q.action.Z2V0LXNoaXBtZW50LWxhYmVs.option.c2hpcG1lbnRfaWQ.display_name": {
+          "source": "Shipment ID",
+          "message": "배송 ID"
+        },
+        "app.RWFzeVBvc3Q.action.Z2V0LXNoaXBtZW50LWxhYmVs.option.c2hpcG1lbnRfaWQ.short_desc": {
+          "source": "Shipment ID (shp_xxx)",
+          "message": "배송 ID (shp_xxx)"
+        },
+        "app.RWFzeVBvc3Q.action.Z2V0LXNoaXBtZW50LWxhYmVs.short_desc": {
+          "source": "Retrieve a shipment label",
+          "message": "배송 라벨 조회"
+        },
+        "app.RWFzeVBvc3Q.action.Z2V0LXNoaXBtZW50LXNtYXJ0cmF0ZXM.desc": {
+          "source": "Retrieve SmartRates for a shipment. Each rate includes a `time_in_transit` object with percentile-based estimated transit business days (`percentile_50` through `percentile_99`) for SLA-aware rate selection.",
+          "message": "배송의 SmartRate를 조회합니다. 각 요금에는 SLA 인식 요금 선택을 위한 백분위수 기반 예상 배송 영업일수(`percentile_50`~`percentile_99`)가 포함된 `time_in_transit` 개체가 포함됩니다."
+        },
+        "app.RWFzeVBvc3Q.action.Z2V0LXNoaXBtZW50LXNtYXJ0cmF0ZXM.display_name": {
+          "source": "Get Shipment SmartRates",
+          "message": "배송 SmartRate 가져오기"
+        },
+        "app.RWFzeVBvc3Q.action.Z2V0LXNoaXBtZW50LXNtYXJ0cmF0ZXM.option.c2hpcG1lbnRfaWQ.desc": {
+          "source": "Shipment to retrieve SmartRates for",
+          "message": "SmartRate를 조회할 배송"
+        },
+        "app.RWFzeVBvc3Q.action.Z2V0LXNoaXBtZW50LXNtYXJ0cmF0ZXM.option.c2hpcG1lbnRfaWQ.display_name": {
+          "source": "Shipment ID",
+          "message": "배송 ID"
+        },
+        "app.RWFzeVBvc3Q.action.Z2V0LXNoaXBtZW50LXNtYXJ0cmF0ZXM.option.c2hpcG1lbnRfaWQ.short_desc": {
+          "source": "Shipment ID (shp_xxx)",
+          "message": "배송 ID (shp_xxx)"
+        },
+        "app.RWFzeVBvc3Q.action.Z2V0LXNoaXBtZW50LXNtYXJ0cmF0ZXM.short_desc": {
+          "source": "Retrieve SmartRates for a shipment",
+          "message": "배송의 SmartRate 조회"
+        },
+        "app.RWFzeVBvc3Q.action.Z2V0LXRyYWNrZXI.desc": {
+          "source": "Retrieve an EasyPost tracker by ID.",
+          "message": "ID로 EasyPost 트래커를 조회합니다."
+        },
+        "app.RWFzeVBvc3Q.action.Z2V0LXRyYWNrZXI.display_name": {
+          "source": "Get Tracker",
+          "message": "트래커 가져오기"
+        },
+        "app.RWFzeVBvc3Q.action.Z2V0LXRyYWNrZXI.option.dHJhY2tlcl9pZA.desc": {
+          "source": "Tracker to retrieve",
+          "message": "조회할 트래커"
+        },
+        "app.RWFzeVBvc3Q.action.Z2V0LXRyYWNrZXI.option.dHJhY2tlcl9pZA.display_name": {
+          "source": "Tracker ID",
+          "message": "트래커 ID"
+        },
+        "app.RWFzeVBvc3Q.action.Z2V0LXRyYWNrZXI.option.dHJhY2tlcl9pZA.short_desc": {
+          "source": "Tracker ID (trk_xxx)",
+          "message": "트래커 ID (trk_xxx)"
+        },
+        "app.RWFzeVBvc3Q.action.Z2V0LXRyYWNrZXI.short_desc": {
+          "source": "Retrieve a tracker by ID",
+          "message": "ID로 트래커 조회"
+        },
+        "app.RWFzeVBvc3Q.action.Z2V0LXdlYmhvb2s.desc": {
+          "source": "Retrieve a webhook by ID.",
+          "message": "ID로 웹훅을 조회합니다."
+        },
+        "app.RWFzeVBvc3Q.action.Z2V0LXdlYmhvb2s.display_name": {
+          "source": "Get Webhook",
+          "message": "웹훅 가져오기"
+        },
+        "app.RWFzeVBvc3Q.action.Z2V0LXdlYmhvb2s.option.d2ViaG9va19pZA.desc": {
+          "source": "Webhook to retrieve",
+          "message": "조회할 웹훅"
+        },
+        "app.RWFzeVBvc3Q.action.Z2V0LXdlYmhvb2s.option.d2ViaG9va19pZA.display_name": {
+          "source": "Webhook ID",
+          "message": "웹훅 ID"
+        },
+        "app.RWFzeVBvc3Q.action.Z2V0LXdlYmhvb2s.option.d2ViaG9va19pZA.short_desc": {
+          "source": "Webhook ID (hook_xxx)",
+          "message": "웹훅 ID (hook_xxx)"
+        },
+        "app.RWFzeVBvc3Q.action.Z2V0LXdlYmhvb2s.short_desc": {
+          "source": "Retrieve a webhook",
+          "message": "웹훅 조회"
+        },
+        "app.RWFzeVBvc3Q.action.ZGVsZXRlLWNhcnJpZXItYWNjb3VudA.desc": {
+          "source": "Delete a carrier account.",
+          "message": "운송업체 계정을 삭제합니다."
+        },
+        "app.RWFzeVBvc3Q.action.ZGVsZXRlLWNhcnJpZXItYWNjb3VudA.display_name": {
+          "source": "Delete Carrier Account",
+          "message": "운송업체 계정 삭제"
+        },
+        "app.RWFzeVBvc3Q.action.ZGVsZXRlLWNhcnJpZXItYWNjb3VudA.option.Y2Fycmllcl9hY2NvdW50X2lk.desc": {
+          "source": "Carrier account to delete",
+          "message": "삭제할 운송업체 계정"
+        },
+        "app.RWFzeVBvc3Q.action.ZGVsZXRlLWNhcnJpZXItYWNjb3VudA.option.Y2Fycmllcl9hY2NvdW50X2lk.display_name": {
+          "source": "Carrier Account ID",
+          "message": "운송업체 계정 ID"
+        },
+        "app.RWFzeVBvc3Q.action.ZGVsZXRlLWNhcnJpZXItYWNjb3VudA.option.Y2Fycmllcl9hY2NvdW50X2lk.short_desc": {
+          "source": "Carrier account ID (ca_xxx)",
+          "message": "운송업체 계정 ID (ca_xxx)"
+        },
+        "app.RWFzeVBvc3Q.action.ZGVsZXRlLWNhcnJpZXItYWNjb3VudA.short_desc": {
+          "source": "Delete a carrier account",
+          "message": "운송업체 계정 삭제"
+        },
+        "app.RWFzeVBvc3Q.action.ZGVsZXRlLXRyYWNrZXI.desc": {
+          "source": "Delete an EasyPost tracker by ID.",
+          "message": "ID로 EasyPost 트래커를 삭제합니다."
+        },
+        "app.RWFzeVBvc3Q.action.ZGVsZXRlLXRyYWNrZXI.display_name": {
+          "source": "Delete Tracker",
+          "message": "트래커 삭제"
+        },
+        "app.RWFzeVBvc3Q.action.ZGVsZXRlLXRyYWNrZXI.option.dHJhY2tlcl9pZA.desc": {
+          "source": "Tracker to delete",
+          "message": "삭제할 트래커"
+        },
+        "app.RWFzeVBvc3Q.action.ZGVsZXRlLXRyYWNrZXI.option.dHJhY2tlcl9pZA.display_name": {
+          "source": "Tracker ID",
+          "message": "트래커 ID"
+        },
+        "app.RWFzeVBvc3Q.action.ZGVsZXRlLXRyYWNrZXI.option.dHJhY2tlcl9pZA.short_desc": {
+          "source": "Tracker ID (trk_xxx)",
+          "message": "트래커 ID (trk_xxx)"
+        },
+        "app.RWFzeVBvc3Q.action.ZGVsZXRlLXRyYWNrZXI.short_desc": {
+          "source": "Delete a tracker by ID",
+          "message": "ID로 트래커 삭제"
+        },
+        "app.RWFzeVBvc3Q.action.ZGVsZXRlLXdlYmhvb2s.desc": {
+          "source": "Delete a webhook subscription.",
+          "message": "웹훅 구독을 삭제합니다."
+        },
+        "app.RWFzeVBvc3Q.action.ZGVsZXRlLXdlYmhvb2s.display_name": {
+          "source": "Delete Webhook",
+          "message": "웹훅 삭제"
+        },
+        "app.RWFzeVBvc3Q.action.ZGVsZXRlLXdlYmhvb2s.option.d2ViaG9va19pZA.desc": {
+          "source": "Webhook to delete",
+          "message": "삭제할 웹훅"
+        },
+        "app.RWFzeVBvc3Q.action.ZGVsZXRlLXdlYmhvb2s.option.d2ViaG9va19pZA.display_name": {
+          "source": "Webhook ID",
+          "message": "웹훅 ID"
+        },
+        "app.RWFzeVBvc3Q.action.ZGVsZXRlLXdlYmhvb2s.option.d2ViaG9va19pZA.short_desc": {
+          "source": "Webhook ID (hook_xxx)",
+          "message": "웹훅 ID (hook_xxx)"
+        },
+        "app.RWFzeVBvc3Q.action.ZGVsZXRlLXdlYmhvb2s.short_desc": {
+          "source": "Delete a webhook",
+          "message": "웹훅 삭제"
+        },
+        "app.RWFzeVBvc3Q.action.aW5zdXJlLXNoaXBtZW50.desc": {
+          "source": "Add insurance to an already-purchased shipment.",
+          "message": "이미 구매한 배송에 보험을 추가합니다."
+        },
+        "app.RWFzeVBvc3Q.action.aW5zdXJlLXNoaXBtZW50.display_name": {
+          "source": "Insure Shipment",
+          "message": "배송 보험 적용"
+        },
+        "app.RWFzeVBvc3Q.action.aW5zdXJlLXNoaXBtZW50.option.YW1vdW50.desc": {
+          "source": "Amount to insure the shipment for, as a string (e.g. `\"100.00\"`)",
+          "message": "배송 보험 금액(문자열, 예: `\"100.00\"`)"
+        },
+        "app.RWFzeVBvc3Q.action.aW5zdXJlLXNoaXBtZW50.option.YW1vdW50.display_name": {
+          "source": "Amount",
+          "message": "금액"
+        },
+        "app.RWFzeVBvc3Q.action.aW5zdXJlLXNoaXBtZW50.option.YW1vdW50.short_desc": {
+          "source": "Amount to insure (string)",
+          "message": "보험 가입 금액(문자열)"
+        },
+        "app.RWFzeVBvc3Q.action.aW5zdXJlLXNoaXBtZW50.option.c2hpcG1lbnRfaWQ.desc": {
+          "source": "Shipment to insure",
+          "message": "보험을 적용할 배송"
+        },
+        "app.RWFzeVBvc3Q.action.aW5zdXJlLXNoaXBtZW50.option.c2hpcG1lbnRfaWQ.display_name": {
+          "source": "Shipment ID",
+          "message": "배송 ID"
+        },
+        "app.RWFzeVBvc3Q.action.aW5zdXJlLXNoaXBtZW50.option.c2hpcG1lbnRfaWQ.short_desc": {
+          "source": "Shipment ID (shp_xxx)",
+          "message": "배송 ID (shp_xxx)"
+        },
+        "app.RWFzeVBvc3Q.action.aW5zdXJlLXNoaXBtZW50.short_desc": {
+          "source": "Insure a shipment",
+          "message": "배송 보험 적용"
+        },
+        "app.RWFzeVBvc3Q.action.bGlzdC10cmFja2Vycw.desc": {
+          "source": "Retrieve a paginated list of trackers. Optionally filter by tracking code or carrier.",
+          "message": "페이지네이션된 트래커 목록을 조회합니다. 선택적으로 트래킹 코드 또는 운송업체별로 필터링합니다."
+        },
+        "app.RWFzeVBvc3Q.action.bGlzdC10cmFja2Vycw.display_name": {
+          "source": "List Trackers",
+          "message": "트래커 목록"
+        },
+        "app.RWFzeVBvc3Q.action.bGlzdC10cmFja2Vycw.short_desc": {
+          "source": "List trackers",
+          "message": "트래커 목록 조회"
+        },
+        "app.RWFzeVBvc3Q.action.bGlzdC13ZWJob29rcw.desc": {
+          "source": "Retrieve all configured webhooks.",
+          "message": "구성된 모든 웹훅을 조회합니다."
+        },
+        "app.RWFzeVBvc3Q.action.bGlzdC13ZWJob29rcw.display_name": {
+          "source": "List Webhooks",
+          "message": "웹훅 목록"
+        },
+        "app.RWFzeVBvc3Q.action.bGlzdC13ZWJob29rcw.short_desc": {
+          "source": "List webhooks",
+          "message": "웹훅 목록 조회"
+        },
+        "app.RWFzeVBvc3Q.action.bGlzdC1hZGRyZXNzZXM.desc": {
+          "source": "Retrieve a paginated list of addresses, or fetch a single address by ID.",
+          "message": "페이지네이션된 주소 목록을 조회하거나 ID로 단일 주소를 가져옵니다."
+        },
+        "app.RWFzeVBvc3Q.action.bGlzdC1hZGRyZXNzZXM.display_name": {
+          "source": "List Addresses",
+          "message": "주소 목록"
+        },
+        "app.RWFzeVBvc3Q.action.bGlzdC1hZGRyZXNzZXM.short_desc": {
+          "source": "List EasyPost addresses",
+          "message": "EasyPost 주소 목록 조회"
+        },
+        "app.RWFzeVBvc3Q.action.bGlzdC1iYXRjaGVz.desc": {
+          "source": "Retrieve a paginated list of batches.",
+          "message": "페이지가 매겨진 배치 목록을 조회합니다."
+        },
+        "app.RWFzeVBvc3Q.action.bGlzdC1iYXRjaGVz.display_name": {
+          "source": "List Batches",
+          "message": "배치 목록 조회"
+        },
+        "app.RWFzeVBvc3Q.action.bGlzdC1iYXRjaGVz.short_desc": {
+          "source": "List batches",
+          "message": "배치 목록 조회"
+        },
+        "app.RWFzeVBvc3Q.action.bGlzdC1jYXJyaWVyLWFjY291bnRz.desc": {
+          "source": "Retrieve all carrier accounts configured on the EasyPost account.",
+          "message": "EasyPost 계정에 구성된 모든 배송업체 계정을 조회합니다."
+        },
+        "app.RWFzeVBvc3Q.action.bGlzdC1jYXJyaWVyLWFjY291bnRz.display_name": {
+          "source": "List Carrier Accounts",
+          "message": "배송업체 계정 목록 조회"
+        },
+        "app.RWFzeVBvc3Q.action.bGlzdC1jYXJyaWVyLWFjY291bnRz.short_desc": {
+          "source": "List carrier accounts",
+          "message": "배송업체 계정 목록 조회"
+        },
+        "app.RWFzeVBvc3Q.action.bGlzdC1ldmVudC1wYXlsb2Fkcw.desc": {
+          "source": "List webhook delivery payloads (attempts) for an event.",
+          "message": "이벤트에 대한 웹훅 전송 페이로드(시도) 목록을 조회합니다."
+        },
+        "app.RWFzeVBvc3Q.action.bGlzdC1ldmVudC1wYXlsb2Fkcw.display_name": {
+          "source": "List Event Payloads",
+          "message": "이벤트 페이로드 목록 조회"
+        },
+        "app.RWFzeVBvc3Q.action.bGlzdC1ldmVudC1wYXlsb2Fkcw.option.ZXZlbnRfaWQ.desc": {
+          "source": "Event to list payloads for",
+          "message": "페이로드를 조회할 이벤트"
+        },
+        "app.RWFzeVBvc3Q.action.bGlzdC1ldmVudC1wYXlsb2Fkcw.option.ZXZlbnRfaWQ.display_name": {
+          "source": "Event ID",
+          "message": "일정 ID"
+        },
+        "app.RWFzeVBvc3Q.action.bGlzdC1ldmVudC1wYXlsb2Fkcw.option.ZXZlbnRfaWQ.short_desc": {
+          "source": "Event ID (evt_xxx)",
+          "message": "이벤트 ID (evt_xxx)"
+        },
+        "app.RWFzeVBvc3Q.action.bGlzdC1ldmVudC1wYXlsb2Fkcw.short_desc": {
+          "source": "List event payloads",
+          "message": "이벤트 페이로드 목록 조회"
+        },
+        "app.RWFzeVBvc3Q.action.bGlzdC1ldmVudHM.desc": {
+          "source": "Retrieve a paginated list of webhook delivery events.",
+          "message": "페이지가 매겨진 웹훅 전송 이벤트 목록을 조회합니다."
+        },
+        "app.RWFzeVBvc3Q.action.bGlzdC1ldmVudHM.display_name": {
+          "source": "List Events",
+          "message": "이벤트 목록 조회"
+        },
+        "app.RWFzeVBvc3Q.action.bGlzdC1ldmVudHM.short_desc": {
+          "source": "List webhook events",
+          "message": "웹훅 이벤트 목록 조회"
+        },
+        "app.RWFzeVBvc3Q.action.bGlzdC1pbnN1cmFuY2Vz.desc": {
+          "source": "Retrieve a paginated list of insurance records.",
+          "message": "페이지가 매겨진 보험 기록 목록을 조회합니다."
+        },
+        "app.RWFzeVBvc3Q.action.bGlzdC1pbnN1cmFuY2Vz.display_name": {
+          "source": "List Insurance Records",
+          "message": "보험 기록 목록 조회"
+        },
+        "app.RWFzeVBvc3Q.action.bGlzdC1pbnN1cmFuY2Vz.short_desc": {
+          "source": "List insurance records",
+          "message": "보험 기록 목록 조회"
+        },
+        "app.RWFzeVBvc3Q.action.bGlzdC1waWNrdXBz.desc": {
+          "source": "Retrieve a paginated list of pickups.",
+          "message": "페이지가 매겨진 픽업 목록을 조회합니다."
+        },
+        "app.RWFzeVBvc3Q.action.bGlzdC1waWNrdXBz.display_name": {
+          "source": "List Pickups",
+          "message": "픽업 목록 조회"
+        },
+        "app.RWFzeVBvc3Q.action.bGlzdC1waWNrdXBz.short_desc": {
+          "source": "List pickups",
+          "message": "픽업 목록 조회"
+        },
+        "app.RWFzeVBvc3Q.action.bGlzdC1yZWZ1bmRz.desc": {
+          "source": "Retrieve a paginated list of refunds.",
+          "message": "페이지가 매겨진 환불 목록을 조회합니다."
+        },
+        "app.RWFzeVBvc3Q.action.bGlzdC1yZWZ1bmRz.display_name": {
+          "source": "List Refunds",
+          "message": "환불 목록 조회"
+        },
+        "app.RWFzeVBvc3Q.action.bGlzdC1yZWZ1bmRz.short_desc": {
+          "source": "List refunds",
+          "message": "환불 목록 조회"
+        },
+        "app.RWFzeVBvc3Q.action.bGlzdC1zaGlwbWVudHM.desc": {
+          "source": "Retrieve a paginated list of shipments. Optionally fetch by ID or filter by purchased status.",
+          "message": "페이지가 매겨진 배송 목록을 조회합니다. 선택적으로 ID로 가져오거나 구매 상태별로 필터링할 수 있습니다."
+        },
+        "app.RWFzeVBvc3Q.action.bGlzdC1zaGlwbWVudHM.display_name": {
+          "source": "List Shipments",
+          "message": "배송 목록 조회"
+        },
+        "app.RWFzeVBvc3Q.action.bGlzdC1zaGlwbWVudHM.short_desc": {
+          "source": "List shipments",
+          "message": "배송 목록 조회"
+        },
+        "app.RWFzeVBvc3Q.action.bWFrZS1hcGktY2FsbA.desc": {
+          "source": "Make a custom HTTP / REST API call to **EasyPost** using the configured connection's authentication.\n\nSpecify the HTTP method, the URI path (relative to the connection's API base URL), optional query parameters, headers, and request body. The response is returned as a hash containing the status code, response headers, and response body.\n\nUse this action for endpoints that are not yet exposed as first-class actions on this app.",
+          "message": "구성된 연결의 인증을 사용하여 **EasyPost**에 사용자 지정 HTTP / REST API 호출을 수행합니다.\n\nHTTP 메서드, URI 경로(연결의 API 기본 URL 기준 상대 경로), 선택적 쿼리 매개변수, 헤더 및 요청 본문을 지정합니다. 응답은 상태 코드, 응답 헤더 및 응답 본문이 포함된 해시로 반환됩니다.\n\n이 앱에서 기본 액션으로 아직 제공되지 않는 엔드포인트에 이 액션을 사용하세요."
+        },
+        "app.RWFzeVBvc3Q.action.bWFrZS1hcGktY2FsbA.display_name": {
+          "source": "Make an API call",
+          "message": "API 호출 실행"
+        },
+        "app.RWFzeVBvc3Q.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.desc": {
+          "source": "The request body. The effective type depends on `body_type`: JSON/form/YAML expect a hash, XML/text expect a string, multipart expects a file structure, binary expects raw bytes.",
+          "message": "요청 본문입니다. 유효한 유형은 `body_type`에 따라 달라집니다. JSON/form/YAML은 해시를, XML/text는 문자열을, multipart는 파일 구조를, binary는 원시 바이트를 요구합니다."
+        },
+        "app.RWFzeVBvc3Q.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.display_name": {
+          "source": "Body",
+          "message": "본문"
+        },
+        "app.RWFzeVBvc3Q.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.short_desc": {
+          "source": "The request body",
+          "message": "요청 본문"
+        },
+        "app.RWFzeVBvc3Q.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.desc": {
+          "source": "Upload a file using `multipart/form-data`. The body must be a @ref DataProvider::FileDataType \"FileDataType\" structure (filename + content + mime_type). The framework builds the multipart envelope and sets the boundary header.",
+          "message": "`multipart/form-data`을(를) 사용하여 파일을 업로드합니다. 본문은 @ref DataProvider::FileDataType \"FileDataType\" 구조(filename + content + mime_type)여야 합니다. 프레임워크가 multipart 봉투를 작성하고 boundary 헤더를 설정합니다."
+        },
+        "app.RWFzeVBvc3Q.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.display_name": {
+          "source": "Multipart Form",
+          "message": "멀티파트 폼"
+        },
+        "app.RWFzeVBvc3Q.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.short_desc": {
+          "source": "Upload a file using multipart/form-data",
+          "message": "multipart/form-data를 사용하여 파일 업로드"
+        },
+        "app.RWFzeVBvc3Q.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.desc": {
+          "source": "Pass the body to the REST client unchanged; the client decides serialization based on its configured `data` option and the value type",
+          "message": "본문을 변경하지 않고 REST 클라이언트에 전달합니다. 클라이언트는 구성된 `data` 옵션과 값 유형을 기반으로 직렬화를 결정합니다."
+        },
+        "app.RWFzeVBvc3Q.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.display_name": {
+          "source": "Auto",
+          "message": "자동"
+        },
+        "app.RWFzeVBvc3Q.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.short_desc": {
+          "source": "Pass-through; use connection serialization and let the REST client decide",
+          "message": "패스스루: 연결 직렬화를 사용하고 REST 클라이언트가 결정하도록 합니다."
+        },
+        "app.RWFzeVBvc3Q.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.desc": {
+          "source": "Send the body as raw bytes. The body must be a binary value. Sets `Content-Type: application/octet-stream` unless overridden by `hdr`.",
+          "message": "본문을 원시 바이트로 전송합니다. 본문은 바이너리 값이어야 합니다. `hdr`에 의해 재정의되지 않는 한 `Content-Type: application/octet-stream`을(를) 설정합니다."
+        },
+        "app.RWFzeVBvc3Q.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.display_name": {
+          "source": "Raw Binary",
+          "message": "원시 바이너리"
+        },
+        "app.RWFzeVBvc3Q.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.short_desc": {
+          "source": "Send body as raw bytes",
+          "message": "본문을 원시 바이트로 전송"
+        },
+        "app.RWFzeVBvc3Q.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.desc": {
+          "source": "Serialize a hash of form fields as `application/x-www-form-urlencoded`. The body must be a hash whose values are scalars (strings/numbers/booleans).",
+          "message": "폼 필드의 해시를 `application/x-www-form-urlencoded`(으)로 직렬화합니다. 본문은 값이 스칼라(문자열/숫자/불리언)인 해시여야 합니다."
+        },
+        "app.RWFzeVBvc3Q.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.display_name": {
+          "source": "Form (URL-encoded)",
+          "message": "폼 (URL 인코딩)"
+        },
+        "app.RWFzeVBvc3Q.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.short_desc": {
+          "source": "Serialize body as application/x-www-form-urlencoded form fields",
+          "message": "본문을 application/x-www-form-urlencoded 폼 필드로 직렬화"
+        },
+        "app.RWFzeVBvc3Q.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.desc": {
+          "source": "Serialize the body as JSON; sets `Content-Type: application/json`. The body should be a hash, list, or scalar value.",
+          "message": "본문을 JSON으로 직렬화하며, `Content-Type: application/json`을(를) 설정합니다. 본문은 해시, 리스트 또는 스칼라 값이어야 합니다."
+        },
+        "app.RWFzeVBvc3Q.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.display_name": {
+          "source": "JSON",
+          "message": "JSON"
+        },
+        "app.RWFzeVBvc3Q.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.short_desc": {
+          "source": "Serialize body as JSON",
+          "message": "본문을 JSON으로 직렬화"
+        },
+        "app.RWFzeVBvc3Q.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.desc": {
+          "source": "Send the body as plain text. The body must be a string. Sets `Content-Type: text/plain`.",
+          "message": "본문을 일반 텍스트로 전송합니다. 본문은 문자열이어야 합니다. `Content-Type: text/plain`을(를) 설정합니다."
+        },
+        "app.RWFzeVBvc3Q.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.display_name": {
+          "source": "Plain Text",
+          "message": "일반 텍스트"
+        },
+        "app.RWFzeVBvc3Q.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.short_desc": {
+          "source": "Send body as text/plain",
+          "message": "본문을 text/plain으로 전송"
+        },
+        "app.RWFzeVBvc3Q.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.desc": {
+          "source": "Send the body as XML. If the body is a hash it is serialized to XML; if it is a string it is sent verbatim. Sets `Content-Type: application/xml`.",
+          "message": "본문을 XML로 전송합니다. 본문이 해시인 경우 XML로 직렬화되고, 문자열인 경우 그대로 전송됩니다. `Content-Type: application/xml`을(를) 설정합니다."
+        },
+        "app.RWFzeVBvc3Q.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.display_name": {
+          "source": "XML",
+          "message": "XML"
+        },
+        "app.RWFzeVBvc3Q.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.short_desc": {
+          "source": "Send body as XML",
+          "message": "본문을 XML로 전송"
+        },
+        "app.RWFzeVBvc3Q.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.desc": {
+          "source": "Send the body as YAML. If the body is a hash it is serialized to YAML; if it is a string it is sent verbatim. Sets `Content-Type: application/x-yaml`.",
+          "message": "본문을 YAML로 전송합니다. 본문이 해시인 경우 YAML로 직렬화되고, 문자열인 경우 그대로 전송됩니다. `Content-Type: application/x-yaml`을(를) 설정합니다."
+        },
+        "app.RWFzeVBvc3Q.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.display_name": {
+          "source": "YAML",
+          "message": "YAML"
+        },
+        "app.RWFzeVBvc3Q.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.short_desc": {
+          "source": "Send body as YAML",
+          "message": "본문을 YAML로 전송"
+        },
+        "app.RWFzeVBvc3Q.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.desc": {
+          "source": "Selects the body serialization mode and the corresponding `Content-Type` header. Changing this field reshapes the `body` editor - selecting JSON exposes a JSON editor, selecting Multipart Form exposes a file picker, and so on.",
+          "message": "본문 직렬화 모드 및 해당되는 `Content-Type` 헤더를 선택합니다. 이 필드를 변경하면 `body` 에디터의 형태가 변경됩니다. JSON을 선택하면 JSON 에디터가 표시되고, 멀티파트 폼을 선택하면 파일 선택기가 표시되는 방식입니다."
+        },
+        "app.RWFzeVBvc3Q.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.display_name": {
+          "source": "Body Type",
+          "message": "본문 유형"
+        },
+        "app.RWFzeVBvc3Q.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.short_desc": {
+          "source": "How the body is serialized and what Content-Type is sent",
+          "message": "본문이 직렬화되는 방식 및 전송되는 Content-Type"
+        },
+        "app.RWFzeVBvc3Q.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.desc": {
+          "source": "If `True`, non-2xx HTTP responses return as the normal response hash (with the actual status code) instead of raising `REST-RESPONSE-ERROR`. Useful for handling 4xx/5xx as data - e.g. checking whether a resource exists. Overrides the connection's `error_passthru` setting for this call only.",
+          "message": "`True`인 경우, 2xx가 아닌 HTTP 응답은 `REST-RESPONSE-ERROR`을(를) 발생시키는 대신 (실제 상태 코드와 함께) 일반 응답 해시로 반환됩니다. 리소스 존재 여부 확인 등 4xx/5xx를 데이터로 처리할 때 유용합니다. 이 호출에 대해서만 연결의 `error_passthru` 설정을 재정의합니다."
+        },
+        "app.RWFzeVBvc3Q.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.display_name": {
+          "source": "Return Errors as Data",
+          "message": "오류를 데이터로 반환"
+        },
+        "app.RWFzeVBvc3Q.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.short_desc": {
+          "source": "Return non-2xx responses normally instead of throwing",
+          "message": "예외를 발생시키는 대신 2xx가 아닌 응답을 정상적으로 반환"
+        },
+        "app.RWFzeVBvc3Q.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.desc": {
+          "source": "Optional list of HTTP status codes treated as success. If set and the response status is not in this list, the action throws `REST-STATUS-ERROR`. When unset, the REST client's default behavior applies (typically: 2xx is success, non-2xx throws).",
+          "message": "성공으로 처리되는 HTTP 상태 코드의 선택적 목록입니다. 설정되어 있고 응답 상태가 이 목록에 없는 경우 작업이 `REST-STATUS-ERROR` 예외를 발생시킵니다. 설정되지 않은 경우 REST 클라이언트의 기본 동작이 적용됩니다(일반적으로 2xx는 성공, 2xx 이외는 예외 발생)."
+        },
+        "app.RWFzeVBvc3Q.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.display_name": {
+          "source": "Expected Status Codes",
+          "message": "예상되는 상태 코드"
+        },
+        "app.RWFzeVBvc3Q.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.short_desc": {
+          "source": "Response status codes treated as success",
+          "message": "성공으로 처리되는 응답 상태 코드"
+        },
+        "app.RWFzeVBvc3Q.action.bWFrZS1hcGktY2FsbA.option.aGRy.desc": {
+          "source": "Hash of custom headers added to the request. These override any default headers set by `body_type` (e.g. supplying `Content-Type` here wins over the body-type default).",
+          "message": "요청에 추가되는 사용자 지정 헤더의 해시입니다. 이는 `body_type`에 의해 설정된 기본 헤더보다 우선합니다(예: 여기에 `Content-Type`을(를) 제공하면 본문 유형 기본값보다 우선 적용됨)."
+        },
+        "app.RWFzeVBvc3Q.action.bWFrZS1hcGktY2FsbA.option.aGRy.display_name": {
+          "source": "Custom Headers",
+          "message": "사용자 지정 헤더"
+        },
+        "app.RWFzeVBvc3Q.action.bWFrZS1hcGktY2FsbA.option.aGRy.short_desc": {
+          "source": "Extra request headers",
+          "message": "추가 요청 헤더"
+        },
+        "app.RWFzeVBvc3Q.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.desc": {
+          "source": "If `True`, the response hash includes a `debug` sub-hash containing the request method/URL/headers (with sensitive values redacted), request and response sizes, and round-trip duration. Useful when investigating slow or failing calls. Off by default to keep responses lean.",
+          "message": "`True`인 경우 응답 해시에 요청 메서드/URL/헤더(민감한 값은 가려짐), 요청 및 응답 크기, 왕복 시간이 포함된 `debug` 하위 해시가 포함됩니다. 느리거나 실패한 호출을 조사할 때 유용합니다. 응답을 가볍게 유지하기 위해 기본적으로 비활성화되어 있습니다."
+        },
+        "app.RWFzeVBvc3Q.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.display_name": {
+          "source": "Include Debug Info",
+          "message": "디버그 정보 포함"
+        },
+        "app.RWFzeVBvc3Q.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.short_desc": {
+          "source": "Include request/timing/size debug info in the response",
+          "message": "응답에 요청/타이밍/크기 디버그 정보 포함"
+        },
+        "app.RWFzeVBvc3Q.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.desc": {
+          "source": "HTTP `OPTIONS`",
+          "message": "HTTP `OPTIONS`"
+        },
+        "app.RWFzeVBvc3Q.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.display_name": {
+          "source": "OPTIONS",
+          "message": "OPTIONS"
+        },
+        "app.RWFzeVBvc3Q.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.short_desc": {
+          "source": "HTTP OPTIONS",
+          "message": "HTTP OPTIONS"
+        },
+        "app.RWFzeVBvc3Q.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.desc": {
+          "source": "HTTP `DELETE`",
+          "message": "HTTP `DELETE`"
+        },
+        "app.RWFzeVBvc3Q.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.display_name": {
+          "source": "DELETE",
+          "message": "DELETE"
+        },
+        "app.RWFzeVBvc3Q.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.short_desc": {
+          "source": "HTTP DELETE",
+          "message": "HTTP DELETE"
+        },
+        "app.RWFzeVBvc3Q.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.desc": {
+          "source": "HTTP `GET`",
+          "message": "HTTP `GET`"
+        },
+        "app.RWFzeVBvc3Q.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.display_name": {
+          "source": "GET",
+          "message": "GET"
+        },
+        "app.RWFzeVBvc3Q.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.short_desc": {
+          "source": "HTTP GET",
+          "message": "HTTP GET"
+        },
+        "app.RWFzeVBvc3Q.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.desc": {
+          "source": "HTTP `HEAD`",
+          "message": "HTTP `HEAD`"
+        },
+        "app.RWFzeVBvc3Q.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.display_name": {
+          "source": "HEAD",
+          "message": "HEAD"
+        },
+        "app.RWFzeVBvc3Q.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.short_desc": {
+          "source": "HTTP HEAD",
+          "message": "HTTP HEAD"
+        },
+        "app.RWFzeVBvc3Q.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.desc": {
+          "source": "HTTP `PATCH`",
+          "message": "HTTP `PATCH`"
+        },
+        "app.RWFzeVBvc3Q.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.display_name": {
+          "source": "PATCH",
+          "message": "PATCH"
+        },
+        "app.RWFzeVBvc3Q.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.short_desc": {
+          "source": "HTTP PATCH",
+          "message": "HTTP PATCH"
+        },
+        "app.RWFzeVBvc3Q.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.desc": {
+          "source": "HTTP `POST`",
+          "message": "HTTP `POST`"
+        },
+        "app.RWFzeVBvc3Q.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.display_name": {
+          "source": "POST",
+          "message": "POST"
+        },
+        "app.RWFzeVBvc3Q.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.short_desc": {
+          "source": "HTTP POST",
+          "message": "HTTP POST"
+        },
+        "app.RWFzeVBvc3Q.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.desc": {
+          "source": "HTTP `PUT`",
+          "message": "HTTP `PUT`"
+        },
+        "app.RWFzeVBvc3Q.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.display_name": {
+          "source": "PUT",
+          "message": "PUT"
+        },
+        "app.RWFzeVBvc3Q.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.short_desc": {
+          "source": "HTTP PUT",
+          "message": "HTTP PUT"
+        },
+        "app.RWFzeVBvc3Q.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.desc": {
+          "source": "HTTP `TRACE`",
+          "message": "HTTP `TRACE`"
+        },
+        "app.RWFzeVBvc3Q.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.display_name": {
+          "source": "TRACE",
+          "message": "TRACE"
+        },
+        "app.RWFzeVBvc3Q.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.short_desc": {
+          "source": "HTTP TRACE",
+          "message": "HTTP TRACE"
+        },
+        "app.RWFzeVBvc3Q.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "요청에 사용할 HTTP 메서드"
+        },
+        "app.RWFzeVBvc3Q.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.display_name": {
+          "source": "HTTP Method",
+          "message": "HTTP 메서드"
+        },
+        "app.RWFzeVBvc3Q.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.short_desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "요청에 사용할 HTTP 메서드"
+        },
+        "app.RWFzeVBvc3Q.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain `{name}` placeholders that are replaced from `path_vars`. Example: `/users/{id}/comments`.",
+          "message": "연결의 API 기본 URL에 대한 상대 URI 경로입니다. `path_vars`에서 대체되는 `{name}` 자리 표시자가 포함될 수 있습니다. 예: `/users/{id}/comments`."
+        },
+        "app.RWFzeVBvc3Q.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.display_name": {
+          "source": "URI Path",
+          "message": "URI 경로"
+        },
+        "app.RWFzeVBvc3Q.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.short_desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain '{name}' placeholders that are replaced from 'path_vars'. Example: '/users/{id}/comments'",
+          "message": "연결의 API 기본 URL에 대한 상대 URI 경로입니다. 'path_vars'에서 대체되는 '{name}' 자리 표시자를 포함할 수 있습니다. 예: '/users/{id}/comments'"
+        },
+        "app.RWFzeVBvc3Q.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.desc": {
+          "source": "Hash of values substituted into `{name}` placeholders in the URI path. Example: with `path = /users/{id}` and `path_vars = {id: 123}` the framework sends `/users/123`. Values are URL-encoded.",
+          "message": "URI 경로의 `{name}` 자리 표시자에 대체되는 값의 해시입니다. 예: `path = /users/{id}` 및 `path_vars = {id: 123}`이 있으면 프레임워크가 `/users/123`을(를) 전송합니다. 값은 URL 인코딩됩니다."
+        },
+        "app.RWFzeVBvc3Q.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.display_name": {
+          "source": "Path Variables",
+          "message": "경로 변수"
+        },
+        "app.RWFzeVBvc3Q.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.short_desc": {
+          "source": "Values for {name} placeholders in path",
+          "message": "경로 내 {name} 자리 표시자의 값"
+        },
+        "app.RWFzeVBvc3Q.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.desc": {
+          "source": "Hash of query string parameters to append to the URI path. Values are URL-encoded; list values are joined with `,`.",
+          "message": "URI 경로에 추가할 쿼리 문자열 매개변수 해시입니다. 값은 URL 인코딩되며, 목록 값은 `,`(으)로 연결됩니다."
+        },
+        "app.RWFzeVBvc3Q.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.display_name": {
+          "source": "Query Arguments",
+          "message": "쿼리 인수"
+        },
+        "app.RWFzeVBvc3Q.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.short_desc": {
+          "source": "Query string parameters",
+          "message": "쿼리 문자열 매개변수"
+        },
+        "app.RWFzeVBvc3Q.action.bWFrZS1hcGktY2FsbA.short_desc": {
+          "source": "Make a custom API call to EasyPost",
+          "message": "EasyPost에 사용자 지정 API 호출 수행"
+        },
+        "app.RWFzeVBvc3Q.action.cmVmdW5kLWluc3VyYW5jZQ.desc": {
+          "source": "Submit a refund request for an insurance record.",
+          "message": "보험 기록에 대한 환불 요청을 제출합니다."
+        },
+        "app.RWFzeVBvc3Q.action.cmVmdW5kLWluc3VyYW5jZQ.display_name": {
+          "source": "Refund Insurance",
+          "message": "보험 환불"
+        },
+        "app.RWFzeVBvc3Q.action.cmVmdW5kLWluc3VyYW5jZQ.option.aW5zdXJhbmNlX2lk.desc": {
+          "source": "Insurance ID to refund",
+          "message": "환불할 보험 ID"
+        },
+        "app.RWFzeVBvc3Q.action.cmVmdW5kLWluc3VyYW5jZQ.option.aW5zdXJhbmNlX2lk.display_name": {
+          "source": "Insurance ID",
+          "message": "보험 ID"
+        },
+        "app.RWFzeVBvc3Q.action.cmVmdW5kLWluc3VyYW5jZQ.option.aW5zdXJhbmNlX2lk.short_desc": {
+          "source": "Insurance ID (ins_xxx)",
+          "message": "보험 ID (ins_xxx)"
+        },
+        "app.RWFzeVBvc3Q.action.cmVmdW5kLWluc3VyYW5jZQ.short_desc": {
+          "source": "Refund an insurance record",
+          "message": "보험 기록 환불"
+        },
+        "app.RWFzeVBvc3Q.action.cmVmdW5kLXNoaXBtZW50.desc": {
+          "source": "Submit a refund request for a previously purchased shipment.",
+          "message": "이전에 구매한 배송에 대한 환불 요청을 제출합니다."
+        },
+        "app.RWFzeVBvc3Q.action.cmVmdW5kLXNoaXBtZW50.display_name": {
+          "source": "Refund Shipment",
+          "message": "배송 환불"
+        },
+        "app.RWFzeVBvc3Q.action.cmVmdW5kLXNoaXBtZW50.option.c2hpcG1lbnRfaWQ.desc": {
+          "source": "ID of a previously purchased shipment to refund",
+          "message": "환불할 이전에 구매한 배송의 ID"
+        },
+        "app.RWFzeVBvc3Q.action.cmVmdW5kLXNoaXBtZW50.option.c2hpcG1lbnRfaWQ.display_name": {
+          "source": "Shipment ID",
+          "message": "배송 ID"
+        },
+        "app.RWFzeVBvc3Q.action.cmVmdW5kLXNoaXBtZW50.option.c2hpcG1lbnRfaWQ.short_desc": {
+          "source": "Shipment ID to refund (shp_xxx)",
+          "message": "환불할 배송 ID (shp_xxx)"
+        },
+        "app.RWFzeVBvc3Q.action.cmVmdW5kLXNoaXBtZW50.short_desc": {
+          "source": "Refund a purchased shipment",
+          "message": "구매한 배송 환불"
+        },
+        "app.RWFzeVBvc3Q.action.cmVyYXRlLXNoaXBtZW50.desc": {
+          "source": "Re-fetch rate quotes for an existing shipment.",
+          "message": "기존 배송에 대한 운임 견적을 다시 가져옵니다."
+        },
+        "app.RWFzeVBvc3Q.action.cmVyYXRlLXNoaXBtZW50.display_name": {
+          "source": "Rerate Shipment",
+          "message": "배송 운임 재계산"
+        },
+        "app.RWFzeVBvc3Q.action.cmVyYXRlLXNoaXBtZW50.option.c2hpcG1lbnRfaWQ.desc": {
+          "source": "Shipment to re-rate",
+          "message": "운임을 재계산할 배송"
+        },
+        "app.RWFzeVBvc3Q.action.cmVyYXRlLXNoaXBtZW50.option.c2hpcG1lbnRfaWQ.display_name": {
+          "source": "Shipment ID",
+          "message": "배송 ID"
+        },
+        "app.RWFzeVBvc3Q.action.cmVyYXRlLXNoaXBtZW50.option.c2hpcG1lbnRfaWQ.short_desc": {
+          "source": "Shipment ID to re-rate (shp_xxx)",
+          "message": "운임을 재계산할 배송 ID (shp_xxx)"
+        },
+        "app.RWFzeVBvc3Q.action.cmVyYXRlLXNoaXBtZW50.short_desc": {
+          "source": "Re-rate a shipment",
+          "message": "배송 운임 재계산"
+        },
+        "app.RWFzeVBvc3Q.action.d2F0Y2gtYmF0Y2gtY3JlYXRlZA.desc": {
+          "source": "Fires when a new batch is created (`batch.created` webhook event).",
+          "message": "새 배치가 생성될 때 실행됩니다(`batch.created` 웹훅 이벤트)."
+        },
+        "app.RWFzeVBvc3Q.action.d2F0Y2gtYmF0Y2gtY3JlYXRlZA.display_name": {
+          "source": "On Batch Created",
+          "message": "배치 생성 시"
+        },
+        "app.RWFzeVBvc3Q.action.d2F0Y2gtYmF0Y2gtY3JlYXRlZA.short_desc": {
+          "source": "Trigger when a batch is created",
+          "message": "배치가 생성될 때 트리거"
+        },
+        "app.RWFzeVBvc3Q.action.d2F0Y2gtYmF0Y2gtdXBkYXRlZA.desc": {
+          "source": "Fires when a batch is updated (`batch.updated` webhook event).",
+          "message": "배치가 업데이트될 때 실행됩니다(`batch.updated` 웹훅 이벤트)."
+        },
+        "app.RWFzeVBvc3Q.action.d2F0Y2gtYmF0Y2gtdXBkYXRlZA.display_name": {
+          "source": "On Batch Updated",
+          "message": "배치 업데이트 시"
+        },
+        "app.RWFzeVBvc3Q.action.d2F0Y2gtYmF0Y2gtdXBkYXRlZA.short_desc": {
+          "source": "Trigger when a batch is updated",
+          "message": "배치가 업데이트될 때 트리거"
+        },
+        "app.RWFzeVBvc3Q.action.d2F0Y2gtaW5zdXJhbmNlLWNhbmNlbGxlZA.desc": {
+          "source": "Fires when a standalone Insurance is cancelled or fails purchasing (`insurance.cancelled` webhook event).",
+          "message": "독립형 보험이 취소되거나 구매에 실패할 때 실행됩니다(`insurance.cancelled` 웹훅 이벤트)."
+        },
+        "app.RWFzeVBvc3Q.action.d2F0Y2gtaW5zdXJhbmNlLWNhbmNlbGxlZA.display_name": {
+          "source": "On Insurance Cancelled",
+          "message": "보험 취소 시"
+        },
+        "app.RWFzeVBvc3Q.action.d2F0Y2gtaW5zdXJhbmNlLWNhbmNlbGxlZA.short_desc": {
+          "source": "Trigger when insurance is cancelled or fails",
+          "message": "보험이 취소되거나 실패할 때 트리거"
+        },
+        "app.RWFzeVBvc3Q.action.d2F0Y2gtaW5zdXJhbmNlLXB1cmNoYXNlZA.desc": {
+          "source": "Fires when insurance is purchased (`insurance.purchased` webhook event).",
+          "message": "보험이 구매될 때 실행됩니다(`insurance.purchased` 웹훅 이벤트)."
+        },
+        "app.RWFzeVBvc3Q.action.d2F0Y2gtaW5zdXJhbmNlLXB1cmNoYXNlZA.display_name": {
+          "source": "On Insurance Purchased",
+          "message": "보험 구매 시"
+        },
+        "app.RWFzeVBvc3Q.action.d2F0Y2gtaW5zdXJhbmNlLXB1cmNoYXNlZA.short_desc": {
+          "source": "Trigger when insurance is purchased",
+          "message": "보험이 구매될 때 트리거"
+        },
+        "app.RWFzeVBvc3Q.action.d2F0Y2gtc2Nhbi1mb3JtLWNyZWF0ZWQ.desc": {
+          "source": "Fires when initial creation of a ScanForm object is complete (`scan_form.created` webhook event).",
+          "message": "ScanForm 객체의 초기 생성이 완료될 때 실행됩니다(`scan_form.created` 웹훅 이벤트)."
+        },
+        "app.RWFzeVBvc3Q.action.d2F0Y2gtc2Nhbi1mb3JtLWNyZWF0ZWQ.display_name": {
+          "source": "On Scan Form Created",
+          "message": "스캔 폼 생성 시"
+        },
+        "app.RWFzeVBvc3Q.action.d2F0Y2gtc2Nhbi1mb3JtLWNyZWF0ZWQ.short_desc": {
+          "source": "Trigger when a scan form is created",
+          "message": "스캔 폼이 생성될 때 트리거"
+        },
+        "app.RWFzeVBvc3Q.action.d2F0Y2gtc2Nhbi1mb3JtLXVwZGF0ZWQ.desc": {
+          "source": "Fires when the status of a ScanForm object changes (`scan_form.updated` webhook event).",
+          "message": "ScanForm 객체의 상태가 변경될 때 실행됩니다(`scan_form.updated` 웹훅 이벤트)."
+        },
+        "app.RWFzeVBvc3Q.action.d2F0Y2gtc2Nhbi1mb3JtLXVwZGF0ZWQ.display_name": {
+          "source": "On Scan Form Updated",
+          "message": "스캔 폼 업데이트 시"
+        },
+        "app.RWFzeVBvc3Q.action.d2F0Y2gtc2Nhbi1mb3JtLXVwZGF0ZWQ.short_desc": {
+          "source": "Trigger when a scan form status changes",
+          "message": "스캔 폼 상태가 변경될 때 트리거"
+        },
+        "app.RWFzeVBvc3Q.action.d2F0Y2gtc2hpcG1lbnQtaW52b2ljZS11cGRhdGVk.desc": {
+          "source": "Fires when a shipment invoice is adjusted and updated (`shipment.invoice.updated` webhook event).",
+          "message": "배송 인보이스가 조정 및 업데이트될 때 실행됩니다(`shipment.invoice.updated` 웹훅 이벤트)."
+        },
+        "app.RWFzeVBvc3Q.action.d2F0Y2gtc2hpcG1lbnQtaW52b2ljZS11cGRhdGVk.display_name": {
+          "source": "On Shipment Invoice Updated",
+          "message": "배송 인보이스 업데이트 시"
+        },
+        "app.RWFzeVBvc3Q.action.d2F0Y2gtc2hpcG1lbnQtaW52b2ljZS11cGRhdGVk.short_desc": {
+          "source": "Trigger when a shipment invoice is updated",
+          "message": "배송 인보이스가 업데이트될 때 트리거"
+        },
+        "app.RWFzeVBvc3Q.action.d2F0Y2gtc2hpcG1lbnQtaW52b2ljZS1jcmVhdGVk.desc": {
+          "source": "Fires when a shipment invoice is created (`shipment.invoice.created` webhook event).",
+          "message": "배송 인보이스가 생성될 때 실행됩니다(`shipment.invoice.created` 웹훅 이벤트)."
+        },
+        "app.RWFzeVBvc3Q.action.d2F0Y2gtc2hpcG1lbnQtaW52b2ljZS1jcmVhdGVk.display_name": {
+          "source": "On Shipment Invoice Created",
+          "message": "배송 인보이스 생성 시"
+        },
+        "app.RWFzeVBvc3Q.action.d2F0Y2gtc2hpcG1lbnQtaW52b2ljZS1jcmVhdGVk.short_desc": {
+          "source": "Trigger when a shipment invoice is created",
+          "message": "배송 인보이스가 생성될 때 트리거"
+        },
+        "app.RWFzeVBvc3Q.action.d2F0Y2gtcGF5bWVudC1jb21wbGV0ZWQ.desc": {
+          "source": "Fires when a payment is completed (`payment.completed` webhook event).",
+          "message": "결제가 완료될 때 실행됩니다(`payment.completed` 웹훅 이벤트)."
+        },
+        "app.RWFzeVBvc3Q.action.d2F0Y2gtcGF5bWVudC1jb21wbGV0ZWQ.display_name": {
+          "source": "On Payment Completed",
+          "message": "결제 완료 시"
+        },
+        "app.RWFzeVBvc3Q.action.d2F0Y2gtcGF5bWVudC1jb21wbGV0ZWQ.short_desc": {
+          "source": "Trigger when a payment is completed",
+          "message": "결제가 완료되었을 때 트리거합니다"
+        },
+        "app.RWFzeVBvc3Q.action.d2F0Y2gtcGF5bWVudC1jcmVhdGVk.desc": {
+          "source": "Fires when a bank account or credit card is successfully charged (`payment.created` webhook event).",
+          "message": "은행 계좌 또는 신용카드 결제가 성공적으로 청구되었을 때 실행됩니다(`payment.created` 웹훅 이벤트)."
+        },
+        "app.RWFzeVBvc3Q.action.d2F0Y2gtcGF5bWVudC1jcmVhdGVk.display_name": {
+          "source": "On Payment Created",
+          "message": "결제 생성 시"
+        },
+        "app.RWFzeVBvc3Q.action.d2F0Y2gtcGF5bWVudC1jcmVhdGVk.short_desc": {
+          "source": "Trigger when a payment is charged",
+          "message": "결제가 청구되었을 때 트리거합니다"
+        },
+        "app.RWFzeVBvc3Q.action.d2F0Y2gtcGF5bWVudC1mYWlsZWQ.desc": {
+          "source": "Fires when a payment fails (`payment.failed` webhook event).",
+          "message": "결제가 실패했을 때 실행됩니다(`payment.failed` 웹훅 이벤트)."
+        },
+        "app.RWFzeVBvc3Q.action.d2F0Y2gtcGF5bWVudC1mYWlsZWQ.display_name": {
+          "source": "On Payment Failed",
+          "message": "결제 실패 시"
+        },
+        "app.RWFzeVBvc3Q.action.d2F0Y2gtcGF5bWVudC1mYWlsZWQ.short_desc": {
+          "source": "Trigger when a payment fails",
+          "message": "결제가 실패했을 때 트리거합니다"
+        },
+        "app.RWFzeVBvc3Q.action.d2F0Y2gtcmVmdW5kLXN1Y2Nlc3NmdWw.desc": {
+          "source": "Fires when a refund is successful (`refund.successful` webhook event).",
+          "message": "환불이 성공했을 때 실행됩니다(`refund.successful` 웹훅 이벤트)."
+        },
+        "app.RWFzeVBvc3Q.action.d2F0Y2gtcmVmdW5kLXN1Y2Nlc3NmdWw.display_name": {
+          "source": "On Refund Successful",
+          "message": "환불 성공 시"
+        },
+        "app.RWFzeVBvc3Q.action.d2F0Y2gtcmVmdW5kLXN1Y2Nlc3NmdWw.short_desc": {
+          "source": "Trigger when a refund succeeds",
+          "message": "환불이 성공했을 때 트리거합니다"
+        },
+        "app.RWFzeVBvc3Q.action.d2F0Y2gtdHJhY2tlci11cGRhdGVk.desc": {
+          "source": "Fires when a tracker status changes (`tracker.updated` webhook event).",
+          "message": "트래커 상태가 변경되었을 때 실행됩니다(`tracker.updated` 웹훅 이벤트)."
+        },
+        "app.RWFzeVBvc3Q.action.d2F0Y2gtdHJhY2tlci11cGRhdGVk.display_name": {
+          "source": "On Tracker Updated",
+          "message": "트래커 업데이트 시"
+        },
+        "app.RWFzeVBvc3Q.action.d2F0Y2gtdHJhY2tlci11cGRhdGVk.short_desc": {
+          "source": "Trigger when a tracker is updated",
+          "message": "트래커가 업데이트되었을 때 트리거합니다"
+        },
+        "app.RWFzeVBvc3Q.action.d2F0Y2gtdHJhY2tlci1jcmVhdGVk.desc": {
+          "source": "Fires when a new tracker is created (`tracker.created` webhook event).",
+          "message": "새 트래커가 생성되었을 때 실행됩니다(`tracker.created` 웹훅 이벤트)."
+        },
+        "app.RWFzeVBvc3Q.action.d2F0Y2gtdHJhY2tlci1jcmVhdGVk.display_name": {
+          "source": "On Tracker Created",
+          "message": "트래커 생성 시"
+        },
+        "app.RWFzeVBvc3Q.action.d2F0Y2gtdHJhY2tlci1jcmVhdGVk.short_desc": {
+          "source": "Trigger when a tracker is created",
+          "message": "트래커가 생성되었을 때 트리거합니다"
+        },
+        "app.RWFzeVBvc3Q.action.dXBkYXRlLWNhcnJpZXItYWNjb3VudA.desc": {
+          "source": "Update an existing carrier account. Selecting a carrier account populates the `credentials` and `test_credentials` fields with that carrier's specific schema.",
+          "message": "기존 운송업체 계정을 업데이트합니다. 운송업체 계정을 선택하면 해당 운송업체의 특정 스키마로 `credentials` 및 `test_credentials` 필드가 채워집니다."
+        },
+        "app.RWFzeVBvc3Q.action.dXBkYXRlLWNhcnJpZXItYWNjb3VudA.display_name": {
+          "source": "Update Carrier Account",
+          "message": "운송업체 계정 업데이트"
+        },
+        "app.RWFzeVBvc3Q.action.dXBkYXRlLWNhcnJpZXItYWNjb3VudA.option.Y2Fycmllcl9hY2NvdW50X2lk.desc": {
+          "source": "Carrier account to update",
+          "message": "업데이트할 운송업체 계정"
+        },
+        "app.RWFzeVBvc3Q.action.dXBkYXRlLWNhcnJpZXItYWNjb3VudA.option.Y2Fycmllcl9hY2NvdW50X2lk.display_name": {
+          "source": "Carrier Account ID",
+          "message": "운송업체 계정 ID"
+        },
+        "app.RWFzeVBvc3Q.action.dXBkYXRlLWNhcnJpZXItYWNjb3VudA.option.Y2Fycmllcl9hY2NvdW50X2lk.short_desc": {
+          "source": "Carrier account ID (ca_xxx)",
+          "message": "운송업체 계정 ID (ca_xxx)"
+        },
+        "app.RWFzeVBvc3Q.action.dXBkYXRlLWNhcnJpZXItYWNjb3VudA.option.Y3JlZGVudGlhbHM.desc": {
+          "source": "New production credentials. Carrier-specific schema; see [carrier types](https://docs.easypost.com/docs/carrier-types).\n\n**Example (UPS)**: `{\"account_number\": \"...\", \"user_id\": \"...\"}`",
+          "message": "새 프로덕션 자격 증명입니다. 운송업체별 스키마는 [carrier types](https://docs.easypost.com/docs/carrier-types)를 참조하세요.\n\n**예시 (UPS)**: `{\"account_number\": \"...\", \"user_id\": \"...\"}`"
+        },
+        "app.RWFzeVBvc3Q.action.dXBkYXRlLWNhcnJpZXItYWNjb3VudA.option.Y3JlZGVudGlhbHM.display_name": {
+          "source": "Credentials",
+          "message": "자격 증명"
+        },
+        "app.RWFzeVBvc3Q.action.dXBkYXRlLWNhcnJpZXItYWNjb3VudA.option.Y3JlZGVudGlhbHM.short_desc": {
+          "source": "Production credentials hash",
+          "message": "프로덕션 자격 증명 해시"
+        },
+        "app.RWFzeVBvc3Q.action.dXBkYXRlLWNhcnJpZXItYWNjb3VudA.option.ZGVzY3JpcHRpb24.desc": {
+          "source": "New account description",
+          "message": "새 계정 설명"
+        },
+        "app.RWFzeVBvc3Q.action.dXBkYXRlLWNhcnJpZXItYWNjb3VudA.option.ZGVzY3JpcHRpb24.display_name": {
+          "source": "Description",
+          "message": "설명"
+        },
+        "app.RWFzeVBvc3Q.action.dXBkYXRlLWNhcnJpZXItYWNjb3VudA.option.ZGVzY3JpcHRpb24.short_desc": {
+          "source": "Account description",
+          "message": "계정 설명"
+        },
+        "app.RWFzeVBvc3Q.action.dXBkYXRlLWNhcnJpZXItYWNjb3VudA.option.cmVmZXJlbmNl.desc": {
+          "source": "Caller-supplied reference",
+          "message": "호출자 제공 참조"
+        },
+        "app.RWFzeVBvc3Q.action.dXBkYXRlLWNhcnJpZXItYWNjb3VudA.option.cmVmZXJlbmNl.display_name": {
+          "source": "Reference",
+          "message": "참조"
+        },
+        "app.RWFzeVBvc3Q.action.dXBkYXRlLWNhcnJpZXItYWNjb3VudA.option.cmVmZXJlbmNl.short_desc": {
+          "source": "Caller-supplied reference",
+          "message": "호출자 제공 참조"
+        },
+        "app.RWFzeVBvc3Q.action.dXBkYXRlLWNhcnJpZXItYWNjb3VudA.option.dGVzdF9jcmVkZW50aWFscw.desc": {
+          "source": "New test credentials. Same schema as `credentials`.",
+          "message": "새 테스트 자격 증명입니다. `credentials`와(과) 동일한 스키마입니다."
+        },
+        "app.RWFzeVBvc3Q.action.dXBkYXRlLWNhcnJpZXItYWNjb3VudA.option.dGVzdF9jcmVkZW50aWFscw.display_name": {
+          "source": "Test Credentials",
+          "message": "테스트 자격 증명"
+        },
+        "app.RWFzeVBvc3Q.action.dXBkYXRlLWNhcnJpZXItYWNjb3VudA.option.dGVzdF9jcmVkZW50aWFscw.short_desc": {
+          "source": "Test credentials hash",
+          "message": "테스트 자격 증명 해시"
+        },
+        "app.RWFzeVBvc3Q.action.dXBkYXRlLWNhcnJpZXItYWNjb3VudA.short_desc": {
+          "source": "Update a carrier account",
+          "message": "운송업체 계정 업데이트"
+        },
+        "app.RWFzeVBvc3Q.action.dXBkYXRlLXdlYmhvb2s.desc": {
+          "source": "Update an existing webhook.",
+          "message": "기존 웹훅을 업데이트합니다."
+        },
+        "app.RWFzeVBvc3Q.action.dXBkYXRlLXdlYmhvb2s.display_name": {
+          "source": "Update Webhook",
+          "message": "웹훅 업데이트"
+        },
+        "app.RWFzeVBvc3Q.action.dXBkYXRlLXdlYmhvb2s.option.Y3VzdG9tX2hlYWRlcnM.desc": {
+          "source": "Custom HTTP headers to send with webhook callbacks",
+          "message": "웹훅 콜백과 함께 보낼 커스텀 HTTP 헤더"
+        },
+        "app.RWFzeVBvc3Q.action.dXBkYXRlLXdlYmhvb2s.option.Y3VzdG9tX2hlYWRlcnM.display_name": {
+          "source": "Custom Headers",
+          "message": "사용자 지정 헤더"
+        },
+        "app.RWFzeVBvc3Q.action.dXBkYXRlLXdlYmhvb2s.option.Y3VzdG9tX2hlYWRlcnM.short_desc": {
+          "source": "Custom HTTP headers",
+          "message": "커스텀 HTTP 헤더"
+        },
+        "app.RWFzeVBvc3Q.action.dXBkYXRlLXdlYmhvb2s.option.d2ViaG9va19pZA.desc": {
+          "source": "Webhook to update",
+          "message": "업데이트할 웹훅"
+        },
+        "app.RWFzeVBvc3Q.action.dXBkYXRlLXdlYmhvb2s.option.d2ViaG9va19pZA.display_name": {
+          "source": "Webhook ID",
+          "message": "웹훅 ID"
+        },
+        "app.RWFzeVBvc3Q.action.dXBkYXRlLXdlYmhvb2s.option.d2ViaG9va19pZA.short_desc": {
+          "source": "Webhook ID (hook_xxx)",
+          "message": "웹훅 ID (hook_xxx)"
+        },
+        "app.RWFzeVBvc3Q.action.dXBkYXRlLXdlYmhvb2s.option.d2ViaG9va19zZWNyZXQ.desc": {
+          "source": "Optional shared secret used to sign webhook payloads",
+          "message": "웹훅 페이로드 서명에 사용되는 선택적 공유 암호"
+        },
+        "app.RWFzeVBvc3Q.action.dXBkYXRlLXdlYmhvb2s.option.d2ViaG9va19zZWNyZXQ.display_name": {
+          "source": "Webhook Secret",
+          "message": "웹훅 시크릿"
+        },
+        "app.RWFzeVBvc3Q.action.dXBkYXRlLXdlYmhvb2s.option.d2ViaG9va19zZWNyZXQ.short_desc": {
+          "source": "Shared secret",
+          "message": "공유 암호"
+        },
+        "app.RWFzeVBvc3Q.action.dXBkYXRlLXdlYmhvb2s.short_desc": {
+          "source": "Update a webhook",
+          "message": "웹훅 업데이트"
+        },
+        "app.RWFzeVBvc3Q.action.dmVyaWZ5LWFkZHJlc3M.desc": {
+          "source": "Run carrier-side address verification on an existing address.",
+          "message": "기존 주소에 대해 운송업체 측 주소 확인을 실행합니다."
+        },
+        "app.RWFzeVBvc3Q.action.dmVyaWZ5LWFkZHJlc3M.display_name": {
+          "source": "Verify Address",
+          "message": "주소 확인"
+        },
+        "app.RWFzeVBvc3Q.action.dmVyaWZ5LWFkZHJlc3M.option.YWRkcmVzc19pZA.desc": {
+          "source": "Existing EasyPost address ID to verify",
+          "message": "확인할 기존 EasyPost 주소 ID"
+        },
+        "app.RWFzeVBvc3Q.action.dmVyaWZ5LWFkZHJlc3M.option.YWRkcmVzc19pZA.display_name": {
+          "source": "Address ID",
+          "message": "주소 ID"
+        },
+        "app.RWFzeVBvc3Q.action.dmVyaWZ5LWFkZHJlc3M.option.YWRkcmVzc19pZA.short_desc": {
+          "source": "Address ID to verify (adr_xxx)",
+          "message": "확인할 주소 ID(adr_xxx)"
+        },
+        "app.RWFzeVBvc3Q.action.dmVyaWZ5LWFkZHJlc3M.short_desc": {
+          "source": "Verify an existing address",
+          "message": "기존 주소 확인"
+        },
+        "app.RWFzeVBvc3Q.desc": {
+          "source": "EasyPost is a unified shipping API that connects to dozens of carriers including USPS, UPS, FedEx, DHL, and more. This integration enables creating addresses, parcels, shipments, trackers, insurance records, pickups, and orders, as well as managing carrier accounts and subscribing to webhook events.\n\n**Features:**\n- Address creation, verification, and lookup\n- Shipment lifecycle (create, buy, refund, label, rerate, insure)\n- Tracker creation (single and bulk) and lookup\n- Insurance creation and refund\n- Pickup scheduling, buying, and cancellation\n- Multi-shipment orders\n- Customs information and customs items\n- Refunds and batches\n- Webhook and carrier-account management\n- Real-time webhook events for tracker, batch, insurance, refund, and payment updates",
+          "message": "EasyPost는 USPS, UPS, FedEx, DHL 등 수십 개의 운송업체와 연결되는 통합 배송 API입니다. 이 연동을 통해 주소, 소포, 배송, 트래커, 보험 기록, 픽업 및 주문을 생성하고 운송업체 계정 관리 및 웹훅 이벤트를 구독할 수 있습니다.\n\n**기능:**\n- 주소 생성, 확인 및 조회\n- 배송 수명 주기(생성, 구매, 환불, 라벨, 요금 재계산, 보험 가입)\n- 트래커 생성(단일 및 대량) 및 조회\n- 보험 생성 및 환불\n- 픽업 예약, 구매 및 취소\n- 다중 배송 주문\n- 통관 정보 및 세관 품목\n- 환불 및 배치\n- 웹훅 및 운송업체 계정 관리\n- 트래커, 배치, 보험, 환불 및 결제 업데이트를 위한 실시간 웹훅 이벤트"
+        },
+        "app.RWFzeVBvc3Q.display_name": {
+          "source": "EasyPost",
+          "message": "EasyPost"
+        },
+        "app.RWFzeVBvc3Q.short_desc": {
+          "source": "EasyPost shipping and logistics platform",
+          "message": "EasyPost 배송 및 물류 플랫폼"
+        }
+      }
+    }
+  }
+}

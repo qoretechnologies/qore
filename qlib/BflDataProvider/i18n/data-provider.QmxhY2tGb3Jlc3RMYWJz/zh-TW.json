@@ -1,0 +1,489 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "zh-TW": {
+      "messages": {
+        "app.QmxhY2tGb3Jlc3RMYWJz.action.Z2VuZXJhdGUtaW1hZ2U.desc": {
+          "source": "Generates an image from a text prompt via the BFL FLUX API.  BFL is asynchronous: submit returns a `polling_url`, and this action drives the polling loop via @ref qoreasyncjobutilsintro \"QoreAsyncJobUtils\" until the job reaches the `Ready` terminal state.\n\nThe response contains `result.sample` — a CDN URL of the generated image.  Download the image promptly; BFL CDN URLs are temporary.",
+          "message": "透過 BFL FLUX API 根據文字提示產生圖片。BFL 是非同步的：提交會返回 `polling_url`，而此動作會透過 @ref qoreasyncjobutilsintro \"QoreAsyncJobUtils\" 驅動輪詢迴圈，直到工作達到 `Ready` 終止狀態。\n\n回應包含 `result.sample` — 所產生圖片的 CDN URL。請及時下載圖片；BFL CDN URL 是暫時性的。"
+        },
+        "app.QmxhY2tGb3Jlc3RMYWJz.action.Z2VuZXJhdGUtaW1hZ2U.display_name": {
+          "source": "Generate Image",
+          "message": "產生圖片"
+        },
+        "app.QmxhY2tGb3Jlc3RMYWJz.action.Z2VuZXJhdGUtaW1hZ2U.option.YXNwZWN0X3JhdGlv.desc": {
+          "source": "Output aspect ratio.",
+          "message": "輸出外觀比例。"
+        },
+        "app.QmxhY2tGb3Jlc3RMYWJz.action.Z2VuZXJhdGUtaW1hZ2U.option.YXNwZWN0X3JhdGlv.display_name": {
+          "source": "Aspect Ratio",
+          "message": "外觀比例"
+        },
+        "app.QmxhY2tGb3Jlc3RMYWJz.action.Z2VuZXJhdGUtaW1hZ2U.option.YXNwZWN0X3JhdGlv.short_desc": {
+          "source": "Output aspect ratio",
+          "message": "輸出外觀比例"
+        },
+        "app.QmxhY2tGb3Jlc3RMYWJz.action.Z2VuZXJhdGUtaW1hZ2U.option.aGVpZ2h0.desc": {
+          "source": "Output image height in pixels (model-specific limits).",
+          "message": "輸出圖片高度（以像素為單位，受限於特定模型限制）。"
+        },
+        "app.QmxhY2tGb3Jlc3RMYWJz.action.Z2VuZXJhdGUtaW1hZ2U.option.aGVpZ2h0.display_name": {
+          "source": "Height",
+          "message": "高度"
+        },
+        "app.QmxhY2tGb3Jlc3RMYWJz.action.Z2VuZXJhdGUtaW1hZ2U.option.aGVpZ2h0.short_desc": {
+          "source": "Output image height in pixels",
+          "message": "輸出圖片高度（像素）"
+        },
+        "app.QmxhY2tGb3Jlc3RMYWJz.action.Z2VuZXJhdGUtaW1hZ2U.option.aW5wdXRfaW1hZ2U.desc": {
+          "source": "Base64-encoded input image, used by the `flux-kontext-pro` and `flux-kontext-max` models for image-to-image editing.",
+          "message": "經 Base64 編碼的輸入圖片，由 `flux-kontext-pro` 和 `flux-kontext-max` 模型用於圖生圖編輯。"
+        },
+        "app.QmxhY2tGb3Jlc3RMYWJz.action.Z2VuZXJhdGUtaW1hZ2U.option.aW5wdXRfaW1hZ2U.display_name": {
+          "source": "Input Image (base64)",
+          "message": "輸入圖片 (base64)"
+        },
+        "app.QmxhY2tGb3Jlc3RMYWJz.action.Z2VuZXJhdGUtaW1hZ2U.option.aW5wdXRfaW1hZ2U.short_desc": {
+          "source": "Base64-encoded input image (for `flux-kontext-*` models)",
+          "message": "經 Base64 編碼的輸入圖片（適用於 `flux-kontext-*` 模型）"
+        },
+        "app.QmxhY2tGb3Jlc3RMYWJz.action.Z2VuZXJhdGUtaW1hZ2U.option.bW9kZWw.allowed-value.c3RyaW5nOmZsdXgtZGV2.display_name": {
+          "source": "FLUX Dev",
+          "message": "FLUX Dev"
+        },
+        "app.QmxhY2tGb3Jlc3RMYWJz.action.Z2VuZXJhdGUtaW1hZ2U.option.bW9kZWw.allowed-value.c3RyaW5nOmZsdXgta29udGV4dC1tYXg.display_name": {
+          "source": "FLUX Kontext Max (image edit)",
+          "message": "FLUX Kontext Max（圖片編輯）"
+        },
+        "app.QmxhY2tGb3Jlc3RMYWJz.action.Z2VuZXJhdGUtaW1hZ2U.option.bW9kZWw.allowed-value.c3RyaW5nOmZsdXgta29udGV4dC1wcm8.display_name": {
+          "source": "FLUX Kontext Pro (image edit)",
+          "message": "FLUX Kontext Pro（圖片編輯）"
+        },
+        "app.QmxhY2tGb3Jlc3RMYWJz.action.Z2VuZXJhdGUtaW1hZ2U.option.bW9kZWw.allowed-value.c3RyaW5nOmZsdXgtcHJv.display_name": {
+          "source": "FLUX Pro",
+          "message": "FLUX Pro"
+        },
+        "app.QmxhY2tGb3Jlc3RMYWJz.action.Z2VuZXJhdGUtaW1hZ2U.option.bW9kZWw.allowed-value.c3RyaW5nOmZsdXgtcHJvLTEuMQ.display_name": {
+          "source": "FLUX Pro 1.1",
+          "message": "FLUX Pro 1.1"
+        },
+        "app.QmxhY2tGb3Jlc3RMYWJz.action.Z2VuZXJhdGUtaW1hZ2U.option.bW9kZWw.allowed-value.c3RyaW5nOmZsdXgtcHJvLTEuMS11bHRyYQ.display_name": {
+          "source": "FLUX Pro 1.1 Ultra",
+          "message": "FLUX Pro 1.1 Ultra"
+        },
+        "app.QmxhY2tGb3Jlc3RMYWJz.action.Z2VuZXJhdGUtaW1hZ2U.option.bW9kZWw.desc": {
+          "source": "FLUX model identifier — `flux-pro-1.1`, `flux-pro-1.1-ultra` (highest quality), `flux-pro`, `flux-dev`, `flux-kontext-pro` / `flux-kontext-max` (image-to-image edit).",
+          "message": "FLUX 模型識別碼 — `flux-pro-1.1`、`flux-pro-1.1-ultra`（最高品質）、`flux-pro`、`flux-dev`、`flux-kontext-pro` / `flux-kontext-max`（圖生圖編輯）。"
+        },
+        "app.QmxhY2tGb3Jlc3RMYWJz.action.Z2VuZXJhdGUtaW1hZ2U.option.bW9kZWw.display_name": {
+          "source": "Model",
+          "message": "模型"
+        },
+        "app.QmxhY2tGb3Jlc3RMYWJz.action.Z2VuZXJhdGUtaW1hZ2U.option.bW9kZWw.short_desc": {
+          "source": "FLUX model identifier",
+          "message": "FLUX 模型識別碼"
+        },
+        "app.QmxhY2tGb3Jlc3RMYWJz.action.Z2VuZXJhdGUtaW1hZ2U.option.bmVnYXRpdmVfcHJvbXB0.desc": {
+          "source": "Text describing what to avoid in the image.",
+          "message": "描述圖片中應避免出現之內容的文字。"
+        },
+        "app.QmxhY2tGb3Jlc3RMYWJz.action.Z2VuZXJhdGUtaW1hZ2U.option.bmVnYXRpdmVfcHJvbXB0.display_name": {
+          "source": "Negative Prompt",
+          "message": "負向提示"
+        },
+        "app.QmxhY2tGb3Jlc3RMYWJz.action.Z2VuZXJhdGUtaW1hZ2U.option.bmVnYXRpdmVfcHJvbXB0.short_desc": {
+          "source": "What to avoid in the image",
+          "message": "圖片中應避免的內容"
+        },
+        "app.QmxhY2tGb3Jlc3RMYWJz.action.Z2VuZXJhdGUtaW1hZ2U.option.c2VlZA.desc": {
+          "source": "Random seed for reproducibility — same seed + prompt should produce the same image.",
+          "message": "用於重現性的隨機種子 — 相同的種子 + 提示應產生相同的圖片。"
+        },
+        "app.QmxhY2tGb3Jlc3RMYWJz.action.Z2VuZXJhdGUtaW1hZ2U.option.c2VlZA.display_name": {
+          "source": "Seed",
+          "message": "種子"
+        },
+        "app.QmxhY2tGb3Jlc3RMYWJz.action.Z2VuZXJhdGUtaW1hZ2U.option.c2VlZA.short_desc": {
+          "source": "Random seed for reproducibility",
+          "message": "用於重現性的隨機種子"
+        },
+        "app.QmxhY2tGb3Jlc3RMYWJz.action.Z2VuZXJhdGUtaW1hZ2U.option.cHJvbXB0.desc": {
+          "source": "Text prompt describing the desired image.",
+          "message": "描述所需圖片的文字提示。"
+        },
+        "app.QmxhY2tGb3Jlc3RMYWJz.action.Z2VuZXJhdGUtaW1hZ2U.option.cHJvbXB0.display_name": {
+          "source": "Prompt",
+          "message": "提示"
+        },
+        "app.QmxhY2tGb3Jlc3RMYWJz.action.Z2VuZXJhdGUtaW1hZ2U.option.cHJvbXB0.short_desc": {
+          "source": "Text prompt describing the image",
+          "message": "描述圖片的文字提示"
+        },
+        "app.QmxhY2tGb3Jlc3RMYWJz.action.Z2VuZXJhdGUtaW1hZ2U.option.cHJvbXB0X3Vwc2FtcGxpbmc.desc": {
+          "source": "When `True`, BFL rewrites the prompt server-side for improved quality.  Off by default.",
+          "message": "當設為 `True` 時，BFL 會在伺服器端重寫提示以提高品質。預設為關閉。"
+        },
+        "app.QmxhY2tGb3Jlc3RMYWJz.action.Z2VuZXJhdGUtaW1hZ2U.option.cHJvbXB0X3Vwc2FtcGxpbmc.display_name": {
+          "source": "Prompt Upsampling",
+          "message": "提示取樣放大"
+        },
+        "app.QmxhY2tGb3Jlc3RMYWJz.action.Z2VuZXJhdGUtaW1hZ2U.option.cHJvbXB0X3Vwc2FtcGxpbmc.short_desc": {
+          "source": "Let BFL rewrite the prompt for better quality",
+          "message": "讓 BFL 重寫提示以獲得更佳品質"
+        },
+        "app.QmxhY2tGb3Jlc3RMYWJz.action.Z2VuZXJhdGUtaW1hZ2U.option.d2lkdGg.desc": {
+          "source": "Output image width in pixels (model-specific limits).",
+          "message": "輸出圖片寬度（以像素為單位，受限於特定模型限制）。"
+        },
+        "app.QmxhY2tGb3Jlc3RMYWJz.action.Z2VuZXJhdGUtaW1hZ2U.option.d2lkdGg.display_name": {
+          "source": "Width",
+          "message": "寬度"
+        },
+        "app.QmxhY2tGb3Jlc3RMYWJz.action.Z2VuZXJhdGUtaW1hZ2U.option.d2lkdGg.short_desc": {
+          "source": "Output image width in pixels",
+          "message": "輸出圖片寬度（像素）"
+        },
+        "app.QmxhY2tGb3Jlc3RMYWJz.action.Z2VuZXJhdGUtaW1hZ2U.short_desc": {
+          "source": "Generate an image from a text prompt (async)",
+          "message": "從文字提示產生圖片（非同步）"
+        },
+        "app.QmxhY2tGb3Jlc3RMYWJz.action.bWFrZS1hcGktY2FsbA.desc": {
+          "source": "Make a custom HTTP / REST API call to **Black Forest Labs** using the configured connection's authentication.\n\nSpecify the HTTP method, the URI path (relative to the connection's API base URL), optional query parameters, headers, and request body. The response is returned as a hash containing the status code, response headers, and response body.\n\nUse this action for endpoints that are not yet exposed as first-class actions on this app.",
+          "message": "使用已設定連線的驗證向 **Black Forest Labs** 進行自訂 HTTP / REST API 呼叫。\n\n指定 HTTP 方法、URI 路徑（相對於連線的 API 基礎 URL）、選填的查詢參數、標頭和請求主體。回應將以包含狀態碼、回應標頭和回應主體的雜湊返回。\n\n將此動作運用於尚未在此應用程式中以第一類動作公開的端點。"
+        },
+        "app.QmxhY2tGb3Jlc3RMYWJz.action.bWFrZS1hcGktY2FsbA.display_name": {
+          "source": "Make an API call",
+          "message": "進行 API 呼叫"
+        },
+        "app.QmxhY2tGb3Jlc3RMYWJz.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.desc": {
+          "source": "The request body. The effective type depends on `body_type`: JSON/form/YAML expect a hash, XML/text expect a string, multipart expects a file structure, binary expects raw bytes.",
+          "message": "請求主體。有效類型取決於 `body_type`：JSON/表單/YAML 預期為雜湊，XML/文字預期為字串，multipart 預期為檔案結構，二進位預期為原始位元組。"
+        },
+        "app.QmxhY2tGb3Jlc3RMYWJz.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.display_name": {
+          "source": "Body",
+          "message": "內文"
+        },
+        "app.QmxhY2tGb3Jlc3RMYWJz.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.short_desc": {
+          "source": "The request body",
+          "message": "請求主體"
+        },
+        "app.QmxhY2tGb3Jlc3RMYWJz.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.desc": {
+          "source": "Upload a file using `multipart/form-data`. The body must be a @ref DataProvider::FileDataType \"FileDataType\" structure (filename + content + mime_type). The framework builds the multipart envelope and sets the boundary header.",
+          "message": "使用 `multipart/form-data` 上傳檔案。主體必須是 @ref DataProvider::FileDataType \"FileDataType\" 結構 (filename + content + mime_type)。框架會建立 multipart 信封並設定 boundary 標頭。"
+        },
+        "app.QmxhY2tGb3Jlc3RMYWJz.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.display_name": {
+          "source": "Multipart Form",
+          "message": "Multipart 表單"
+        },
+        "app.QmxhY2tGb3Jlc3RMYWJz.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.short_desc": {
+          "source": "Upload a file using multipart/form-data",
+          "message": "使用 multipart/form-data 上傳檔案"
+        },
+        "app.QmxhY2tGb3Jlc3RMYWJz.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.desc": {
+          "source": "Pass the body to the REST client unchanged; the client decides serialization based on its configured `data` option and the value type",
+          "message": "將主體原封不動地傳遞給 REST 用戶端；用戶端會根據其設定的 `data` 選項與數值類型來決定序列化方式"
+        },
+        "app.QmxhY2tGb3Jlc3RMYWJz.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.display_name": {
+          "source": "Auto",
+          "message": "自動"
+        },
+        "app.QmxhY2tGb3Jlc3RMYWJz.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.short_desc": {
+          "source": "Pass-through; use connection serialization and let the REST client decide",
+          "message": "透傳；使用連線序列化並由 REST 用戶端決定"
+        },
+        "app.QmxhY2tGb3Jlc3RMYWJz.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.desc": {
+          "source": "Send the body as raw bytes. The body must be a binary value. Sets `Content-Type: application/octet-stream` unless overridden by `hdr`.",
+          "message": "將主體作為原始位元組傳送。主體必須是二進位值。除非被 `hdr` 覆寫，否則會設定 `Content-Type: application/octet-stream`。"
+        },
+        "app.QmxhY2tGb3Jlc3RMYWJz.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.display_name": {
+          "source": "Raw Binary",
+          "message": "原始二進位"
+        },
+        "app.QmxhY2tGb3Jlc3RMYWJz.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.short_desc": {
+          "source": "Send body as raw bytes",
+          "message": "將主體作為原始位元組傳送"
+        },
+        "app.QmxhY2tGb3Jlc3RMYWJz.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.desc": {
+          "source": "Serialize a hash of form fields as `application/x-www-form-urlencoded`. The body must be a hash whose values are scalars (strings/numbers/booleans).",
+          "message": "將表單欄位的雜湊序列化為 `application/x-www-form-urlencoded`。主體必須是值為純量 (字串/數字/布林值) 的雜湊。"
+        },
+        "app.QmxhY2tGb3Jlc3RMYWJz.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.display_name": {
+          "source": "Form (URL-encoded)",
+          "message": "表單 (URL 編碼)"
+        },
+        "app.QmxhY2tGb3Jlc3RMYWJz.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.short_desc": {
+          "source": "Serialize body as application/x-www-form-urlencoded form fields",
+          "message": "將主體序列化為 application/x-www-form-urlencoded 表單欄位"
+        },
+        "app.QmxhY2tGb3Jlc3RMYWJz.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.desc": {
+          "source": "Serialize the body as JSON; sets `Content-Type: application/json`. The body should be a hash, list, or scalar value.",
+          "message": "將主體序列化為 JSON；設定 `Content-Type: application/json`。主體應為雜湊、清單或純量值。"
+        },
+        "app.QmxhY2tGb3Jlc3RMYWJz.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.display_name": {
+          "source": "JSON",
+          "message": "JSON"
+        },
+        "app.QmxhY2tGb3Jlc3RMYWJz.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.short_desc": {
+          "source": "Serialize body as JSON",
+          "message": "將主體序列化為 JSON"
+        },
+        "app.QmxhY2tGb3Jlc3RMYWJz.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.desc": {
+          "source": "Send the body as plain text. The body must be a string. Sets `Content-Type: text/plain`.",
+          "message": "將主體作為純文字傳送。主體必須是字串。設定 `Content-Type: text/plain`。"
+        },
+        "app.QmxhY2tGb3Jlc3RMYWJz.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.display_name": {
+          "source": "Plain Text",
+          "message": "純文字"
+        },
+        "app.QmxhY2tGb3Jlc3RMYWJz.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.short_desc": {
+          "source": "Send body as text/plain",
+          "message": "將主體作為 text/plain 傳送"
+        },
+        "app.QmxhY2tGb3Jlc3RMYWJz.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.desc": {
+          "source": "Send the body as XML. If the body is a hash it is serialized to XML; if it is a string it is sent verbatim. Sets `Content-Type: application/xml`.",
+          "message": "將主體作為 XML 傳送。若主體為雜湊，則會序列化為 XML；若為字串，則原樣傳送。設定 `Content-Type: application/xml`。"
+        },
+        "app.QmxhY2tGb3Jlc3RMYWJz.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.display_name": {
+          "source": "XML",
+          "message": "XML"
+        },
+        "app.QmxhY2tGb3Jlc3RMYWJz.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.short_desc": {
+          "source": "Send body as XML",
+          "message": "將主體作為 XML 傳送"
+        },
+        "app.QmxhY2tGb3Jlc3RMYWJz.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.desc": {
+          "source": "Send the body as YAML. If the body is a hash it is serialized to YAML; if it is a string it is sent verbatim. Sets `Content-Type: application/x-yaml`.",
+          "message": "將主體作為 YAML 傳送。若主體為雜湊，則會序列化為 YAML；若為字串，則原樣傳送。設定 `Content-Type: application/x-yaml`。"
+        },
+        "app.QmxhY2tGb3Jlc3RMYWJz.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.display_name": {
+          "source": "YAML",
+          "message": "YAML"
+        },
+        "app.QmxhY2tGb3Jlc3RMYWJz.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.short_desc": {
+          "source": "Send body as YAML",
+          "message": "將主體作為 YAML 傳送"
+        },
+        "app.QmxhY2tGb3Jlc3RMYWJz.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.desc": {
+          "source": "Selects the body serialization mode and the corresponding `Content-Type` header. Changing this field reshapes the `body` editor - selecting JSON exposes a JSON editor, selecting Multipart Form exposes a file picker, and so on.",
+          "message": "選擇主體序列化模式與相應的 `Content-Type` 標頭。變更此欄位會重塑 `body` 編輯器 - 選擇 JSON 會顯示 JSON 編輯器，選擇 Multipart Form 會顯示檔案選擇器，依此類推。"
+        },
+        "app.QmxhY2tGb3Jlc3RMYWJz.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.display_name": {
+          "source": "Body Type",
+          "message": "主體類型"
+        },
+        "app.QmxhY2tGb3Jlc3RMYWJz.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.short_desc": {
+          "source": "How the body is serialized and what Content-Type is sent",
+          "message": "主體如何序列化以及傳送何種 Content-Type"
+        },
+        "app.QmxhY2tGb3Jlc3RMYWJz.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.desc": {
+          "source": "If `True`, non-2xx HTTP responses return as the normal response hash (with the actual status code) instead of raising `REST-RESPONSE-ERROR`. Useful for handling 4xx/5xx as data - e.g. checking whether a resource exists. Overrides the connection's `error_passthru` setting for this call only.",
+          "message": "若為 `True`，非 2xx 的 HTTP 回應將作為正常的回應雜湊 (包含實際狀態碼) 返回，而不是引發 `REST-RESPONSE-ERROR`。適用於將 4xx/5xx 作為資料處理 - 例如檢查資源是否存在。僅針對本次呼叫覆寫連線的 `error_passthru` 設定。"
+        },
+        "app.QmxhY2tGb3Jlc3RMYWJz.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.display_name": {
+          "source": "Return Errors as Data",
+          "message": "將錯誤作為資料返回"
+        },
+        "app.QmxhY2tGb3Jlc3RMYWJz.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.short_desc": {
+          "source": "Return non-2xx responses normally instead of throwing",
+          "message": "正常返回非 2xx 回應，而不是拋出例外"
+        },
+        "app.QmxhY2tGb3Jlc3RMYWJz.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.desc": {
+          "source": "Optional list of HTTP status codes treated as success. If set and the response status is not in this list, the action throws `REST-STATUS-ERROR`. When unset, the REST client's default behavior applies (typically: 2xx is success, non-2xx throws).",
+          "message": "視為成功的選擇性 HTTP 狀態碼清單。若已設定且回應狀態不在此清單中，該動作將拋出 `REST-STATUS-ERROR`。未設定時，套用 REST 用戶端的預設行為 (通常：2xx 代表成功，非 2xx 拋出例外)。"
+        },
+        "app.QmxhY2tGb3Jlc3RMYWJz.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.display_name": {
+          "source": "Expected Status Codes",
+          "message": "預期的狀態碼"
+        },
+        "app.QmxhY2tGb3Jlc3RMYWJz.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.short_desc": {
+          "source": "Response status codes treated as success",
+          "message": "視為成功的回應狀態碼"
+        },
+        "app.QmxhY2tGb3Jlc3RMYWJz.action.bWFrZS1hcGktY2FsbA.option.aGRy.desc": {
+          "source": "Hash of custom headers added to the request. These override any default headers set by `body_type` (e.g. supplying `Content-Type` here wins over the body-type default).",
+          "message": "新增至請求的自訂標頭雜湊。這些會覆寫由 `body_type` 設定的任何預設標頭 (例如：在此處提供 `Content-Type` 會優先於主體類型的預設值)。"
+        },
+        "app.QmxhY2tGb3Jlc3RMYWJz.action.bWFrZS1hcGktY2FsbA.option.aGRy.display_name": {
+          "source": "Custom Headers",
+          "message": "自訂標頭"
+        },
+        "app.QmxhY2tGb3Jlc3RMYWJz.action.bWFrZS1hcGktY2FsbA.option.aGRy.short_desc": {
+          "source": "Extra request headers",
+          "message": "額外的請求標頭"
+        },
+        "app.QmxhY2tGb3Jlc3RMYWJz.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.desc": {
+          "source": "If `True`, the response hash includes a `debug` sub-hash containing the request method/URL/headers (with sensitive values redacted), request and response sizes, and round-trip duration. Useful when investigating slow or failing calls. Off by default to keep responses lean.",
+          "message": "若為 `True`，回應雜湊包含一個 `debug` 子雜湊，其中包含請求方法/URL/標頭 (敏感值已遮蔽)、請求與回應大小以及來回時間。在調查過慢或失敗的呼叫時很有用。預設關閉以維持回應精簡。"
+        },
+        "app.QmxhY2tGb3Jlc3RMYWJz.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.display_name": {
+          "source": "Include Debug Info",
+          "message": "包含除錯資訊"
+        },
+        "app.QmxhY2tGb3Jlc3RMYWJz.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.short_desc": {
+          "source": "Include request/timing/size debug info in the response",
+          "message": "在回應中包含請求/時序/大小除錯資訊"
+        },
+        "app.QmxhY2tGb3Jlc3RMYWJz.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.desc": {
+          "source": "HTTP `OPTIONS`",
+          "message": "HTTP `OPTIONS`"
+        },
+        "app.QmxhY2tGb3Jlc3RMYWJz.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.display_name": {
+          "source": "OPTIONS",
+          "message": "OPTIONS"
+        },
+        "app.QmxhY2tGb3Jlc3RMYWJz.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.short_desc": {
+          "source": "HTTP OPTIONS",
+          "message": "HTTP OPTIONS"
+        },
+        "app.QmxhY2tGb3Jlc3RMYWJz.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.desc": {
+          "source": "HTTP `DELETE`",
+          "message": "HTTP `DELETE`"
+        },
+        "app.QmxhY2tGb3Jlc3RMYWJz.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.display_name": {
+          "source": "DELETE",
+          "message": "DELETE"
+        },
+        "app.QmxhY2tGb3Jlc3RMYWJz.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.short_desc": {
+          "source": "HTTP DELETE",
+          "message": "HTTP DELETE"
+        },
+        "app.QmxhY2tGb3Jlc3RMYWJz.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.desc": {
+          "source": "HTTP `GET`",
+          "message": "HTTP `GET`"
+        },
+        "app.QmxhY2tGb3Jlc3RMYWJz.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.display_name": {
+          "source": "GET",
+          "message": "GET"
+        },
+        "app.QmxhY2tGb3Jlc3RMYWJz.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.short_desc": {
+          "source": "HTTP GET",
+          "message": "HTTP GET"
+        },
+        "app.QmxhY2tGb3Jlc3RMYWJz.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.desc": {
+          "source": "HTTP `HEAD`",
+          "message": "HTTP `HEAD`"
+        },
+        "app.QmxhY2tGb3Jlc3RMYWJz.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.display_name": {
+          "source": "HEAD",
+          "message": "HEAD"
+        },
+        "app.QmxhY2tGb3Jlc3RMYWJz.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.short_desc": {
+          "source": "HTTP HEAD",
+          "message": "HTTP HEAD"
+        },
+        "app.QmxhY2tGb3Jlc3RMYWJz.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.desc": {
+          "source": "HTTP `PATCH`",
+          "message": "HTTP `PATCH`"
+        },
+        "app.QmxhY2tGb3Jlc3RMYWJz.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.display_name": {
+          "source": "PATCH",
+          "message": "PATCH"
+        },
+        "app.QmxhY2tGb3Jlc3RMYWJz.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.short_desc": {
+          "source": "HTTP PATCH",
+          "message": "HTTP PATCH"
+        },
+        "app.QmxhY2tGb3Jlc3RMYWJz.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.desc": {
+          "source": "HTTP `POST`",
+          "message": "HTTP `POST`"
+        },
+        "app.QmxhY2tGb3Jlc3RMYWJz.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.display_name": {
+          "source": "POST",
+          "message": "POST"
+        },
+        "app.QmxhY2tGb3Jlc3RMYWJz.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.short_desc": {
+          "source": "HTTP POST",
+          "message": "HTTP POST"
+        },
+        "app.QmxhY2tGb3Jlc3RMYWJz.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.desc": {
+          "source": "HTTP `PUT`",
+          "message": "HTTP `PUT`"
+        },
+        "app.QmxhY2tGb3Jlc3RMYWJz.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.display_name": {
+          "source": "PUT",
+          "message": "PUT"
+        },
+        "app.QmxhY2tGb3Jlc3RMYWJz.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.short_desc": {
+          "source": "HTTP PUT",
+          "message": "HTTP PUT"
+        },
+        "app.QmxhY2tGb3Jlc3RMYWJz.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.desc": {
+          "source": "HTTP `TRACE`",
+          "message": "HTTP `TRACE`"
+        },
+        "app.QmxhY2tGb3Jlc3RMYWJz.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.display_name": {
+          "source": "TRACE",
+          "message": "TRACE"
+        },
+        "app.QmxhY2tGb3Jlc3RMYWJz.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.short_desc": {
+          "source": "HTTP TRACE",
+          "message": "HTTP TRACE"
+        },
+        "app.QmxhY2tGb3Jlc3RMYWJz.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "用於請求的 HTTP 方法"
+        },
+        "app.QmxhY2tGb3Jlc3RMYWJz.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.display_name": {
+          "source": "HTTP Method",
+          "message": "HTTP 方法"
+        },
+        "app.QmxhY2tGb3Jlc3RMYWJz.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.short_desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "用於請求的 HTTP 方法"
+        },
+        "app.QmxhY2tGb3Jlc3RMYWJz.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain `{name}` placeholders that are replaced from `path_vars`. Example: `/users/{id}/comments`.",
+          "message": "相於連線 API 基本 URL 的 URI 路徑。可能包含從 `path_vars` 替換的 `{name}` 預留位置。範例：`/users/{id}/comments`。"
+        },
+        "app.QmxhY2tGb3Jlc3RMYWJz.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.display_name": {
+          "source": "URI Path",
+          "message": "URI 路徑"
+        },
+        "app.QmxhY2tGb3Jlc3RMYWJz.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.short_desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain '{name}' placeholders that are replaced from 'path_vars'. Example: '/users/{id}/comments'",
+          "message": "相對於連線 API 基底 URL 的 URI 路徑。可能包含從 'path_vars' 替換的 '{name}' 預留位置。範例：'/users/{id}/comments'"
+        },
+        "app.QmxhY2tGb3Jlc3RMYWJz.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.desc": {
+          "source": "Hash of values substituted into `{name}` placeholders in the URI path. Example: with `path = /users/{id}` and `path_vars = {id: 123}` the framework sends `/users/123`. Values are URL-encoded.",
+          "message": "替換至 URI 路徑中 `{name}` 預留位置的值 Hash。範例：使用 `path = /users/{id}` 與 `path_vars = {id: 123}` 時，框架會傳送 `/users/123`。數值均經過 URL 編碼。"
+        },
+        "app.QmxhY2tGb3Jlc3RMYWJz.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.display_name": {
+          "source": "Path Variables",
+          "message": "路徑變數"
+        },
+        "app.QmxhY2tGb3Jlc3RMYWJz.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.short_desc": {
+          "source": "Values for {name} placeholders in path",
+          "message": "路徑中 {name} 預留位置的值"
+        },
+        "app.QmxhY2tGb3Jlc3RMYWJz.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.desc": {
+          "source": "Hash of query string parameters to append to the URI path. Values are URL-encoded; list values are joined with `,`.",
+          "message": "要附加至 URI 路徑的查詢字串參數 Hash。數值均經過 URL 編碼；清單值會使用 `,` 連接。"
+        },
+        "app.QmxhY2tGb3Jlc3RMYWJz.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.display_name": {
+          "source": "Query Arguments",
+          "message": "查詢引數"
+        },
+        "app.QmxhY2tGb3Jlc3RMYWJz.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.short_desc": {
+          "source": "Query string parameters",
+          "message": "查詢字串參數"
+        },
+        "app.QmxhY2tGb3Jlc3RMYWJz.action.bWFrZS1hcGktY2FsbA.short_desc": {
+          "source": "Make a custom API call to Black Forest Labs",
+          "message": "向 Black Forest Labs 進行自訂 API 呼叫"
+        },
+        "app.QmxhY2tGb3Jlc3RMYWJz.desc": {
+          "source": "Provides access to [Black Forest Labs](https://bfl.ai) — the company behind the FLUX image generation models.\n\n**Image models** (selectable via the `model` action option):\n- `flux-pro-1.1` (default) — production text-to-image\n- `flux-pro-1.1-ultra` — highest quality, 4MP output\n- `flux-pro` — original FLUX Pro\n- `flux-dev` — faster + cheaper development model\n- `flux-kontext-pro` / `flux-kontext-max` — image-to-image edit (needs an `input_image`)\n\n**Video generation** is exposed only via the @ref qoremediautilsintro \"QoreMediaUtils\" `bfl` video-generator backend or the @ref bflrestclientintro \"BflRestClient\" `submitAndWait()` method directly — not as an action in this data provider.",
+          "message": "提供對 [Black Forest Labs](https://bfl.ai) 的存取權限 — 該公司是 FLUX 圖片產生模型的背後推手。\n\n**圖片模型**（可透過 `model` 動作選項選取）：\n- `flux-pro-1.1`（預設）— 生產級文字生圖\n- `flux-pro-1.1-ultra` — 最高品質，400 萬像素輸出\n- `flux-pro` — 原始 FLUX Pro\n- `flux-dev` — 更快且更經濟的開發模型\n- `flux-kontext-pro` / `flux-kontext-max` — 圖生圖編輯（需要 `input_image`）\n\n**影片產生**僅透過 @ref qoremediautilsintro \"QoreMediaUtils\" `bfl` 影片產生器後端或直接透過 @ref bflrestclientintro \"BflRestClient\" `submitAndWait()` 方法公開 — 未作為此資料提供者中的動作。"
+        },
+        "app.QmxhY2tGb3Jlc3RMYWJz.display_name": {
+          "source": "Black Forest Labs",
+          "message": "Black Forest Labs"
+        },
+        "app.QmxhY2tGb3Jlc3RMYWJz.short_desc": {
+          "source": "Black Forest Labs FLUX text-to-image generation",
+          "message": "Black Forest Labs FLUX 文字生圖"
+        }
+      }
+    }
+  }
+}

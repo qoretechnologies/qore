@@ -1,0 +1,1869 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "ko": {
+      "messages": {
+        "app.S2l0.action.Y291cnNlLXN1YnNjcmliZQ.desc": {
+          "source": "Triggers when a subscriber enrolls in a course in Kit",
+          "message": "Kit에서 구독자가 코스에 등록할 때 트리거됨"
+        },
+        "app.S2l0.action.Y291cnNlLXN1YnNjcmliZQ.display_name": {
+          "source": "Course Subscription",
+          "message": "코스 구독"
+        },
+        "app.S2l0.action.Y291cnNlLXN1YnNjcmliZQ.short_desc": {
+          "source": "Watch for course subscriptions",
+          "message": "코스 구독 감시"
+        },
+        "app.S2l0.action.Y3JlYXRlLWJyb2FkY2FzdA.desc": {
+          "source": "Create a new broadcast in Kit. Set `send_at` to schedule, or leave empty for a draft",
+          "message": "Kit에서 새 브로드캐스트를 생성합니다. 예약하려면 `send_at`을(를) 설정하고, 임시 저장은 비워 두세요"
+        },
+        "app.S2l0.action.Y3JlYXRlLWJyb2FkY2FzdA.display_name": {
+          "source": "Create a Broadcast",
+          "message": "브로드캐스트 생성"
+        },
+        "app.S2l0.action.Y3JlYXRlLWJyb2FkY2FzdA.option.Y29udGVudA.desc": {
+          "source": "The HTML content of the broadcast email",
+          "message": "브로드캐스트 이메일의 HTML 콘텐츠"
+        },
+        "app.S2l0.action.Y3JlYXRlLWJyb2FkY2FzdA.option.Y29udGVudA.display_name": {
+          "source": "Content",
+          "message": "내용"
+        },
+        "app.S2l0.action.Y3JlYXRlLWJyb2FkY2FzdA.option.Y29udGVudA.short_desc": {
+          "source": "The broadcast HTML content",
+          "message": "브로드캐스트 HTML 콘텐츠"
+        },
+        "app.S2l0.action.Y3JlYXRlLWJyb2FkY2FzdA.option.ZGVzY3JpcHRpb24.desc": {
+          "source": "A description of the broadcast for internal reference",
+          "message": "내부 참조용 브로드캐스트 설명"
+        },
+        "app.S2l0.action.Y3JlYXRlLWJyb2FkY2FzdA.option.ZGVzY3JpcHRpb24.display_name": {
+          "source": "Description",
+          "message": "설명"
+        },
+        "app.S2l0.action.Y3JlYXRlLWJyb2FkY2FzdA.option.ZGVzY3JpcHRpb24.short_desc": {
+          "source": "The broadcast description",
+          "message": "브로드캐스트 설명"
+        },
+        "app.S2l0.action.Y3JlYXRlLWJyb2FkY2FzdA.option.ZW1haWxfYWRkcmVzcw.desc": {
+          "source": "The email address used as the sender for the broadcast",
+          "message": "브로드캐스트 발신자로 사용되는 이메일 주소"
+        },
+        "app.S2l0.action.Y3JlYXRlLWJyb2FkY2FzdA.option.ZW1haWxfYWRkcmVzcw.display_name": {
+          "source": "Email Address",
+          "message": "이메일 주소"
+        },
+        "app.S2l0.action.Y3JlYXRlLWJyb2FkY2FzdA.option.ZW1haWxfYWRkcmVzcw.short_desc": {
+          "source": "The sender email address",
+          "message": "발신자 이메일 주소"
+        },
+        "app.S2l0.action.Y3JlYXRlLWJyb2FkY2FzdA.option.ZW1haWxfdGVtcGxhdGVfaWQ.desc": {
+          "source": "The identifier of the email template to use for the broadcast",
+          "message": "브로드캐스트에 사용할 이메일 템플릿의 식별자"
+        },
+        "app.S2l0.action.Y3JlYXRlLWJyb2FkY2FzdA.option.ZW1haWxfdGVtcGxhdGVfaWQ.display_name": {
+          "source": "Email Template ID",
+          "message": "이메일 템플릿 ID"
+        },
+        "app.S2l0.action.Y3JlYXRlLWJyb2FkY2FzdA.option.ZW1haWxfdGVtcGxhdGVfaWQ.short_desc": {
+          "source": "The email template ID",
+          "message": "이메일 템플릿 ID"
+        },
+        "app.S2l0.action.Y3JlYXRlLWJyb2FkY2FzdA.option.c2VuZF9hdA.desc": {
+          "source": "The timestamp when the broadcast should be sent; set to `null` for a draft",
+          "message": "브로드캐스트가 전송되어야 하는 타임스탬프입니다. 임시 저장의 경우 `null`(으)로 설정하세요"
+        },
+        "app.S2l0.action.Y3JlYXRlLWJyb2FkY2FzdA.option.c2VuZF9hdA.display_name": {
+          "source": "Send At",
+          "message": "전송 시각"
+        },
+        "app.S2l0.action.Y3JlYXRlLWJyb2FkY2FzdA.option.c2VuZF9hdA.short_desc": {
+          "source": "When to send the broadcast",
+          "message": "브로드캐스트 전송 시간"
+        },
+        "app.S2l0.action.Y3JlYXRlLWJyb2FkY2FzdA.option.c3ViamVjdA.desc": {
+          "source": "The subject line of the broadcast email",
+          "message": "브로드캐스트 이메일의 제목"
+        },
+        "app.S2l0.action.Y3JlYXRlLWJyb2FkY2FzdA.option.c3ViamVjdA.display_name": {
+          "source": "Subject",
+          "message": "제목"
+        },
+        "app.S2l0.action.Y3JlYXRlLWJyb2FkY2FzdA.option.c3ViamVjdA.short_desc": {
+          "source": "The broadcast subject line",
+          "message": "브로드캐스트 제목"
+        },
+        "app.S2l0.action.Y3JlYXRlLWJyb2FkY2FzdA.option.cHJldmlld190ZXh0.desc": {
+          "source": "The preview text shown in email clients before the email is opened",
+          "message": "이메일을 열기 전에 이메일 클라이언트에 표시되는 미리보기 텍스트"
+        },
+        "app.S2l0.action.Y3JlYXRlLWJyb2FkY2FzdA.option.cHJldmlld190ZXh0.display_name": {
+          "source": "Preview Text",
+          "message": "미리보기 텍스트"
+        },
+        "app.S2l0.action.Y3JlYXRlLWJyb2FkY2FzdA.option.cHJldmlld190ZXh0.short_desc": {
+          "source": "The preview text",
+          "message": "미리보기 텍스트"
+        },
+        "app.S2l0.action.Y3JlYXRlLWJyb2FkY2FzdA.option.cHVibGlj.desc": {
+          "source": "Indicates whether the broadcast is publicly accessible",
+          "message": "브로드캐스트에 공개적으로 액세스할 수 있는지 여부를 나타냅니다"
+        },
+        "app.S2l0.action.Y3JlYXRlLWJyb2FkY2FzdA.option.cHVibGlj.display_name": {
+          "source": "Public",
+          "message": "공개"
+        },
+        "app.S2l0.action.Y3JlYXRlLWJyb2FkY2FzdA.option.cHVibGlj.short_desc": {
+          "source": "Whether the broadcast is public",
+          "message": "브로드캐스트의 공개 여부"
+        },
+        "app.S2l0.action.Y3JlYXRlLWJyb2FkY2FzdA.option.cHVibGlzaGVkX2F0.desc": {
+          "source": "The timestamp when the broadcast should be published",
+          "message": "브로드캐스트를 게시해야 하는 타임스탬프"
+        },
+        "app.S2l0.action.Y3JlYXRlLWJyb2FkY2FzdA.option.cHVibGlzaGVkX2F0.display_name": {
+          "source": "Published At",
+          "message": "게시 일시"
+        },
+        "app.S2l0.action.Y3JlYXRlLWJyb2FkY2FzdA.option.cHVibGlzaGVkX2F0.short_desc": {
+          "source": "When to publish the broadcast",
+          "message": "브로드캐스트 게시 시점"
+        },
+        "app.S2l0.action.Y3JlYXRlLWJyb2FkY2FzdA.option.dGh1bWJuYWlsX2FsdA.desc": {
+          "source": "The alternative text for the broadcast thumbnail image",
+          "message": "브로드캐스트 썸네일 이미지의 대체 텍스트"
+        },
+        "app.S2l0.action.Y3JlYXRlLWJyb2FkY2FzdA.option.dGh1bWJuYWlsX2FsdA.display_name": {
+          "source": "Thumbnail Alt",
+          "message": "썸네일 대체 텍스트"
+        },
+        "app.S2l0.action.Y3JlYXRlLWJyb2FkY2FzdA.option.dGh1bWJuYWlsX2FsdA.short_desc": {
+          "source": "The thumbnail alt text",
+          "message": "썸네일 대체 텍스트"
+        },
+        "app.S2l0.action.Y3JlYXRlLWJyb2FkY2FzdA.option.dGh1bWJuYWlsX3VybA.desc": {
+          "source": "The URL of the broadcast thumbnail image",
+          "message": "브로드캐스트 썸네일 이미지의 URL"
+        },
+        "app.S2l0.action.Y3JlYXRlLWJyb2FkY2FzdA.option.dGh1bWJuYWlsX3VybA.display_name": {
+          "source": "Thumbnail URL",
+          "message": "썸네일 URL"
+        },
+        "app.S2l0.action.Y3JlYXRlLWJyb2FkY2FzdA.option.dGh1bWJuYWlsX3VybA.short_desc": {
+          "source": "The thumbnail URL",
+          "message": "썸네일 URL"
+        },
+        "app.S2l0.action.Y3JlYXRlLWJyb2FkY2FzdA.short_desc": {
+          "source": "Create a new broadcast or draft",
+          "message": "새 브로드캐스트 또는 초안 생성"
+        },
+        "app.S2l0.action.Y3JlYXRlLWN1c3RvbS1maWVsZA.desc": {
+          "source": "Create a new custom field in Kit",
+          "message": "Kit에서 새 사용자 정의 필드 생성"
+        },
+        "app.S2l0.action.Y3JlYXRlLWN1c3RvbS1maWVsZA.display_name": {
+          "source": "Create a Custom Field",
+          "message": "사용자 정의 필드 생성"
+        },
+        "app.S2l0.action.Y3JlYXRlLWN1c3RvbS1maWVsZA.option.bGFiZWw.desc": {
+          "source": "The display label of the custom field to create",
+          "message": "생성할 사용자 정의 필드의 표시 레이블"
+        },
+        "app.S2l0.action.Y3JlYXRlLWN1c3RvbS1maWVsZA.option.bGFiZWw.display_name": {
+          "source": "Label",
+          "message": "라벨"
+        },
+        "app.S2l0.action.Y3JlYXRlLWN1c3RvbS1maWVsZA.option.bGFiZWw.short_desc": {
+          "source": "The custom field label",
+          "message": "사용자 정의 필드 레이블"
+        },
+        "app.S2l0.action.Y3JlYXRlLWN1c3RvbS1maWVsZA.short_desc": {
+          "source": "Create a new custom field",
+          "message": "새 사용자 정의 필드 생성"
+        },
+        "app.S2l0.action.Y3JlYXRlLXB1cmNoYXNl.desc": {
+          "source": "Create a new purchase record in Kit for e-commerce tracking",
+          "message": "전자상거래 추적을 위해 Kit에서 새 구매 기록 생성"
+        },
+        "app.S2l0.action.Y3JlYXRlLXB1cmNoYXNl.display_name": {
+          "source": "Create a Purchase",
+          "message": "구매 기록 생성"
+        },
+        "app.S2l0.action.Y3JlYXRlLXB1cmNoYXNl.option.Y3VycmVuY3k.desc": {
+          "source": "The ISO 4217 currency code for the purchase (defaults to `USD`)",
+          "message": "구매에 대한 ISO 4217 통화 코드(기본값: `USD`)"
+        },
+        "app.S2l0.action.Y3JlYXRlLXB1cmNoYXNl.option.Y3VycmVuY3k.display_name": {
+          "source": "Currency",
+          "message": "통화"
+        },
+        "app.S2l0.action.Y3JlYXRlLXB1cmNoYXNl.option.Y3VycmVuY3k.short_desc": {
+          "source": "The currency code",
+          "message": "통화 코드"
+        },
+        "app.S2l0.action.Y3JlYXRlLXB1cmNoYXNl.option.ZGlzY291bnQ.desc": {
+          "source": "The discount amount applied to the purchase",
+          "message": "구매에 적용된 할인 금액"
+        },
+        "app.S2l0.action.Y3JlYXRlLXB1cmNoYXNl.option.ZGlzY291bnQ.display_name": {
+          "source": "Discount",
+          "message": "할인"
+        },
+        "app.S2l0.action.Y3JlYXRlLXB1cmNoYXNl.option.ZGlzY291bnQ.short_desc": {
+          "source": "The discount amount",
+          "message": "할인 금액"
+        },
+        "app.S2l0.action.Y3JlYXRlLXB1cmNoYXNl.option.ZW1haWxfYWRkcmVzcw.desc": {
+          "source": "The email address of the buyer",
+          "message": "구매자의 이메일 주소"
+        },
+        "app.S2l0.action.Y3JlYXRlLXB1cmNoYXNl.option.ZW1haWxfYWRkcmVzcw.display_name": {
+          "source": "Email Address",
+          "message": "이메일 주소"
+        },
+        "app.S2l0.action.Y3JlYXRlLXB1cmNoYXNl.option.ZW1haWxfYWRkcmVzcw.short_desc": {
+          "source": "The buyer's email address",
+          "message": "구매자 이메일 주소"
+        },
+        "app.S2l0.action.Y3JlYXRlLXB1cmNoYXNl.option.c2hpcHBpbmc.desc": {
+          "source": "The shipping cost for the purchase",
+          "message": "구매 배송비"
+        },
+        "app.S2l0.action.Y3JlYXRlLXB1cmNoYXNl.option.c2hpcHBpbmc.display_name": {
+          "source": "Shipping",
+          "message": "배송"
+        },
+        "app.S2l0.action.Y3JlYXRlLXB1cmNoYXNl.option.c2hpcHBpbmc.short_desc": {
+          "source": "The shipping cost",
+          "message": "배송비"
+        },
+        "app.S2l0.action.Y3JlYXRlLXB1cmNoYXNl.option.c3RhdHVz.desc": {
+          "source": "The current status of the purchase",
+          "message": "구매의 현재 상태"
+        },
+        "app.S2l0.action.Y3JlYXRlLXB1cmNoYXNl.option.c3RhdHVz.display_name": {
+          "source": "Status",
+          "message": "상태"
+        },
+        "app.S2l0.action.Y3JlYXRlLXB1cmNoYXNl.option.c3RhdHVz.short_desc": {
+          "source": "The purchase status",
+          "message": "구매 상태"
+        },
+        "app.S2l0.action.Y3JlYXRlLXB1cmNoYXNl.option.c3VidG90YWw.desc": {
+          "source": "The subtotal amount of the purchase before tax, shipping, and discount",
+          "message": "세금, 배송비 및 할인이 적용되기 전 구매 소계 금액"
+        },
+        "app.S2l0.action.Y3JlYXRlLXB1cmNoYXNl.option.c3VidG90YWw.display_name": {
+          "source": "Subtotal",
+          "message": "소계"
+        },
+        "app.S2l0.action.Y3JlYXRlLXB1cmNoYXNl.option.c3VidG90YWw.short_desc": {
+          "source": "The purchase subtotal",
+          "message": "구매 소계"
+        },
+        "app.S2l0.action.Y3JlYXRlLXB1cmNoYXNl.option.cHJvZHVjdHM.desc": {
+          "source": "A list of products in the purchase, each containing product details such as `name`, `pid`, `lid`, `quantity`, and `unit_price`",
+          "message": "`name`, `pid`, `lid`, `quantity`, `unit_price` 등과 같은 상품 세부 정보가 포함된 구매 상품 목록"
+        },
+        "app.S2l0.action.Y3JlYXRlLXB1cmNoYXNl.option.cHJvZHVjdHM.display_name": {
+          "source": "Products",
+          "message": "제품"
+        },
+        "app.S2l0.action.Y3JlYXRlLXB1cmNoYXNl.option.cHJvZHVjdHM.short_desc": {
+          "source": "List of products in the purchase",
+          "message": "구매 상품 목록"
+        },
+        "app.S2l0.action.Y3JlYXRlLXB1cmNoYXNl.option.dG90YWw.desc": {
+          "source": "The total amount of the purchase",
+          "message": "구매 총액"
+        },
+        "app.S2l0.action.Y3JlYXRlLXB1cmNoYXNl.option.dG90YWw.display_name": {
+          "source": "Total",
+          "message": "총액"
+        },
+        "app.S2l0.action.Y3JlYXRlLXB1cmNoYXNl.option.dG90YWw.short_desc": {
+          "source": "The total amount",
+          "message": "총액"
+        },
+        "app.S2l0.action.Y3JlYXRlLXB1cmNoYXNl.option.dGF4.desc": {
+          "source": "The tax amount applied to the purchase",
+          "message": "구매에 적용된 세액"
+        },
+        "app.S2l0.action.Y3JlYXRlLXB1cmNoYXNl.option.dGF4.display_name": {
+          "source": "Tax",
+          "message": "세금"
+        },
+        "app.S2l0.action.Y3JlYXRlLXB1cmNoYXNl.option.dGF4.short_desc": {
+          "source": "The tax amount",
+          "message": "세액"
+        },
+        "app.S2l0.action.Y3JlYXRlLXB1cmNoYXNl.option.dHJhbnNhY3Rpb25faWQ.desc": {
+          "source": "The external transaction identifier for the purchase",
+          "message": "구매의 외부 트랜잭션 식별자"
+        },
+        "app.S2l0.action.Y3JlYXRlLXB1cmNoYXNl.option.dHJhbnNhY3Rpb25faWQ.display_name": {
+          "source": "Transaction ID",
+          "message": "트랜잭션 ID"
+        },
+        "app.S2l0.action.Y3JlYXRlLXB1cmNoYXNl.option.dHJhbnNhY3Rpb25faWQ.short_desc": {
+          "source": "The external transaction ID",
+          "message": "외부 트랜잭션 ID"
+        },
+        "app.S2l0.action.Y3JlYXRlLXB1cmNoYXNl.option.dHJhbnNhY3Rpb25fdGltZQ.desc": {
+          "source": "The timestamp when the transaction occurred",
+          "message": "트랜잭션이 발생한 타임스탬프"
+        },
+        "app.S2l0.action.Y3JlYXRlLXB1cmNoYXNl.option.dHJhbnNhY3Rpb25fdGltZQ.display_name": {
+          "source": "Transaction Time",
+          "message": "트랜잭션 시간"
+        },
+        "app.S2l0.action.Y3JlYXRlLXB1cmNoYXNl.option.dHJhbnNhY3Rpb25fdGltZQ.short_desc": {
+          "source": "When the transaction occurred",
+          "message": "트랜잭션이 발생한 시점"
+        },
+        "app.S2l0.action.Y3JlYXRlLXB1cmNoYXNl.short_desc": {
+          "source": "Create a new purchase record",
+          "message": "새 구매 기록 생성"
+        },
+        "app.S2l0.action.Y3JlYXRlLXN1YnNjcmliZXI.desc": {
+          "source": "Create a new subscriber in Kit (upsert behavior — updates if email already exists)",
+          "message": "Kit에서 새 구독자 생성(upsert 동작 — 이메일이 이미 존재하는 경우 업데이트)"
+        },
+        "app.S2l0.action.Y3JlYXRlLXN1YnNjcmliZXI.display_name": {
+          "source": "Create a Subscriber",
+          "message": "구독자 생성"
+        },
+        "app.S2l0.action.Y3JlYXRlLXN1YnNjcmliZXI.option.ZW1haWxfYWRkcmVzcw.desc": {
+          "source": "The email address of the subscriber to create or update (upsert behavior)",
+          "message": "생성하거나 업데이트할 구독자의 이메일 주소(upsert 동작)"
+        },
+        "app.S2l0.action.Y3JlYXRlLXN1YnNjcmliZXI.option.ZW1haWxfYWRkcmVzcw.display_name": {
+          "source": "Email Address",
+          "message": "이메일 주소"
+        },
+        "app.S2l0.action.Y3JlYXRlLXN1YnNjcmliZXI.option.ZW1haWxfYWRkcmVzcw.short_desc": {
+          "source": "The subscriber's email address",
+          "message": "구독자 이메일 주소"
+        },
+        "app.S2l0.action.Y3JlYXRlLXN1YnNjcmliZXI.option.ZmllbGRz.desc": {
+          "source": "A hash of custom field values to set on the subscriber",
+          "message": "구독자에게 설정할 사용자 정의 필드 값의 해시"
+        },
+        "app.S2l0.action.Y3JlYXRlLXN1YnNjcmliZXI.option.ZmllbGRz.display_name": {
+          "source": "Custom Fields",
+          "message": "사용자 지정 필드"
+        },
+        "app.S2l0.action.Y3JlYXRlLXN1YnNjcmliZXI.option.ZmllbGRz.short_desc": {
+          "source": "Custom field values",
+          "message": "사용자 지정 필드 값"
+        },
+        "app.S2l0.action.Y3JlYXRlLXN1YnNjcmliZXI.option.Zmlyc3RfbmFtZQ.desc": {
+          "source": "The first name of the subscriber",
+          "message": "구독자의 이름"
+        },
+        "app.S2l0.action.Y3JlYXRlLXN1YnNjcmliZXI.option.Zmlyc3RfbmFtZQ.display_name": {
+          "source": "First Name",
+          "message": "이름"
+        },
+        "app.S2l0.action.Y3JlYXRlLXN1YnNjcmliZXI.option.Zmlyc3RfbmFtZQ.short_desc": {
+          "source": "The subscriber's first name",
+          "message": "구독자 이름"
+        },
+        "app.S2l0.action.Y3JlYXRlLXN1YnNjcmliZXI.option.c3RhdGU.desc": {
+          "source": "The state of the subscriber (e.g., `active`, `inactive`)",
+          "message": "구독자의 상태(예: `active`, `inactive`)"
+        },
+        "app.S2l0.action.Y3JlYXRlLXN1YnNjcmliZXI.option.c3RhdGU.display_name": {
+          "source": "State",
+          "message": "주/도"
+        },
+        "app.S2l0.action.Y3JlYXRlLXN1YnNjcmliZXI.option.c3RhdGU.short_desc": {
+          "source": "The subscriber's state",
+          "message": "구독자 상태"
+        },
+        "app.S2l0.action.Y3JlYXRlLXN1YnNjcmliZXI.short_desc": {
+          "source": "Create or update a subscriber",
+          "message": "구독자 생성 또는 업데이트"
+        },
+        "app.S2l0.action.Y3JlYXRlLXRhZw.desc": {
+          "source": "Create a new tag in Kit",
+          "message": "Kit에서 새 태그 생성"
+        },
+        "app.S2l0.action.Y3JlYXRlLXRhZw.display_name": {
+          "source": "Create a Tag",
+          "message": "태그 만들기"
+        },
+        "app.S2l0.action.Y3JlYXRlLXRhZw.option.bmFtZQ.desc": {
+          "source": "The name of the tag to create",
+          "message": "생성할 태그의 이름"
+        },
+        "app.S2l0.action.Y3JlYXRlLXRhZw.option.bmFtZQ.display_name": {
+          "source": "Tag Name",
+          "message": "태그 이름"
+        },
+        "app.S2l0.action.Y3JlYXRlLXRhZw.option.bmFtZQ.short_desc": {
+          "source": "The tag name",
+          "message": "태그 이름"
+        },
+        "app.S2l0.action.Y3JlYXRlLXRhZw.short_desc": {
+          "source": "Create a new tag",
+          "message": "새 태그 생성"
+        },
+        "app.S2l0.action.YWRkLXN1YnNjcmliZXItdG8tZm9ybQ.desc": {
+          "source": "Add a subscriber to a form in Kit by email address",
+          "message": "이메일 주소로 Kit의 양식에 구독자 추가"
+        },
+        "app.S2l0.action.YWRkLXN1YnNjcmliZXItdG8tZm9ybQ.display_name": {
+          "source": "Add Subscriber to Form",
+          "message": "양식에 구독자 추가"
+        },
+        "app.S2l0.action.YWRkLXN1YnNjcmliZXItdG8tZm9ybQ.option.ZW1haWxfYWRkcmVzcw.desc": {
+          "source": "The email address of the subscriber to add to the form",
+          "message": "양식에 추가할 구독자의 이메일 주소"
+        },
+        "app.S2l0.action.YWRkLXN1YnNjcmliZXItdG8tZm9ybQ.option.ZW1haWxfYWRkcmVzcw.display_name": {
+          "source": "Email Address",
+          "message": "이메일 주소"
+        },
+        "app.S2l0.action.YWRkLXN1YnNjcmliZXItdG8tZm9ybQ.option.ZW1haWxfYWRkcmVzcw.short_desc": {
+          "source": "The subscriber's email address",
+          "message": "구독자 이메일 주소"
+        },
+        "app.S2l0.action.YWRkLXN1YnNjcmliZXItdG8tZm9ybQ.option.Zm9ybV9pZA.desc": {
+          "source": "The unique identifier of the form to add the subscriber to",
+          "message": "구독자를 추가할 양식의 고유 식별자"
+        },
+        "app.S2l0.action.YWRkLXN1YnNjcmliZXItdG8tZm9ybQ.option.Zm9ybV9pZA.display_name": {
+          "source": "Form ID",
+          "message": "폼 ID"
+        },
+        "app.S2l0.action.YWRkLXN1YnNjcmliZXItdG8tZm9ybQ.option.Zm9ybV9pZA.short_desc": {
+          "source": "The form ID",
+          "message": "양식 ID"
+        },
+        "app.S2l0.action.YWRkLXN1YnNjcmliZXItdG8tZm9ybQ.option.Zmlyc3RfbmFtZQ.desc": {
+          "source": "The first name of the subscriber",
+          "message": "구독자의 이름"
+        },
+        "app.S2l0.action.YWRkLXN1YnNjcmliZXItdG8tZm9ybQ.option.Zmlyc3RfbmFtZQ.display_name": {
+          "source": "First Name",
+          "message": "이름"
+        },
+        "app.S2l0.action.YWRkLXN1YnNjcmliZXItdG8tZm9ybQ.option.Zmlyc3RfbmFtZQ.short_desc": {
+          "source": "The subscriber's first name",
+          "message": "구독자 이름"
+        },
+        "app.S2l0.action.YWRkLXN1YnNjcmliZXItdG8tZm9ybQ.short_desc": {
+          "source": "Add a subscriber to a form",
+          "message": "양식에 구독자 추가"
+        },
+        "app.S2l0.action.YWRkLXN1YnNjcmliZXItdG8tc2VxdWVuY2U.desc": {
+          "source": "Add a subscriber to an email sequence in Kit",
+          "message": "Kit의 이메일 시퀀스에 구독자 추가"
+        },
+        "app.S2l0.action.YWRkLXN1YnNjcmliZXItdG8tc2VxdWVuY2U.display_name": {
+          "source": "Add Subscriber to Sequence",
+          "message": "시퀀스에 구독자 추가"
+        },
+        "app.S2l0.action.YWRkLXN1YnNjcmliZXItdG8tc2VxdWVuY2U.option.ZW1haWxfYWRkcmVzcw.desc": {
+          "source": "The email address of the subscriber to add to the sequence",
+          "message": "시퀀스에 추가할 구독자의 이메일 주소"
+        },
+        "app.S2l0.action.YWRkLXN1YnNjcmliZXItdG8tc2VxdWVuY2U.option.ZW1haWxfYWRkcmVzcw.display_name": {
+          "source": "Email Address",
+          "message": "이메일 주소"
+        },
+        "app.S2l0.action.YWRkLXN1YnNjcmliZXItdG8tc2VxdWVuY2U.option.ZW1haWxfYWRkcmVzcw.short_desc": {
+          "source": "The subscriber's email address",
+          "message": "구독자 이메일 주소"
+        },
+        "app.S2l0.action.YWRkLXN1YnNjcmliZXItdG8tc2VxdWVuY2U.option.c2VxdWVuY2VfaWQ.desc": {
+          "source": "The unique identifier of the sequence to add the subscriber to",
+          "message": "구독자를 추가할 시퀀스의 고유 식별자"
+        },
+        "app.S2l0.action.YWRkLXN1YnNjcmliZXItdG8tc2VxdWVuY2U.option.c2VxdWVuY2VfaWQ.display_name": {
+          "source": "Sequence ID",
+          "message": "시퀀스 ID"
+        },
+        "app.S2l0.action.YWRkLXN1YnNjcmliZXItdG8tc2VxdWVuY2U.option.c2VxdWVuY2VfaWQ.short_desc": {
+          "source": "The sequence ID",
+          "message": "시퀀스 ID"
+        },
+        "app.S2l0.action.YWRkLXN1YnNjcmliZXItdG8tc2VxdWVuY2U.short_desc": {
+          "source": "Add a subscriber to a sequence",
+          "message": "시퀀스에 구독자 추가"
+        },
+        "app.S2l0.action.YnVsay10YWctc3Vic2NyaWJlcnM.desc": {
+          "source": "Apply a tag to multiple subscribers in Kit at once",
+          "message": "Kit에서 여러 구독자에게 태그를 한 번에 적용"
+        },
+        "app.S2l0.action.YnVsay10YWctc3Vic2NyaWJlcnM.display_name": {
+          "source": "Bulk Tag Subscribers",
+          "message": "구독자 일괄 태그 지정"
+        },
+        "app.S2l0.action.YnVsay10YWctc3Vic2NyaWJlcnM.option.c3Vic2NyaWJlcnM.desc": {
+          "source": "A list of subscriber email addresses to tag",
+          "message": "태그를 지정할 구독자 이메일 주소 목록"
+        },
+        "app.S2l0.action.YnVsay10YWctc3Vic2NyaWJlcnM.option.c3Vic2NyaWJlcnM.display_name": {
+          "source": "Subscribers",
+          "message": "구독자"
+        },
+        "app.S2l0.action.YnVsay10YWctc3Vic2NyaWJlcnM.option.c3Vic2NyaWJlcnM.short_desc": {
+          "source": "List of subscriber email addresses",
+          "message": "구독자 이메일 주소 목록"
+        },
+        "app.S2l0.action.YnVsay10YWctc3Vic2NyaWJlcnM.option.dGFnX2lk.desc": {
+          "source": "The unique identifier of the tag to apply to the subscribers",
+          "message": "구독자에게 적용할 태그의 고유 식별자"
+        },
+        "app.S2l0.action.YnVsay10YWctc3Vic2NyaWJlcnM.option.dGFnX2lk.display_name": {
+          "source": "Tag ID",
+          "message": "태그 ID"
+        },
+        "app.S2l0.action.YnVsay10YWctc3Vic2NyaWJlcnM.option.dGFnX2lk.short_desc": {
+          "source": "The tag ID",
+          "message": "태그 ID"
+        },
+        "app.S2l0.action.YnVsay10YWctc3Vic2NyaWJlcnM.short_desc": {
+          "source": "Apply a tag to multiple subscribers",
+          "message": "여러 구독자에게 태그 적용"
+        },
+        "app.S2l0.action.YnVsay1jcmVhdGUtc3Vic2NyaWJlcnM.desc": {
+          "source": "Bulk create subscribers in Kit (async processing)",
+          "message": "Kit에서 구독자 일괄 생성(비동기 처리)"
+        },
+        "app.S2l0.action.YnVsay1jcmVhdGUtc3Vic2NyaWJlcnM.display_name": {
+          "source": "Bulk Create Subscribers",
+          "message": "구독자 일괄 생성"
+        },
+        "app.S2l0.action.YnVsay1jcmVhdGUtc3Vic2NyaWJlcnM.option.Y2FsbGJhY2tfdXJs.desc": {
+          "source": "A URL that will receive a webhook when the bulk operation completes",
+          "message": "일괄 작업이 완료될 때 웹훅을 수신할 URL"
+        },
+        "app.S2l0.action.YnVsay1jcmVhdGUtc3Vic2NyaWJlcnM.option.Y2FsbGJhY2tfdXJs.display_name": {
+          "source": "Callback URL",
+          "message": "콜백 URL"
+        },
+        "app.S2l0.action.YnVsay1jcmVhdGUtc3Vic2NyaWJlcnM.option.Y2FsbGJhY2tfdXJs.short_desc": {
+          "source": "URL to receive completion callback",
+          "message": "완료 콜백을 수신할 URL"
+        },
+        "app.S2l0.action.YnVsay1jcmVhdGUtc3Vic2NyaWJlcnM.option.c3Vic2NyaWJlcnM.desc": {
+          "source": "A list of subscribers to create, each containing at least an `email_address` field",
+          "message": "생성할 구독자 목록(각 항목에 최소한 `email_address` 필드 포함)"
+        },
+        "app.S2l0.action.YnVsay1jcmVhdGUtc3Vic2NyaWJlcnM.option.c3Vic2NyaWJlcnM.display_name": {
+          "source": "Subscribers",
+          "message": "구독자"
+        },
+        "app.S2l0.action.YnVsay1jcmVhdGUtc3Vic2NyaWJlcnM.option.c3Vic2NyaWJlcnM.short_desc": {
+          "source": "List of subscribers to create",
+          "message": "생성할 구독자 목록"
+        },
+        "app.S2l0.action.YnVsay1jcmVhdGUtc3Vic2NyaWJlcnM.short_desc": {
+          "source": "Create multiple subscribers at once",
+          "message": "여러 구독자를 한 번에 생성"
+        },
+        "app.S2l0.action.Z2V0LWJyb2FkY2FzdA.desc": {
+          "source": "Retrieve a single broadcast by ID from Kit",
+          "message": "Kit에서 ID로 단일 브로드캐스트 조회"
+        },
+        "app.S2l0.action.Z2V0LWJyb2FkY2FzdA.display_name": {
+          "source": "Get a Broadcast",
+          "message": "브로드캐스트 가져오기"
+        },
+        "app.S2l0.action.Z2V0LWJyb2FkY2FzdA.option.YnJvYWRjYXN0X2lk.display_name": {
+          "source": "Broadcast ID",
+          "message": "브로드캐스트 ID"
+        },
+        "app.S2l0.action.Z2V0LWJyb2FkY2FzdA.option.YnJvYWRjYXN0X2lk.short_desc": {
+          "source": "The broadcast ID",
+          "message": "브로드캐스트 ID"
+        },
+        "app.S2l0.action.Z2V0LWJyb2FkY2FzdA.short_desc": {
+          "source": "Get a single broadcast by ID",
+          "message": "ID로 단일 브로드캐스트 가져오기"
+        },
+        "app.S2l0.action.Z2V0LWJyb2FkY2FzdC1zdGF0cw.desc": {
+          "source": "Get statistics for a specific broadcast in Kit",
+          "message": "Kit에서 특정 브로드캐스트의 통계 가져오기"
+        },
+        "app.S2l0.action.Z2V0LWJyb2FkY2FzdC1zdGF0cw.display_name": {
+          "source": "Get Broadcast Stats",
+          "message": "브로드캐스트 통계 가져오기"
+        },
+        "app.S2l0.action.Z2V0LWJyb2FkY2FzdC1zdGF0cw.option.YnJvYWRjYXN0X2lk.desc": {
+          "source": "The unique identifier of the broadcast to get stats for",
+          "message": "통계를 가져올 브로드캐스트의 고유 식별자"
+        },
+        "app.S2l0.action.Z2V0LWJyb2FkY2FzdC1zdGF0cw.option.YnJvYWRjYXN0X2lk.display_name": {
+          "source": "Broadcast ID",
+          "message": "브로드캐스트 ID"
+        },
+        "app.S2l0.action.Z2V0LWJyb2FkY2FzdC1zdGF0cw.option.YnJvYWRjYXN0X2lk.short_desc": {
+          "source": "The broadcast ID",
+          "message": "브로드캐스트 ID"
+        },
+        "app.S2l0.action.Z2V0LWJyb2FkY2FzdC1zdGF0cw.short_desc": {
+          "source": "Get statistics for a broadcast",
+          "message": "브로드캐스트 통계 가져오기"
+        },
+        "app.S2l0.action.Z2V0LXB1cmNoYXNl.desc": {
+          "source": "Retrieve a single purchase record by ID from Kit",
+          "message": "Kit에서 ID로 단일 구매 기록 조회"
+        },
+        "app.S2l0.action.Z2V0LXB1cmNoYXNl.display_name": {
+          "source": "Get a Purchase",
+          "message": "구매 정보 가져오기"
+        },
+        "app.S2l0.action.Z2V0LXB1cmNoYXNl.option.cHVyY2hhc2VfaWQ.display_name": {
+          "source": "Purchase ID",
+          "message": "구매 ID"
+        },
+        "app.S2l0.action.Z2V0LXB1cmNoYXNl.option.cHVyY2hhc2VfaWQ.short_desc": {
+          "source": "The purchase ID",
+          "message": "구매 ID"
+        },
+        "app.S2l0.action.Z2V0LXB1cmNoYXNl.short_desc": {
+          "source": "Get a single purchase by ID",
+          "message": "ID로 단일 구매 정보 가져오기"
+        },
+        "app.S2l0.action.Z2V0LXN1YnNjcmliZXI.desc": {
+          "source": "Retrieve a single subscriber by ID from Kit",
+          "message": "Kit에서 ID로 단일 구독자 조회"
+        },
+        "app.S2l0.action.Z2V0LXN1YnNjcmliZXI.display_name": {
+          "source": "Get a Subscriber",
+          "message": "구독자 가져오기"
+        },
+        "app.S2l0.action.Z2V0LXN1YnNjcmliZXI.option.c3Vic2NyaWJlcl9pZA.display_name": {
+          "source": "Subscriber ID",
+          "message": "구독자 ID"
+        },
+        "app.S2l0.action.Z2V0LXN1YnNjcmliZXI.option.c3Vic2NyaWJlcl9pZA.short_desc": {
+          "source": "The subscriber ID",
+          "message": "구독자 ID"
+        },
+        "app.S2l0.action.Z2V0LXN1YnNjcmliZXI.short_desc": {
+          "source": "Get a single subscriber by ID",
+          "message": "ID로 단일 구독자 가져오기"
+        },
+        "app.S2l0.action.ZGVsZXRlLWJyb2FkY2FzdA.desc": {
+          "source": "Delete a broadcast from Kit (only before sending)",
+          "message": "Kit에서 브로드캐스트 삭제(발송 전에만 가능)"
+        },
+        "app.S2l0.action.ZGVsZXRlLWJyb2FkY2FzdA.display_name": {
+          "source": "Delete a Broadcast",
+          "message": "브로드캐스트 삭제"
+        },
+        "app.S2l0.action.ZGVsZXRlLWJyb2FkY2FzdA.option.YnJvYWRjYXN0X2lk.desc": {
+          "source": "The unique identifier of the broadcast to delete",
+          "message": "삭제할 브로드캐스트의 고유 식별자"
+        },
+        "app.S2l0.action.ZGVsZXRlLWJyb2FkY2FzdA.option.YnJvYWRjYXN0X2lk.display_name": {
+          "source": "Broadcast ID",
+          "message": "브로드캐스트 ID"
+        },
+        "app.S2l0.action.ZGVsZXRlLWJyb2FkY2FzdA.option.YnJvYWRjYXN0X2lk.short_desc": {
+          "source": "The broadcast ID to delete",
+          "message": "삭제할 브로드캐스트 ID"
+        },
+        "app.S2l0.action.ZGVsZXRlLWJyb2FkY2FzdA.short_desc": {
+          "source": "Delete a broadcast",
+          "message": "브로드캐스트 삭제"
+        },
+        "app.S2l0.action.ZGVsZXRlLWN1c3RvbS1maWVsZA.desc": {
+          "source": "Delete a custom field from Kit",
+          "message": "Kit에서 사용자 정의 필드 삭제"
+        },
+        "app.S2l0.action.ZGVsZXRlLWN1c3RvbS1maWVsZA.display_name": {
+          "source": "Delete a Custom Field",
+          "message": "사용자 정의 필드 삭제"
+        },
+        "app.S2l0.action.ZGVsZXRlLWN1c3RvbS1maWVsZA.option.Y3VzdG9tX2ZpZWxkX2lk.desc": {
+          "source": "The unique identifier of the custom field to delete",
+          "message": "삭제할 사용자 정의 필드의 고유 식별자"
+        },
+        "app.S2l0.action.ZGVsZXRlLWN1c3RvbS1maWVsZA.option.Y3VzdG9tX2ZpZWxkX2lk.display_name": {
+          "source": "Custom Field ID",
+          "message": "사용자 정의 필드 ID"
+        },
+        "app.S2l0.action.ZGVsZXRlLWN1c3RvbS1maWVsZA.option.Y3VzdG9tX2ZpZWxkX2lk.short_desc": {
+          "source": "The custom field ID to delete",
+          "message": "삭제할 사용자 정의 필드 ID"
+        },
+        "app.S2l0.action.ZGVsZXRlLWN1c3RvbS1maWVsZA.short_desc": {
+          "source": "Delete a custom field",
+          "message": "사용자 정의 필드 삭제"
+        },
+        "app.S2l0.action.Zm9ybS1zdWJzY3JpYmU.desc": {
+          "source": "Triggers when a subscriber signs up through a form in Kit",
+          "message": "구독자가 Kit의 양식을 통해 가입할 때 트리거됨"
+        },
+        "app.S2l0.action.Zm9ybS1zdWJzY3JpYmU.display_name": {
+          "source": "Form Subscription",
+          "message": "양식 구독"
+        },
+        "app.S2l0.action.Zm9ybS1zdWJzY3JpYmU.short_desc": {
+          "source": "Watch for form subscriptions",
+          "message": "양식 구독 감시"
+        },
+        "app.S2l0.action.bGlzdC10YWctc3Vic2NyaWJlcnM.desc": {
+          "source": "List all subscribers that have a specific tag applied in Kit",
+          "message": "Kit에서 특정 태그가 적용된 모든 구독자 나열"
+        },
+        "app.S2l0.action.bGlzdC10YWctc3Vic2NyaWJlcnM.display_name": {
+          "source": "List Tag Subscribers",
+          "message": "태그 구독자 목록 조회"
+        },
+        "app.S2l0.action.bGlzdC10YWctc3Vic2NyaWJlcnM.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "제한"
+        },
+        "app.S2l0.action.bGlzdC10YWctc3Vic2NyaWJlcnM.option.bGltaXQ.short_desc": {
+          "source": "Maximum results",
+          "message": "최대 결과 수"
+        },
+        "app.S2l0.action.bGlzdC10YWctc3Vic2NyaWJlcnM.option.c3Vic2NyaWJlcl9zdGF0ZQ.display_name": {
+          "source": "Subscriber State",
+          "message": "구독자 상태"
+        },
+        "app.S2l0.action.bGlzdC10YWctc3Vic2NyaWJlcnM.option.c3Vic2NyaWJlcl9zdGF0ZQ.short_desc": {
+          "source": "Filter by subscriber state",
+          "message": "구독자 상태별 필터링"
+        },
+        "app.S2l0.action.bGlzdC10YWctc3Vic2NyaWJlcnM.option.dGFnX2lk.display_name": {
+          "source": "Tag ID",
+          "message": "태그 ID"
+        },
+        "app.S2l0.action.bGlzdC10YWctc3Vic2NyaWJlcnM.option.dGFnX2lk.short_desc": {
+          "source": "The tag to list subscribers for",
+          "message": "구독자를 나열할 태그"
+        },
+        "app.S2l0.action.bGlzdC10YWctc3Vic2NyaWJlcnM.short_desc": {
+          "source": "List subscribers for a tag",
+          "message": "태그의 구독자 목록 조회"
+        },
+        "app.S2l0.action.bGlzdC10YWdz.desc": {
+          "source": "List tags in Kit with optional filtering",
+          "message": "선택적 필터링을 사용하여 Kit의 태그 나열"
+        },
+        "app.S2l0.action.bGlzdC10YWdz.display_name": {
+          "source": "List Tags",
+          "message": "태그 목록"
+        },
+        "app.S2l0.action.bGlzdC10YWdz.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "제한"
+        },
+        "app.S2l0.action.bGlzdC10YWdz.option.bGltaXQ.short_desc": {
+          "source": "Maximum results",
+          "message": "최대 결과 수"
+        },
+        "app.S2l0.action.bGlzdC10YWdz.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "이름"
+        },
+        "app.S2l0.action.bGlzdC10YWdz.option.bmFtZQ.short_desc": {
+          "source": "Filter by name",
+          "message": "이름으로 필터링"
+        },
+        "app.S2l0.action.bGlzdC10YWdz.option.dGFnX2lk.display_name": {
+          "source": "Tag ID",
+          "message": "태그 ID"
+        },
+        "app.S2l0.action.bGlzdC10YWdz.option.dGFnX2lk.short_desc": {
+          "source": "Filter by tag ID",
+          "message": "태그 ID별 필터링"
+        },
+        "app.S2l0.action.bGlzdC10YWdz.short_desc": {
+          "source": "List all tags",
+          "message": "모든 태그 목록 조회"
+        },
+        "app.S2l0.action.bGlzdC1icm9hZGNhc3Rz.desc": {
+          "source": "List broadcasts in Kit",
+          "message": "Kit의 브로드캐스트 나열"
+        },
+        "app.S2l0.action.bGlzdC1icm9hZGNhc3Rz.display_name": {
+          "source": "List Broadcasts",
+          "message": "브로드캐스트 목록 조회"
+        },
+        "app.S2l0.action.bGlzdC1icm9hZGNhc3Rz.option.YnJvYWRjYXN0X2lk.display_name": {
+          "source": "Broadcast ID",
+          "message": "브로드캐스트 ID"
+        },
+        "app.S2l0.action.bGlzdC1icm9hZGNhc3Rz.option.YnJvYWRjYXN0X2lk.short_desc": {
+          "source": "Filter by broadcast ID",
+          "message": "브로드캐스트 ID별 필터링"
+        },
+        "app.S2l0.action.bGlzdC1icm9hZGNhc3Rz.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "제한"
+        },
+        "app.S2l0.action.bGlzdC1icm9hZGNhc3Rz.option.bGltaXQ.short_desc": {
+          "source": "Maximum results",
+          "message": "최대 결과 수"
+        },
+        "app.S2l0.action.bGlzdC1icm9hZGNhc3Rz.short_desc": {
+          "source": "List all broadcasts",
+          "message": "모든 브로드캐스트 나열"
+        },
+        "app.S2l0.action.bGlzdC1jdXN0b20tZmllbGRz.desc": {
+          "source": "List all custom fields in Kit",
+          "message": "Kit의 모든 사용자 정의 필드 나열"
+        },
+        "app.S2l0.action.bGlzdC1jdXN0b20tZmllbGRz.display_name": {
+          "source": "List Custom Fields",
+          "message": "사용자 지정 필드 목록 조회"
+        },
+        "app.S2l0.action.bGlzdC1jdXN0b20tZmllbGRz.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "제한"
+        },
+        "app.S2l0.action.bGlzdC1jdXN0b20tZmllbGRz.option.bGltaXQ.short_desc": {
+          "source": "Maximum results",
+          "message": "최대 결과 수"
+        },
+        "app.S2l0.action.bGlzdC1jdXN0b20tZmllbGRz.short_desc": {
+          "source": "List all custom fields",
+          "message": "모든 사용자 정의 필드 조회"
+        },
+        "app.S2l0.action.bGlzdC1mb3JtLXN1YnNjcmliZXJz.desc": {
+          "source": "List all subscribers that subscribed through a specific form in Kit",
+          "message": "Kit에서 특정 양식을 통해 구독한 모든 구독자 나열"
+        },
+        "app.S2l0.action.bGlzdC1mb3JtLXN1YnNjcmliZXJz.display_name": {
+          "source": "List Form Subscribers",
+          "message": "양식 구독자 목록 조회"
+        },
+        "app.S2l0.action.bGlzdC1mb3JtLXN1YnNjcmliZXJz.option.Zm9ybV9pZA.display_name": {
+          "source": "Form ID",
+          "message": "폼 ID"
+        },
+        "app.S2l0.action.bGlzdC1mb3JtLXN1YnNjcmliZXJz.option.Zm9ybV9pZA.short_desc": {
+          "source": "The form to list subscribers for",
+          "message": "구독자를 나열할 양식"
+        },
+        "app.S2l0.action.bGlzdC1mb3JtLXN1YnNjcmliZXJz.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "제한"
+        },
+        "app.S2l0.action.bGlzdC1mb3JtLXN1YnNjcmliZXJz.option.bGltaXQ.short_desc": {
+          "source": "Maximum results",
+          "message": "최대 결과 수"
+        },
+        "app.S2l0.action.bGlzdC1mb3JtLXN1YnNjcmliZXJz.option.c3Vic2NyaWJlcl9zdGF0ZQ.display_name": {
+          "source": "Subscriber State",
+          "message": "구독자 상태"
+        },
+        "app.S2l0.action.bGlzdC1mb3JtLXN1YnNjcmliZXJz.option.c3Vic2NyaWJlcl9zdGF0ZQ.short_desc": {
+          "source": "Filter by subscriber state",
+          "message": "구독자 상태별 필터링"
+        },
+        "app.S2l0.action.bGlzdC1mb3JtLXN1YnNjcmliZXJz.short_desc": {
+          "source": "List subscribers for a form",
+          "message": "양식의 구독자 목록 조회"
+        },
+        "app.S2l0.action.bGlzdC1mb3Jtcw.desc": {
+          "source": "List forms in Kit with optional status filter",
+          "message": "선택적 상태 필터를 사용하여 Kit의 양식 나열"
+        },
+        "app.S2l0.action.bGlzdC1mb3Jtcw.display_name": {
+          "source": "List Forms",
+          "message": "양식 목록 조회"
+        },
+        "app.S2l0.action.bGlzdC1mb3Jtcw.option.Zm9ybV9pZA.display_name": {
+          "source": "Form ID",
+          "message": "폼 ID"
+        },
+        "app.S2l0.action.bGlzdC1mb3Jtcw.option.Zm9ybV9pZA.short_desc": {
+          "source": "Filter by form ID",
+          "message": "양식 ID별 필터링"
+        },
+        "app.S2l0.action.bGlzdC1mb3Jtcw.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "제한"
+        },
+        "app.S2l0.action.bGlzdC1mb3Jtcw.option.bGltaXQ.short_desc": {
+          "source": "Maximum results",
+          "message": "최대 결과 수"
+        },
+        "app.S2l0.action.bGlzdC1mb3Jtcw.option.c3RhdHVz.display_name": {
+          "source": "Status",
+          "message": "상태"
+        },
+        "app.S2l0.action.bGlzdC1mb3Jtcw.option.c3RhdHVz.short_desc": {
+          "source": "Filter by form status",
+          "message": "양식 상태별로 필터링"
+        },
+        "app.S2l0.action.bGlzdC1mb3Jtcw.short_desc": {
+          "source": "List all forms",
+          "message": "모든 양식 목록 조회"
+        },
+        "app.S2l0.action.bGlzdC1wdXJjaGFzZXM.desc": {
+          "source": "List purchase records in Kit",
+          "message": "Kit의 구매 기록 목록 조회"
+        },
+        "app.S2l0.action.bGlzdC1wdXJjaGFzZXM.display_name": {
+          "source": "List Purchases",
+          "message": "구매 목록 조회"
+        },
+        "app.S2l0.action.bGlzdC1wdXJjaGFzZXM.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "제한"
+        },
+        "app.S2l0.action.bGlzdC1wdXJjaGFzZXM.option.bGltaXQ.short_desc": {
+          "source": "Maximum results",
+          "message": "최대 결과 수"
+        },
+        "app.S2l0.action.bGlzdC1wdXJjaGFzZXM.option.cHVyY2hhc2VfaWQ.display_name": {
+          "source": "Purchase ID",
+          "message": "구매 ID"
+        },
+        "app.S2l0.action.bGlzdC1wdXJjaGFzZXM.option.cHVyY2hhc2VfaWQ.short_desc": {
+          "source": "Filter by purchase ID",
+          "message": "구매 ID별로 필터링"
+        },
+        "app.S2l0.action.bGlzdC1wdXJjaGFzZXM.short_desc": {
+          "source": "List all purchases",
+          "message": "모든 구매 목록 조회"
+        },
+        "app.S2l0.action.bGlzdC1zZXF1ZW5jZS1zdWJzY3JpYmVycw.desc": {
+          "source": "List all subscribers in a specific email sequence in Kit",
+          "message": "Kit의 특정 이메일 시퀀스에 있는 모든 구독자 목록 조회"
+        },
+        "app.S2l0.action.bGlzdC1zZXF1ZW5jZS1zdWJzY3JpYmVycw.display_name": {
+          "source": "List Sequence Subscribers",
+          "message": "시퀀스 구독자 목록 조회"
+        },
+        "app.S2l0.action.bGlzdC1zZXF1ZW5jZS1zdWJzY3JpYmVycw.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "제한"
+        },
+        "app.S2l0.action.bGlzdC1zZXF1ZW5jZS1zdWJzY3JpYmVycw.option.bGltaXQ.short_desc": {
+          "source": "Maximum results",
+          "message": "최대 결과 수"
+        },
+        "app.S2l0.action.bGlzdC1zZXF1ZW5jZS1zdWJzY3JpYmVycw.option.c2VxdWVuY2VfaWQ.display_name": {
+          "source": "Sequence ID",
+          "message": "시퀀스 ID"
+        },
+        "app.S2l0.action.bGlzdC1zZXF1ZW5jZS1zdWJzY3JpYmVycw.option.c2VxdWVuY2VfaWQ.short_desc": {
+          "source": "The sequence to list subscribers for",
+          "message": "구독자 목록을 조회할 시퀀스"
+        },
+        "app.S2l0.action.bGlzdC1zZXF1ZW5jZS1zdWJzY3JpYmVycw.option.c3Vic2NyaWJlcl9zdGF0ZQ.display_name": {
+          "source": "Subscriber State",
+          "message": "구독자 상태"
+        },
+        "app.S2l0.action.bGlzdC1zZXF1ZW5jZS1zdWJzY3JpYmVycw.option.c3Vic2NyaWJlcl9zdGF0ZQ.short_desc": {
+          "source": "Filter by subscriber state",
+          "message": "구독자 상태별 필터링"
+        },
+        "app.S2l0.action.bGlzdC1zZXF1ZW5jZS1zdWJzY3JpYmVycw.short_desc": {
+          "source": "List subscribers for a sequence",
+          "message": "시퀀스의 구독자 목록 조회"
+        },
+        "app.S2l0.action.bGlzdC1zZXF1ZW5jZXM.desc": {
+          "source": "List email sequences in Kit",
+          "message": "Kit의 이메일 시퀀스 목록 조회"
+        },
+        "app.S2l0.action.bGlzdC1zZXF1ZW5jZXM.display_name": {
+          "source": "List Sequences",
+          "message": "시퀀스 목록 조회"
+        },
+        "app.S2l0.action.bGlzdC1zZXF1ZW5jZXM.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "제한"
+        },
+        "app.S2l0.action.bGlzdC1zZXF1ZW5jZXM.option.bGltaXQ.short_desc": {
+          "source": "Maximum results",
+          "message": "최대 결과 수"
+        },
+        "app.S2l0.action.bGlzdC1zZXF1ZW5jZXM.option.c2VxdWVuY2VfaWQ.display_name": {
+          "source": "Sequence ID",
+          "message": "시퀀스 ID"
+        },
+        "app.S2l0.action.bGlzdC1zZXF1ZW5jZXM.option.c2VxdWVuY2VfaWQ.short_desc": {
+          "source": "Filter by sequence ID",
+          "message": "시퀀스 ID별로 필터링"
+        },
+        "app.S2l0.action.bGlzdC1zZXF1ZW5jZXM.short_desc": {
+          "source": "List all sequences",
+          "message": "모든 시퀀스 목록 조회"
+        },
+        "app.S2l0.action.bGlzdC1zdWJzY3JpYmVycw.desc": {
+          "source": "List subscribers in Kit with optional filtering",
+          "message": "선택적 필터링을 사용하여 Kit의 구독자 목록 조회"
+        },
+        "app.S2l0.action.bGlzdC1zdWJzY3JpYmVycw.display_name": {
+          "source": "List Subscribers",
+          "message": "구독자 목록 조회"
+        },
+        "app.S2l0.action.bGlzdC1zdWJzY3JpYmVycw.option.Y3JlYXRlZF9hZnRlcg.display_name": {
+          "source": "Created After",
+          "message": "생성일 이후"
+        },
+        "app.S2l0.action.bGlzdC1zdWJzY3JpYmVycw.option.Y3JlYXRlZF9hZnRlcg.short_desc": {
+          "source": "Filter by creation date",
+          "message": "생성일별 필터링"
+        },
+        "app.S2l0.action.bGlzdC1zdWJzY3JpYmVycw.option.Y3JlYXRlZF9iZWZvcmU.display_name": {
+          "source": "Created Before",
+          "message": "생성일 이전"
+        },
+        "app.S2l0.action.bGlzdC1zdWJzY3JpYmVycw.option.Y3JlYXRlZF9iZWZvcmU.short_desc": {
+          "source": "Filter by creation date",
+          "message": "생성일별 필터링"
+        },
+        "app.S2l0.action.bGlzdC1zdWJzY3JpYmVycw.option.ZW1haWxfYWRkcmVzcw.display_name": {
+          "source": "Email Address",
+          "message": "이메일 주소"
+        },
+        "app.S2l0.action.bGlzdC1zdWJzY3JpYmVycw.option.ZW1haWxfYWRkcmVzcw.short_desc": {
+          "source": "Filter by email",
+          "message": "이메일로 필터링"
+        },
+        "app.S2l0.action.bGlzdC1zdWJzY3JpYmVycw.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "제한"
+        },
+        "app.S2l0.action.bGlzdC1zdWJzY3JpYmVycw.option.bGltaXQ.short_desc": {
+          "source": "Maximum results",
+          "message": "최대 결과 수"
+        },
+        "app.S2l0.action.bGlzdC1zdWJzY3JpYmVycw.option.c29ydF9maWVsZA.display_name": {
+          "source": "Sort Field",
+          "message": "정렬 필드"
+        },
+        "app.S2l0.action.bGlzdC1zdWJzY3JpYmVycw.option.c29ydF9maWVsZA.short_desc": {
+          "source": "Field to sort by",
+          "message": "정렬 기준 필드"
+        },
+        "app.S2l0.action.bGlzdC1zdWJzY3JpYmVycw.option.c29ydF9vcmRlcg.display_name": {
+          "source": "Sort Order",
+          "message": "정렬 순서"
+        },
+        "app.S2l0.action.bGlzdC1zdWJzY3JpYmVycw.option.c29ydF9vcmRlcg.short_desc": {
+          "source": "Sort direction",
+          "message": "정렬 방향"
+        },
+        "app.S2l0.action.bGlzdC1zdWJzY3JpYmVycw.option.c3RhdGU.display_name": {
+          "source": "State",
+          "message": "주/도"
+        },
+        "app.S2l0.action.bGlzdC1zdWJzY3JpYmVycw.option.c3RhdGU.short_desc": {
+          "source": "Filter by state",
+          "message": "상태별로 필터링"
+        },
+        "app.S2l0.action.bGlzdC1zdWJzY3JpYmVycw.option.c3Vic2NyaWJlcl9pZA.display_name": {
+          "source": "Subscriber ID",
+          "message": "구독자 ID"
+        },
+        "app.S2l0.action.bGlzdC1zdWJzY3JpYmVycw.option.c3Vic2NyaWJlcl9pZA.short_desc": {
+          "source": "Filter by subscriber ID",
+          "message": "구독자 ID별로 필터링"
+        },
+        "app.S2l0.action.bGlzdC1zdWJzY3JpYmVycw.option.dGFnX2lk.display_name": {
+          "source": "Tag ID",
+          "message": "태그 ID"
+        },
+        "app.S2l0.action.bGlzdC1zdWJzY3JpYmVycw.option.dGFnX2lk.short_desc": {
+          "source": "Filter by tag",
+          "message": "태그로 필터링"
+        },
+        "app.S2l0.action.bGlzdC1zdWJzY3JpYmVycw.option.dXBkYXRlZF9hZnRlcg.display_name": {
+          "source": "Updated After",
+          "message": "이후 업데이트됨"
+        },
+        "app.S2l0.action.bGlzdC1zdWJzY3JpYmVycw.option.dXBkYXRlZF9hZnRlcg.short_desc": {
+          "source": "Filter by update date",
+          "message": "업데이트 날짜로 필터링"
+        },
+        "app.S2l0.action.bGlzdC1zdWJzY3JpYmVycw.option.dXBkYXRlZF9iZWZvcmU.display_name": {
+          "source": "Updated Before",
+          "message": "이전 업데이트됨"
+        },
+        "app.S2l0.action.bGlzdC1zdWJzY3JpYmVycw.option.dXBkYXRlZF9iZWZvcmU.short_desc": {
+          "source": "Filter by update date",
+          "message": "업데이트 날짜로 필터링"
+        },
+        "app.S2l0.action.bGlzdC1zdWJzY3JpYmVycw.short_desc": {
+          "source": "List all subscribers",
+          "message": "모든 구독자 목록 조회"
+        },
+        "app.S2l0.action.bWFrZS1hcGktY2FsbA.desc": {
+          "source": "Make a custom HTTP / REST API call to **Kit** using the configured connection's authentication.\n\nSpecify the HTTP method, the URI path (relative to the connection's API base URL), optional query parameters, headers, and request body. The response is returned as a hash containing the status code, response headers, and response body.\n\nUse this action for endpoints that are not yet exposed as first-class actions on this app.",
+          "message": "구성된 연결의 인증을 사용하여 **Kit**에 사용자 정의 HTTP / REST API 호출을 수행합니다.\n\nHTTP 메서드, URI 경로(연결의 API 기본 URL 기준 상대 경로), 선택적 쿼리 매개변수, 헤더 및 요청 본문을 지정합니다. 응답은 상태 코드, 응답 헤더 및 응답 본문이 포함된 해시로 반환됩니다.\n\n이 앱에서 기본 액션으로 아직 제공되지 않는 엔드포인트에 이 액션을 사용하세요."
+        },
+        "app.S2l0.action.bWFrZS1hcGktY2FsbA.display_name": {
+          "source": "Make an API call",
+          "message": "API 호출 실행"
+        },
+        "app.S2l0.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.desc": {
+          "source": "The request body. The effective type depends on `body_type`: JSON/form/YAML expect a hash, XML/text expect a string, multipart expects a file structure, binary expects raw bytes.",
+          "message": "요청 본문입니다. 유효한 유형은 `body_type`에 따라 달라집니다. JSON/form/YAML은 해시를, XML/text는 문자열을, multipart는 파일 구조를, binary는 원시 바이트를 요구합니다."
+        },
+        "app.S2l0.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.display_name": {
+          "source": "Body",
+          "message": "본문"
+        },
+        "app.S2l0.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.short_desc": {
+          "source": "The request body",
+          "message": "요청 본문"
+        },
+        "app.S2l0.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.desc": {
+          "source": "Upload a file using `multipart/form-data`. The body must be a @ref DataProvider::FileDataType \"FileDataType\" structure (filename + content + mime_type). The framework builds the multipart envelope and sets the boundary header.",
+          "message": "`multipart/form-data`을(를) 사용하여 파일을 업로드합니다. 본문은 @ref DataProvider::FileDataType \"FileDataType\" 구조(filename + content + mime_type)여야 합니다. 프레임워크가 multipart 봉투를 작성하고 boundary 헤더를 설정합니다."
+        },
+        "app.S2l0.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.display_name": {
+          "source": "Multipart Form",
+          "message": "멀티파트 폼"
+        },
+        "app.S2l0.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.short_desc": {
+          "source": "Upload a file using multipart/form-data",
+          "message": "multipart/form-data를 사용하여 파일 업로드"
+        },
+        "app.S2l0.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.desc": {
+          "source": "Pass the body to the REST client unchanged; the client decides serialization based on its configured `data` option and the value type",
+          "message": "본문을 변경하지 않고 REST 클라이언트에 전달합니다. 클라이언트는 구성된 `data` 옵션과 값 유형을 기반으로 직렬화를 결정합니다."
+        },
+        "app.S2l0.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.display_name": {
+          "source": "Auto",
+          "message": "자동"
+        },
+        "app.S2l0.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.short_desc": {
+          "source": "Pass-through; use connection serialization and let the REST client decide",
+          "message": "패스스루: 연결 직렬화를 사용하고 REST 클라이언트가 결정하도록 합니다."
+        },
+        "app.S2l0.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.desc": {
+          "source": "Send the body as raw bytes. The body must be a binary value. Sets `Content-Type: application/octet-stream` unless overridden by `hdr`.",
+          "message": "본문을 원시 바이트로 전송합니다. 본문은 바이너리 값이어야 합니다. `hdr`에 의해 재정의되지 않는 한 `Content-Type: application/octet-stream`을(를) 설정합니다."
+        },
+        "app.S2l0.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.display_name": {
+          "source": "Raw Binary",
+          "message": "원시 바이너리"
+        },
+        "app.S2l0.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.short_desc": {
+          "source": "Send body as raw bytes",
+          "message": "본문을 원시 바이트로 전송"
+        },
+        "app.S2l0.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.desc": {
+          "source": "Serialize a hash of form fields as `application/x-www-form-urlencoded`. The body must be a hash whose values are scalars (strings/numbers/booleans).",
+          "message": "폼 필드의 해시를 `application/x-www-form-urlencoded`(으)로 직렬화합니다. 본문은 값이 스칼라(문자열/숫자/불리언)인 해시여야 합니다."
+        },
+        "app.S2l0.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.display_name": {
+          "source": "Form (URL-encoded)",
+          "message": "폼 (URL 인코딩)"
+        },
+        "app.S2l0.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.short_desc": {
+          "source": "Serialize body as application/x-www-form-urlencoded form fields",
+          "message": "본문을 application/x-www-form-urlencoded 폼 필드로 직렬화"
+        },
+        "app.S2l0.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.desc": {
+          "source": "Serialize the body as JSON; sets `Content-Type: application/json`. The body should be a hash, list, or scalar value.",
+          "message": "본문을 JSON으로 직렬화하며, `Content-Type: application/json`을(를) 설정합니다. 본문은 해시, 리스트 또는 스칼라 값이어야 합니다."
+        },
+        "app.S2l0.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.display_name": {
+          "source": "JSON",
+          "message": "JSON"
+        },
+        "app.S2l0.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.short_desc": {
+          "source": "Serialize body as JSON",
+          "message": "본문을 JSON으로 직렬화"
+        },
+        "app.S2l0.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.desc": {
+          "source": "Send the body as plain text. The body must be a string. Sets `Content-Type: text/plain`.",
+          "message": "본문을 일반 텍스트로 전송합니다. 본문은 문자열이어야 합니다. `Content-Type: text/plain`을(를) 설정합니다."
+        },
+        "app.S2l0.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.display_name": {
+          "source": "Plain Text",
+          "message": "일반 텍스트"
+        },
+        "app.S2l0.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.short_desc": {
+          "source": "Send body as text/plain",
+          "message": "본문을 text/plain으로 전송"
+        },
+        "app.S2l0.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.desc": {
+          "source": "Send the body as XML. If the body is a hash it is serialized to XML; if it is a string it is sent verbatim. Sets `Content-Type: application/xml`.",
+          "message": "본문을 XML로 전송합니다. 본문이 해시인 경우 XML로 직렬화되고, 문자열인 경우 그대로 전송됩니다. `Content-Type: application/xml`을(를) 설정합니다."
+        },
+        "app.S2l0.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.display_name": {
+          "source": "XML",
+          "message": "XML"
+        },
+        "app.S2l0.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.short_desc": {
+          "source": "Send body as XML",
+          "message": "본문을 XML로 전송"
+        },
+        "app.S2l0.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.desc": {
+          "source": "Send the body as YAML. If the body is a hash it is serialized to YAML; if it is a string it is sent verbatim. Sets `Content-Type: application/x-yaml`.",
+          "message": "본문을 YAML로 전송합니다. 본문이 해시인 경우 YAML로 직렬화되고, 문자열인 경우 그대로 전송됩니다. `Content-Type: application/x-yaml`을(를) 설정합니다."
+        },
+        "app.S2l0.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.display_name": {
+          "source": "YAML",
+          "message": "YAML"
+        },
+        "app.S2l0.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.short_desc": {
+          "source": "Send body as YAML",
+          "message": "본문을 YAML로 전송"
+        },
+        "app.S2l0.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.desc": {
+          "source": "Selects the body serialization mode and the corresponding `Content-Type` header. Changing this field reshapes the `body` editor - selecting JSON exposes a JSON editor, selecting Multipart Form exposes a file picker, and so on.",
+          "message": "본문 직렬화 모드 및 해당되는 `Content-Type` 헤더를 선택합니다. 이 필드를 변경하면 `body` 에디터의 형태가 변경됩니다. JSON을 선택하면 JSON 에디터가 표시되고, 멀티파트 폼을 선택하면 파일 선택기가 표시되는 방식입니다."
+        },
+        "app.S2l0.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.display_name": {
+          "source": "Body Type",
+          "message": "본문 유형"
+        },
+        "app.S2l0.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.short_desc": {
+          "source": "How the body is serialized and what Content-Type is sent",
+          "message": "본문이 직렬화되는 방식 및 전송되는 Content-Type"
+        },
+        "app.S2l0.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.desc": {
+          "source": "If `True`, non-2xx HTTP responses return as the normal response hash (with the actual status code) instead of raising `REST-RESPONSE-ERROR`. Useful for handling 4xx/5xx as data - e.g. checking whether a resource exists. Overrides the connection's `error_passthru` setting for this call only.",
+          "message": "`True`인 경우, 2xx가 아닌 HTTP 응답은 `REST-RESPONSE-ERROR`을(를) 발생시키는 대신 (실제 상태 코드와 함께) 일반 응답 해시로 반환됩니다. 리소스 존재 여부 확인 등 4xx/5xx를 데이터로 처리할 때 유용합니다. 이 호출에 대해서만 연결의 `error_passthru` 설정을 재정의합니다."
+        },
+        "app.S2l0.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.display_name": {
+          "source": "Return Errors as Data",
+          "message": "오류를 데이터로 반환"
+        },
+        "app.S2l0.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.short_desc": {
+          "source": "Return non-2xx responses normally instead of throwing",
+          "message": "예외를 발생시키는 대신 2xx가 아닌 응답을 정상적으로 반환"
+        },
+        "app.S2l0.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.desc": {
+          "source": "Optional list of HTTP status codes treated as success. If set and the response status is not in this list, the action throws `REST-STATUS-ERROR`. When unset, the REST client's default behavior applies (typically: 2xx is success, non-2xx throws).",
+          "message": "성공으로 처리되는 HTTP 상태 코드의 선택적 목록입니다. 설정되어 있고 응답 상태가 이 목록에 없는 경우 작업이 `REST-STATUS-ERROR` 예외를 발생시킵니다. 설정되지 않은 경우 REST 클라이언트의 기본 동작이 적용됩니다(일반적으로 2xx는 성공, 2xx 이외는 예외 발생)."
+        },
+        "app.S2l0.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.display_name": {
+          "source": "Expected Status Codes",
+          "message": "예상되는 상태 코드"
+        },
+        "app.S2l0.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.short_desc": {
+          "source": "Response status codes treated as success",
+          "message": "성공으로 처리되는 응답 상태 코드"
+        },
+        "app.S2l0.action.bWFrZS1hcGktY2FsbA.option.aGRy.desc": {
+          "source": "Hash of custom headers added to the request. These override any default headers set by `body_type` (e.g. supplying `Content-Type` here wins over the body-type default).",
+          "message": "요청에 추가되는 사용자 지정 헤더의 해시입니다. 이는 `body_type`에 의해 설정된 기본 헤더보다 우선합니다(예: 여기에 `Content-Type`을(를) 제공하면 본문 유형 기본값보다 우선 적용됨)."
+        },
+        "app.S2l0.action.bWFrZS1hcGktY2FsbA.option.aGRy.display_name": {
+          "source": "Custom Headers",
+          "message": "사용자 지정 헤더"
+        },
+        "app.S2l0.action.bWFrZS1hcGktY2FsbA.option.aGRy.short_desc": {
+          "source": "Extra request headers",
+          "message": "추가 요청 헤더"
+        },
+        "app.S2l0.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.desc": {
+          "source": "If `True`, the response hash includes a `debug` sub-hash containing the request method/URL/headers (with sensitive values redacted), request and response sizes, and round-trip duration. Useful when investigating slow or failing calls. Off by default to keep responses lean.",
+          "message": "`True`인 경우 응답 해시에 요청 메서드/URL/헤더(민감한 값은 가려짐), 요청 및 응답 크기, 왕복 시간이 포함된 `debug` 하위 해시가 포함됩니다. 느리거나 실패한 호출을 조사할 때 유용합니다. 응답을 가볍게 유지하기 위해 기본적으로 비활성화되어 있습니다."
+        },
+        "app.S2l0.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.display_name": {
+          "source": "Include Debug Info",
+          "message": "디버그 정보 포함"
+        },
+        "app.S2l0.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.short_desc": {
+          "source": "Include request/timing/size debug info in the response",
+          "message": "응답에 요청/타이밍/크기 디버그 정보 포함"
+        },
+        "app.S2l0.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.desc": {
+          "source": "HTTP `OPTIONS`",
+          "message": "HTTP `OPTIONS`"
+        },
+        "app.S2l0.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.display_name": {
+          "source": "OPTIONS",
+          "message": "OPTIONS"
+        },
+        "app.S2l0.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.short_desc": {
+          "source": "HTTP OPTIONS",
+          "message": "HTTP OPTIONS"
+        },
+        "app.S2l0.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.desc": {
+          "source": "HTTP `DELETE`",
+          "message": "HTTP `DELETE`"
+        },
+        "app.S2l0.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.display_name": {
+          "source": "DELETE",
+          "message": "DELETE"
+        },
+        "app.S2l0.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.short_desc": {
+          "source": "HTTP DELETE",
+          "message": "HTTP DELETE"
+        },
+        "app.S2l0.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.desc": {
+          "source": "HTTP `GET`",
+          "message": "HTTP `GET`"
+        },
+        "app.S2l0.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.display_name": {
+          "source": "GET",
+          "message": "GET"
+        },
+        "app.S2l0.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.short_desc": {
+          "source": "HTTP GET",
+          "message": "HTTP GET"
+        },
+        "app.S2l0.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.desc": {
+          "source": "HTTP `HEAD`",
+          "message": "HTTP `HEAD`"
+        },
+        "app.S2l0.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.display_name": {
+          "source": "HEAD",
+          "message": "HEAD"
+        },
+        "app.S2l0.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.short_desc": {
+          "source": "HTTP HEAD",
+          "message": "HTTP HEAD"
+        },
+        "app.S2l0.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.desc": {
+          "source": "HTTP `PATCH`",
+          "message": "HTTP `PATCH`"
+        },
+        "app.S2l0.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.display_name": {
+          "source": "PATCH",
+          "message": "PATCH"
+        },
+        "app.S2l0.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.short_desc": {
+          "source": "HTTP PATCH",
+          "message": "HTTP PATCH"
+        },
+        "app.S2l0.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.desc": {
+          "source": "HTTP `POST`",
+          "message": "HTTP `POST`"
+        },
+        "app.S2l0.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.display_name": {
+          "source": "POST",
+          "message": "POST"
+        },
+        "app.S2l0.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.short_desc": {
+          "source": "HTTP POST",
+          "message": "HTTP POST"
+        },
+        "app.S2l0.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.desc": {
+          "source": "HTTP `PUT`",
+          "message": "HTTP `PUT`"
+        },
+        "app.S2l0.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.display_name": {
+          "source": "PUT",
+          "message": "PUT"
+        },
+        "app.S2l0.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.short_desc": {
+          "source": "HTTP PUT",
+          "message": "HTTP PUT"
+        },
+        "app.S2l0.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.desc": {
+          "source": "HTTP `TRACE`",
+          "message": "HTTP `TRACE`"
+        },
+        "app.S2l0.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.display_name": {
+          "source": "TRACE",
+          "message": "TRACE"
+        },
+        "app.S2l0.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.short_desc": {
+          "source": "HTTP TRACE",
+          "message": "HTTP TRACE"
+        },
+        "app.S2l0.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "요청에 사용할 HTTP 메서드"
+        },
+        "app.S2l0.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.display_name": {
+          "source": "HTTP Method",
+          "message": "HTTP 메서드"
+        },
+        "app.S2l0.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.short_desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "요청에 사용할 HTTP 메서드"
+        },
+        "app.S2l0.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain `{name}` placeholders that are replaced from `path_vars`. Example: `/users/{id}/comments`.",
+          "message": "연결의 API 기본 URL에 대한 상대 URI 경로입니다. `path_vars`에서 대체되는 `{name}` 자리 표시자가 포함될 수 있습니다. 예: `/users/{id}/comments`."
+        },
+        "app.S2l0.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.display_name": {
+          "source": "URI Path",
+          "message": "URI 경로"
+        },
+        "app.S2l0.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.short_desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain '{name}' placeholders that are replaced from 'path_vars'. Example: '/users/{id}/comments'",
+          "message": "연결의 API 기본 URL에 대한 상대 URI 경로입니다. 'path_vars'에서 대체되는 '{name}' 자리 표시자를 포함할 수 있습니다. 예: '/users/{id}/comments'"
+        },
+        "app.S2l0.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.desc": {
+          "source": "Hash of values substituted into `{name}` placeholders in the URI path. Example: with `path = /users/{id}` and `path_vars = {id: 123}` the framework sends `/users/123`. Values are URL-encoded.",
+          "message": "URI 경로의 `{name}` 자리 표시자에 대체되는 값의 해시입니다. 예: `path = /users/{id}` 및 `path_vars = {id: 123}`이 있으면 프레임워크가 `/users/123`을(를) 전송합니다. 값은 URL 인코딩됩니다."
+        },
+        "app.S2l0.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.display_name": {
+          "source": "Path Variables",
+          "message": "경로 변수"
+        },
+        "app.S2l0.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.short_desc": {
+          "source": "Values for {name} placeholders in path",
+          "message": "경로 내 {name} 자리 표시자의 값"
+        },
+        "app.S2l0.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.desc": {
+          "source": "Hash of query string parameters to append to the URI path. Values are URL-encoded; list values are joined with `,`.",
+          "message": "URI 경로에 추가할 쿼리 문자열 매개변수 해시입니다. 값은 URL 인코딩되며, 목록 값은 `,`(으)로 연결됩니다."
+        },
+        "app.S2l0.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.display_name": {
+          "source": "Query Arguments",
+          "message": "쿼리 인수"
+        },
+        "app.S2l0.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.short_desc": {
+          "source": "Query string parameters",
+          "message": "쿼리 문자열 매개변수"
+        },
+        "app.S2l0.action.bWFrZS1hcGktY2FsbA.short_desc": {
+          "source": "Make a custom API call to Kit",
+          "message": "Kit에 사용자 정의 API 호출 수행"
+        },
+        "app.S2l0.action.c3Vic2NyaWJlci11bnN1YnNjcmliZQ.desc": {
+          "source": "Triggers when a subscriber unsubscribes in Kit",
+          "message": "Kit에서 구독자가 구독을 취소할 때 트리거됩니다."
+        },
+        "app.S2l0.action.c3Vic2NyaWJlci11bnN1YnNjcmliZQ.display_name": {
+          "source": "Subscriber Unsubscribed",
+          "message": "구독자 구독 취소됨"
+        },
+        "app.S2l0.action.c3Vic2NyaWJlci11bnN1YnNjcmliZQ.short_desc": {
+          "source": "Watch for subscriber unsubscribes",
+          "message": "구독자 구독 취소 감시"
+        },
+        "app.S2l0.action.c3Vic2NyaWJlci1hY3RpdmF0ZQ.desc": {
+          "source": "Triggers when a subscriber is activated in Kit",
+          "message": "Kit에서 구독자가 활성화될 때 트리거됩니다."
+        },
+        "app.S2l0.action.c3Vic2NyaWJlci1hY3RpdmF0ZQ.display_name": {
+          "source": "Subscriber Activated",
+          "message": "구독자 활성화됨"
+        },
+        "app.S2l0.action.c3Vic2NyaWJlci1hY3RpdmF0ZQ.short_desc": {
+          "source": "Watch for new subscriber activations",
+          "message": "새 구독자 활성화 감시"
+        },
+        "app.S2l0.action.c3Vic2NyaWJlci1ib3VuY2U.desc": {
+          "source": "Triggers when a subscriber's email bounces in Kit",
+          "message": "Kit에서 구독자의 이메일이 반송될 때 트리거됩니다."
+        },
+        "app.S2l0.action.c3Vic2NyaWJlci1ib3VuY2U.display_name": {
+          "source": "Subscriber Bounced",
+          "message": "구독자 반송됨"
+        },
+        "app.S2l0.action.c3Vic2NyaWJlci1ib3VuY2U.short_desc": {
+          "source": "Watch for subscriber bounces",
+          "message": "구독자 반송 감시"
+        },
+        "app.S2l0.action.c3Vic2NyaWJlci1jb21wbGFpbg.desc": {
+          "source": "Triggers when a subscriber marks an email as spam in Kit",
+          "message": "Kit에서 구독자가 이메일을 스팸으로 표시할 때 트리거됩니다."
+        },
+        "app.S2l0.action.c3Vic2NyaWJlci1jb21wbGFpbg.display_name": {
+          "source": "Subscriber Complained",
+          "message": "구독자 불만 제기됨"
+        },
+        "app.S2l0.action.c3Vic2NyaWJlci1jb21wbGFpbg.short_desc": {
+          "source": "Watch for subscriber complaints",
+          "message": "구독자 불만 제기 감시"
+        },
+        "app.S2l0.action.dGFnLXN1YnNjcmliZXI.desc": {
+          "source": "Apply a tag to a subscriber in Kit by email address",
+          "message": "이메일 주소로 Kit의 구독자에게 태그 적용"
+        },
+        "app.S2l0.action.dGFnLXN1YnNjcmliZXI.display_name": {
+          "source": "Tag a Subscriber",
+          "message": "구독자에 태그 지정"
+        },
+        "app.S2l0.action.dGFnLXN1YnNjcmliZXI.option.ZW1haWxfYWRkcmVzcw.desc": {
+          "source": "The email address of the subscriber to tag",
+          "message": "태그를 지정할 구독자의 이메일 주소"
+        },
+        "app.S2l0.action.dGFnLXN1YnNjcmliZXI.option.ZW1haWxfYWRkcmVzcw.display_name": {
+          "source": "Email Address",
+          "message": "이메일 주소"
+        },
+        "app.S2l0.action.dGFnLXN1YnNjcmliZXI.option.ZW1haWxfYWRkcmVzcw.short_desc": {
+          "source": "The subscriber's email address",
+          "message": "구독자 이메일 주소"
+        },
+        "app.S2l0.action.dGFnLXN1YnNjcmliZXI.option.dGFnX2lk.desc": {
+          "source": "The unique identifier of the tag to apply to the subscriber",
+          "message": "구독자에게 적용할 태그의 고유 식별자"
+        },
+        "app.S2l0.action.dGFnLXN1YnNjcmliZXI.option.dGFnX2lk.display_name": {
+          "source": "Tag ID",
+          "message": "태그 ID"
+        },
+        "app.S2l0.action.dGFnLXN1YnNjcmliZXI.option.dGFnX2lk.short_desc": {
+          "source": "The tag ID",
+          "message": "태그 ID"
+        },
+        "app.S2l0.action.dGFnLXN1YnNjcmliZXI.short_desc": {
+          "source": "Apply a tag to a subscriber",
+          "message": "구독자에 태그 적용"
+        },
+        "app.S2l0.action.dW50YWctc3Vic2NyaWJlcg.desc": {
+          "source": "Remove a tag from a subscriber in Kit",
+          "message": "Kit의 구독자에서 태그 제거"
+        },
+        "app.S2l0.action.dW50YWctc3Vic2NyaWJlcg.display_name": {
+          "source": "Untag a Subscriber",
+          "message": "구독자 태그 해제"
+        },
+        "app.S2l0.action.dW50YWctc3Vic2NyaWJlcg.option.c3Vic2NyaWJlcl9pZA.desc": {
+          "source": "The unique identifier of the subscriber to untag",
+          "message": "태그를 해제할 구독자의 고유 식별자"
+        },
+        "app.S2l0.action.dW50YWctc3Vic2NyaWJlcg.option.c3Vic2NyaWJlcl9pZA.display_name": {
+          "source": "Subscriber ID",
+          "message": "구독자 ID"
+        },
+        "app.S2l0.action.dW50YWctc3Vic2NyaWJlcg.option.c3Vic2NyaWJlcl9pZA.short_desc": {
+          "source": "The subscriber ID",
+          "message": "구독자 ID"
+        },
+        "app.S2l0.action.dW50YWctc3Vic2NyaWJlcg.option.dGFnX2lk.desc": {
+          "source": "The unique identifier of the tag to remove from the subscriber",
+          "message": "구독자에서 제거할 태그의 고유 식별자"
+        },
+        "app.S2l0.action.dW50YWctc3Vic2NyaWJlcg.option.dGFnX2lk.display_name": {
+          "source": "Tag ID",
+          "message": "태그 ID"
+        },
+        "app.S2l0.action.dW50YWctc3Vic2NyaWJlcg.option.dGFnX2lk.short_desc": {
+          "source": "The tag ID",
+          "message": "태그 ID"
+        },
+        "app.S2l0.action.dW50YWctc3Vic2NyaWJlcg.short_desc": {
+          "source": "Remove a tag from a subscriber",
+          "message": "구독자에서 태그 제거"
+        },
+        "app.S2l0.action.dW5zdWJzY3JpYmUtc3Vic2NyaWJlcg.desc": {
+          "source": "Unsubscribe a subscriber from Kit",
+          "message": "Kit에서 구독자 구독 취소"
+        },
+        "app.S2l0.action.dW5zdWJzY3JpYmUtc3Vic2NyaWJlcg.display_name": {
+          "source": "Unsubscribe a Subscriber",
+          "message": "구독자 구독 취소"
+        },
+        "app.S2l0.action.dW5zdWJzY3JpYmUtc3Vic2NyaWJlcg.option.c3Vic2NyaWJlcl9pZA.desc": {
+          "source": "The unique identifier of the subscriber to unsubscribe",
+          "message": "구독을 취소할 구독자의 고유 식별자"
+        },
+        "app.S2l0.action.dW5zdWJzY3JpYmUtc3Vic2NyaWJlcg.option.c3Vic2NyaWJlcl9pZA.display_name": {
+          "source": "Subscriber ID",
+          "message": "구독자 ID"
+        },
+        "app.S2l0.action.dW5zdWJzY3JpYmUtc3Vic2NyaWJlcg.option.c3Vic2NyaWJlcl9pZA.short_desc": {
+          "source": "The subscriber ID to unsubscribe",
+          "message": "구독을 취소할 구독자 ID"
+        },
+        "app.S2l0.action.dW5zdWJzY3JpYmUtc3Vic2NyaWJlcg.short_desc": {
+          "source": "Unsubscribe a subscriber",
+          "message": "구독자 구독 취소"
+        },
+        "app.S2l0.action.dXBkYXRlLWJyb2FkY2FzdA.desc": {
+          "source": "Update an existing broadcast in Kit",
+          "message": "Kit의 기존 브로드캐스트 업데이트"
+        },
+        "app.S2l0.action.dXBkYXRlLWJyb2FkY2FzdA.display_name": {
+          "source": "Update a Broadcast",
+          "message": "브로드캐스트 업데이트"
+        },
+        "app.S2l0.action.dXBkYXRlLWJyb2FkY2FzdA.option.Y29udGVudA.desc": {
+          "source": "The HTML content of the broadcast email",
+          "message": "브로드캐스트 이메일의 HTML 콘텐츠"
+        },
+        "app.S2l0.action.dXBkYXRlLWJyb2FkY2FzdA.option.Y29udGVudA.display_name": {
+          "source": "Content",
+          "message": "내용"
+        },
+        "app.S2l0.action.dXBkYXRlLWJyb2FkY2FzdA.option.Y29udGVudA.short_desc": {
+          "source": "The broadcast HTML content",
+          "message": "브로드캐스트 HTML 콘텐츠"
+        },
+        "app.S2l0.action.dXBkYXRlLWJyb2FkY2FzdA.option.YnJvYWRjYXN0X2lk.desc": {
+          "source": "The unique identifier of the broadcast to update",
+          "message": "업데이트할 브로드캐스트의 고유 식별자"
+        },
+        "app.S2l0.action.dXBkYXRlLWJyb2FkY2FzdA.option.YnJvYWRjYXN0X2lk.display_name": {
+          "source": "Broadcast ID",
+          "message": "브로드캐스트 ID"
+        },
+        "app.S2l0.action.dXBkYXRlLWJyb2FkY2FzdA.option.YnJvYWRjYXN0X2lk.short_desc": {
+          "source": "The broadcast ID to update",
+          "message": "업데이트할 브로드캐스트 ID"
+        },
+        "app.S2l0.action.dXBkYXRlLWJyb2FkY2FzdA.option.ZGVzY3JpcHRpb24.desc": {
+          "source": "A description of the broadcast for internal reference",
+          "message": "내부 참조용 브로드캐스트 설명"
+        },
+        "app.S2l0.action.dXBkYXRlLWJyb2FkY2FzdA.option.ZGVzY3JpcHRpb24.display_name": {
+          "source": "Description",
+          "message": "설명"
+        },
+        "app.S2l0.action.dXBkYXRlLWJyb2FkY2FzdA.option.ZGVzY3JpcHRpb24.short_desc": {
+          "source": "The broadcast description",
+          "message": "브로드캐스트 설명"
+        },
+        "app.S2l0.action.dXBkYXRlLWJyb2FkY2FzdA.option.ZW1haWxfYWRkcmVzcw.desc": {
+          "source": "The email address used as the sender for the broadcast",
+          "message": "브로드캐스트 발신자로 사용되는 이메일 주소"
+        },
+        "app.S2l0.action.dXBkYXRlLWJyb2FkY2FzdA.option.ZW1haWxfYWRkcmVzcw.display_name": {
+          "source": "Email Address",
+          "message": "이메일 주소"
+        },
+        "app.S2l0.action.dXBkYXRlLWJyb2FkY2FzdA.option.ZW1haWxfYWRkcmVzcw.short_desc": {
+          "source": "The sender email address",
+          "message": "발신자 이메일 주소"
+        },
+        "app.S2l0.action.dXBkYXRlLWJyb2FkY2FzdA.option.ZW1haWxfdGVtcGxhdGVfaWQ.desc": {
+          "source": "The identifier of the email template to use for the broadcast",
+          "message": "브로드캐스트에 사용할 이메일 템플릿의 식별자"
+        },
+        "app.S2l0.action.dXBkYXRlLWJyb2FkY2FzdA.option.ZW1haWxfdGVtcGxhdGVfaWQ.display_name": {
+          "source": "Email Template ID",
+          "message": "이메일 템플릿 ID"
+        },
+        "app.S2l0.action.dXBkYXRlLWJyb2FkY2FzdA.option.ZW1haWxfdGVtcGxhdGVfaWQ.short_desc": {
+          "source": "The email template ID",
+          "message": "이메일 템플릿 ID"
+        },
+        "app.S2l0.action.dXBkYXRlLWJyb2FkY2FzdA.option.c2VuZF9hdA.desc": {
+          "source": "The timestamp when the broadcast should be sent; set to `null` for a draft",
+          "message": "브로드캐스트가 전송되어야 하는 타임스탬프입니다. 임시 저장의 경우 `null`(으)로 설정하세요"
+        },
+        "app.S2l0.action.dXBkYXRlLWJyb2FkY2FzdA.option.c2VuZF9hdA.display_name": {
+          "source": "Send At",
+          "message": "전송 시각"
+        },
+        "app.S2l0.action.dXBkYXRlLWJyb2FkY2FzdA.option.c2VuZF9hdA.short_desc": {
+          "source": "When to send the broadcast",
+          "message": "브로드캐스트 전송 시간"
+        },
+        "app.S2l0.action.dXBkYXRlLWJyb2FkY2FzdA.option.c3ViamVjdA.desc": {
+          "source": "The subject line of the broadcast email",
+          "message": "브로드캐스트 이메일의 제목"
+        },
+        "app.S2l0.action.dXBkYXRlLWJyb2FkY2FzdA.option.c3ViamVjdA.display_name": {
+          "source": "Subject",
+          "message": "제목"
+        },
+        "app.S2l0.action.dXBkYXRlLWJyb2FkY2FzdA.option.c3ViamVjdA.short_desc": {
+          "source": "The broadcast subject line",
+          "message": "브로드캐스트 제목"
+        },
+        "app.S2l0.action.dXBkYXRlLWJyb2FkY2FzdA.option.cHJldmlld190ZXh0.desc": {
+          "source": "The preview text shown in email clients before the email is opened",
+          "message": "이메일을 열기 전에 이메일 클라이언트에 표시되는 미리보기 텍스트"
+        },
+        "app.S2l0.action.dXBkYXRlLWJyb2FkY2FzdA.option.cHJldmlld190ZXh0.display_name": {
+          "source": "Preview Text",
+          "message": "미리보기 텍스트"
+        },
+        "app.S2l0.action.dXBkYXRlLWJyb2FkY2FzdA.option.cHJldmlld190ZXh0.short_desc": {
+          "source": "The preview text",
+          "message": "미리보기 텍스트"
+        },
+        "app.S2l0.action.dXBkYXRlLWJyb2FkY2FzdA.option.cHVibGlj.desc": {
+          "source": "Indicates whether the broadcast is publicly accessible",
+          "message": "브로드캐스트에 공개적으로 액세스할 수 있는지 여부를 나타냅니다"
+        },
+        "app.S2l0.action.dXBkYXRlLWJyb2FkY2FzdA.option.cHVibGlj.display_name": {
+          "source": "Public",
+          "message": "공개"
+        },
+        "app.S2l0.action.dXBkYXRlLWJyb2FkY2FzdA.option.cHVibGlj.short_desc": {
+          "source": "Whether the broadcast is public",
+          "message": "브로드캐스트의 공개 여부"
+        },
+        "app.S2l0.action.dXBkYXRlLWJyb2FkY2FzdA.option.cHVibGlzaGVkX2F0.desc": {
+          "source": "The timestamp when the broadcast should be published",
+          "message": "브로드캐스트를 게시해야 하는 타임스탬프"
+        },
+        "app.S2l0.action.dXBkYXRlLWJyb2FkY2FzdA.option.cHVibGlzaGVkX2F0.display_name": {
+          "source": "Published At",
+          "message": "게시 일시"
+        },
+        "app.S2l0.action.dXBkYXRlLWJyb2FkY2FzdA.option.cHVibGlzaGVkX2F0.short_desc": {
+          "source": "When to publish the broadcast",
+          "message": "브로드캐스트 게시 시점"
+        },
+        "app.S2l0.action.dXBkYXRlLWJyb2FkY2FzdA.option.dGh1bWJuYWlsX2FsdA.desc": {
+          "source": "The alternative text for the broadcast thumbnail image",
+          "message": "브로드캐스트 썸네일 이미지의 대체 텍스트"
+        },
+        "app.S2l0.action.dXBkYXRlLWJyb2FkY2FzdA.option.dGh1bWJuYWlsX2FsdA.display_name": {
+          "source": "Thumbnail Alt",
+          "message": "썸네일 대체 텍스트"
+        },
+        "app.S2l0.action.dXBkYXRlLWJyb2FkY2FzdA.option.dGh1bWJuYWlsX2FsdA.short_desc": {
+          "source": "The thumbnail alt text",
+          "message": "썸네일 대체 텍스트"
+        },
+        "app.S2l0.action.dXBkYXRlLWJyb2FkY2FzdA.option.dGh1bWJuYWlsX3VybA.desc": {
+          "source": "The URL of the broadcast thumbnail image",
+          "message": "브로드캐스트 썸네일 이미지의 URL"
+        },
+        "app.S2l0.action.dXBkYXRlLWJyb2FkY2FzdA.option.dGh1bWJuYWlsX3VybA.display_name": {
+          "source": "Thumbnail URL",
+          "message": "썸네일 URL"
+        },
+        "app.S2l0.action.dXBkYXRlLWJyb2FkY2FzdA.option.dGh1bWJuYWlsX3VybA.short_desc": {
+          "source": "The thumbnail URL",
+          "message": "썸네일 URL"
+        },
+        "app.S2l0.action.dXBkYXRlLWJyb2FkY2FzdA.short_desc": {
+          "source": "Update an existing broadcast",
+          "message": "기존 브로드캐스트 업데이트"
+        },
+        "app.S2l0.action.dXBkYXRlLWN1c3RvbS1maWVsZA.desc": {
+          "source": "Update the label of an existing custom field in Kit",
+          "message": "Kit의 기존 사용자 정의 필드 레이블 업데이트"
+        },
+        "app.S2l0.action.dXBkYXRlLWN1c3RvbS1maWVsZA.display_name": {
+          "source": "Update a Custom Field",
+          "message": "사용자 정의 필드 업데이트"
+        },
+        "app.S2l0.action.dXBkYXRlLWN1c3RvbS1maWVsZA.option.Y3VzdG9tX2ZpZWxkX2lk.desc": {
+          "source": "The unique identifier of the custom field to update",
+          "message": "업데이트할 사용자 정의 필드의 고유 식별자"
+        },
+        "app.S2l0.action.dXBkYXRlLWN1c3RvbS1maWVsZA.option.Y3VzdG9tX2ZpZWxkX2lk.display_name": {
+          "source": "Custom Field ID",
+          "message": "사용자 정의 필드 ID"
+        },
+        "app.S2l0.action.dXBkYXRlLWN1c3RvbS1maWVsZA.option.Y3VzdG9tX2ZpZWxkX2lk.short_desc": {
+          "source": "The custom field ID to update",
+          "message": "업데이트할 사용자 정의 필드 ID"
+        },
+        "app.S2l0.action.dXBkYXRlLWN1c3RvbS1maWVsZA.option.bGFiZWw.desc": {
+          "source": "The new display label for the custom field",
+          "message": "사용자 정의 필드의 새 표시 레이블"
+        },
+        "app.S2l0.action.dXBkYXRlLWN1c3RvbS1maWVsZA.option.bGFiZWw.display_name": {
+          "source": "Label",
+          "message": "라벨"
+        },
+        "app.S2l0.action.dXBkYXRlLWN1c3RvbS1maWVsZA.option.bGFiZWw.short_desc": {
+          "source": "The new custom field label",
+          "message": "새 사용자 정의 필드 레이블"
+        },
+        "app.S2l0.action.dXBkYXRlLWN1c3RvbS1maWVsZA.short_desc": {
+          "source": "Update a custom field label",
+          "message": "사용자 정의 필드 레이블 업데이트"
+        },
+        "app.S2l0.action.dXBkYXRlLXN1YnNjcmliZXI.desc": {
+          "source": "Update an existing subscriber in Kit",
+          "message": "Kit의 기존 구독자 업데이트"
+        },
+        "app.S2l0.action.dXBkYXRlLXN1YnNjcmliZXI.display_name": {
+          "source": "Update a Subscriber",
+          "message": "구독자 업데이트"
+        },
+        "app.S2l0.action.dXBkYXRlLXN1YnNjcmliZXI.option.ZW1haWxfYWRkcmVzcw.desc": {
+          "source": "The email address of the subscriber",
+          "message": "구독자의 이메일 주소"
+        },
+        "app.S2l0.action.dXBkYXRlLXN1YnNjcmliZXI.option.ZW1haWxfYWRkcmVzcw.display_name": {
+          "source": "Email Address",
+          "message": "이메일 주소"
+        },
+        "app.S2l0.action.dXBkYXRlLXN1YnNjcmliZXI.option.ZW1haWxfYWRkcmVzcw.short_desc": {
+          "source": "The subscriber's email address",
+          "message": "구독자 이메일 주소"
+        },
+        "app.S2l0.action.dXBkYXRlLXN1YnNjcmliZXI.option.ZmllbGRz.desc": {
+          "source": "A hash of custom field values to set on the subscriber",
+          "message": "구독자에게 설정할 사용자 정의 필드 값의 해시"
+        },
+        "app.S2l0.action.dXBkYXRlLXN1YnNjcmliZXI.option.ZmllbGRz.display_name": {
+          "source": "Custom Fields",
+          "message": "사용자 지정 필드"
+        },
+        "app.S2l0.action.dXBkYXRlLXN1YnNjcmliZXI.option.ZmllbGRz.short_desc": {
+          "source": "Custom field values",
+          "message": "사용자 지정 필드 값"
+        },
+        "app.S2l0.action.dXBkYXRlLXN1YnNjcmliZXI.option.Zmlyc3RfbmFtZQ.desc": {
+          "source": "The first name of the subscriber",
+          "message": "구독자의 이름"
+        },
+        "app.S2l0.action.dXBkYXRlLXN1YnNjcmliZXI.option.Zmlyc3RfbmFtZQ.display_name": {
+          "source": "First Name",
+          "message": "이름"
+        },
+        "app.S2l0.action.dXBkYXRlLXN1YnNjcmliZXI.option.Zmlyc3RfbmFtZQ.short_desc": {
+          "source": "The subscriber's first name",
+          "message": "구독자 이름"
+        },
+        "app.S2l0.action.dXBkYXRlLXN1YnNjcmliZXI.option.c3Vic2NyaWJlcl9pZA.desc": {
+          "source": "The unique identifier of the subscriber to update",
+          "message": "업데이트할 구독자의 고유 식별자"
+        },
+        "app.S2l0.action.dXBkYXRlLXN1YnNjcmliZXI.option.c3Vic2NyaWJlcl9pZA.display_name": {
+          "source": "Subscriber ID",
+          "message": "구독자 ID"
+        },
+        "app.S2l0.action.dXBkYXRlLXN1YnNjcmliZXI.option.c3Vic2NyaWJlcl9pZA.short_desc": {
+          "source": "The subscriber ID to update",
+          "message": "업데이트할 구독자 ID"
+        },
+        "app.S2l0.action.dXBkYXRlLXN1YnNjcmliZXI.short_desc": {
+          "source": "Update an existing subscriber",
+          "message": "기존 구독자 업데이트"
+        },
+        "app.S2l0.action.dXBkYXRlLXRhZw.desc": {
+          "source": "Update the name of an existing tag in Kit",
+          "message": "Kit의 기존 태그 이름 업데이트"
+        },
+        "app.S2l0.action.dXBkYXRlLXRhZw.display_name": {
+          "source": "Update a Tag",
+          "message": "태그 업데이트"
+        },
+        "app.S2l0.action.dXBkYXRlLXRhZw.option.bmFtZQ.desc": {
+          "source": "The new name for the tag",
+          "message": "태그의 새 이름"
+        },
+        "app.S2l0.action.dXBkYXRlLXRhZw.option.bmFtZQ.display_name": {
+          "source": "Tag Name",
+          "message": "태그 이름"
+        },
+        "app.S2l0.action.dXBkYXRlLXRhZw.option.bmFtZQ.short_desc": {
+          "source": "The new tag name",
+          "message": "새 태그 이름"
+        },
+        "app.S2l0.action.dXBkYXRlLXRhZw.option.dGFnX2lk.desc": {
+          "source": "The unique identifier of the tag to update",
+          "message": "업데이트할 태그의 고유 식별자"
+        },
+        "app.S2l0.action.dXBkYXRlLXRhZw.option.dGFnX2lk.display_name": {
+          "source": "Tag ID",
+          "message": "태그 ID"
+        },
+        "app.S2l0.action.dXBkYXRlLXRhZw.option.dGFnX2lk.short_desc": {
+          "source": "The tag ID to update",
+          "message": "업데이트할 태그 ID"
+        },
+        "app.S2l0.action.dXBkYXRlLXRhZw.short_desc": {
+          "source": "Update a tag name",
+          "message": "태그 이름 업데이트"
+        },
+        "app.S2l0.desc": {
+          "source": "Kit (formerly ConvertKit) is an email marketing platform for creators supporting subscribers, tags, custom fields, broadcasts, forms, sequences, and purchases.\n\nThis integration supports full CRUD operations on core resources and event-based triggers.",
+          "message": "Kit(이전 ConvertKit)은 구독자, 태그, 사용자 정의 필드, 브로드캐스트, 양식, 시퀀스 및 구매를 지원하는 크리에이터용 이메일 마케팅 플랫폼입니다.\n\n이 연동은 핵심 리소스에 대한 전체 CRUD 작업 및 이벤트 기반 트리거를 지원합니다."
+        },
+        "app.S2l0.display_name": {
+          "source": "Kit",
+          "message": "Kit"
+        },
+        "app.S2l0.short_desc": {
+          "source": "Kit email marketing platform for creators",
+          "message": "크리에이터를 위한 Kit 이메일 마케팅 플랫폼"
+        }
+      }
+    }
+  }
+}

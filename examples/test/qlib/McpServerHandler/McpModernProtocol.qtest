@@ -1222,8 +1222,10 @@ public class McpModernProtocolTest inherits QUnit::Test {
         assertEq(0, h.getSubscriptionCount());
         # the subclass's narrower variant does NOT match a subscription stream, so the base
         # notification hook ran instead — which is precisely why the mandatory cleanup cannot
-        # live in that method
-        assertFalse(h.dereg_called,
+        # live in that method.  The count is asserted again at the end of the test, once the hook
+        # has demonstrably run for the connection type it does match: that is the check which
+        # cannot pass merely because the hook has not been reached yet
+        assertEq(0, h.getDeregCount(),
             "the narrower subclass variant does not match a subscription stream");
 
         # the factory hook is still used for what it is for: the legacy GET event stream
@@ -1240,8 +1242,17 @@ public class McpModernProtocolTest inherits QUnit::Test {
         assertTrue(h.waitForNoSessionConnections(20s),
             sprintf("the legacy stream is deregistered; sessions=%y", h.getSessionInfo()));
         # for its own connection type the subclass variant is selected, and the base cleanup
-        # still ran (asserted above) even though this override never chains to it
-        assertTrue(h.dereg_called, "the subclass notification hook ran for its own type");
+        # still ran (asserted above) even though this override never chains to it.
+        #
+        # Wait for the hook rather than reading a flag: deregisterConnection() removes the
+        # connection from the handler's maps under the write lock and calls the hook afterwards, so
+        # the wait above - which watches the session's connection count - is satisfied before the
+        # hook can have run
+        assertTrue(h.waitForDereg(20s), "the subclass notification hook ran for its own type");
+        # exactly one call: for the custom connection type, and never for the subscription stream
+        # that closed earlier
+        assertEq(1, h.getDeregCount(),
+            "the subclass hook ran only for the connection type its parameter declares");
     }
 
     #! Waits until the client has received the subscription acknowledgment
@@ -1288,9 +1299,23 @@ class HookSubclassHandler inherits McpServerHandler {
     public {
         #! Set when the documented connection factory hook runs
         bool factory_called = False;
+    }
 
-        #! Set when the subclass's narrower deregistration hook runs
-        bool dereg_called = False;
+    private {
+        #! Zeroed the first time the subclass's narrower deregistration hook runs
+        /** The hook runs on a server thread after the connection has already been removed from the
+            handler's maps - deregisterConnection() removes it under the write lock and only then
+            calls the hook - so waiting for a connection count to drop says nothing about whether
+            the hook has run yet.  This counter is the signal for that, instead of reading a flag
+            that the server thread may not have set yet.
+        */
+        Counter dereg_cnt(1);
+
+        #! How many times the subclass's narrower deregistration hook ran
+        int dereg_count = 0;
+
+        #! Protects dereg_count against the server threads that increment it
+        Mutex dereg_lock();
     }
 
     constructor(LoggerInterface logger) : McpServerHandler(logger, new PermissiveAuthenticator()) {
@@ -1312,7 +1337,22 @@ class HookSubclassHandler inherits McpServerHandler {
     /** This is the shape that silently skipped the base implementation entirely.
     */
     deregisterConnectionImpl(CustomServerConnection conn) {
-        dereg_called = True;
+        AutoLock al(dereg_lock);
+        ++dereg_count;
+        if (dereg_cnt.getCount()) {
+            dereg_cnt.dec();
+        }
+    }
+
+    #! Waits for the subclass's narrower deregistration hook to run
+    bool waitForDereg(timeout t) {
+        return !dereg_cnt.waitForZero(t);
+    }
+
+    #! Returns how many times the subclass's narrower deregistration hook has run
+    int getDeregCount() {
+        AutoLock al(dereg_lock);
+        return dereg_count;
     }
 
     bool waitForSubscription(timeout t) {

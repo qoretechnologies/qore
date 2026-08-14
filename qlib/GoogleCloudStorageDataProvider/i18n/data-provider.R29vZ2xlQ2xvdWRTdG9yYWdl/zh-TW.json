@@ -1,0 +1,1269 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "zh-TW": {
+      "messages": {
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.Y29tcG9zZQ.desc": {
+          "source": "Concatenates up to 32 objects into a single new object, entirely within Google Cloud Storage and without transferring any content through the caller.\n\nEvery source and the destination must be in the same bucket. The destination may be one of the sources, which is how content is appended to an existing object. Set `content_type` explicitly: Google Cloud Storage does not infer it from the sources.",
+          "message": "完全在 Google Cloud Storage 內將最多 32 個物件組合成單一新物件，無須透過呼叫端傳輸任何內容。\n\n所有來源物件與目標物件必須位於相同的儲存桶中。目標物件可以是其中一個來源物件，這也是將內容附加至現有物件的方式。請明確設定 `content_type`：Google Cloud Storage 不會從來源物件推斷它。"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.Y29tcG9zZQ.display_name": {
+          "source": "Compose Objects",
+          "message": "組合物件"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.Y29tcG9zZQ.option.Y29udGVudF90eXBl.desc": {
+          "source": "The MIME type the composed object should have.  Google Cloud Storage does not infer it from the sources, so it should be set explicitly",
+          "message": "組合後的物件應具備的 MIME 類型。Google Cloud Storage 不會從來源物件推斷它，因此應明確設定"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.Y29tcG9zZQ.option.Y29udGVudF90eXBl.display_name": {
+          "source": "Content Type",
+          "message": "內容類型"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.Y29tcG9zZQ.option.Y29udGVudF90eXBl.short_desc": {
+          "source": "The MIME type for the destination",
+          "message": "目標物件的 MIME 類型"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.Y29tcG9zZQ.option.YnVja2V0.desc": {
+          "source": "The name of the bucket; every source and the destination must be in the same bucket, which is a Google Cloud Storage restriction on compose",
+          "message": "儲存桶的名稱；所有來源物件與目標物件必須位於同一個儲存桶中，這是 Google Cloud Storage 對組合操作的限制"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.Y29tcG9zZQ.option.YnVja2V0.display_name": {
+          "source": "Bucket",
+          "message": "儲存區"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.Y29tcG9zZQ.option.YnVja2V0.short_desc": {
+          "source": "The bucket holding the sources and the destination",
+          "message": "包含來源物件與目標物件的儲存桶"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.Y29tcG9zZQ.option.ZGVzdGluYXRpb25fb2JqZWN0.desc": {
+          "source": "The name of the object the sources are concatenated into, used verbatim; it may be one of the sources, which is how content is appended",
+          "message": "來源物件組合至其中的物件名稱，按字面使用；它可以是其中一個來源物件，這也是附加內容的方式"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.Y29tcG9zZQ.option.ZGVzdGluYXRpb25fb2JqZWN0.display_name": {
+          "source": "Destination Object Name",
+          "message": "目標物件名稱"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.Y29tcG9zZQ.option.ZGVzdGluYXRpb25fb2JqZWN0.short_desc": {
+          "source": "The object to write the concatenation to",
+          "message": "要將組合內容寫入的物件"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.Y29tcG9zZQ.option.bWV0YWRhdGE.desc": {
+          "source": "User-defined metadata for the composed object as key/value pairs",
+          "message": "以鍵/值組表示的組合後物件使用者定義中繼資料"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.Y29tcG9zZQ.option.bWV0YWRhdGE.display_name": {
+          "source": "Custom Metadata",
+          "message": "自訂中繼資料"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.Y29tcG9zZQ.option.bWV0YWRhdGE.short_desc": {
+          "source": "User-defined metadata for the destination",
+          "message": "目標物件的使用者定義中繼資料"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.Y29tcG9zZQ.option.c291cmNlX29iamVjdHM.desc": {
+          "source": "The names of the objects to concatenate, in the order they should appear; between 1 and 32 names, used verbatim",
+          "message": "要組合的物件名稱（依顯示順序排列）；介於 1 到 32 個名稱之間，按字面使用"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.Y29tcG9zZQ.option.c291cmNlX29iamVjdHM.display_name": {
+          "source": "Source Object Names",
+          "message": "來源物件名稱"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.Y29tcG9zZQ.option.c291cmNlX29iamVjdHM.short_desc": {
+          "source": "The objects to concatenate, in order",
+          "message": "要組合的物件（依順序）"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.Y29tcG9zZQ.short_desc": {
+          "source": "Concatenate objects into one object",
+          "message": "將多個物件組合成一個物件"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.Y29weS1vYmplY3Q.desc": {
+          "source": "Copies an object to another name or bucket entirely within Google Cloud Storage, without transferring the content through the caller.\n\nHandles an object of any size and a copy between different locations, storage classes, or encryption keys. Copying an object onto itself with a new `destination_storage_class` is how an object's storage class is changed.",
+          "message": "完全在 Google Cloud Storage 內將物件複製至另一個名稱或儲存桶，無須透過呼叫端傳輸內容。\n\n處理任何大小的物件，以及在不同位置、儲存體類別或加密金鑰之間的複製。以新的 `destination_storage_class` 將物件複製到自身，即是變更物件儲存體類別的方式。"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.Y29weS1vYmplY3Q.display_name": {
+          "source": "Copy Object",
+          "message": "複製物件"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.Y29weS1vYmplY3Q.option.Y29udGVudF90eXBl.desc": {
+          "source": "The MIME type the copy should have; when omitted the source's is kept",
+          "message": "副本應具備的 MIME 類型；若省略則保留來源物件的類型"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.Y29weS1vYmplY3Q.option.Y29udGVudF90eXBl.display_name": {
+          "source": "Content Type",
+          "message": "內容類型"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.Y29weS1vYmplY3Q.option.Y29udGVudF90eXBl.short_desc": {
+          "source": "The MIME type for the copy",
+          "message": "副本的 MIME 類型"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.Y29weS1vYmplY3Q.option.ZGVzdGluYXRpb25fYnVja2V0.desc": {
+          "source": "The name of the bucket to copy the object into; may be the same as the source bucket",
+          "message": "要將物件複製進去的儲存桶名稱；可與來源儲存桶相同"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.Y29weS1vYmplY3Q.option.ZGVzdGluYXRpb25fYnVja2V0.display_name": {
+          "source": "Destination Bucket",
+          "message": "目標儲存桶"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.Y29weS1vYmplY3Q.option.ZGVzdGluYXRpb25fYnVja2V0.short_desc": {
+          "source": "The bucket to copy the object into",
+          "message": "要將物件複製到的儲存貯體"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.Y29weS1vYmplY3Q.option.ZGVzdGluYXRpb25fb2JqZWN0.desc": {
+          "source": "The name the copy should have, used verbatim",
+          "message": "副本應使用的名稱，按字面使用"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.Y29weS1vYmplY3Q.option.ZGVzdGluYXRpb25fb2JqZWN0.display_name": {
+          "source": "Destination Object Name",
+          "message": "目標物件名稱"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.Y29weS1vYmplY3Q.option.ZGVzdGluYXRpb25fb2JqZWN0.short_desc": {
+          "source": "The name to copy the object to",
+          "message": "物件複製過去的名稱"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.Y29weS1vYmplY3Q.option.ZGVzdGluYXRpb25fc3RvcmFnZV9jbGFzcw.desc": {
+          "source": "The storage class the copy should have: `STANDARD`, `NEARLINE`, `COLDLINE` or `ARCHIVE`.  When omitted the destination bucket's default is used.  Rewriting an object onto itself with a new storage class is how an object's class is changed",
+          "message": "副本應具備的儲存體類別：`STANDARD`、`NEARLINE`、`COLDLINE` 或 `ARCHIVE`。若省略，則使用目標儲存桶的預設值。以新的儲存體類別將物件重寫至自身，即是變更物件類別的方式"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.Y29weS1vYmplY3Q.option.ZGVzdGluYXRpb25fc3RvcmFnZV9jbGFzcw.display_name": {
+          "source": "Destination Storage Class",
+          "message": "目標儲存體類別"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.Y29weS1vYmplY3Q.option.ZGVzdGluYXRpb25fc3RvcmFnZV9jbGFzcw.short_desc": {
+          "source": "The storage class for the copy",
+          "message": "複本的儲存類別"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.Y29weS1vYmplY3Q.option.bWV0YWRhdGE.desc": {
+          "source": "User-defined metadata for the copy as key/value pairs; when omitted the source's metadata is kept",
+          "message": "以鍵/值組表示的副本使用者定義中繼資料；若省略則保留來源物件的中繼資料"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.Y29weS1vYmplY3Q.option.bWV0YWRhdGE.display_name": {
+          "source": "Custom Metadata",
+          "message": "自訂中繼資料"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.Y29weS1vYmplY3Q.option.bWV0YWRhdGE.short_desc": {
+          "source": "User-defined metadata for the copy",
+          "message": "副本的使用者定義中繼資料"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.Y29weS1vYmplY3Q.option.c291cmNlX29iamVjdA.desc": {
+          "source": "The name of the object to copy, used verbatim",
+          "message": "要複製的物件名稱，按字面使用"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.Y29weS1vYmplY3Q.option.c291cmNlX29iamVjdA.display_name": {
+          "source": "Source Object Name",
+          "message": "來源物件名稱"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.Y29weS1vYmplY3Q.option.c291cmNlX29iamVjdA.short_desc": {
+          "source": "The object to copy",
+          "message": "要複製的物件"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.Y29weS1vYmplY3Q.option.c291cmNlX2J1Y2tldA.desc": {
+          "source": "The name of the bucket holding the object to copy",
+          "message": "包含要複製之物件的儲存桶名稱"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.Y29weS1vYmplY3Q.option.c291cmNlX2J1Y2tldA.display_name": {
+          "source": "Source Bucket",
+          "message": "來源儲存貯體"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.Y29weS1vYmplY3Q.option.c291cmNlX2J1Y2tldA.short_desc": {
+          "source": "The bucket holding the source object",
+          "message": "包含來源物件的儲存桶"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.Y29weS1vYmplY3Q.option.c291cmNlX2dlbmVyYXRpb24.desc": {
+          "source": "The content generation of the source to copy; when omitted the live version is copied",
+          "message": "要複製的來源內容世代；若省略則複製即時版本"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.Y29weS1vYmplY3Q.option.c291cmNlX2dlbmVyYXRpb24.display_name": {
+          "source": "Source Generation",
+          "message": "來源世代"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.Y29weS1vYmplY3Q.option.c291cmNlX2dlbmVyYXRpb24.short_desc": {
+          "source": "A specific source content generation to copy",
+          "message": "要複製的特定來源內容世代"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.Y29weS1vYmplY3Q.short_desc": {
+          "source": "Copy an object without downloading it",
+          "message": "複製物件而不下載"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.Y3JlYXRlLXNpZ25lZC11cmw.desc": {
+          "source": "Creates a V4 signed URL granting access to a single object for a single HTTP method until it expires. Anyone holding the URL can use it with no credentials, which is how content is handed to a browser or to a third party with no Google account.\n\nSigning is performed by the IAM Service Account Credentials API, so it also works when the credential is Application Default Credentials or a workload identity and there is no private key on the host. The caller needs the `iam.serviceAccounts.signBlob` permission on the signing service account (the `roles/iam.serviceAccountTokenCreator` role) and that API must be enabled on the project.",
+          "message": "建立 V4 簽署網址，在過期前授予對單一物件使用單一 HTTP 方法的存取權。任何持有該網址的人無須憑證即可使用，這也是將內容提供給瀏覽器或沒有 Google 帳戶的第三方的方式。\n\n簽署由 IAM Service Account Credentials API 執行，因此當憑證為 Application Default Credentials 或工作負載身分且主機上沒有私密金鑰時也能運作。呼叫端需要具備簽署服務帳戶的 `iam.serviceAccounts.signBlob` 權限（`roles/iam.serviceAccountTokenCreator` 角色），且該 API 必須在專案中啟用。"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.Y3JlYXRlLXNpZ25lZC11cmw.display_name": {
+          "source": "Create Signed URL",
+          "message": "建立簽署網址"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.Y3JlYXRlLXNpZ25lZC11cmw.option.YnVja2V0.desc": {
+          "source": "The name of the bucket the signed URL should address",
+          "message": "簽署網址應定址的儲存桶名稱"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.Y3JlYXRlLXNpZ25lZC11cmw.option.YnVja2V0.display_name": {
+          "source": "Bucket",
+          "message": "儲存區"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.Y3JlYXRlLXNpZ25lZC11cmw.option.YnVja2V0.short_desc": {
+          "source": "The bucket holding the object",
+          "message": "包含該物件的儲存桶"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.Y3JlYXRlLXNpZ25lZC11cmw.option.ZXhwaXJlc19pbl9zZWNvbmRz.desc": {
+          "source": "The lifetime of the signed URL in seconds; Google Cloud Storage allows at most 604800 (7 days) for a V4 signature",
+          "message": "簽署網址的有效時間（以秒為單位）；Google Cloud Storage 的 V4 簽章最多允許 604800 秒（7 天）"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.Y3JlYXRlLXNpZ25lZC11cmw.option.ZXhwaXJlc19pbl9zZWNvbmRz.display_name": {
+          "source": "Expires In (Seconds)",
+          "message": "有效期限（秒）"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.Y3JlYXRlLXNpZ25lZC11cmw.option.ZXhwaXJlc19pbl9zZWNvbmRz.short_desc": {
+          "source": "How long the URL stays valid",
+          "message": "網址保持有效的時間"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.Y3JlYXRlLXNpZ25lZC11cmw.option.b2JqZWN0.desc": {
+          "source": "The name of the object the signed URL should address, used verbatim",
+          "message": "簽署網址應定址的物件名稱，按字面使用"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.Y3JlYXRlLXNpZ25lZC11cmw.option.b2JqZWN0.display_name": {
+          "source": "Object Name",
+          "message": "物件名稱"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.Y3JlYXRlLXNpZ25lZC11cmw.option.b2JqZWN0.short_desc": {
+          "source": "The object's name",
+          "message": "物件名稱"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.Y3JlYXRlLXNpZ25lZC11cmw.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.desc": {
+          "source": "Grants deleting the object",
+          "message": "授予刪除物件的權限"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.Y3JlYXRlLXNpZ25lZC11cmw.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.display_name": {
+          "source": "DELETE",
+          "message": "DELETE"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.Y3JlYXRlLXNpZ25lZC11cmw.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.short_desc": {
+          "source": "Grants deleting the object",
+          "message": "授予刪除物件的權限"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.Y3JlYXRlLXNpZ25lZC11cmw.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.desc": {
+          "source": "Grants reading the object's content",
+          "message": "授予讀取物件內容的權限"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.Y3JlYXRlLXNpZ25lZC11cmw.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.display_name": {
+          "source": "GET (download)",
+          "message": "GET (下載)"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.Y3JlYXRlLXNpZ25lZC11cmw.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.short_desc": {
+          "source": "Grants reading the object",
+          "message": "授予讀取物件的權限"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.Y3JlYXRlLXNpZ25lZC11cmw.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.desc": {
+          "source": "Grants reading the object's response headers without its content",
+          "message": "授予讀取物件回應標頭（不包含其內容）的權限"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.Y3JlYXRlLXNpZ25lZC11cmw.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.display_name": {
+          "source": "HEAD (metadata)",
+          "message": "HEAD (中繼資料)"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.Y3JlYXRlLXNpZ25lZC11cmw.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.short_desc": {
+          "source": "Grants reading the object's metadata",
+          "message": "授予讀取物件中繼資料的權限"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.Y3JlYXRlLXNpZ25lZC11cmw.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.desc": {
+          "source": "Grants writing the object's content",
+          "message": "授予寫入物件內容的權限"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.Y3JlYXRlLXNpZ25lZC11cmw.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.display_name": {
+          "source": "PUT (upload)",
+          "message": "PUT (上傳)"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.Y3JlYXRlLXNpZ25lZC11cmw.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.short_desc": {
+          "source": "Grants writing the object",
+          "message": "授予寫入物件的權限"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.Y3JlYXRlLXNpZ25lZC11cmw.option.bWV0aG9k.desc": {
+          "source": "The HTTP method the URL should be valid for.  A URL signed for `GET` grants read access only; sign for `PUT` to grant an upload",
+          "message": "網址應適用的 HTTP 方法。為 `GET` 簽署的網址僅授予讀取存取權；為 `PUT` 簽署可授予上傳權限"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.Y3JlYXRlLXNpZ25lZC11cmw.option.bWV0aG9k.display_name": {
+          "source": "HTTP Method",
+          "message": "HTTP 方法"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.Y3JlYXRlLXNpZ25lZC11cmw.option.bWV0aG9k.short_desc": {
+          "source": "The HTTP method to sign for",
+          "message": "要簽署的 HTTP 方法"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.Y3JlYXRlLXNpZ25lZC11cmw.option.c2lnbmVyX2VtYWls.desc": {
+          "source": "The service account whose key should sign the URL.  When omitted the connection's `gcp_signer_email` is used, and failing that the `client_email` from the service-account key",
+          "message": "應使用其金鑰簽署網址的服務帳戶。若省略，則使用連線的 `gcp_signer_email`，若仍沒有則使用服務帳戶金鑰中的 `client_email`"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.Y3JlYXRlLXNpZ25lZC11cmw.option.c2lnbmVyX2VtYWls.display_name": {
+          "source": "Signer Email",
+          "message": "簽署者電子郵件"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.Y3JlYXRlLXNpZ25lZC11cmw.option.c2lnbmVyX2VtYWls.short_desc": {
+          "source": "The service account to sign with",
+          "message": "用於簽署的服務帳戶"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.Y3JlYXRlLXNpZ25lZC11cmw.short_desc": {
+          "source": "Create a time-limited URL granting access to one object",
+          "message": "建立具時效性且授予單一物件存取權的網址"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.Z2V0LW9iamVjdC1tZXRhZGF0YQ.desc": {
+          "source": "Retrieves an object's metadata — size, content type, checksums, storage class, generation, and user-defined metadata — without transferring its content.",
+          "message": "擷取物件的中繼資料（大小、內容類型、總和檢查碼、儲存體類別、世代以及使用者定義的中繼資料），無須傳輸其內容。"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.Z2V0LW9iamVjdC1tZXRhZGF0YQ.display_name": {
+          "source": "Get Object Metadata",
+          "message": "取得物件中繼資料"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.Z2V0LW9iamVjdC1tZXRhZGF0YQ.option.YnVja2V0.desc": {
+          "source": "The name of the bucket holding the object",
+          "message": "存放該物件的儲存桶名稱"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.Z2V0LW9iamVjdC1tZXRhZGF0YQ.option.YnVja2V0.display_name": {
+          "source": "Bucket",
+          "message": "儲存區"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.Z2V0LW9iamVjdC1tZXRhZGF0YQ.option.YnVja2V0.short_desc": {
+          "source": "The bucket holding the object",
+          "message": "包含該物件的儲存桶"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.Z2V0LW9iamVjdC1tZXRhZGF0YQ.option.Z2VuZXJhdGlvbg.desc": {
+          "source": "The content generation to retrieve; when omitted the live version is used",
+          "message": "要擷取的內容世代；省略時將使用目前版本"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.Z2V0LW9iamVjdC1tZXRhZGF0YQ.option.Z2VuZXJhdGlvbg.display_name": {
+          "source": "Generation",
+          "message": "世代"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.Z2V0LW9iamVjdC1tZXRhZGF0YQ.option.Z2VuZXJhdGlvbg.short_desc": {
+          "source": "A specific content generation to address",
+          "message": "要指定的特定內容世代"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.Z2V0LW9iamVjdC1tZXRhZGF0YQ.option.b2JqZWN0.desc": {
+          "source": "The name of the object.  Object names are a flat key space in which `/` is an ordinary character, so the value is used verbatim: it is not split, normalized, or resolved against anything",
+          "message": "物件的名稱。物件名稱屬於扁平索引鍵空間，其中 `/` 為一般字元，因此該值將原樣使用：不會進行分割、正規化或解析"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.Z2V0LW9iamVjdC1tZXRhZGF0YQ.option.b2JqZWN0.display_name": {
+          "source": "Object Name",
+          "message": "物件名稱"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.Z2V0LW9iamVjdC1tZXRhZGF0YQ.option.b2JqZWN0.short_desc": {
+          "source": "The object's name",
+          "message": "物件名稱"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.Z2V0LW9iamVjdC1tZXRhZGF0YQ.short_desc": {
+          "source": "Get an object's metadata without its content",
+          "message": "取得物件的中繼資料（不包含內容）"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.Z2V0LWJ1Y2tldA.desc": {
+          "source": "Retrieves a bucket's metadata: its location, storage class, versioning and uniform bucket-level access settings, labels, and timestamps.",
+          "message": "擷取儲存桶的中繼資料：其位置、儲存體類別、版本控制與統一儲存桶層級存取設定、標籤及時間戳記。"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.Z2V0LWJ1Y2tldA.display_name": {
+          "source": "Get Bucket",
+          "message": "取得儲存桶"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.Z2V0LWJ1Y2tldA.option.YnVja2V0.desc": {
+          "source": "The name of the bucket whose metadata should be retrieved",
+          "message": "要擷取其中繼資料的儲存桶名稱"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.Z2V0LWJ1Y2tldA.option.YnVja2V0.display_name": {
+          "source": "Bucket",
+          "message": "儲存區"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.Z2V0LWJ1Y2tldA.option.YnVja2V0.short_desc": {
+          "source": "The bucket to retrieve",
+          "message": "要擷取的儲存桶"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.Z2V0LWJ1Y2tldA.short_desc": {
+          "source": "Get a bucket's metadata",
+          "message": "取得儲存桶的中繼資料"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.ZG93bmxvYWQtb2JqZWN0.desc": {
+          "source": "Downloads an object's content and returns it as raw bytes in `content`, together with the content type, size, and the checksums Google Cloud Storage reports.\n\n`object` is used verbatim. Set `generation` to download a specific version of an object in a bucket with versioning enabled.",
+          "message": "下載物件內容並以 `content` 中的原始位元組形式傳回，同時附帶內容類型、大小以及 Google Cloud Storage 回報的總和檢查碼。\n\n`object` 將原樣使用。若要下載已啟用版本控制之儲存桶中的特定物件版本，請設定 `generation`。"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.ZG93bmxvYWQtb2JqZWN0.display_name": {
+          "source": "Download Object",
+          "message": "下載物件"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.ZG93bmxvYWQtb2JqZWN0.option.YnVja2V0.desc": {
+          "source": "The name of the bucket holding the object",
+          "message": "存放該物件的儲存桶名稱"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.ZG93bmxvYWQtb2JqZWN0.option.YnVja2V0.display_name": {
+          "source": "Bucket",
+          "message": "儲存區"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.ZG93bmxvYWQtb2JqZWN0.option.YnVja2V0.short_desc": {
+          "source": "The bucket holding the object",
+          "message": "包含該物件的儲存桶"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.ZG93bmxvYWQtb2JqZWN0.option.Z2VuZXJhdGlvbg.desc": {
+          "source": "The content generation to download; when omitted the live version is used",
+          "message": "要下載的內容世代；省略時將使用目前版本"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.ZG93bmxvYWQtb2JqZWN0.option.Z2VuZXJhdGlvbg.display_name": {
+          "source": "Generation",
+          "message": "世代"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.ZG93bmxvYWQtb2JqZWN0.option.Z2VuZXJhdGlvbg.short_desc": {
+          "source": "A specific content generation to download",
+          "message": "要下載的特定內容世代"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.ZG93bmxvYWQtb2JqZWN0.option.b2JqZWN0.desc": {
+          "source": "The name of the object to download, used verbatim: `/` is an ordinary character in a Google Cloud Storage object name, so the value is not split or normalized",
+          "message": "要下載的物件名稱（原樣使用）：`/` 在 Google Cloud Storage 物件名稱中為一般字元，因此該值不會進行分割或正規化"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.ZG93bmxvYWQtb2JqZWN0.option.b2JqZWN0.display_name": {
+          "source": "Object Name",
+          "message": "物件名稱"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.ZG93bmxvYWQtb2JqZWN0.option.b2JqZWN0.short_desc": {
+          "source": "The object's name",
+          "message": "物件名稱"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.ZG93bmxvYWQtb2JqZWN0.short_desc": {
+          "source": "Download an object's content",
+          "message": "下載物件的內容"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.ZGVsZXRlLW9iamVjdA.desc": {
+          "source": "Deletes an object.\n\nIn a bucket with versioning enabled, deleting without a `generation` removes the live version and retains the earlier generations; naming a `generation` removes that version permanently.",
+          "message": "刪除物件。\n\n在已啟用版本控制的儲存桶中，若刪除時未指定 `generation`，將會移除目前版本並保留較早的世代；指定 `generation` 則會永久移除該版本。"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.ZGVsZXRlLW9iamVjdA.display_name": {
+          "source": "Delete Object",
+          "message": "刪除物件"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.ZGVsZXRlLW9iamVjdA.option.YnVja2V0.desc": {
+          "source": "The name of the bucket holding the object",
+          "message": "存放該物件的儲存桶名稱"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.ZGVsZXRlLW9iamVjdA.option.YnVja2V0.display_name": {
+          "source": "Bucket",
+          "message": "儲存區"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.ZGVsZXRlLW9iamVjdA.option.YnVja2V0.short_desc": {
+          "source": "The bucket holding the object",
+          "message": "包含該物件的儲存桶"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.ZGVsZXRlLW9iamVjdA.option.Z2VuZXJhdGlvbg.desc": {
+          "source": "The content generation to delete; when omitted the live version is deleted.  In a bucket with versioning enabled, deleting the live version leaves the earlier generations in place, and a specific generation must be named to remove it permanently",
+          "message": "要刪除的內容世代；省略時將刪除目前版本。在已啟用版本控制的儲存桶中，刪除目前版本會保留較早的世代，且必須指定特定世代才能將其永久移除"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.ZGVsZXRlLW9iamVjdA.option.Z2VuZXJhdGlvbg.display_name": {
+          "source": "Generation",
+          "message": "世代"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.ZGVsZXRlLW9iamVjdA.option.Z2VuZXJhdGlvbg.short_desc": {
+          "source": "A specific content generation to delete",
+          "message": "要刪除的特定內容世代"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.ZGVsZXRlLW9iamVjdA.option.b2JqZWN0.desc": {
+          "source": "The name of the object to delete, used verbatim",
+          "message": "要刪除的物件名稱（原樣使用）"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.ZGVsZXRlLW9iamVjdA.option.b2JqZWN0.display_name": {
+          "source": "Object Name",
+          "message": "物件名稱"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.ZGVsZXRlLW9iamVjdA.option.b2JqZWN0.short_desc": {
+          "source": "The object's name",
+          "message": "物件名稱"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.ZGVsZXRlLW9iamVjdA.short_desc": {
+          "source": "Delete an object",
+          "message": "刪除物件"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bGlzdC1idWNrZXRz.desc": {
+          "source": "Lists the buckets in the connection's GCP project.\n\nA listing is capped at `1000` buckets; when a `next_page_token` is returned, pass it back in `page_token` to retrieve the following page.",
+          "message": "列出連線所屬 GCP 專案中的儲存桶。\n\n清單上限為 `1000` 個儲存桶；傳回 `next_page_token` 時，請將其傳入 `page_token` 以擷取下一頁。"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bGlzdC1idWNrZXRz.display_name": {
+          "source": "List Buckets",
+          "message": "列出儲存貯體"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bGlzdC1idWNrZXRz.option.bWF4X3Jlc3VsdHM.desc": {
+          "source": "The maximum number of buckets to return in one page (max `1000`)",
+          "message": "單頁傳回的儲存桶數量上限（最大值 `1000`）"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bGlzdC1idWNrZXRz.option.bWF4X3Jlc3VsdHM.display_name": {
+          "source": "Max Results",
+          "message": "最大結果數"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bGlzdC1idWNrZXRz.option.bWF4X3Jlc3VsdHM.short_desc": {
+          "source": "Maximum buckets to return per page",
+          "message": "每頁傳回的儲存桶數量上限"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bGlzdC1idWNrZXRz.option.cGFnZV90b2tlbg.desc": {
+          "source": "The `next_page_token` from a previous call, to retrieve the following page",
+          "message": "上一次呼叫傳回的 `next_page_token`，用於擷取下一頁"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bGlzdC1idWNrZXRz.option.cGFnZV90b2tlbg.display_name": {
+          "source": "Page Token",
+          "message": "頁面 Token"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bGlzdC1idWNrZXRz.option.cGFnZV90b2tlbg.short_desc": {
+          "source": "Token identifying the page to return",
+          "message": "識別要傳回頁面的權杖"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bGlzdC1idWNrZXRz.option.cHJlZml4.desc": {
+          "source": "List only buckets whose name begins with this string",
+          "message": "僅列出名稱以此字串開頭的儲存桶"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bGlzdC1idWNrZXRz.option.cHJlZml4.display_name": {
+          "source": "Prefix",
+          "message": "前綴"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bGlzdC1idWNrZXRz.option.cHJlZml4.short_desc": {
+          "source": "List only buckets whose name begins with this string",
+          "message": "僅列出名稱以此字串開頭的儲存桶"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bGlzdC1idWNrZXRz.short_desc": {
+          "source": "List the buckets in the project",
+          "message": "列出專案中的儲存桶"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bGlzdC1vYmplY3Rz.desc": {
+          "source": "Lists the objects in a bucket.\n\nObject names are a flat key space, so `prefix` is how a subset is selected; it is matched literally. Set `delimiter` to `/` as well to list one level at a time, which makes a bucket browsable as though it had folders — the rolled-up names are returned in `prefixes` and are not objects.\n\nA listing is capped at `1000` objects; when a `next_page_token` is returned, pass it back in `page_token` to retrieve the following page.",
+          "message": "列出儲存桶中的物件。\n\n物件名稱屬於扁平索引鍵空間，因此透過 `prefix` 來選取子集；它會進行逐字比對。同時將 `delimiter` 設定為 `/` 可逐層列出，使儲存桶如同包含資料夾般可供瀏覽 — 摺疊後的名稱會在 `prefixes` 中傳回且不是物件。\n\n清單上限為 `1000` 個物件；傳回 `next_page_token` 時，請將其傳入 `page_token` 以擷取下一頁。"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bGlzdC1vYmplY3Rz.display_name": {
+          "source": "List Objects",
+          "message": "列出物件"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bGlzdC1vYmplY3Rz.option.YnVja2V0.desc": {
+          "source": "The name of the bucket whose objects should be listed",
+          "message": "要列出其物件的儲存桶名稱"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bGlzdC1vYmplY3Rz.option.YnVja2V0.display_name": {
+          "source": "Bucket",
+          "message": "儲存區"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bGlzdC1vYmplY3Rz.option.YnVja2V0.short_desc": {
+          "source": "The bucket to list",
+          "message": "要列出物件的儲存桶"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bGlzdC1vYmplY3Rz.option.ZGVsaW1pdGVy.desc": {
+          "source": "Objects whose name contains this string after `prefix` are omitted from `objects` and rolled up into `prefixes` instead.  Setting it to `/` together with `prefix` makes a bucket browsable one level at a time, as though it had folders — which it does not",
+          "message": "名稱在 `prefix` 之後包含此字串的物件會從 `objects` 中省略，改為摺疊至 `prefixes`。將其與 `prefix` 一起設定為 `/` 時，儲存桶可逐層瀏覽，就像擁有資料夾一樣（實際上並無資料夾）"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bGlzdC1vYmplY3Rz.option.ZGVsaW1pdGVy.display_name": {
+          "source": "Delimiter",
+          "message": "分隔符號"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bGlzdC1vYmplY3Rz.option.ZGVsaW1pdGVy.short_desc": {
+          "source": "Roll up names containing this delimiter into common prefixes",
+          "message": "將包含此分隔符號的名稱摺疊為共同前置詞"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bGlzdC1vYmplY3Rz.option.ZW5kX29mZnNldA.desc": {
+          "source": "List only objects whose name is lexicographically less than this value",
+          "message": "僅列出名稱在字典順序上小於此值的物件"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bGlzdC1vYmplY3Rz.option.ZW5kX29mZnNldA.display_name": {
+          "source": "End Offset",
+          "message": "結束位移"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bGlzdC1vYmplY3Rz.option.ZW5kX29mZnNldA.short_desc": {
+          "source": "List only objects before this name",
+          "message": "僅列出在此名稱之前的物件"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bGlzdC1vYmplY3Rz.option.aW5jbHVkZV90cmFpbGluZ19kZWxpbWl0ZXI.desc": {
+          "source": "When set, objects whose name ends with `delimiter` are returned in `objects` as well as being rolled up into `prefixes`; this is how the zero-byte folder placeholder objects written by some tools become visible",
+          "message": "設定時，名稱以 `delimiter` 結尾的物件會在 `objects` 中傳回，同時也會摺疊至 `prefixes`；某些工具寫入的零位元組資料夾預留位置物件即是透過此方式呈現"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bGlzdC1vYmplY3Rz.option.aW5jbHVkZV90cmFpbGluZ19kZWxpbWl0ZXI.display_name": {
+          "source": "Include Trailing Delimiter",
+          "message": "包含結尾分隔符號"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bGlzdC1vYmplY3Rz.option.aW5jbHVkZV90cmFpbGluZ19kZWxpbWl0ZXI.short_desc": {
+          "source": "Also return objects whose name ends with the delimiter",
+          "message": "一併傳回名稱以分隔符號結尾的物件"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bGlzdC1vYmplY3Rz.option.bWF4X3Jlc3VsdHM.desc": {
+          "source": "The maximum number of objects to return in one page (max `1000`)",
+          "message": "單頁傳回的物件數量上限（最大值 `1000`）"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bGlzdC1vYmplY3Rz.option.bWF4X3Jlc3VsdHM.display_name": {
+          "source": "Max Results",
+          "message": "最大結果數"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bGlzdC1vYmplY3Rz.option.bWF4X3Jlc3VsdHM.short_desc": {
+          "source": "Maximum objects to return per page",
+          "message": "每頁傳回的物件數量上限"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bGlzdC1vYmplY3Rz.option.c3RhcnRfb2Zmc2V0.desc": {
+          "source": "List only objects whose name is lexicographically greater than or equal to this value",
+          "message": "僅列出名稱在字典順序上大於或等於此值的物件"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bGlzdC1vYmplY3Rz.option.c3RhcnRfb2Zmc2V0.display_name": {
+          "source": "Start Offset",
+          "message": "起始位移"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bGlzdC1vYmplY3Rz.option.c3RhcnRfb2Zmc2V0.short_desc": {
+          "source": "List only objects at or after this name",
+          "message": "僅列出位於此名稱或在此名稱之後的物件"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bGlzdC1vYmplY3Rz.option.cGFnZV90b2tlbg.desc": {
+          "source": "The `next_page_token` from a previous call, to retrieve the following page",
+          "message": "上一次呼叫傳回的 `next_page_token`，用於擷取下一頁"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bGlzdC1vYmplY3Rz.option.cGFnZV90b2tlbg.display_name": {
+          "source": "Page Token",
+          "message": "頁面 Token"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bGlzdC1vYmplY3Rz.option.cGFnZV90b2tlbg.short_desc": {
+          "source": "Token identifying the page to return",
+          "message": "識別要傳回頁面的權杖"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bGlzdC1vYmplY3Rz.option.cHJlZml4.desc": {
+          "source": "List only objects whose name begins with this string.  Because object names are a flat key space, a prefix is how a subset is selected; it is matched literally and byte for byte",
+          "message": "僅列出名稱以此字串開頭的物件。由於物件名稱屬於扁平索引鍵空間，因此使用前置詞來選取子集；它會逐字且逐位元組進行比對"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bGlzdC1vYmplY3Rz.option.cHJlZml4.display_name": {
+          "source": "Prefix",
+          "message": "前綴"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bGlzdC1vYmplY3Rz.option.cHJlZml4.short_desc": {
+          "source": "List only objects whose name begins with this string",
+          "message": "僅列出名稱以此字串開頭的物件"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bGlzdC1vYmplY3Rz.option.dmVyc2lvbnM.desc": {
+          "source": "Include noncurrent generations of objects, which exist only in a bucket with versioning enabled; each generation is returned as a separate entry",
+          "message": "包含物件的非目前世代（僅存在於已啟用版本控制的儲存桶中）；每個世代都會以獨立項目傳回"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bGlzdC1vYmplY3Rz.option.dmVyc2lvbnM.display_name": {
+          "source": "Include Versions",
+          "message": "包含版本"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bGlzdC1vYmplY3Rz.option.dmVyc2lvbnM.short_desc": {
+          "source": "Include noncurrent object generations",
+          "message": "包含非目前物件世代"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bGlzdC1vYmplY3Rz.short_desc": {
+          "source": "List the objects in a bucket",
+          "message": "列出儲存貯體中的物件"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bWFrZS1hcGktY2FsbA.desc": {
+          "source": "Make a custom HTTP / REST API call to **Google Cloud Storage** using the configured connection's authentication.\n\nSpecify the HTTP method, the URI path (relative to the connection's API base URL), optional query parameters, headers, and request body. The response is returned as a hash containing the status code, response headers, and response body.\n\nUse this action for endpoints that are not yet exposed as first-class actions on this app.",
+          "message": "使用已設定連線的驗證向 **Google Cloud Storage** 發出自訂 HTTP / REST API 呼叫。\n\n指定 HTTP 方法、URI 路徑（相對於連線的 API 基本 URL）、選用查詢參數、標頭以及請求內文。回應將以包含狀態碼、回應標頭及回應內文的雜湊形式傳回。\n\n此動作適用於尚未在此應用程式中以第一級動作公開的端點。"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bWFrZS1hcGktY2FsbA.display_name": {
+          "source": "Make an API call",
+          "message": "進行 API 呼叫"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.desc": {
+          "source": "The request body. The effective type depends on `body_type`: JSON/form/YAML expect a hash, XML/text expect a string, multipart expects a file structure, binary expects raw bytes.",
+          "message": "請求主體。有效類型取決於 `body_type`：JSON/表單/YAML 預期為雜湊，XML/文字預期為字串，multipart 預期為檔案結構，二進位預期為原始位元組。"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.display_name": {
+          "source": "Body",
+          "message": "內文"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.short_desc": {
+          "source": "The request body",
+          "message": "請求主體"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.desc": {
+          "source": "Upload a file using `multipart/form-data`. The body must be a @ref DataProvider::FileDataType \"FileDataType\" structure (filename + content + mime_type). The framework builds the multipart envelope and sets the boundary header.",
+          "message": "使用 `multipart/form-data` 上傳檔案。主體必須是 @ref DataProvider::FileDataType \"FileDataType\" 結構 (filename + content + mime_type)。框架會建立 multipart 信封並設定 boundary 標頭。"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.display_name": {
+          "source": "Multipart Form",
+          "message": "Multipart 表單"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.short_desc": {
+          "source": "Upload a file using multipart/form-data",
+          "message": "使用 multipart/form-data 上傳檔案"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.desc": {
+          "source": "Pass the body to the REST client unchanged; the client decides serialization based on its configured `data` option and the value type",
+          "message": "將主體原封不動地傳遞給 REST 用戶端；用戶端會根據其設定的 `data` 選項與數值類型來決定序列化方式"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.display_name": {
+          "source": "Auto",
+          "message": "自動"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.short_desc": {
+          "source": "Pass-through; use connection serialization and let the REST client decide",
+          "message": "透傳；使用連線序列化並由 REST 用戶端決定"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.desc": {
+          "source": "Send the body as raw bytes. The body must be a binary value. Sets `Content-Type: application/octet-stream` unless overridden by `hdr`.",
+          "message": "將主體作為原始位元組傳送。主體必須是二進位值。除非被 `hdr` 覆寫，否則會設定 `Content-Type: application/octet-stream`。"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.display_name": {
+          "source": "Raw Binary",
+          "message": "原始二進位"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.short_desc": {
+          "source": "Send body as raw bytes",
+          "message": "將主體作為原始位元組傳送"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.desc": {
+          "source": "Serialize a hash of form fields as `application/x-www-form-urlencoded`. The body must be a hash whose values are scalars (strings/numbers/booleans).",
+          "message": "將表單欄位的雜湊序列化為 `application/x-www-form-urlencoded`。主體必須是值為純量 (字串/數字/布林值) 的雜湊。"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.display_name": {
+          "source": "Form (URL-encoded)",
+          "message": "表單 (URL 編碼)"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.short_desc": {
+          "source": "Serialize body as application/x-www-form-urlencoded form fields",
+          "message": "將主體序列化為 application/x-www-form-urlencoded 表單欄位"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.desc": {
+          "source": "Serialize the body as JSON; sets `Content-Type: application/json`. The body should be a hash, list, or scalar value.",
+          "message": "將主體序列化為 JSON；設定 `Content-Type: application/json`。主體應為雜湊、清單或純量值。"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.display_name": {
+          "source": "JSON",
+          "message": "JSON"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.short_desc": {
+          "source": "Serialize body as JSON",
+          "message": "將主體序列化為 JSON"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.desc": {
+          "source": "Send the body as plain text. The body must be a string. Sets `Content-Type: text/plain`.",
+          "message": "將主體作為純文字傳送。主體必須是字串。設定 `Content-Type: text/plain`。"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.display_name": {
+          "source": "Plain Text",
+          "message": "純文字"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.short_desc": {
+          "source": "Send body as text/plain",
+          "message": "將主體作為 text/plain 傳送"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.desc": {
+          "source": "Send the body as XML. If the body is a hash it is serialized to XML; if it is a string it is sent verbatim. Sets `Content-Type: application/xml`.",
+          "message": "將主體作為 XML 傳送。若主體為雜湊，則會序列化為 XML；若為字串，則原樣傳送。設定 `Content-Type: application/xml`。"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.display_name": {
+          "source": "XML",
+          "message": "XML"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.short_desc": {
+          "source": "Send body as XML",
+          "message": "將主體作為 XML 傳送"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.desc": {
+          "source": "Send the body as YAML. If the body is a hash it is serialized to YAML; if it is a string it is sent verbatim. Sets `Content-Type: application/x-yaml`.",
+          "message": "將主體作為 YAML 傳送。若主體為雜湊，則會序列化為 YAML；若為字串，則原樣傳送。設定 `Content-Type: application/x-yaml`。"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.display_name": {
+          "source": "YAML",
+          "message": "YAML"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.short_desc": {
+          "source": "Send body as YAML",
+          "message": "將主體作為 YAML 傳送"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.desc": {
+          "source": "Selects the body serialization mode and the corresponding `Content-Type` header. Changing this field reshapes the `body` editor - selecting JSON exposes a JSON editor, selecting Multipart Form exposes a file picker, and so on.",
+          "message": "選擇主體序列化模式與相應的 `Content-Type` 標頭。變更此欄位會重塑 `body` 編輯器 - 選擇 JSON 會顯示 JSON 編輯器，選擇 Multipart Form 會顯示檔案選擇器，依此類推。"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.display_name": {
+          "source": "Body Type",
+          "message": "主體類型"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.short_desc": {
+          "source": "How the body is serialized and what Content-Type is sent",
+          "message": "主體如何序列化以及傳送何種 Content-Type"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.desc": {
+          "source": "If `True`, non-2xx HTTP responses return as the normal response hash (with the actual status code) instead of raising `REST-RESPONSE-ERROR`. Useful for handling 4xx/5xx as data - e.g. checking whether a resource exists. Overrides the connection's `error_passthru` setting for this call only.",
+          "message": "若為 `True`，非 2xx 的 HTTP 回應將作為正常的回應雜湊 (包含實際狀態碼) 返回，而不是引發 `REST-RESPONSE-ERROR`。適用於將 4xx/5xx 作為資料處理 - 例如檢查資源是否存在。僅針對本次呼叫覆寫連線的 `error_passthru` 設定。"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.display_name": {
+          "source": "Return Errors as Data",
+          "message": "將錯誤作為資料返回"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.short_desc": {
+          "source": "Return non-2xx responses normally instead of throwing",
+          "message": "正常返回非 2xx 回應，而不是拋出例外"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.desc": {
+          "source": "Optional list of HTTP status codes treated as success. If set and the response status is not in this list, the action throws `REST-STATUS-ERROR`. When unset, the REST client's default behavior applies (typically: 2xx is success, non-2xx throws).",
+          "message": "視為成功的選擇性 HTTP 狀態碼清單。若已設定且回應狀態不在此清單中，該動作將拋出 `REST-STATUS-ERROR`。未設定時，套用 REST 用戶端的預設行為 (通常：2xx 代表成功，非 2xx 拋出例外)。"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.display_name": {
+          "source": "Expected Status Codes",
+          "message": "預期的狀態碼"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.short_desc": {
+          "source": "Response status codes treated as success",
+          "message": "視為成功的回應狀態碼"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bWFrZS1hcGktY2FsbA.option.aGRy.desc": {
+          "source": "Hash of custom headers added to the request. These override any default headers set by `body_type` (e.g. supplying `Content-Type` here wins over the body-type default).",
+          "message": "新增至請求的自訂標頭雜湊。這些會覆寫由 `body_type` 設定的任何預設標頭 (例如：在此處提供 `Content-Type` 會優先於主體類型的預設值)。"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bWFrZS1hcGktY2FsbA.option.aGRy.display_name": {
+          "source": "Custom Headers",
+          "message": "自訂標頭"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bWFrZS1hcGktY2FsbA.option.aGRy.short_desc": {
+          "source": "Extra request headers",
+          "message": "額外的請求標頭"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.desc": {
+          "source": "If `True`, the response hash includes a `debug` sub-hash containing the request method/URL/headers (with sensitive values redacted), request and response sizes, and round-trip duration. Useful when investigating slow or failing calls. Off by default to keep responses lean.",
+          "message": "若為 `True`，回應雜湊包含一個 `debug` 子雜湊，其中包含請求方法/URL/標頭 (敏感值已遮蔽)、請求與回應大小以及來回時間。在調查過慢或失敗的呼叫時很有用。預設關閉以維持回應精簡。"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.display_name": {
+          "source": "Include Debug Info",
+          "message": "包含除錯資訊"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.short_desc": {
+          "source": "Include request/timing/size debug info in the response",
+          "message": "在回應中包含請求/時序/大小除錯資訊"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.desc": {
+          "source": "HTTP `OPTIONS`",
+          "message": "HTTP `OPTIONS`"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.display_name": {
+          "source": "OPTIONS",
+          "message": "OPTIONS"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.short_desc": {
+          "source": "HTTP OPTIONS",
+          "message": "HTTP OPTIONS"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.desc": {
+          "source": "HTTP `DELETE`",
+          "message": "HTTP `DELETE`"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.display_name": {
+          "source": "DELETE",
+          "message": "DELETE"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.short_desc": {
+          "source": "HTTP DELETE",
+          "message": "HTTP DELETE"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.desc": {
+          "source": "HTTP `GET`",
+          "message": "HTTP `GET`"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.display_name": {
+          "source": "GET",
+          "message": "GET"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.short_desc": {
+          "source": "HTTP GET",
+          "message": "HTTP GET"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.desc": {
+          "source": "HTTP `HEAD`",
+          "message": "HTTP `HEAD`"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.display_name": {
+          "source": "HEAD",
+          "message": "HEAD"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.short_desc": {
+          "source": "HTTP HEAD",
+          "message": "HTTP HEAD"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.desc": {
+          "source": "HTTP `PATCH`",
+          "message": "HTTP `PATCH`"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.display_name": {
+          "source": "PATCH",
+          "message": "PATCH"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.short_desc": {
+          "source": "HTTP PATCH",
+          "message": "HTTP PATCH"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.desc": {
+          "source": "HTTP `POST`",
+          "message": "HTTP `POST`"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.display_name": {
+          "source": "POST",
+          "message": "POST"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.short_desc": {
+          "source": "HTTP POST",
+          "message": "HTTP POST"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.desc": {
+          "source": "HTTP `PUT`",
+          "message": "HTTP `PUT`"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.display_name": {
+          "source": "PUT",
+          "message": "PUT"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.short_desc": {
+          "source": "HTTP PUT",
+          "message": "HTTP PUT"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.desc": {
+          "source": "HTTP `TRACE`",
+          "message": "HTTP `TRACE`"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.display_name": {
+          "source": "TRACE",
+          "message": "TRACE"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.short_desc": {
+          "source": "HTTP TRACE",
+          "message": "HTTP TRACE"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "用於請求的 HTTP 方法"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.display_name": {
+          "source": "HTTP Method",
+          "message": "HTTP 方法"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.short_desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "用於請求的 HTTP 方法"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain `{name}` placeholders that are replaced from `path_vars`. Example: `/users/{id}/comments`.",
+          "message": "相於連線 API 基本 URL 的 URI 路徑。可能包含從 `path_vars` 替換的 `{name}` 預留位置。範例：`/users/{id}/comments`。"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.display_name": {
+          "source": "URI Path",
+          "message": "URI 路徑"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.short_desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain '{name}' placeholders that are replaced from 'path_vars'. Example: '/users/{id}/comments'",
+          "message": "相對於連線 API 基底 URL 的 URI 路徑。可能包含從 'path_vars' 替換的 '{name}' 預留位置。範例：'/users/{id}/comments'"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.desc": {
+          "source": "Hash of values substituted into `{name}` placeholders in the URI path. Example: with `path = /users/{id}` and `path_vars = {id: 123}` the framework sends `/users/123`. Values are URL-encoded.",
+          "message": "替換至 URI 路徑中 `{name}` 預留位置的值 Hash。範例：使用 `path = /users/{id}` 與 `path_vars = {id: 123}` 時，框架會傳送 `/users/123`。數值均經過 URL 編碼。"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.display_name": {
+          "source": "Path Variables",
+          "message": "路徑變數"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.short_desc": {
+          "source": "Values for {name} placeholders in path",
+          "message": "路徑中 {name} 預留位置的值"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.desc": {
+          "source": "Hash of query string parameters to append to the URI path. Values are URL-encoded; list values are joined with `,`.",
+          "message": "要附加至 URI 路徑的查詢字串參數 Hash。數值均經過 URL 編碼；清單值會使用 `,` 連接。"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.display_name": {
+          "source": "Query Arguments",
+          "message": "查詢引數"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.short_desc": {
+          "source": "Query string parameters",
+          "message": "查詢字串參數"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bWFrZS1hcGktY2FsbA.short_desc": {
+          "source": "Make a custom API call to Google Cloud Storage",
+          "message": "對 Google Cloud Storage 發出自訂 API 呼叫"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.dXBkYXRlLW9iamVjdC1tZXRhZGF0YQ.desc": {
+          "source": "Updates an object's metadata in place, without re-uploading its content: the content type, the cache and content headers served with it, a custom timestamp, and user-defined metadata.\n\nThe update is a merge, so only the fields supplied are changed; set a `metadata` key to `null` to remove that key.",
+          "message": "就地更新物件的中繼資料，無須重新上傳其內容：內容類型、隨其提供的快取與內容標頭、自訂時間戳記以及使用者定義的中繼資料。\n\n此更新為合併操作，因此僅會變更所提供的欄位；將 `metadata` 索引鍵設定為 `null` 可移除該索引鍵。"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.dXBkYXRlLW9iamVjdC1tZXRhZGF0YQ.display_name": {
+          "source": "Update Object Metadata",
+          "message": "更新物件中繼資料"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.dXBkYXRlLW9iamVjdC1tZXRhZGF0YQ.option.Y29udGVudF90eXBl.desc": {
+          "source": "The MIME type served with the object's content",
+          "message": "隨物件內容提供的 MIME 類型"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.dXBkYXRlLW9iamVjdC1tZXRhZGF0YQ.option.Y29udGVudF90eXBl.display_name": {
+          "source": "Content Type",
+          "message": "內容類型"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.dXBkYXRlLW9iamVjdC1tZXRhZGF0YQ.option.Y29udGVudF90eXBl.short_desc": {
+          "source": "The MIME type to set",
+          "message": "要設定的 MIME 類型"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.dXBkYXRlLW9iamVjdC1tZXRhZGF0YQ.option.Y29udGVudF9kaXNwb3NpdGlvbg.desc": {
+          "source": "The `Content-Disposition` header served with the object's content",
+          "message": "隨物件內容提供的 `Content-Disposition` 標頭"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.dXBkYXRlLW9iamVjdC1tZXRhZGF0YQ.option.Y29udGVudF9kaXNwb3NpdGlvbg.display_name": {
+          "source": "Content Disposition",
+          "message": "Content Disposition"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.dXBkYXRlLW9iamVjdC1tZXRhZGF0YQ.option.Y29udGVudF9kaXNwb3NpdGlvbg.short_desc": {
+          "source": "The Content-Disposition header to set",
+          "message": "要設定的 Content-Disposition 標頭"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.dXBkYXRlLW9iamVjdC1tZXRhZGF0YQ.option.Y29udGVudF9lbmNvZGluZw.desc": {
+          "source": "The `Content-Encoding` header served with the object's content (e.g. `gzip`)",
+          "message": "隨物件內容提供的 `Content-Encoding` 標頭（例如 `gzip`）"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.dXBkYXRlLW9iamVjdC1tZXRhZGF0YQ.option.Y29udGVudF9lbmNvZGluZw.display_name": {
+          "source": "Content Encoding",
+          "message": "Content Encoding"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.dXBkYXRlLW9iamVjdC1tZXRhZGF0YQ.option.Y29udGVudF9lbmNvZGluZw.short_desc": {
+          "source": "The Content-Encoding header to set",
+          "message": "要設定的 Content-Encoding 標頭"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.dXBkYXRlLW9iamVjdC1tZXRhZGF0YQ.option.Y29udGVudF9sYW5ndWFnZQ.desc": {
+          "source": "The `Content-Language` header served with the object's content",
+          "message": "隨物件內容提供的 `Content-Language` 標頭"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.dXBkYXRlLW9iamVjdC1tZXRhZGF0YQ.option.Y29udGVudF9sYW5ndWFnZQ.display_name": {
+          "source": "Content Language",
+          "message": "Content Language"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.dXBkYXRlLW9iamVjdC1tZXRhZGF0YQ.option.Y29udGVudF9sYW5ndWFnZQ.short_desc": {
+          "source": "The Content-Language header to set",
+          "message": "要設定的 Content-Language 標頭"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.dXBkYXRlLW9iamVjdC1tZXRhZGF0YQ.option.Y2FjaGVfY29udHJvbA.desc": {
+          "source": "The `Cache-Control` header served with the object's content",
+          "message": "隨物件內容提供的 `Cache-Control` 標頭"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.dXBkYXRlLW9iamVjdC1tZXRhZGF0YQ.option.Y2FjaGVfY29udHJvbA.display_name": {
+          "source": "Cache Control",
+          "message": "Cache Control"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.dXBkYXRlLW9iamVjdC1tZXRhZGF0YQ.option.Y2FjaGVfY29udHJvbA.short_desc": {
+          "source": "The Cache-Control header to set",
+          "message": "要設定的 Cache-Control 標頭"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.dXBkYXRlLW9iamVjdC1tZXRhZGF0YQ.option.Y3VzdG9tX3RpbWU.desc": {
+          "source": "A user-specified date and time on the object, usable in lifecycle rules",
+          "message": "物件上使用者指定的日期與時間，可用於生命週期規則"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.dXBkYXRlLW9iamVjdC1tZXRhZGF0YQ.option.Y3VzdG9tX3RpbWU.display_name": {
+          "source": "Custom Time",
+          "message": "自訂時間"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.dXBkYXRlLW9iamVjdC1tZXRhZGF0YQ.option.Y3VzdG9tX3RpbWU.short_desc": {
+          "source": "The user-specified timestamp to set",
+          "message": "要設定的使用者指定時間戳記"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.dXBkYXRlLW9iamVjdC1tZXRhZGF0YQ.option.YnVja2V0.desc": {
+          "source": "The name of the bucket holding the object",
+          "message": "存放該物件的儲存桶名稱"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.dXBkYXRlLW9iamVjdC1tZXRhZGF0YQ.option.YnVja2V0.display_name": {
+          "source": "Bucket",
+          "message": "儲存區"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.dXBkYXRlLW9iamVjdC1tZXRhZGF0YQ.option.YnVja2V0.short_desc": {
+          "source": "The bucket holding the object",
+          "message": "包含該物件的儲存桶"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.dXBkYXRlLW9iamVjdC1tZXRhZGF0YQ.option.Z2VuZXJhdGlvbg.desc": {
+          "source": "The content generation whose metadata should be updated; when omitted the live version is used",
+          "message": "要更新其中繼資料的內容世代；省略時會使用目前有效版本"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.dXBkYXRlLW9iamVjdC1tZXRhZGF0YQ.option.Z2VuZXJhdGlvbg.display_name": {
+          "source": "Generation",
+          "message": "世代"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.dXBkYXRlLW9iamVjdC1tZXRhZGF0YQ.option.Z2VuZXJhdGlvbg.short_desc": {
+          "source": "A specific content generation to address",
+          "message": "要指定的特定內容世代"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.dXBkYXRlLW9iamVjdC1tZXRhZGF0YQ.option.b2JqZWN0.desc": {
+          "source": "The name of the object, used verbatim",
+          "message": "物件的名稱，逐字使用"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.dXBkYXRlLW9iamVjdC1tZXRhZGF0YQ.option.b2JqZWN0.display_name": {
+          "source": "Object Name",
+          "message": "物件名稱"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.dXBkYXRlLW9iamVjdC1tZXRhZGF0YQ.option.b2JqZWN0.short_desc": {
+          "source": "The object's name",
+          "message": "物件名稱"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.dXBkYXRlLW9iamVjdC1tZXRhZGF0YQ.option.bWV0YWRhdGE.desc": {
+          "source": "User-defined metadata as key/value pairs.  A `PATCH` merges these with the existing metadata; set a key to `null` to remove it",
+          "message": "以鍵/值組表示的使用者定義中繼資料。`PATCH` 會將這些內容與現有中繼資料合併；將鍵設為 `null` 即可將其移除"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.dXBkYXRlLW9iamVjdC1tZXRhZGF0YQ.option.bWV0YWRhdGE.display_name": {
+          "source": "Custom Metadata",
+          "message": "自訂中繼資料"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.dXBkYXRlLW9iamVjdC1tZXRhZGF0YQ.option.bWV0YWRhdGE.short_desc": {
+          "source": "User-defined metadata to set",
+          "message": "要設定的使用者定義中繼資料"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.dXBkYXRlLW9iamVjdC1tZXRhZGF0YQ.short_desc": {
+          "source": "Update an object's metadata without rewriting it",
+          "message": "在不重新寫入物件的情況下更新其中繼資料"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.dXBsb2FkLW9iamVjdA.desc": {
+          "source": "Uploads content to a bucket as an object of any size.\n\nLarge content, and any upload that also sets metadata, is sent as a resumable upload in chunks that Google Cloud Storage commits as they arrive, so a large transfer does not have to restart from the beginning if a chunk fails. Small content is sent in a single request.\n\n`object` is used verbatim, so `reports/2026/q1.csv` is one key rather than a path. Set `if_generation_match` to `0` to create the object only if it does not already exist, rather than overwriting it.",
+          "message": "將任何大小的內容作為物件上傳至儲存桶。\n\n大型內容以及任何同時設定中繼資料的上傳，都會以可續傳上傳方式分塊傳送，Google Cloud Storage 會在分塊到達時即時提交，因此如果某個分塊失敗，大型傳輸不需要從頭重新開始。小型內容則在單一請求中傳送。\n\n`object` 會逐字使用，因此 `reports/2026/q1.csv` 是一個鍵而非路徑。將 `if_generation_match` 設為 `0` 可僅在物件尚不存在時建立物件，而非將其覆寫。"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.dXBsb2FkLW9iamVjdA.display_name": {
+          "source": "Upload Object",
+          "message": "上傳物件"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.dXBsb2FkLW9iamVjdA.option.Y29udGVudF90eXBl.desc": {
+          "source": "The MIME type to store the object with.  When omitted the file's MIME type is used; if that is unset or `auto`, it is derived from the object name, falling back to `application/octet-stream`",
+          "message": "儲存物件時使用的 MIME 類型。省略時會使用檔案的 MIME 類型；若該值未設定或為 `auto`，則會從物件名稱推導，並退回使用 `application/octet-stream`"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.dXBsb2FkLW9iamVjdA.option.Y29udGVudF90eXBl.display_name": {
+          "source": "Content Type",
+          "message": "內容類型"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.dXBsb2FkLW9iamVjdA.option.Y29udGVudF90eXBl.short_desc": {
+          "source": "The MIME type to store",
+          "message": "要儲存的 MIME 類型"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.dXBsb2FkLW9iamVjdA.option.Y29udGVudF9kaXNwb3NpdGlvbg.desc": {
+          "source": "The `Content-Disposition` header to serve the object's content with",
+          "message": "提供物件內容時所使用的 `Content-Disposition` 標頭"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.dXBsb2FkLW9iamVjdA.option.Y29udGVudF9kaXNwb3NpdGlvbg.display_name": {
+          "source": "Content Disposition",
+          "message": "Content Disposition"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.dXBsb2FkLW9iamVjdA.option.Y29udGVudF9kaXNwb3NpdGlvbg.short_desc": {
+          "source": "The Content-Disposition header to store",
+          "message": "要儲存的 Content-Disposition 標頭"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.dXBsb2FkLW9iamVjdA.option.Y29udGVudF9lbmNvZGluZw.desc": {
+          "source": "The `Content-Encoding` header to serve the object's content with (e.g. `gzip`).  This declares how the bytes being uploaded are already encoded; it does not compress them",
+          "message": "提供物件內容時所使用的 `Content-Encoding` 標頭（例如 `gzip`）。這會宣告正在上傳的位元組已採用的編碼方式；它不會壓縮這些位元組"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.dXBsb2FkLW9iamVjdA.option.Y29udGVudF9lbmNvZGluZw.display_name": {
+          "source": "Content Encoding",
+          "message": "Content Encoding"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.dXBsb2FkLW9iamVjdA.option.Y29udGVudF9lbmNvZGluZw.short_desc": {
+          "source": "The Content-Encoding header to store",
+          "message": "要儲存的 Content-Encoding 標頭"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.dXBsb2FkLW9iamVjdA.option.Y29udGVudF9sYW5ndWFnZQ.desc": {
+          "source": "The `Content-Language` header to serve the object's content with",
+          "message": "提供物件內容時所使用的 `Content-Language` 標頭"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.dXBsb2FkLW9iamVjdA.option.Y29udGVudF9sYW5ndWFnZQ.display_name": {
+          "source": "Content Language",
+          "message": "Content Language"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.dXBsb2FkLW9iamVjdA.option.Y29udGVudF9sYW5ndWFnZQ.short_desc": {
+          "source": "The Content-Language header to store",
+          "message": "要儲存的 Content-Language 標頭"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.dXBsb2FkLW9iamVjdA.option.Y2FjaGVfY29udHJvbA.desc": {
+          "source": "The `Cache-Control` header to serve the object's content with",
+          "message": "提供物件內容時所使用的 `Cache-Control` 標頭"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.dXBsb2FkLW9iamVjdA.option.Y2FjaGVfY29udHJvbA.display_name": {
+          "source": "Cache Control",
+          "message": "Cache Control"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.dXBsb2FkLW9iamVjdA.option.Y2FjaGVfY29udHJvbA.short_desc": {
+          "source": "The Cache-Control header to store",
+          "message": "要儲存的 Cache-Control 標頭"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.dXBsb2FkLW9iamVjdA.option.Y3VzdG9tX3RpbWU.desc": {
+          "source": "A user-specified date and time on the object, usable in lifecycle rules",
+          "message": "物件上使用者指定的日期與時間，可用於生命週期規則"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.dXBsb2FkLW9iamVjdA.option.Y3VzdG9tX3RpbWU.display_name": {
+          "source": "Custom Time",
+          "message": "自訂時間"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.dXBsb2FkLW9iamVjdA.option.Y3VzdG9tX3RpbWU.short_desc": {
+          "source": "The user-specified timestamp to store",
+          "message": "要儲存的使用者指定時間戳記"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.dXBsb2FkLW9iamVjdA.option.YnVja2V0.desc": {
+          "source": "The name of the bucket to upload the object into",
+          "message": "要上傳物件至其中的儲存桶名稱"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.dXBsb2FkLW9iamVjdA.option.YnVja2V0.display_name": {
+          "source": "Bucket",
+          "message": "儲存區"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.dXBsb2FkLW9iamVjdA.option.YnVja2V0.short_desc": {
+          "source": "The bucket to upload into",
+          "message": "要上傳至的儲存桶"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.dXBsb2FkLW9iamVjdA.option.ZmlsZQ.desc": {
+          "source": "The content to upload, including the file name, the content, and the MIME type",
+          "message": "要上傳的內容，包含檔案名稱、內容以及 MIME 類型"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.dXBsb2FkLW9iamVjdA.option.ZmlsZQ.display_name": {
+          "source": "File",
+          "message": "檔案"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.dXBsb2FkLW9iamVjdA.option.ZmlsZQ.short_desc": {
+          "source": "The content to upload",
+          "message": "要上傳的內容"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.dXBsb2FkLW9iamVjdA.option.aWZfZ2VuZXJhdGlvbl9tYXRjaA.desc": {
+          "source": "Only perform the write if the object's current generation matches this value; pass `0` to write only if the object does not exist yet, which makes the upload a safe create rather than an overwrite",
+          "message": "僅在物件目前的世代與此值相符時執行寫入；傳入 `0` 以僅在物件尚不存在時寫入，這會使上傳成為安全的建立操作而非覆寫"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.dXBsb2FkLW9iamVjdA.option.aWZfZ2VuZXJhdGlvbl9tYXRjaA.display_name": {
+          "source": "If Generation Match",
+          "message": "If Generation Match"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.dXBsb2FkLW9iamVjdA.option.aWZfZ2VuZXJhdGlvbl9tYXRjaA.short_desc": {
+          "source": "Only write if the live generation matches",
+          "message": "僅在有效世代相符時寫入"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.dXBsb2FkLW9iamVjdA.option.b2JqZWN0.desc": {
+          "source": "The name to store the object under, used verbatim: `/` is an ordinary character in a Google Cloud Storage object name, so `reports/2026/q1.csv` is a single key and not a path.  When omitted the file's name is used",
+          "message": "儲存物件時使用的名稱，會逐字使用：`/` 在 Google Cloud Storage 物件名稱中為一般字元，因此 `reports/2026/q1.csv` 是一個單一鍵而非路徑。省略時會使用檔案名稱"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.dXBsb2FkLW9iamVjdA.option.b2JqZWN0.display_name": {
+          "source": "Object Name",
+          "message": "物件名稱"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.dXBsb2FkLW9iamVjdA.option.b2JqZWN0.short_desc": {
+          "source": "The object name to write",
+          "message": "要寫入的物件名稱"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.dXBsb2FkLW9iamVjdA.option.bWV0YWRhdGE.desc": {
+          "source": "User-defined metadata to store on the object as key/value pairs",
+          "message": "要作為鍵/值組儲存在物件上的使用者定義中繼資料"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.dXBsb2FkLW9iamVjdA.option.bWV0YWRhdGE.display_name": {
+          "source": "Custom Metadata",
+          "message": "自訂中繼資料"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.dXBsb2FkLW9iamVjdA.option.bWV0YWRhdGE.short_desc": {
+          "source": "User-defined metadata to store",
+          "message": "要儲存的使用者定義中繼資料"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.dXBsb2FkLW9iamVjdA.option.c3RvcmFnZV9jbGFzcw.desc": {
+          "source": "The storage class for the new object: `STANDARD`, `NEARLINE`, `COLDLINE` or `ARCHIVE`.  When omitted the bucket's default is used",
+          "message": "新物件的儲存級別：`STANDARD`、`NEARLINE`、`COLDLINE` 或 `ARCHIVE`。省略時會使用儲存桶的預設值"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.dXBsb2FkLW9iamVjdA.option.c3RvcmFnZV9jbGFzcw.display_name": {
+          "source": "Storage Class",
+          "message": "儲存類別"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.dXBsb2FkLW9iamVjdA.option.c3RvcmFnZV9jbGFzcw.short_desc": {
+          "source": "The storage class to store the object with",
+          "message": "儲存物件時使用的儲存級別"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.dXBsb2FkLW9iamVjdA.short_desc": {
+          "source": "Upload content to a bucket",
+          "message": "將內容上傳至儲存桶"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.desc": {
+          "source": "Provides access to [Google Cloud Storage](https://cloud.google.com/storage) — Google's object storage service — through its [JSON API](https://cloud.google.com/storage/docs/json_api).\n\n**Common use cases**:\n- **Object storage**: upload, download, copy, and delete objects, with resumable uploads for large content\n- **Bucket browsing**: list buckets and list objects by prefix, optionally rolled up into synthetic folders with a delimiter\n- **Metadata management**: read and update content type, cache headers, and user-defined metadata\n- **Sharing**: generate time-limited signed URLs that grant access to a single object with no credentials\n- **Concatenation**: compose up to 32 objects into one without downloading them\n\nThis application is also a file-location target, so a `conn://` location can read and write objects through a Google Cloud Storage connection, and it can supply the `gs://` inputs and outputs that the Vertex AI and Google Document AI applications take.\n\n**Object names are a flat key space**: `/` is an ordinary character in an object name and not a path separator, so names are used verbatim and are never split or normalized. `dir/`, `a//b` and `/leading` are all valid, distinct object names.\n\nAuthentication uses a GCP service account or Application Default Credentials.\n\nGoogle Cloud and Google Cloud Storage are trademarks of Google LLC",
+          "message": "透過其 [JSON API](https://cloud.google.com/storage/docs/json_api) 提供對 [Google Cloud Storage](https://cloud.google.com/storage)（Google 的物件儲存服務）的存取。\n\n**常見使用案例**：\n- **物件儲存**：上傳、下載、複製及刪除物件，大型內容支援可續傳上傳\n- **儲存桶瀏覽**：列出儲存桶並依前綴列出物件，可選擇使用分隔符號彙總為合成資料夾\n- **中繼資料管理**：讀取與更新內容類型、快取標頭及使用者定義中繼資料\n- **共用**：產生具時效性的已簽署 URL，無需憑證即可存取單一物件\n- **串聯**：在無需下載的情況下將最多 32 個物件組合成一個\n\n此應用程式也是一個檔案位置目標，因此 `conn://` 位置可以透過 Google Cloud Storage 連線讀取與寫入物件，並可提供 Vertex AI 與 Google Document AI 應用程式所需的 `gs://` 輸入與輸出。\n\n**物件名稱為平面鍵空間**：`/` 在物件名稱中是一般字元而非路徑分隔符號，因此名稱會逐字使用且絕不進行分割或正規化。`dir/`、`a//b` 與 `/leading` 均為有效且相異的物件名稱。\n\n驗證使用 GCP 服務帳戶或應用程式預設憑證（Application Default Credentials）。\n\nGoogle Cloud 與 Google Cloud Storage 為 Google LLC 的商標"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.display_name": {
+          "source": "Google Cloud Storage",
+          "message": "Google Cloud Storage"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.short_desc": {
+          "source": "Google Cloud Storage object storage",
+          "message": "Google Cloud Storage 物件儲存"
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,21 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "uk": {
+      "messages": {
+        "app.U1FMaXRl.desc": {
+          "source": "Create and manage connections to a SQLite embedded database",
+          "message": "Створення та керування підключеннями до вбудованої бази даних SQLite"
+        },
+        "app.U1FMaXRl.display_name": {
+          "source": "SQLite",
+          "message": "SQLite"
+        },
+        "app.U1FMaXRl.short_desc": {
+          "source": "SQLite embedded database",
+          "message": "Вбудована база даних SQLite"
+        }
+      }
+    }
+  }
+}

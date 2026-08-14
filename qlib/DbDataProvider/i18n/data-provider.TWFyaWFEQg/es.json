@@ -1,0 +1,21 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "es": {
+      "messages": {
+        "app.TWFyaWFEQg.desc": {
+          "source": "Create and manage connections to a MariaDB database server",
+          "message": "Cree y gestione conexiones a un servidor de base de datos de MariaDB"
+        },
+        "app.TWFyaWFEQg.display_name": {
+          "source": "MariaDB",
+          "message": "MariaDB"
+        },
+        "app.TWFyaWFEQg.short_desc": {
+          "source": "MariaDB database server",
+          "message": "Servidor de base de datos de MariaDB"
+        }
+      }
+    }
+  }
+}

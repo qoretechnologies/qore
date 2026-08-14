@@ -1,0 +1,933 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "sk": {
+      "messages": {
+        "app.TWV3cw.action.Z2V0LW9yZGVyLWl0ZW1z.desc": {
+          "source": "Retrieve order item information from Mews",
+          "message": "Získať informácie o položkách objednávky zo systému Mews"
+        },
+        "app.TWV3cw.action.Z2V0LW9yZGVyLWl0ZW1z.display_name": {
+          "source": "Retrieve Order Items",
+          "message": "Získať položky objednávky"
+        },
+        "app.TWV3cw.action.Z2V0LW9yZGVyLWl0ZW1z.option.Q29uc3VtZWRVdGNFbmQ.desc": {
+          "source": "The upper limit of the consumed date (and time) range; i.e. `UpdatedUtc` < <this date>",
+          "message": "Horná hranica rozsahu dátumu (a času) spotreby; t. j. `UpdatedUtc` < <tento dátum>"
+        },
+        "app.TWV3cw.action.Z2V0LW9yZGVyLWl0ZW1z.option.Q29uc3VtZWRVdGNFbmQ.display_name": {
+          "source": "Updated Date End",
+          "message": "Koniec dátumu aktualizácie"
+        },
+        "app.TWV3cw.action.Z2V0LW9yZGVyLWl0ZW1z.option.Q29uc3VtZWRVdGNFbmQ.short_desc": {
+          "source": "The upper limit of the consumed date (and time) range",
+          "message": "Horná hranica rozsahu dátumu (a času) spotreby"
+        },
+        "app.TWV3cw.action.Z2V0LW9yZGVyLWl0ZW1z.option.Q29uc3VtZWRVdGNTdGFydA.desc": {
+          "source": "The earliest date and time of the consumed date; i.e. `ConsumedUtc` >= <this date>",
+          "message": "Najskorší dátum a čas dátumu spotreby; t. j. `ConsumedUtc` >= <tento dátum>"
+        },
+        "app.TWV3cw.action.Z2V0LW9yZGVyLWl0ZW1z.option.Q29uc3VtZWRVdGNTdGFydA.display_name": {
+          "source": "Consumed Date Start",
+          "message": "Začiatok dátumu spotreby"
+        },
+        "app.TWV3cw.action.Z2V0LW9yZGVyLWl0ZW1z.option.Q29uc3VtZWRVdGNTdGFydA.short_desc": {
+          "source": "The earliest date and time of the consumed date",
+          "message": "Najskorší dátum a čas dátumu spotreby"
+        },
+        "app.TWV3cw.action.Z2V0LW9yZGVyLWl0ZW1z.option.Q2FuY2VsZWRVdGNFbmQ.desc": {
+          "source": "The upper limit of the canceled date (and time) range; i.e. `CanceledUtc` < <this date>",
+          "message": "Horná hranica rozsahu dátumu (a času) zrušenia; t. j. `CanceledUtc` < <tento dátum>"
+        },
+        "app.TWV3cw.action.Z2V0LW9yZGVyLWl0ZW1z.option.Q2FuY2VsZWRVdGNFbmQ.display_name": {
+          "source": "Canceled Date End",
+          "message": "Koniec dátumu zrušenia"
+        },
+        "app.TWV3cw.action.Z2V0LW9yZGVyLWl0ZW1z.option.Q2FuY2VsZWRVdGNFbmQ.short_desc": {
+          "source": "The upper limit of the canceled date (and time) range",
+          "message": "Horná hranica rozsahu dátumu (a času) zrušenia"
+        },
+        "app.TWV3cw.action.Z2V0LW9yZGVyLWl0ZW1z.option.Q2FuY2VsZWRVdGNTdGFydA.desc": {
+          "source": "The earliest date and time of the canceled date; i.e. `CanceledUtc` >= <this date>",
+          "message": "Najskorší dátum a čas dátumu zrušenia; t. j. `CanceledUtc` >= <tento dátum>"
+        },
+        "app.TWV3cw.action.Z2V0LW9yZGVyLWl0ZW1z.option.Q2FuY2VsZWRVdGNTdGFydA.display_name": {
+          "source": "Canceled Date Start",
+          "message": "Začiatok dátumu zrušenia"
+        },
+        "app.TWV3cw.action.Z2V0LW9yZGVyLWl0ZW1z.option.Q2FuY2VsZWRVdGNTdGFydA.short_desc": {
+          "source": "The earliest date and time of the canceled date",
+          "message": "Najskorší dátum a čas dátumu zrušenia"
+        },
+        "app.TWV3cw.action.Z2V0LW9yZGVyLWl0ZW1z.option.Q2hhcmdlZFV0Y0VuZA.desc": {
+          "source": "The upper limit of the charged date (and time) range; i.e. `ChargedUtc` < <this date>",
+          "message": "Horná hranica rozsahu dátumu (a času) zaúčtovania; t. j. `ChargedUtc` < <tento dátum>"
+        },
+        "app.TWV3cw.action.Z2V0LW9yZGVyLWl0ZW1z.option.Q2hhcmdlZFV0Y0VuZA.display_name": {
+          "source": "Charged Date End",
+          "message": "Koniec dátumu zaúčtovania"
+        },
+        "app.TWV3cw.action.Z2V0LW9yZGVyLWl0ZW1z.option.Q2hhcmdlZFV0Y0VuZA.short_desc": {
+          "source": "The upper limit of the charged date (and time) range",
+          "message": "Horná hranica rozsahu dátumu (a času) zaúčtovania"
+        },
+        "app.TWV3cw.action.Z2V0LW9yZGVyLWl0ZW1z.option.Q2hhcmdlZFV0Y1N0YXJ0.desc": {
+          "source": "The earliest date and time of the charged date; i.e. `ChargedUtc` >= <this date>",
+          "message": "Najskorší dátum a čas dátumu zaúčtovania; t. j. `ChargedUtc` >= <tento dátum>"
+        },
+        "app.TWV3cw.action.Z2V0LW9yZGVyLWl0ZW1z.option.Q2hhcmdlZFV0Y1N0YXJ0.display_name": {
+          "source": "Charged Date Start",
+          "message": "Začiatok dátumu zaúčtovania"
+        },
+        "app.TWV3cw.action.Z2V0LW9yZGVyLWl0ZW1z.option.Q2hhcmdlZFV0Y1N0YXJ0.short_desc": {
+          "source": "The earliest date and time of the charged date",
+          "message": "Najskorší dátum a čas dátumu zaúčtovania"
+        },
+        "app.TWV3cw.action.Z2V0LW9yZGVyLWl0ZW1z.option.Q2xvc2VkVXRjRW5k.desc": {
+          "source": "The upper limit of the closed date (and time) range; i.e. `ClosedUtc` < <this date>",
+          "message": "Horná hranica rozsahu dátumu (a času) uzavretia; t. j. `ClosedUtc` < <tento dátum>"
+        },
+        "app.TWV3cw.action.Z2V0LW9yZGVyLWl0ZW1z.option.Q2xvc2VkVXRjRW5k.display_name": {
+          "source": "Closed Date End",
+          "message": "Koniec dátumu uzavretia"
+        },
+        "app.TWV3cw.action.Z2V0LW9yZGVyLWl0ZW1z.option.Q2xvc2VkVXRjRW5k.short_desc": {
+          "source": "The upper limit of the closed date (and time) range",
+          "message": "Horná hranica rozsahu dátumu (a času) uzavretia"
+        },
+        "app.TWV3cw.action.Z2V0LW9yZGVyLWl0ZW1z.option.Q2xvc2VkVXRjU3RhcnQ.desc": {
+          "source": "The earliest date and time of the closed date; i.e. `ClosedUtc` >= <this date>",
+          "message": "Najskorší dátum a čas dátumu uzavretia; t. j. `ClosedUtc` >= <tento dátum>"
+        },
+        "app.TWV3cw.action.Z2V0LW9yZGVyLWl0ZW1z.option.Q2xvc2VkVXRjU3RhcnQ.display_name": {
+          "source": "Closed Date Start",
+          "message": "Začiatok dátumu uzavretia"
+        },
+        "app.TWV3cw.action.Z2V0LW9yZGVyLWl0ZW1z.option.Q2xvc2VkVXRjU3RhcnQ.short_desc": {
+          "source": "The earliest date and time of the closed date",
+          "message": "Najskorší dátum a čas dátumu uzavretia"
+        },
+        "app.TWV3cw.action.Z2V0LW9yZGVyLWl0ZW1z.option.Q3JlYXRlZFV0Y0VuZA.desc": {
+          "source": "The upper limit of the created date (and time) range; i.e. `CreatedUtc` < <this date>",
+          "message": "Horná hranica rozsahu dátumu (a času) vytvorenia; t. j. `CreatedUtc` < <tento dátum>"
+        },
+        "app.TWV3cw.action.Z2V0LW9yZGVyLWl0ZW1z.option.Q3JlYXRlZFV0Y0VuZA.display_name": {
+          "source": "Updated Date End",
+          "message": "Koniec dátumu aktualizácie"
+        },
+        "app.TWV3cw.action.Z2V0LW9yZGVyLWl0ZW1z.option.Q3JlYXRlZFV0Y0VuZA.short_desc": {
+          "source": "The upper limit of the created date (and time) range",
+          "message": "Horná hranica rozsahu dátumu (a času) vytvorenia"
+        },
+        "app.TWV3cw.action.Z2V0LW9yZGVyLWl0ZW1z.option.Q3JlYXRlZFV0Y1N0YXJ0.desc": {
+          "source": "The earliest date and time of the updated date; i.e. `CreatedUtc` >= <this date>",
+          "message": "Najskorší dátum a čas dátumu aktualizácie; t. j. `CreatedUtc` >= <tento dátum>"
+        },
+        "app.TWV3cw.action.Z2V0LW9yZGVyLWl0ZW1z.option.Q3JlYXRlZFV0Y1N0YXJ0.display_name": {
+          "source": "Created Date Start",
+          "message": "Začiatok dátumu vytvorenia"
+        },
+        "app.TWV3cw.action.Z2V0LW9yZGVyLWl0ZW1z.option.Q3JlYXRlZFV0Y1N0YXJ0.short_desc": {
+          "source": "The earliest date and time of the updated date",
+          "message": "Najskorší dátum a čas dátumu aktualizácie"
+        },
+        "app.TWV3cw.action.Z2V0LW9yZGVyLWl0ZW1z.option.Q3VycmVuY3k.desc": {
+          "source": "The currency code that amounts should be reported in",
+          "message": "Kód meny, v ktorej sa majú vykazovať sumy"
+        },
+        "app.TWV3cw.action.Z2V0LW9yZGVyLWl0ZW1z.option.Q3VycmVuY3k.display_name": {
+          "source": "Currency",
+          "message": "Mena"
+        },
+        "app.TWV3cw.action.Z2V0LW9yZGVyLWl0ZW1z.option.Q3VycmVuY3k.short_desc": {
+          "source": "The currency code that amounts should be reported in",
+          "message": "Kód meny, v ktorej sa majú vykazovať sumy"
+        },
+        "app.TWV3cw.action.Z2V0LW9yZGVyLWl0ZW1z.option.QWNjb3VudGluZ1N0YXRl.desc": {
+          "source": "The accounting state(s) for the search; `Open`, `Closed`, `Inactive`, or `Canceled`",
+          "message": "Účtovný stav / stavy na vyhľadávanie; `Open`, `Closed`, `Inactive` alebo `Canceled`"
+        },
+        "app.TWV3cw.action.Z2V0LW9yZGVyLWl0ZW1z.option.QWNjb3VudGluZ1N0YXRl.display_name": {
+          "source": "Accounting State",
+          "message": "Účtovný stav"
+        },
+        "app.TWV3cw.action.Z2V0LW9yZGVyLWl0ZW1z.option.QWNjb3VudGluZ1N0YXRl.short_desc": {
+          "source": "The accounting state(s) for the search",
+          "message": "Účtovný stav / stavy na vyhľadávanie"
+        },
+        "app.TWV3cw.action.Z2V0LW9yZGVyLWl0ZW1z.option.QmlsbElk.desc": {
+          "source": "The bill ID(s) for the search",
+          "message": "ID účtu / účtov na vyhľadávanie"
+        },
+        "app.TWV3cw.action.Z2V0LW9yZGVyLWl0ZW1z.option.QmlsbElk.display_name": {
+          "source": "Bill ID",
+          "message": "ID prijatej faktúry"
+        },
+        "app.TWV3cw.action.Z2V0LW9yZGVyLWl0ZW1z.option.QmlsbElk.short_desc": {
+          "source": "The bill ID(s) for the search",
+          "message": "ID účtu / účtov na vyhľadávanie"
+        },
+        "app.TWV3cw.action.Z2V0LW9yZGVyLWl0ZW1z.option.RW50ZXJwcmlzZUlk.desc": {
+          "source": "The enterprise ID(s) for the search",
+          "message": "ID podniku / podnikov na vyhľadávanie"
+        },
+        "app.TWV3cw.action.Z2V0LW9yZGVyLWl0ZW1z.option.RW50ZXJwcmlzZUlk.display_name": {
+          "source": "Enterprise ID",
+          "message": "ID podniku"
+        },
+        "app.TWV3cw.action.Z2V0LW9yZGVyLWl0ZW1z.option.RW50ZXJwcmlzZUlk.short_desc": {
+          "source": "The enterprise ID(s) for the search",
+          "message": "ID podniku / podnikov na vyhľadávanie"
+        },
+        "app.TWV3cw.action.Z2V0LW9yZGVyLWl0ZW1z.option.T3JkZXJJdGVtSWQ.desc": {
+          "source": "The order item ID(s) for the search",
+          "message": "ID položky / položiek objednávky na vyhľadávanie"
+        },
+        "app.TWV3cw.action.Z2V0LW9yZGVyLWl0ZW1z.option.T3JkZXJJdGVtSWQ.display_name": {
+          "source": "Order Item ID",
+          "message": "ID položky objednávky"
+        },
+        "app.TWV3cw.action.Z2V0LW9yZGVyLWl0ZW1z.option.T3JkZXJJdGVtSWQ.short_desc": {
+          "source": "The order item ID(s) for the search",
+          "message": "ID položky / položiek objednávky na vyhľadávanie"
+        },
+        "app.TWV3cw.action.Z2V0LW9yZGVyLWl0ZW1z.option.U2VydmljZU9yZGVySWQ.desc": {
+          "source": "The service order ID(s) for the search",
+          "message": "ID objednávky / objednávok služieb na vyhľadávanie"
+        },
+        "app.TWV3cw.action.Z2V0LW9yZGVyLWl0ZW1z.option.U2VydmljZU9yZGVySWQ.display_name": {
+          "source": "Service Order ID",
+          "message": "ID objednávky služieb"
+        },
+        "app.TWV3cw.action.Z2V0LW9yZGVyLWl0ZW1z.option.U2VydmljZU9yZGVySWQ.short_desc": {
+          "source": "The service order ID(s) for the search",
+          "message": "ID objednávky / objednávok služieb na vyhľadávanie"
+        },
+        "app.TWV3cw.action.Z2V0LW9yZGVyLWl0ZW1z.option.U2VydmljZUlk.desc": {
+          "source": "The service ID(s) for the search",
+          "message": "ID služby / služieb na vyhľadávanie"
+        },
+        "app.TWV3cw.action.Z2V0LW9yZGVyLWl0ZW1z.option.U2VydmljZUlk.display_name": {
+          "source": "Service ID",
+          "message": "ID služby"
+        },
+        "app.TWV3cw.action.Z2V0LW9yZGVyLWl0ZW1z.option.U2VydmljZUlk.short_desc": {
+          "source": "The service ID(s) for the search",
+          "message": "ID služby / služieb na vyhľadávanie"
+        },
+        "app.TWV3cw.action.Z2V0LW9yZGVyLWl0ZW1z.option.VHlwZQ.desc": {
+          "source": "The order item type(s) for the search",
+          "message": "Typ(y) položky objednávky na vyhľadávanie"
+        },
+        "app.TWV3cw.action.Z2V0LW9yZGVyLWl0ZW1z.option.VHlwZQ.display_name": {
+          "source": "Order Item Type",
+          "message": "Typ položky objednávky"
+        },
+        "app.TWV3cw.action.Z2V0LW9yZGVyLWl0ZW1z.option.VHlwZQ.short_desc": {
+          "source": "The order item type(s) for the search",
+          "message": "Typ(y) položky objednávky na vyhľadávanie"
+        },
+        "app.TWV3cw.action.Z2V0LW9yZGVyLWl0ZW1z.option.VXBkYXRlZFV0Y0VuZA.desc": {
+          "source": "The upper limit of the updated date (and time) range; i.e. `UpdatedUtc` < <this date>",
+          "message": "Horná hranica rozsahu dátumu (a času) aktualizácie; t. j. `UpdatedUtc` < <tento dátum>"
+        },
+        "app.TWV3cw.action.Z2V0LW9yZGVyLWl0ZW1z.option.VXBkYXRlZFV0Y0VuZA.display_name": {
+          "source": "Updated Date End",
+          "message": "Koniec dátumu aktualizácie"
+        },
+        "app.TWV3cw.action.Z2V0LW9yZGVyLWl0ZW1z.option.VXBkYXRlZFV0Y0VuZA.short_desc": {
+          "source": "The upper limit of the updated date (and time) range",
+          "message": "Horná hranica rozsahu dátumu (a času) aktualizácie"
+        },
+        "app.TWV3cw.action.Z2V0LW9yZGVyLWl0ZW1z.option.VXBkYXRlZFV0Y1N0YXJ0.desc": {
+          "source": "The earliest date and time of the updated date; i.e. `UpdatedUtc` >= <this date>",
+          "message": "Najskorší dátum a čas dátumu aktualizácie; t. j. `UpdatedUtc` >= <tento dátum>"
+        },
+        "app.TWV3cw.action.Z2V0LW9yZGVyLWl0ZW1z.option.VXBkYXRlZFV0Y1N0YXJ0.display_name": {
+          "source": "Updated Date Start",
+          "message": "Začiatok dátumu aktualizácie"
+        },
+        "app.TWV3cw.action.Z2V0LW9yZGVyLWl0ZW1z.option.VXBkYXRlZFV0Y1N0YXJ0.short_desc": {
+          "source": "The earliest date and time of the updated date",
+          "message": "Najskorší dátum a čas dátumu aktualizácie"
+        },
+        "app.TWV3cw.action.Z2V0LW9yZGVyLWl0ZW1z.option.bGltaXQ.desc": {
+          "source": "Maximum number of records to return",
+          "message": "Maximálny počet záznamov na vrátenie"
+        },
+        "app.TWV3cw.action.Z2V0LW9yZGVyLWl0ZW1z.option.bGltaXQ.display_name": {
+          "source": "Record Limit",
+          "message": "Limit záznamov"
+        },
+        "app.TWV3cw.action.Z2V0LW9yZGVyLWl0ZW1z.option.bGltaXQ.short_desc": {
+          "source": "Maximum number of records to return",
+          "message": "Maximálny počet záznamov na vrátenie"
+        },
+        "app.TWV3cw.action.Z2V0LW9yZGVyLWl0ZW1z.short_desc": {
+          "source": "Retrieve order item information from Mews",
+          "message": "Získať informácie o položkách objednávky zo systému Mews"
+        },
+        "app.TWV3cw.action.Z2V0LWN1c3RvbWVycw.desc": {
+          "source": "Retrieve customer information from Mews",
+          "message": "Získať informácie o zákazníkoch zo systému Mews"
+        },
+        "app.TWV3cw.action.Z2V0LWN1c3RvbWVycw.display_name": {
+          "source": "Retrieve Customer Information",
+          "message": "Získať informácie o zákazníkovi"
+        },
+        "app.TWV3cw.action.Z2V0LWN1c3RvbWVycw.option.Q2hhaW5JZA.desc": {
+          "source": "Limit the search to the given chain ID(s)",
+          "message": "Obmedziť vyhľadávanie na zadané ID reťazca (alebo reťazcov)"
+        },
+        "app.TWV3cw.action.Z2V0LWN1c3RvbWVycw.option.Q2hhaW5JZA.display_name": {
+          "source": "Chain ID",
+          "message": "ID reťazca"
+        },
+        "app.TWV3cw.action.Z2V0LWN1c3RvbWVycw.option.Q2hhaW5JZA.short_desc": {
+          "source": "Limit the search to the given chain ID(s)",
+          "message": "Obmedziť vyhľadávanie na zadané ID reťazca (alebo reťazcov)"
+        },
+        "app.TWV3cw.action.Z2V0LWN1c3RvbWVycw.option.Q3VzdG9tZXJJZA.desc": {
+          "source": "The customer ID(s) (UUID(s)) to find",
+          "message": "ID zákazníka (UUID) na vyhľadanie"
+        },
+        "app.TWV3cw.action.Z2V0LWN1c3RvbWVycw.option.Q3VzdG9tZXJJZA.display_name": {
+          "source": "Customer ID",
+          "message": "ID zákazníka"
+        },
+        "app.TWV3cw.action.Z2V0LWN1c3RvbWVycw.option.Q3VzdG9tZXJJZA.short_desc": {
+          "source": "The customer ID(s) to find",
+          "message": "ID zákazníka na vyhľadanie"
+        },
+        "app.TWV3cw.action.Z2V0LWN1c3RvbWVycw.option.QWN0aXZpdHlTdGF0ZQ.desc": {
+          "source": "Search for customers with the given activity state(s) (`Active` or `Deleted`)",
+          "message": "Vyhľadať zákazníkov so zadaným stavom aktivity (`Active` alebo `Deleted`)"
+        },
+        "app.TWV3cw.action.Z2V0LWN1c3RvbWVycw.option.QWN0aXZpdHlTdGF0ZQ.display_name": {
+          "source": "Activity State",
+          "message": "Stav aktivity"
+        },
+        "app.TWV3cw.action.Z2V0LWN1c3RvbWVycw.option.QWN0aXZpdHlTdGF0ZQ.short_desc": {
+          "source": "Search for customers with the given activity state(s)",
+          "message": "Vyhľadať zákazníkov so zadaným stavom aktivity"
+        },
+        "app.TWV3cw.action.Z2V0LWN1c3RvbWVycw.option.RW1haWw.desc": {
+          "source": "Search for customers with the given email address(es)",
+          "message": "Vyhľadať zákazníkov so zadanou e-mailovou adresou (adresami)"
+        },
+        "app.TWV3cw.action.Z2V0LWN1c3RvbWVycw.option.RW1haWw.display_name": {
+          "source": "EMail Address",
+          "message": "E-mailová adresa"
+        },
+        "app.TWV3cw.action.Z2V0LWN1c3RvbWVycw.option.RW1haWw.short_desc": {
+          "source": "Search for customers with the given email address(es)",
+          "message": "Vyhľadať zákazníkov so zadanou e-mailovou adresou (adresami)"
+        },
+        "app.TWV3cw.action.Z2V0LWN1c3RvbWVycw.option.Rmlyc3ROYW1l.desc": {
+          "source": "Search for customers with the given first name(s)",
+          "message": "Vyhľadať zákazníkov so zadaným krstným menom (menami)"
+        },
+        "app.TWV3cw.action.Z2V0LWN1c3RvbWVycw.option.Rmlyc3ROYW1l.display_name": {
+          "source": "First Name",
+          "message": "Meno"
+        },
+        "app.TWV3cw.action.Z2V0LWN1c3RvbWVycw.option.Rmlyc3ROYW1l.short_desc": {
+          "source": "Search for customers with the given first name(s)",
+          "message": "Vyhľadať zákazníkov so zadaným krstným menom (menami)"
+        },
+        "app.TWV3cw.action.Z2V0LWN1c3RvbWVycw.option.TG95YWx0eUNvZGU.desc": {
+          "source": "Search for customers with the given loyalty code(s)",
+          "message": "Vyhľadať zákazníkov so zadaným vernostným kódom (kódmi)"
+        },
+        "app.TWV3cw.action.Z2V0LWN1c3RvbWVycw.option.TG95YWx0eUNvZGU.display_name": {
+          "source": "Loyalty Code",
+          "message": "Vernostný kód"
+        },
+        "app.TWV3cw.action.Z2V0LWN1c3RvbWVycw.option.TG95YWx0eUNvZGU.short_desc": {
+          "source": "Search for customers with the given loyalty code(s)",
+          "message": "Vyhľadať zákazníkov so zadaným vernostným kódom (kódmi)"
+        },
+        "app.TWV3cw.action.Z2V0LWN1c3RvbWVycw.option.TGFzdE5hbWU.desc": {
+          "source": "Search for customers with the given last name(s)",
+          "message": "Vyhľadať zákazníkov so zadaným priezviskom (priezviskami)"
+        },
+        "app.TWV3cw.action.Z2V0LWN1c3RvbWVycw.option.TGFzdE5hbWU.display_name": {
+          "source": "Last Name",
+          "message": "Priezvisko"
+        },
+        "app.TWV3cw.action.Z2V0LWN1c3RvbWVycw.option.TGFzdE5hbWU.short_desc": {
+          "source": "Search for customers with the given last name(s)",
+          "message": "Vyhľadať zákazníkov so zadaným priezviskom (priezviskami)"
+        },
+        "app.TWV3cw.action.Z2V0LWN1c3RvbWVycw.short_desc": {
+          "source": "Retrieve customer information from Mews",
+          "message": "Získať informácie o zákazníkoch zo systému Mews"
+        },
+        "app.TWV3cw.action.Z2V0LXBheW1lbnRz.desc": {
+          "source": "Retrieve payment information from Mews",
+          "message": "Získať informácie o platbe z Mews"
+        },
+        "app.TWV3cw.action.Z2V0LXBheW1lbnRz.display_name": {
+          "source": "Retrieve Payment Information",
+          "message": "Získať informácie o platbe"
+        },
+        "app.TWV3cw.action.Z2V0LXBheW1lbnRz.option.Q2hhcmdlZFV0Y0VuZA.desc": {
+          "source": "The upper limit of the charged date (and time) range; i.e. `ChargedUtc` < <this date>",
+          "message": "Horná hranica rozsahu dátumu (a času) zaúčtovania; t. j. `ChargedUtc` < <tento dátum>"
+        },
+        "app.TWV3cw.action.Z2V0LXBheW1lbnRz.option.Q2hhcmdlZFV0Y0VuZA.display_name": {
+          "source": "Charged Date End",
+          "message": "Koniec dátumu zaúčtovania"
+        },
+        "app.TWV3cw.action.Z2V0LXBheW1lbnRz.option.Q2hhcmdlZFV0Y0VuZA.short_desc": {
+          "source": "The upper limit of the charged date (and time) range",
+          "message": "Horná hranica rozsahu dátumu (a času) zaúčtovania"
+        },
+        "app.TWV3cw.action.Z2V0LXBheW1lbnRz.option.Q2hhcmdlZFV0Y1N0YXJ0.desc": {
+          "source": "The earliest date and time of the charged date; i.e. `ChargedUtc` >= <this date>",
+          "message": "Najskorší dátum a čas dátumu zaúčtovania; t. j. `ChargedUtc` >= <tento dátum>"
+        },
+        "app.TWV3cw.action.Z2V0LXBheW1lbnRz.option.Q2hhcmdlZFV0Y1N0YXJ0.display_name": {
+          "source": "Charged Date Start",
+          "message": "Začiatok dátumu zaúčtovania"
+        },
+        "app.TWV3cw.action.Z2V0LXBheW1lbnRz.option.Q2hhcmdlZFV0Y1N0YXJ0.short_desc": {
+          "source": "The earliest date and time of the charged date",
+          "message": "Najskorší dátum a čas dátumu zaúčtovania"
+        },
+        "app.TWV3cw.action.Z2V0LXBheW1lbnRz.option.Q2xvc2VkVXRjRW5k.desc": {
+          "source": "The upper limit of the closed date (and time) range; i.e. `ClosedUtc` < <this date>",
+          "message": "Horná hranica rozsahu dátumu (a času) uzavretia; t. j. `ClosedUtc` < <tento dátum>"
+        },
+        "app.TWV3cw.action.Z2V0LXBheW1lbnRz.option.Q2xvc2VkVXRjRW5k.display_name": {
+          "source": "Closed Date End",
+          "message": "Koniec dátumu uzavretia"
+        },
+        "app.TWV3cw.action.Z2V0LXBheW1lbnRz.option.Q2xvc2VkVXRjRW5k.short_desc": {
+          "source": "The upper limit of the closed date (and time) range",
+          "message": "Horná hranica rozsahu dátumu (a času) uzavretia"
+        },
+        "app.TWV3cw.action.Z2V0LXBheW1lbnRz.option.Q2xvc2VkVXRjU3RhcnQ.desc": {
+          "source": "The earliest date and time of the closed date; i.e. `ClosedUtc` >= <this date>",
+          "message": "Najskorší dátum a čas dátumu uzavretia; t. j. `ClosedUtc` >= <tento dátum>"
+        },
+        "app.TWV3cw.action.Z2V0LXBheW1lbnRz.option.Q2xvc2VkVXRjU3RhcnQ.display_name": {
+          "source": "Closed Date Start",
+          "message": "Začiatok dátumu uzavretia"
+        },
+        "app.TWV3cw.action.Z2V0LXBheW1lbnRz.option.Q2xvc2VkVXRjU3RhcnQ.short_desc": {
+          "source": "The earliest date and time of the closed date",
+          "message": "Najskorší dátum a čas dátumu uzavretia"
+        },
+        "app.TWV3cw.action.Z2V0LXBheW1lbnRz.option.Q3JlYXRlZFV0Y0VuZA.desc": {
+          "source": "The upper limit of the created date (and time) range; i.e. `CreatedUtc` < <this date>",
+          "message": "Horná hranica rozsahu dátumu (a času) vytvorenia; t. j. `CreatedUtc` < <tento dátum>"
+        },
+        "app.TWV3cw.action.Z2V0LXBheW1lbnRz.option.Q3JlYXRlZFV0Y0VuZA.display_name": {
+          "source": "Updated Date End",
+          "message": "Koniec dátumu aktualizácie"
+        },
+        "app.TWV3cw.action.Z2V0LXBheW1lbnRz.option.Q3JlYXRlZFV0Y0VuZA.short_desc": {
+          "source": "The upper limit of the created date (and time) range",
+          "message": "Horná hranica rozsahu dátumu (a času) vytvorenia"
+        },
+        "app.TWV3cw.action.Z2V0LXBheW1lbnRz.option.Q3JlYXRlZFV0Y1N0YXJ0.desc": {
+          "source": "The earliest date and time of the updated date; i.e. `CreatedUtc` >= <this date>",
+          "message": "Najskorší dátum a čas dátumu aktualizácie; t. j. `CreatedUtc` >= <tento dátum>"
+        },
+        "app.TWV3cw.action.Z2V0LXBheW1lbnRz.option.Q3JlYXRlZFV0Y1N0YXJ0.display_name": {
+          "source": "Created Date Start",
+          "message": "Začiatok dátumu vytvorenia"
+        },
+        "app.TWV3cw.action.Z2V0LXBheW1lbnRz.option.Q3JlYXRlZFV0Y1N0YXJ0.short_desc": {
+          "source": "The earliest date and time of the updated date",
+          "message": "Najskorší dátum a čas dátumu aktualizácie"
+        },
+        "app.TWV3cw.action.Z2V0LXBheW1lbnRz.option.Q3VycmVuY3k.desc": {
+          "source": "The currency code that amounts should be reported in",
+          "message": "Kód meny, v ktorej sa majú vykazovať sumy"
+        },
+        "app.TWV3cw.action.Z2V0LXBheW1lbnRz.option.Q3VycmVuY3k.display_name": {
+          "source": "Currency",
+          "message": "Mena"
+        },
+        "app.TWV3cw.action.Z2V0LXBheW1lbnRz.option.Q3VycmVuY3k.short_desc": {
+          "source": "The currency code that amounts should be reported in",
+          "message": "Kód meny, v ktorej sa majú vykazovať sumy"
+        },
+        "app.TWV3cw.action.Z2V0LXBheW1lbnRz.option.QWNjb3VudGluZ1N0YXRl.desc": {
+          "source": "The accounting state(s) for the search; `Open`, `Closed`, `Inactive`, or `Canceled`",
+          "message": "Účtovný stav / stavy na vyhľadávanie; `Open`, `Closed`, `Inactive` alebo `Canceled`"
+        },
+        "app.TWV3cw.action.Z2V0LXBheW1lbnRz.option.QWNjb3VudGluZ1N0YXRl.display_name": {
+          "source": "Accounting State",
+          "message": "Účtovný stav"
+        },
+        "app.TWV3cw.action.Z2V0LXBheW1lbnRz.option.QWNjb3VudGluZ1N0YXRl.short_desc": {
+          "source": "The accounting state(s) for the search",
+          "message": "Účtovný stav / stavy na vyhľadávanie"
+        },
+        "app.TWV3cw.action.Z2V0LXBheW1lbnRz.option.QmlsbElk.desc": {
+          "source": "The bill ID(s) for the search",
+          "message": "ID účtu / účtov na vyhľadávanie"
+        },
+        "app.TWV3cw.action.Z2V0LXBheW1lbnRz.option.QmlsbElk.display_name": {
+          "source": "Bill ID",
+          "message": "ID prijatej faktúry"
+        },
+        "app.TWV3cw.action.Z2V0LXBheW1lbnRz.option.QmlsbElk.short_desc": {
+          "source": "The bill ID(s) for the search",
+          "message": "ID účtu / účtov na vyhľadávanie"
+        },
+        "app.TWV3cw.action.Z2V0LXBheW1lbnRz.option.RW50ZXJwcmlzZUlk.desc": {
+          "source": "The enterprise ID(s) for the search",
+          "message": "ID podniku / podnikov na vyhľadávanie"
+        },
+        "app.TWV3cw.action.Z2V0LXBheW1lbnRz.option.RW50ZXJwcmlzZUlk.display_name": {
+          "source": "Enterprise ID",
+          "message": "ID podniku"
+        },
+        "app.TWV3cw.action.Z2V0LXBheW1lbnRz.option.RW50ZXJwcmlzZUlk.short_desc": {
+          "source": "The enterprise ID(s) for the search",
+          "message": "ID podniku / podnikov na vyhľadávanie"
+        },
+        "app.TWV3cw.action.Z2V0LXBheW1lbnRz.option.U2V0dGxlbWVudFV0Y0VuZA.desc": {
+          "source": "The upper limit of the settlement date (and time) range; i.e. `SettlementUtc` < <this date>",
+          "message": "Horná hranica rozsahu dátumu (a času) zúčtovania; t. j. `SettlementUtc` < <tento dátum>"
+        },
+        "app.TWV3cw.action.Z2V0LXBheW1lbnRz.option.U2V0dGxlbWVudFV0Y0VuZA.display_name": {
+          "source": "Settlement Date End",
+          "message": "Koniec dátumu zúčtovania"
+        },
+        "app.TWV3cw.action.Z2V0LXBheW1lbnRz.option.U2V0dGxlbWVudFV0Y0VuZA.short_desc": {
+          "source": "The upper limit of the settlement date (and time) range",
+          "message": "Horná hranica rozsahu dátumu (a času) zúčtovania"
+        },
+        "app.TWV3cw.action.Z2V0LXBheW1lbnRz.option.U2V0dGxlbWVudFV0Y1N0YXJ0.desc": {
+          "source": "The earliest date and time of the settlement date; i.e. `SettlementUtc` >= <this date>",
+          "message": "Najskorší dátum a čas dátumu zúčtovania; t. j. `SettlementUtc` >= <tento dátum>"
+        },
+        "app.TWV3cw.action.Z2V0LXBheW1lbnRz.option.U2V0dGxlbWVudFV0Y1N0YXJ0.display_name": {
+          "source": "Settlement Date Start",
+          "message": "Začiatok dátumu zúčtovania"
+        },
+        "app.TWV3cw.action.Z2V0LXBheW1lbnRz.option.U2V0dGxlbWVudFV0Y1N0YXJ0.short_desc": {
+          "source": "The earliest date and time of the settlement date",
+          "message": "Najskorší dátum a čas dátumu zúčtovania"
+        },
+        "app.TWV3cw.action.Z2V0LXBheW1lbnRz.option.U3RhdGU.desc": {
+          "source": "The payment state(s) for the search; `Charged`, `Canceled`, `Pending`, `Failed`, or `Verifying`",
+          "message": "Stav(y) platby pre vyhľadávanie; `Charged`, `Canceled`, `Pending`, `Failed` alebo `Verifying`"
+        },
+        "app.TWV3cw.action.Z2V0LXBheW1lbnRz.option.U3RhdGU.display_name": {
+          "source": "Payment State",
+          "message": "Stav platby"
+        },
+        "app.TWV3cw.action.Z2V0LXBheW1lbnRz.option.U3RhdGU.short_desc": {
+          "source": "The payment state(s) for the search",
+          "message": "Stav(y) platby pre vyhľadávanie"
+        },
+        "app.TWV3cw.action.Z2V0LXBheW1lbnRz.option.UGF5bWVudElk.desc": {
+          "source": "One or more payment ID(s) for the search",
+          "message": "Jedno alebo viac ID platieb pre vyhľadávanie"
+        },
+        "app.TWV3cw.action.Z2V0LXBheW1lbnRz.option.UGF5bWVudElk.display_name": {
+          "source": "Payment ID",
+          "message": "ID platby"
+        },
+        "app.TWV3cw.action.Z2V0LXBheW1lbnRz.option.UGF5bWVudElk.short_desc": {
+          "source": "One or more payment ID(s) for the search",
+          "message": "Jedno alebo viac ID platieb pre vyhľadávanie"
+        },
+        "app.TWV3cw.action.Z2V0LXBheW1lbnRz.option.VHlwZQ.desc": {
+          "source": "The payment type(s) for the search",
+          "message": "Typ(y) platby pre vyhľadávanie"
+        },
+        "app.TWV3cw.action.Z2V0LXBheW1lbnRz.option.VHlwZQ.display_name": {
+          "source": "Payment Type",
+          "message": "Typ platby"
+        },
+        "app.TWV3cw.action.Z2V0LXBheW1lbnRz.option.VHlwZQ.short_desc": {
+          "source": "The payment type(s) for the search",
+          "message": "Typ(y) platby pre vyhľadávanie"
+        },
+        "app.TWV3cw.action.Z2V0LXBheW1lbnRz.option.VXBkYXRlZFV0Y0VuZA.desc": {
+          "source": "The upper limit of the updated date (and time) range; i.e. `UpdatedUtc` < <this date>",
+          "message": "Horná hranica rozsahu dátumu (a času) aktualizácie; t. j. `UpdatedUtc` < <tento dátum>"
+        },
+        "app.TWV3cw.action.Z2V0LXBheW1lbnRz.option.VXBkYXRlZFV0Y0VuZA.display_name": {
+          "source": "Updated Date End",
+          "message": "Koniec dátumu aktualizácie"
+        },
+        "app.TWV3cw.action.Z2V0LXBheW1lbnRz.option.VXBkYXRlZFV0Y0VuZA.short_desc": {
+          "source": "The upper limit of the updated date (and time) range",
+          "message": "Horná hranica rozsahu dátumu (a času) aktualizácie"
+        },
+        "app.TWV3cw.action.Z2V0LXBheW1lbnRz.option.VXBkYXRlZFV0Y1N0YXJ0.desc": {
+          "source": "The earliest date and time of the updated date; i.e. `UpdatedUtc` >= <this date>",
+          "message": "Najskorší dátum a čas dátumu aktualizácie; t. j. `UpdatedUtc` >= <tento dátum>"
+        },
+        "app.TWV3cw.action.Z2V0LXBheW1lbnRz.option.VXBkYXRlZFV0Y1N0YXJ0.display_name": {
+          "source": "Updated Date Start",
+          "message": "Začiatok dátumu aktualizácie"
+        },
+        "app.TWV3cw.action.Z2V0LXBheW1lbnRz.option.VXBkYXRlZFV0Y1N0YXJ0.short_desc": {
+          "source": "The earliest date and time of the updated date",
+          "message": "Najskorší dátum a čas dátumu aktualizácie"
+        },
+        "app.TWV3cw.action.Z2V0LXBheW1lbnRz.option.bGltaXQ.desc": {
+          "source": "Maximum number of records to return",
+          "message": "Maximálny počet záznamov na vrátenie"
+        },
+        "app.TWV3cw.action.Z2V0LXBheW1lbnRz.option.bGltaXQ.display_name": {
+          "source": "Record Limit",
+          "message": "Limit záznamov"
+        },
+        "app.TWV3cw.action.Z2V0LXBheW1lbnRz.option.bGltaXQ.short_desc": {
+          "source": "Maximum number of records to return",
+          "message": "Maximálny počet záznamov na vrátenie"
+        },
+        "app.TWV3cw.action.Z2V0LXBheW1lbnRz.short_desc": {
+          "source": "Retrieve payment information from Mews",
+          "message": "Získať informácie o platbe z Mews"
+        },
+        "app.TWV3cw.action.bWFrZS1hcGktY2FsbA.desc": {
+          "source": "Make a custom HTTP / REST API call to **Mews Server** using the configured connection's authentication.\n\nSpecify the HTTP method, the URI path (relative to the connection's API base URL), optional query parameters, headers, and request body. The response is returned as a hash containing the status code, response headers, and response body.\n\nUse this action for endpoints that are not yet exposed as first-class actions on this app.",
+          "message": "Vykonajte vlastné volanie HTTP / REST API do **Mews Server** pomocou autentifikácie nakonfigurovaného pripojenia.\n\nZadajte metódu HTTP, cestu URI (relatívnu k základnej adrese URL API pripojenia), voliteľné parametre dotazu, hlavičky a telo požiadavky. Odpoveď sa vráti ako hash obsahujúci stavový kód, hlavičky odpovede a telo odpovede.\n\nTúto akciu použite pre koncové body, ktoré ešte nie sú sprístupnené ako prvotriedne akcie v tejto aplikácii."
+        },
+        "app.TWV3cw.action.bWFrZS1hcGktY2FsbA.display_name": {
+          "source": "Make an API call",
+          "message": "Urobiť volanie API"
+        },
+        "app.TWV3cw.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.desc": {
+          "source": "The request body. The effective type depends on `body_type`: JSON/form/YAML expect a hash, XML/text expect a string, multipart expects a file structure, binary expects raw bytes.",
+          "message": "Telo požiadavky. Efektívny typ závisí od `body_type`: JSON/formulár/YAML očakávajú hash, XML/text očakávajú reťazec, multipart očakáva štruktúru súboru, binárny typ očakáva neopracované bajty."
+        },
+        "app.TWV3cw.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.display_name": {
+          "source": "Body",
+          "message": "Telo"
+        },
+        "app.TWV3cw.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.short_desc": {
+          "source": "The request body",
+          "message": "Telo požiadavky"
+        },
+        "app.TWV3cw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.desc": {
+          "source": "Upload a file using `multipart/form-data`. The body must be a @ref DataProvider::FileDataType \"FileDataType\" structure (filename + content + mime_type). The framework builds the multipart envelope and sets the boundary header.",
+          "message": "Odoslať súbor pomocou `multipart/form-data`. Telo musí byť štruktúra @ref DataProvider::FileDataType \"FileDataType\" (filename + content + mime_type). Rámec vytvorí obálku multipart a nastaví hlavičku boundary."
+        },
+        "app.TWV3cw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.display_name": {
+          "source": "Multipart Form",
+          "message": "Multipart formulár"
+        },
+        "app.TWV3cw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.short_desc": {
+          "source": "Upload a file using multipart/form-data",
+          "message": "Odoslať súbor pomocou multipart/form-data"
+        },
+        "app.TWV3cw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.desc": {
+          "source": "Pass the body to the REST client unchanged; the client decides serialization based on its configured `data` option and the value type",
+          "message": "Odovzdať telo klientovi REST bez zmeny; klient rozhodne o serializácii na základe svojej konfigurovanej možnosti `data` a typu hodnoty"
+        },
+        "app.TWV3cw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.display_name": {
+          "source": "Auto",
+          "message": "Auto"
+        },
+        "app.TWV3cw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.short_desc": {
+          "source": "Pass-through; use connection serialization and let the REST client decide",
+          "message": "Priamy prechod; použiť serializáciu spojenia a nechať rozhodnúť klienta REST"
+        },
+        "app.TWV3cw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.desc": {
+          "source": "Send the body as raw bytes. The body must be a binary value. Sets `Content-Type: application/octet-stream` unless overridden by `hdr`.",
+          "message": "Odoslať telo ako neopracované bajty. Telo musí byť binárna hodnota. Nastavuje `Content-Type: application/octet-stream`, pokiaľ nie je prepísané pomocou `hdr`."
+        },
+        "app.TWV3cw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.display_name": {
+          "source": "Raw Binary",
+          "message": "Surové binárne dáta"
+        },
+        "app.TWV3cw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.short_desc": {
+          "source": "Send body as raw bytes",
+          "message": "Odoslať telo ako neopracované bajty"
+        },
+        "app.TWV3cw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.desc": {
+          "source": "Serialize a hash of form fields as `application/x-www-form-urlencoded`. The body must be a hash whose values are scalars (strings/numbers/booleans).",
+          "message": "Serializovať hash polí formulára ako `application/x-www-form-urlencoded`. Telo musí byť hash, ktorého hodnoty sú skaláre (reťazce/čísla/booleovské hodnoty)."
+        },
+        "app.TWV3cw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.display_name": {
+          "source": "Form (URL-encoded)",
+          "message": "Formulár (kódovaný v URL)"
+        },
+        "app.TWV3cw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.short_desc": {
+          "source": "Serialize body as application/x-www-form-urlencoded form fields",
+          "message": "Serializovať telo ako polia formulára application/x-www-form-urlencoded"
+        },
+        "app.TWV3cw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.desc": {
+          "source": "Serialize the body as JSON; sets `Content-Type: application/json`. The body should be a hash, list, or scalar value.",
+          "message": "Serializovať telo ako JSON; nastavuje `Content-Type: application/json`. Telo by malo byť hash, zoznam alebo skalárna hodnota."
+        },
+        "app.TWV3cw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.display_name": {
+          "source": "JSON",
+          "message": "JSON"
+        },
+        "app.TWV3cw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.short_desc": {
+          "source": "Serialize body as JSON",
+          "message": "Serializovať telo ako JSON"
+        },
+        "app.TWV3cw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.desc": {
+          "source": "Send the body as plain text. The body must be a string. Sets `Content-Type: text/plain`.",
+          "message": "Odoslať telo ako čistý text. Telo musí byť reťazec. Nastavuje `Content-Type: text/plain`."
+        },
+        "app.TWV3cw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.display_name": {
+          "source": "Plain Text",
+          "message": "Čistý text"
+        },
+        "app.TWV3cw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.short_desc": {
+          "source": "Send body as text/plain",
+          "message": "Odoslať telo ako text/plain"
+        },
+        "app.TWV3cw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.desc": {
+          "source": "Send the body as XML. If the body is a hash it is serialized to XML; if it is a string it is sent verbatim. Sets `Content-Type: application/xml`.",
+          "message": "Odoslať telo ako XML. Ak je telo hash, serializuje sa do XML; ak je to reťazec, odosiela sa doslovne. Nastavuje `Content-Type: application/xml`."
+        },
+        "app.TWV3cw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.display_name": {
+          "source": "XML",
+          "message": "XML"
+        },
+        "app.TWV3cw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.short_desc": {
+          "source": "Send body as XML",
+          "message": "Odoslať telo ako XML"
+        },
+        "app.TWV3cw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.desc": {
+          "source": "Send the body as YAML. If the body is a hash it is serialized to YAML; if it is a string it is sent verbatim. Sets `Content-Type: application/x-yaml`.",
+          "message": "Odoslať telo ako YAML. Ak je telo hash, serializuje sa do YAML; ak je to reťazec, odosiela sa doslovne. Nastavuje `Content-Type: application/x-yaml`."
+        },
+        "app.TWV3cw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.display_name": {
+          "source": "YAML",
+          "message": "YAML"
+        },
+        "app.TWV3cw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.short_desc": {
+          "source": "Send body as YAML",
+          "message": "Odoslať telo ako YAML"
+        },
+        "app.TWV3cw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.desc": {
+          "source": "Selects the body serialization mode and the corresponding `Content-Type` header. Changing this field reshapes the `body` editor - selecting JSON exposes a JSON editor, selecting Multipart Form exposes a file picker, and so on.",
+          "message": "Vyberie režim serializácie tela a zodpovedajúcu hlavičku `Content-Type`. Zmena tohto poľa zmení editor `body` - výber JSON zobrazí editor JSON, výber Multipart Form zobrazí výber súborov a podobne."
+        },
+        "app.TWV3cw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.display_name": {
+          "source": "Body Type",
+          "message": "Typ tela"
+        },
+        "app.TWV3cw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.short_desc": {
+          "source": "How the body is serialized and what Content-Type is sent",
+          "message": "Ako sa telo serializuje a aký Content-Type sa odosiela"
+        },
+        "app.TWV3cw.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.desc": {
+          "source": "If `True`, non-2xx HTTP responses return as the normal response hash (with the actual status code) instead of raising `REST-RESPONSE-ERROR`. Useful for handling 4xx/5xx as data - e.g. checking whether a resource exists. Overrides the connection's `error_passthru` setting for this call only.",
+          "message": "Ak je `True`, odpovede HTTP iné ako 2xx sa vrátia ako normálny hash odpovede (s reálnym stavovým kódom) namiesto vyvolania `REST-RESPONSE-ERROR`. Užitočné na spracovanie 4xx/5xx ako dát – napr. kontrola, či zdroj existuje. Prepíše nastavenie `error_passthru` spojenia len pre toto volanie."
+        },
+        "app.TWV3cw.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.display_name": {
+          "source": "Return Errors as Data",
+          "message": "Vrátiť chyby ako dáta"
+        },
+        "app.TWV3cw.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.short_desc": {
+          "source": "Return non-2xx responses normally instead of throwing",
+          "message": "Vrátiť odpovede iné ako 2xx normálne namiesto vyvolania výnimky"
+        },
+        "app.TWV3cw.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.desc": {
+          "source": "Optional list of HTTP status codes treated as success. If set and the response status is not in this list, the action throws `REST-STATUS-ERROR`. When unset, the REST client's default behavior applies (typically: 2xx is success, non-2xx throws).",
+          "message": "Voliteľný zoznam stavových kódov HTTP považovaných za úspech. Ak je nastavený a stav odpovede nie je v tomto zozname, akcia vyvolá `REST-STATUS-ERROR`. Ak nie je nastavený, uplatní sa predvolené správanie klienta REST (zvyčajne: 2xx je úspech, iné ako 2xx vyvolá výnimku)."
+        },
+        "app.TWV3cw.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.display_name": {
+          "source": "Expected Status Codes",
+          "message": "Očakávané stavové kódy"
+        },
+        "app.TWV3cw.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.short_desc": {
+          "source": "Response status codes treated as success",
+          "message": "Stavové kódy odpovede považované za úspech"
+        },
+        "app.TWV3cw.action.bWFrZS1hcGktY2FsbA.option.aGRy.desc": {
+          "source": "Hash of custom headers added to the request. These override any default headers set by `body_type` (e.g. supplying `Content-Type` here wins over the body-type default).",
+          "message": "Hash vlastných hlavičiek pridaných k požiadavke. Tie prepíšu akékoľvek predvolené hlavičky nastavené pomocou `body_type` (napr. zadanie `Content-Type` na tomto mieste má prednosť pred predvolenou hodnotou typu tela)."
+        },
+        "app.TWV3cw.action.bWFrZS1hcGktY2FsbA.option.aGRy.display_name": {
+          "source": "Custom Headers",
+          "message": "Vlastné hlavičky"
+        },
+        "app.TWV3cw.action.bWFrZS1hcGktY2FsbA.option.aGRy.short_desc": {
+          "source": "Extra request headers",
+          "message": "Dodatočné hlavičky požiadavky"
+        },
+        "app.TWV3cw.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.desc": {
+          "source": "If `True`, the response hash includes a `debug` sub-hash containing the request method/URL/headers (with sensitive values redacted), request and response sizes, and round-trip duration. Useful when investigating slow or failing calls. Off by default to keep responses lean.",
+          "message": "Ak je `True`, hash odpovede obsahuje pod-hash `debug` obsahujúci metódu/URL/hlavičky požiadavky (so skrytými citlivými hodnotami), veľkosti požiadavky a odpovede a trvanie celého cyklu. Užitočné pri vyšetrovaní pomalých alebo zlyhávajúcich volaní. Predvolene vypnuté, aby odpovede zostali stručné."
+        },
+        "app.TWV3cw.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.display_name": {
+          "source": "Include Debug Info",
+          "message": "Zahrnúť ladiace informácie"
+        },
+        "app.TWV3cw.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.short_desc": {
+          "source": "Include request/timing/size debug info in the response",
+          "message": "Zahrnúť ladiace informácie o požiadavke/časovaní/veľkosti do odpovede"
+        },
+        "app.TWV3cw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.desc": {
+          "source": "HTTP `OPTIONS`",
+          "message": "HTTP `OPTIONS`"
+        },
+        "app.TWV3cw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.display_name": {
+          "source": "OPTIONS",
+          "message": "OPTIONS"
+        },
+        "app.TWV3cw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.short_desc": {
+          "source": "HTTP OPTIONS",
+          "message": "HTTP OPTIONS"
+        },
+        "app.TWV3cw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.desc": {
+          "source": "HTTP `DELETE`",
+          "message": "HTTP `DELETE`"
+        },
+        "app.TWV3cw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.display_name": {
+          "source": "DELETE",
+          "message": "DELETE"
+        },
+        "app.TWV3cw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.short_desc": {
+          "source": "HTTP DELETE",
+          "message": "HTTP DELETE"
+        },
+        "app.TWV3cw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.desc": {
+          "source": "HTTP `GET`",
+          "message": "HTTP `GET`"
+        },
+        "app.TWV3cw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.display_name": {
+          "source": "GET",
+          "message": "GET"
+        },
+        "app.TWV3cw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.short_desc": {
+          "source": "HTTP GET",
+          "message": "HTTP GET"
+        },
+        "app.TWV3cw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.desc": {
+          "source": "HTTP `HEAD`",
+          "message": "HTTP `HEAD`"
+        },
+        "app.TWV3cw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.display_name": {
+          "source": "HEAD",
+          "message": "HEAD"
+        },
+        "app.TWV3cw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.short_desc": {
+          "source": "HTTP HEAD",
+          "message": "HTTP HEAD"
+        },
+        "app.TWV3cw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.desc": {
+          "source": "HTTP `PATCH`",
+          "message": "HTTP `PATCH`"
+        },
+        "app.TWV3cw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.display_name": {
+          "source": "PATCH",
+          "message": "PATCH"
+        },
+        "app.TWV3cw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.short_desc": {
+          "source": "HTTP PATCH",
+          "message": "HTTP PATCH"
+        },
+        "app.TWV3cw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.desc": {
+          "source": "HTTP `POST`",
+          "message": "HTTP `POST`"
+        },
+        "app.TWV3cw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.display_name": {
+          "source": "POST",
+          "message": "POST"
+        },
+        "app.TWV3cw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.short_desc": {
+          "source": "HTTP POST",
+          "message": "HTTP POST"
+        },
+        "app.TWV3cw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.desc": {
+          "source": "HTTP `PUT`",
+          "message": "HTTP `PUT`"
+        },
+        "app.TWV3cw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.display_name": {
+          "source": "PUT",
+          "message": "PUT"
+        },
+        "app.TWV3cw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.short_desc": {
+          "source": "HTTP PUT",
+          "message": "HTTP PUT"
+        },
+        "app.TWV3cw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.desc": {
+          "source": "HTTP `TRACE`",
+          "message": "HTTP `TRACE`"
+        },
+        "app.TWV3cw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.display_name": {
+          "source": "TRACE",
+          "message": "TRACE"
+        },
+        "app.TWV3cw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.short_desc": {
+          "source": "HTTP TRACE",
+          "message": "HTTP TRACE"
+        },
+        "app.TWV3cw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "Metóda HTTP, ktorá sa má použiť pre požiadavku"
+        },
+        "app.TWV3cw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.display_name": {
+          "source": "HTTP Method",
+          "message": "Metóda HTTP"
+        },
+        "app.TWV3cw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.short_desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "Metóda HTTP, ktorá sa má použiť pre požiadavku"
+        },
+        "app.TWV3cw.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain `{name}` placeholders that are replaced from `path_vars`. Example: `/users/{id}/comments`.",
+          "message": "Cesta URI relatívna k základnej adrese URL API spojenia. Môže obsahovať žolíky `{name}`, ktoré sú nahradené z `path_vars`. Príklad: `/users/{id}/comments`."
+        },
+        "app.TWV3cw.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.display_name": {
+          "source": "URI Path",
+          "message": "Cesta URI"
+        },
+        "app.TWV3cw.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.short_desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain '{name}' placeholders that are replaced from 'path_vars'. Example: '/users/{id}/comments'",
+          "message": "Cesta URI relatívna k základnej URL adrese API pripojenia. Môže obsahovať zastupiteľné objekty '{name}', ktoré sa nahradia z 'path_vars'. Príklad: '/users/{id}/comments'"
+        },
+        "app.TWV3cw.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.desc": {
+          "source": "Hash of values substituted into `{name}` placeholders in the URI path. Example: with `path = /users/{id}` and `path_vars = {id: 123}` the framework sends `/users/123`. Values are URL-encoded.",
+          "message": "Hash hodnôt nahradených do zastupiteľných objektov `{name}` v ceste URI. Príklad: s `path = /users/{id}` a `path_vars = {id: 123}` rozhranie odosiela `/users/123`. Hodnoty sú zakódované v URL."
+        },
+        "app.TWV3cw.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.display_name": {
+          "source": "Path Variables",
+          "message": "Premenné cesty"
+        },
+        "app.TWV3cw.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.short_desc": {
+          "source": "Values for {name} placeholders in path",
+          "message": "Hodnoty pre zastupiteľné objekty {name} v ceste"
+        },
+        "app.TWV3cw.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.desc": {
+          "source": "Hash of query string parameters to append to the URI path. Values are URL-encoded; list values are joined with `,`.",
+          "message": "Hash parametrov reťazca dopytu na pripojenie k ceste URI. Hodnoty sú zakódované v URL; hodnoty zoznamu sú spojené pomocou `,`."
+        },
+        "app.TWV3cw.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.display_name": {
+          "source": "Query Arguments",
+          "message": "Argumenty dopytu"
+        },
+        "app.TWV3cw.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.short_desc": {
+          "source": "Query string parameters",
+          "message": "Parametre reťazca dopytu"
+        },
+        "app.TWV3cw.action.bWFrZS1hcGktY2FsbA.short_desc": {
+          "source": "Make a custom API call to Mews Server",
+          "message": "Vykonať vlastné volanie API do Mews Server"
+        },
+        "app.TWV3cw.desc": {
+          "source": "Mews server",
+          "message": "Mews server"
+        },
+        "app.TWV3cw.display_name": {
+          "source": "Mews Server",
+          "message": "Mews Server"
+        },
+        "app.TWV3cw.short_desc": {
+          "source": "Mews server",
+          "message": "Mews server"
+        }
+      }
+    }
+  }
+}

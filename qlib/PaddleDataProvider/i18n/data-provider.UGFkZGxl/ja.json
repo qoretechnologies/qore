@@ -1,0 +1,3089 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "ja": {
+      "messages": {
+        "app.UGFkZGxl.action.Y3JlYXRl.desc": {
+          "source": "Creates new records in the given table",
+          "message": "指定されたテーブルに新しいレコードを作成します"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRl.display_name": {
+          "source": "Create Records",
+          "message": "レコードを作成"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRl.option.dGFibGU.desc": {
+          "source": "The table to work with: `customers`, `products`, `prices`, `transactions` or `reports`",
+          "message": "操作対象のテーブル: `customers`、`products`、`prices`、`transactions`、または`reports`"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRl.option.dGFibGU.display_name": {
+          "source": "Table",
+          "message": "表"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRl.option.dGFibGU.short_desc": {
+          "source": "The name of the table to work with",
+          "message": "操作対象のテーブル名"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRl.short_desc": {
+          "source": "Create new records in the given table",
+          "message": "指定されたテーブルに新しいレコードを作成"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX2N1c3RvbWVy.desc": {
+          "source": "Creates a customer.\n\n`email` is the only required field and it must be unique in the account: creating a customer with an address that already exists fails with a conflict rather than returning the existing one. Look the address up with **List Customers** first if that is a possibility.\n\nUse `custom_data` to carry your own identifier for the customer, so the two systems can be reconciled later.",
+          "message": "顧客を作成します。\n\n`email`は唯一の必須フィールドであり、アカウント内で一意である必要があります。すでに存在するアドレスで顧客を作成しようとすると、既存の顧客を返すのではなく競合エラーで失敗します。その可能性がある場合は、まず**顧客一覧（List Customers）**でアドレスを検索してください。\n\n顧客に独自の識別子を関連付けるには`custom_data`を使用します。これにより、後で2つのシステム間で照合を行うことができます。"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX2N1c3RvbWVy.display_name": {
+          "source": "Create Customer",
+          "message": "顧客を作成"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX2N1c3RvbWVy.option.Y3VzdG9tX2RhdGE.desc": {
+          "source": "Your own structured key-value data.",
+          "message": "独自の構造化キー/値データ。"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX2N1c3RvbWVy.option.Y3VzdG9tX2RhdGE.display_name": {
+          "source": "Custom Data",
+          "message": "カスタムデータ"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX2N1c3RvbWVy.option.Y3VzdG9tX2RhdGE.short_desc": {
+          "source": "Your own structured key-value data",
+          "message": "独自の構造化キー/値データ"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX2N1c3RvbWVy.option.ZW1haWw.desc": {
+          "source": "Email address for this customer.",
+          "message": "この顧客のメールアドレス。"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX2N1c3RvbWVy.option.ZW1haWw.display_name": {
+          "source": "Email",
+          "message": "メール"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX2N1c3RvbWVy.option.ZW1haWw.short_desc": {
+          "source": "Email address for this customer",
+          "message": "この顧客のメールアドレス"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX2N1c3RvbWVy.option.aW1wb3J0X21ldGE.desc": {
+          "source": "Import information for this entity. `null` if this entity is not imported.",
+          "message": "このエンティティのインポート情報。このエンティティがインポートされていない場合は`null`。"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX2N1c3RvbWVy.option.aW1wb3J0X21ldGE.display_name": {
+          "source": "Import Meta",
+          "message": "インポートメタ"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX2N1c3RvbWVy.option.aW1wb3J0X21ldGE.short_desc": {
+          "source": "Import information for this entity",
+          "message": "このエンティティのインポート情報"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX2N1c3RvbWVy.option.aWQ.desc": {
+          "source": "Unique Paddle ID for this customer entity, prefixed with `ctm_`.",
+          "message": "この顧客エンティティの一意のPaddle ID（プレフィックス: `ctm_`）。"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX2N1c3RvbWVy.option.aWQ.display_name": {
+          "source": "Customer ID",
+          "message": "顧客ID"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX2N1c3RvbWVy.option.aWQ.short_desc": {
+          "source": "Import an existing customer under a known Paddle ID",
+          "message": "既知のPaddle IDで既存の顧客をインポート"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX2N1c3RvbWVy.option.bG9jYWxl.desc": {
+          "source": "Valid IETF BCP 47 short form locale tag. If omitted, defaults to `en`.",
+          "message": "有効なIETF BCP 47短縮形式ロケールタグ。省略した場合のデフォルトは`en`です。"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX2N1c3RvbWVy.option.bG9jYWxl.display_name": {
+          "source": "Locale",
+          "message": "ロケール"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX2N1c3RvbWVy.option.bG9jYWxl.short_desc": {
+          "source": "Valid IETF BCP 47 short form locale tag",
+          "message": "有効なIETF BCP 47短縮形式ロケールタグ"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX2N1c3RvbWVy.option.bWFya2V0aW5nX2NvbnNlbnQ.desc": {
+          "source": "Whether this customer opted into marketing from you. `false` unless customers check the marketing consent box\nwhen using Paddle Checkout. Set automatically by Paddle.",
+          "message": "この顧客がマーケティング情報の受信に同意したかどうか。顧客がPaddle Checkoutの使用時にマーケティング同意チェックボックスをオンにしない限り`false`となります。Paddleによって自動的に設定されます。"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX2N1c3RvbWVy.option.bWFya2V0aW5nX2NvbnNlbnQ.display_name": {
+          "source": "Marketing Consent",
+          "message": "マーケティング同意"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX2N1c3RvbWVy.option.bWFya2V0aW5nX2NvbnNlbnQ.short_desc": {
+          "source": "Whether this customer opted into marketing from you",
+          "message": "この顧客がマーケティング情報の受信に同意したかどうか"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX2N1c3RvbWVy.option.bmFtZQ.desc": {
+          "source": "Full name of this customer. Required when creating transactions where `collection_mode` is `manual` (invoices).",
+          "message": "この顧客の氏名。`collection_mode`が`manual`（請求書）であるトランザクションを作成する際に必須です。"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX2N1c3RvbWVy.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "名前"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX2N1c3RvbWVy.option.bmFtZQ.short_desc": {
+          "source": "Full name of this customer",
+          "message": "この顧客の氏名"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX2N1c3RvbWVy.short_desc": {
+          "source": "Create a customer",
+          "message": "顧客を作成"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3ByaWNl.desc": {
+          "source": "Creates a price against a product.\n\n`unit_price` is an amount in the **smallest unit of its currency** given as a string - `\"1000\"` is $10.00 in USD, but ¥1000 in JPY, which has no minor unit. Getting this wrong is a factor-of-100 error in what customers are charged.\n\nSet `billing_cycle` to make it a subscription price; leave it unset for a one-off charge. `unit_price_overrides` sets a different amount for specific countries, which is how local pricing is done.\n\nA price cannot be moved to another product afterwards.",
+          "message": "製品に対する価格を作成します。\n\n`unit_price`は、文字列として指定される**該当通貨の最小単位**での金額です（USDの`\"1000\"`は$10.00ですが、補助通貨単位のないJPYでは¥1000になります）。これを誤ると、請求額に100倍の差異が生じます。\n\nサブスクリプション価格にするには`billing_cycle`を設定し、一括請求（1回限り）の場合は未設定のままにします。`unit_price_overrides`は特定の国に対して異なる金額を設定するもので、ローカル価格設定に使用されます。\n\n作成後に価格を別の製品へ移動することはできません。"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3ByaWNl.display_name": {
+          "source": "Create Price",
+          "message": "価格を作成"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3ByaWNl.option.Y3VzdG9tX2RhdGE.desc": {
+          "source": "Your own structured key-value data.",
+          "message": "独自の構造化キー/値データ。"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3ByaWNl.option.Y3VzdG9tX2RhdGE.display_name": {
+          "source": "Custom Data",
+          "message": "カスタムデータ"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3ByaWNl.option.Y3VzdG9tX2RhdGE.short_desc": {
+          "source": "Your own structured key-value data",
+          "message": "独自の構造化キー/値データ"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3ByaWNl.option.YmlsbGluZ19jeWNsZQ.desc": {
+          "source": "How often this price should be charged. `null` if price is non-recurring (one-time). If omitted, defaults to `null`.",
+          "message": "この価格が請求される頻度。価格が非定期（1回限り）の場合は`null`。省略した場合のデフォルトは`null`です。"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3ByaWNl.option.YmlsbGluZ19jeWNsZQ.display_name": {
+          "source": "Billing Cycle",
+          "message": "請求サイクル"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3ByaWNl.option.YmlsbGluZ19jeWNsZQ.short_desc": {
+          "source": "Set for a subscription price; leave unset for a one-off charge",
+          "message": "サブスクリプション価格の場合は設定。1回限りの請求の場合は未設定"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3ByaWNl.option.ZGVzY3JpcHRpb24.desc": {
+          "source": "Internal description for this price, not shown to customers. Typically notes for your team.",
+          "message": "この価格の内部説明（顧客には表示されません）。通常はチーム向けのメモです。"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3ByaWNl.option.ZGVzY3JpcHRpb24.display_name": {
+          "source": "Description",
+          "message": "説明"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3ByaWNl.option.ZGVzY3JpcHRpb24.short_desc": {
+          "source": "An internal description; not shown to customers",
+          "message": "内部説明（顧客には非表示）"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3ByaWNl.option.aW1wb3J0X21ldGE.desc": {
+          "source": "Import information for this entity. `null` if this entity is not imported.",
+          "message": "このエンティティのインポート情報。このエンティティがインポートされていない場合は`null`。"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3ByaWNl.option.aW1wb3J0X21ldGE.display_name": {
+          "source": "Import Meta",
+          "message": "インポートメタ"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3ByaWNl.option.aW1wb3J0X21ldGE.short_desc": {
+          "source": "Import information for this entity",
+          "message": "このエンティティのインポート情報"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3ByaWNl.option.aWQ.desc": {
+          "source": "Unique Paddle ID for this price, prefixed with `pri_`.",
+          "message": "この価格の一意のPaddle ID（プレフィックス: `pri_`）。"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3ByaWNl.option.aWQ.display_name": {
+          "source": "Price ID",
+          "message": "価格ID"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3ByaWNl.option.aWQ.short_desc": {
+          "source": "Import an existing price under a known Paddle ID",
+          "message": "既知のPaddle IDで既存の価格をインポート"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3ByaWNl.option.bmFtZQ.desc": {
+          "source": "Name of this price, shown to customers at checkout and on invoices. Typically describes how often the related product bills.",
+          "message": "この価格の名前（チェックアウト時および請求書上に顧客へ表示されます）。通常は関連製品の請求頻度を記載します。"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3ByaWNl.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "名前"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3ByaWNl.option.bmFtZQ.short_desc": {
+          "source": "Name of this price, shown to customers at checkout and on invoices",
+          "message": "この価格の名前（チェックアウト時および請求書上に顧客へ表示）"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3ByaWNl.option.cHJvZHVjdF9pZA.desc": {
+          "source": "Paddle ID for the product that this price is for, prefixed with `pro_`.",
+          "message": "この価格が属する製品のPaddle ID（プレフィックス: `pro_`）。"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3ByaWNl.option.cHJvZHVjdF9pZA.display_name": {
+          "source": "Product",
+          "message": "商品"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3ByaWNl.option.cHJvZHVjdF9pZA.short_desc": {
+          "source": "The product this price belongs to",
+          "message": "この価格が属する製品"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3ByaWNl.option.cXVhbnRpdHk.desc": {
+          "source": "Limits on how many times the related product can be purchased at this price. Useful for discount campaigns. If omitted, defaults to 1-100.",
+          "message": "この価格で関連製品を購入できる回数の制限。割引キャンペーンに便利です。省略した場合のデフォルトは1〜100です。"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3ByaWNl.option.cXVhbnRpdHk.display_name": {
+          "source": "Quantity",
+          "message": "数量"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3ByaWNl.option.cXVhbnRpdHk.short_desc": {
+          "source": "Limits on how many times the related product can be purchased at this price",
+          "message": "この価格で関連製品を購入できる回数の制限"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3ByaWNl.option.dGF4X21vZGU.allowed-value.c3RyaW5nOmFjY291bnRfc2V0dGluZw.display_name": {
+          "source": "account_setting",
+          "message": "account_setting"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3ByaWNl.option.dGF4X21vZGU.allowed-value.c3RyaW5nOmV4dGVybmFs.display_name": {
+          "source": "external",
+          "message": "external"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3ByaWNl.option.dGF4X21vZGU.allowed-value.c3RyaW5nOmludGVybmFs.display_name": {
+          "source": "internal",
+          "message": "内部"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3ByaWNl.option.dGF4X21vZGU.allowed-value.c3RyaW5nOmxvY2F0aW9u.display_name": {
+          "source": "location",
+          "message": "場所"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3ByaWNl.option.dGF4X21vZGU.desc": {
+          "source": "How tax is calculated for this price. If omitted, defaults to `account_setting`.",
+          "message": "この価格の税金計算方法。省略した場合のデフォルトは`account_setting`です。"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3ByaWNl.option.dGF4X21vZGU.display_name": {
+          "source": "Tax Mode",
+          "message": "税モード"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3ByaWNl.option.dGF4X21vZGU.short_desc": {
+          "source": "How tax is calculated for this price",
+          "message": "この価格の税金計算方法"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3ByaWNl.option.dHJpYWxfcGVyaW9k.desc": {
+          "source": "Trial period for the product related to this price. The billing cycle begins once the trial period is over.\n`null` for no trial period. Requires `billing_cycle`. If omitted, defaults to `null`.",
+          "message": "この価格に関連する製品のお試し期間。お試し期間が終了すると請求サイクルが開始されます。\nお試し期間がない場合は`null`。`billing_cycle`が必要です。省略した場合のデフォルトは`null`です。"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3ByaWNl.option.dHJpYWxfcGVyaW9k.display_name": {
+          "source": "Trial Period",
+          "message": "お試し期間"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3ByaWNl.option.dHJpYWxfcGVyaW9k.short_desc": {
+          "source": "Trial period for the product related to this price",
+          "message": "この価格に関連する製品のお試し期間"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3ByaWNl.option.dHlwZQ.allowed-value.c3RyaW5nOmN1c3RvbQ.display_name": {
+          "source": "custom",
+          "message": "カスタム"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3ByaWNl.option.dHlwZQ.allowed-value.c3RyaW5nOnN0YW5kYXJk.display_name": {
+          "source": "standard",
+          "message": "標準"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3ByaWNl.option.dHlwZQ.desc": {
+          "source": "Type of item. Standard items are considered part of your catalog and are shown in the Paddle dashboard. If omitted, defaults to `standard`.",
+          "message": "アイテムのタイプ。標準アイテムはカタログの一部とみなされ、Paddleダッシュボードに表示されます。省略した場合のデフォルトは`standard`です。"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3ByaWNl.option.dHlwZQ.display_name": {
+          "source": "Type",
+          "message": "タイプ"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3ByaWNl.option.dHlwZQ.short_desc": {
+          "source": "Type of item",
+          "message": "アイテムのタイプ"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3ByaWNl.option.dW5pdF9wcmljZQ.desc": {
+          "source": "Base price. This price applies to all customers, except for customers located in countries where you have `unit_price_overrides`.",
+          "message": "基本価格。`unit_price_overrides`を設定している国に所在する顧客を除き、すべての顧客にこの価格が適用されます。"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3ByaWNl.option.dW5pdF9wcmljZQ.display_name": {
+          "source": "Unit Price",
+          "message": "単価"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3ByaWNl.option.dW5pdF9wcmljZQ.short_desc": {
+          "source": "The amount, in the smallest unit of its currency",
+          "message": "金額（該当通貨の最小単位）"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3ByaWNl.option.dW5pdF9wcmljZV9vdmVycmlkZXM.desc": {
+          "source": "List of unit price overrides. Use to override the base price with a custom price and currency for a country or group of countries.",
+          "message": "単価オーバーライドのリスト。特定の国または国のグループに対して、基本価格をカスタム価格および通貨で上書きするために使用します。"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3ByaWNl.option.dW5pdF9wcmljZV9vdmVycmlkZXM.display_name": {
+          "source": "Unit Price Overrides",
+          "message": "単価の上書き"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3ByaWNl.option.dW5pdF9wcmljZV9vdmVycmlkZXM.short_desc": {
+          "source": "List of unit price overrides",
+          "message": "単価の上書きリスト"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3ByaWNl.short_desc": {
+          "source": "Create a price for a catalog product",
+          "message": "カタログ商品の価格を作成"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3Byb2R1Y3Q.desc": {
+          "source": "Creates a product in the catalog.\n\nA product is what you sell; it carries no price of its own. Create at least one price against it with **Create Price** before it can be billed.\n\n`tax_category` decides how Paddle charges sales tax and **cannot be changed afterwards**, so it has to be right at creation. Most software is `standard-digital-goods` or `saas`; using the wrong category means tax is calculated wrongly for every sale of the product.",
+          "message": "カタログに商品を作成します。\n\n商品は販売する対象であり、それ自体に価格は含まれません。請求を行う前に、**Create Price** で少なくとも1つの価格を作成してください。\n\n`tax_category` はPaddleが売上税をどのように請求するかを決定し、**後から変更することはできません**。そのため、作成時に正しく指定する必要があります。ほとんどのソフトウェアは `standard-digital-goods` または `saas` です。誤ったカテゴリを使用すると、その商品のすべての販売において税金が誤って計算されます。"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3Byb2R1Y3Q.display_name": {
+          "source": "Create Product",
+          "message": "商品を作成"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3Byb2R1Y3Q.option.Y3VzdG9tX2RhdGE.desc": {
+          "source": "Your own structured key-value data.",
+          "message": "独自の構造化キー/値データ。"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3Byb2R1Y3Q.option.Y3VzdG9tX2RhdGE.display_name": {
+          "source": "Custom Data",
+          "message": "カスタムデータ"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3Byb2R1Y3Q.option.Y3VzdG9tX2RhdGE.short_desc": {
+          "source": "Your own structured key-value data",
+          "message": "独自の構造化キー/値データ"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3Byb2R1Y3Q.option.ZGVzY3JpcHRpb24.desc": {
+          "source": "Short description for this product.",
+          "message": "この商品の簡単な説明。"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3Byb2R1Y3Q.option.ZGVzY3JpcHRpb24.display_name": {
+          "source": "Description",
+          "message": "説明"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3Byb2R1Y3Q.option.ZGVzY3JpcHRpb24.short_desc": {
+          "source": "Short description for this product",
+          "message": "この商品の簡単な説明"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3Byb2R1Y3Q.option.aW1hZ2VfdXJs.desc": {
+          "source": "Image for this product. Included in the checkout and on some customer documents.",
+          "message": "この商品の画像。チェックアウト時や一部の顧客向けドキュメントに含まれます。"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3Byb2R1Y3Q.option.aW1hZ2VfdXJs.display_name": {
+          "source": "Image Url",
+          "message": "画像URL"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3Byb2R1Y3Q.option.aW1hZ2VfdXJs.short_desc": {
+          "source": "Image for this product",
+          "message": "この商品の画像"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3Byb2R1Y3Q.option.aW1wb3J0X21ldGE.desc": {
+          "source": "Import information for this entity. `null` if this entity is not imported.",
+          "message": "このエンティティのインポート情報。このエンティティがインポートされていない場合は`null`。"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3Byb2R1Y3Q.option.aW1wb3J0X21ldGE.display_name": {
+          "source": "Import Meta",
+          "message": "インポートメタ"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3Byb2R1Y3Q.option.aW1wb3J0X21ldGE.short_desc": {
+          "source": "Import information for this entity",
+          "message": "このエンティティのインポート情報"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3Byb2R1Y3Q.option.aWQ.desc": {
+          "source": "Unique Paddle ID for this product, prefixed with `pro_`.",
+          "message": "この商品の一意のPaddle ID（プレフィックス: `pro_`）。"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3Byb2R1Y3Q.option.aWQ.display_name": {
+          "source": "Product ID",
+          "message": "商品 ID"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3Byb2R1Y3Q.option.aWQ.short_desc": {
+          "source": "Import an existing product under a known Paddle ID",
+          "message": "既知のPaddle IDで既存の商品をインポート"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3Byb2R1Y3Q.option.bmFtZQ.desc": {
+          "source": "Name of this product.",
+          "message": "この商品の名前。"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3Byb2R1Y3Q.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "名前"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3Byb2R1Y3Q.option.bmFtZQ.short_desc": {
+          "source": "Name of this product",
+          "message": "この商品の名前"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3Byb2R1Y3Q.option.dGF4X2NhdGVnb3J5.allowed-value.c3RyaW5nOmRpZ2l0YWwtZ29vZHM.display_name": {
+          "source": "digital-goods",
+          "message": "digital-goods"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3Byb2R1Y3Q.option.dGF4X2NhdGVnb3J5.allowed-value.c3RyaW5nOmVib29rcw.display_name": {
+          "source": "ebooks",
+          "message": "ebooks"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3Byb2R1Y3Q.option.dGF4X2NhdGVnb3J5.allowed-value.c3RyaW5nOmltcGxlbWVudGF0aW9uLXNlcnZpY2Vz.display_name": {
+          "source": "implementation-services",
+          "message": "implementation-services"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3Byb2R1Y3Q.option.dGF4X2NhdGVnb3J5.allowed-value.c3RyaW5nOnByb2Zlc3Npb25hbC1zZXJ2aWNlcw.display_name": {
+          "source": "professional-services",
+          "message": "professional-services"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3Byb2R1Y3Q.option.dGF4X2NhdGVnb3J5.allowed-value.c3RyaW5nOnN0YW5kYXJk.display_name": {
+          "source": "standard",
+          "message": "標準"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3Byb2R1Y3Q.option.dGF4X2NhdGVnb3J5.allowed-value.c3RyaW5nOnNhYXM.display_name": {
+          "source": "saas",
+          "message": "saas"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3Byb2R1Y3Q.option.dGF4X2NhdGVnb3J5.allowed-value.c3RyaW5nOnNvZnR3YXJlLXByb2dyYW1taW5nLXNlcnZpY2Vz.display_name": {
+          "source": "software-programming-services",
+          "message": "software-programming-services"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3Byb2R1Y3Q.option.dGF4X2NhdGVnb3J5.allowed-value.c3RyaW5nOnRyYWluaW5nLXNlcnZpY2Vz.display_name": {
+          "source": "training-services",
+          "message": "training-services"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3Byb2R1Y3Q.option.dGF4X2NhdGVnb3J5.allowed-value.c3RyaW5nOndlYnNpdGUtaG9zdGluZw.display_name": {
+          "source": "website-hosting",
+          "message": "website-hosting"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3Byb2R1Y3Q.option.dGF4X2NhdGVnb3J5.desc": {
+          "source": "Tax category for this product. Used for charging the correct rate of tax. Selected tax category must be enabled on your Paddle account.",
+          "message": "この商品の税金カテゴリ。正しい税率を請求するために使用されます。選択した税金カテゴリはPaddleアカウントで有効化されている必要があります。"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3Byb2R1Y3Q.option.dGF4X2NhdGVnb3J5.display_name": {
+          "source": "Tax Category",
+          "message": "税金カテゴリ"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3Byb2R1Y3Q.option.dGF4X2NhdGVnb3J5.short_desc": {
+          "source": "How Paddle charges tax; cannot be changed later",
+          "message": "Paddleによる税金の請求方法。後から変更できません"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3Byb2R1Y3Q.option.dHlwZQ.allowed-value.c3RyaW5nOmN1c3RvbQ.display_name": {
+          "source": "custom",
+          "message": "カスタム"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3Byb2R1Y3Q.option.dHlwZQ.allowed-value.c3RyaW5nOnN0YW5kYXJk.display_name": {
+          "source": "standard",
+          "message": "標準"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3Byb2R1Y3Q.option.dHlwZQ.desc": {
+          "source": "Type of item. Standard items are considered part of your catalog and are shown in the Paddle dashboard. If omitted, defaults to `standard`.",
+          "message": "アイテムのタイプ。標準アイテムはカタログの一部とみなされ、Paddleダッシュボードに表示されます。省略した場合のデフォルトは`standard`です。"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3Byb2R1Y3Q.option.dHlwZQ.display_name": {
+          "source": "Type",
+          "message": "タイプ"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3Byb2R1Y3Q.option.dHlwZQ.short_desc": {
+          "source": "Type of item",
+          "message": "アイテムのタイプ"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3Byb2R1Y3Q.short_desc": {
+          "source": "Create a catalog product",
+          "message": "カタログ商品を作成"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3JlcG9ydA.desc": {
+          "source": "Requests a report. Paddle generates it in the background, so this returns a report in the `pending` state rather than any data.\n\nThe body selects the report type and its filters, and the fields a report accepts depend on the type: `transactions`, `adjustments`, `products_prices`, `discounts`, `balance`, `payout_reconciliation` or `checkouts`. Because the shape differs per type, the body is supplied whole rather than as separate options.\n\n**With no `filters`, a report covers only the last 30 days of updates.** Pass an `updated_at` filter for any other window.\n\nPoll **Get Report** until `status` is `ready`, or subscribe to the `report.updated` event, then call **Get Report File** for the download URL.",
+          "message": "レポートをリクエストします。Paddleはバックグラウンドでレポートを生成するため、データではなく `pending` 状態のレポートが返されます。\n\n本文でレポートタイプとそのフィルターを選択します。レポートで受け入れられるフィールドはタイプによって異なります: `transactions`、`adjustments`、`products_prices`、`discounts`、`balance`、`payout_reconciliation` または `checkouts`。タイプごとに構造が異なるため、本文は個別のオプションではなく全体として指定されます。\n\n**`filters` がない場合、レポートは過去30日間の更新のみを対象とします。** それ以外の期間については `updated_at` フィルターを渡してください。\n\n`status` が `ready` になるまで **Get Report** をポーリングするか、`report.updated` イベントを購読し、その後 **Get Report File** を呼び出してダウンロードURLを取得してください。"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3JlcG9ydA.display_name": {
+          "source": "Create Report",
+          "message": "レポートを作成"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3JlcG9ydA.option.Ym9keQ.desc": {
+          "source": "REST request body argument: Represents a report entity.",
+          "message": "RESTリクエスト本文の引数: レポートエンティティを表します。"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3JlcG9ydA.option.Ym9keQ.display_name": {
+          "source": "Report",
+          "message": "レポート"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3JlcG9ydA.option.Ym9keQ.short_desc": {
+          "source": "The report type and its filters",
+          "message": "レポートタイプとそのフィルター"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3JlcG9ydA.short_desc": {
+          "source": "Request a report; it is generated asynchronously",
+          "message": "レポートをリクエストします（非同期で生成されます）"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.desc": {
+          "source": "Creates a transaction: the record of what a customer is being charged for.\n\n`items` is required - each entry names a `price_id` and a `quantity`, or carries a one-off price inline. `status` decides what happens next: leave it unset for a `draft` that can still be edited, or set it to `billed` to issue it to the customer.\n\n**A transaction with no `customer_id` is a quote nobody can pay**; set it, along with `address_id` where tax depends on location, for anything the customer is meant to settle.\n\nSet `include` to `totals` to get the calculated amounts back in the same response, which is the cheapest way to see what a transaction actually comes to.",
+          "message": "トランザクション（顧客への請求内容の記録）を作成します。\n\n`items` は必須です。各エントリで `price_id` と `quantity` を指定するか、インラインで単発の価格を設定します。`status` は次の処理を決定します。まだ編集可能な `draft` にする場合は未設定のままにし、顧客に発行する場合は `billed` に設定します。\n\n**`customer_id` のないトランザクションは誰も支払うことができない見積もりです**。顧客が決済する予定のすべてのものについて、税金が場所によって異なる場合は `address_id` とともに設定してください。\n\n`include` を `totals` に設定すると、計算された金額が同じレスポンスで返されます。これはトランザクションの実際の合計額を確認する最も効率的な方法です。"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.display_name": {
+          "source": "Create Transaction",
+          "message": "取引を作成"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.Y29sbGVjdGlvbl9tb2Rl.allowed-value.c3RyaW5nOm1hbnVhbA.display_name": {
+          "source": "manual",
+          "message": "手動"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.Y29sbGVjdGlvbl9tb2Rl.allowed-value.c3RyaW5nOmF1dG9tYXRpYw.display_name": {
+          "source": "automatic",
+          "message": "automatic"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.Y29sbGVjdGlvbl9tb2Rl.desc": {
+          "source": "How payment is collected for this transaction. `automatic` for checkout, `manual` for invoices. If omitted, defaults to `automatic`.",
+          "message": "このトランザクションの支払い回収方法。チェックアウトには `automatic`、請求書には `manual` を使用します。省略した場合、デフォルトは `automatic` です。"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.Y29sbGVjdGlvbl9tb2Rl.display_name": {
+          "source": "Collection Mode",
+          "message": "回収モード"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.Y29sbGVjdGlvbl9tb2Rl.short_desc": {
+          "source": "How payment is collected for this transaction",
+          "message": "このトランザクションの支払い回収方法"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.Y2hlY2tvdXQ.desc": {
+          "source": "Paddle Checkout details for this transaction. You may pass a URL when creating or updating an automatically-collected transaction, or when creating or updating a manually-collected transaction where `billing_details.enable_checkout` is `true`.",
+          "message": "このトランザクションのPaddle Checkoutの詳細。自動回収のトランザクションを作成または更新する場合、あるいは `billing_details.enable_checkout` が `true` である手動回収のトランザクションを作成または更新する場合にURLを渡すことができます。"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.Y2hlY2tvdXQ.display_name": {
+          "source": "Checkout",
+          "message": "チェックアウト"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.Y2hlY2tvdXQ.short_desc": {
+          "source": "Paddle Checkout details for this transaction",
+          "message": "このトランザクションのPaddle Checkoutの詳細"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.Y3JlYXRlZF9hdA.desc": {
+          "source": "RFC 3339 datetime string of when this entity was created. Set automatically by Paddle.",
+          "message": "このエンティティが作成された日時のRFC 3339形式の日時文字列。Paddleによって自動的に設定されます。"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.Y3JlYXRlZF9hdA.display_name": {
+          "source": "Created At",
+          "message": "作成日時"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.Y3JlYXRlZF9hdA.short_desc": {
+          "source": "RFC 3339 datetime string of when this entity was created",
+          "message": "このエンティティが作成された日時のRFC 3339形式の日時文字列"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.Y3VycmVuY3lfY29kZQ.desc": {
+          "source": "Supported three-letter ISO 4217 currency code. Must be `USD`, `EUR`, or `GBP` if `collection_mode` is `manual`.",
+          "message": "サポートされている3文字のISO 4217通貨コード。`collection_mode` が `manual` の場合、`USD`、`EUR`、または `GBP` である必要があります。"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.Y3VycmVuY3lfY29kZQ.display_name": {
+          "source": "Currency Code",
+          "message": "通貨コード"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.Y3VycmVuY3lfY29kZQ.short_desc": {
+          "source": "Supported three-letter ISO 4217 currency code",
+          "message": "サポートされている3文字のISO 4217通貨コード"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.Y3VzdG9tX2RhdGE.desc": {
+          "source": "Your own structured key-value data.",
+          "message": "独自の構造化キー/値データ。"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.Y3VzdG9tX2RhdGE.display_name": {
+          "source": "Custom Data",
+          "message": "カスタムデータ"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.Y3VzdG9tX2RhdGE.short_desc": {
+          "source": "Your own structured key-value data",
+          "message": "独自の構造化キー/値データ"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.Y3VzdG9tZXJfaWQ.desc": {
+          "source": "Paddle ID of the customer that this transaction is for, prefixed with `ctm_`. If omitted, transaction status is `draft`.",
+          "message": "このトランザクションの対象となる顧客のPaddle ID（プレフィックス: `ctm_`）。省略した場合、トランザクションのステータスは `draft` になります。"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.Y3VzdG9tZXJfaWQ.display_name": {
+          "source": "Customer",
+          "message": "顧客"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.Y3VzdG9tZXJfaWQ.short_desc": {
+          "source": "The customer being billed",
+          "message": "請求対象の顧客"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.YWRkcmVzc19pZA.desc": {
+          "source": "Paddle ID of the address that this transaction is for, prefixed with `add_`. Requires `customer_id`. If omitted, transaction status is `draft`.",
+          "message": "このトランザクションの対象となる住所のPaddle ID（プレフィックス: `add_`）。`customer_id` が必要です。省略した場合、トランザクションのステータスは `draft` になります。"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.YWRkcmVzc19pZA.display_name": {
+          "source": "Address Id",
+          "message": "住所ID"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.YWRkcmVzc19pZA.short_desc": {
+          "source": "Paddle ID of the address that this transaction is for, prefixed with 'add_'. Requires 'customer_id'. If omitted, transaction status is 'draft'",
+          "message": "このトランザクションの対象となる住所のPaddle ID（'add_' プレフィックス付き）。'customer_id' が必要です。省略した場合、トランザクションのステータスは 'draft' になります"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.YmlsbGVkX2F0.desc": {
+          "source": "RFC 3339 datetime string of when this transaction was marked as `billed`. `null` for transactions that aren't `billed` or `completed`. Set automatically by Paddle.",
+          "message": "このトランザクションが `billed` としてマークされた日時のRFC 3339形式の日時文字列。`billed` または `completed` ではないトランザクションの場合は `null`。Paddleによって自動的に設定されます。"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.YmlsbGVkX2F0.display_name": {
+          "source": "Billed At",
+          "message": "請求日時"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.YmlsbGVkX2F0.short_desc": {
+          "source": "RFC 3339 datetime string of when this transaction was marked as 'billed'. 'null' for transactions that aren't 'billed' or 'completed'. Set automatically by Paddle",
+          "message": "このトランザクションが 'billed' としてマークされた日時のRFC 3339形式の日時文字列。'billed' または 'completed' ではないトランザクションの場合は 'null'。Paddleによって自動的に設定されます"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.YmlsbGluZ19kZXRhaWxz.desc": {
+          "source": "Details for invoicing. Required if `collection_mode` is `manual`.",
+          "message": "請求書発行の詳細。`collection_mode` が `manual` の場合に必須です。"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.YmlsbGluZ19kZXRhaWxz.display_name": {
+          "source": "Billing Details",
+          "message": "請求先情報"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.YmlsbGluZ19kZXRhaWxz.short_desc": {
+          "source": "Details for invoicing",
+          "message": "請求書発行の詳細"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.YmlsbGluZ19wZXJpb2Q.desc": {
+          "source": "Time period that this transaction is for. Set automatically by Paddle for subscription renewals to describe the period that charges are for.",
+          "message": "このトランザクションが対象とする期間。サブスクリプションの更新時に請求対象期間を表すためにPaddleによって自動的に設定されます。"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.YmlsbGluZ19wZXJpb2Q.display_name": {
+          "source": "Billing Period",
+          "message": "請求期間"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.YmlsbGluZ19wZXJpb2Q.short_desc": {
+          "source": "Time period that this transaction is for",
+          "message": "このトランザクションが対象とする期間"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.YnVzaW5lc3NfaWQ.desc": {
+          "source": "Paddle ID of the business that this transaction is for, prefixed with `biz_`. Requires `customer_id`. ",
+          "message": "このトランザクションの対象となる法人のPaddle ID（プレフィックス: `biz_`）。`customer_id` が必要です。"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.YnVzaW5lc3NfaWQ.display_name": {
+          "source": "Business Id",
+          "message": "法人ID"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.YnVzaW5lc3NfaWQ.short_desc": {
+          "source": "Paddle ID of the business that this transaction is for, prefixed with 'biz_'. Requires 'customer_id'",
+          "message": "このトランザクションの対象となる法人のPaddle ID（'biz_' プレフィックス付き）。'customer_id' が必要です"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.ZGV0YWlscw.desc": {
+          "source": "Calculated totals for a transaction, including proration, discounts, tax, and currency conversion. Considered the source of truth for totals on a transaction.",
+          "message": "日割り計算、割引、税金、通貨換算を含む、トランザクションの計算済み合計額。トランザクションの合計額に関する信頼できる唯一の情報源とみなされます。"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.ZGV0YWlscw.display_name": {
+          "source": "Details",
+          "message": "詳細"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.ZGV0YWlscw.short_desc": {
+          "source": "Calculated totals for a transaction, including proration, discounts, tax, and currency conversion",
+          "message": "日割り計算、割引、税金、通貨換算を含む、トランザクションの計算済み合計額"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.ZGlzY291bnQ.desc": {
+          "source": "Apply a non-catalog discount to a transaction. Send one of `discount_id` or `discount`.",
+          "message": "カタログ外の割引をトランザクションに適用します。`discount_id` または `discount` のいずれかを送信してください。"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.ZGlzY291bnQ.display_name": {
+          "source": "Discount",
+          "message": "割引"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.ZGlzY291bnQ.short_desc": {
+          "source": "Apply a non-catalog discount to a transaction",
+          "message": "カタログ外の割引をトランザクションに適用"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.ZGlzY291bnRfaWQ.desc": {
+          "source": "Paddle ID of the discount to apply to this transaction, prefixed with `dsc_`.",
+          "message": "この取引に適用する割引のPaddle ID（プレフィックス: `dsc_`）。"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.ZGlzY291bnRfaWQ.display_name": {
+          "source": "Discount Id",
+          "message": "割引ID"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.ZGlzY291bnRfaWQ.short_desc": {
+          "source": "Paddle ID of the discount to apply to this transaction, prefixed with 'dsc_'",
+          "message": "この取引に適用する割引のPaddle ID（プレフィックス: 'dsc_'）"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.aW52b2ljZV9pZA.desc": {
+          "source": "Paddle ID of the invoice that this transaction is related to, prefixed with `inv_`. Used for compatibility with the Paddle Invoice API, which is now deprecated. This field is scheduled to be removed in the next version of the Paddle API.",
+          "message": "この取引に関連付けられている請求書のPaddle ID（プレフィックス: `inv_`）。現在は非推奨となっているPaddle Invoice APIとの互換性のために使用されます。このフィールドはPaddle APIの次期バージョンで削除される予定です。"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.aW52b2ljZV9pZA.display_name": {
+          "source": "Invoice Id",
+          "message": "請求書ID"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.aW52b2ljZV9pZA.short_desc": {
+          "source": "Paddle ID of the invoice that this transaction is related to, prefixed with 'inv_'",
+          "message": "この取引に関連付けられている請求書のPaddle ID（プレフィックス: 'inv_'）"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.aW52b2ljZV9udW1iZXI.desc": {
+          "source": "Invoice number for this transaction. Automatically generated by Paddle when you mark a transaction as `billed` where `collection_mode` is `manual`.",
+          "message": "この取引の請求書番号。`collection_mode` が `manual` の場合に取引を `billed` としてマークすると、Paddleによって自動的に生成されます。"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.aW52b2ljZV9udW1iZXI.display_name": {
+          "source": "Invoice Number",
+          "message": "請求書番号"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.aW52b2ljZV9udW1iZXI.short_desc": {
+          "source": "Invoice number for this transaction",
+          "message": "この取引の請求書番号"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.aW5jbHVkZQ.desc": {
+          "source": "Include related entities in the response. Use a comma-separated list to specify multiple entities.",
+          "message": "レスポンスに関連エンティティを含めます。複数のエンティティを指定するにはカンマ区切りリストを使用します。"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.aW5jbHVkZQ.display_name": {
+          "source": "Include",
+          "message": "Include"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.aW5jbHVkZQ.short_desc": {
+          "source": "Include related entities, ex: \"totals\", in the response",
+          "message": "レスポンスに関連エンティティ（例: \"totals\"）を含める"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.aWQ.desc": {
+          "source": "Unique Paddle ID for this transaction entity, prefixed with `txn_`.",
+          "message": "この取引エンティティの一意のPaddle ID（プレフィックス: `txn_`）。"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.aWQ.display_name": {
+          "source": "Id",
+          "message": "ID"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.aWQ.short_desc": {
+          "source": "Unique Paddle ID for this transaction entity, prefixed with 'txn_'",
+          "message": "この取引エンティティの一意のPaddle ID（プレフィックス: 'txn_'）"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.aXRlbXM.desc": {
+          "source": "List of items to charge for. You can charge for items that you've added to your catalog by passing the Paddle ID of an existing price entity, or you can charge for non-catalog items by passing a price object.\n\nNon-catalog items can be for existing products, or you can pass a product object as part of your price to charge for a non-catalog product.",
+          "message": "請求対象の品目リスト。既存の価格エンティティのPaddle IDを渡すことでカタログに追加した品目を請求するか、価格オブジェクトを渡すことでカタログ外品目を請求できます。\n\nカタログ外品目は既存の製品を対象にすることも、カタログ外製品の請求のために価格の一部として製品オブジェクトを渡すこともできます。"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.aXRlbXM.display_name": {
+          "source": "Items",
+          "message": "アイテム"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.aXRlbXM.short_desc": {
+          "source": "What is being billed: a price and a quantity per line",
+          "message": "請求内容: 明細ごとの価格と数量"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.b3JpZ2lu.allowed-value.c3RyaW5nOmFwaQ.display_name": {
+          "source": "api",
+          "message": "api"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.b3JpZ2lu.allowed-value.c3RyaW5nOnN1YnNjcmlwdGlvbl91cGRhdGU.display_name": {
+          "source": "subscription_update",
+          "message": "subscription_update"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.b3JpZ2lu.allowed-value.c3RyaW5nOnN1YnNjcmlwdGlvbl9jaGFyZ2U.display_name": {
+          "source": "subscription_charge",
+          "message": "subscription_charge"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.b3JpZ2lu.allowed-value.c3RyaW5nOnN1YnNjcmlwdGlvbl9wYXltZW50X21ldGhvZF9jaGFuZ2U.display_name": {
+          "source": "subscription_payment_method_change",
+          "message": "subscription_payment_method_change"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.b3JpZ2lu.allowed-value.c3RyaW5nOnN1YnNjcmlwdGlvbl9yZWN1cnJpbmc.display_name": {
+          "source": "subscription_recurring",
+          "message": "subscription_recurring"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.b3JpZ2lu.allowed-value.c3RyaW5nOndlYg.display_name": {
+          "source": "web",
+          "message": "web"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.b3JpZ2lu.desc": {
+          "source": "How the transaction came about - `api` for one created through the API, `web` for a Paddle.js checkout, or one of the `subscription_…` values for one Paddle raised itself for a renewal, charge or update.\n\nLeave this unset when creating a transaction: Paddle sets it.",
+          "message": "取引の発生要因 - API経由で作成されたものは `api`、Paddle.jsチェックアウト経由は `web`、更新・請求・変更のためにPaddle自体によって生成されたものは `subscription_…` のいずれかの値になります。\n\n取引を作成する際は未設定のままにしてください（Paddleが自動設定します）。"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.b3JpZ2lu.display_name": {
+          "source": "Origin",
+          "message": "発生元"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.b3JpZ2lu.short_desc": {
+          "source": "How the transaction came about",
+          "message": "取引の発生要因"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.c3RhdHVz.allowed-value.c3RyaW5nOmJpbGxlZA.display_name": {
+          "source": "billed",
+          "message": "billed"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.c3RhdHVz.allowed-value.c3RyaW5nOmNhbmNlbGVk.display_name": {
+          "source": "canceled",
+          "message": "canceled"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.c3RhdHVz.allowed-value.c3RyaW5nOmNvbXBsZXRlZA.display_name": {
+          "source": "completed",
+          "message": "completed"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.c3RhdHVz.allowed-value.c3RyaW5nOmRyYWZ0.display_name": {
+          "source": "draft",
+          "message": "ドラフト"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.c3RhdHVz.allowed-value.c3RyaW5nOnBhaWQ.display_name": {
+          "source": "paid",
+          "message": "paid"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.c3RhdHVz.allowed-value.c3RyaW5nOnBhc3RfZHVl.display_name": {
+          "source": "past_due",
+          "message": "past_due"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.c3RhdHVz.allowed-value.c3RyaW5nOnJlYWR5.display_name": {
+          "source": "ready",
+          "message": "ready"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.c3RhdHVz.desc": {
+          "source": "Status of this transaction. You may set a transaction to `billed` when creating,\nor omit to let Paddle set the status. Transactions are created as `ready` if they have\nan `address_id`, `customer_id`, and `items`, otherwise they are created as `draft`.\n\nMarking as `billed` when creating is typically used when working with manually-collected\ntransactions as part of an invoicing workflow. Billed transactions cannot be updated, only canceled.",
+          "message": "この取引のステータス。作成時に取引を `billed` に設定するか、\nPaddleにステータスを設定させるために省略することができます。取引は、`address_id`、`customer_id`、および `items` が存在する場合は `ready` として作成され、\nそうでない場合は `draft` として作成されます。\n\n作成時に `billed` としてマークする方法は、通常、請求書ワークフローの一環として手動回収の取引を\n処理する場合に使用されます。請求済みの取引は更新できず、キャンセルのみ可能です。"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.c3RhdHVz.display_name": {
+          "source": "Status",
+          "message": "ステータス"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.c3RhdHVz.short_desc": {
+          "source": "Leave unset for a draft; \"billed\" issues it to the customer",
+          "message": "下書きの場合は未設定のままにします。\"billed\" は顧客に発行します"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.c3Vic2NyaXB0aW9uX2lk.desc": {
+          "source": "Paddle ID of the subscription that this transaction is for, prefixed with `sub_`.",
+          "message": "この取引の対象となるサブスクリプションのPaddle ID（プレフィックス: `sub_`）。"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.c3Vic2NyaXB0aW9uX2lk.display_name": {
+          "source": "Subscription",
+          "message": "サブスクリプション"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.c3Vic2NyaXB0aW9uX2lk.short_desc": {
+          "source": "Paddle ID of the subscription that this transaction is for, prefixed with 'sub_'",
+          "message": "この取引の対象となるサブスクリプションのPaddle ID（プレフィックス: 'sub_'）"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.cGF5bWVudHM.desc": {
+          "source": "List of payment attempts for this transaction, including successful payments. Sorted by `created_at` in descending order, so most recent attempts are returned first.",
+          "message": "成功した支払いを含む、この取引の支払い試行リスト。`created_at` の降順でソートされるため、最新の試行が先頭に返されます。"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.cGF5bWVudHM.display_name": {
+          "source": "Payments",
+          "message": "支払い"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.cGF5bWVudHM.short_desc": {
+          "source": "List of payment attempts for this transaction, including successful payments",
+          "message": "成功した支払いを含む、この取引の支払い試行リスト"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.dXBkYXRlZF9hdA.desc": {
+          "source": "RFC 3339 datetime string of when this entity was updated. Set automatically by Paddle.",
+          "message": "このエンティティが更新された日時のRFC 3339日時文字列。Paddleによって自動的に設定されます。"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.dXBkYXRlZF9hdA.display_name": {
+          "source": "Updated At",
+          "message": "更新日時"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.dXBkYXRlZF9hdA.short_desc": {
+          "source": "RFC 3339 datetime string of when this entity was updated",
+          "message": "このエンティティが更新された日時のRFC 3339日時文字列"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.short_desc": {
+          "source": "Create a transaction, optionally billing it",
+          "message": "取引を作成（オプションで請求）"
+        },
+        "app.UGFkZGxl.action.Y3VzdG9tZXItY3JlYXRlZA.desc": {
+          "source": "Fires when a customer is created, however it happened -- through the API, a checkout, or the Paddle dashboard.\n\nThis replaces polling the customer listing: a poll ordered by creation time cannot see a customer that was created and removed between two runs, and costs a request per interval whether or not anything happened.",
+          "message": "API、チェックアウト、Paddleダッシュボードなど、方法を問わず顧客が作成されたときにトリガーされます。\n\nこれにより顧客一覧のポーリングが不要になります。作成日時順のポーリングでは実行と実行の間に作成・削除された顧客を検知できず、変更がない場合でもインターバルごとにリクエストコストが発生します。"
+        },
+        "app.UGFkZGxl.action.Y3VzdG9tZXItY3JlYXRlZA.display_name": {
+          "source": "Customer Created",
+          "message": "顧客が作成されました"
+        },
+        "app.UGFkZGxl.action.Y3VzdG9tZXItY3JlYXRlZA.short_desc": {
+          "source": "React to a customer being created",
+          "message": "顧客の作成を検知"
+        },
+        "app.UGFkZGxl.action.Y3VzdG9tZXItdXBkYXRlZA.desc": {
+          "source": "Fires when a customer changes, including when one is archived -- `status` becomes `archived` rather than the customer being deleted.\n\nPaddle sends the whole customer, not a diff, so compare against what you hold if you need to know which field moved.",
+          "message": "顧客が削除されるのではなく `status` が `archived` になるアーカイブ時を含め、顧客が変更されたときにトリガーされます。\n\nPaddleは差分ではなく顧客全体を送信するため、どのフィールドが変更されたかを確認する必要がある場合は保持しているデータと比較してください。"
+        },
+        "app.UGFkZGxl.action.Y3VzdG9tZXItdXBkYXRlZA.display_name": {
+          "source": "Customer Updated",
+          "message": "顧客更新"
+        },
+        "app.UGFkZGxl.action.Y3VzdG9tZXItdXBkYXRlZA.short_desc": {
+          "source": "React to a customer's details changing",
+          "message": "顧客詳細の変更を検知"
+        },
+        "app.UGFkZGxl.action.YXJjaGl2ZV9wcm9kdWN0.desc": {
+          "source": "Archives a product, so it can no longer be billed and stops appearing in listings.\n\nExisting subscriptions and transactions that reference the product are unaffected - archiving withdraws it from sale, it does not delete it. Paddle has no delete operation for a product.\n\n**The product's prices are not archived with it.** Archive each price separately if they should also be withdrawn.\n\nThis is **Update Product** with `status` fixed to `archived`; use that action to change anything else, or to un-archive by setting `status` back to `active`.",
+          "message": "製品をアーカイブし、請求不可にして一覧に表示されないようにします。\n\nその製品を参照する既存のサブスクリプションや取引には影響しません。アーカイブは販売を停止するものであり、削除するものではありません。Paddleには製品の削除操作はありません。\n\n**製品の価格は製品と一緒にアーカイブされません。** 価格も停止する場合は、各価格を個別にアーカイブしてください。\n\nこれは `status` を `archived` に固定した**製品の更新**です。その他の変更を行ったり、`status` を `active` に戻してアーカイブ解除したりするには、そのアクションを使用してください。"
+        },
+        "app.UGFkZGxl.action.YXJjaGl2ZV9wcm9kdWN0.display_name": {
+          "source": "Archive Product",
+          "message": "製品をアーカイブ"
+        },
+        "app.UGFkZGxl.action.YXJjaGl2ZV9wcm9kdWN0.option.c3RhdHVz.allowed-value.c3RyaW5nOmFyY2hpdmVk.display_name": {
+          "source": "archived",
+          "message": "archived"
+        },
+        "app.UGFkZGxl.action.YXJjaGl2ZV9wcm9kdWN0.option.c3RhdHVz.desc": {
+          "source": "Fixed to `archived`: this action exists to retire a product. Use **Update Product** to set any other status.",
+          "message": "`archived` に固定: このアクションは製品を廃止するために存在します。他のステータスを設定するには**製品の更新**を使用してください。"
+        },
+        "app.UGFkZGxl.action.YXJjaGl2ZV9wcm9kdWN0.option.c3RhdHVz.display_name": {
+          "source": "Status",
+          "message": "ステータス"
+        },
+        "app.UGFkZGxl.action.YXJjaGl2ZV9wcm9kdWN0.option.c3RhdHVz.short_desc": {
+          "source": "Always \"archived\" for this action",
+          "message": "このアクションでは常に \"archived\""
+        },
+        "app.UGFkZGxl.action.YXJjaGl2ZV9wcm9kdWN0.option.cHJvZHVjdF9pZA.desc": {
+          "source": "Paddle ID of the product entity to work with.",
+          "message": "対象となる製品エンティティのPaddle ID。"
+        },
+        "app.UGFkZGxl.action.YXJjaGl2ZV9wcm9kdWN0.option.cHJvZHVjdF9pZA.display_name": {
+          "source": "Product",
+          "message": "商品"
+        },
+        "app.UGFkZGxl.action.YXJjaGl2ZV9wcm9kdWN0.option.cHJvZHVjdF9pZA.short_desc": {
+          "source": "Paddle ID of the product entity to work with",
+          "message": "対象となる製品エンティティのPaddle ID"
+        },
+        "app.UGFkZGxl.action.YXJjaGl2ZV9wcm9kdWN0.short_desc": {
+          "source": "Retire a catalog product",
+          "message": "カタログ製品を廃止"
+        },
+        "app.UGFkZGxl.action.Z2V0X2N1c3RvbWVy.desc": {
+          "source": "Retrieves a customer by Paddle ID, including any `custom_data` stored against it.\n\nThis returns a customer whatever its status, so it is how an archived customer is read back - **List Customers** omits archived customers by default.",
+          "message": "保存されているすべての `custom_data` を含め、Paddle IDで顧客を取得します。\n\nステータスに関係なく顧客を返すため、アーカイブされた顧客を読み戻す方法となります（**顧客一覧の取得**ではデフォルトでアーカイブされた顧客が除外されます）。"
+        },
+        "app.UGFkZGxl.action.Z2V0X2N1c3RvbWVy.display_name": {
+          "source": "Get Customer",
+          "message": "顧客を取得"
+        },
+        "app.UGFkZGxl.action.Z2V0X2N1c3RvbWVy.option.Y3VzdG9tZXJfaWQ.desc": {
+          "source": "Paddle ID of the customer entity to work with.: Unique Paddle ID for this customer entity, prefixed with `ctm_`.",
+          "message": "対象となる顧客エンティティのPaddle ID: この顧客エンティティの一意のPaddle ID（プレフィックス: `ctm_`）。"
+        },
+        "app.UGFkZGxl.action.Z2V0X2N1c3RvbWVy.option.Y3VzdG9tZXJfaWQ.display_name": {
+          "source": "Customer",
+          "message": "顧客"
+        },
+        "app.UGFkZGxl.action.Z2V0X2N1c3RvbWVy.option.Y3VzdG9tZXJfaWQ.short_desc": {
+          "source": "Paddle ID of the customer entity to work with",
+          "message": "対象となる顧客エンティティのPaddle ID"
+        },
+        "app.UGFkZGxl.action.Z2V0X2N1c3RvbWVy.short_desc": {
+          "source": "Retrieve one customer",
+          "message": "1件の顧客を取得"
+        },
+        "app.UGFkZGxl.action.Z2V0X2N1c3RvbWVyX2F1dGhfdG9rZW4.desc": {
+          "source": "Generates an authentication token for a customer, so that a checkout opened with Paddle.js knows who the buyer is without them signing in again.\n\n**The token is short-lived and grants access to that customer's data**, so generate it per checkout, server-side, and pass it straight to the browser rather than storing it.\n\nThis needs the `customer_auth_token.write` permission, which is separate from `customer.write`.",
+          "message": "顧客の認証トークンを生成し、Paddle.jsで開かれたチェックアウトで再度サインインすることなく購入者を識別できるようにします。\n\n**トークンは短時間のみ有効で、その顧客のデータへのアクセスを許可します**。そのため、保存せずにチェックアウトごとにサーバー側で生成し、直接ブラウザに渡してください。\n\nこれには `customer.write` とは別の `customer_auth_token.write` 権限が必要です。"
+        },
+        "app.UGFkZGxl.action.Z2V0X2N1c3RvbWVyX2F1dGhfdG9rZW4.display_name": {
+          "source": "Get Customer Authentication Token",
+          "message": "顧客認証トークンを取得"
+        },
+        "app.UGFkZGxl.action.Z2V0X2N1c3RvbWVyX2F1dGhfdG9rZW4.option.Y3VzdG9tZXJfaWQ.desc": {
+          "source": "Paddle ID of the customer entity to work with.: Unique Paddle ID for this customer entity, prefixed with `ctm_`.",
+          "message": "対象となる顧客エンティティのPaddle ID: この顧客エンティティの一意のPaddle ID（プレフィックス: `ctm_`）。"
+        },
+        "app.UGFkZGxl.action.Z2V0X2N1c3RvbWVyX2F1dGhfdG9rZW4.option.Y3VzdG9tZXJfaWQ.display_name": {
+          "source": "Customer",
+          "message": "顧客"
+        },
+        "app.UGFkZGxl.action.Z2V0X2N1c3RvbWVyX2F1dGhfdG9rZW4.option.Y3VzdG9tZXJfaWQ.short_desc": {
+          "source": "Paddle ID of the customer entity to work with",
+          "message": "対象となる顧客エンティティのPaddle ID"
+        },
+        "app.UGFkZGxl.action.Z2V0X2N1c3RvbWVyX2F1dGhfdG9rZW4.short_desc": {
+          "source": "Generate a short-lived token identifying a customer to Paddle.js",
+          "message": "Paddle.jsに対して顧客を識別する短寿命トークンを生成"
+        },
+        "app.UGFkZGxl.action.Z2V0X3ByaWNl.desc": {
+          "source": "Retrieves a price by Paddle ID, whatever its status.\n\nSet `include` to `product` to get the owning product in the same response.",
+          "message": "ステータスに関係なく、Paddle IDで価格を取得します。\n\n同じレスポンス内で所有製品を取得するには、`include` を `product` に設定します。"
+        },
+        "app.UGFkZGxl.action.Z2V0X3ByaWNl.display_name": {
+          "source": "Get Price",
+          "message": "価格を取得"
+        },
+        "app.UGFkZGxl.action.Z2V0X3ByaWNl.option.aW5jbHVkZQ.desc": {
+          "source": "Include related entities in the response.",
+          "message": "レスポンスに関連エンティティを含めます。"
+        },
+        "app.UGFkZGxl.action.Z2V0X3ByaWNl.option.aW5jbHVkZQ.display_name": {
+          "source": "Include",
+          "message": "Include"
+        },
+        "app.UGFkZGxl.action.Z2V0X3ByaWNl.option.aW5jbHVkZQ.short_desc": {
+          "source": "Include related entities in the response",
+          "message": "レスポンスに関連エンティティを含める"
+        },
+        "app.UGFkZGxl.action.Z2V0X3ByaWNl.option.cHJpY2VfaWQ.desc": {
+          "source": "Paddle ID of the price entity to work with.",
+          "message": "対象となる価格エンティティのPaddle ID。"
+        },
+        "app.UGFkZGxl.action.Z2V0X3ByaWNl.option.cHJpY2VfaWQ.display_name": {
+          "source": "Price",
+          "message": "価格"
+        },
+        "app.UGFkZGxl.action.Z2V0X3ByaWNl.option.cHJpY2VfaWQ.short_desc": {
+          "source": "Paddle ID of the price entity to work with",
+          "message": "対象となる価格エンティティのPaddle ID"
+        },
+        "app.UGFkZGxl.action.Z2V0X3ByaWNl.short_desc": {
+          "source": "Retrieve one catalog price",
+          "message": "1件のカタログ価格を取得"
+        },
+        "app.UGFkZGxl.action.Z2V0X3Byb2R1Y3Q.desc": {
+          "source": "Retrieves a product by Paddle ID, whatever its status.\n\nSet `include` to `prices` to get the product's prices in the same response.",
+          "message": "ステータスにかかわらず、Paddle IDによって製品を取得します。\n\n同じレスポンスで製品の価格を取得するには、`include` を `prices` に設定します。"
+        },
+        "app.UGFkZGxl.action.Z2V0X3Byb2R1Y3Q.display_name": {
+          "source": "Get Product",
+          "message": "製品の取得"
+        },
+        "app.UGFkZGxl.action.Z2V0X3Byb2R1Y3Q.option.aW5jbHVkZQ.desc": {
+          "source": "Include related entities in the response. Use a comma-separated list to specify multiple entities.",
+          "message": "レスポンスに関連エンティティを含めます。複数のエンティティを指定するにはカンマ区切りリストを使用します。"
+        },
+        "app.UGFkZGxl.action.Z2V0X3Byb2R1Y3Q.option.aW5jbHVkZQ.display_name": {
+          "source": "Include",
+          "message": "Include"
+        },
+        "app.UGFkZGxl.action.Z2V0X3Byb2R1Y3Q.option.aW5jbHVkZQ.short_desc": {
+          "source": "Include related entities in the response",
+          "message": "レスポンスに関連エンティティを含める"
+        },
+        "app.UGFkZGxl.action.Z2V0X3Byb2R1Y3Q.option.cHJvZHVjdF9pZA.desc": {
+          "source": "Paddle ID of the product entity to work with.",
+          "message": "対象となる製品エンティティのPaddle ID。"
+        },
+        "app.UGFkZGxl.action.Z2V0X3Byb2R1Y3Q.option.cHJvZHVjdF9pZA.display_name": {
+          "source": "Product",
+          "message": "商品"
+        },
+        "app.UGFkZGxl.action.Z2V0X3Byb2R1Y3Q.option.cHJvZHVjdF9pZA.short_desc": {
+          "source": "Paddle ID of the product entity to work with",
+          "message": "対象となる製品エンティティのPaddle ID"
+        },
+        "app.UGFkZGxl.action.Z2V0X3Byb2R1Y3Q.short_desc": {
+          "source": "Retrieve one catalog product",
+          "message": "カタログ製品を1件取得"
+        },
+        "app.UGFkZGxl.action.Z2V0X3JlcG9ydA.desc": {
+          "source": "Retrieves a report by Paddle ID.\n\n`status` is what matters: `pending` while Paddle is still generating it, `ready` when the file can be downloaded, `failed` if generation did not succeed, and `expired` once Paddle has removed it. `rows` is how many records it holds.\n\nThis is the action to poll after **Create Report**.",
+          "message": "Paddle IDによってレポートを取得します。\n\n`status` が重要です。Paddleで生成中は `pending`、ファイルをダウンロード可能な場合は `ready`、生成に失敗した場合は `failed`、Paddleによって削除された後は `expired` となります。`rows` は含まれるレコード数です。\n\nこれは **Create Report** の後にポーリングするアクションです。"
+        },
+        "app.UGFkZGxl.action.Z2V0X3JlcG9ydA.display_name": {
+          "source": "Get Report",
+          "message": "レポートを取得"
+        },
+        "app.UGFkZGxl.action.Z2V0X3JlcG9ydA.option.cmVwb3J0X2lk.desc": {
+          "source": "Paddle ID of the report entity.",
+          "message": "レポートエンティティのPaddle ID。"
+        },
+        "app.UGFkZGxl.action.Z2V0X3JlcG9ydA.option.cmVwb3J0X2lk.display_name": {
+          "source": "Report",
+          "message": "レポート"
+        },
+        "app.UGFkZGxl.action.Z2V0X3JlcG9ydA.option.cmVwb3J0X2lk.short_desc": {
+          "source": "Paddle ID of the report entity",
+          "message": "レポートエンティティのPaddle ID"
+        },
+        "app.UGFkZGxl.action.Z2V0X3JlcG9ydA.short_desc": {
+          "source": "Retrieve one report and its status",
+          "message": "1件のレポートとそのステータスを取得"
+        },
+        "app.UGFkZGxl.action.Z2V0X3JlcG9ydF9maWxl.desc": {
+          "source": "Returns a URL the report's CSV file can be downloaded from.\n\n**This is a URL, not the file**: fetch it separately. The URL is signed and short-lived - Paddle expires it within the hour - so generate it at the point of download rather than storing it.\n\nThe report must be `ready`; asking for the file of a report that is still `pending` fails.",
+          "message": "レポートのCSVファイルをダウンロードできるURLを返します。\n\n**これはURLであり、ファイルそのものではありません**: 別途取得してください。URLは署名付きで有効期間が短く（Paddleにより1時間以内に失効します）、保存するのではなくダウンロード時に生成してください。\n\nレポートは `ready` である必要があります。まだ `pending` のレポートのファイルを要求すると失敗します。"
+        },
+        "app.UGFkZGxl.action.Z2V0X3JlcG9ydF9maWxl.display_name": {
+          "source": "Get Report File",
+          "message": "レポートファイルを取得"
+        },
+        "app.UGFkZGxl.action.Z2V0X3JlcG9ydF9maWxl.option.cmVwb3J0X2lk.desc": {
+          "source": "Paddle ID of the report entity.",
+          "message": "レポートエンティティのPaddle ID。"
+        },
+        "app.UGFkZGxl.action.Z2V0X3JlcG9ydF9maWxl.option.cmVwb3J0X2lk.display_name": {
+          "source": "Report",
+          "message": "レポート"
+        },
+        "app.UGFkZGxl.action.Z2V0X3JlcG9ydF9maWxl.option.cmVwb3J0X2lk.short_desc": {
+          "source": "Paddle ID of the report entity",
+          "message": "レポートエンティティのPaddle ID"
+        },
+        "app.UGFkZGxl.action.Z2V0X3JlcG9ydF9maWxl.short_desc": {
+          "source": "Get a download URL for a report's CSV file",
+          "message": "レポートのCSVファイルのダウンロードURLを取得"
+        },
+        "app.UGFkZGxl.action.Z2V0X3N1YnNjcmlwdGlvbg.desc": {
+          "source": "Retrieves a subscription by Paddle ID.\n\n`items` is what the customer is billed for, `current_billing_period` is the window they have paid for, and `scheduled_change` is a pause or cancellation already booked for a future date - a subscription can be `active` and still be due to end.\n\nSet `include` to `next_transaction` for what the next renewal will cost, or `recurring_transaction_details` for the recurring amount.",
+          "message": "Paddle IDによってサブスクリプションを取得します。\n\n`items` は顧客への請求対象、`current_billing_period` は支払済みの期間、`scheduled_change` は将来の日付で予約済みの休止またはキャンセルです（サブスクリプションが `active` であっても終了予定である場合があります）。\n\n次回の更新費用を取得するには `include` を `next_transaction` に、継続請求額を取得するには `recurring_transaction_details` に設定します。"
+        },
+        "app.UGFkZGxl.action.Z2V0X3N1YnNjcmlwdGlvbg.display_name": {
+          "source": "Get Subscription",
+          "message": "サブスクリプションを取得"
+        },
+        "app.UGFkZGxl.action.Z2V0X3N1YnNjcmlwdGlvbg.option.aW5jbHVkZQ.desc": {
+          "source": "Include related entities in the response. Use a comma-separated list to specify multiple entities.",
+          "message": "レスポンスに関連エンティティを含めます。複数のエンティティを指定するにはカンマ区切りリストを使用します。"
+        },
+        "app.UGFkZGxl.action.Z2V0X3N1YnNjcmlwdGlvbg.option.aW5jbHVkZQ.display_name": {
+          "source": "Include",
+          "message": "Include"
+        },
+        "app.UGFkZGxl.action.Z2V0X3N1YnNjcmlwdGlvbg.option.aW5jbHVkZQ.short_desc": {
+          "source": "Include related entities in the response",
+          "message": "レスポンスに関連エンティティを含める"
+        },
+        "app.UGFkZGxl.action.Z2V0X3N1YnNjcmlwdGlvbg.option.c3Vic2NyaXB0aW9uX2lk.desc": {
+          "source": "Paddle ID of the subscription entity to work with.",
+          "message": "操作対象のサブスクリプションエンティティのPaddle ID。"
+        },
+        "app.UGFkZGxl.action.Z2V0X3N1YnNjcmlwdGlvbg.option.c3Vic2NyaXB0aW9uX2lk.display_name": {
+          "source": "Subscription",
+          "message": "サブスクリプション"
+        },
+        "app.UGFkZGxl.action.Z2V0X3N1YnNjcmlwdGlvbg.option.c3Vic2NyaXB0aW9uX2lk.short_desc": {
+          "source": "Paddle ID of the subscription entity to work with",
+          "message": "操作対象のサブスクリプションエンティティのPaddle ID"
+        },
+        "app.UGFkZGxl.action.Z2V0X3N1YnNjcmlwdGlvbg.short_desc": {
+          "source": "Retrieve one subscription",
+          "message": "サブスクリプションを1件取得"
+        },
+        "app.UGFkZGxl.action.Z2V0X3RyYW5zYWN0aW9u.desc": {
+          "source": "Retrieves a transaction by Paddle ID.\n\n`details.totals` breaks the amount down into subtotal, tax, discount and the balance still due; `payments` records each attempt to collect it, including failures. `status` is what says whether the money actually arrived.\n\nSet `include` to `customer` or `address` to resolve the related entities in the same response.",
+          "message": "Paddle IDによってトランザクションを取得します。\n\n`details.totals` は金額を小計、税金、割引、未払残高に内訳表示します。`payments` は失敗を含む回収試行を記録します。`status` は実際に支払われたかどうかを示します。\n\n同じレスポンスで関連エンティティを解決するには、`include` を `customer` または `address` に設定します。"
+        },
+        "app.UGFkZGxl.action.Z2V0X3RyYW5zYWN0aW9u.display_name": {
+          "source": "Get Transaction",
+          "message": "トランザクションを取得"
+        },
+        "app.UGFkZGxl.action.Z2V0X3RyYW5zYWN0aW9u.option.aW5jbHVkZQ.desc": {
+          "source": "Include related entities in the response. Use a comma-separated list to specify multiple entities.",
+          "message": "レスポンスに関連エンティティを含めます。複数のエンティティを指定するにはカンマ区切りリストを使用します。"
+        },
+        "app.UGFkZGxl.action.Z2V0X3RyYW5zYWN0aW9u.option.aW5jbHVkZQ.display_name": {
+          "source": "Include",
+          "message": "Include"
+        },
+        "app.UGFkZGxl.action.Z2V0X3RyYW5zYWN0aW9u.option.aW5jbHVkZQ.short_desc": {
+          "source": "Include related entities in the response",
+          "message": "レスポンスに関連エンティティを含める"
+        },
+        "app.UGFkZGxl.action.Z2V0X3RyYW5zYWN0aW9u.option.dHJhbnNhY3Rpb25faWQ.desc": {
+          "source": "Paddle ID of the transaction entity to work with.",
+          "message": "操作対象のトランザクションエンティティのPaddle ID。"
+        },
+        "app.UGFkZGxl.action.Z2V0X3RyYW5zYWN0aW9u.option.dHJhbnNhY3Rpb25faWQ.display_name": {
+          "source": "Transaction",
+          "message": "トランザクション"
+        },
+        "app.UGFkZGxl.action.Z2V0X3RyYW5zYWN0aW9u.option.dHJhbnNhY3Rpb25faWQ.short_desc": {
+          "source": "Paddle ID of the transaction entity to work with",
+          "message": "操作対象のトランザクションエンティティのPaddle ID"
+        },
+        "app.UGFkZGxl.action.Z2V0X3RyYW5zYWN0aW9u.short_desc": {
+          "source": "Retrieve one transaction",
+          "message": "トランザクションを1件取得"
+        },
+        "app.UGFkZGxl.action.bGlzdF90cmFuc2FjdGlvbnM.desc": {
+          "source": "Lists transactions - the records that calculate and capture revenue.\n\nFilter by `status` to separate what has been paid (`completed`, `paid`) from what is outstanding (`billed`, `past_due`) or still a draft (`draft`, `ready`). `created_at`, `updated_at` and `billed_at` take an operator suffix, as in `updated_at[GT]=2026-01-01T00:00:00Z`, which is how an incremental sync picks up only what changed.\n\n`per_page` defaults to 30 here rather than 50, because a transaction is a large object.",
+          "message": "収益の計算および回収を行うレコードであるトランザクションを一覧表示します。\n\n`status` でフィルタリングして、支払済み（`completed`、`paid`）と未払い（`billed`、`past_due`）または下書き（`draft`、`ready`）を区別できます。`created_at`、`updated_at`、`billed_at` は `updated_at[GT]=2026-01-01T00:00:00Z` のように演算子サフィックスを受け取り、差分同期で変更分のみを取得するために使用します。\n\nトランザクションはサイズの大きいオブジェクトであるため、ここでは `per_page` のデフォルト値が50ではなく30になっています。"
+        },
+        "app.UGFkZGxl.action.bGlzdF90cmFuc2FjdGlvbnM.display_name": {
+          "source": "List Transactions",
+          "message": "取引一覧"
+        },
+        "app.UGFkZGxl.action.bGlzdF90cmFuc2FjdGlvbnM.option.Y29sbGVjdGlvbl9tb2Rl.allowed-value.c3RyaW5nOm1hbnVhbA.display_name": {
+          "source": "manual",
+          "message": "手動"
+        },
+        "app.UGFkZGxl.action.bGlzdF90cmFuc2FjdGlvbnM.option.Y29sbGVjdGlvbl9tb2Rl.allowed-value.c3RyaW5nOmF1dG9tYXRpYw.display_name": {
+          "source": "automatic",
+          "message": "automatic"
+        },
+        "app.UGFkZGxl.action.bGlzdF90cmFuc2FjdGlvbnM.option.Y29sbGVjdGlvbl9tb2Rl.desc": {
+          "source": "Return entities that match the specified collection mode.: How payment is collected. `automatic` for checkout, `manual` for invoices.",
+          "message": "指定された回収モードに一致するエンティティを返します。: 支払いの回収方法。チェックアウトの場合は `automatic`、請求書の場合は `manual`。"
+        },
+        "app.UGFkZGxl.action.bGlzdF90cmFuc2FjdGlvbnM.option.Y29sbGVjdGlvbl9tb2Rl.display_name": {
+          "source": "Collection Mode",
+          "message": "回収モード"
+        },
+        "app.UGFkZGxl.action.bGlzdF90cmFuc2FjdGlvbnM.option.Y29sbGVjdGlvbl9tb2Rl.short_desc": {
+          "source": "Return entities that match the specified collection mode",
+          "message": "指定された回収モードに一致するエンティティを返す"
+        },
+        "app.UGFkZGxl.action.bGlzdF90cmFuc2FjdGlvbnM.option.Y3JlYXRlZF9hdA.desc": {
+          "source": "Return entities created at a specific time. Pass an RFC 3339 datetime string, or use `[LT]` (less than), `[LTE]` (less than or equal to), `[GT]` (greater than), or `[GTE]` (greater than or equal to) operators. For example, `created_at=2023-04-18T17:03:26` or `created_at[LT]=2023-04-18T17:03:26`.",
+          "message": "特定の時刻に作成されたエンティティを返します。RFC 3339形式の日時文字列を渡すか、`[LT]`（未満）、`[LTE]`（以下）、`[GT]`（超）、または `[GTE]`（以上）演算子を使用します。例: `created_at=2023-04-18T17:03:26` や `created_at[LT]=2023-04-18T17:03:26`。"
+        },
+        "app.UGFkZGxl.action.bGlzdF90cmFuc2FjdGlvbnM.option.Y3JlYXRlZF9hdA.display_name": {
+          "source": "Created At",
+          "message": "作成日時"
+        },
+        "app.UGFkZGxl.action.bGlzdF90cmFuc2FjdGlvbnM.option.Y3JlYXRlZF9hdA.short_desc": {
+          "source": "Filter on creation time; takes an operator suffix",
+          "message": "作成日時でフィルタリング。演算子サフィックスを使用可能"
+        },
+        "app.UGFkZGxl.action.bGlzdF90cmFuc2FjdGlvbnM.option.Y3VzdG9tZXJfaWQ.desc": {
+          "source": "Return entities related to the specified customer. Use a comma-separated list to specify multiple customer IDs.",
+          "message": "指定された顧客に関連するエンティティを返します。複数の顧客IDを指定するにはカンマ区切りリストを使用します。"
+        },
+        "app.UGFkZGxl.action.bGlzdF90cmFuc2FjdGlvbnM.option.Y3VzdG9tZXJfaWQ.display_name": {
+          "source": "Customer",
+          "message": "顧客"
+        },
+        "app.UGFkZGxl.action.bGlzdF90cmFuc2FjdGlvbnM.option.Y3VzdG9tZXJfaWQ.short_desc": {
+          "source": "Return only transactions for these customers",
+          "message": "これらの顧客のトランザクションのみを返す"
+        },
+        "app.UGFkZGxl.action.bGlzdF90cmFuc2FjdGlvbnM.option.YWZ0ZXI.desc": {
+          "source": "The pagination cursor: return the records that come after this Paddle ID.\n\nTake it from the `after` query argument of the `meta.pagination.next` URL in the previous response. Paddle always returns that URL, even on the last page, so page on `meta.pagination.has_more` rather than on its presence.",
+          "message": "ページネーションカーソル: このPaddle ID以降のレコードを返します。\n\n前回のレスポンスにある `meta.pagination.next` URLの `after` クエリ引数から取得してください。Paddleは最後のページでも常にそのURLを返すため、URLの有無ではなく `meta.pagination.has_more` に基づいてページングを行ってください。"
+        },
+        "app.UGFkZGxl.action.bGlzdF90cmFuc2FjdGlvbnM.option.YWZ0ZXI.display_name": {
+          "source": "After",
+          "message": "After"
+        },
+        "app.UGFkZGxl.action.bGlzdF90cmFuc2FjdGlvbnM.option.YWZ0ZXI.short_desc": {
+          "source": "Return records after this Paddle ID",
+          "message": "このPaddle ID以降のレコードを返す"
+        },
+        "app.UGFkZGxl.action.bGlzdF90cmFuc2FjdGlvbnM.option.YmlsbGVkX2F0.desc": {
+          "source": "Return entities billed at a specific time. Pass an RFC 3339 datetime string, or use `[LT]` (less than), `[LTE]` (less than or equal to), `[GT]` (greater than), or `[GTE]` (greater than or equal to) operators. For example, `billed_at=2023-04-18T17:03:26` or `billed_at[LT]=2023-04-18T17:03:26`.",
+          "message": "特定の時刻に請求されたエンティティを返します。RFC 3339形式の日時文字列を渡すか、`[LT]`（未満）、`[LTE]`（以下）、`[GT]`（超）、または `[GTE]`（以上）演算子を使用します。例: `billed_at=2023-04-18T17:03:26` や `billed_at[LT]=2023-04-18T17:03:26`。"
+        },
+        "app.UGFkZGxl.action.bGlzdF90cmFuc2FjdGlvbnM.option.YmlsbGVkX2F0.display_name": {
+          "source": "Billed At",
+          "message": "請求日時"
+        },
+        "app.UGFkZGxl.action.bGlzdF90cmFuc2FjdGlvbnM.option.YmlsbGVkX2F0.short_desc": {
+          "source": "Filter on when the transaction was billed; takes an operator suffix",
+          "message": "トランザクションの請求日時でフィルタリング。演算子サフィックスを使用可能"
+        },
+        "app.UGFkZGxl.action.bGlzdF90cmFuc2FjdGlvbnM.option.aW52b2ljZV9udW1iZXI.desc": {
+          "source": "Return entities that match the invoice number. Use a comma-separated list to specify multiple invoice numbers.",
+          "message": "請求書番号に一致するエンティティを返します。複数の請求書番号を指定するにはカンマ区切りリストを使用します。"
+        },
+        "app.UGFkZGxl.action.bGlzdF90cmFuc2FjdGlvbnM.option.aW52b2ljZV9udW1iZXI.display_name": {
+          "source": "Invoice Number",
+          "message": "請求書番号"
+        },
+        "app.UGFkZGxl.action.bGlzdF90cmFuc2FjdGlvbnM.option.aW52b2ljZV9udW1iZXI.short_desc": {
+          "source": "Return entities that match the invoice number",
+          "message": "請求書番号に一致するエンティティを返す"
+        },
+        "app.UGFkZGxl.action.bGlzdF90cmFuc2FjdGlvbnM.option.aW5jbHVkZQ.desc": {
+          "source": "Include related entities in the response. Use a comma-separated list to specify multiple entities.",
+          "message": "レスポンスに関連エンティティを含めます。複数のエンティティを指定するにはカンマ区切りリストを使用します。"
+        },
+        "app.UGFkZGxl.action.bGlzdF90cmFuc2FjdGlvbnM.option.aW5jbHVkZQ.display_name": {
+          "source": "Include",
+          "message": "Include"
+        },
+        "app.UGFkZGxl.action.bGlzdF90cmFuc2FjdGlvbnM.option.aW5jbHVkZQ.short_desc": {
+          "source": "Include related entities in the response",
+          "message": "レスポンスに関連エンティティを含める"
+        },
+        "app.UGFkZGxl.action.bGlzdF90cmFuc2FjdGlvbnM.option.aWQ.desc": {
+          "source": "Return only the IDs specified. Use a comma-separated list to get multiple entities.",
+          "message": "指定されたIDのみを返します。複数のエンティティを取得するにはカンマ区切りリストを使用します。"
+        },
+        "app.UGFkZGxl.action.bGlzdF90cmFuc2FjdGlvbnM.option.aWQ.display_name": {
+          "source": "Transaction",
+          "message": "トランザクション"
+        },
+        "app.UGFkZGxl.action.bGlzdF90cmFuc2FjdGlvbnM.option.aWQ.short_desc": {
+          "source": "Return only these transactions",
+          "message": "これらのトランザクションのみを返す"
+        },
+        "app.UGFkZGxl.action.bGlzdF90cmFuc2FjdGlvbnM.option.b3JkZXJfYnk.desc": {
+          "source": "Order returned entities by the specified field and direction (`[ASC]` or `[DESC]`). For example, `?order_by=id[ASC]`.\n\nValid fields for ordering: `id`.",
+          "message": "指定されたフィールドと順序（`[ASC]` または `[DESC]`）で返されるエンティティを並べ替えます。例: `?order_by=id[ASC]`。\n\n並べ替えに有効なフィールド: `id`。"
+        },
+        "app.UGFkZGxl.action.bGlzdF90cmFuc2FjdGlvbnM.option.b3JkZXJfYnk.display_name": {
+          "source": "Order By",
+          "message": "並べ替え"
+        },
+        "app.UGFkZGxl.action.bGlzdF90cmFuc2FjdGlvbnM.option.b3JkZXJfYnk.short_desc": {
+          "source": "Order by a field and direction, ex: \"id[ASC]\"",
+          "message": "フィールドと順序で並べ替え（例: \"id[ASC]\"）"
+        },
+        "app.UGFkZGxl.action.bGlzdF90cmFuc2FjdGlvbnM.option.b3JpZ2lu.desc": {
+          "source": "Return entities related to the specified origin. Use a comma-separated list to specify multiple origins.",
+          "message": "指定された発生元に関連するエンティティを返します。複数の発生元を指定するにはカンマ区切りリストを使用します。"
+        },
+        "app.UGFkZGxl.action.bGlzdF90cmFuc2FjdGlvbnM.option.b3JpZ2lu.display_name": {
+          "source": "Origin",
+          "message": "発生元"
+        },
+        "app.UGFkZGxl.action.bGlzdF90cmFuc2FjdGlvbnM.option.b3JpZ2lu.short_desc": {
+          "source": "Return entities related to the specified origin",
+          "message": "指定された発生元に関連するエンティティを返す"
+        },
+        "app.UGFkZGxl.action.bGlzdF90cmFuc2FjdGlvbnM.option.c2tpcF9jb3VudA.desc": {
+          "source": "Set to `true` to skip the count query Paddle runs for a listing.\n\n`meta.pagination.estimated_total` then returns `-1` instead of a count. Worth setting when paging through a large collection, where the count costs time on every page and is not used.",
+          "message": "一覧取得時にPaddleが実行するカウントクエリをスキップするには `true` に設定します。\n\n設定すると、`meta.pagination.estimated_total` は件数の代わりに `-1` を返します。件数カウントに各ページで時間がかかり、かつ件数を使用しない大規模コレクションのページング時に設定すると効果的です。"
+        },
+        "app.UGFkZGxl.action.bGlzdF90cmFuc2FjdGlvbnM.option.c2tpcF9jb3VudA.display_name": {
+          "source": "Skip Count",
+          "message": "カウントをスキップ"
+        },
+        "app.UGFkZGxl.action.bGlzdF90cmFuc2FjdGlvbnM.option.c2tpcF9jb3VudA.short_desc": {
+          "source": "Skip the count query, making a large listing cheaper",
+          "message": "カウントクエリをスキップして大規模な一覧取得の負荷を軽減"
+        },
+        "app.UGFkZGxl.action.bGlzdF90cmFuc2FjdGlvbnM.option.c3RhdHVz.desc": {
+          "source": "Return entities that match the specified status. Use a comma-separated list to specify multiple status values.",
+          "message": "指定されたステータスに一致するエンティティを返します。複数のステータス値を指定するにはカンマ区切りリストを使用します。"
+        },
+        "app.UGFkZGxl.action.bGlzdF90cmFuc2FjdGlvbnM.option.c3RhdHVz.display_name": {
+          "source": "Status",
+          "message": "ステータス"
+        },
+        "app.UGFkZGxl.action.bGlzdF90cmFuc2FjdGlvbnM.option.c3RhdHVz.short_desc": {
+          "source": "Return only transactions with these statuses",
+          "message": "これらのステータスのトランザクションのみを返す"
+        },
+        "app.UGFkZGxl.action.bGlzdF90cmFuc2FjdGlvbnM.option.c3Vic2NyaXB0aW9uX2lk.desc": {
+          "source": "Return entities related to the specified subscription. Use a comma-separated list to specify multiple subscription IDs. Pass `null` to return entities that aren't related to any subscription.",
+          "message": "指定されたサブスクリプションに関連するエンティティを返します。複数のサブスクリプションIDを指定するにはカンマ区切りリストを使用します。どのサブスクリプションにも関連付けられていないエンティティを返すには `null` を渡します。"
+        },
+        "app.UGFkZGxl.action.bGlzdF90cmFuc2FjdGlvbnM.option.c3Vic2NyaXB0aW9uX2lk.display_name": {
+          "source": "Subscription",
+          "message": "サブスクリプション"
+        },
+        "app.UGFkZGxl.action.bGlzdF90cmFuc2FjdGlvbnM.option.c3Vic2NyaXB0aW9uX2lk.short_desc": {
+          "source": "Return only transactions for these subscriptions",
+          "message": "これらのサブスクリプションのトランザクションのみを返す"
+        },
+        "app.UGFkZGxl.action.bGlzdF90cmFuc2FjdGlvbnM.option.cGVyX3BhZ2U.desc": {
+          "source": "How many records to return in one request, up to Paddle's maximum of `200`. Asking for more returns the maximum rather than failing.\n\n`meta.pagination.per_page` in the response reports how many were actually returned, and `meta.pagination.has_more` says whether another page exists.",
+          "message": "1回のリクエストで返すレコード数（Paddleの最大値である `200` まで）。これより大きい値を指定した場合、エラーにはならず最大値が返されます。\n\nレスポンス内の `meta.pagination.per_page` は実際に返された件数を報告し、`meta.pagination.has_more` は次のページが存在するかどうかを示します。"
+        },
+        "app.UGFkZGxl.action.bGlzdF90cmFuc2FjdGlvbnM.option.cGVyX3BhZ2U.display_name": {
+          "source": "Per Page",
+          "message": "ページあたり"
+        },
+        "app.UGFkZGxl.action.bGlzdF90cmFuc2FjdGlvbnM.option.cGVyX3BhZ2U.short_desc": {
+          "source": "How many records to return, up to 200",
+          "message": "返すレコード数（最大200件）"
+        },
+        "app.UGFkZGxl.action.bGlzdF90cmFuc2FjdGlvbnM.option.dXBkYXRlZF9hdA.desc": {
+          "source": "Return entities updated at a specific time. Pass an RFC 3339 datetime string, or use `[LT]` (less than), `[LTE]` (less than or equal to), `[GT]` (greater than), or `[GTE]` (greater than or equal to) operators. For example, `updated_at=2023-04-18T17:03:26` or `updated_at[LT]=2023-04-18T17:03:26`.",
+          "message": "特定の時刻に更新されたエンティティを返します。RFC 3339形式の日時文字列を渡すか、`[LT]`（未満）、`[LTE]`（以下）、`[GT]`（超）、または `[GTE]`（以上）演算子を使用します。例: `updated_at=2023-04-18T17:03:26` や `updated_at[LT]=2023-04-18T17:03:26`。"
+        },
+        "app.UGFkZGxl.action.bGlzdF90cmFuc2FjdGlvbnM.option.dXBkYXRlZF9hdA.display_name": {
+          "source": "Updated At",
+          "message": "更新日時"
+        },
+        "app.UGFkZGxl.action.bGlzdF90cmFuc2FjdGlvbnM.option.dXBkYXRlZF9hdA.short_desc": {
+          "source": "Filter on last-modified time; takes an operator suffix",
+          "message": "最終更新日時でフィルタリング。演算子サフィックスを使用可能"
+        },
+        "app.UGFkZGxl.action.bGlzdF90cmFuc2FjdGlvbnM.short_desc": {
+          "source": "List the transactions in this Paddle account",
+          "message": "このPaddleアカウントのトランザクションを一覧表示"
+        },
+        "app.UGFkZGxl.action.bGlzdF9jdXN0b21lcl9jcmVkaXRfYmFsYW5jZXM.desc": {
+          "source": "Lists the credit a customer holds, one entry per currency.\n\nEach entry splits the balance into `available` credit, credit `reserved` against an unpaid transaction, and the `used` total. Credit arises from a refund or an adjustment and is applied automatically to the customer's next transaction in the same currency.\n\nThis listing is not paginated: every currency the customer holds credit in is returned.",
+          "message": "顧客が保有するクレジットを通貨ごとに一覧表示します。\n\n各エントリは残高を `available` クレジット、未払いのトランザクションに対して `reserved` されたクレジット、および `used` 合計に分割します。クレジットは返金または調整によって発生し、同通貨での顧客の次回のトランザクションに自動的に適用されます。\n\nこの一覧はページネーションされません。顧客がクレジットを保有しているすべての通貨が返されます。"
+        },
+        "app.UGFkZGxl.action.bGlzdF9jdXN0b21lcl9jcmVkaXRfYmFsYW5jZXM.display_name": {
+          "source": "List Customer Credit Balances",
+          "message": "顧客のクレジット残高を一覧表示"
+        },
+        "app.UGFkZGxl.action.bGlzdF9jdXN0b21lcl9jcmVkaXRfYmFsYW5jZXM.option.Y3VycmVuY3lfY29kZQ.desc": {
+          "source": "Return entities that match the currency code. Use a comma-separated list to specify multiple currency codes.",
+          "message": "通貨コードに一致するエンティティを返します。複数の通貨コードを指定するにはカンマ区切りリストを使用します。"
+        },
+        "app.UGFkZGxl.action.bGlzdF9jdXN0b21lcl9jcmVkaXRfYmFsYW5jZXM.option.Y3VycmVuY3lfY29kZQ.display_name": {
+          "source": "Currency Code",
+          "message": "通貨コード"
+        },
+        "app.UGFkZGxl.action.bGlzdF9jdXN0b21lcl9jcmVkaXRfYmFsYW5jZXM.option.Y3VycmVuY3lfY29kZQ.short_desc": {
+          "source": "Return only balances in these currencies",
+          "message": "これらの通貨の残高のみを返す"
+        },
+        "app.UGFkZGxl.action.bGlzdF9jdXN0b21lcl9jcmVkaXRfYmFsYW5jZXM.option.Y3VzdG9tZXJfaWQ.desc": {
+          "source": "Paddle ID of the customer entity to work with.: Unique Paddle ID for this customer entity, prefixed with `ctm_`.",
+          "message": "対象となる顧客エンティティのPaddle ID: この顧客エンティティの一意のPaddle ID（プレフィックス: `ctm_`）。"
+        },
+        "app.UGFkZGxl.action.bGlzdF9jdXN0b21lcl9jcmVkaXRfYmFsYW5jZXM.option.Y3VzdG9tZXJfaWQ.display_name": {
+          "source": "Customer",
+          "message": "顧客"
+        },
+        "app.UGFkZGxl.action.bGlzdF9jdXN0b21lcl9jcmVkaXRfYmFsYW5jZXM.option.Y3VzdG9tZXJfaWQ.short_desc": {
+          "source": "Paddle ID of the customer entity to work with",
+          "message": "対象となる顧客エンティティのPaddle ID"
+        },
+        "app.UGFkZGxl.action.bGlzdF9jdXN0b21lcl9jcmVkaXRfYmFsYW5jZXM.short_desc": {
+          "source": "List a customer's credit balances, by currency",
+          "message": "顧客のクレジット残高を通貨別に一覧表示"
+        },
+        "app.UGFkZGxl.action.bGlzdF9jdXN0b21lcnM.desc": {
+          "source": "Lists customers, newest first by default.\n\nOnly `active` customers are returned unless `status` says otherwise, which is worth knowing when a lookup by email comes back empty: an archived customer is still there. Use `email` for an exact address and `search` for a partial match across `id`, `name` and `email`.\n\nThe response is Paddle's list envelope: the customers are in `data`, and `meta.pagination` carries the cursor for the next page.",
+          "message": "顧客を一覧表示します（デフォルトは新しい順）。\n\n`status` で別段の指定がない限り `active` の顧客のみが返されます。メールアドレスによる検索結果が空の場合でもアーカイブされた顧客が存在する可能性があるため、注意してください。完全一致のメールアドレスには `email` を使用し、`id`、`name`、`email` 全体の部分一致には `search` を使用します。\n\nレスポンスはPaddleのリストエンベロープです。顧客は `data` に含まれ、`meta.pagination` には次のページのカーソルが保持されます。"
+        },
+        "app.UGFkZGxl.action.bGlzdF9jdXN0b21lcnM.display_name": {
+          "source": "List Customers",
+          "message": "顧客の一覧表示"
+        },
+        "app.UGFkZGxl.action.bGlzdF9jdXN0b21lcnM.option.YWZ0ZXI.desc": {
+          "source": "The pagination cursor: return the records that come after this Paddle ID.\n\nTake it from the `after` query argument of the `meta.pagination.next` URL in the previous response. Paddle always returns that URL, even on the last page, so page on `meta.pagination.has_more` rather than on its presence.",
+          "message": "ページネーションカーソル: このPaddle ID以降のレコードを返します。\n\n前回のレスポンスにある `meta.pagination.next` URLの `after` クエリ引数から取得してください。Paddleは最後のページでも常にそのURLを返すため、URLの有無ではなく `meta.pagination.has_more` に基づいてページングを行ってください。"
+        },
+        "app.UGFkZGxl.action.bGlzdF9jdXN0b21lcnM.option.YWZ0ZXI.display_name": {
+          "source": "After",
+          "message": "After"
+        },
+        "app.UGFkZGxl.action.bGlzdF9jdXN0b21lcnM.option.YWZ0ZXI.short_desc": {
+          "source": "Return records after this Paddle ID",
+          "message": "このPaddle ID以降のレコードを返す"
+        },
+        "app.UGFkZGxl.action.bGlzdF9jdXN0b21lcnM.option.ZW1haWw.desc": {
+          "source": "Return entities that exactly match the specified email address. Use a comma-separated list to specify multiple email addresses. Recommended for precise matching of email addresses.",
+          "message": "指定されたメールアドレスに完全に一致するエンティティを返します。複数のメールアドレスを指定するにはカンマ区切りリストを使用します。メールアドレスの完全一致検索に推奨されます。"
+        },
+        "app.UGFkZGxl.action.bGlzdF9jdXN0b21lcnM.option.ZW1haWw.display_name": {
+          "source": "Email",
+          "message": "メール"
+        },
+        "app.UGFkZGxl.action.bGlzdF9jdXN0b21lcnM.option.ZW1haWw.short_desc": {
+          "source": "Return only customers with these exact email addresses",
+          "message": "これらの完全一致するメールアドレスを持つ顧客のみを返す"
+        },
+        "app.UGFkZGxl.action.bGlzdF9jdXN0b21lcnM.option.aWQ.desc": {
+          "source": "Return only the IDs specified. Use a comma-separated list to get multiple entities.",
+          "message": "指定されたIDのみを返します。複数のエンティティを取得するにはカンマ区切りリストを使用します。"
+        },
+        "app.UGFkZGxl.action.bGlzdF9jdXN0b21lcnM.option.aWQ.display_name": {
+          "source": "Customer",
+          "message": "顧客"
+        },
+        "app.UGFkZGxl.action.bGlzdF9jdXN0b21lcnM.option.aWQ.short_desc": {
+          "source": "Return only these customers",
+          "message": "これらの顧客のみを返す"
+        },
+        "app.UGFkZGxl.action.bGlzdF9jdXN0b21lcnM.option.b3JkZXJfYnk.desc": {
+          "source": "Order returned entities by the specified field and direction (`[ASC]` or `[DESC]`). For example, `?order_by=id[ASC]`.\n\nValid fields for ordering: `id`.",
+          "message": "指定されたフィールドと順序（`[ASC]` または `[DESC]`）で返されるエンティティを並べ替えます。例: `?order_by=id[ASC]`。\n\n並べ替えに有効なフィールド: `id`。"
+        },
+        "app.UGFkZGxl.action.bGlzdF9jdXN0b21lcnM.option.b3JkZXJfYnk.display_name": {
+          "source": "Order By",
+          "message": "並べ替え"
+        },
+        "app.UGFkZGxl.action.bGlzdF9jdXN0b21lcnM.option.b3JkZXJfYnk.short_desc": {
+          "source": "Order by a field and direction, ex: \"id[ASC]\"",
+          "message": "フィールドと順序で並べ替え（例: \"id[ASC]\"）"
+        },
+        "app.UGFkZGxl.action.bGlzdF9jdXN0b21lcnM.option.c2VhcmNo.desc": {
+          "source": "Return entities that match a search query. Searches `id`, `name`, and `email` fields. Use the `email` query parameter for precise matching of email addresses.",
+          "message": "検索クエリに一致するエンティティを返します。`id`、`name`、`email` フィールドを検索します。メールアドレスの完全一致検索には `email` クエリパラメータを使用してください。"
+        },
+        "app.UGFkZGxl.action.bGlzdF9jdXN0b21lcnM.option.c2VhcmNo.display_name": {
+          "source": "Search",
+          "message": "検索"
+        },
+        "app.UGFkZGxl.action.bGlzdF9jdXN0b21lcnM.option.c2VhcmNo.short_desc": {
+          "source": "Match against id, name and email",
+          "message": "id、name、emailに一致"
+        },
+        "app.UGFkZGxl.action.bGlzdF9jdXN0b21lcnM.option.c2tpcF9jb3VudA.desc": {
+          "source": "Set to `true` to skip the count query Paddle runs for a listing.\n\n`meta.pagination.estimated_total` then returns `-1` instead of a count. Worth setting when paging through a large collection, where the count costs time on every page and is not used.",
+          "message": "一覧取得時にPaddleが実行するカウントクエリをスキップするには `true` に設定します。\n\n設定すると、`meta.pagination.estimated_total` は件数の代わりに `-1` を返します。件数カウントに各ページで時間がかかり、かつ件数を使用しない大規模コレクションのページング時に設定すると効果的です。"
+        },
+        "app.UGFkZGxl.action.bGlzdF9jdXN0b21lcnM.option.c2tpcF9jb3VudA.display_name": {
+          "source": "Skip Count",
+          "message": "カウントをスキップ"
+        },
+        "app.UGFkZGxl.action.bGlzdF9jdXN0b21lcnM.option.c2tpcF9jb3VudA.short_desc": {
+          "source": "Skip the count query, making a large listing cheaper",
+          "message": "カウントクエリをスキップして大規模な一覧取得の負荷を軽減"
+        },
+        "app.UGFkZGxl.action.bGlzdF9jdXN0b21lcnM.option.c3RhdHVz.desc": {
+          "source": "Return entities that match the specified status. Use a comma-separated list to specify multiple status values.",
+          "message": "指定されたステータスに一致するエンティティを返します。複数のステータス値を指定するにはカンマ区切りリストを使用します。"
+        },
+        "app.UGFkZGxl.action.bGlzdF9jdXN0b21lcnM.option.c3RhdHVz.display_name": {
+          "source": "Status",
+          "message": "ステータス"
+        },
+        "app.UGFkZGxl.action.bGlzdF9jdXN0b21lcnM.option.c3RhdHVz.short_desc": {
+          "source": "Return only customers with these statuses",
+          "message": "これらのステータスの顧客のみを返す"
+        },
+        "app.UGFkZGxl.action.bGlzdF9jdXN0b21lcnM.option.cGVyX3BhZ2U.desc": {
+          "source": "How many records to return in one request, up to Paddle's maximum of `200`. Asking for more returns the maximum rather than failing.\n\n`meta.pagination.per_page` in the response reports how many were actually returned, and `meta.pagination.has_more` says whether another page exists.",
+          "message": "1回のリクエストで返すレコード数（Paddleの最大値である `200` まで）。これより大きい値を指定した場合、エラーにはならず最大値が返されます。\n\nレスポンス内の `meta.pagination.per_page` は実際に返された件数を報告し、`meta.pagination.has_more` は次のページが存在するかどうかを示します。"
+        },
+        "app.UGFkZGxl.action.bGlzdF9jdXN0b21lcnM.option.cGVyX3BhZ2U.display_name": {
+          "source": "Per Page",
+          "message": "ページあたり"
+        },
+        "app.UGFkZGxl.action.bGlzdF9jdXN0b21lcnM.option.cGVyX3BhZ2U.short_desc": {
+          "source": "How many records to return, up to 200",
+          "message": "返すレコード数（最大200件）"
+        },
+        "app.UGFkZGxl.action.bGlzdF9jdXN0b21lcnM.short_desc": {
+          "source": "List the customers in this Paddle account",
+          "message": "このPaddleアカウントの顧客を一覧表示"
+        },
+        "app.UGFkZGxl.action.bGlzdF9wcm9kdWN0cw.desc": {
+          "source": "Lists catalog products.\n\nOnly `active` products are returned unless `status` says otherwise. Set `include` to `prices` to get each product's prices in the same request, which saves a call per product when building a pricing page.\n\nThe products are in `data`, and `meta.pagination` carries the cursor for the next page.",
+          "message": "カタログ製品を一覧表示します。\n\n`status` で別段の指定がない限り `active` の製品のみが返されます。同じリクエストで各製品の価格を取得するには `include` を `prices` に設定します。これにより、価格設定ページの作成時に製品ごとのAPI呼び出しを節約できます。\n\n製品は `data` に含まれ、`meta.pagination` には次のページのカーソルが保持されます。"
+        },
+        "app.UGFkZGxl.action.bGlzdF9wcm9kdWN0cw.display_name": {
+          "source": "List Products",
+          "message": "商品一覧"
+        },
+        "app.UGFkZGxl.action.bGlzdF9wcm9kdWN0cw.option.YWZ0ZXI.desc": {
+          "source": "The pagination cursor: return the records that come after this Paddle ID.\n\nTake it from the `after` query argument of the `meta.pagination.next` URL in the previous response. Paddle always returns that URL, even on the last page, so page on `meta.pagination.has_more` rather than on its presence.",
+          "message": "ページネーションカーソル: このPaddle ID以降のレコードを返します。\n\n前回のレスポンスにある `meta.pagination.next` URLの `after` クエリ引数から取得してください。Paddleは最後のページでも常にそのURLを返すため、URLの有無ではなく `meta.pagination.has_more` に基づいてページングを行ってください。"
+        },
+        "app.UGFkZGxl.action.bGlzdF9wcm9kdWN0cw.option.YWZ0ZXI.display_name": {
+          "source": "After",
+          "message": "After"
+        },
+        "app.UGFkZGxl.action.bGlzdF9wcm9kdWN0cw.option.YWZ0ZXI.short_desc": {
+          "source": "Return records after this Paddle ID",
+          "message": "このPaddle ID以降のレコードを返す"
+        },
+        "app.UGFkZGxl.action.bGlzdF9wcm9kdWN0cw.option.aW5jbHVkZQ.desc": {
+          "source": "Include related entities in the response. Use a comma-separated list to specify multiple entities.",
+          "message": "レスポンスに関連エンティティを含めます。複数のエンティティを指定するにはカンマ区切りリストを使用します。"
+        },
+        "app.UGFkZGxl.action.bGlzdF9wcm9kdWN0cw.option.aW5jbHVkZQ.display_name": {
+          "source": "Include",
+          "message": "Include"
+        },
+        "app.UGFkZGxl.action.bGlzdF9wcm9kdWN0cw.option.aW5jbHVkZQ.short_desc": {
+          "source": "Include related entities in the response",
+          "message": "レスポンスに関連エンティティを含める"
+        },
+        "app.UGFkZGxl.action.bGlzdF9wcm9kdWN0cw.option.aWQ.desc": {
+          "source": "Return only the IDs specified. Use a comma-separated list to get multiple entities.",
+          "message": "指定されたIDのみを返します。複数のエンティティを取得するにはカンマ区切りリストを使用します。"
+        },
+        "app.UGFkZGxl.action.bGlzdF9wcm9kdWN0cw.option.aWQ.display_name": {
+          "source": "Product",
+          "message": "商品"
+        },
+        "app.UGFkZGxl.action.bGlzdF9wcm9kdWN0cw.option.aWQ.short_desc": {
+          "source": "Return only these products",
+          "message": "これらの製品のみを返す"
+        },
+        "app.UGFkZGxl.action.bGlzdF9wcm9kdWN0cw.option.b3JkZXJfYnk.desc": {
+          "source": "Order returned entities by the specified field and direction (`[ASC]` or `[DESC]`). For example, `?order_by=id[ASC]`.\n\nValid fields for ordering: `id`.",
+          "message": "指定されたフィールドと順序（`[ASC]` または `[DESC]`）で返されるエンティティを並べ替えます。例: `?order_by=id[ASC]`。\n\n並べ替えに有効なフィールド: `id`。"
+        },
+        "app.UGFkZGxl.action.bGlzdF9wcm9kdWN0cw.option.b3JkZXJfYnk.display_name": {
+          "source": "Order By",
+          "message": "並べ替え"
+        },
+        "app.UGFkZGxl.action.bGlzdF9wcm9kdWN0cw.option.b3JkZXJfYnk.short_desc": {
+          "source": "Order by a field and direction, ex: \"id[ASC]\"",
+          "message": "フィールドと順序で並べ替え（例: \"id[ASC]\"）"
+        },
+        "app.UGFkZGxl.action.bGlzdF9wcm9kdWN0cw.option.c2tpcF9jb3VudA.desc": {
+          "source": "Set to `true` to skip the count query Paddle runs for a listing.\n\n`meta.pagination.estimated_total` then returns `-1` instead of a count. Worth setting when paging through a large collection, where the count costs time on every page and is not used.",
+          "message": "一覧取得時にPaddleが実行するカウントクエリをスキップするには `true` に設定します。\n\n設定すると、`meta.pagination.estimated_total` は件数の代わりに `-1` を返します。件数カウントに各ページで時間がかかり、かつ件数を使用しない大規模コレクションのページング時に設定すると効果的です。"
+        },
+        "app.UGFkZGxl.action.bGlzdF9wcm9kdWN0cw.option.c2tpcF9jb3VudA.display_name": {
+          "source": "Skip Count",
+          "message": "カウントをスキップ"
+        },
+        "app.UGFkZGxl.action.bGlzdF9wcm9kdWN0cw.option.c2tpcF9jb3VudA.short_desc": {
+          "source": "Skip the count query, making a large listing cheaper",
+          "message": "カウントクエリをスキップして大規模な一覧取得の負荷を軽減"
+        },
+        "app.UGFkZGxl.action.bGlzdF9wcm9kdWN0cw.option.c3RhdHVz.desc": {
+          "source": "Return entities that match the specified status. Use a comma-separated list to specify multiple status values.",
+          "message": "指定されたステータスに一致するエンティティを返します。複数のステータス値を指定するにはカンマ区切りリストを使用します。"
+        },
+        "app.UGFkZGxl.action.bGlzdF9wcm9kdWN0cw.option.c3RhdHVz.display_name": {
+          "source": "Status",
+          "message": "ステータス"
+        },
+        "app.UGFkZGxl.action.bGlzdF9wcm9kdWN0cw.option.c3RhdHVz.short_desc": {
+          "source": "Return only products with these statuses",
+          "message": "これらのステータスの製品のみを返す"
+        },
+        "app.UGFkZGxl.action.bGlzdF9wcm9kdWN0cw.option.cGVyX3BhZ2U.desc": {
+          "source": "How many records to return in one request, up to Paddle's maximum of `200`. Asking for more returns the maximum rather than failing.\n\n`meta.pagination.per_page` in the response reports how many were actually returned, and `meta.pagination.has_more` says whether another page exists.",
+          "message": "1回のリクエストで返すレコード数（Paddleの最大値である `200` まで）。これより大きい値を指定した場合、エラーにはならず最大値が返されます。\n\nレスポンス内の `meta.pagination.per_page` は実際に返された件数を報告し、`meta.pagination.has_more` は次のページが存在するかどうかを示します。"
+        },
+        "app.UGFkZGxl.action.bGlzdF9wcm9kdWN0cw.option.cGVyX3BhZ2U.display_name": {
+          "source": "Per Page",
+          "message": "ページあたり"
+        },
+        "app.UGFkZGxl.action.bGlzdF9wcm9kdWN0cw.option.cGVyX3BhZ2U.short_desc": {
+          "source": "How many records to return, up to 200",
+          "message": "返すレコード数（最大200件）"
+        },
+        "app.UGFkZGxl.action.bGlzdF9wcm9kdWN0cw.option.dGF4X2NhdGVnb3J5.desc": {
+          "source": "Return entities that match the specified tax category. Use a comma-separated list to specify multiple tax categories.",
+          "message": "指定された税区分に一致するエンティティを返します。複数の税区分を指定する場合はカンマ区切りリストを使用してください。"
+        },
+        "app.UGFkZGxl.action.bGlzdF9wcm9kdWN0cw.option.dGF4X2NhdGVnb3J5.display_name": {
+          "source": "Tax Category",
+          "message": "税金カテゴリ"
+        },
+        "app.UGFkZGxl.action.bGlzdF9wcm9kdWN0cw.option.dGF4X2NhdGVnb3J5.short_desc": {
+          "source": "Return entities that match the specified tax category",
+          "message": "指定された税区分に一致するエンティティを返す"
+        },
+        "app.UGFkZGxl.action.bGlzdF9wcm9kdWN0cw.option.dHlwZQ.allowed-value.c3RyaW5nOmN1c3RvbQ.display_name": {
+          "source": "custom",
+          "message": "カスタム"
+        },
+        "app.UGFkZGxl.action.bGlzdF9wcm9kdWN0cw.option.dHlwZQ.allowed-value.c3RyaW5nOnN0YW5kYXJk.display_name": {
+          "source": "standard",
+          "message": "標準"
+        },
+        "app.UGFkZGxl.action.bGlzdF9wcm9kdWN0cw.option.dHlwZQ.desc": {
+          "source": "Return items that match the specified type.: Type of item. Standard items are considered part of your catalog and are shown in the Paddle dashboard.",
+          "message": "指定されたタイプに一致するアイテムを返します。: アイテムのタイプ。標準アイテムはカタログの一部とみなされ、Paddleダッシュボードに表示されます。"
+        },
+        "app.UGFkZGxl.action.bGlzdF9wcm9kdWN0cw.option.dHlwZQ.display_name": {
+          "source": "Type",
+          "message": "タイプ"
+        },
+        "app.UGFkZGxl.action.bGlzdF9wcm9kdWN0cw.option.dHlwZQ.short_desc": {
+          "source": "Return items that match the specified type",
+          "message": "指定されたタイプに一致するアイテムを返す"
+        },
+        "app.UGFkZGxl.action.bGlzdF9wcm9kdWN0cw.short_desc": {
+          "source": "List the products in the catalog",
+          "message": "カタログ内の製品を一覧表示"
+        },
+        "app.UGFkZGxl.action.bGlzdF9wcmljZXM.desc": {
+          "source": "Lists catalog prices.\n\nOnly `active` prices are returned unless `status` says otherwise. Filter by `product_id` for one product's prices, or by `recurring` to separate subscription prices from one-off ones. Set `include` to `product` to get the owning product alongside each price.\n\nThe prices are in `data`, and `meta.pagination` carries the cursor for the next page.",
+          "message": "カタログの価格を一覧表示します。\n\n`status` で別段の指定がない限り、`active` の価格のみが返されます。1つの製品の価格で絞り込むには `product_id` を、サブスクリプション価格と都度購入価格を分けるには `recurring` でフィルタリングします。各価格と併せて所有製品を取得するには、`include` を `product` に設定します。\n\n価格は `data` に含まれ、`meta.pagination` には次のページのカーソルが含まれます。"
+        },
+        "app.UGFkZGxl.action.bGlzdF9wcmljZXM.display_name": {
+          "source": "List Prices",
+          "message": "価格を一覧表示"
+        },
+        "app.UGFkZGxl.action.bGlzdF9wcmljZXM.option.YWZ0ZXI.desc": {
+          "source": "The pagination cursor: return the records that come after this Paddle ID.\n\nTake it from the `after` query argument of the `meta.pagination.next` URL in the previous response. Paddle always returns that URL, even on the last page, so page on `meta.pagination.has_more` rather than on its presence.",
+          "message": "ページネーションカーソル: このPaddle ID以降のレコードを返します。\n\n前回のレスポンスにある `meta.pagination.next` URLの `after` クエリ引数から取得してください。Paddleは最後のページでも常にそのURLを返すため、URLの有無ではなく `meta.pagination.has_more` に基づいてページングを行ってください。"
+        },
+        "app.UGFkZGxl.action.bGlzdF9wcmljZXM.option.YWZ0ZXI.display_name": {
+          "source": "After",
+          "message": "After"
+        },
+        "app.UGFkZGxl.action.bGlzdF9wcmljZXM.option.YWZ0ZXI.short_desc": {
+          "source": "Return records after this Paddle ID",
+          "message": "このPaddle ID以降のレコードを返す"
+        },
+        "app.UGFkZGxl.action.bGlzdF9wcmljZXM.option.YmlsbGluZ19jeWNsZS5mcmVxdWVuY3k.desc": {
+          "source": "Return entities where the price billing cycle frequency matches this value.",
+          "message": "価格の請求サイクルの頻度がこの値と一致するエンティティを返します。"
+        },
+        "app.UGFkZGxl.action.bGlzdF9wcmljZXM.option.YmlsbGluZ19jeWNsZS5mcmVxdWVuY3k.display_name": {
+          "source": "Billing Cycle Frequency",
+          "message": "請求サイクル頻度"
+        },
+        "app.UGFkZGxl.action.bGlzdF9wcmljZXM.option.YmlsbGluZ19jeWNsZS5mcmVxdWVuY3k.short_desc": {
+          "source": "Return entities where the price billing cycle frequency matches this value",
+          "message": "価格の請求サイクルの頻度がこの値と一致するエンティティを返す"
+        },
+        "app.UGFkZGxl.action.bGlzdF9wcmljZXM.option.YmlsbGluZ19jeWNsZS5pbnRlcnZhbA.allowed-value.c3RyaW5nOm1vbnRo.display_name": {
+          "source": "month",
+          "message": "月"
+        },
+        "app.UGFkZGxl.action.bGlzdF9wcmljZXM.option.YmlsbGluZ19jeWNsZS5pbnRlcnZhbA.allowed-value.c3RyaW5nOmRheQ.display_name": {
+          "source": "day",
+          "message": "日"
+        },
+        "app.UGFkZGxl.action.bGlzdF9wcmljZXM.option.YmlsbGluZ19jeWNsZS5pbnRlcnZhbA.allowed-value.c3RyaW5nOndlZWs.display_name": {
+          "source": "week",
+          "message": "週"
+        },
+        "app.UGFkZGxl.action.bGlzdF9wcmljZXM.option.YmlsbGluZ19jeWNsZS5pbnRlcnZhbA.allowed-value.c3RyaW5nOnllYXI.display_name": {
+          "source": "year",
+          "message": "年"
+        },
+        "app.UGFkZGxl.action.bGlzdF9wcmljZXM.option.YmlsbGluZ19jeWNsZS5pbnRlcnZhbA.desc": {
+          "source": "Return entities where the price billing cycle interval matches this value.",
+          "message": "価格の請求サイクルの間隔がこの値と一致するエンティティを返します。"
+        },
+        "app.UGFkZGxl.action.bGlzdF9wcmljZXM.option.YmlsbGluZ19jeWNsZS5pbnRlcnZhbA.display_name": {
+          "source": "Billing Cycle Interval",
+          "message": "請求サイクル間隔"
+        },
+        "app.UGFkZGxl.action.bGlzdF9wcmljZXM.option.YmlsbGluZ19jeWNsZS5pbnRlcnZhbA.short_desc": {
+          "source": "Return entities where the price billing cycle interval matches this value",
+          "message": "価格の請求サイクルの間隔がこの値と一致するエンティティを返す"
+        },
+        "app.UGFkZGxl.action.bGlzdF9wcmljZXM.option.aW5jbHVkZQ.desc": {
+          "source": "Include related entities in the response.",
+          "message": "レスポンスに関連エンティティを含めます。"
+        },
+        "app.UGFkZGxl.action.bGlzdF9wcmljZXM.option.aW5jbHVkZQ.display_name": {
+          "source": "Include",
+          "message": "Include"
+        },
+        "app.UGFkZGxl.action.bGlzdF9wcmljZXM.option.aW5jbHVkZQ.short_desc": {
+          "source": "Include related entities in the response",
+          "message": "レスポンスに関連エンティティを含める"
+        },
+        "app.UGFkZGxl.action.bGlzdF9wcmljZXM.option.aWQ.desc": {
+          "source": "Return only the IDs specified. Use a comma-separated list to get multiple entities.",
+          "message": "指定されたIDのみを返します。複数のエンティティを取得するにはカンマ区切りリストを使用します。"
+        },
+        "app.UGFkZGxl.action.bGlzdF9wcmljZXM.option.aWQ.display_name": {
+          "source": "Price",
+          "message": "価格"
+        },
+        "app.UGFkZGxl.action.bGlzdF9wcmljZXM.option.aWQ.short_desc": {
+          "source": "Return only these prices",
+          "message": "これらの価格のみを返す"
+        },
+        "app.UGFkZGxl.action.bGlzdF9wcmljZXM.option.b3JkZXJfYnk.desc": {
+          "source": "Order returned entities by the specified field and direction (`[ASC]` or `[DESC]`). For example, `?order_by=id[ASC]`.\n\nValid fields for ordering: `id`.",
+          "message": "指定されたフィールドと順序（`[ASC]` または `[DESC]`）で返されるエンティティを並べ替えます。例: `?order_by=id[ASC]`。\n\n並べ替えに有効なフィールド: `id`。"
+        },
+        "app.UGFkZGxl.action.bGlzdF9wcmljZXM.option.b3JkZXJfYnk.display_name": {
+          "source": "Order By",
+          "message": "並べ替え"
+        },
+        "app.UGFkZGxl.action.bGlzdF9wcmljZXM.option.b3JkZXJfYnk.short_desc": {
+          "source": "Order by a field and direction, ex: \"id[ASC]\"",
+          "message": "フィールドと順序で並べ替え（例: \"id[ASC]\"）"
+        },
+        "app.UGFkZGxl.action.bGlzdF9wcmljZXM.option.c2tpcF9jb3VudA.desc": {
+          "source": "Set to `true` to skip the count query Paddle runs for a listing.\n\n`meta.pagination.estimated_total` then returns `-1` instead of a count. Worth setting when paging through a large collection, where the count costs time on every page and is not used.",
+          "message": "一覧取得時にPaddleが実行するカウントクエリをスキップするには `true` に設定します。\n\n設定すると、`meta.pagination.estimated_total` は件数の代わりに `-1` を返します。件数カウントに各ページで時間がかかり、かつ件数を使用しない大規模コレクションのページング時に設定すると効果的です。"
+        },
+        "app.UGFkZGxl.action.bGlzdF9wcmljZXM.option.c2tpcF9jb3VudA.display_name": {
+          "source": "Skip Count",
+          "message": "カウントをスキップ"
+        },
+        "app.UGFkZGxl.action.bGlzdF9wcmljZXM.option.c2tpcF9jb3VudA.short_desc": {
+          "source": "Skip the count query, making a large listing cheaper",
+          "message": "カウントクエリをスキップして大規模な一覧取得の負荷を軽減"
+        },
+        "app.UGFkZGxl.action.bGlzdF9wcmljZXM.option.c3RhdHVz.desc": {
+          "source": "Return entities that match the specified status. Use a comma-separated list to specify multiple status values.",
+          "message": "指定されたステータスに一致するエンティティを返します。複数のステータス値を指定するにはカンマ区切りリストを使用します。"
+        },
+        "app.UGFkZGxl.action.bGlzdF9wcmljZXM.option.c3RhdHVz.display_name": {
+          "source": "Status",
+          "message": "ステータス"
+        },
+        "app.UGFkZGxl.action.bGlzdF9wcmljZXM.option.c3RhdHVz.short_desc": {
+          "source": "Return only prices with these statuses",
+          "message": "これらのステータスの価格のみを返す"
+        },
+        "app.UGFkZGxl.action.bGlzdF9wcmljZXM.option.cGVyX3BhZ2U.desc": {
+          "source": "How many records to return in one request, up to Paddle's maximum of `200`. Asking for more returns the maximum rather than failing.\n\n`meta.pagination.per_page` in the response reports how many were actually returned, and `meta.pagination.has_more` says whether another page exists.",
+          "message": "1回のリクエストで返すレコード数（Paddleの最大値である `200` まで）。これより大きい値を指定した場合、エラーにはならず最大値が返されます。\n\nレスポンス内の `meta.pagination.per_page` は実際に返された件数を報告し、`meta.pagination.has_more` は次のページが存在するかどうかを示します。"
+        },
+        "app.UGFkZGxl.action.bGlzdF9wcmljZXM.option.cGVyX3BhZ2U.display_name": {
+          "source": "Per Page",
+          "message": "ページあたり"
+        },
+        "app.UGFkZGxl.action.bGlzdF9wcmljZXM.option.cGVyX3BhZ2U.short_desc": {
+          "source": "How many records to return, up to 200",
+          "message": "返すレコード数（最大200件）"
+        },
+        "app.UGFkZGxl.action.bGlzdF9wcmljZXM.option.cHJvZHVjdF9pZA.desc": {
+          "source": "Return entities related to the specified product. Use a comma-separated list to specify multiple product IDs.",
+          "message": "指定された製品に関連するエンティティを返します。複数の製品IDを指定する場合はカンマ区切りリストを使用してください。"
+        },
+        "app.UGFkZGxl.action.bGlzdF9wcmljZXM.option.cHJvZHVjdF9pZA.display_name": {
+          "source": "Product",
+          "message": "商品"
+        },
+        "app.UGFkZGxl.action.bGlzdF9wcmljZXM.option.cHJvZHVjdF9pZA.short_desc": {
+          "source": "Return only prices for these products",
+          "message": "これらの製品の価格のみを返す"
+        },
+        "app.UGFkZGxl.action.bGlzdF9wcmljZXM.option.cmVjdXJyaW5n.desc": {
+          "source": "Determine whether returned entities are for recurring prices (`true`) or one-time prices (`false`).",
+          "message": "返されるエンティティが継続請求価格（`true`）か都度払い価格（`false`）かを決定します。"
+        },
+        "app.UGFkZGxl.action.bGlzdF9wcmljZXM.option.cmVjdXJyaW5n.display_name": {
+          "source": "Recurring",
+          "message": "継続請求"
+        },
+        "app.UGFkZGxl.action.bGlzdF9wcmljZXM.option.cmVjdXJyaW5n.short_desc": {
+          "source": "True for subscription prices, false for one-off prices",
+          "message": "サブスクリプション価格の場合はtrue、都度購入価格の場合はfalse"
+        },
+        "app.UGFkZGxl.action.bGlzdF9wcmljZXM.option.dHlwZQ.allowed-value.c3RyaW5nOmN1c3RvbQ.display_name": {
+          "source": "custom",
+          "message": "カスタム"
+        },
+        "app.UGFkZGxl.action.bGlzdF9wcmljZXM.option.dHlwZQ.allowed-value.c3RyaW5nOnN0YW5kYXJk.display_name": {
+          "source": "standard",
+          "message": "標準"
+        },
+        "app.UGFkZGxl.action.bGlzdF9wcmljZXM.option.dHlwZQ.desc": {
+          "source": "Return items that match the specified type.: Type of item. Standard items are considered part of your catalog and are shown in the Paddle dashboard.",
+          "message": "指定されたタイプに一致するアイテムを返します。: アイテムのタイプ。標準アイテムはカタログの一部とみなされ、Paddleダッシュボードに表示されます。"
+        },
+        "app.UGFkZGxl.action.bGlzdF9wcmljZXM.option.dHlwZQ.display_name": {
+          "source": "Type",
+          "message": "タイプ"
+        },
+        "app.UGFkZGxl.action.bGlzdF9wcmljZXM.option.dHlwZQ.short_desc": {
+          "source": "Return items that match the specified type",
+          "message": "指定されたタイプに一致するアイテムを返す"
+        },
+        "app.UGFkZGxl.action.bGlzdF9wcmljZXM.short_desc": {
+          "source": "List the prices in the catalog",
+          "message": "カタログ内の価格を一覧表示"
+        },
+        "app.UGFkZGxl.action.bGlzdF9yZXBvcnRz.desc": {
+          "source": "Lists reports and the state each is in.\n\nA report is generated asynchronously: it starts `pending`, becomes `ready` when the file can be downloaded, and is `expired` once Paddle has removed it. Filter by `status` to find the ones worth downloading.\n\nReports are kept for a limited time, so a job that generates one should download it rather than assume it will still be there later.",
+          "message": "レポートとそれぞれの状態を一覧表示します。\n\nレポートは非同期で生成されます。`pending` で開始し、ファイルをダウンロードできるようになると `ready` になり、Paddleが削除すると `expired` になります。ダウンロード可能なレポートを見つけるには `status` でフィルタリングします。\n\nレポートは期間限定で保持されるため、レポートを生成するジョブでは、後でもまだ存在すると想定せずにダウンロードしてください。"
+        },
+        "app.UGFkZGxl.action.bGlzdF9yZXBvcnRz.display_name": {
+          "source": "List Reports",
+          "message": "レポートを一覧表示"
+        },
+        "app.UGFkZGxl.action.bGlzdF9yZXBvcnRz.option.YWZ0ZXI.desc": {
+          "source": "The pagination cursor: return the records that come after this Paddle ID.\n\nTake it from the `after` query argument of the `meta.pagination.next` URL in the previous response. Paddle always returns that URL, even on the last page, so page on `meta.pagination.has_more` rather than on its presence.",
+          "message": "ページネーションカーソル: このPaddle ID以降のレコードを返します。\n\n前回のレスポンスにある `meta.pagination.next` URLの `after` クエリ引数から取得してください。Paddleは最後のページでも常にそのURLを返すため、URLの有無ではなく `meta.pagination.has_more` に基づいてページングを行ってください。"
+        },
+        "app.UGFkZGxl.action.bGlzdF9yZXBvcnRz.option.YWZ0ZXI.display_name": {
+          "source": "After",
+          "message": "After"
+        },
+        "app.UGFkZGxl.action.bGlzdF9yZXBvcnRz.option.YWZ0ZXI.short_desc": {
+          "source": "Return records after this Paddle ID",
+          "message": "このPaddle ID以降のレコードを返す"
+        },
+        "app.UGFkZGxl.action.bGlzdF9yZXBvcnRz.option.b3JkZXJfYnk.desc": {
+          "source": "Order returned entities by the specified field and direction (`[ASC]` or `[DESC]`). For example, `?order_by=id[ASC]`.\n\nValid fields for ordering: `id`.",
+          "message": "指定されたフィールドと順序（`[ASC]` または `[DESC]`）で返されるエンティティを並べ替えます。例: `?order_by=id[ASC]`。\n\n並べ替えに有効なフィールド: `id`。"
+        },
+        "app.UGFkZGxl.action.bGlzdF9yZXBvcnRz.option.b3JkZXJfYnk.display_name": {
+          "source": "Order By",
+          "message": "並べ替え"
+        },
+        "app.UGFkZGxl.action.bGlzdF9yZXBvcnRz.option.b3JkZXJfYnk.short_desc": {
+          "source": "Order by a field and direction, ex: \"id[ASC]\"",
+          "message": "フィールドと順序で並べ替え（例: \"id[ASC]\"）"
+        },
+        "app.UGFkZGxl.action.bGlzdF9yZXBvcnRz.option.c2tpcF9jb3VudA.desc": {
+          "source": "Set to `true` to skip the count query Paddle runs for a listing.\n\n`meta.pagination.estimated_total` then returns `-1` instead of a count. Worth setting when paging through a large collection, where the count costs time on every page and is not used.",
+          "message": "一覧取得時にPaddleが実行するカウントクエリをスキップするには `true` に設定します。\n\n設定すると、`meta.pagination.estimated_total` は件数の代わりに `-1` を返します。件数カウントに各ページで時間がかかり、かつ件数を使用しない大規模コレクションのページング時に設定すると効果的です。"
+        },
+        "app.UGFkZGxl.action.bGlzdF9yZXBvcnRz.option.c2tpcF9jb3VudA.display_name": {
+          "source": "Skip Count",
+          "message": "カウントをスキップ"
+        },
+        "app.UGFkZGxl.action.bGlzdF9yZXBvcnRz.option.c2tpcF9jb3VudA.short_desc": {
+          "source": "Skip the count query, making a large listing cheaper",
+          "message": "カウントクエリをスキップして大規模な一覧取得の負荷を軽減"
+        },
+        "app.UGFkZGxl.action.bGlzdF9yZXBvcnRz.option.c3RhdHVz.desc": {
+          "source": "Return entities that match the specified status. Use a comma-separated list to specify multiple status values.",
+          "message": "指定されたステータスに一致するエンティティを返します。複数のステータス値を指定するにはカンマ区切りリストを使用します。"
+        },
+        "app.UGFkZGxl.action.bGlzdF9yZXBvcnRz.option.c3RhdHVz.display_name": {
+          "source": "Status",
+          "message": "ステータス"
+        },
+        "app.UGFkZGxl.action.bGlzdF9yZXBvcnRz.option.c3RhdHVz.short_desc": {
+          "source": "Return only reports with these statuses",
+          "message": "これらのステータスのレポートのみを返す"
+        },
+        "app.UGFkZGxl.action.bGlzdF9yZXBvcnRz.option.cGVyX3BhZ2U.desc": {
+          "source": "How many records to return in one request, up to Paddle's maximum of `200`. Asking for more returns the maximum rather than failing.\n\n`meta.pagination.per_page` in the response reports how many were actually returned, and `meta.pagination.has_more` says whether another page exists.",
+          "message": "1回のリクエストで返すレコード数（Paddleの最大値である `200` まで）。これより大きい値を指定した場合、エラーにはならず最大値が返されます。\n\nレスポンス内の `meta.pagination.per_page` は実際に返された件数を報告し、`meta.pagination.has_more` は次のページが存在するかどうかを示します。"
+        },
+        "app.UGFkZGxl.action.bGlzdF9yZXBvcnRz.option.cGVyX3BhZ2U.display_name": {
+          "source": "Per Page",
+          "message": "ページあたり"
+        },
+        "app.UGFkZGxl.action.bGlzdF9yZXBvcnRz.option.cGVyX3BhZ2U.short_desc": {
+          "source": "How many records to return, up to 200",
+          "message": "返すレコード数（最大200件）"
+        },
+        "app.UGFkZGxl.action.bGlzdF9yZXBvcnRz.short_desc": {
+          "source": "List the reports requested from this account",
+          "message": "このアカウントからリクエストされたレポートを一覧表示"
+        },
+        "app.UGFkZGxl.action.bGlzdF9zdWJzY3JpcHRpb25z.desc": {
+          "source": "Lists subscriptions.\n\nFilter by `customer_id` for one customer's subscriptions, by `status` for the state they are in - `active`, `trialing`, `past_due`, `paused` or `canceled` - or by `scheduled_change_action` to find the ones with a pause or cancellation already booked.\n\nThe subscriptions are in `data`, and `meta.pagination` carries the cursor for the next page.",
+          "message": "サブスクリプションを一覧表示します。\n\n1つの顧客のサブスクリプションで絞り込むには `customer_id` を、ステータス（`active`、`trialing`、`past_due`、`paused`、または `canceled`）で絞り込むには `status` を、すでに一時停止または解約が予約されているものを探すには `scheduled_change_action` でフィルタリングします。\n\nサブスクリプションは `data` に含まれ、`meta.pagination` には次のページのカーソルが含まれます。"
+        },
+        "app.UGFkZGxl.action.bGlzdF9zdWJzY3JpcHRpb25z.display_name": {
+          "source": "List Subscriptions",
+          "message": "サブスクリプションを一覧表示"
+        },
+        "app.UGFkZGxl.action.bGlzdF9zdWJzY3JpcHRpb25z.option.Y29sbGVjdGlvbl9tb2Rl.allowed-value.c3RyaW5nOm1hbnVhbA.display_name": {
+          "source": "manual",
+          "message": "手動"
+        },
+        "app.UGFkZGxl.action.bGlzdF9zdWJzY3JpcHRpb25z.option.Y29sbGVjdGlvbl9tb2Rl.allowed-value.c3RyaW5nOmF1dG9tYXRpYw.display_name": {
+          "source": "automatic",
+          "message": "automatic"
+        },
+        "app.UGFkZGxl.action.bGlzdF9zdWJzY3JpcHRpb25z.option.Y29sbGVjdGlvbl9tb2Rl.desc": {
+          "source": "Return entities that match the specified collection mode.",
+          "message": "指定された回収モードに一致するエンティティを返します。"
+        },
+        "app.UGFkZGxl.action.bGlzdF9zdWJzY3JpcHRpb25z.option.Y29sbGVjdGlvbl9tb2Rl.display_name": {
+          "source": "Collection Mode",
+          "message": "回収モード"
+        },
+        "app.UGFkZGxl.action.bGlzdF9zdWJzY3JpcHRpb25z.option.Y29sbGVjdGlvbl9tb2Rl.short_desc": {
+          "source": "Return entities that match the specified collection mode",
+          "message": "指定された回収モードに一致するエンティティを返す"
+        },
+        "app.UGFkZGxl.action.bGlzdF9zdWJzY3JpcHRpb25z.option.Y3VzdG9tZXJfaWQ.desc": {
+          "source": "Return entities related to the specified customer. Use a comma-separated list to specify multiple customer IDs.",
+          "message": "指定された顧客に関連するエンティティを返します。複数の顧客IDを指定するにはカンマ区切りリストを使用します。"
+        },
+        "app.UGFkZGxl.action.bGlzdF9zdWJzY3JpcHRpb25z.option.Y3VzdG9tZXJfaWQ.display_name": {
+          "source": "Customer",
+          "message": "顧客"
+        },
+        "app.UGFkZGxl.action.bGlzdF9zdWJzY3JpcHRpb25z.option.Y3VzdG9tZXJfaWQ.short_desc": {
+          "source": "Return only subscriptions for these customers",
+          "message": "これらの顧客のサブスクリプションのみを返す"
+        },
+        "app.UGFkZGxl.action.bGlzdF9zdWJzY3JpcHRpb25z.option.YWRkcmVzc19pZA.desc": {
+          "source": "Return entities related to the specified address. Use a comma-separated list to specify multiple address IDs.",
+          "message": "指定された住所に関連するエンティティを返します。複数の住所IDを指定する場合はカンマ区切りリストを使用してください。"
+        },
+        "app.UGFkZGxl.action.bGlzdF9zdWJzY3JpcHRpb25z.option.YWRkcmVzc19pZA.display_name": {
+          "source": "Address Id",
+          "message": "住所ID"
+        },
+        "app.UGFkZGxl.action.bGlzdF9zdWJzY3JpcHRpb25z.option.YWRkcmVzc19pZA.short_desc": {
+          "source": "Return entities related to the specified address",
+          "message": "指定された住所に関連するエンティティを返す"
+        },
+        "app.UGFkZGxl.action.bGlzdF9zdWJzY3JpcHRpb25z.option.YWZ0ZXI.desc": {
+          "source": "The pagination cursor: return the records that come after this Paddle ID.\n\nTake it from the `after` query argument of the `meta.pagination.next` URL in the previous response. Paddle always returns that URL, even on the last page, so page on `meta.pagination.has_more` rather than on its presence.",
+          "message": "ページネーションカーソル: このPaddle ID以降のレコードを返します。\n\n前回のレスポンスにある `meta.pagination.next` URLの `after` クエリ引数から取得してください。Paddleは最後のページでも常にそのURLを返すため、URLの有無ではなく `meta.pagination.has_more` に基づいてページングを行ってください。"
+        },
+        "app.UGFkZGxl.action.bGlzdF9zdWJzY3JpcHRpb25z.option.YWZ0ZXI.display_name": {
+          "source": "After",
+          "message": "After"
+        },
+        "app.UGFkZGxl.action.bGlzdF9zdWJzY3JpcHRpb25z.option.YWZ0ZXI.short_desc": {
+          "source": "Return records after this Paddle ID",
+          "message": "このPaddle ID以降のレコードを返す"
+        },
+        "app.UGFkZGxl.action.bGlzdF9zdWJzY3JpcHRpb25z.option.aWQ.desc": {
+          "source": "Return only the IDs specified. Use a comma-separated list to get multiple entities.",
+          "message": "指定されたIDのみを返します。複数のエンティティを取得するにはカンマ区切りリストを使用します。"
+        },
+        "app.UGFkZGxl.action.bGlzdF9zdWJzY3JpcHRpb25z.option.aWQ.display_name": {
+          "source": "Subscription",
+          "message": "サブスクリプション"
+        },
+        "app.UGFkZGxl.action.bGlzdF9zdWJzY3JpcHRpb25z.option.aWQ.short_desc": {
+          "source": "Return only these subscriptions",
+          "message": "これらのサブスクリプションのみを返す"
+        },
+        "app.UGFkZGxl.action.bGlzdF9zdWJzY3JpcHRpb25z.option.b3JkZXJfYnk.desc": {
+          "source": "Order returned entities by the specified field and direction (`[ASC]` or `[DESC]`). For example, `?order_by=id[ASC]`.\n\nValid fields for ordering: `id`.",
+          "message": "指定されたフィールドと順序（`[ASC]` または `[DESC]`）で返されるエンティティを並べ替えます。例: `?order_by=id[ASC]`。\n\n並べ替えに有効なフィールド: `id`。"
+        },
+        "app.UGFkZGxl.action.bGlzdF9zdWJzY3JpcHRpb25z.option.b3JkZXJfYnk.display_name": {
+          "source": "Order By",
+          "message": "並べ替え"
+        },
+        "app.UGFkZGxl.action.bGlzdF9zdWJzY3JpcHRpb25z.option.b3JkZXJfYnk.short_desc": {
+          "source": "Order by a field and direction, ex: \"id[ASC]\"",
+          "message": "フィールドと順序で並べ替え（例: \"id[ASC]\"）"
+        },
+        "app.UGFkZGxl.action.bGlzdF9zdWJzY3JpcHRpb25z.option.bmV4dF9iaWxsZWRfYXQ.desc": {
+          "source": "Return entities next billed at a specific time. Pass `null` to return entities with no next billing date.\n",
+          "message": "特定の時間に次回請求されるエンティティを返します。次回請求日がないエンティティを返すには `null` を渡します。\n"
+        },
+        "app.UGFkZGxl.action.bGlzdF9zdWJzY3JpcHRpb25z.option.bmV4dF9iaWxsZWRfYXQ.display_name": {
+          "source": "Next Billed At",
+          "message": "次回請求日時"
+        },
+        "app.UGFkZGxl.action.bGlzdF9zdWJzY3JpcHRpb25z.option.bmV4dF9iaWxsZWRfYXQ.short_desc": {
+          "source": "Return entities next billed at a specific time",
+          "message": "特定の日時に次回請求されるエンティティを返す"
+        },
+        "app.UGFkZGxl.action.bGlzdF9zdWJzY3JpcHRpb25z.option.c2NoZWR1bGVkX2NoYW5nZV9hY3Rpb24.desc": {
+          "source": "Return subscriptions that have a scheduled change. Use a comma-separated list to specify multiple scheduled change actions.",
+          "message": "変更がスケジュールされているサブスクリプションを返します。複数のスケジュール変更アクションを指定する場合はカンマ区切りリストを使用してください。"
+        },
+        "app.UGFkZGxl.action.bGlzdF9zdWJzY3JpcHRpb25z.option.c2NoZWR1bGVkX2NoYW5nZV9hY3Rpb24.display_name": {
+          "source": "Scheduled Change Action",
+          "message": "スケジュールされた変更アクション"
+        },
+        "app.UGFkZGxl.action.bGlzdF9zdWJzY3JpcHRpb25z.option.c2NoZWR1bGVkX2NoYW5nZV9hY3Rpb24.short_desc": {
+          "source": "Return subscriptions that have a scheduled change",
+          "message": "変更がスケジュールされているサブスクリプションを返す"
+        },
+        "app.UGFkZGxl.action.bGlzdF9zdWJzY3JpcHRpb25z.option.c2tpcF9jb3VudA.desc": {
+          "source": "Set to `true` to skip the count query Paddle runs for a listing.\n\n`meta.pagination.estimated_total` then returns `-1` instead of a count. Worth setting when paging through a large collection, where the count costs time on every page and is not used.",
+          "message": "一覧取得時にPaddleが実行するカウントクエリをスキップするには `true` に設定します。\n\n設定すると、`meta.pagination.estimated_total` は件数の代わりに `-1` を返します。件数カウントに各ページで時間がかかり、かつ件数を使用しない大規模コレクションのページング時に設定すると効果的です。"
+        },
+        "app.UGFkZGxl.action.bGlzdF9zdWJzY3JpcHRpb25z.option.c2tpcF9jb3VudA.display_name": {
+          "source": "Skip Count",
+          "message": "カウントをスキップ"
+        },
+        "app.UGFkZGxl.action.bGlzdF9zdWJzY3JpcHRpb25z.option.c2tpcF9jb3VudA.short_desc": {
+          "source": "Skip the count query, making a large listing cheaper",
+          "message": "カウントクエリをスキップして大規模な一覧取得の負荷を軽減"
+        },
+        "app.UGFkZGxl.action.bGlzdF9zdWJzY3JpcHRpb25z.option.c3RhdHVz.desc": {
+          "source": "Return entities that match the specified status. Use a comma-separated list to specify multiple status values.",
+          "message": "指定されたステータスに一致するエンティティを返します。複数のステータス値を指定するにはカンマ区切りリストを使用します。"
+        },
+        "app.UGFkZGxl.action.bGlzdF9zdWJzY3JpcHRpb25z.option.c3RhdHVz.display_name": {
+          "source": "Status",
+          "message": "ステータス"
+        },
+        "app.UGFkZGxl.action.bGlzdF9zdWJzY3JpcHRpb25z.option.c3RhdHVz.short_desc": {
+          "source": "Return only subscriptions with these statuses",
+          "message": "これらのステータスのサブスクリプションのみを返す"
+        },
+        "app.UGFkZGxl.action.bGlzdF9zdWJzY3JpcHRpb25z.option.cGVyX3BhZ2U.desc": {
+          "source": "How many records to return in one request, up to Paddle's maximum of `200`. Asking for more returns the maximum rather than failing.\n\n`meta.pagination.per_page` in the response reports how many were actually returned, and `meta.pagination.has_more` says whether another page exists.",
+          "message": "1回のリクエストで返すレコード数（Paddleの最大値である `200` まで）。これより大きい値を指定した場合、エラーにはならず最大値が返されます。\n\nレスポンス内の `meta.pagination.per_page` は実際に返された件数を報告し、`meta.pagination.has_more` は次のページが存在するかどうかを示します。"
+        },
+        "app.UGFkZGxl.action.bGlzdF9zdWJzY3JpcHRpb25z.option.cGVyX3BhZ2U.display_name": {
+          "source": "Per Page",
+          "message": "ページあたり"
+        },
+        "app.UGFkZGxl.action.bGlzdF9zdWJzY3JpcHRpb25z.option.cGVyX3BhZ2U.short_desc": {
+          "source": "How many records to return, up to 200",
+          "message": "返すレコード数（最大200件）"
+        },
+        "app.UGFkZGxl.action.bGlzdF9zdWJzY3JpcHRpb25z.option.cHJpY2VfaWQ.desc": {
+          "source": "Return entities related to the specified price. Use a comma-separated list to specify multiple price IDs.",
+          "message": "指定された価格に関連するエンティティを返します。複数の価格IDを指定する場合はカンマ区切りリストを使用してください。"
+        },
+        "app.UGFkZGxl.action.bGlzdF9zdWJzY3JpcHRpb25z.option.cHJpY2VfaWQ.display_name": {
+          "source": "Price",
+          "message": "価格"
+        },
+        "app.UGFkZGxl.action.bGlzdF9zdWJzY3JpcHRpb25z.option.cHJpY2VfaWQ.short_desc": {
+          "source": "Return only subscriptions billing these prices",
+          "message": "これらの価格を請求しているサブスクリプションのみを返す"
+        },
+        "app.UGFkZGxl.action.bGlzdF9zdWJzY3JpcHRpb25z.short_desc": {
+          "source": "List the subscriptions in this Paddle account",
+          "message": "このPaddleアカウントのサブスクリプションを一覧表示"
+        },
+        "app.UGFkZGxl.action.bWFrZS1hcGktY2FsbA.desc": {
+          "source": "Make a custom HTTP / REST API call to **Paddle** using the configured connection's authentication.\n\nSpecify the HTTP method, the URI path (relative to the connection's API base URL), optional query parameters, headers, and request body. The response is returned as a hash containing the status code, response headers, and response body.\n\nUse this action for endpoints that are not yet exposed as first-class actions on this app.",
+          "message": "設定された接続の認証を使用して、**Paddle** へのカスタムHTTP / REST API呼び出しを行います。\n\nHTTPメソッド、URIパス（接続のAPIベースURLに対する相対パス）、オプションのクエリパラメータ、ヘッダー、およびリクエスト本文を指定します。応答は、ステータスコード、応答ヘッダー、および応答本文を含むハッシュとして返されます。\n\nこのアプリでファーストクラスのアクションとしてまだ公開されていないエンドポイントには、このアクションを使用します。"
+        },
+        "app.UGFkZGxl.action.bWFrZS1hcGktY2FsbA.display_name": {
+          "source": "Make an API call",
+          "message": "API コールを実行"
+        },
+        "app.UGFkZGxl.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.desc": {
+          "source": "The request body. The effective type depends on `body_type`: JSON/form/YAML expect a hash, XML/text expect a string, multipart expects a file structure, binary expects raw bytes.",
+          "message": "リクエストボディ。有効な型は`body_type`に依存します。JSON/form/YAMLはハッシュを期待し、XML/textは文字列を期待し、multipartはファイル構造を期待し、binaryは生バイトを期待します。"
+        },
+        "app.UGFkZGxl.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.display_name": {
+          "source": "Body",
+          "message": "ボディ"
+        },
+        "app.UGFkZGxl.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.short_desc": {
+          "source": "The request body",
+          "message": "リクエストボディ"
+        },
+        "app.UGFkZGxl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.desc": {
+          "source": "Upload a file using `multipart/form-data`. The body must be a @ref DataProvider::FileDataType \"FileDataType\" structure (filename + content + mime_type). The framework builds the multipart envelope and sets the boundary header.",
+          "message": "`multipart/form-data`を使用してファイルをアップロードします。ボディは@ref DataProvider::FileDataType \"FileDataType\"構造（filename + content + mime_type）である必要があります。フレームワークがmultipartエンベロープを構築し、boundaryヘッダーを設定します。"
+        },
+        "app.UGFkZGxl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.display_name": {
+          "source": "Multipart Form",
+          "message": "マルチパートフォーム"
+        },
+        "app.UGFkZGxl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.short_desc": {
+          "source": "Upload a file using multipart/form-data",
+          "message": "multipart/form-dataを使用してファイルをアップロード"
+        },
+        "app.UGFkZGxl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.desc": {
+          "source": "Pass the body to the REST client unchanged; the client decides serialization based on its configured `data` option and the value type",
+          "message": "ボディを変更せずにRESTクライアントに渡します。クライアントは設定された`data`オプションと値の型に基づいてシリアライズを決定します"
+        },
+        "app.UGFkZGxl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.display_name": {
+          "source": "Auto",
+          "message": "自動"
+        },
+        "app.UGFkZGxl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.short_desc": {
+          "source": "Pass-through; use connection serialization and let the REST client decide",
+          "message": "パススルー。接続のシリアライズを使用し、RESTクライアントに決定させます"
+        },
+        "app.UGFkZGxl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.desc": {
+          "source": "Send the body as raw bytes. The body must be a binary value. Sets `Content-Type: application/octet-stream` unless overridden by `hdr`.",
+          "message": "ボディを生バイトとして送信します。ボディはバイナリ値である必要があります。`hdr`によってオーバーライドされない限り、`Content-Type: application/octet-stream`を設定します。"
+        },
+        "app.UGFkZGxl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.display_name": {
+          "source": "Raw Binary",
+          "message": "生バイナリ"
+        },
+        "app.UGFkZGxl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.short_desc": {
+          "source": "Send body as raw bytes",
+          "message": "ボディを生バイトとして送信"
+        },
+        "app.UGFkZGxl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.desc": {
+          "source": "Serialize a hash of form fields as `application/x-www-form-urlencoded`. The body must be a hash whose values are scalars (strings/numbers/booleans).",
+          "message": "フォームフィールドのハッシュを`application/x-www-form-urlencoded`としてシリアライズします。ボディは値がスカラー（文字列/数値/ブール値）のハッシュである必要があります。"
+        },
+        "app.UGFkZGxl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.display_name": {
+          "source": "Form (URL-encoded)",
+          "message": "フォーム (URLエンコード)"
+        },
+        "app.UGFkZGxl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.short_desc": {
+          "source": "Serialize body as application/x-www-form-urlencoded form fields",
+          "message": "ボディをapplication/x-www-form-urlencodedフォームフィールドとしてシリアライズ"
+        },
+        "app.UGFkZGxl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.desc": {
+          "source": "Serialize the body as JSON; sets `Content-Type: application/json`. The body should be a hash, list, or scalar value.",
+          "message": "ボディをJSONとしてシリアライズします。`Content-Type: application/json`を設定します。ボディはハッシュ、リスト、またはスカラー値である必要があります。"
+        },
+        "app.UGFkZGxl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.display_name": {
+          "source": "JSON",
+          "message": "JSON"
+        },
+        "app.UGFkZGxl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.short_desc": {
+          "source": "Serialize body as JSON",
+          "message": "ボディをJSONとしてシリアライズ"
+        },
+        "app.UGFkZGxl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.desc": {
+          "source": "Send the body as plain text. The body must be a string. Sets `Content-Type: text/plain`.",
+          "message": "ボディをプレーンテキストとして送信します。ボディは文字列である必要があります。`Content-Type: text/plain`を設定します。"
+        },
+        "app.UGFkZGxl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.display_name": {
+          "source": "Plain Text",
+          "message": "プレーンテキスト"
+        },
+        "app.UGFkZGxl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.short_desc": {
+          "source": "Send body as text/plain",
+          "message": "ボディをtext/plainとして送信"
+        },
+        "app.UGFkZGxl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.desc": {
+          "source": "Send the body as XML. If the body is a hash it is serialized to XML; if it is a string it is sent verbatim. Sets `Content-Type: application/xml`.",
+          "message": "ボディをXMLとして送信します。ボディがハッシュの場合はXMLにシリアライズされ、文字列の場合はそのまま送信されます。`Content-Type: application/xml`を設定します。"
+        },
+        "app.UGFkZGxl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.display_name": {
+          "source": "XML",
+          "message": "XML"
+        },
+        "app.UGFkZGxl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.short_desc": {
+          "source": "Send body as XML",
+          "message": "ボディをXMLとして送信"
+        },
+        "app.UGFkZGxl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.desc": {
+          "source": "Send the body as YAML. If the body is a hash it is serialized to YAML; if it is a string it is sent verbatim. Sets `Content-Type: application/x-yaml`.",
+          "message": "ボディをYAMLとして送信します。ボディがハッシュの場合はYAMLにシリアライズされ、文字列の場合はそのまま送信されます。`Content-Type: application/x-yaml`を設定します。"
+        },
+        "app.UGFkZGxl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.display_name": {
+          "source": "YAML",
+          "message": "YAML"
+        },
+        "app.UGFkZGxl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.short_desc": {
+          "source": "Send body as YAML",
+          "message": "ボディをYAMLとして送信"
+        },
+        "app.UGFkZGxl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.desc": {
+          "source": "Selects the body serialization mode and the corresponding `Content-Type` header. Changing this field reshapes the `body` editor - selecting JSON exposes a JSON editor, selecting Multipart Form exposes a file picker, and so on.",
+          "message": "ボディのシリアライズモードと対応する`Content-Type`ヘッダーを選択します。このフィールドを変更すると`body`エディターの形状が変わります。JSONを選択するとJSONエディターが表示され、マルチパートフォームを選択するとファイルピッカーが表示される、などです。"
+        },
+        "app.UGFkZGxl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.display_name": {
+          "source": "Body Type",
+          "message": "ボディタイプ"
+        },
+        "app.UGFkZGxl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.short_desc": {
+          "source": "How the body is serialized and what Content-Type is sent",
+          "message": "ボディのシリアライズ方法および送信されるContent-Type"
+        },
+        "app.UGFkZGxl.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.desc": {
+          "source": "If `True`, non-2xx HTTP responses return as the normal response hash (with the actual status code) instead of raising `REST-RESPONSE-ERROR`. Useful for handling 4xx/5xx as data - e.g. checking whether a resource exists. Overrides the connection's `error_passthru` setting for this call only.",
+          "message": "`True`の場合、2xx以外のHTTPレスポンスは`REST-RESPONSE-ERROR`を発生させる代わりに（実際のステータスコードを含む）通常のレスポンスハッシュとして返されます。リソースが存在するかどうかの確認など、4xx/5xxをデータとして処理する場合に便利です。この呼び出しに限り、接続の`error_passthru`設定をオーバーライドします。"
+        },
+        "app.UGFkZGxl.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.display_name": {
+          "source": "Return Errors as Data",
+          "message": "エラーをデータとして返す"
+        },
+        "app.UGFkZGxl.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.short_desc": {
+          "source": "Return non-2xx responses normally instead of throwing",
+          "message": "例外をスローする代わりに2xx以外のレスポンスを通常通り返す"
+        },
+        "app.UGFkZGxl.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.desc": {
+          "source": "Optional list of HTTP status codes treated as success. If set and the response status is not in this list, the action throws `REST-STATUS-ERROR`. When unset, the REST client's default behavior applies (typically: 2xx is success, non-2xx throws).",
+          "message": "成功として扱われるHTTPステータスコードのオプションリスト。設定されていてレスポンスステータスがこのリストに含まれない場合、アクションは`REST-STATUS-ERROR`をスローします。未設定の場合、RESTクライアントのデフォルト動作が適用されます（通常：2xxは成功、2xx以外はスロー）。"
+        },
+        "app.UGFkZGxl.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.display_name": {
+          "source": "Expected Status Codes",
+          "message": "期待されるステータスコード"
+        },
+        "app.UGFkZGxl.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.short_desc": {
+          "source": "Response status codes treated as success",
+          "message": "成功として扱われるレスポンスステータスコード"
+        },
+        "app.UGFkZGxl.action.bWFrZS1hcGktY2FsbA.option.aGRy.desc": {
+          "source": "Hash of custom headers added to the request. These override any default headers set by `body_type` (e.g. supplying `Content-Type` here wins over the body-type default).",
+          "message": "リクエストに追加されるカスタムヘッダーのハッシュ。これらは`body_type`によって設定されたデフォルトヘッダーをオーバーライドします（例：ここで`Content-Type`を指定すると、ボディタイプのデフォルトより優先されます）。"
+        },
+        "app.UGFkZGxl.action.bWFrZS1hcGktY2FsbA.option.aGRy.display_name": {
+          "source": "Custom Headers",
+          "message": "カスタムヘッダー"
+        },
+        "app.UGFkZGxl.action.bWFrZS1hcGktY2FsbA.option.aGRy.short_desc": {
+          "source": "Extra request headers",
+          "message": "追加のリクエストヘッダー"
+        },
+        "app.UGFkZGxl.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.desc": {
+          "source": "If `True`, the response hash includes a `debug` sub-hash containing the request method/URL/headers (with sensitive values redacted), request and response sizes, and round-trip duration. Useful when investigating slow or failing calls. Off by default to keep responses lean.",
+          "message": "`True`の場合、レスポンスハッシュにはリクエストメソッド/URL/ヘッダー（機密値は伏字処理済み）、リクエストとレスポンスのサイズ、およびラウンドトリップ時間を含む`debug`サブハッシュが含まれます。遅い呼び出しや失敗した呼び出しを調査する際に便利です。レスポンスを軽量に保つため、デフォルトではオフになっています。"
+        },
+        "app.UGFkZGxl.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.display_name": {
+          "source": "Include Debug Info",
+          "message": "デバッグ情報を含める"
+        },
+        "app.UGFkZGxl.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.short_desc": {
+          "source": "Include request/timing/size debug info in the response",
+          "message": "レスポンスにリクエスト/タイミング/サイズのデバッグ情報を含める"
+        },
+        "app.UGFkZGxl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.desc": {
+          "source": "HTTP `OPTIONS`",
+          "message": "HTTP `OPTIONS`"
+        },
+        "app.UGFkZGxl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.display_name": {
+          "source": "OPTIONS",
+          "message": "OPTIONS"
+        },
+        "app.UGFkZGxl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.short_desc": {
+          "source": "HTTP OPTIONS",
+          "message": "HTTP OPTIONS"
+        },
+        "app.UGFkZGxl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.desc": {
+          "source": "HTTP `DELETE`",
+          "message": "HTTP `DELETE`"
+        },
+        "app.UGFkZGxl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.display_name": {
+          "source": "DELETE",
+          "message": "DELETE"
+        },
+        "app.UGFkZGxl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.short_desc": {
+          "source": "HTTP DELETE",
+          "message": "HTTP DELETE"
+        },
+        "app.UGFkZGxl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.desc": {
+          "source": "HTTP `GET`",
+          "message": "HTTP `GET`"
+        },
+        "app.UGFkZGxl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.display_name": {
+          "source": "GET",
+          "message": "GET"
+        },
+        "app.UGFkZGxl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.short_desc": {
+          "source": "HTTP GET",
+          "message": "HTTP GET"
+        },
+        "app.UGFkZGxl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.desc": {
+          "source": "HTTP `HEAD`",
+          "message": "HTTP `HEAD`"
+        },
+        "app.UGFkZGxl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.display_name": {
+          "source": "HEAD",
+          "message": "HEAD"
+        },
+        "app.UGFkZGxl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.short_desc": {
+          "source": "HTTP HEAD",
+          "message": "HTTP HEAD"
+        },
+        "app.UGFkZGxl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.desc": {
+          "source": "HTTP `PATCH`",
+          "message": "HTTP `PATCH`"
+        },
+        "app.UGFkZGxl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.display_name": {
+          "source": "PATCH",
+          "message": "PATCH"
+        },
+        "app.UGFkZGxl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.short_desc": {
+          "source": "HTTP PATCH",
+          "message": "HTTP PATCH"
+        },
+        "app.UGFkZGxl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.desc": {
+          "source": "HTTP `POST`",
+          "message": "HTTP `POST`"
+        },
+        "app.UGFkZGxl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.display_name": {
+          "source": "POST",
+          "message": "POST"
+        },
+        "app.UGFkZGxl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.short_desc": {
+          "source": "HTTP POST",
+          "message": "HTTP POST"
+        },
+        "app.UGFkZGxl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.desc": {
+          "source": "HTTP `PUT`",
+          "message": "HTTP `PUT`"
+        },
+        "app.UGFkZGxl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.display_name": {
+          "source": "PUT",
+          "message": "PUT"
+        },
+        "app.UGFkZGxl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.short_desc": {
+          "source": "HTTP PUT",
+          "message": "HTTP PUT"
+        },
+        "app.UGFkZGxl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.desc": {
+          "source": "HTTP `TRACE`",
+          "message": "HTTP `TRACE`"
+        },
+        "app.UGFkZGxl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.display_name": {
+          "source": "TRACE",
+          "message": "TRACE"
+        },
+        "app.UGFkZGxl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.short_desc": {
+          "source": "HTTP TRACE",
+          "message": "HTTP TRACE"
+        },
+        "app.UGFkZGxl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "リクエストに使用するHTTPメソッド"
+        },
+        "app.UGFkZGxl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.display_name": {
+          "source": "HTTP Method",
+          "message": "HTTPメソッド"
+        },
+        "app.UGFkZGxl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.short_desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "リクエストに使用するHTTPメソッド"
+        },
+        "app.UGFkZGxl.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain `{name}` placeholders that are replaced from `path_vars`. Example: `/users/{id}/comments`.",
+          "message": "接続のAPIベースURLに対する相対URIパス。`path_vars`から置換される`{name}`プレースホルダーを含めることができます。例: `/users/{id}/comments`。"
+        },
+        "app.UGFkZGxl.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.display_name": {
+          "source": "URI Path",
+          "message": "URIパス"
+        },
+        "app.UGFkZGxl.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.short_desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain '{name}' placeholders that are replaced from 'path_vars'. Example: '/users/{id}/comments'",
+          "message": "接続のAPIベースURLに対する相対URIパス。'path_vars' から置換される '{name}' プレースホルダーを含めることができます。例: '/users/{id}/comments'"
+        },
+        "app.UGFkZGxl.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.desc": {
+          "source": "Hash of values substituted into `{name}` placeholders in the URI path. Example: with `path = /users/{id}` and `path_vars = {id: 123}` the framework sends `/users/123`. Values are URL-encoded.",
+          "message": "URIパス内の `{name}` プレースホルダーに置換される値のハッシュ。例: `path = /users/{id}` と `path_vars = {id: 123}` を指定すると、フレームワークは `/users/123` を送信します。値はURLエンコードされます。"
+        },
+        "app.UGFkZGxl.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.display_name": {
+          "source": "Path Variables",
+          "message": "パス変数"
+        },
+        "app.UGFkZGxl.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.short_desc": {
+          "source": "Values for {name} placeholders in path",
+          "message": "パス内の {name} プレースホルダーの値"
+        },
+        "app.UGFkZGxl.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.desc": {
+          "source": "Hash of query string parameters to append to the URI path. Values are URL-encoded; list values are joined with `,`.",
+          "message": "URIパスに追加するクエリ文字列パラメータのハッシュ。値はURLエンコードされます。リスト値は `,` で結合されます。"
+        },
+        "app.UGFkZGxl.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.display_name": {
+          "source": "Query Arguments",
+          "message": "クエリ引数"
+        },
+        "app.UGFkZGxl.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.short_desc": {
+          "source": "Query string parameters",
+          "message": "クエリ文字列パラメータ"
+        },
+        "app.UGFkZGxl.action.bWFrZS1hcGktY2FsbA.short_desc": {
+          "source": "Make a custom API call to Paddle",
+          "message": "PaddleへのカスタムAPI呼び出しを実行"
+        },
+        "app.UGFkZGxl.action.c2VhcmNo.desc": {
+          "source": "Returns every record in the given table matching the search criteria",
+          "message": "検索条件に一致する指定テーブルのすべてのレコードを返します"
+        },
+        "app.UGFkZGxl.action.c2VhcmNo.display_name": {
+          "source": "Search Records",
+          "message": "レコードの検索"
+        },
+        "app.UGFkZGxl.action.c2VhcmNo.option.dGFibGU.desc": {
+          "source": "The table to work with: `customers`, `products`, `prices`, `transactions` or `reports`",
+          "message": "操作対象のテーブル: `customers`、`products`、`prices`、`transactions`、または`reports`"
+        },
+        "app.UGFkZGxl.action.c2VhcmNo.option.dGFibGU.display_name": {
+          "source": "Table",
+          "message": "表"
+        },
+        "app.UGFkZGxl.action.c2VhcmNo.option.dGFibGU.short_desc": {
+          "source": "The name of the table to work with",
+          "message": "操作対象のテーブル名"
+        },
+        "app.UGFkZGxl.action.c2VhcmNo.short_desc": {
+          "source": "Search for matching records in the given table",
+          "message": "指定テーブル内の一致するレコードを検索"
+        },
+        "app.UGFkZGxl.action.c2VhcmNoLXNpbmdsZQ.desc": {
+          "source": "Returns the one record in the given table matching the search criteria; it is an error if more than one matches",
+          "message": "検索条件に一致する指定テーブルの1件のレコードを返します。複数一致した場合はエラーになります"
+        },
+        "app.UGFkZGxl.action.c2VhcmNoLXNpbmdsZQ.display_name": {
+          "source": "Find a Single Record",
+          "message": "単一レコードの検索"
+        },
+        "app.UGFkZGxl.action.c2VhcmNoLXNpbmdsZQ.option.dGFibGU.desc": {
+          "source": "The table to work with: `customers`, `products`, `prices`, `transactions` or `reports`",
+          "message": "操作対象のテーブル: `customers`、`products`、`prices`、`transactions`、または`reports`"
+        },
+        "app.UGFkZGxl.action.c2VhcmNoLXNpbmdsZQ.option.dGFibGU.display_name": {
+          "source": "Table",
+          "message": "表"
+        },
+        "app.UGFkZGxl.action.c2VhcmNoLXNpbmdsZQ.option.dGFibGU.short_desc": {
+          "source": "The name of the table to work with",
+          "message": "操作対象のテーブル名"
+        },
+        "app.UGFkZGxl.action.c2VhcmNoLXNpbmdsZQ.short_desc": {
+          "source": "Search for a single matching record in the given table",
+          "message": "指定テーブル内の一致する単一レコードを検索"
+        },
+        "app.UGFkZGxl.action.c3Vic2NyaXB0aW9uLWFjdGl2YXRlZA.desc": {
+          "source": "Fires when a subscription first becomes `active` -- a trial ended and was paid for, or a scheduled start arrived.\n\nThis is the signal to provision a paid plan: it means Paddle has collected, where `subscription.created` only means the record exists.",
+          "message": "サブスクリプションが初めて `active` になったとき（トライアルが終了して支払いが完了したか、スケジュールされた開始日に達したとき）にトリガーされます。\n\nこれは有料プランをプロビジョニングする合図です。`subscription.created` はレコードが存在することを示すだけですが、これはPaddleが回収したことを意味します。"
+        },
+        "app.UGFkZGxl.action.c3Vic2NyaXB0aW9uLWFjdGl2YXRlZA.display_name": {
+          "source": "Subscription Activated",
+          "message": "サブスクリプション有効化"
+        },
+        "app.UGFkZGxl.action.c3Vic2NyaXB0aW9uLWFjdGl2YXRlZA.short_desc": {
+          "source": "React to a subscription becoming active",
+          "message": "サブスクリプションのアクティブ化に反応"
+        },
+        "app.UGFkZGxl.action.c3Vic2NyaXB0aW9uLWNhbmNlbGVk.desc": {
+          "source": "Fires when a subscription actually ends and `status` becomes `canceled`.\n\n**This is the deprovisioning signal, not the cancellation request.** A cancellation booked for the end of the billing period appears first as a `scheduled_change` on `subscription.updated`, and the customer has paid up to that date; this event is when the date arrives.",
+          "message": "サブスクリプションが実際に終了し、`status` が `canceled` になったときにトリガーされます。\n\n**これはプロビジョニング解除の合図であり、解約リクエストではありません。** 請求期間の終了時に予約された解約は、まず `subscription.updated` 上の `scheduled_change` として表示され、顧客はその日付まで支払いを済ませています。このイベントはその日付が到来したときに発生します。"
+        },
+        "app.UGFkZGxl.action.c3Vic2NyaXB0aW9uLWNhbmNlbGVk.display_name": {
+          "source": "Subscription Canceled",
+          "message": "サブスクリプションが解約されました"
+        },
+        "app.UGFkZGxl.action.c3Vic2NyaXB0aW9uLWNhbmNlbGVk.short_desc": {
+          "source": "React to a subscription ending",
+          "message": "サブスクリプションの終了に反応"
+        },
+        "app.UGFkZGxl.action.c3Vic2NyaXB0aW9uLWNyZWF0ZWQ.desc": {
+          "source": "Fires when a subscription is created.\n\n**Created is not the same as paid.** A new subscription is often `trialing`, and one created for a transaction that has not been collected yet is not earning anything; check `status` before provisioning. `subscription.activated` is the signal that billing has actually begun.\n\nThis replaces polling the subscription listing.",
+          "message": "サブスクリプションが作成されたときにトリガーされます。\n\n**作成されたことは支払い済みと同じではありません。** 新しいサブスクリプションは多くの場合 `trialing` であり、まだ回収されていないトランザクションに対して作成されたものは収益を生んでいません。プロビジョニングする前に `status` を確認してください。`subscription.activated` は請求が実際に開始された合図です。\n\nこれはサブスクリプション一覧のポーリングの代わりとなります。"
+        },
+        "app.UGFkZGxl.action.c3Vic2NyaXB0aW9uLWNyZWF0ZWQ.display_name": {
+          "source": "Subscription Created",
+          "message": "サブスクリプション作成"
+        },
+        "app.UGFkZGxl.action.c3Vic2NyaXB0aW9uLWNyZWF0ZWQ.short_desc": {
+          "source": "React to a subscription being created",
+          "message": "サブスクリプションの作成に反応"
+        },
+        "app.UGFkZGxl.action.c3Vic2NyaXB0aW9uLXBhc3QtZHVl.desc": {
+          "source": "Fires when a renewal could not be collected and the subscription becomes `past_due`.\n\nPaddle retries on its dunning schedule, so this is not yet the end: the subscription recovers to `active` if a retry succeeds, or is canceled when the retries run out. Treat it as a warning to prompt the customer, not as a reason to cut off access.",
+          "message": "更新の回収ができず、サブスクリプションが `past_due` になったときにトリガーされます。\n\nPaddleは督促スケジュールに従って再試行するため、これはまだ終了ではありません。再試行が成功した場合はサブスクリプションが `active` に復旧し、再試行回数を使い果たすと解約されます。これをアクセスを遮断する理由ではなく、顧客に支払いを促すための警告として扱ってください。"
+        },
+        "app.UGFkZGxl.action.c3Vic2NyaXB0aW9uLXBhc3QtZHVl.display_name": {
+          "source": "Subscription Past Due",
+          "message": "サブスクリプションの期日超過"
+        },
+        "app.UGFkZGxl.action.c3Vic2NyaXB0aW9uLXBhc3QtZHVl.short_desc": {
+          "source": "React to a subscription's payment failing",
+          "message": "サブスクリプションの支払い失敗に反応"
+        },
+        "app.UGFkZGxl.action.c3Vic2NyaXB0aW9uLXVwZGF0ZWQ.desc": {
+          "source": "Fires for any change to a subscription: a plan change, a quantity change, a renewal moving `next_billed_at`, or a pause or cancellation being **scheduled**.\n\n`scheduled_change` is the field that distinguishes those last cases -- a subscription can be `active` and still be booked to end. Paddle sends the whole subscription rather than a diff.",
+          "message": "サブスクリプションに対するあらゆる変更（プランの変更、数量の変更、`next_billed_at` に進む更新、あるいは一時停止や解約の**スケジュール**など）でトリガーされます。\n\n`scheduled_change` はこれらの最後のケースを区別するフィールドです。サブスクリプションは `active` のままでも終了が予約されている場合があります。Paddleは差分ではなくサブスクリプション全体を送信します。"
+        },
+        "app.UGFkZGxl.action.c3Vic2NyaXB0aW9uLXVwZGF0ZWQ.display_name": {
+          "source": "Subscription Updated",
+          "message": "サブスクリプション更新"
+        },
+        "app.UGFkZGxl.action.c3Vic2NyaXB0aW9uLXVwZGF0ZWQ.short_desc": {
+          "source": "React to a subscription changing",
+          "message": "サブスクリプションの変更に反応"
+        },
+        "app.UGFkZGxl.action.cHJpY2UtY3JlYXRlZA.desc": {
+          "source": "Fires when a price is created against a product.\n\n`unit_price.amount` is a string in the **smallest unit of its currency**, so `1000` is $10.00 in USD but 1000 yen in JPY. A `billing_cycle` makes it a subscription price; without one it is a one-off charge.",
+          "message": "製品に対して価格が作成されたときにトリガーされます。\n\n`unit_price.amount` はその**通貨の最小単位**の文字列であるため、`1000` はUSDでは$10.00ですが、JPYでは1000円になります。`billing_cycle` があるとサブスクリプション価格になり、ない場合は都度請求になります。"
+        },
+        "app.UGFkZGxl.action.cHJpY2UtY3JlYXRlZA.display_name": {
+          "source": "Price Created",
+          "message": "価格が作成されました"
+        },
+        "app.UGFkZGxl.action.cHJpY2UtY3JlYXRlZA.short_desc": {
+          "source": "React to a catalog price being created",
+          "message": "カタログ価格の作成に反応"
+        },
+        "app.UGFkZGxl.action.cHJpY2UtdXBkYXRlZA.desc": {
+          "source": "Fires when a price changes, including when one is archived.\n\n**A change to `unit_price` affects new purchases only**; subscriptions already billing this price keep the amount they were created with until they are explicitly updated. A price change is therefore not a signal that anyone's bill changed.",
+          "message": "価格が変更されたとき（アーカイブされた場合を含む）にトリガーされます。\n\n**`unit_price` の変更は新規購入にのみ適用されます**。すでにこの価格で請求されているサブスクリプションは、明示的に更新されるまで作成時の金額が維持されます。したがって、価格の変更は誰かの請求額が変更された合図ではありません。"
+        },
+        "app.UGFkZGxl.action.cHJpY2UtdXBkYXRlZA.display_name": {
+          "source": "Price Updated",
+          "message": "価格更新"
+        },
+        "app.UGFkZGxl.action.cHJpY2UtdXBkYXRlZA.short_desc": {
+          "source": "React to a catalog price changing",
+          "message": "カタログ価格の変更を検知"
+        },
+        "app.UGFkZGxl.action.cHJvZHVjdC11cGRhdGVk.desc": {
+          "source": "Fires when a product changes, including when one is archived -- `status` becomes `archived`, which withdraws it from sale without affecting existing subscriptions.\n\n**Archiving a product does not archive its prices**, so a price of an archived product can still be billed unless it is archived too.",
+          "message": "商品が変更されたとき（アーカイブされたときを含む。`status` が `archived` になり、既存のサブスクリプションに影響を与えることなく販売が停止されます）にトリガーされます。\n\n**商品をアーカイブしてもその価格はアーカイブされない**ため、アーカイブされた商品の価格もアーカイブされない限り引き続き請求可能です。"
+        },
+        "app.UGFkZGxl.action.cHJvZHVjdC11cGRhdGVk.display_name": {
+          "source": "Product Updated",
+          "message": "製品更新"
+        },
+        "app.UGFkZGxl.action.cHJvZHVjdC11cGRhdGVk.short_desc": {
+          "source": "React to a catalog product changing",
+          "message": "カタログ商品の変更を検知"
+        },
+        "app.UGFkZGxl.action.cHJvZHVjdC1jcmVhdGVk.desc": {
+          "source": "Fires when a product is added to the catalog.\n\nA product carries no price of its own, so a newly created product cannot be sold until a price exists for it; watch `price.created` for that.\n\nThis replaces polling the product listing.",
+          "message": "商品がカタログに追加されたときにトリガーされます。\n\n商品自体には価格が含まれていないため、新規作成された商品は価格が設定されるまで販売できません。それについては `price.created` を監視してください。\n\nこれにより、商品一覧のポーリングが不要になります。"
+        },
+        "app.UGFkZGxl.action.cHJvZHVjdC1jcmVhdGVk.display_name": {
+          "source": "Product Created",
+          "message": "製品作成"
+        },
+        "app.UGFkZGxl.action.cHJvZHVjdC1jcmVhdGVk.short_desc": {
+          "source": "React to a catalog product being created",
+          "message": "カタログ商品の新規作成を検知"
+        },
+        "app.UGFkZGxl.action.cmVwb3J0LWNyZWF0ZWQ.desc": {
+          "source": "Fires when a report is requested. It arrives `pending`: Paddle generates the file in the background, so there is nothing to download yet.\n\nWait for `report.updated` with `status` of `ready` before asking for the file.\n\nThis replaces polling the report listing.",
+          "message": "レポートがリクエストされたときにトリガーされます。`pending` の状態で届きます。Paddle がバックグラウンドでファイルを生成するため、この時点ではダウンロードできません。\n\nファイルを要求する前に、`status` が `ready` である `report.updated` を待機してください。\n\nこれにより、レポート一覧のポーリングが不要になります。"
+        },
+        "app.UGFkZGxl.action.cmVwb3J0LWNyZWF0ZWQ.display_name": {
+          "source": "Report Created",
+          "message": "レポート作成"
+        },
+        "app.UGFkZGxl.action.cmVwb3J0LWNyZWF0ZWQ.short_desc": {
+          "source": "React to a report being requested",
+          "message": "レポートのリクエストを検知"
+        },
+        "app.UGFkZGxl.action.cmVwb3J0LXVwZGF0ZWQ.desc": {
+          "source": "Fires when a report's status changes: `ready` when the file can be downloaded, `failed` when generation did not succeed, `expired` once Paddle has removed it.\n\nThis is the signal to call **Get Report File** -- and to do it promptly, because a report is kept only for a limited time.",
+          "message": "レポートのステータスが変更されたときにトリガーされます: ファイルがダウンロード可能になると `ready`、生成に失敗すると `failed`、Paddle により削除されると `expired`。\n\nこれは **Get Report File** を呼び出すシグナルです。レポートは限られた期間しか保持されないため、速やかに実行してください。"
+        },
+        "app.UGFkZGxl.action.cmVwb3J0LXVwZGF0ZWQ.display_name": {
+          "source": "Report Updated",
+          "message": "レポート更新"
+        },
+        "app.UGFkZGxl.action.cmVwb3J0LXVwZGF0ZWQ.short_desc": {
+          "source": "React to a report becoming ready",
+          "message": "レポートの準備完了を検知"
+        },
+        "app.UGFkZGxl.action.dHJhbnNhY3Rpb24tY29tcGxldGVk.desc": {
+          "source": "Fires when a transaction is `completed`: the money has been collected and the invoice is settled.\n\nThis is the event to fulfil an order on. `details.totals` breaks the amount down into subtotal, tax and the grand total, all as strings in the smallest unit of `currency_code`.",
+          "message": "取引が `completed` になったとき（代金が回収され、請求書が決済されたとき）にトリガーされます。\n\nこれは注文を履行するためのイベントです。`details.totals` は金額を小計、税額、合計金額に分類し、すべて `currency_code` の最小単位の文字列として表されます。"
+        },
+        "app.UGFkZGxl.action.dHJhbnNhY3Rpb24tY29tcGxldGVk.display_name": {
+          "source": "Transaction Completed",
+          "message": "取引完了"
+        },
+        "app.UGFkZGxl.action.dHJhbnNhY3Rpb24tY29tcGxldGVk.short_desc": {
+          "source": "React to a transaction being paid in full",
+          "message": "取引の全額支払いを検知"
+        },
+        "app.UGFkZGxl.action.dHJhbnNhY3Rpb24tY3JlYXRlZA.desc": {
+          "source": "Fires when a transaction is created, including the draft Paddle raises for an upcoming renewal.\n\n**A created transaction has not been paid**; most are `draft` or `ready` at this point. Use `transaction.completed` for money actually collected.\n\nThis replaces polling the transaction listing.",
+          "message": "取引が作成されたとき（今後の更新のために Paddle が作成する下書きを含む）にトリガーされます。\n\n**作成された取引はまだ支払われていません**。現時点ではほとんどが `draft` または `ready` です。実際に回収された金額については `transaction.completed` を使用してください。\n\nこれにより、取引一覧のポーリングが不要になります。"
+        },
+        "app.UGFkZGxl.action.dHJhbnNhY3Rpb24tY3JlYXRlZA.display_name": {
+          "source": "Transaction Created",
+          "message": "取引作成"
+        },
+        "app.UGFkZGxl.action.dHJhbnNhY3Rpb24tY3JlYXRlZA.short_desc": {
+          "source": "React to a transaction being created",
+          "message": "取引の新規作成を検知"
+        },
+        "app.UGFkZGxl.action.dHJhbnNhY3Rpb24tcGF5bWVudC1mYWlsZWQ.desc": {
+          "source": "Fires when an attempt to collect a transaction fails.\n\n`payments` carries the attempt and the reason it failed. Paddle retries automatically for a subscription renewal, so a single failure is not final; the subscription moving to `past_due` is the point at which the customer needs to act.",
+          "message": "取引の回収試行が失敗したときにトリガーされます。\n\n`payments` には試行内容と失敗理由が含まれます。Paddle はサブスクリプションの更新について自動的に再試行するため、1 回の失敗が最終的なものではありません。サブスクリプションが `past_due` に移行した時点が、顧客の対応が必要なタイミングです。"
+        },
+        "app.UGFkZGxl.action.dHJhbnNhY3Rpb24tcGF5bWVudC1mYWlsZWQ.display_name": {
+          "source": "Transaction Payment Failed",
+          "message": "取引支払い失敗"
+        },
+        "app.UGFkZGxl.action.dHJhbnNhY3Rpb24tcGF5bWVudC1mYWlsZWQ.short_desc": {
+          "source": "React to a payment attempt failing",
+          "message": "支払いの試行失敗を検知"
+        },
+        "app.UGFkZGxl.action.dXBkYXRl.desc": {
+          "source": "Updates every record in the given table matching the search criteria",
+          "message": "指定されたテーブル内で検索条件に一致するすべてのレコードを更新します"
+        },
+        "app.UGFkZGxl.action.dXBkYXRl.display_name": {
+          "source": "Update Records",
+          "message": "レコードを更新"
+        },
+        "app.UGFkZGxl.action.dXBkYXRl.option.dGFibGU.desc": {
+          "source": "The table to work with: `customers`, `products`, `prices`, `transactions` or `reports`",
+          "message": "操作対象のテーブル: `customers`、`products`、`prices`、`transactions`、または`reports`"
+        },
+        "app.UGFkZGxl.action.dXBkYXRl.option.dGFibGU.display_name": {
+          "source": "Table",
+          "message": "表"
+        },
+        "app.UGFkZGxl.action.dXBkYXRl.option.dGFibGU.short_desc": {
+          "source": "The name of the table to work with",
+          "message": "操作対象のテーブル名"
+        },
+        "app.UGFkZGxl.action.dXBkYXRl.short_desc": {
+          "source": "Update the records matching the search criteria",
+          "message": "検索条件に一致するレコードを更新"
+        },
+        "app.UGFkZGxl.action.dXBkYXRlX2N1c3RvbWVy.desc": {
+          "source": "Updates a customer. Only the fields supplied are changed; everything else is left as it is.\n\nSetting `status` to `archived` is how a customer is retired: an archived customer cannot be billed and stops appearing in listings, but its transactions and subscriptions are untouched.\n\n**`custom_data` is replaced, not merged.** Send the whole object, or previously stored keys are lost.",
+          "message": "顧客を更新します。指定されたフィールドのみが変更され、その他の内容はそのまま残ります。\n\n`status` を `archived` に設定することで顧客をアーカイブします。アーカイブされた顧客は請求できなくなり、一覧に表示されなくなりますが、その取引やサブスクリプションは保持されます。\n\n**`custom_data` はマージされず、上書きされます。** オブジェクト全体を送信してください。そうしないと以前保存されたキーが失われます。"
+        },
+        "app.UGFkZGxl.action.dXBkYXRlX2N1c3RvbWVy.display_name": {
+          "source": "Update Customer",
+          "message": "顧客を更新"
+        },
+        "app.UGFkZGxl.action.dXBkYXRlX2N1c3RvbWVy.option.Y3VzdG9tX2RhdGE.desc": {
+          "source": "Your own structured key-value data.",
+          "message": "独自の構造化キー/値データ。"
+        },
+        "app.UGFkZGxl.action.dXBkYXRlX2N1c3RvbWVy.option.Y3VzdG9tX2RhdGE.display_name": {
+          "source": "Custom Data",
+          "message": "カスタムデータ"
+        },
+        "app.UGFkZGxl.action.dXBkYXRlX2N1c3RvbWVy.option.Y3VzdG9tX2RhdGE.short_desc": {
+          "source": "Replaces the stored custom data in full",
+          "message": "保存されているカスタムデータを完全に置き換えます"
+        },
+        "app.UGFkZGxl.action.dXBkYXRlX2N1c3RvbWVy.option.Y3VzdG9tZXJfaWQ.desc": {
+          "source": "Paddle ID of the customer entity to work with.: Unique Paddle ID for this customer entity, prefixed with `ctm_`.",
+          "message": "対象となる顧客エンティティのPaddle ID: この顧客エンティティの一意のPaddle ID（プレフィックス: `ctm_`）。"
+        },
+        "app.UGFkZGxl.action.dXBkYXRlX2N1c3RvbWVy.option.Y3VzdG9tZXJfaWQ.display_name": {
+          "source": "Customer",
+          "message": "顧客"
+        },
+        "app.UGFkZGxl.action.dXBkYXRlX2N1c3RvbWVy.option.Y3VzdG9tZXJfaWQ.short_desc": {
+          "source": "Paddle ID of the customer entity to work with",
+          "message": "対象となる顧客エンティティのPaddle ID"
+        },
+        "app.UGFkZGxl.action.dXBkYXRlX2N1c3RvbWVy.option.ZW1haWw.desc": {
+          "source": "Email address for this customer.",
+          "message": "この顧客のメールアドレス。"
+        },
+        "app.UGFkZGxl.action.dXBkYXRlX2N1c3RvbWVy.option.ZW1haWw.display_name": {
+          "source": "Email",
+          "message": "メール"
+        },
+        "app.UGFkZGxl.action.dXBkYXRlX2N1c3RvbWVy.option.ZW1haWw.short_desc": {
+          "source": "Email address for this customer",
+          "message": "この顧客のメールアドレス"
+        },
+        "app.UGFkZGxl.action.dXBkYXRlX2N1c3RvbWVy.option.aW1wb3J0X21ldGE.desc": {
+          "source": "Import information for this entity. `null` if this entity is not imported.",
+          "message": "このエンティティのインポート情報。このエンティティがインポートされていない場合は`null`。"
+        },
+        "app.UGFkZGxl.action.dXBkYXRlX2N1c3RvbWVy.option.aW1wb3J0X21ldGE.display_name": {
+          "source": "Import Meta",
+          "message": "インポートメタ"
+        },
+        "app.UGFkZGxl.action.dXBkYXRlX2N1c3RvbWVy.option.aW1wb3J0X21ldGE.short_desc": {
+          "source": "Import information for this entity",
+          "message": "このエンティティのインポート情報"
+        },
+        "app.UGFkZGxl.action.dXBkYXRlX2N1c3RvbWVy.option.bG9jYWxl.desc": {
+          "source": "Valid IETF BCP 47 short form locale tag.",
+          "message": "有効な IETF BCP 47 短縮形式のロケールタグ。"
+        },
+        "app.UGFkZGxl.action.dXBkYXRlX2N1c3RvbWVy.option.bG9jYWxl.display_name": {
+          "source": "Locale",
+          "message": "ロケール"
+        },
+        "app.UGFkZGxl.action.dXBkYXRlX2N1c3RvbWVy.option.bG9jYWxl.short_desc": {
+          "source": "Valid IETF BCP 47 short form locale tag",
+          "message": "有効なIETF BCP 47短縮形式ロケールタグ"
+        },
+        "app.UGFkZGxl.action.dXBkYXRlX2N1c3RvbWVy.option.bWFya2V0aW5nX2NvbnNlbnQ.desc": {
+          "source": "Whether this customer opted into marketing from you. `false` unless customers check the marketing consent box\nwhen using Paddle Checkout. Set automatically by Paddle.",
+          "message": "この顧客がマーケティング情報の受信に同意したかどうか。顧客がPaddle Checkoutの使用時にマーケティング同意チェックボックスをオンにしない限り`false`となります。Paddleによって自動的に設定されます。"
+        },
+        "app.UGFkZGxl.action.dXBkYXRlX2N1c3RvbWVy.option.bWFya2V0aW5nX2NvbnNlbnQ.display_name": {
+          "source": "Marketing Consent",
+          "message": "マーケティング同意"
+        },
+        "app.UGFkZGxl.action.dXBkYXRlX2N1c3RvbWVy.option.bWFya2V0aW5nX2NvbnNlbnQ.short_desc": {
+          "source": "Whether this customer opted into marketing from you",
+          "message": "この顧客がマーケティング情報の受信に同意したかどうか"
+        },
+        "app.UGFkZGxl.action.dXBkYXRlX2N1c3RvbWVy.option.bmFtZQ.desc": {
+          "source": "Full name of this customer. Required when creating transactions where `collection_mode` is `manual` (invoices).",
+          "message": "この顧客の氏名。`collection_mode`が`manual`（請求書）であるトランザクションを作成する際に必須です。"
+        },
+        "app.UGFkZGxl.action.dXBkYXRlX2N1c3RvbWVy.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "名前"
+        },
+        "app.UGFkZGxl.action.dXBkYXRlX2N1c3RvbWVy.option.bmFtZQ.short_desc": {
+          "source": "Full name of this customer",
+          "message": "この顧客の氏名"
+        },
+        "app.UGFkZGxl.action.dXBkYXRlX2N1c3RvbWVy.option.c3RhdHVz.allowed-value.c3RyaW5nOmFjdGl2ZQ.display_name": {
+          "source": "active",
+          "message": "active"
+        },
+        "app.UGFkZGxl.action.dXBkYXRlX2N1c3RvbWVy.option.c3RhdHVz.allowed-value.c3RyaW5nOmFyY2hpdmVk.display_name": {
+          "source": "archived",
+          "message": "archived"
+        },
+        "app.UGFkZGxl.action.dXBkYXRlX2N1c3RvbWVy.option.c3RhdHVz.desc": {
+          "source": "Whether this entity can be used in Paddle.",
+          "message": "このエンティティが Paddle で使用可能かどうか。"
+        },
+        "app.UGFkZGxl.action.dXBkYXRlX2N1c3RvbWVy.option.c3RhdHVz.display_name": {
+          "source": "Status",
+          "message": "ステータス"
+        },
+        "app.UGFkZGxl.action.dXBkYXRlX2N1c3RvbWVy.option.c3RhdHVz.short_desc": {
+          "source": "Set to \"archived\" to retire the customer",
+          "message": "顧客をアーカイブするには \"archived\" に設定"
+        },
+        "app.UGFkZGxl.action.dXBkYXRlX2N1c3RvbWVy.short_desc": {
+          "source": "Update a customer",
+          "message": "顧客の更新"
+        },
+        "app.UGFkZGxl.action.dXBkYXRlX3ByaWNl.desc": {
+          "source": "Updates a price. Only the fields supplied are changed.\n\n**Changing `unit_price` changes what new purchases cost; existing subscriptions keep the amount they were created with** until they are explicitly updated. Raising a published price is normally done by creating a new price and archiving the old one, so that the change is visible in the catalog.\n\nSet `status` to `archived` to withdraw the price from sale.",
+          "message": "価格を更新します。指定されたフィールドのみが変更されます。\n\n**`unit_price` を変更すると新規購入の金額が変わります。既存のサブスクリプションは明示的に更新されるまで作成時の金額が維持されます**。公開されている価格の引き上げは、通常、新しい価格を作成して古い価格をアーカイブすることで行われ、変更がカタログに反映されるようにします。\n\n価格の販売を終了するには、`status` を `archived` に設定してください。"
+        },
+        "app.UGFkZGxl.action.dXBkYXRlX3ByaWNl.display_name": {
+          "source": "Update Price",
+          "message": "価格の更新"
+        },
+        "app.UGFkZGxl.action.dXBkYXRlX3ByaWNl.option.Y3VzdG9tX2RhdGE.desc": {
+          "source": "Your own structured key-value data.",
+          "message": "独自の構造化キー/値データ。"
+        },
+        "app.UGFkZGxl.action.dXBkYXRlX3ByaWNl.option.Y3VzdG9tX2RhdGE.display_name": {
+          "source": "Custom Data",
+          "message": "カスタムデータ"
+        },
+        "app.UGFkZGxl.action.dXBkYXRlX3ByaWNl.option.Y3VzdG9tX2RhdGE.short_desc": {
+          "source": "Replaces the stored custom data in full",
+          "message": "保存されているカスタムデータを完全に置き換えます"
+        },
+        "app.UGFkZGxl.action.dXBkYXRlX3ByaWNl.option.YmlsbGluZ19jeWNsZQ.desc": {
+          "source": "How often this price should be charged. `null` if price is non-recurring (one-time).",
+          "message": "この価格が請求される頻度。価格が非継続（1 回限り）の場合は `null`。"
+        },
+        "app.UGFkZGxl.action.dXBkYXRlX3ByaWNl.option.YmlsbGluZ19jeWNsZQ.display_name": {
+          "source": "Billing Cycle",
+          "message": "請求サイクル"
+        },
+        "app.UGFkZGxl.action.dXBkYXRlX3ByaWNl.option.YmlsbGluZ19jeWNsZQ.short_desc": {
+          "source": "How often this price should be charged",
+          "message": "この価格が請求される頻度"
+        },
+        "app.UGFkZGxl.action.dXBkYXRlX3ByaWNl.option.ZGVzY3JpcHRpb24.desc": {
+          "source": "Internal description for this price, not shown to customers. Typically notes for your team.",
+          "message": "この価格の内部説明（顧客には表示されません）。通常はチーム向けのメモです。"
+        },
+        "app.UGFkZGxl.action.dXBkYXRlX3ByaWNl.option.ZGVzY3JpcHRpb24.display_name": {
+          "source": "Description",
+          "message": "説明"
+        },
+        "app.UGFkZGxl.action.dXBkYXRlX3ByaWNl.option.ZGVzY3JpcHRpb24.short_desc": {
+          "source": "Internal description for this price, not shown to customers",
+          "message": "この価格の内部説明（顧客には表示されません）"
+        },
+        "app.UGFkZGxl.action.dXBkYXRlX3ByaWNl.option.bmFtZQ.desc": {
+          "source": "Name of this price, shown to customers at checkout and on invoices. Typically describes how often the related product bills.",
+          "message": "この価格の名前（チェックアウト時および請求書上に顧客へ表示されます）。通常は関連製品の請求頻度を記載します。"
+        },
+        "app.UGFkZGxl.action.dXBkYXRlX3ByaWNl.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "名前"
+        },
+        "app.UGFkZGxl.action.dXBkYXRlX3ByaWNl.option.bmFtZQ.short_desc": {
+          "source": "Name of this price, shown to customers at checkout and on invoices",
+          "message": "この価格の名前（チェックアウト時および請求書上に顧客へ表示）"
+        },
+        "app.UGFkZGxl.action.dXBkYXRlX3ByaWNl.option.c3RhdHVz.allowed-value.c3RyaW5nOmFjdGl2ZQ.display_name": {
+          "source": "active",
+          "message": "active"
+        },
+        "app.UGFkZGxl.action.dXBkYXRlX3ByaWNl.option.c3RhdHVz.allowed-value.c3RyaW5nOmFyY2hpdmVk.display_name": {
+          "source": "archived",
+          "message": "archived"
+        },
+        "app.UGFkZGxl.action.dXBkYXRlX3ByaWNl.option.c3RhdHVz.desc": {
+          "source": "Whether this entity can be used in Paddle.",
+          "message": "このエンティティが Paddle で使用可能かどうか。"
+        },
+        "app.UGFkZGxl.action.dXBkYXRlX3ByaWNl.option.c3RhdHVz.display_name": {
+          "source": "Status",
+          "message": "ステータス"
+        },
+        "app.UGFkZGxl.action.dXBkYXRlX3ByaWNl.option.c3RhdHVz.short_desc": {
+          "source": "Set to \"archived\" to withdraw the price from sale",
+          "message": "価格の販売を終了するには \"archived\" に設定"
+        },
+        "app.UGFkZGxl.action.dXBkYXRlX3ByaWNl.option.cHJpY2VfaWQ.desc": {
+          "source": "Paddle ID of the price entity to work with.",
+          "message": "対象となる価格エンティティのPaddle ID。"
+        },
+        "app.UGFkZGxl.action.dXBkYXRlX3ByaWNl.option.cHJpY2VfaWQ.display_name": {
+          "source": "Price",
+          "message": "価格"
+        },
+        "app.UGFkZGxl.action.dXBkYXRlX3ByaWNl.option.cHJpY2VfaWQ.short_desc": {
+          "source": "Paddle ID of the price entity to work with",
+          "message": "対象となる価格エンティティのPaddle ID"
+        },
+        "app.UGFkZGxl.action.dXBkYXRlX3ByaWNl.option.cXVhbnRpdHk.desc": {
+          "source": "Limits on how many times the related product can be purchased at this price. Useful for discount campaigns.",
+          "message": "関連商品がこの価格で購入できる回数の上限。割引キャンペーンなどに便利です。"
+        },
+        "app.UGFkZGxl.action.dXBkYXRlX3ByaWNl.option.cXVhbnRpdHk.display_name": {
+          "source": "Quantity",
+          "message": "数量"
+        },
+        "app.UGFkZGxl.action.dXBkYXRlX3ByaWNl.option.cXVhbnRpdHk.short_desc": {
+          "source": "Limits on how many times the related product can be purchased at this price",
+          "message": "この価格で関連製品を購入できる回数の制限"
+        },
+        "app.UGFkZGxl.action.dXBkYXRlX3ByaWNl.option.dGF4X21vZGU.allowed-value.c3RyaW5nOmFjY291bnRfc2V0dGluZw.display_name": {
+          "source": "account_setting",
+          "message": "account_setting"
+        },
+        "app.UGFkZGxl.action.dXBkYXRlX3ByaWNl.option.dGF4X21vZGU.allowed-value.c3RyaW5nOmV4dGVybmFs.display_name": {
+          "source": "external",
+          "message": "external"
+        },
+        "app.UGFkZGxl.action.dXBkYXRlX3ByaWNl.option.dGF4X21vZGU.allowed-value.c3RyaW5nOmludGVybmFs.display_name": {
+          "source": "internal",
+          "message": "内部"
+        },
+        "app.UGFkZGxl.action.dXBkYXRlX3ByaWNl.option.dGF4X21vZGU.allowed-value.c3RyaW5nOmxvY2F0aW9u.display_name": {
+          "source": "location",
+          "message": "場所"
+        },
+        "app.UGFkZGxl.action.dXBkYXRlX3ByaWNl.option.dGF4X21vZGU.desc": {
+          "source": "How tax is calculated for this price.",
+          "message": "この価格に対する税の計算方法。"
+        },
+        "app.UGFkZGxl.action.dXBkYXRlX3ByaWNl.option.dGF4X21vZGU.display_name": {
+          "source": "Tax Mode",
+          "message": "税モード"
+        },
+        "app.UGFkZGxl.action.dXBkYXRlX3ByaWNl.option.dGF4X21vZGU.short_desc": {
+          "source": "How tax is calculated for this price",
+          "message": "この価格の税金計算方法"
+        },
+        "app.UGFkZGxl.action.dXBkYXRlX3ByaWNl.option.dHJpYWxfcGVyaW9k.desc": {
+          "source": "Trial period for the product related to this price. The billing cycle begins once the trial period is over. `null` for no trial period. Requires `billing_cycle`.",
+          "message": "この価格に関連付けられた商品のトライアル期間。請求サイクルはトライアル期間終了後に開始されます。トライアル期間がない場合は `null`。`billing_cycle` が必要です。"
+        },
+        "app.UGFkZGxl.action.dXBkYXRlX3ByaWNl.option.dHJpYWxfcGVyaW9k.display_name": {
+          "source": "Trial Period",
+          "message": "お試し期間"
+        },
+        "app.UGFkZGxl.action.dXBkYXRlX3ByaWNl.option.dHJpYWxfcGVyaW9k.short_desc": {
+          "source": "Trial period for the product related to this price",
+          "message": "この価格に関連する製品のお試し期間"
+        },
+        "app.UGFkZGxl.action.dXBkYXRlX3ByaWNl.option.dHlwZQ.allowed-value.c3RyaW5nOmN1c3RvbQ.display_name": {
+          "source": "custom",
+          "message": "カスタム"
+        },
+        "app.UGFkZGxl.action.dXBkYXRlX3ByaWNl.option.dHlwZQ.allowed-value.c3RyaW5nOnN0YW5kYXJk.display_name": {
+          "source": "standard",
+          "message": "標準"
+        },
+        "app.UGFkZGxl.action.dXBkYXRlX3ByaWNl.option.dHlwZQ.desc": {
+          "source": "Type of item. Standard items are considered part of your catalog and are shown in the Paddle dashboard.",
+          "message": "アイテムのタイプ。標準アイテムはカタログの一部と見なされ、Paddle ダッシュボードに表示されます。"
+        },
+        "app.UGFkZGxl.action.dXBkYXRlX3ByaWNl.option.dHlwZQ.display_name": {
+          "source": "Type",
+          "message": "タイプ"
+        },
+        "app.UGFkZGxl.action.dXBkYXRlX3ByaWNl.option.dHlwZQ.short_desc": {
+          "source": "Type of item",
+          "message": "アイテムのタイプ"
+        },
+        "app.UGFkZGxl.action.dXBkYXRlX3ByaWNl.option.dW5pdF9wcmljZQ.desc": {
+          "source": "Base price. This price applies to all customers, except for customers located in countries where you have `unit_price_overrides`.",
+          "message": "基本価格。`unit_price_overrides`を設定している国に所在する顧客を除き、すべての顧客にこの価格が適用されます。"
+        },
+        "app.UGFkZGxl.action.dXBkYXRlX3ByaWNl.option.dW5pdF9wcmljZQ.display_name": {
+          "source": "Unit Price",
+          "message": "単価"
+        },
+        "app.UGFkZGxl.action.dXBkYXRlX3ByaWNl.option.dW5pdF9wcmljZQ.short_desc": {
+          "source": "The amount, in the smallest unit of its currency",
+          "message": "金額（該当通貨の最小単位）"
+        },
+        "app.UGFkZGxl.action.dXBkYXRlX3ByaWNl.option.dW5pdF9wcmljZV9vdmVycmlkZXM.desc": {
+          "source": "List of unit price overrides. Use to override the base price with a custom price and currency for a country or group of countries.",
+          "message": "単価オーバーライドのリスト。特定の国または国のグループに対して、基本価格をカスタム価格および通貨で上書きするために使用します。"
+        },
+        "app.UGFkZGxl.action.dXBkYXRlX3ByaWNl.option.dW5pdF9wcmljZV9vdmVycmlkZXM.display_name": {
+          "source": "Unit Price Overrides",
+          "message": "単価の上書き"
+        },
+        "app.UGFkZGxl.action.dXBkYXRlX3ByaWNl.option.dW5pdF9wcmljZV9vdmVycmlkZXM.short_desc": {
+          "source": "List of unit price overrides",
+          "message": "単価の上書きリスト"
+        },
+        "app.UGFkZGxl.action.dXBkYXRlX3ByaWNl.short_desc": {
+          "source": "Update a catalog price",
+          "message": "カタログ価格の更新"
+        },
+        "app.UGFkZGxl.action.dXBkYXRlX3Byb2R1Y3Q.desc": {
+          "source": "Updates a product. Only the fields supplied are changed.\n\n`tax_category` is fixed at creation and cannot be changed here; a product in the wrong category has to be archived and replaced.\n\n**`custom_data` is replaced, not merged.** Send the whole object, or previously stored keys are lost.",
+          "message": "商品を更新します。指定されたフィールドのみが変更されます。\n\n`tax_category` は作成時に固定され、ここでは変更できません。カテゴリを誤った商品はアーカイブして再作成する必要があります。\n\n**`custom_data` はマージされず、上書きされます。** オブジェクト全体を送信してください。そうしないと以前保存されたキーが失われます。"
+        },
+        "app.UGFkZGxl.action.dXBkYXRlX3Byb2R1Y3Q.display_name": {
+          "source": "Update Product",
+          "message": "製品を更新"
+        },
+        "app.UGFkZGxl.action.dXBkYXRlX3Byb2R1Y3Q.option.Y3VzdG9tX2RhdGE.desc": {
+          "source": "Your own structured key-value data.",
+          "message": "独自の構造化キー/値データ。"
+        },
+        "app.UGFkZGxl.action.dXBkYXRlX3Byb2R1Y3Q.option.Y3VzdG9tX2RhdGE.display_name": {
+          "source": "Custom Data",
+          "message": "カスタムデータ"
+        },
+        "app.UGFkZGxl.action.dXBkYXRlX3Byb2R1Y3Q.option.Y3VzdG9tX2RhdGE.short_desc": {
+          "source": "Replaces the stored custom data in full",
+          "message": "保存されているカスタムデータを完全に置き換えます"
+        },
+        "app.UGFkZGxl.action.dXBkYXRlX3Byb2R1Y3Q.option.ZGVzY3JpcHRpb24.desc": {
+          "source": "Short description for this product.",
+          "message": "この商品の簡単な説明。"
+        },
+        "app.UGFkZGxl.action.dXBkYXRlX3Byb2R1Y3Q.option.ZGVzY3JpcHRpb24.display_name": {
+          "source": "Description",
+          "message": "説明"
+        },
+        "app.UGFkZGxl.action.dXBkYXRlX3Byb2R1Y3Q.option.ZGVzY3JpcHRpb24.short_desc": {
+          "source": "Short description for this product",
+          "message": "この商品の簡単な説明"
+        },
+        "app.UGFkZGxl.action.dXBkYXRlX3Byb2R1Y3Q.option.aW1hZ2VfdXJs.desc": {
+          "source": "Image for this product. Included in the checkout and on some customer documents.",
+          "message": "この商品の画像。チェックアウト時や一部の顧客向けドキュメントに含まれます。"
+        },
+        "app.UGFkZGxl.action.dXBkYXRlX3Byb2R1Y3Q.option.aW1hZ2VfdXJs.display_name": {
+          "source": "Image Url",
+          "message": "画像URL"
+        },
+        "app.UGFkZGxl.action.dXBkYXRlX3Byb2R1Y3Q.option.aW1hZ2VfdXJs.short_desc": {
+          "source": "Image for this product",
+          "message": "この商品の画像"
+        },
+        "app.UGFkZGxl.action.dXBkYXRlX3Byb2R1Y3Q.option.bmFtZQ.desc": {
+          "source": "Name of this product.",
+          "message": "この商品の名前。"
+        },
+        "app.UGFkZGxl.action.dXBkYXRlX3Byb2R1Y3Q.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "名前"
+        },
+        "app.UGFkZGxl.action.dXBkYXRlX3Byb2R1Y3Q.option.bmFtZQ.short_desc": {
+          "source": "Name of this product",
+          "message": "この商品の名前"
+        },
+        "app.UGFkZGxl.action.dXBkYXRlX3Byb2R1Y3Q.option.c3RhdHVz.allowed-value.c3RyaW5nOmFjdGl2ZQ.display_name": {
+          "source": "active",
+          "message": "active"
+        },
+        "app.UGFkZGxl.action.dXBkYXRlX3Byb2R1Y3Q.option.c3RhdHVz.allowed-value.c3RyaW5nOmFyY2hpdmVk.display_name": {
+          "source": "archived",
+          "message": "archived"
+        },
+        "app.UGFkZGxl.action.dXBkYXRlX3Byb2R1Y3Q.option.c3RhdHVz.desc": {
+          "source": "Whether this entity can be used in Paddle.",
+          "message": "このエンティティが Paddle で使用可能かどうか。"
+        },
+        "app.UGFkZGxl.action.dXBkYXRlX3Byb2R1Y3Q.option.c3RhdHVz.display_name": {
+          "source": "Status",
+          "message": "ステータス"
+        },
+        "app.UGFkZGxl.action.dXBkYXRlX3Byb2R1Y3Q.option.c3RhdHVz.short_desc": {
+          "source": "Set to \"archived\" to retire the product",
+          "message": "商品をアーカイブするには \"archived\" に設定"
+        },
+        "app.UGFkZGxl.action.dXBkYXRlX3Byb2R1Y3Q.option.cHJvZHVjdF9pZA.desc": {
+          "source": "Paddle ID of the product entity to work with.",
+          "message": "対象となる製品エンティティのPaddle ID。"
+        },
+        "app.UGFkZGxl.action.dXBkYXRlX3Byb2R1Y3Q.option.cHJvZHVjdF9pZA.display_name": {
+          "source": "Product",
+          "message": "商品"
+        },
+        "app.UGFkZGxl.action.dXBkYXRlX3Byb2R1Y3Q.option.cHJvZHVjdF9pZA.short_desc": {
+          "source": "Paddle ID of the product entity to work with",
+          "message": "対象となる製品エンティティのPaddle ID"
+        },
+        "app.UGFkZGxl.action.dXBkYXRlX3Byb2R1Y3Q.option.dGF4X2NhdGVnb3J5.allowed-value.c3RyaW5nOmRpZ2l0YWwtZ29vZHM.display_name": {
+          "source": "digital-goods",
+          "message": "digital-goods"
+        },
+        "app.UGFkZGxl.action.dXBkYXRlX3Byb2R1Y3Q.option.dGF4X2NhdGVnb3J5.allowed-value.c3RyaW5nOmVib29rcw.display_name": {
+          "source": "ebooks",
+          "message": "ebooks"
+        },
+        "app.UGFkZGxl.action.dXBkYXRlX3Byb2R1Y3Q.option.dGF4X2NhdGVnb3J5.allowed-value.c3RyaW5nOmltcGxlbWVudGF0aW9uLXNlcnZpY2Vz.display_name": {
+          "source": "implementation-services",
+          "message": "implementation-services"
+        },
+        "app.UGFkZGxl.action.dXBkYXRlX3Byb2R1Y3Q.option.dGF4X2NhdGVnb3J5.allowed-value.c3RyaW5nOnByb2Zlc3Npb25hbC1zZXJ2aWNlcw.display_name": {
+          "source": "professional-services",
+          "message": "professional-services"
+        },
+        "app.UGFkZGxl.action.dXBkYXRlX3Byb2R1Y3Q.option.dGF4X2NhdGVnb3J5.allowed-value.c3RyaW5nOnN0YW5kYXJk.display_name": {
+          "source": "standard",
+          "message": "標準"
+        },
+        "app.UGFkZGxl.action.dXBkYXRlX3Byb2R1Y3Q.option.dGF4X2NhdGVnb3J5.allowed-value.c3RyaW5nOnNhYXM.display_name": {
+          "source": "saas",
+          "message": "saas"
+        },
+        "app.UGFkZGxl.action.dXBkYXRlX3Byb2R1Y3Q.option.dGF4X2NhdGVnb3J5.allowed-value.c3RyaW5nOnNvZnR3YXJlLXByb2dyYW1taW5nLXNlcnZpY2Vz.display_name": {
+          "source": "software-programming-services",
+          "message": "software-programming-services"
+        },
+        "app.UGFkZGxl.action.dXBkYXRlX3Byb2R1Y3Q.option.dGF4X2NhdGVnb3J5.allowed-value.c3RyaW5nOnRyYWluaW5nLXNlcnZpY2Vz.display_name": {
+          "source": "training-services",
+          "message": "training-services"
+        },
+        "app.UGFkZGxl.action.dXBkYXRlX3Byb2R1Y3Q.option.dGF4X2NhdGVnb3J5.allowed-value.c3RyaW5nOndlYnNpdGUtaG9zdGluZw.display_name": {
+          "source": "website-hosting",
+          "message": "website-hosting"
+        },
+        "app.UGFkZGxl.action.dXBkYXRlX3Byb2R1Y3Q.option.dGF4X2NhdGVnb3J5.desc": {
+          "source": "Tax category for this product. Used for charging the correct rate of tax. Selected tax category must be enabled on your Paddle account.",
+          "message": "この商品の税金カテゴリ。正しい税率を請求するために使用されます。選択した税金カテゴリはPaddleアカウントで有効化されている必要があります。"
+        },
+        "app.UGFkZGxl.action.dXBkYXRlX3Byb2R1Y3Q.option.dGF4X2NhdGVnb3J5.display_name": {
+          "source": "Tax Category",
+          "message": "税金カテゴリ"
+        },
+        "app.UGFkZGxl.action.dXBkYXRlX3Byb2R1Y3Q.option.dGF4X2NhdGVnb3J5.short_desc": {
+          "source": "Tax category for this product",
+          "message": "この商品の税カテゴリ"
+        },
+        "app.UGFkZGxl.action.dXBkYXRlX3Byb2R1Y3Q.option.dHlwZQ.allowed-value.c3RyaW5nOmN1c3RvbQ.display_name": {
+          "source": "custom",
+          "message": "カスタム"
+        },
+        "app.UGFkZGxl.action.dXBkYXRlX3Byb2R1Y3Q.option.dHlwZQ.allowed-value.c3RyaW5nOnN0YW5kYXJk.display_name": {
+          "source": "standard",
+          "message": "標準"
+        },
+        "app.UGFkZGxl.action.dXBkYXRlX3Byb2R1Y3Q.option.dHlwZQ.desc": {
+          "source": "Type of item. Standard items are considered part of your catalog and are shown in the Paddle dashboard.",
+          "message": "アイテムのタイプ。標準アイテムはカタログの一部と見なされ、Paddle ダッシュボードに表示されます。"
+        },
+        "app.UGFkZGxl.action.dXBkYXRlX3Byb2R1Y3Q.option.dHlwZQ.display_name": {
+          "source": "Type",
+          "message": "タイプ"
+        },
+        "app.UGFkZGxl.action.dXBkYXRlX3Byb2R1Y3Q.option.dHlwZQ.short_desc": {
+          "source": "Type of item",
+          "message": "アイテムのタイプ"
+        },
+        "app.UGFkZGxl.action.dXBkYXRlX3Byb2R1Y3Q.short_desc": {
+          "source": "Update a catalog product",
+          "message": "カタログ商品の更新"
+        },
+        "app.UGFkZGxl.desc": {
+          "source": "Provides access to [Paddle](https://www.paddle.com), the billing platform for software businesses.\n\nPaddle is a **merchant of record**: it sells on your behalf, which means it - not you - handles payment processing, sales tax registration and remittance, invoicing and chargebacks, and then pays out the balance.\n\n**Common use cases**:\n- **Catalog**: create and update the products you sell and the prices they are sold at, including per-country pricing\n- **Customers**: create and update customers, and read the credit they hold\n- **Billing**: raise transactions, bill them, and read what was actually collected\n- **Subscriptions**: read subscriptions and what they are billing for\n- **Reporting**: request a report and download the CSV Paddle generates\n\nAuthentication is a Paddle API key, granted an explicit set of permissions in the Paddle dashboard. **Sandbox and production are separate environments** with separate data and separate keys.\n\nPaddle is a trademark of Paddle.com Market Ltd.",
+          "message": "ソフトウェア企業向け請求プラットフォーム [Paddle](https://www.paddle.com) へのアクセスを提供します。\n\nPaddle は **登録マーチャント（Merchant of Record）** です。お客様に代わって販売を行うため、決済処理、売上税の登録と納付、請求書発行、チャージバック対応を（お客様ではなく）Paddle が行い、差額を支払います。\n\n**一般的なユースケース**:\n- **カタログ**: 販売する商品や販売価格（国別価格を含む）の作成および更新\n- **顧客**: 顧客の作成および更新、顧客が保有するクレジットの確認\n- **請求**: 取引の発行、請求、および実際に回収された金額の確認\n- **サブスクリプション**: サブスクリプションおよびその請求内容の確認\n- **レポート**: レポートをリクエストし、Paddle が生成した CSV のダウンロード\n\n認証には、Paddle ダッシュボードで明示的な権限セットが付与された Paddle API キーを使用します。**サンドボックスと本番は個別環境**であり、データとキーも分離されています。\n\nPaddle は Paddle.com Market Ltd. の商標です。"
+        },
+        "app.UGFkZGxl.display_name": {
+          "source": "Paddle",
+          "message": "Paddle"
+        },
+        "app.UGFkZGxl.short_desc": {
+          "source": "Sell software through Paddle and manage the billing around it",
+          "message": "Paddle を介したソフトウェアの販売と関連する請求の管理"
+        }
+      }
+    }
+  }
+}

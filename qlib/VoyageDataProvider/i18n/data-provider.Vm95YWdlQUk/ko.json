@@ -1,0 +1,621 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "ko": {
+      "messages": {
+        "app.Vm95YWdlQUk.action.Y3JlYXRlLWVtYmVkZGluZ3M.desc": {
+          "source": "Converts one or more text inputs into numerical vectors (embeddings) that capture the meaning of the text. Texts with similar meanings will have similar vectors, enabling semantic search and comparison.\n\n**Example use cases**:\n- Convert product descriptions into embeddings to power a \"find similar products\" feature\n- Embed support tickets to automatically route them to the right team\n- Build a knowledge base index for AI-powered question answering (RAG)\n\nSupports batch processing (up to 1,000 texts per request) and configurable output dimensions for balancing accuracy vs. storage cost",
+          "message": "하나 이상의 텍스트 입력을 텍스트의 의미를 담고 있는 숫자 벡터(임베딩)로 변환합니다. 의미가 유사한 텍스트는 유사한 벡터를 갖게 되므로 의미 체계 검색 및 비교가 가능합니다.\n\n**활용 사례 예시**:\n- 제품 설명을 임베딩으로 변환하여 \"유사 제품 찾기\" 기능 구현\n- 지원 티켓을 임베딩하여 적절한 팀에 자동으로 라우팅\n- AI 기반 질의응답(RAG)을 위한 지식 베이스 인덱스 구축\n\n배치 처리(요청당 최대 1,000개 텍스트) 및 정확도와 스토리지 비용의 균형을 맞추기 위한 구성 가능한 출력 차원을 지원합니다."
+        },
+        "app.Vm95YWdlQUk.action.Y3JlYXRlLWVtYmVkZGluZ3M.display_name": {
+          "source": "Create Embeddings",
+          "message": "임베딩 생성"
+        },
+        "app.Vm95YWdlQUk.action.Y3JlYXRlLWVtYmVkZGluZ3M.option.ZW5jb2RpbmdfZm9ybWF0.allowed-value.c3RyaW5nOmJhc2U2NA.display_name": {
+          "source": "Base64 - Encoded Binary (efficient for compact types)",
+          "message": "Base64 - 인코딩된 바이너리 (컴팩트 유형에 효율적)"
+        },
+        "app.Vm95YWdlQUk.action.Y3JlYXRlLWVtYmVkZGluZ3M.option.ZW5jb2RpbmdfZm9ybWF0.desc": {
+          "source": "Controls how embedding vectors are formatted in the API response.\n\nBy default, embeddings are returned as plain number arrays. Set to `base64` to receive base64-encoded binary data, which can be more efficient for network transfer when using compact output types like `int8` or `binary`",
+          "message": "API 응답에서 임베딩 벡터가 서식 지정되는 방식을 제어합니다.\n\n기본적으로 임베딩은 일반 숫자 배열로 반환됩니다. `int8` 또는 `binary`와 같은 컴팩트 출력 유형을 사용할 때 네트워크 전송에 더 효율적인 Base64 인코딩 바이너리 데이터를 수신하려면 `base64`로 설정하십시오."
+        },
+        "app.Vm95YWdlQUk.action.Y3JlYXRlLWVtYmVkZGluZ3M.option.ZW5jb2RpbmdfZm9ybWF0.display_name": {
+          "source": "Encoding Format",
+          "message": "인코딩 형식"
+        },
+        "app.Vm95YWdlQUk.action.Y3JlYXRlLWVtYmVkZGluZ3M.option.ZW5jb2RpbmdfZm9ybWF0.short_desc": {
+          "source": "How embedding values are encoded in the response",
+          "message": "응답에서 임베딩 값이 인코딩되는 방식"
+        },
+        "app.Vm95YWdlQUk.action.Y3JlYXRlLWVtYmVkZGluZ3M.option.aW5wdXQ.desc": {
+          "source": "The text content to convert into embeddings. Can be a single string or a list of strings for batch processing.\n\n**Examples**:\n- Single text: `\"How do I reset my password?\"`\n- Batch: `[\"Product A description\", \"Product B description\", \"Product C description\"]`\n\nMaximum **1,000** items per request. Total token limits vary by model",
+          "message": "임베딩으로 변환할 텍스트 콘텐츠입니다. 단일 문자열이거나 배치 처리를 위한 문자열 목록일 수 있습니다.\n\n**예시**:\n- 단일 텍스트: `\"How do I reset my password?\"`\n- 배치: `[\"Product A description\", \"Product B description\", \"Product C description\"]`\n\n요청당 최대 **1,000**개 항목입니다. 총 토큰 제한은 모델에 따라 다릅니다."
+        },
+        "app.Vm95YWdlQUk.action.Y3JlYXRlLWVtYmVkZGluZ3M.option.aW5wdXQ.display_name": {
+          "source": "Input Text",
+          "message": "입력 텍스트"
+        },
+        "app.Vm95YWdlQUk.action.Y3JlYXRlLWVtYmVkZGluZ3M.option.aW5wdXQ.short_desc": {
+          "source": "The text or list of texts to convert into embeddings",
+          "message": "임베딩으로 변환할 텍스트 또는 텍스트 목록"
+        },
+        "app.Vm95YWdlQUk.action.Y3JlYXRlLWVtYmVkZGluZ3M.option.aW5wdXRfdHlwZQ.allowed-value.c3RyaW5nOmRvY3VtZW50.display_name": {
+          "source": "Document - Content to be searched (e.g., articles, products)",
+          "message": "문서 - 검색 대상 콘텐츠 (예: 기사, 제품)"
+        },
+        "app.Vm95YWdlQUk.action.Y3JlYXRlLWVtYmVkZGluZ3M.option.aW5wdXRfdHlwZQ.allowed-value.c3RyaW5nOnF1ZXJ5.display_name": {
+          "source": "Query - Search question (e.g., user's search input)",
+          "message": "쿼리 - 검색 질문 (예: 사용자의 검색 입력)"
+        },
+        "app.Vm95YWdlQUk.action.Y3JlYXRlLWVtYmVkZGluZ3M.option.aW5wdXRfdHlwZQ.desc": {
+          "source": "Tells the model whether the input text is a search query or a document to be searched. This optimizes the embeddings for better search accuracy.\n\n- Use **Query** when embedding a user's search question (e.g., `\"How do I reset my password?\"`)\n- Use **Document** when embedding content that will be searched through (e.g., knowledge base articles, product descriptions)\n\nLeave empty if you're not using the embeddings for search/retrieval",
+          "message": "입력 텍스트가 검색 쿼리인지 검색 대상 문서인지 모델에 알려줍니다. 이를 통해 더 나은 검색 정확도를 위해 임베딩을 최적화합니다.\n\n- 사용자의 검색 질문(예: `\"How do I reset my password?\"`)을 임베딩할 때는 **쿼리**를 사용하십시오.\n- 검색 대상이 될 콘텐츠(예: 지식 베이스 문서, 제품 설명)를 임베딩할 때는 **문서**를 사용하십시오.\n\n검색/검색(retrieval)에 임베딩을 사용하지 않는 경우 비워 두십시오."
+        },
+        "app.Vm95YWdlQUk.action.Y3JlYXRlLWVtYmVkZGluZ3M.option.aW5wdXRfdHlwZQ.display_name": {
+          "source": "Input Type",
+          "message": "입력 유형"
+        },
+        "app.Vm95YWdlQUk.action.Y3JlYXRlLWVtYmVkZGluZ3M.option.aW5wdXRfdHlwZQ.short_desc": {
+          "source": "Whether the text is a search query or a document to be searched",
+          "message": "텍스트가 검색 쿼리인지 검색 대상 문서인지 여부"
+        },
+        "app.Vm95YWdlQUk.action.Y3JlYXRlLWVtYmVkZGluZ3M.option.b3V0cHV0X2R0eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.display_name": {
+          "source": "Binary - Minimal Storage (32x less, for large-scale search)",
+          "message": "이진 - 최소 스토리지 (32배 감소, 대규모 검색용)"
+        },
+        "app.Vm95YWdlQUk.action.Y3JlYXRlLWVtYmVkZGluZ3M.option.b3V0cHV0X2R0eXBl.allowed-value.c3RyaW5nOmZsb2F0.display_name": {
+          "source": "Float - Full Precision (default, best accuracy)",
+          "message": "Float - 전체 정밀도 (기본값, 최고 정확도)"
+        },
+        "app.Vm95YWdlQUk.action.Y3JlYXRlLWVtYmVkZGluZ3M.option.b3V0cHV0X2R0eXBl.allowed-value.c3RyaW5nOmludDg.display_name": {
+          "source": "Int8 - Compact (4x less storage, minimal accuracy loss)",
+          "message": "Int8 - 컴팩트 (스토리지 4배 감소, 정확도 손실 최소화)"
+        },
+        "app.Vm95YWdlQUk.action.Y3JlYXRlLWVtYmVkZGluZ3M.option.b3V0cHV0X2R0eXBl.allowed-value.c3RyaW5nOnViaW5hcnk.display_name": {
+          "source": "Unsigned Binary - Minimal Storage (32x less)",
+          "message": "부호 없는 이진 - 최소 스토리지 (32배 감소)"
+        },
+        "app.Vm95YWdlQUk.action.Y3JlYXRlLWVtYmVkZGluZ3M.option.b3V0cHV0X2R0eXBl.allowed-value.c3RyaW5nOnVpbnQ4.display_name": {
+          "source": "Uint8 - Compact Unsigned (4x less storage)",
+          "message": "Uint8 - 컴팩트 부호 없음 (스토리지 4배 감소)"
+        },
+        "app.Vm95YWdlQUk.action.Y3JlYXRlLWVtYmVkZGluZ3M.option.b3V0cHV0X2R0eXBl.desc": {
+          "source": "Controls the numeric precision of embedding values. Lower precision uses less storage with a small accuracy trade-off.\n\n- **Float** — full precision (default), best accuracy\n- **Int8/Uint8** — 4x less storage, minimal accuracy loss\n- **Binary/Unsigned Binary** — 32x less storage, suitable for large-scale approximate search\n\nUse the default (`float`) unless you need to optimize storage for millions of embeddings",
+          "message": "임베딩 값의 숫자 정밀도를 제어합니다. 정밀도가 낮을수록 약간의 정확도 저하와 함께 스토리지를 덜 사용합니다.\n\n- **Float** — 전체 정밀도(기본값), 최고 정확도\n- **Int8/Uint8** — 스토리지 4배 감소, 정확도 손실 최소화\n- **이진/부호 없는 이진** — 스토리지 32배 감소, 대규모 근사 검색에 적합\n\n수백만 개의 임베딩에 대한 스토리지를 최적화해야 하는 경우가 아니라면 기본값(`float`)을 사용하십시오."
+        },
+        "app.Vm95YWdlQUk.action.Y3JlYXRlLWVtYmVkZGluZ3M.option.b3V0cHV0X2R0eXBl.display_name": {
+          "source": "Output Precision",
+          "message": "출력 정밀도"
+        },
+        "app.Vm95YWdlQUk.action.Y3JlYXRlLWVtYmVkZGluZ3M.option.b3V0cHV0X2R0eXBl.short_desc": {
+          "source": "Numeric precision of embedding values (affects storage size)",
+          "message": "임베딩 값의 숫자 정밀도 (스토리지 크기에 영향을 줌)"
+        },
+        "app.Vm95YWdlQUk.action.Y3JlYXRlLWVtYmVkZGluZ3M.option.b3V0cHV0X2RpbWVuc2lvbg.allowed-value.aW50OjEwMjQ.display_name": {
+          "source": "1024 - Default (recommended)",
+          "message": "1024 - 기본값 (권장)"
+        },
+        "app.Vm95YWdlQUk.action.Y3JlYXRlLWVtYmVkZGluZ3M.option.b3V0cHV0X2RpbWVuc2lvbg.allowed-value.aW50OjI1Ng.display_name": {
+          "source": "256 - Smallest (least storage)",
+          "message": "256 - 가장 작음 (최소 스토리지)"
+        },
+        "app.Vm95YWdlQUk.action.Y3JlYXRlLWVtYmVkZGluZ3M.option.b3V0cHV0X2RpbWVuc2lvbg.allowed-value.aW50OjIwNDg.display_name": {
+          "source": "2048 - Largest (highest accuracy)",
+          "message": "2048 - 가장 큼 (최고 정확도)"
+        },
+        "app.Vm95YWdlQUk.action.Y3JlYXRlLWVtYmVkZGluZ3M.option.b3V0cHV0X2RpbWVuc2lvbg.allowed-value.aW50OjUxMg.display_name": {
+          "source": "512 - Compact (good balance)",
+          "message": "512 - 컴팩트 (적절한 균형)"
+        },
+        "app.Vm95YWdlQUk.action.Y3JlYXRlLWVtYmVkZGluZ3M.option.b3V0cHV0X2RpbWVuc2lvbg.desc": {
+          "source": "Controls the size of the output embedding vectors. Higher dimensions give more accurate results but use more storage and memory.\n\n- **256** — smallest, ~4x less storage, good for large-scale approximate search\n- **512** — compact, good balance for most applications\n- **1024** — default, recommended for high-accuracy search\n- **2048** — highest accuracy, best when storage is not a concern\n\nNot all models support all dimensions. Default is `1024`",
+          "message": "출력 임베딩 벡터의 크기를 제어합니다. 차원이 높을수록 더 정확한 결과를 제공하지만 더 많은 스토리지와 메모리를 사용합니다.\n\n- **256** — 가장 작음, 스토리지 약 4배 절약, 대규모 근사 검색에 적합\n- **512** — 컴팩트, 대부분의 애플리케이션에 적절한 균형\n- **1024** — 기본값, 고정밀 검색에 권장\n- **2048** — 최고 정확도, 스토리지가 문제가 되지 않을 때 가장 적합\n\n모든 모델이 모든 차원을 지원하는 것은 아닙니다. 기본값은 `1024`입니다."
+        },
+        "app.Vm95YWdlQUk.action.Y3JlYXRlLWVtYmVkZGluZ3M.option.b3V0cHV0X2RpbWVuc2lvbg.display_name": {
+          "source": "Output Dimensions",
+          "message": "출력 차원"
+        },
+        "app.Vm95YWdlQUk.action.Y3JlYXRlLWVtYmVkZGluZ3M.option.b3V0cHV0X2RpbWVuc2lvbg.short_desc": {
+          "source": "Size of the embedding vector (affects accuracy vs. storage)",
+          "message": "임베딩 벡터의 크기(정확도 대 스토리지에 영향)"
+        },
+        "app.Vm95YWdlQUk.action.Y3JlYXRlLWVtYmVkZGluZ3M.option.bW9kZWw.allowed-value.c3RyaW5nOnZveWFnZS00.display_name": {
+          "source": "Voyage 4 - Balanced (good quality and speed)",
+          "message": "Voyage 4 - 밸런스드 (우수한 품질 및 속도)"
+        },
+        "app.Vm95YWdlQUk.action.Y3JlYXRlLWVtYmVkZGluZ3M.option.bW9kZWw.allowed-value.c3RyaW5nOnZveWFnZS00LWxhcmdl.display_name": {
+          "source": "Voyage 4 Large - Best Quality (general-purpose, multilingual)",
+          "message": "Voyage 4 Large - 최고 품질 (범용, 다국어)"
+        },
+        "app.Vm95YWdlQUk.action.Y3JlYXRlLWVtYmVkZGluZ3M.option.bW9kZWw.allowed-value.c3RyaW5nOnZveWFnZS00LWxpdGU.display_name": {
+          "source": "Voyage 4 Lite - Fastest (high-volume workloads)",
+          "message": "Voyage 4 Lite - 최고 속도 (대용량 워크로드)"
+        },
+        "app.Vm95YWdlQUk.action.Y3JlYXRlLWVtYmVkZGluZ3M.option.bW9kZWw.allowed-value.c3RyaW5nOnZveWFnZS0z.display_name": {
+          "source": "Voyage 3 - Previous Gen (balanced)",
+          "message": "Voyage 3 - 이전 세대 (밸런스드)"
+        },
+        "app.Vm95YWdlQUk.action.Y3JlYXRlLWVtYmVkZGluZ3M.option.bW9kZWw.allowed-value.c3RyaW5nOnZveWFnZS0zLWxhcmdl.display_name": {
+          "source": "Voyage 3 Large - Previous Gen (general-purpose)",
+          "message": "Voyage 3 Large - 이전 세대 (범용)"
+        },
+        "app.Vm95YWdlQUk.action.Y3JlYXRlLWVtYmVkZGluZ3M.option.bW9kZWw.allowed-value.c3RyaW5nOnZveWFnZS1jb2RlLTM.display_name": {
+          "source": "Voyage Code 3 - Code Search (source code retrieval)",
+          "message": "Voyage Code 3 - 코드 검색 (소스 코드 검색)"
+        },
+        "app.Vm95YWdlQUk.action.Y3JlYXRlLWVtYmVkZGluZ3M.option.bW9kZWw.allowed-value.c3RyaW5nOnZveWFnZS1maW5hbmNlLTI.display_name": {
+          "source": "Voyage Finance 2 - Finance (SEC filings, earnings)",
+          "message": "Voyage Finance 2 - 금융 (SEC 공시, 실적 보고서)"
+        },
+        "app.Vm95YWdlQUk.action.Y3JlYXRlLWVtYmVkZGluZ3M.option.bW9kZWw.allowed-value.c3RyaW5nOnZveWFnZS1sYXctMg.display_name": {
+          "source": "Voyage Law 2 - Legal (contracts, case law)",
+          "message": "Voyage Law 2 - 법률 (계약서, 판례)"
+        },
+        "app.Vm95YWdlQUk.action.Y3JlYXRlLWVtYmVkZGluZ3M.option.bW9kZWw.allowed-value.c3RyaW5nOnZveWFnZS1tdWx0aWxpbmd1YWwtMg.display_name": {
+          "source": "Voyage Multilingual 2 - Previous Gen (multilingual)",
+          "message": "Voyage Multilingual 2 - 이전 세대 (다국어)"
+        },
+        "app.Vm95YWdlQUk.action.Y3JlYXRlLWVtYmVkZGluZ3M.option.bW9kZWw.desc": {
+          "source": "Choose which Voyage AI model to use for converting your text into embeddings.\n\n**Recommended models**:\n- `voyage-4-large` — highest quality, best for multilingual content and complex documents\n- `voyage-4` — good balance of quality and speed for most use cases\n- `voyage-4-lite` — fastest and cheapest, good for high-volume or latency-sensitive workloads\n- `voyage-code-3` — specialized for source code search and retrieval\n\n**Domain-specific models** (trained on specialized data):\n- `voyage-finance-2` — financial documents, SEC filings, earnings reports\n- `voyage-law-2` — legal contracts, case law, regulations",
+          "message": "텍스트를 임베딩으로 변환하는 데 사용할 Voyage AI 모델을 선택하세요.\n\n**권장 모델**:\n- `voyage-4-large` — 최고 품질, 다국어 콘텐츠 및 복잡한 문서에 가장 적합\n- `voyage-4` — 대부분의 사용 사례에 적절한 품질과 속도의 균형\n- `voyage-4-lite` — 가장 빠르고 저렴함, 대용량 또는 지연 시간에 민감한 워크로드에 적합\n- `voyage-code-3` — 소스 코드 검색 및 조회에 특화\n\n**도메인 특화 모델** (특화 데이터로 학습됨):\n- `voyage-finance-2` — 금융 문서, SEC 공시, 실적 보고서\n- `voyage-law-2` — 법률 계약서, 판례, 규정"
+        },
+        "app.Vm95YWdlQUk.action.Y3JlYXRlLWVtYmVkZGluZ3M.option.bW9kZWw.display_name": {
+          "source": "Model",
+          "message": "모델"
+        },
+        "app.Vm95YWdlQUk.action.Y3JlYXRlLWVtYmVkZGluZ3M.option.bW9kZWw.short_desc": {
+          "source": "The AI model to use for generating embeddings",
+          "message": "임베딩 생성에 사용할 AI 모델"
+        },
+        "app.Vm95YWdlQUk.action.Y3JlYXRlLWVtYmVkZGluZ3M.option.dHJ1bmNhdGlvbg.desc": {
+          "source": "When enabled (the default), text that is too long for the model is automatically shortened to fit. When disabled, an error is returned instead, which is useful if you need to ensure the complete text is processed",
+          "message": "활성화하면(기본값) 모델 한도보다 긴 텍스트가 맞춤 크기로 자동 축소됩니다. 비활성화하면 오류가 반환되며, 이는 전체 텍스트가 온전히 처리되도록 보장해야 할 때 유용합니다."
+        },
+        "app.Vm95YWdlQUk.action.Y3JlYXRlLWVtYmVkZGluZ3M.option.dHJ1bmNhdGlvbg.display_name": {
+          "source": "Auto-Truncate Long Text",
+          "message": "긴 텍스트 자동 잘라내기"
+        },
+        "app.Vm95YWdlQUk.action.Y3JlYXRlLWVtYmVkZGluZ3M.option.dHJ1bmNhdGlvbg.short_desc": {
+          "source": "Automatically shorten text that exceeds the model's limit",
+          "message": "모델의 한도를 초과하는 텍스트를 자동으로 축소"
+        },
+        "app.Vm95YWdlQUk.action.Y3JlYXRlLWVtYmVkZGluZ3M.short_desc": {
+          "source": "Convert text into numerical vectors for search and comparison",
+          "message": "검색 및 비교를 위해 텍스트를 숫자 벡터로 변환"
+        },
+        "app.Vm95YWdlQUk.action.bWFrZS1hcGktY2FsbA.desc": {
+          "source": "Make a custom HTTP / REST API call to **Voyage AI** using the configured connection's authentication.\n\nSpecify the HTTP method, the URI path (relative to the connection's API base URL), optional query parameters, headers, and request body. The response is returned as a hash containing the status code, response headers, and response body.\n\nUse this action for endpoints that are not yet exposed as first-class actions on this app.",
+          "message": "구성된 연결의 인증을 사용하여 **Voyage AI**에 커스텀 HTTP / REST API 호출을 수행합니다.\n\nHTTP 메서드, URI 경로(연결의 API 기본 URL 기준 상대 경로), 선택적 쿼리 매개변수, 헤더 및 요청 본문을 지정합니다. 응답은 상태 코드, 응답 헤더 및 응답 본문을 포함하는 해시로 반환됩니다.\n\n이 앱에서 기본 액션으로 아직 노출되지 않은 엔드포인트에 이 액션을 사용하세요."
+        },
+        "app.Vm95YWdlQUk.action.bWFrZS1hcGktY2FsbA.display_name": {
+          "source": "Make an API call",
+          "message": "API 호출 실행"
+        },
+        "app.Vm95YWdlQUk.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.desc": {
+          "source": "The request body. The effective type depends on `body_type`: JSON/form/YAML expect a hash, XML/text expect a string, multipart expects a file structure, binary expects raw bytes.",
+          "message": "요청 본문입니다. 유효한 유형은 `body_type`에 따라 달라집니다. JSON/form/YAML은 해시를, XML/text는 문자열을, multipart는 파일 구조를, binary는 원시 바이트를 요구합니다."
+        },
+        "app.Vm95YWdlQUk.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.display_name": {
+          "source": "Body",
+          "message": "본문"
+        },
+        "app.Vm95YWdlQUk.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.short_desc": {
+          "source": "The request body",
+          "message": "요청 본문"
+        },
+        "app.Vm95YWdlQUk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.desc": {
+          "source": "Upload a file using `multipart/form-data`. The body must be a @ref DataProvider::FileDataType \"FileDataType\" structure (filename + content + mime_type). The framework builds the multipart envelope and sets the boundary header.",
+          "message": "`multipart/form-data`을(를) 사용하여 파일을 업로드합니다. 본문은 @ref DataProvider::FileDataType \"FileDataType\" 구조(filename + content + mime_type)여야 합니다. 프레임워크가 multipart 봉투를 작성하고 boundary 헤더를 설정합니다."
+        },
+        "app.Vm95YWdlQUk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.display_name": {
+          "source": "Multipart Form",
+          "message": "멀티파트 폼"
+        },
+        "app.Vm95YWdlQUk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.short_desc": {
+          "source": "Upload a file using multipart/form-data",
+          "message": "multipart/form-data를 사용하여 파일 업로드"
+        },
+        "app.Vm95YWdlQUk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.desc": {
+          "source": "Pass the body to the REST client unchanged; the client decides serialization based on its configured `data` option and the value type",
+          "message": "본문을 변경하지 않고 REST 클라이언트에 전달합니다. 클라이언트는 구성된 `data` 옵션과 값 유형을 기반으로 직렬화를 결정합니다."
+        },
+        "app.Vm95YWdlQUk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.display_name": {
+          "source": "Auto",
+          "message": "자동"
+        },
+        "app.Vm95YWdlQUk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.short_desc": {
+          "source": "Pass-through; use connection serialization and let the REST client decide",
+          "message": "패스스루: 연결 직렬화를 사용하고 REST 클라이언트가 결정하도록 합니다."
+        },
+        "app.Vm95YWdlQUk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.desc": {
+          "source": "Send the body as raw bytes. The body must be a binary value. Sets `Content-Type: application/octet-stream` unless overridden by `hdr`.",
+          "message": "본문을 원시 바이트로 전송합니다. 본문은 바이너리 값이어야 합니다. `hdr`에 의해 재정의되지 않는 한 `Content-Type: application/octet-stream`을(를) 설정합니다."
+        },
+        "app.Vm95YWdlQUk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.display_name": {
+          "source": "Raw Binary",
+          "message": "원시 바이너리"
+        },
+        "app.Vm95YWdlQUk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.short_desc": {
+          "source": "Send body as raw bytes",
+          "message": "본문을 원시 바이트로 전송"
+        },
+        "app.Vm95YWdlQUk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.desc": {
+          "source": "Serialize a hash of form fields as `application/x-www-form-urlencoded`. The body must be a hash whose values are scalars (strings/numbers/booleans).",
+          "message": "폼 필드의 해시를 `application/x-www-form-urlencoded`(으)로 직렬화합니다. 본문은 값이 스칼라(문자열/숫자/불리언)인 해시여야 합니다."
+        },
+        "app.Vm95YWdlQUk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.display_name": {
+          "source": "Form (URL-encoded)",
+          "message": "폼 (URL 인코딩)"
+        },
+        "app.Vm95YWdlQUk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.short_desc": {
+          "source": "Serialize body as application/x-www-form-urlencoded form fields",
+          "message": "본문을 application/x-www-form-urlencoded 폼 필드로 직렬화"
+        },
+        "app.Vm95YWdlQUk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.desc": {
+          "source": "Serialize the body as JSON; sets `Content-Type: application/json`. The body should be a hash, list, or scalar value.",
+          "message": "본문을 JSON으로 직렬화하며, `Content-Type: application/json`을(를) 설정합니다. 본문은 해시, 리스트 또는 스칼라 값이어야 합니다."
+        },
+        "app.Vm95YWdlQUk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.display_name": {
+          "source": "JSON",
+          "message": "JSON"
+        },
+        "app.Vm95YWdlQUk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.short_desc": {
+          "source": "Serialize body as JSON",
+          "message": "본문을 JSON으로 직렬화"
+        },
+        "app.Vm95YWdlQUk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.desc": {
+          "source": "Send the body as plain text. The body must be a string. Sets `Content-Type: text/plain`.",
+          "message": "본문을 일반 텍스트로 전송합니다. 본문은 문자열이어야 합니다. `Content-Type: text/plain`을(를) 설정합니다."
+        },
+        "app.Vm95YWdlQUk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.display_name": {
+          "source": "Plain Text",
+          "message": "일반 텍스트"
+        },
+        "app.Vm95YWdlQUk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.short_desc": {
+          "source": "Send body as text/plain",
+          "message": "본문을 text/plain으로 전송"
+        },
+        "app.Vm95YWdlQUk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.desc": {
+          "source": "Send the body as XML. If the body is a hash it is serialized to XML; if it is a string it is sent verbatim. Sets `Content-Type: application/xml`.",
+          "message": "본문을 XML로 전송합니다. 본문이 해시인 경우 XML로 직렬화되고, 문자열인 경우 그대로 전송됩니다. `Content-Type: application/xml`을(를) 설정합니다."
+        },
+        "app.Vm95YWdlQUk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.display_name": {
+          "source": "XML",
+          "message": "XML"
+        },
+        "app.Vm95YWdlQUk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.short_desc": {
+          "source": "Send body as XML",
+          "message": "본문을 XML로 전송"
+        },
+        "app.Vm95YWdlQUk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.desc": {
+          "source": "Send the body as YAML. If the body is a hash it is serialized to YAML; if it is a string it is sent verbatim. Sets `Content-Type: application/x-yaml`.",
+          "message": "본문을 YAML로 전송합니다. 본문이 해시인 경우 YAML로 직렬화되고, 문자열인 경우 그대로 전송됩니다. `Content-Type: application/x-yaml`을(를) 설정합니다."
+        },
+        "app.Vm95YWdlQUk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.display_name": {
+          "source": "YAML",
+          "message": "YAML"
+        },
+        "app.Vm95YWdlQUk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.short_desc": {
+          "source": "Send body as YAML",
+          "message": "본문을 YAML로 전송"
+        },
+        "app.Vm95YWdlQUk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.desc": {
+          "source": "Selects the body serialization mode and the corresponding `Content-Type` header. Changing this field reshapes the `body` editor - selecting JSON exposes a JSON editor, selecting Multipart Form exposes a file picker, and so on.",
+          "message": "본문 직렬화 모드 및 해당되는 `Content-Type` 헤더를 선택합니다. 이 필드를 변경하면 `body` 에디터의 형태가 변경됩니다. JSON을 선택하면 JSON 에디터가 표시되고, 멀티파트 폼을 선택하면 파일 선택기가 표시되는 방식입니다."
+        },
+        "app.Vm95YWdlQUk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.display_name": {
+          "source": "Body Type",
+          "message": "본문 유형"
+        },
+        "app.Vm95YWdlQUk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.short_desc": {
+          "source": "How the body is serialized and what Content-Type is sent",
+          "message": "본문이 직렬화되는 방식 및 전송되는 Content-Type"
+        },
+        "app.Vm95YWdlQUk.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.desc": {
+          "source": "If `True`, non-2xx HTTP responses return as the normal response hash (with the actual status code) instead of raising `REST-RESPONSE-ERROR`. Useful for handling 4xx/5xx as data - e.g. checking whether a resource exists. Overrides the connection's `error_passthru` setting for this call only.",
+          "message": "`True`인 경우, 2xx가 아닌 HTTP 응답은 `REST-RESPONSE-ERROR`을(를) 발생시키는 대신 (실제 상태 코드와 함께) 일반 응답 해시로 반환됩니다. 리소스 존재 여부 확인 등 4xx/5xx를 데이터로 처리할 때 유용합니다. 이 호출에 대해서만 연결의 `error_passthru` 설정을 재정의합니다."
+        },
+        "app.Vm95YWdlQUk.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.display_name": {
+          "source": "Return Errors as Data",
+          "message": "오류를 데이터로 반환"
+        },
+        "app.Vm95YWdlQUk.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.short_desc": {
+          "source": "Return non-2xx responses normally instead of throwing",
+          "message": "예외를 발생시키는 대신 2xx가 아닌 응답을 정상적으로 반환"
+        },
+        "app.Vm95YWdlQUk.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.desc": {
+          "source": "Optional list of HTTP status codes treated as success. If set and the response status is not in this list, the action throws `REST-STATUS-ERROR`. When unset, the REST client's default behavior applies (typically: 2xx is success, non-2xx throws).",
+          "message": "성공으로 처리되는 HTTP 상태 코드의 선택적 목록입니다. 설정되어 있고 응답 상태가 이 목록에 없는 경우 작업이 `REST-STATUS-ERROR` 예외를 발생시킵니다. 설정되지 않은 경우 REST 클라이언트의 기본 동작이 적용됩니다(일반적으로 2xx는 성공, 2xx 이외는 예외 발생)."
+        },
+        "app.Vm95YWdlQUk.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.display_name": {
+          "source": "Expected Status Codes",
+          "message": "예상되는 상태 코드"
+        },
+        "app.Vm95YWdlQUk.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.short_desc": {
+          "source": "Response status codes treated as success",
+          "message": "성공으로 처리되는 응답 상태 코드"
+        },
+        "app.Vm95YWdlQUk.action.bWFrZS1hcGktY2FsbA.option.aGRy.desc": {
+          "source": "Hash of custom headers added to the request. These override any default headers set by `body_type` (e.g. supplying `Content-Type` here wins over the body-type default).",
+          "message": "요청에 추가되는 사용자 지정 헤더의 해시입니다. 이는 `body_type`에 의해 설정된 기본 헤더보다 우선합니다(예: 여기에 `Content-Type`을(를) 제공하면 본문 유형 기본값보다 우선 적용됨)."
+        },
+        "app.Vm95YWdlQUk.action.bWFrZS1hcGktY2FsbA.option.aGRy.display_name": {
+          "source": "Custom Headers",
+          "message": "사용자 지정 헤더"
+        },
+        "app.Vm95YWdlQUk.action.bWFrZS1hcGktY2FsbA.option.aGRy.short_desc": {
+          "source": "Extra request headers",
+          "message": "추가 요청 헤더"
+        },
+        "app.Vm95YWdlQUk.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.desc": {
+          "source": "If `True`, the response hash includes a `debug` sub-hash containing the request method/URL/headers (with sensitive values redacted), request and response sizes, and round-trip duration. Useful when investigating slow or failing calls. Off by default to keep responses lean.",
+          "message": "`True`인 경우 응답 해시에 요청 메서드/URL/헤더(민감한 값은 가려짐), 요청 및 응답 크기, 왕복 시간이 포함된 `debug` 하위 해시가 포함됩니다. 느리거나 실패한 호출을 조사할 때 유용합니다. 응답을 가볍게 유지하기 위해 기본적으로 비활성화되어 있습니다."
+        },
+        "app.Vm95YWdlQUk.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.display_name": {
+          "source": "Include Debug Info",
+          "message": "디버그 정보 포함"
+        },
+        "app.Vm95YWdlQUk.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.short_desc": {
+          "source": "Include request/timing/size debug info in the response",
+          "message": "응답에 요청/타이밍/크기 디버그 정보 포함"
+        },
+        "app.Vm95YWdlQUk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.desc": {
+          "source": "HTTP `OPTIONS`",
+          "message": "HTTP `OPTIONS`"
+        },
+        "app.Vm95YWdlQUk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.display_name": {
+          "source": "OPTIONS",
+          "message": "OPTIONS"
+        },
+        "app.Vm95YWdlQUk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.short_desc": {
+          "source": "HTTP OPTIONS",
+          "message": "HTTP OPTIONS"
+        },
+        "app.Vm95YWdlQUk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.desc": {
+          "source": "HTTP `DELETE`",
+          "message": "HTTP `DELETE`"
+        },
+        "app.Vm95YWdlQUk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.display_name": {
+          "source": "DELETE",
+          "message": "DELETE"
+        },
+        "app.Vm95YWdlQUk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.short_desc": {
+          "source": "HTTP DELETE",
+          "message": "HTTP DELETE"
+        },
+        "app.Vm95YWdlQUk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.desc": {
+          "source": "HTTP `GET`",
+          "message": "HTTP `GET`"
+        },
+        "app.Vm95YWdlQUk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.display_name": {
+          "source": "GET",
+          "message": "GET"
+        },
+        "app.Vm95YWdlQUk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.short_desc": {
+          "source": "HTTP GET",
+          "message": "HTTP GET"
+        },
+        "app.Vm95YWdlQUk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.desc": {
+          "source": "HTTP `HEAD`",
+          "message": "HTTP `HEAD`"
+        },
+        "app.Vm95YWdlQUk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.display_name": {
+          "source": "HEAD",
+          "message": "HEAD"
+        },
+        "app.Vm95YWdlQUk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.short_desc": {
+          "source": "HTTP HEAD",
+          "message": "HTTP HEAD"
+        },
+        "app.Vm95YWdlQUk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.desc": {
+          "source": "HTTP `PATCH`",
+          "message": "HTTP `PATCH`"
+        },
+        "app.Vm95YWdlQUk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.display_name": {
+          "source": "PATCH",
+          "message": "PATCH"
+        },
+        "app.Vm95YWdlQUk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.short_desc": {
+          "source": "HTTP PATCH",
+          "message": "HTTP PATCH"
+        },
+        "app.Vm95YWdlQUk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.desc": {
+          "source": "HTTP `POST`",
+          "message": "HTTP `POST`"
+        },
+        "app.Vm95YWdlQUk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.display_name": {
+          "source": "POST",
+          "message": "POST"
+        },
+        "app.Vm95YWdlQUk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.short_desc": {
+          "source": "HTTP POST",
+          "message": "HTTP POST"
+        },
+        "app.Vm95YWdlQUk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.desc": {
+          "source": "HTTP `PUT`",
+          "message": "HTTP `PUT`"
+        },
+        "app.Vm95YWdlQUk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.display_name": {
+          "source": "PUT",
+          "message": "PUT"
+        },
+        "app.Vm95YWdlQUk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.short_desc": {
+          "source": "HTTP PUT",
+          "message": "HTTP PUT"
+        },
+        "app.Vm95YWdlQUk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.desc": {
+          "source": "HTTP `TRACE`",
+          "message": "HTTP `TRACE`"
+        },
+        "app.Vm95YWdlQUk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.display_name": {
+          "source": "TRACE",
+          "message": "TRACE"
+        },
+        "app.Vm95YWdlQUk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.short_desc": {
+          "source": "HTTP TRACE",
+          "message": "HTTP TRACE"
+        },
+        "app.Vm95YWdlQUk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "요청에 사용할 HTTP 메서드"
+        },
+        "app.Vm95YWdlQUk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.display_name": {
+          "source": "HTTP Method",
+          "message": "HTTP 메서드"
+        },
+        "app.Vm95YWdlQUk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.short_desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "요청에 사용할 HTTP 메서드"
+        },
+        "app.Vm95YWdlQUk.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain `{name}` placeholders that are replaced from `path_vars`. Example: `/users/{id}/comments`.",
+          "message": "연결의 API 기본 URL에 대한 상대 URI 경로입니다. `path_vars`에서 대체되는 `{name}` 자리 표시자가 포함될 수 있습니다. 예: `/users/{id}/comments`."
+        },
+        "app.Vm95YWdlQUk.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.display_name": {
+          "source": "URI Path",
+          "message": "URI 경로"
+        },
+        "app.Vm95YWdlQUk.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.short_desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain '{name}' placeholders that are replaced from 'path_vars'. Example: '/users/{id}/comments'",
+          "message": "연결의 API 기본 URL에 대한 상대 URI 경로입니다. 'path_vars'에서 대체되는 '{name}' 자리 표시자를 포함할 수 있습니다. 예: '/users/{id}/comments'"
+        },
+        "app.Vm95YWdlQUk.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.desc": {
+          "source": "Hash of values substituted into `{name}` placeholders in the URI path. Example: with `path = /users/{id}` and `path_vars = {id: 123}` the framework sends `/users/123`. Values are URL-encoded.",
+          "message": "URI 경로의 `{name}` 자리 표시자에 대체되는 값의 해시입니다. 예: `path = /users/{id}` 및 `path_vars = {id: 123}`이 있으면 프레임워크가 `/users/123`을(를) 전송합니다. 값은 URL 인코딩됩니다."
+        },
+        "app.Vm95YWdlQUk.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.display_name": {
+          "source": "Path Variables",
+          "message": "경로 변수"
+        },
+        "app.Vm95YWdlQUk.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.short_desc": {
+          "source": "Values for {name} placeholders in path",
+          "message": "경로 내 {name} 자리 표시자의 값"
+        },
+        "app.Vm95YWdlQUk.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.desc": {
+          "source": "Hash of query string parameters to append to the URI path. Values are URL-encoded; list values are joined with `,`.",
+          "message": "URI 경로에 추가할 쿼리 문자열 매개변수 해시입니다. 값은 URL 인코딩되며, 목록 값은 `,`(으)로 연결됩니다."
+        },
+        "app.Vm95YWdlQUk.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.display_name": {
+          "source": "Query Arguments",
+          "message": "쿼리 인수"
+        },
+        "app.Vm95YWdlQUk.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.short_desc": {
+          "source": "Query string parameters",
+          "message": "쿼리 문자열 매개변수"
+        },
+        "app.Vm95YWdlQUk.action.bWFrZS1hcGktY2FsbA.short_desc": {
+          "source": "Make a custom API call to Voyage AI",
+          "message": "Voyage AI에 커스텀 API 호출 수행"
+        },
+        "app.Vm95YWdlQUk.action.cmVyYW5r.desc": {
+          "source": "Takes a search query and a list of documents, then re-sorts the documents by how relevant they are to the query. This improves search quality by using AI to understand meaning rather than just keyword matching.\n\n**Example use cases**:\n- Improve search results from a basic keyword search by reranking with semantic understanding\n- Filter a large set of candidate documents down to the most relevant ones for AI processing\n- Re-sort customer support articles by relevance to a user's question\n\nReturns results sorted by relevance score (highest first). Use `top_k` to limit the number of results returned, and `return_documents` to include the document text in each result",
+          "message": "검색 쿼리와 문서 목록을 받아 쿼리와의 관련성에 따라 문서를 재정렬합니다. 이는 단순 키워드 매칭 대신 AI를 활용해 의미를 이해함으로써 검색 품질을 향상시킵니다.\n\n**사용 사례 예시**:\n- 시맨틱 이해를 기반으로 재순위화하여 기본 키워드 검색 결과 개선\n- AI 처리를 위해 대규모 후보 문서 집합을 가장 관련성 높은 문서로 필터링\n- 사용자 질문과의 관련성에 따라 고객 지원 문서 재정렬\n\n관련성 점수 기준(높은 점수 우선)으로 정렬된 결과를 반환합니다. 반환되는 결과 수를 제한하려면 `top_k`을 사용하고, 각 결과에 문서 텍스트를 포함하려면 `return_documents`을 사용하세요."
+        },
+        "app.Vm95YWdlQUk.action.cmVyYW5r.display_name": {
+          "source": "Rerank Documents",
+          "message": "문서 재순위화"
+        },
+        "app.Vm95YWdlQUk.action.cmVyYW5r.option.ZG9jdW1lbnRz.desc": {
+          "source": "A list of text documents to rank by relevance to the search query. These can be full documents, paragraphs, or short text snippets.\n\n**Example**: `[\"Guide to canceling subscriptions...\", \"Billing FAQ...\", \"How to upgrade your plan...\"]`\n\nMaximum **1,000** documents per request",
+          "message": "검색 쿼리와의 관련성에 따라 순위를 매길 텍스트 문서 목록입니다. 전체 문서, 단락 또는 짧은 텍스트 스니펫일 수 있습니다.\n\n**예시**: `[\"Guide to canceling subscriptions...\", \"Billing FAQ...\", \"How to upgrade your plan...\"]`\n\n요청당 최대 **1,000**개 문서"
+        },
+        "app.Vm95YWdlQUk.action.cmVyYW5r.option.ZG9jdW1lbnRz.display_name": {
+          "source": "Documents",
+          "message": "문서"
+        },
+        "app.Vm95YWdlQUk.action.cmVyYW5r.option.ZG9jdW1lbnRz.short_desc": {
+          "source": "The list of documents or text snippets to rank",
+          "message": "순위를 매길 문서 또는 텍스트 스니펫 목록"
+        },
+        "app.Vm95YWdlQUk.action.cmVyYW5r.option.bW9kZWw.allowed-value.c3RyaW5nOnJlcmFuay0y.display_name": {
+          "source": "Rerank 2 - Previous Generation",
+          "message": "Rerank 2 - 이전 세대"
+        },
+        "app.Vm95YWdlQUk.action.cmVyYW5r.option.bW9kZWw.allowed-value.c3RyaW5nOnJlcmFuay0yLjU.display_name": {
+          "source": "Rerank 2.5 - Best Quality (most accurate relevance scoring)",
+          "message": "Rerank 2.5 - 최고 품질 (가장 정확한 관련성 점수 부여)"
+        },
+        "app.Vm95YWdlQUk.action.cmVyYW5r.option.bW9kZWw.allowed-value.c3RyaW5nOnJlcmFuay0yLjUtbGl0ZQ.display_name": {
+          "source": "Rerank 2.5 Lite - Fastest (high-volume workloads)",
+          "message": "Rerank 2.5 Lite - 최고 속도 (대용량 워크로드)"
+        },
+        "app.Vm95YWdlQUk.action.cmVyYW5r.option.bW9kZWw.desc": {
+          "source": "Choose which Voyage AI model to use for reranking your documents.\n\n- `rerank-2.5` — best quality, most accurate relevance scoring\n- `rerank-2.5-lite` — faster and cheaper, good for high-volume workloads\n- `rerank-2` — previous generation model",
+          "message": "문서 재순위화에 사용할 Voyage AI 모델을 선택하세요.\n\n- `rerank-2.5` — 최고 품질, 가장 정확한 관련성 점수 부여\n- `rerank-2.5-lite` — 더 빠르고 저렴함, 대용량 워크로드에 적합\n- `rerank-2` — 이전 세대 모델"
+        },
+        "app.Vm95YWdlQUk.action.cmVyYW5r.option.bW9kZWw.display_name": {
+          "source": "Model",
+          "message": "모델"
+        },
+        "app.Vm95YWdlQUk.action.cmVyYW5r.option.bW9kZWw.short_desc": {
+          "source": "The AI model to use for reranking documents",
+          "message": "문서 재순위화에 사용할 AI 모델"
+        },
+        "app.Vm95YWdlQUk.action.cmVyYW5r.option.cXVlcnk.desc": {
+          "source": "The search query or question that documents will be ranked against. Documents most relevant to this query will be ranked highest.\n\n**Example**: `\"How do I cancel my subscription?\"`",
+          "message": "문서의 순위를 매길 기준이 되는 검색 쿼리 또는 질문입니다. 이 쿼리와 가장 관련성이 높은 문서가 가장 높은 순위를 받습니다.\n\n**예시**: `\"How do I cancel my subscription?\"`"
+        },
+        "app.Vm95YWdlQUk.action.cmVyYW5r.option.cXVlcnk.display_name": {
+          "source": "Search Query",
+          "message": "검색 쿼리"
+        },
+        "app.Vm95YWdlQUk.action.cmVyYW5r.option.cXVlcnk.short_desc": {
+          "source": "The search question to rank documents against",
+          "message": "문서 순위 평가 기준이 되는 검색 질문"
+        },
+        "app.Vm95YWdlQUk.action.cmVyYW5r.option.cmV0dXJuX2RvY3VtZW50cw.desc": {
+          "source": "When enabled, each result includes the full text of the document alongside its relevance score. This is convenient when you want to display results directly without looking up documents by their index.\n\nDisabled by default to reduce response size",
+          "message": "활성화하면 각 결과에 관련성 점수와 함께 문서의 전체 텍스트가 포함됩니다. 인덱스로 문서를 조회하지 않고 결과를 바로 표시하고자 할 때 편리합니다.\n\n응답 크기를 줄이기 위해 기본적으로 비활성화되어 있습니다."
+        },
+        "app.Vm95YWdlQUk.action.cmVyYW5r.option.cmV0dXJuX2RvY3VtZW50cw.display_name": {
+          "source": "Include Document Text",
+          "message": "문서 텍스트 포함"
+        },
+        "app.Vm95YWdlQUk.action.cmVyYW5r.option.cmV0dXJuX2RvY3VtZW50cw.short_desc": {
+          "source": "Include the original document text in each result",
+          "message": "각 결과에 원본 문서 텍스트 포함"
+        },
+        "app.Vm95YWdlQUk.action.cmVyYW5r.option.dG9wX2s.desc": {
+          "source": "Limits the results to only the top most-relevant documents.\n\nFor example, set to `5` to get only the 5 most relevant documents. If not specified, all documents are returned sorted by relevance score",
+          "message": "결과를 가장 관련성이 높은 상위 문서로만 제한합니다.\n\n예를 들어, 가장 관련성이 높은 문서 5개만 가져오려면 `5`으로 설정하세요. 지정하지 않으면 모든 문서가 관련성 점수순으로 정렬되어 반환됩니다."
+        },
+        "app.Vm95YWdlQUk.action.cmVyYW5r.option.dG9wX2s.display_name": {
+          "source": "Number of Results",
+          "message": "결과 수"
+        },
+        "app.Vm95YWdlQUk.action.cmVyYW5r.option.dG9wX2s.short_desc": {
+          "source": "How many top results to return",
+          "message": "반환할 상위 결과 수"
+        },
+        "app.Vm95YWdlQUk.action.cmVyYW5r.option.dHJ1bmNhdGlvbg.desc": {
+          "source": "When enabled (the default), text that is too long for the model is automatically shortened to fit. When disabled, an error is returned instead, which is useful if you need to ensure the complete text is processed",
+          "message": "활성화하면(기본값) 모델 한도보다 긴 텍스트가 맞춤 크기로 자동 축소됩니다. 비활성화하면 오류가 반환되며, 이는 전체 텍스트가 온전히 처리되도록 보장해야 할 때 유용합니다."
+        },
+        "app.Vm95YWdlQUk.action.cmVyYW5r.option.dHJ1bmNhdGlvbg.display_name": {
+          "source": "Auto-Truncate Long Text",
+          "message": "긴 텍스트 자동 잘라내기"
+        },
+        "app.Vm95YWdlQUk.action.cmVyYW5r.option.dHJ1bmNhdGlvbg.short_desc": {
+          "source": "Automatically shorten text that exceeds the model's limit",
+          "message": "모델의 한도를 초과하는 텍스트를 자동으로 축소"
+        },
+        "app.Vm95YWdlQUk.action.cmVyYW5r.short_desc": {
+          "source": "Re-sort search results by relevance to a query",
+          "message": "쿼리와의 관련성에 따라 검색 결과 재정렬"
+        },
+        "app.Vm95YWdlQUk.desc": {
+          "source": "Provides access to [Voyage AI](https://voyageai.com/) for converting text into numerical representations (embeddings) and reranking search results by relevance.\n\n**Common use cases**:\n- **Semantic search**: convert product descriptions, support tickets, or documents into embeddings, then find the most similar items by comparing vectors\n- **RAG (Retrieval-Augmented Generation)**: embed your knowledge base so an AI assistant can find relevant context before answering questions\n- **Search result reranking**: take initial search results and re-sort them by true relevance to the user's query for higher-quality results",
+          "message": "텍스트를 수치 표현(임베딩)으로 변환하고 관련성에 따라 검색 결과를 재순위화할 수 있도록 [Voyage AI](https://voyageai.com/)에 대한 액세스를 제공합니다.\n\n**주요 사용 사례**:\n- **시맨틱 검색**: 제품 설명, 지원 티켓 또는 문서를 임베딩으로 변환한 후 벡터를 비교하여 가장 유사한 항목을 찾습니다.\n- **RAG(검색 증강 생성)**: 지식 베이스를 임베딩하여 AI 어시스턴트가 질문에 답변하기 전에 관련 컨텍스트를 찾을 수 있도록 합니다.\n- **검색 결과 재순위화**: 초기 검색 결과를 가져와 사용자의 쿼리와의 실제 관련성에 따라 재정렬함으로써 더 높은 품질의 결과를 얻습니다."
+        },
+        "app.Vm95YWdlQUk.display_name": {
+          "source": "Voyage AI",
+          "message": "Voyage AI"
+        },
+        "app.Vm95YWdlQUk.short_desc": {
+          "source": "Voyage AI text embedding and search reranking services",
+          "message": "Voyage AI 텍스트 임베딩 및 검색 재순위화 서비스"
+        }
+      }
+    }
+  }
+}

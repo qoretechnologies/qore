@@ -31,9 +31,56 @@
 
 #include <qore/Qore.h>
 #include "qore/intern/QoreLoggerBridge.h"
+#include "qore/intern/qore_thread_intern.h"
+
+namespace {
+//! Enters the logger object's program context when the calling thread has none
+/** The bridge is called from native threads that never entered a %Qore program: the async I/O
+    controller's I/O threads log directly from their event loop (ex:
+    AsyncIoControllerPriv::ioThread() reporting an event loop error), and every logged message is
+    rendered with q_sprintf(), which reads parse options from the current program.  With no program
+    context the current program is nullptr, and running the logger's %Qore code from such a thread
+    crashes.
+
+    Entering the context also adds this thread to the program's thread count, so the program cannot
+    complete teardown while its logger is running.
+
+    If the context cannot be entered - the program is already past its teardown gate - the helper is
+    invalid and the caller must drop the message; executing %Qore code in the program is no longer
+    safe at that point.
+
+    A thread that already has a program context is left alone: switching it to the logger's program
+    would change the behavior of ordinary %Qore-thread logging.
+*/
+class LoggerProgramContextHelper {
+public:
+    DLLLOCAL LoggerProgramContextHelper(QoreProgram* pgm) {
+        if (!pgm || getProgram()) {
+            return;
+        }
+        // use a temporary sink: a failure to enter the context is not the caller's exception, and
+        // the caller's sink may already hold an unrelated exception
+        ExceptionSink xsink;
+        pch.set(&xsink, pgm, true);
+        if (xsink) {
+            xsink.clear();
+            valid = false;
+        }
+    }
+
+    DLLLOCAL operator bool() const {
+        return valid;
+    }
+
+private:
+    ProgramThreadCountContextHelper pch;
+    bool valid = true;
+};
+}
 
 QoreLoggerBridge::QoreLoggerBridge(QoreObject* logger_obj)
-    : logger_obj(logger_obj), logArgsMethod(nullptr), isEnabledForMethod(nullptr) {
+    : logger_obj(logger_obj), pgm(logger_obj->getProgram()), logArgsMethod(nullptr),
+        isEnabledForMethod(nullptr) {
     assert(logger_obj);
     logger_obj->ref();
     const QoreClass* cls = logger_obj->getClass();
@@ -47,6 +94,10 @@ QoreLoggerBridge::~QoreLoggerBridge() {
 void QoreLoggerBridge::logArgs(int level, const QoreStringNode* msg,
         const QoreListNode* args, ExceptionSink* xsink) {
     if (!logArgsMethod) {
+        return;
+    }
+    LoggerProgramContextHelper pch(pgm);
+    if (!pch) {
         return;
     }
     ReferenceHolder<QoreListNode> call_args(new QoreListNode(autoTypeInfo), xsink);
@@ -66,6 +117,10 @@ bool QoreLoggerBridge::isEnabledFor(int level) const {
     if (!isEnabledForMethod) {
         return false;
     }
+    LoggerProgramContextHelper pch(pgm);
+    if (!pch) {
+        return false;
+    }
     ExceptionSink xsink;
     ReferenceHolder<QoreListNode> call_args(new QoreListNode(autoTypeInfo), &xsink);
     call_args->push(level, &xsink);
@@ -78,6 +133,11 @@ bool QoreLoggerBridge::isEnabledFor(int level) const {
 
 void QoreLoggerBridge::deref(ExceptionSink* xsink) {
     if (ROdereference()) {
+        // releasing the last reference runs the logger object's destructor, which is Qore code, and
+        // this can happen on an I/O thread (AsyncIoControllerPriv::log() derefs its snapshot of the
+        // logger there).  Unlike a log call this cannot be skipped when the context cannot be
+        // entered: the reference must be released either way
+        LoggerProgramContextHelper pch(pgm);
         logger_obj->deref(xsink);
         logger_obj = nullptr;
         delete this;

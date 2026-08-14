@@ -1,0 +1,21 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "ko": {
+      "messages": {
+        "app.U25vd2ZsYWtl.desc": {
+          "source": "Create and manage connections to a Snowflake cloud data warehouse",
+          "message": "Snowflake 클라우드 데이터 웨어하우스에 대한 연결 생성 및 관리"
+        },
+        "app.U25vd2ZsYWtl.display_name": {
+          "source": "Snowflake",
+          "message": "Snowflake"
+        },
+        "app.U25vd2ZsYWtl.short_desc": {
+          "source": "Snowflake cloud data warehouse",
+          "message": "Snowflake 클라우드 데이터 웨어하우스"
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,1177 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "es": {
+      "messages": {
+        "app.R2VtaW5p.action.Y291bnQtdG9rZW5z.desc": {
+          "source": "Count the number of tokens that a model would use to process the given content. Use the `prompt` field for simple text, or `contents` for multi-turn input",
+          "message": "Cuenta la cantidad de tokens que un modelo utilizaría para procesar el contenido proporcionado. Usa el campo `prompt` para texto simple, o `contents` para entradas multiturno"
+        },
+        "app.R2VtaW5p.action.Y291bnQtdG9rZW5z.display_name": {
+          "source": "Count Tokens",
+          "message": "Contar tokens"
+        },
+        "app.R2VtaW5p.action.Y291bnQtdG9rZW5z.option.Y29udGVudHM.desc": {
+          "source": "The content to count tokens for. For simple text, use the `prompt` field instead",
+          "message": "El contenido para el cual contar tokens. Para texto simple, usa el campo `prompt` en su lugar"
+        },
+        "app.R2VtaW5p.action.Y291bnQtdG9rZW5z.option.Y29udGVudHM.display_name": {
+          "source": "Contents",
+          "message": "Contenidos"
+        },
+        "app.R2VtaW5p.action.Y291bnQtdG9rZW5z.option.Y29udGVudHM.short_desc": {
+          "source": "The content to count tokens for",
+          "message": "El contenido para el cual contar tokens"
+        },
+        "app.R2VtaW5p.action.Y291bnQtdG9rZW5z.option.bW9kZWw.desc": {
+          "source": "The model name to use for token counting",
+          "message": "El nombre del modelo a utilizar para el conteo de tokens"
+        },
+        "app.R2VtaW5p.action.Y291bnQtdG9rZW5z.option.bW9kZWw.display_name": {
+          "source": "Model",
+          "message": "Modelo"
+        },
+        "app.R2VtaW5p.action.Y291bnQtdG9rZW5z.option.bW9kZWw.short_desc": {
+          "source": "The model to use for token counting",
+          "message": "El modelo a utilizar para el conteo de tokens"
+        },
+        "app.R2VtaW5p.action.Y291bnQtdG9rZW5z.option.cHJvbXB0.desc": {
+          "source": "A simple text string to count tokens for. The provider automatically wraps this into the `contents` message format. Use `contents` instead for multi-turn or multimodal input",
+          "message": "Una cadena de texto simple para la cual contar tokens. El proveedor la envuelve automáticamente en el formato de mensaje `contents`. Usa `contents` en su lugar para entradas multiturno o multimodales"
+        },
+        "app.R2VtaW5p.action.Y291bnQtdG9rZW5z.option.cHJvbXB0.display_name": {
+          "source": "Prompt",
+          "message": "Prompt"
+        },
+        "app.R2VtaW5p.action.Y291bnQtdG9rZW5z.option.cHJvbXB0.short_desc": {
+          "source": "Simple text to count tokens for",
+          "message": "Texto simple para el cual contar tokens"
+        },
+        "app.R2VtaW5p.action.Y291bnQtdG9rZW5z.short_desc": {
+          "source": "Count the number of tokens in the given content",
+          "message": "Contar la cantidad de tokens en el contenido proporcionado"
+        },
+        "app.R2VtaW5p.action.Y3JlYXRlLWNhY2hlZC1jb250ZW50.desc": {
+          "source": "Create cached content that can be reused across multiple generation requests to reduce latency and cost. Use the `prompt` field for simple text, or `contents` for multi-turn or multimodal content",
+          "message": "Crea contenido en caché que se puede reutilizar en múltiples solicitudes de generación para reducir la latencia y el costo. Usa el campo `prompt` para texto simple, o `contents` para contenido multiturno o multimodal"
+        },
+        "app.R2VtaW5p.action.Y3JlYXRlLWNhY2hlZC1jb250ZW50.display_name": {
+          "source": "Create Cached Content",
+          "message": "Crear contenido en caché"
+        },
+        "app.R2VtaW5p.action.Y3JlYXRlLWNhY2hlZC1jb250ZW50.option.Y29udGVudHM.desc": {
+          "source": "The content to cache for future use. For simple text, use the `prompt` field instead",
+          "message": "El contenido a almacenar en caché para uso futuro. Para texto simple, usa el campo `prompt` en su lugar"
+        },
+        "app.R2VtaW5p.action.Y3JlYXRlLWNhY2hlZC1jb250ZW50.option.Y29udGVudHM.display_name": {
+          "source": "Contents",
+          "message": "Contenidos"
+        },
+        "app.R2VtaW5p.action.Y3JlYXRlLWNhY2hlZC1jb250ZW50.option.Y29udGVudHM.short_desc": {
+          "source": "The content to cache",
+          "message": "El contenido a almacenar en caché"
+        },
+        "app.R2VtaW5p.action.Y3JlYXRlLWNhY2hlZC1jb250ZW50.option.ZGlzcGxheU5hbWU.desc": {
+          "source": "Optional human-readable display name",
+          "message": "Nombre para mostrar legible por humanos opcional"
+        },
+        "app.R2VtaW5p.action.Y3JlYXRlLWNhY2hlZC1jb250ZW50.option.ZGlzcGxheU5hbWU.display_name": {
+          "source": "Display Name",
+          "message": "Nombre para mostrar"
+        },
+        "app.R2VtaW5p.action.Y3JlYXRlLWNhY2hlZC1jb250ZW50.option.ZGlzcGxheU5hbWU.short_desc": {
+          "source": "Display name for the cached content",
+          "message": "Nombre para mostrar del contenido en caché"
+        },
+        "app.R2VtaW5p.action.Y3JlYXRlLWNhY2hlZC1jb250ZW50.option.ZXhwaXJlVGltZQ.desc": {
+          "source": "Timestamp in UTC when the cached content should expire (RFC 3339 format)",
+          "message": "Marca de tiempo en UTC cuando el contenido en caché debe expirar (formato RFC 3339)"
+        },
+        "app.R2VtaW5p.action.Y3JlYXRlLWNhY2hlZC1jb250ZW50.option.ZXhwaXJlVGltZQ.display_name": {
+          "source": "Expire Time",
+          "message": "Hora de expiración"
+        },
+        "app.R2VtaW5p.action.Y3JlYXRlLWNhY2hlZC1jb250ZW50.option.ZXhwaXJlVGltZQ.short_desc": {
+          "source": "Expiration timestamp",
+          "message": "Marca de tiempo de expiración"
+        },
+        "app.R2VtaW5p.action.Y3JlYXRlLWNhY2hlZC1jb250ZW50.option.bW9kZWw.desc": {
+          "source": "The name of the model to use for cached content (e.g., `gemini-2.5-flash`)",
+          "message": "El nombre del modelo a utilizar para el contenido en caché (por ejemplo, `gemini-2.5-flash`)"
+        },
+        "app.R2VtaW5p.action.Y3JlYXRlLWNhY2hlZC1jb250ZW50.option.bW9kZWw.display_name": {
+          "source": "Model",
+          "message": "Modelo"
+        },
+        "app.R2VtaW5p.action.Y3JlYXRlLWNhY2hlZC1jb250ZW50.option.bW9kZWw.short_desc": {
+          "source": "The model to use",
+          "message": "El modelo a utilizar"
+        },
+        "app.R2VtaW5p.action.Y3JlYXRlLWNhY2hlZC1jb250ZW50.option.c3lzdGVtSW5zdHJ1Y3Rpb24.desc": {
+          "source": "Optional system instruction text to include in the cache",
+          "message": "Texto de instrucción del sistema opcional para incluir en la caché"
+        },
+        "app.R2VtaW5p.action.Y3JlYXRlLWNhY2hlZC1jb250ZW50.option.c3lzdGVtSW5zdHJ1Y3Rpb24.display_name": {
+          "source": "System Instruction",
+          "message": "Instrucción del sistema"
+        },
+        "app.R2VtaW5p.action.Y3JlYXRlLWNhY2hlZC1jb250ZW50.option.c3lzdGVtSW5zdHJ1Y3Rpb24.short_desc": {
+          "source": "System instruction to cache",
+          "message": "Instrucción del sistema para almacenar en caché"
+        },
+        "app.R2VtaW5p.action.Y3JlYXRlLWNhY2hlZC1jb250ZW50.option.cHJvbXB0.desc": {
+          "source": "A simple text string to cache for reuse across multiple requests. The provider automatically wraps this into the `contents` message format. Use `contents` instead for multi-turn or multimodal content",
+          "message": "Una cadena de texto simple para almacenar en caché y reutilizar en múltiples solicitudes. El proveedor la envuelve automáticamente en el formato de mensaje `contents`. Utilice `contents` en su lugar para contenido multironda o multimodal"
+        },
+        "app.R2VtaW5p.action.Y3JlYXRlLWNhY2hlZC1jb250ZW50.option.cHJvbXB0.display_name": {
+          "source": "Prompt",
+          "message": "Prompt"
+        },
+        "app.R2VtaW5p.action.Y3JlYXRlLWNhY2hlZC1jb250ZW50.option.cHJvbXB0.short_desc": {
+          "source": "Simple text content to cache",
+          "message": "Contenido de texto simple para almacenar en caché"
+        },
+        "app.R2VtaW5p.action.Y3JlYXRlLWNhY2hlZC1jb250ZW50.option.dHRs.desc": {
+          "source": "Time-to-live for the cached content (e.g., `3600s` for one hour)",
+          "message": "Tiempo de vida (TTL) para el contenido en caché (p. ej., `3600s` para una hora)"
+        },
+        "app.R2VtaW5p.action.Y3JlYXRlLWNhY2hlZC1jb250ZW50.option.dHRs.display_name": {
+          "source": "TTL",
+          "message": "TTL"
+        },
+        "app.R2VtaW5p.action.Y3JlYXRlLWNhY2hlZC1jb250ZW50.option.dHRs.short_desc": {
+          "source": "Time-to-live duration",
+          "message": "Duración del tiempo de vida (TTL)"
+        },
+        "app.R2VtaW5p.action.Y3JlYXRlLWNhY2hlZC1jb250ZW50.short_desc": {
+          "source": "Create cached content for reuse across multiple requests",
+          "message": "Crear contenido en caché para reutilizar en múltiples solicitudes"
+        },
+        "app.R2VtaW5p.action.Y3JlYXRlLWZpbGUtc2VhcmNoLXN0b3Jl.desc": {
+          "source": "Create an empty file search store for organizing and searching files",
+          "message": "Crear un almacén de búsqueda de archivos vacío para organizar y buscar archivos"
+        },
+        "app.R2VtaW5p.action.Y3JlYXRlLWZpbGUtc2VhcmNoLXN0b3Jl.display_name": {
+          "source": "Create File Search Store",
+          "message": "Crear almacén de búsqueda de archivos"
+        },
+        "app.R2VtaW5p.action.Y3JlYXRlLWZpbGUtc2VhcmNoLXN0b3Jl.option.ZGlzcGxheU5hbWU.desc": {
+          "source": "The human-readable display name for the new file search store",
+          "message": "El nombre para mostrar legible por humanos para el nuevo almacén de búsqueda de archivos"
+        },
+        "app.R2VtaW5p.action.Y3JlYXRlLWZpbGUtc2VhcmNoLXN0b3Jl.option.ZGlzcGxheU5hbWU.display_name": {
+          "source": "Display Name",
+          "message": "Nombre para mostrar"
+        },
+        "app.R2VtaW5p.action.Y3JlYXRlLWZpbGUtc2VhcmNoLXN0b3Jl.option.ZGlzcGxheU5hbWU.short_desc": {
+          "source": "Display name for the store",
+          "message": "Nombre para mostrar del almacén"
+        },
+        "app.R2VtaW5p.action.Y3JlYXRlLWZpbGUtc2VhcmNoLXN0b3Jl.short_desc": {
+          "source": "Create an empty file search store",
+          "message": "Crear un almacén de búsqueda de archivos vacío"
+        },
+        "app.R2VtaW5p.action.YmF0Y2gtZW1iZWQ.desc": {
+          "source": "Generate embeddings for multiple content items in a single batch request",
+          "message": "Generar incrustaciones para múltiples elementos de contenido en una sola solicitud por lotes"
+        },
+        "app.R2VtaW5p.action.YmF0Y2gtZW1iZWQ.display_name": {
+          "source": "Batch Embed",
+          "message": "Incrustar por lotes"
+        },
+        "app.R2VtaW5p.action.YmF0Y2gtZW1iZWQ.option.bW9kZWw.desc": {
+          "source": "The model name to use for embedding (e.g., `gemini-embedding-001`)",
+          "message": "El nombre del modelo a utilizar para incrustar (p. ej., `gemini-embedding-001`)"
+        },
+        "app.R2VtaW5p.action.YmF0Y2gtZW1iZWQ.option.bW9kZWw.display_name": {
+          "source": "Model",
+          "message": "Modelo"
+        },
+        "app.R2VtaW5p.action.YmF0Y2gtZW1iZWQ.option.bW9kZWw.short_desc": {
+          "source": "The embedding model to use",
+          "message": "El modelo de incrustación a utilizar"
+        },
+        "app.R2VtaW5p.action.YmF0Y2gtZW1iZWQ.option.cmVxdWVzdHM.desc": {
+          "source": "List of individual embed content requests. The `model` field in each request is ignored in favor of the top-level model",
+          "message": "Lista de solicitudes individuales de incrustación de contenido. El campo `model` en cada solicitud se ignora a favor del modelo de nivel superior"
+        },
+        "app.R2VtaW5p.action.YmF0Y2gtZW1iZWQ.option.cmVxdWVzdHM.display_name": {
+          "source": "Requests",
+          "message": "Solicitudes"
+        },
+        "app.R2VtaW5p.action.YmF0Y2gtZW1iZWQ.option.cmVxdWVzdHM.short_desc": {
+          "source": "Embed requests to batch",
+          "message": "Solicitudes de incrustación para procesar por lotes"
+        },
+        "app.R2VtaW5p.action.YmF0Y2gtZW1iZWQ.short_desc": {
+          "source": "Generate embeddings for multiple content items in a single request",
+          "message": "Generar incrustaciones para múltiples elementos de contenido en una sola solicitud"
+        },
+        "app.R2VtaW5p.action.Z2VuZXJhdGUtY29udGVudA.desc": {
+          "source": "Generate content with a Gemini model. Use the `prompt` field for simple text requests, or the `contents` field for multi-turn conversations and multimodal input. Supports system instructions, generation configuration, and safety settings",
+          "message": "Generar contenido con un modelo de Gemini. Utilice el campo `prompt` para solicitudes de texto simples o el campo `contents` para conversaciones multironda y entradas multimodales. Admite instrucciones del sistema, configuración de generación y ajustes de seguridad"
+        },
+        "app.R2VtaW5p.action.Z2VuZXJhdGUtY29udGVudA.display_name": {
+          "source": "Generate Content",
+          "message": "Generar contenido"
+        },
+        "app.R2VtaW5p.action.Z2VuZXJhdGUtY29udGVudA.option.Y29udGVudHM.desc": {
+          "source": "The content of the current conversation with the model. For single-turn queries, this is a single message. For multi-turn queries, this is a repeated field that contains conversation history and the latest request. For simple text prompts, use the `prompt` field instead",
+          "message": "El contenido de la conversación actual con el modelo. Para consultas de una sola ronda, este es un mensaje único. Para consultas multironda, este es un campo repetido que contiene el historial de conversación y la última solicitud. Para instrucciones de texto simples, utilice el campo `prompt` en su lugar"
+        },
+        "app.R2VtaW5p.action.Z2VuZXJhdGUtY29udGVudA.option.Y29udGVudHM.display_name": {
+          "source": "Contents",
+          "message": "Contenidos"
+        },
+        "app.R2VtaW5p.action.Z2VuZXJhdGUtY29udGVudA.option.Y29udGVudHM.short_desc": {
+          "source": "The conversation contents for multi-turn or multimodal input",
+          "message": "El contenido de la conversación para entradas multironda o multimodales"
+        },
+        "app.R2VtaW5p.action.Z2VuZXJhdGUtY29udGVudA.option.Z2VuZXJhdGlvbkNvbmZpZw.desc": {
+          "source": "Configuration options for model generation and outputs",
+          "message": "Opciones de configuración para la generación y salidas del modelo"
+        },
+        "app.R2VtaW5p.action.Z2VuZXJhdGUtY29udGVudA.option.Z2VuZXJhdGlvbkNvbmZpZw.display_name": {
+          "source": "Generation Config",
+          "message": "Configuración de generación"
+        },
+        "app.R2VtaW5p.action.Z2VuZXJhdGUtY29udGVudA.option.Z2VuZXJhdGlvbkNvbmZpZw.short_desc": {
+          "source": "Configuration for generation",
+          "message": "Configuración para la generación"
+        },
+        "app.R2VtaW5p.action.Z2VuZXJhdGUtY29udGVudA.option.ZmlsZVNlYXJjaFN0b3Jl.desc": {
+          "source": "The name of a file search store to use for retrieval-augmented generation (RAG). The model will search the store's documents to ground its response with relevant content",
+          "message": "El nombre de un almacén de búsqueda de archivos que se utilizará para la generación aumentada por recuperación (RAG). El modelo buscará en los documentos del almacén para fundamentar su respuesta con contenido relevante"
+        },
+        "app.R2VtaW5p.action.Z2VuZXJhdGUtY29udGVudA.option.ZmlsZVNlYXJjaFN0b3Jl.display_name": {
+          "source": "File Search Store",
+          "message": "Almacén de búsqueda de archivos"
+        },
+        "app.R2VtaW5p.action.Z2VuZXJhdGUtY29udGVudA.option.ZmlsZVNlYXJjaFN0b3Jl.short_desc": {
+          "source": "File search store for RAG grounding",
+          "message": "Almacén de búsqueda de archivos para fundamentación de RAG"
+        },
+        "app.R2VtaW5p.action.Z2VuZXJhdGUtY29udGVudA.option.bW9kZWw.desc": {
+          "source": "The model name to use for generation (e.g., `gemini-2.5-flash`)",
+          "message": "El nombre del modelo que se utilizará para la generación (p. ej., `gemini-2.5-flash`)"
+        },
+        "app.R2VtaW5p.action.Z2VuZXJhdGUtY29udGVudA.option.bW9kZWw.display_name": {
+          "source": "Model",
+          "message": "Modelo"
+        },
+        "app.R2VtaW5p.action.Z2VuZXJhdGUtY29udGVudA.option.bW9kZWw.short_desc": {
+          "source": "The model to use for generation",
+          "message": "El modelo a utilizar para la generación"
+        },
+        "app.R2VtaW5p.action.Z2VuZXJhdGUtY29udGVudA.option.c2FmZXR5U2V0dGluZ3M.desc": {
+          "source": "A list of unique safety settings for blocking unsafe content",
+          "message": "Una lista de ajustes de seguridad únicos para bloquear contenido no seguro"
+        },
+        "app.R2VtaW5p.action.Z2VuZXJhdGUtY29udGVudA.option.c2FmZXR5U2V0dGluZ3M.display_name": {
+          "source": "Safety Settings",
+          "message": "Ajustes de seguridad"
+        },
+        "app.R2VtaW5p.action.Z2VuZXJhdGUtY29udGVudA.option.c2FmZXR5U2V0dGluZ3M.short_desc": {
+          "source": "Safety settings for content filtering",
+          "message": "Ajustes de seguridad para el filtrado de contenido"
+        },
+        "app.R2VtaW5p.action.Z2VuZXJhdGUtY29udGVudA.option.c3lzdGVtSW5zdHJ1Y3Rpb24.desc": {
+          "source": "Optional system instruction text that sets the behavior and context for the model. For example: `You are a helpful customer support agent for TechStore`",
+          "message": "Texto opcional de instrucción del sistema que establece el comportamiento y el contexto para el modelo. Por ejemplo: `You are a helpful customer support agent for TechStore`"
+        },
+        "app.R2VtaW5p.action.Z2VuZXJhdGUtY29udGVudA.option.c3lzdGVtSW5zdHJ1Y3Rpb24.display_name": {
+          "source": "System Instruction",
+          "message": "Instrucción del sistema"
+        },
+        "app.R2VtaW5p.action.Z2VuZXJhdGUtY29udGVudA.option.c3lzdGVtSW5zdHJ1Y3Rpb24.short_desc": {
+          "source": "System instruction for the model",
+          "message": "Instrucción del sistema para el modelo"
+        },
+        "app.R2VtaW5p.action.Z2VuZXJhdGUtY29udGVudA.option.cHJvbXB0.desc": {
+          "source": "A simple text prompt for single-turn generation. The provider automatically wraps this into the `contents` message format. Use this for simple requests; use `contents` instead for multi-turn conversations or multimodal input",
+          "message": "Una instrucción de texto simple para la generación de una sola ronda. El proveedor la envuelve automáticamente en el formato de mensaje `contents`. Utilice esto para solicitudes simples; utilice `contents` en su lugar para conversaciones multironda o entradas multimodales"
+        },
+        "app.R2VtaW5p.action.Z2VuZXJhdGUtY29udGVudA.option.cHJvbXB0.display_name": {
+          "source": "Prompt",
+          "message": "Prompt"
+        },
+        "app.R2VtaW5p.action.Z2VuZXJhdGUtY29udGVudA.option.cHJvbXB0.short_desc": {
+          "source": "Simple text prompt for single-turn generation",
+          "message": "Instrucción de texto simple para generación de una sola ronda"
+        },
+        "app.R2VtaW5p.action.Z2VuZXJhdGUtY29udGVudA.short_desc": {
+          "source": "Generate content with a Gemini model",
+          "message": "Generar contenido con un modelo de Gemini"
+        },
+        "app.R2VtaW5p.action.ZGVsZXRlLWNhY2hlZC1jb250ZW50.desc": {
+          "source": "Delete cached content that is no longer needed",
+          "message": "Eliminar contenido en caché que ya no se necesita"
+        },
+        "app.R2VtaW5p.action.ZGVsZXRlLWNhY2hlZC1jb250ZW50.display_name": {
+          "source": "Delete Cached Content",
+          "message": "Eliminar contenido en caché"
+        },
+        "app.R2VtaW5p.action.ZGVsZXRlLWNhY2hlZC1jb250ZW50.option.Y2FjaGVkQ29udGVudA.desc": {
+          "source": "The resource name of the cached content to delete",
+          "message": "El nombre de recurso del contenido en caché que se eliminará"
+        },
+        "app.R2VtaW5p.action.ZGVsZXRlLWNhY2hlZC1jb250ZW50.option.Y2FjaGVkQ29udGVudA.display_name": {
+          "source": "Cached Content",
+          "message": "Contenido en caché"
+        },
+        "app.R2VtaW5p.action.ZGVsZXRlLWNhY2hlZC1jb250ZW50.option.Y2FjaGVkQ29udGVudA.short_desc": {
+          "source": "The cached content to delete",
+          "message": "El contenido en caché a eliminar"
+        },
+        "app.R2VtaW5p.action.ZGVsZXRlLWNhY2hlZC1jb250ZW50.short_desc": {
+          "source": "Delete cached content",
+          "message": "Eliminar contenido en caché"
+        },
+        "app.R2VtaW5p.action.ZGVsZXRlLWZpbGU.desc": {
+          "source": "Delete a file stored on Google Gemini",
+          "message": "Eliminar un archivo almacenado en Google Gemini"
+        },
+        "app.R2VtaW5p.action.ZGVsZXRlLWZpbGU.display_name": {
+          "source": "Delete File",
+          "message": "Eliminar archivo"
+        },
+        "app.R2VtaW5p.action.ZGVsZXRlLWZpbGU.option.ZmlsZU5hbWU.desc": {
+          "source": "The resource name of the file to delete (e.g., `files/abc-123`)",
+          "message": "El nombre de recurso del archivo a eliminar (p. ej., `files/abc-123`)"
+        },
+        "app.R2VtaW5p.action.ZGVsZXRlLWZpbGU.option.ZmlsZU5hbWU.display_name": {
+          "source": "File",
+          "message": "Archivo"
+        },
+        "app.R2VtaW5p.action.ZGVsZXRlLWZpbGU.option.ZmlsZU5hbWU.short_desc": {
+          "source": "The file to delete",
+          "message": "El archivo que se va a eliminar"
+        },
+        "app.R2VtaW5p.action.ZGVsZXRlLWZpbGU.short_desc": {
+          "source": "Delete a file stored on Google Gemini",
+          "message": "Eliminar un archivo almacenado en Google Gemini"
+        },
+        "app.R2VtaW5p.action.ZGVsZXRlLWZpbGUtc2VhcmNoLXN0b3Jl.desc": {
+          "source": "Delete a file search store and its contents",
+          "message": "Eliminar un almacén de búsqueda de archivos y su contenido"
+        },
+        "app.R2VtaW5p.action.ZGVsZXRlLWZpbGUtc2VhcmNoLXN0b3Jl.display_name": {
+          "source": "Delete File Search Store",
+          "message": "Eliminar almacén de búsqueda de archivos"
+        },
+        "app.R2VtaW5p.action.ZGVsZXRlLWZpbGUtc2VhcmNoLXN0b3Jl.option.ZmlsZVNlYXJjaFN0b3Jl.desc": {
+          "source": "The resource name of the file search store to delete",
+          "message": "El nombre de recurso del almacén de búsqueda de archivos a eliminar"
+        },
+        "app.R2VtaW5p.action.ZGVsZXRlLWZpbGUtc2VhcmNoLXN0b3Jl.option.ZmlsZVNlYXJjaFN0b3Jl.display_name": {
+          "source": "File Search Store",
+          "message": "Almacén de búsqueda de archivos"
+        },
+        "app.R2VtaW5p.action.ZGVsZXRlLWZpbGUtc2VhcmNoLXN0b3Jl.option.ZmlsZVNlYXJjaFN0b3Jl.short_desc": {
+          "source": "The file search store to delete",
+          "message": "El almacén de búsqueda de archivos a eliminar"
+        },
+        "app.R2VtaW5p.action.ZGVsZXRlLWZpbGUtc2VhcmNoLXN0b3Jl.short_desc": {
+          "source": "Delete a file search store",
+          "message": "Eliminar un almacén de búsqueda de archivos"
+        },
+        "app.R2VtaW5p.action.ZW1iZWQtY29udGVudA.desc": {
+          "source": "Generate an embedding vector for the given content using a Gemini embedding model. Use the `text` field for simple text input, or `content` for multimodal input",
+          "message": "Generar un vector de incrustación para el contenido dado utilizando un modelo de incrustación de Gemini. Utilice el campo `text` para entradas de texto simples o `content` para entradas multimodales"
+        },
+        "app.R2VtaW5p.action.ZW1iZWQtY29udGVudA.display_name": {
+          "source": "Embed Content",
+          "message": "Incrustar contenido"
+        },
+        "app.R2VtaW5p.action.ZW1iZWQtY29udGVudA.option.Y29udGVudA.desc": {
+          "source": "The content to embed. Only the `parts.text` fields will be counted. For simple text, use the `text` field instead",
+          "message": "El contenido a incrustar. Solo se contarán los campos `parts.text`. Para texto simple, utilice el campo `text` en su lugar"
+        },
+        "app.R2VtaW5p.action.ZW1iZWQtY29udGVudA.option.Y29udGVudA.display_name": {
+          "source": "Content",
+          "message": "Contenido"
+        },
+        "app.R2VtaW5p.action.ZW1iZWQtY29udGVudA.option.Y29udGVudA.short_desc": {
+          "source": "The content to embed",
+          "message": "El contenido a incrustar"
+        },
+        "app.R2VtaW5p.action.ZW1iZWQtY29udGVudA.option.b3V0cHV0RGltZW5zaW9uYWxpdHk.desc": {
+          "source": "Optional reduced dimension for the output embedding. If set, excessive values in the output embedding are truncated from the end",
+          "message": "Dimensión reducida opcional para la incrustación de salida. Si se establece, los valores excesivos en la incrustación de salida se truncan desde el final"
+        },
+        "app.R2VtaW5p.action.ZW1iZWQtY29udGVudA.option.b3V0cHV0RGltZW5zaW9uYWxpdHk.display_name": {
+          "source": "Output Dimensionality",
+          "message": "Dimensionalidad de salida"
+        },
+        "app.R2VtaW5p.action.ZW1iZWQtY29udGVudA.option.b3V0cHV0RGltZW5zaW9uYWxpdHk.short_desc": {
+          "source": "Optional reduced dimension for the output embedding",
+          "message": "Dimensión reducida opcional para la incrustación de salida"
+        },
+        "app.R2VtaW5p.action.ZW1iZWQtY29udGVudA.option.bW9kZWw.desc": {
+          "source": "The model name to use for embedding (e.g., `gemini-embedding-001`). Required for standalone requests; ignored in batch requests where the top-level model is used",
+          "message": "El nombre del modelo a utilizar para incrustar (p. ej., `gemini-embedding-001`). Requerido para solicitudes independientes; se ignora en solicitudes por lotes donde se utiliza el modelo de nivel superior"
+        },
+        "app.R2VtaW5p.action.ZW1iZWQtY29udGVudA.option.bW9kZWw.display_name": {
+          "source": "Model",
+          "message": "Modelo"
+        },
+        "app.R2VtaW5p.action.ZW1iZWQtY29udGVudA.option.bW9kZWw.short_desc": {
+          "source": "The embedding model to use",
+          "message": "El modelo de incrustación a utilizar"
+        },
+        "app.R2VtaW5p.action.ZW1iZWQtY29udGVudA.option.dGFza1R5cGU.allowed-value.c3RyaW5nOkNMQVNTSUZJQ0FUSU9O.desc": {
+          "source": "Specifies that the given text will be classified",
+          "message": "Especifica que el texto proporcionado se clasificará"
+        },
+        "app.R2VtaW5p.action.ZW1iZWQtY29udGVudA.option.dGFza1R5cGU.allowed-value.c3RyaW5nOkNMQVNTSUZJQ0FUSU9O.display_name": {
+          "source": "Classification",
+          "message": "Clasificación"
+        },
+        "app.R2VtaW5p.action.ZW1iZWQtY29udGVudA.option.dGFza1R5cGU.allowed-value.c3RyaW5nOkNMVVNURVJJTkc.desc": {
+          "source": "Specifies that the embeddings will be used for clustering",
+          "message": "Especifica que las incrustaciones se utilizarán para agrupamiento (clustering)"
+        },
+        "app.R2VtaW5p.action.ZW1iZWQtY29udGVudA.option.dGFza1R5cGU.allowed-value.c3RyaW5nOkNMVVNURVJJTkc.display_name": {
+          "source": "Clustering",
+          "message": "Clustering"
+        },
+        "app.R2VtaW5p.action.ZW1iZWQtY29udGVudA.option.dGFza1R5cGU.allowed-value.c3RyaW5nOlJFVFJJRVZBTF9ET0NVTUVOVA.desc": {
+          "source": "Specifies the given text is a document from the corpus being searched",
+          "message": "Especifica que el texto proporcionado es un documento del corpus que se está buscando"
+        },
+        "app.R2VtaW5p.action.ZW1iZWQtY29udGVudA.option.dGFza1R5cGU.allowed-value.c3RyaW5nOlJFVFJJRVZBTF9ET0NVTUVOVA.display_name": {
+          "source": "Retrieval Document",
+          "message": "Documento de recuperación"
+        },
+        "app.R2VtaW5p.action.ZW1iZWQtY29udGVudA.option.dGFza1R5cGU.allowed-value.c3RyaW5nOlJFVFJJRVZBTF9RVUVSWQ.desc": {
+          "source": "Specifies the given text is a query in a search/retrieval setting",
+          "message": "Especifica que el texto proporcionado es una consulta en un contexto de búsqueda/recuperación"
+        },
+        "app.R2VtaW5p.action.ZW1iZWQtY29udGVudA.option.dGFza1R5cGU.allowed-value.c3RyaW5nOlJFVFJJRVZBTF9RVUVSWQ.display_name": {
+          "source": "Retrieval Query",
+          "message": "Consulta de recuperación"
+        },
+        "app.R2VtaW5p.action.ZW1iZWQtY29udGVudA.option.dGFza1R5cGU.allowed-value.c3RyaW5nOlNFTUFOVElDX1NJTUlMQVJJVFk.desc": {
+          "source": "Specifies the given text will be used for semantic text similarity",
+          "message": "Especifica que el texto proporcionado se utilizará para la similitud semántica de texto"
+        },
+        "app.R2VtaW5p.action.ZW1iZWQtY29udGVudA.option.dGFza1R5cGU.allowed-value.c3RyaW5nOlNFTUFOVElDX1NJTUlMQVJJVFk.display_name": {
+          "source": "Semantic Similarity",
+          "message": "Similitud semántica"
+        },
+        "app.R2VtaW5p.action.ZW1iZWQtY29udGVudA.option.dGFza1R5cGU.desc": {
+          "source": "Optional task type for which the embeddings will be used",
+          "message": "Tipo de tarea opcional para la que se utilizarán los embeddings"
+        },
+        "app.R2VtaW5p.action.ZW1iZWQtY29udGVudA.option.dGFza1R5cGU.display_name": {
+          "source": "Task Type",
+          "message": "Tipo de tarea"
+        },
+        "app.R2VtaW5p.action.ZW1iZWQtY29udGVudA.option.dGFza1R5cGU.short_desc": {
+          "source": "The intended task type for the embedding",
+          "message": "El tipo de tarea previsto para el embedding"
+        },
+        "app.R2VtaW5p.action.ZW1iZWQtY29udGVudA.option.dGV4dA.desc": {
+          "source": "A simple text string to generate an embedding for. The provider automatically wraps this into the `content` message format. Use `content` instead for multimodal input",
+          "message": "Una cadena de texto simple para la cual generar un embedding. El proveedor la envuelve automáticamente en el formato de mensaje `content`. Utilice `content` en su lugar para entradas multimodales"
+        },
+        "app.R2VtaW5p.action.ZW1iZWQtY29udGVudA.option.dGV4dA.display_name": {
+          "source": "Text",
+          "message": "Texto"
+        },
+        "app.R2VtaW5p.action.ZW1iZWQtY29udGVudA.option.dGV4dA.short_desc": {
+          "source": "Simple text to embed",
+          "message": "Texto simple para generar embedding"
+        },
+        "app.R2VtaW5p.action.ZW1iZWQtY29udGVudA.option.dGl0bGU.desc": {
+          "source": "An optional title for the text. Only applicable when `taskType` is `RETRIEVAL_DOCUMENT`",
+          "message": "Un título opcional para el texto. Solo aplicable cuando `taskType` es `RETRIEVAL_DOCUMENT`"
+        },
+        "app.R2VtaW5p.action.ZW1iZWQtY29udGVudA.option.dGl0bGU.display_name": {
+          "source": "Title",
+          "message": "Título"
+        },
+        "app.R2VtaW5p.action.ZW1iZWQtY29udGVudA.option.dGl0bGU.short_desc": {
+          "source": "An optional title for the text",
+          "message": "Un título opcional para el texto"
+        },
+        "app.R2VtaW5p.action.ZW1iZWQtY29udGVudA.short_desc": {
+          "source": "Generate an embedding vector for the given content",
+          "message": "Generar un vector de embedding para el contenido proporcionado"
+        },
+        "app.R2VtaW5p.action.aW1wb3J0LWZpbGUtdG8tc3RvcmU.desc": {
+          "source": "Import an uploaded file into a file search store for retrieval-augmented generation. Select the target store and the file to import from dropdowns",
+          "message": "Importe un archivo subido a un almacén de búsqueda de archivos para la generación aumentada por recuperación (RAG). Seleccione el almacén de destino y el archivo a importar desde los menús desplegables"
+        },
+        "app.R2VtaW5p.action.aW1wb3J0LWZpbGUtdG8tc3RvcmU.display_name": {
+          "source": "Import File to Search Store",
+          "message": "Importar archivo a almacén de búsqueda"
+        },
+        "app.R2VtaW5p.action.aW1wb3J0LWZpbGUtdG8tc3RvcmU.option.ZmlsZQ.desc": {
+          "source": "Upload a new file and import it into the search store in one step. The provider uploads the file first, then imports it. Use this or `fileName` for an already-uploaded file",
+          "message": "Suba un archivo nuevo e impórtelo en el almacén de búsqueda en un solo paso. El proveedor sube primero el archivo y luego lo importa. Use esto o `fileName` para un archivo ya subido"
+        },
+        "app.R2VtaW5p.action.aW1wb3J0LWZpbGUtdG8tc3RvcmU.option.ZmlsZQ.display_name": {
+          "source": "File",
+          "message": "Archivo"
+        },
+        "app.R2VtaW5p.action.aW1wb3J0LWZpbGUtdG8tc3RvcmU.option.ZmlsZQ.short_desc": {
+          "source": "Upload and import a file",
+          "message": "Subir e importar un archivo"
+        },
+        "app.R2VtaW5p.action.aW1wb3J0LWZpbGUtdG8tc3RvcmU.option.ZmlsZU5hbWU.desc": {
+          "source": "The resource name of an already-uploaded file to import (e.g., `files/abc-123`). Use this or `file` to upload a new file directly",
+          "message": "El nombre de recurso de un archivo ya subido para importar (p. ej., `files/abc-123`). Use esto o `file` para subir un archivo nuevo directamente"
+        },
+        "app.R2VtaW5p.action.aW1wb3J0LWZpbGUtdG8tc3RvcmU.option.ZmlsZU5hbWU.display_name": {
+          "source": "Existing File",
+          "message": "Archivo existente"
+        },
+        "app.R2VtaW5p.action.aW1wb3J0LWZpbGUtdG8tc3RvcmU.option.ZmlsZU5hbWU.short_desc": {
+          "source": "An already-uploaded file to import",
+          "message": "Un archivo ya subido para importar"
+        },
+        "app.R2VtaW5p.action.aW1wb3J0LWZpbGUtdG8tc3RvcmU.option.ZmlsZVNlYXJjaFN0b3Jl.desc": {
+          "source": "The name of the file search store to import the file into",
+          "message": "El nombre del almacén de búsqueda de archivos al que se importará el archivo"
+        },
+        "app.R2VtaW5p.action.aW1wb3J0LWZpbGUtdG8tc3RvcmU.option.ZmlsZVNlYXJjaFN0b3Jl.display_name": {
+          "source": "File Search Store",
+          "message": "Almacén de búsqueda de archivos"
+        },
+        "app.R2VtaW5p.action.aW1wb3J0LWZpbGUtdG8tc3RvcmU.option.ZmlsZVNlYXJjaFN0b3Jl.short_desc": {
+          "source": "The file search store to import into",
+          "message": "El almacén de búsqueda de archivos al que importar"
+        },
+        "app.R2VtaW5p.action.aW1wb3J0LWZpbGUtdG8tc3RvcmU.short_desc": {
+          "source": "Import an uploaded file into a file search store",
+          "message": "Importar un archivo subido a un almacén de búsqueda de archivos"
+        },
+        "app.R2VtaW5p.action.bWFrZS1hcGktY2FsbA.desc": {
+          "source": "Make a custom HTTP / REST API call to **Google Gemini** using the configured connection's authentication.\n\nSpecify the HTTP method, the URI path (relative to the connection's API base URL), optional query parameters, headers, and request body. The response is returned as a hash containing the status code, response headers, and response body.\n\nUse this action for endpoints that are not yet exposed as first-class actions on this app.",
+          "message": "Realice una llamada a la API HTTP / REST personalizada a **Google Gemini** utilizando la autenticación de la conexión configurada.\n\nEspecifique el método HTTP, la ruta URI (relativa a la URL base de la API de la conexión), parámetros de consulta opcionales, encabezados y el cuerpo de la solicitud. La respuesta se devuelve como un hash que contiene el código de estado, los encabezados de respuesta y el cuerpo de la respuesta.\n\nUtilice esta acción para endpoints que aún no estén expuestos como acciones nativas en esta aplicación."
+        },
+        "app.R2VtaW5p.action.bWFrZS1hcGktY2FsbA.display_name": {
+          "source": "Make an API call",
+          "message": "Realizar una llamada a la API"
+        },
+        "app.R2VtaW5p.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.desc": {
+          "source": "The request body. The effective type depends on `body_type`: JSON/form/YAML expect a hash, XML/text expect a string, multipart expects a file structure, binary expects raw bytes.",
+          "message": "El cuerpo de la solicitud. El tipo efectivo depende de `body_type`: JSON/formulario/YAML esperan un hash, XML/texto esperan una cadena, multipart espera una estructura de archivo y binario espera bytes sin procesar."
+        },
+        "app.R2VtaW5p.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.display_name": {
+          "source": "Body",
+          "message": "Cuerpo"
+        },
+        "app.R2VtaW5p.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.short_desc": {
+          "source": "The request body",
+          "message": "El cuerpo de la solicitud"
+        },
+        "app.R2VtaW5p.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.desc": {
+          "source": "Upload a file using `multipart/form-data`. The body must be a @ref DataProvider::FileDataType \"FileDataType\" structure (filename + content + mime_type). The framework builds the multipart envelope and sets the boundary header.",
+          "message": "Cargue un archivo usando `multipart/form-data`. El cuerpo debe ser una estructura @ref DataProvider::FileDataType \"FileDataType\" (filename + content + mime_type). El marco construye el sobre multipart y establece el encabezado boundary."
+        },
+        "app.R2VtaW5p.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.display_name": {
+          "source": "Multipart Form",
+          "message": "Formulario multipart"
+        },
+        "app.R2VtaW5p.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.short_desc": {
+          "source": "Upload a file using multipart/form-data",
+          "message": "Cargar un archivo usando multipart/form-data"
+        },
+        "app.R2VtaW5p.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.desc": {
+          "source": "Pass the body to the REST client unchanged; the client decides serialization based on its configured `data` option and the value type",
+          "message": "Pasa el cuerpo al cliente REST sin cambios; el cliente decide la serialización según su opción `data` configurada y el tipo de valor"
+        },
+        "app.R2VtaW5p.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.display_name": {
+          "source": "Auto",
+          "message": "Auto"
+        },
+        "app.R2VtaW5p.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.short_desc": {
+          "source": "Pass-through; use connection serialization and let the REST client decide",
+          "message": "Paso directo; utiliza la serialización de la conexión y deja que el cliente REST decida"
+        },
+        "app.R2VtaW5p.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.desc": {
+          "source": "Send the body as raw bytes. The body must be a binary value. Sets `Content-Type: application/octet-stream` unless overridden by `hdr`.",
+          "message": "Envía el cuerpo como bytes sin procesar. El cuerpo debe ser un valor binario. Establece `Content-Type: application/octet-stream` a menos que `hdr` lo anule."
+        },
+        "app.R2VtaW5p.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.display_name": {
+          "source": "Raw Binary",
+          "message": "Binario sin procesar"
+        },
+        "app.R2VtaW5p.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.short_desc": {
+          "source": "Send body as raw bytes",
+          "message": "Enviar el cuerpo como bytes sin procesar"
+        },
+        "app.R2VtaW5p.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.desc": {
+          "source": "Serialize a hash of form fields as `application/x-www-form-urlencoded`. The body must be a hash whose values are scalars (strings/numbers/booleans).",
+          "message": "Serializa un hash de campos de formulario como `application/x-www-form-urlencoded`. El cuerpo debe ser un hash cuyos valores sean escalares (cadenas/números/booleanos)."
+        },
+        "app.R2VtaW5p.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.display_name": {
+          "source": "Form (URL-encoded)",
+          "message": "Formulario (codificado en URL)"
+        },
+        "app.R2VtaW5p.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.short_desc": {
+          "source": "Serialize body as application/x-www-form-urlencoded form fields",
+          "message": "Serializar el cuerpo como campos de formulario application/x-www-form-urlencoded"
+        },
+        "app.R2VtaW5p.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.desc": {
+          "source": "Serialize the body as JSON; sets `Content-Type: application/json`. The body should be a hash, list, or scalar value.",
+          "message": "Serializa el cuerpo como JSON; establece `Content-Type: application/json`. El cuerpo debe ser un hash, lista o valor escalar."
+        },
+        "app.R2VtaW5p.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.display_name": {
+          "source": "JSON",
+          "message": "JSON"
+        },
+        "app.R2VtaW5p.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.short_desc": {
+          "source": "Serialize body as JSON",
+          "message": "Serializar el cuerpo como JSON"
+        },
+        "app.R2VtaW5p.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.desc": {
+          "source": "Send the body as plain text. The body must be a string. Sets `Content-Type: text/plain`.",
+          "message": "Envía el cuerpo como texto plano. El cuerpo debe ser una cadena. Establece `Content-Type: text/plain`."
+        },
+        "app.R2VtaW5p.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.display_name": {
+          "source": "Plain Text",
+          "message": "Texto plano"
+        },
+        "app.R2VtaW5p.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.short_desc": {
+          "source": "Send body as text/plain",
+          "message": "Enviar el cuerpo como text/plain"
+        },
+        "app.R2VtaW5p.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.desc": {
+          "source": "Send the body as XML. If the body is a hash it is serialized to XML; if it is a string it is sent verbatim. Sets `Content-Type: application/xml`.",
+          "message": "Envía el cuerpo como XML. Si el cuerpo es un hash, se serializa a XML; si es una cadena, se envía textualmente. Establece `Content-Type: application/xml`."
+        },
+        "app.R2VtaW5p.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.display_name": {
+          "source": "XML",
+          "message": "XML"
+        },
+        "app.R2VtaW5p.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.short_desc": {
+          "source": "Send body as XML",
+          "message": "Enviar el cuerpo como XML"
+        },
+        "app.R2VtaW5p.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.desc": {
+          "source": "Send the body as YAML. If the body is a hash it is serialized to YAML; if it is a string it is sent verbatim. Sets `Content-Type: application/x-yaml`.",
+          "message": "Envía el cuerpo como YAML. Si el cuerpo es un hash, se serializa a YAML; si es una cadena, se envía textualmente. Establece `Content-Type: application/x-yaml`."
+        },
+        "app.R2VtaW5p.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.display_name": {
+          "source": "YAML",
+          "message": "YAML"
+        },
+        "app.R2VtaW5p.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.short_desc": {
+          "source": "Send body as YAML",
+          "message": "Enviar el cuerpo como YAML"
+        },
+        "app.R2VtaW5p.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.desc": {
+          "source": "Selects the body serialization mode and the corresponding `Content-Type` header. Changing this field reshapes the `body` editor - selecting JSON exposes a JSON editor, selecting Multipart Form exposes a file picker, and so on.",
+          "message": "Selecciona el modo de serialización del cuerpo y el encabezado `Content-Type` correspondiente. Cambiar este campo modifica la forma del editor `body`: seleccionar JSON expone un editor JSON, seleccionar Formulario multipart expone un selector de archivos, y así sucesivamente."
+        },
+        "app.R2VtaW5p.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.display_name": {
+          "source": "Body Type",
+          "message": "Tipo de cuerpo"
+        },
+        "app.R2VtaW5p.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.short_desc": {
+          "source": "How the body is serialized and what Content-Type is sent",
+          "message": "Cómo se serializa el cuerpo y qué Content-Type se envía"
+        },
+        "app.R2VtaW5p.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.desc": {
+          "source": "If `True`, non-2xx HTTP responses return as the normal response hash (with the actual status code) instead of raising `REST-RESPONSE-ERROR`. Useful for handling 4xx/5xx as data - e.g. checking whether a resource exists. Overrides the connection's `error_passthru` setting for this call only.",
+          "message": "Si es `True`, las respuestas HTTP que no sean 2xx se devuelven como el hash de respuesta normal (con el código de estado real) en lugar de generar `REST-RESPONSE-ERROR`. Útil para manejar 4xx/5xx como datos, por ejemplo, para comprobar si un recurso existe. Anula la configuración `error_passthru` de la conexión solo para esta llamada."
+        },
+        "app.R2VtaW5p.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.display_name": {
+          "source": "Return Errors as Data",
+          "message": "Devolver errores como datos"
+        },
+        "app.R2VtaW5p.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.short_desc": {
+          "source": "Return non-2xx responses normally instead of throwing",
+          "message": "Devolver respuestas que no sean 2xx normalmente en lugar de lanzar una excepción"
+        },
+        "app.R2VtaW5p.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.desc": {
+          "source": "Optional list of HTTP status codes treated as success. If set and the response status is not in this list, the action throws `REST-STATUS-ERROR`. When unset, the REST client's default behavior applies (typically: 2xx is success, non-2xx throws).",
+          "message": "Lista opcional de códigos de estado HTTP tratados como éxito. Si se establece y el estado de la respuesta no está en esta lista, la acción lanza `REST-STATUS-ERROR`. Cuando no se establece, se aplica el comportamiento predeterminado del cliente REST (típicamente: 2xx es éxito, no 2xx lanza una excepción)."
+        },
+        "app.R2VtaW5p.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.display_name": {
+          "source": "Expected Status Codes",
+          "message": "Códigos de estado esperados"
+        },
+        "app.R2VtaW5p.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.short_desc": {
+          "source": "Response status codes treated as success",
+          "message": "Códigos de estado de respuesta tratados como éxito"
+        },
+        "app.R2VtaW5p.action.bWFrZS1hcGktY2FsbA.option.aGRy.desc": {
+          "source": "Hash of custom headers added to the request. These override any default headers set by `body_type` (e.g. supplying `Content-Type` here wins over the body-type default).",
+          "message": "Hash de encabezados personalizados agregados a la solicitud. Estos anulan cualquier encabezado predeterminado establecido por `body_type` (por ejemplo, proporcionar `Content-Type` aquí prevalece sobre el valor predeterminado según el tipo de cuerpo)."
+        },
+        "app.R2VtaW5p.action.bWFrZS1hcGktY2FsbA.option.aGRy.display_name": {
+          "source": "Custom Headers",
+          "message": "Encabezados personalizados"
+        },
+        "app.R2VtaW5p.action.bWFrZS1hcGktY2FsbA.option.aGRy.short_desc": {
+          "source": "Extra request headers",
+          "message": "Encabezados de solicitud adicionales"
+        },
+        "app.R2VtaW5p.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.desc": {
+          "source": "If `True`, the response hash includes a `debug` sub-hash containing the request method/URL/headers (with sensitive values redacted), request and response sizes, and round-trip duration. Useful when investigating slow or failing calls. Off by default to keep responses lean.",
+          "message": "Si es `True`, el hash de respuesta incluye un sub-hash `debug` que contiene el método/URL/encabezados de la solicitud (con valores confidenciales redactados), tamaños de solicitud y respuesta, y la duración del viaje de ida y vuelta. Útil para investigar llamadas lentas o con fallos. Desactivado de forma predeterminada para mantener las respuestas ligeras."
+        },
+        "app.R2VtaW5p.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.display_name": {
+          "source": "Include Debug Info",
+          "message": "Incluir información de depuración"
+        },
+        "app.R2VtaW5p.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.short_desc": {
+          "source": "Include request/timing/size debug info in the response",
+          "message": "Incluir información de depuración de solicitud/tiempo/tamaño en la respuesta"
+        },
+        "app.R2VtaW5p.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.desc": {
+          "source": "HTTP `OPTIONS`",
+          "message": "HTTP `OPTIONS`"
+        },
+        "app.R2VtaW5p.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.display_name": {
+          "source": "OPTIONS",
+          "message": "OPTIONS"
+        },
+        "app.R2VtaW5p.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.short_desc": {
+          "source": "HTTP OPTIONS",
+          "message": "HTTP OPTIONS"
+        },
+        "app.R2VtaW5p.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.desc": {
+          "source": "HTTP `DELETE`",
+          "message": "HTTP `DELETE`"
+        },
+        "app.R2VtaW5p.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.display_name": {
+          "source": "DELETE",
+          "message": "DELETE"
+        },
+        "app.R2VtaW5p.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.short_desc": {
+          "source": "HTTP DELETE",
+          "message": "HTTP DELETE"
+        },
+        "app.R2VtaW5p.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.desc": {
+          "source": "HTTP `GET`",
+          "message": "HTTP `GET`"
+        },
+        "app.R2VtaW5p.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.display_name": {
+          "source": "GET",
+          "message": "GET"
+        },
+        "app.R2VtaW5p.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.short_desc": {
+          "source": "HTTP GET",
+          "message": "HTTP GET"
+        },
+        "app.R2VtaW5p.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.desc": {
+          "source": "HTTP `HEAD`",
+          "message": "HTTP `HEAD`"
+        },
+        "app.R2VtaW5p.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.display_name": {
+          "source": "HEAD",
+          "message": "HEAD"
+        },
+        "app.R2VtaW5p.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.short_desc": {
+          "source": "HTTP HEAD",
+          "message": "HTTP HEAD"
+        },
+        "app.R2VtaW5p.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.desc": {
+          "source": "HTTP `PATCH`",
+          "message": "HTTP `PATCH`"
+        },
+        "app.R2VtaW5p.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.display_name": {
+          "source": "PATCH",
+          "message": "PATCH"
+        },
+        "app.R2VtaW5p.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.short_desc": {
+          "source": "HTTP PATCH",
+          "message": "HTTP PATCH"
+        },
+        "app.R2VtaW5p.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.desc": {
+          "source": "HTTP `POST`",
+          "message": "HTTP `POST`"
+        },
+        "app.R2VtaW5p.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.display_name": {
+          "source": "POST",
+          "message": "POST"
+        },
+        "app.R2VtaW5p.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.short_desc": {
+          "source": "HTTP POST",
+          "message": "HTTP POST"
+        },
+        "app.R2VtaW5p.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.desc": {
+          "source": "HTTP `PUT`",
+          "message": "HTTP `PUT`"
+        },
+        "app.R2VtaW5p.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.display_name": {
+          "source": "PUT",
+          "message": "PUT"
+        },
+        "app.R2VtaW5p.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.short_desc": {
+          "source": "HTTP PUT",
+          "message": "HTTP PUT"
+        },
+        "app.R2VtaW5p.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.desc": {
+          "source": "HTTP `TRACE`",
+          "message": "HTTP `TRACE`"
+        },
+        "app.R2VtaW5p.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.display_name": {
+          "source": "TRACE",
+          "message": "TRACE"
+        },
+        "app.R2VtaW5p.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.short_desc": {
+          "source": "HTTP TRACE",
+          "message": "HTTP TRACE"
+        },
+        "app.R2VtaW5p.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "El método HTTP que se utilizará para la solicitud"
+        },
+        "app.R2VtaW5p.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.display_name": {
+          "source": "HTTP Method",
+          "message": "Método HTTP"
+        },
+        "app.R2VtaW5p.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.short_desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "El método HTTP que se utilizará para la solicitud"
+        },
+        "app.R2VtaW5p.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain `{name}` placeholders that are replaced from `path_vars`. Example: `/users/{id}/comments`.",
+          "message": "La ruta URI relativa a la URL base de la API de la conexión. Puede contener marcadores de posición `{name}` que se reemplazan desde `path_vars`. Ejemplo: `/users/{id}/comments`."
+        },
+        "app.R2VtaW5p.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.display_name": {
+          "source": "URI Path",
+          "message": "Ruta URI"
+        },
+        "app.R2VtaW5p.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.short_desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain '{name}' placeholders that are replaced from 'path_vars'. Example: '/users/{id}/comments'",
+          "message": "La ruta URI relativa a la URL base de la API de la conexión. Puede contener marcadores de posición '{name}' que se reemplazan desde 'path_vars'. Ejemplo: '/users/{id}/comments'"
+        },
+        "app.R2VtaW5p.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.desc": {
+          "source": "Hash of values substituted into `{name}` placeholders in the URI path. Example: with `path = /users/{id}` and `path_vars = {id: 123}` the framework sends `/users/123`. Values are URL-encoded.",
+          "message": "Hash de valores sustituidos en los marcadores de posición `{name}` en la ruta URI. Ejemplo: con `path = /users/{id}` y `path_vars = {id: 123}`, el framework envía `/users/123`. Los valores están codificados en URL."
+        },
+        "app.R2VtaW5p.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.display_name": {
+          "source": "Path Variables",
+          "message": "Variables de ruta"
+        },
+        "app.R2VtaW5p.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.short_desc": {
+          "source": "Values for {name} placeholders in path",
+          "message": "Valores para los marcadores de posición {name} en la ruta"
+        },
+        "app.R2VtaW5p.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.desc": {
+          "source": "Hash of query string parameters to append to the URI path. Values are URL-encoded; list values are joined with `,`.",
+          "message": "Hash de parámetros de cadena de consulta para adjuntar a la ruta URI. Los valores están codificados en URL; los valores de lista se unen con `,`."
+        },
+        "app.R2VtaW5p.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.display_name": {
+          "source": "Query Arguments",
+          "message": "Argumentos de consulta"
+        },
+        "app.R2VtaW5p.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.short_desc": {
+          "source": "Query string parameters",
+          "message": "Parámetros de cadena de consulta"
+        },
+        "app.R2VtaW5p.action.bWFrZS1hcGktY2FsbA.short_desc": {
+          "source": "Make a custom API call to Google Gemini",
+          "message": "Realizar una llamada API personalizada a Google Gemini"
+        },
+        "app.R2VtaW5p.action.c2ltcGxlLWNoYXQ.desc": {
+          "source": "Chat with a Gemini model by sending a single message and receiving a single reply. Simplifies the API by handling message formatting automatically",
+          "message": "Chatee con un modelo de Gemini enviando un solo mensaje y recibiendo una sola respuesta. Simplifica la API gestionando el formato de los mensajes automáticamente"
+        },
+        "app.R2VtaW5p.action.c2ltcGxlLWNoYXQ.display_name": {
+          "source": "Simple Chat",
+          "message": "Chat simple"
+        },
+        "app.R2VtaW5p.action.c2ltcGxlLWNoYXQ.option.Y29udGVudA.desc": {
+          "source": "The text content of the message to send to the model",
+          "message": "El contenido de texto del mensaje a enviar al modelo"
+        },
+        "app.R2VtaW5p.action.c2ltcGxlLWNoYXQ.option.Y29udGVudA.display_name": {
+          "source": "Content",
+          "message": "Contenido"
+        },
+        "app.R2VtaW5p.action.c2ltcGxlLWNoYXQ.option.Y29udGVudA.short_desc": {
+          "source": "The message text",
+          "message": "El texto del mensaje"
+        },
+        "app.R2VtaW5p.action.c2ltcGxlLWNoYXQ.option.bW9kZWw.desc": {
+          "source": "The model name to use for generation (e.g., `gemini-2.5-flash`)",
+          "message": "El nombre del modelo que se utilizará para la generación (p. ej., `gemini-2.5-flash`)"
+        },
+        "app.R2VtaW5p.action.c2ltcGxlLWNoYXQ.option.bW9kZWw.display_name": {
+          "source": "Model",
+          "message": "Modelo"
+        },
+        "app.R2VtaW5p.action.c2ltcGxlLWNoYXQ.option.bW9kZWw.short_desc": {
+          "source": "The model to use for generation",
+          "message": "El modelo a utilizar para la generación"
+        },
+        "app.R2VtaW5p.action.c2ltcGxlLWNoYXQ.option.bWF4T3V0cHV0VG9rZW5z.desc": {
+          "source": "The maximum number of tokens to generate in the response",
+          "message": "El número máximo de tokens a generar en la respuesta"
+        },
+        "app.R2VtaW5p.action.c2ltcGxlLWNoYXQ.option.bWF4T3V0cHV0VG9rZW5z.display_name": {
+          "source": "Max Output Tokens",
+          "message": "Tokens máximos de salida"
+        },
+        "app.R2VtaW5p.action.c2ltcGxlLWNoYXQ.option.bWF4T3V0cHV0VG9rZW5z.short_desc": {
+          "source": "Maximum number of tokens to generate",
+          "message": "Número máximo de tokens a generar"
+        },
+        "app.R2VtaW5p.action.c2ltcGxlLWNoYXQ.option.c3lzdGVtSW5zdHJ1Y3Rpb24.desc": {
+          "source": "Optional system instruction text that sets the behavior and context for the model",
+          "message": "Texto opcional de instrucción del sistema que establece el comportamiento y el contexto para el modelo"
+        },
+        "app.R2VtaW5p.action.c2ltcGxlLWNoYXQ.option.c3lzdGVtSW5zdHJ1Y3Rpb24.display_name": {
+          "source": "System Instruction",
+          "message": "Instrucción del sistema"
+        },
+        "app.R2VtaW5p.action.c2ltcGxlLWNoYXQ.option.c3lzdGVtSW5zdHJ1Y3Rpb24.short_desc": {
+          "source": "System instruction text",
+          "message": "Texto de instrucción del sistema"
+        },
+        "app.R2VtaW5p.action.c2ltcGxlLWNoYXQ.option.cm9sZQ.desc": {
+          "source": "The role of the message author (default: `user`)",
+          "message": "El rol del autor del mensaje (por defecto: `user`)"
+        },
+        "app.R2VtaW5p.action.c2ltcGxlLWNoYXQ.option.cm9sZQ.display_name": {
+          "source": "Role",
+          "message": "Rol"
+        },
+        "app.R2VtaW5p.action.c2ltcGxlLWNoYXQ.option.cm9sZQ.short_desc": {
+          "source": "The role of the message author",
+          "message": "El rol del autor del mensaje"
+        },
+        "app.R2VtaW5p.action.c2ltcGxlLWNoYXQ.option.dG9wSw.desc": {
+          "source": "The maximum number of tokens to consider when sampling",
+          "message": "El número máximo de tokens a considerar durante el muestreo"
+        },
+        "app.R2VtaW5p.action.c2ltcGxlLWNoYXQ.option.dG9wSw.display_name": {
+          "source": "Top K",
+          "message": "Top K"
+        },
+        "app.R2VtaW5p.action.c2ltcGxlLWNoYXQ.option.dG9wSw.short_desc": {
+          "source": "Top-K sampling parameter",
+          "message": "Parámetro de muestreo Top-K"
+        },
+        "app.R2VtaW5p.action.c2ltcGxlLWNoYXQ.option.dG9wUA.desc": {
+          "source": "The maximum cumulative probability of tokens to consider when sampling",
+          "message": "La probabilidad acumulada máxima de tokens a considerar durante el muestreo"
+        },
+        "app.R2VtaW5p.action.c2ltcGxlLWNoYXQ.option.dG9wUA.display_name": {
+          "source": "Top P",
+          "message": "Top P"
+        },
+        "app.R2VtaW5p.action.c2ltcGxlLWNoYXQ.option.dG9wUA.short_desc": {
+          "source": "Nucleus sampling parameter",
+          "message": "Parámetro de muestreo de núcleo"
+        },
+        "app.R2VtaW5p.action.c2ltcGxlLWNoYXQ.option.dGVtcGVyYXR1cmU.desc": {
+          "source": "Controls the randomness of the output. Values range from `0.0` to `2.0`",
+          "message": "Controla la aleatoriedad de la salida. Los valores van de `0.0` a `2.0`"
+        },
+        "app.R2VtaW5p.action.c2ltcGxlLWNoYXQ.option.dGVtcGVyYXR1cmU.display_name": {
+          "source": "Temperature",
+          "message": "Temperatura"
+        },
+        "app.R2VtaW5p.action.c2ltcGxlLWNoYXQ.option.dGVtcGVyYXR1cmU.short_desc": {
+          "source": "Controls randomness in generation",
+          "message": "Controla la aleatoriedad en la generación"
+        },
+        "app.R2VtaW5p.action.c2ltcGxlLWNoYXQ.short_desc": {
+          "source": "Chat with a Gemini model by sending a single message and receiving a single reply",
+          "message": "Chatee con un modelo de Gemini enviando un solo mensaje y recibiendo una sola respuesta"
+        },
+        "app.R2VtaW5p.action.c3RyZWFtLWNvbnRlbnQ.desc": {
+          "source": "Stream content generation from a Gemini model via Server-Sent Events (SSE). Provides incremental responses as the model generates content",
+          "message": "Transmita la generación de contenido desde un modelo de Gemini mediante Server-Sent Events (SSE). Proporciona respuestas incrementales a medida que el modelo genera contenido"
+        },
+        "app.R2VtaW5p.action.c3RyZWFtLWNvbnRlbnQ.display_name": {
+          "source": "Stream Content",
+          "message": "Transmitir contenido"
+        },
+        "app.R2VtaW5p.action.c3RyZWFtLWNvbnRlbnQ.option.Y29udGVudHM.desc": {
+          "source": "The content of the current conversation with the model. For single-turn queries, this is a single message. For multi-turn queries, this is a repeated field that contains conversation history and the latest request. For simple text prompts, use the `prompt` field instead",
+          "message": "El contenido de la conversación actual con el modelo. Para consultas de una sola ronda, este es un mensaje único. Para consultas multironda, este es un campo repetido que contiene el historial de conversación y la última solicitud. Para instrucciones de texto simples, utilice el campo `prompt` en su lugar"
+        },
+        "app.R2VtaW5p.action.c3RyZWFtLWNvbnRlbnQ.option.Y29udGVudHM.display_name": {
+          "source": "Contents",
+          "message": "Contenidos"
+        },
+        "app.R2VtaW5p.action.c3RyZWFtLWNvbnRlbnQ.option.Y29udGVudHM.short_desc": {
+          "source": "The conversation contents for multi-turn or multimodal input",
+          "message": "El contenido de la conversación para entradas multironda o multimodales"
+        },
+        "app.R2VtaW5p.action.c3RyZWFtLWNvbnRlbnQ.option.Z2VuZXJhdGlvbkNvbmZpZw.desc": {
+          "source": "Configuration options for model generation and outputs",
+          "message": "Opciones de configuración para la generación y salidas del modelo"
+        },
+        "app.R2VtaW5p.action.c3RyZWFtLWNvbnRlbnQ.option.Z2VuZXJhdGlvbkNvbmZpZw.display_name": {
+          "source": "Generation Config",
+          "message": "Configuración de generación"
+        },
+        "app.R2VtaW5p.action.c3RyZWFtLWNvbnRlbnQ.option.Z2VuZXJhdGlvbkNvbmZpZw.short_desc": {
+          "source": "Configuration for generation",
+          "message": "Configuración para la generación"
+        },
+        "app.R2VtaW5p.action.c3RyZWFtLWNvbnRlbnQ.option.ZmlsZVNlYXJjaFN0b3Jl.desc": {
+          "source": "The name of a file search store to use for retrieval-augmented generation (RAG). The model will search the store's documents to ground its response with relevant content",
+          "message": "El nombre de un almacén de búsqueda de archivos que se utilizará para la generación aumentada por recuperación (RAG). El modelo buscará en los documentos del almacén para fundamentar su respuesta con contenido relevante"
+        },
+        "app.R2VtaW5p.action.c3RyZWFtLWNvbnRlbnQ.option.ZmlsZVNlYXJjaFN0b3Jl.display_name": {
+          "source": "File Search Store",
+          "message": "Almacén de búsqueda de archivos"
+        },
+        "app.R2VtaW5p.action.c3RyZWFtLWNvbnRlbnQ.option.ZmlsZVNlYXJjaFN0b3Jl.short_desc": {
+          "source": "File search store for RAG grounding",
+          "message": "Almacén de búsqueda de archivos para fundamentación de RAG"
+        },
+        "app.R2VtaW5p.action.c3RyZWFtLWNvbnRlbnQ.option.bW9kZWw.desc": {
+          "source": "The model name to use for generation (e.g., `gemini-2.5-flash`)",
+          "message": "El nombre del modelo que se utilizará para la generación (p. ej., `gemini-2.5-flash`)"
+        },
+        "app.R2VtaW5p.action.c3RyZWFtLWNvbnRlbnQ.option.bW9kZWw.display_name": {
+          "source": "Model",
+          "message": "Modelo"
+        },
+        "app.R2VtaW5p.action.c3RyZWFtLWNvbnRlbnQ.option.bW9kZWw.short_desc": {
+          "source": "The model to use for generation",
+          "message": "El modelo a utilizar para la generación"
+        },
+        "app.R2VtaW5p.action.c3RyZWFtLWNvbnRlbnQ.option.c2FmZXR5U2V0dGluZ3M.desc": {
+          "source": "A list of unique safety settings for blocking unsafe content",
+          "message": "Una lista de ajustes de seguridad únicos para bloquear contenido no seguro"
+        },
+        "app.R2VtaW5p.action.c3RyZWFtLWNvbnRlbnQ.option.c2FmZXR5U2V0dGluZ3M.display_name": {
+          "source": "Safety Settings",
+          "message": "Ajustes de seguridad"
+        },
+        "app.R2VtaW5p.action.c3RyZWFtLWNvbnRlbnQ.option.c2FmZXR5U2V0dGluZ3M.short_desc": {
+          "source": "Safety settings for content filtering",
+          "message": "Ajustes de seguridad para el filtrado de contenido"
+        },
+        "app.R2VtaW5p.action.c3RyZWFtLWNvbnRlbnQ.option.c3lzdGVtSW5zdHJ1Y3Rpb24.desc": {
+          "source": "Optional system instruction text that sets the behavior and context for the model. For example: `You are a helpful customer support agent for TechStore`",
+          "message": "Texto opcional de instrucción del sistema que establece el comportamiento y el contexto para el modelo. Por ejemplo: `You are a helpful customer support agent for TechStore`"
+        },
+        "app.R2VtaW5p.action.c3RyZWFtLWNvbnRlbnQ.option.c3lzdGVtSW5zdHJ1Y3Rpb24.display_name": {
+          "source": "System Instruction",
+          "message": "Instrucción del sistema"
+        },
+        "app.R2VtaW5p.action.c3RyZWFtLWNvbnRlbnQ.option.c3lzdGVtSW5zdHJ1Y3Rpb24.short_desc": {
+          "source": "System instruction for the model",
+          "message": "Instrucción del sistema para el modelo"
+        },
+        "app.R2VtaW5p.action.c3RyZWFtLWNvbnRlbnQ.option.cHJvbXB0.desc": {
+          "source": "A simple text prompt for single-turn generation. The provider automatically wraps this into the `contents` message format. Use this for simple requests; use `contents` instead for multi-turn conversations or multimodal input",
+          "message": "Una instrucción de texto simple para la generación de una sola ronda. El proveedor la envuelve automáticamente en el formato de mensaje `contents`. Utilice esto para solicitudes simples; utilice `contents` en su lugar para conversaciones multironda o entradas multimodales"
+        },
+        "app.R2VtaW5p.action.c3RyZWFtLWNvbnRlbnQ.option.cHJvbXB0.display_name": {
+          "source": "Prompt",
+          "message": "Prompt"
+        },
+        "app.R2VtaW5p.action.c3RyZWFtLWNvbnRlbnQ.option.cHJvbXB0.short_desc": {
+          "source": "Simple text prompt for single-turn generation",
+          "message": "Instrucción de texto simple para generación de una sola ronda"
+        },
+        "app.R2VtaW5p.action.c3RyZWFtLWNvbnRlbnQ.short_desc": {
+          "source": "Stream content generation from a Gemini model via Server-Sent Events",
+          "message": "Transmitir la generación de contenido desde un modelo de Gemini mediante Server-Sent Events"
+        },
+        "app.R2VtaW5p.action.dXBkYXRlLWNhY2hlZC1jb250ZW50.desc": {
+          "source": "Update the expiration time or TTL of existing cached content",
+          "message": "Actualice la hora de expiración o el TTL del contenido en caché existente"
+        },
+        "app.R2VtaW5p.action.dXBkYXRlLWNhY2hlZC1jb250ZW50.display_name": {
+          "source": "Update Cached Content",
+          "message": "Actualizar contenido en caché"
+        },
+        "app.R2VtaW5p.action.dXBkYXRlLWNhY2hlZC1jb250ZW50.option.Y2FjaGVkQ29udGVudA.desc": {
+          "source": "The resource name of the cached content to update",
+          "message": "El nombre de recurso del contenido en caché a actualizar"
+        },
+        "app.R2VtaW5p.action.dXBkYXRlLWNhY2hlZC1jb250ZW50.option.Y2FjaGVkQ29udGVudA.display_name": {
+          "source": "Cached Content",
+          "message": "Contenido en caché"
+        },
+        "app.R2VtaW5p.action.dXBkYXRlLWNhY2hlZC1jb250ZW50.option.Y2FjaGVkQ29udGVudA.short_desc": {
+          "source": "The cached content to update",
+          "message": "El contenido en caché a actualizar"
+        },
+        "app.R2VtaW5p.action.dXBkYXRlLWNhY2hlZC1jb250ZW50.option.ZXhwaXJlVGltZQ.desc": {
+          "source": "New expiration timestamp in UTC (RFC 3339 format)",
+          "message": "Nueva marca de tiempo de expiración en UTC (formato RFC 3339)"
+        },
+        "app.R2VtaW5p.action.dXBkYXRlLWNhY2hlZC1jb250ZW50.option.ZXhwaXJlVGltZQ.display_name": {
+          "source": "Expire Time",
+          "message": "Hora de expiración"
+        },
+        "app.R2VtaW5p.action.dXBkYXRlLWNhY2hlZC1jb250ZW50.option.ZXhwaXJlVGltZQ.short_desc": {
+          "source": "New expiration timestamp",
+          "message": "Nueva marca de tiempo de expiración"
+        },
+        "app.R2VtaW5p.action.dXBkYXRlLWNhY2hlZC1jb250ZW50.option.dHRs.desc": {
+          "source": "New time-to-live for the cached content (e.g., `3600s` for one hour)",
+          "message": "Nuevo tiempo de vida (TTL) para el contenido en caché (p. ej., `3600s` para una hora)"
+        },
+        "app.R2VtaW5p.action.dXBkYXRlLWNhY2hlZC1jb250ZW50.option.dHRs.display_name": {
+          "source": "TTL",
+          "message": "TTL"
+        },
+        "app.R2VtaW5p.action.dXBkYXRlLWNhY2hlZC1jb250ZW50.option.dHRs.short_desc": {
+          "source": "New time-to-live duration",
+          "message": "Nueva duración de tiempo de vida"
+        },
+        "app.R2VtaW5p.action.dXBkYXRlLWNhY2hlZC1jb250ZW50.short_desc": {
+          "source": "Update the expiration of cached content",
+          "message": "Actualizar la expiración del contenido en caché"
+        },
+        "app.R2VtaW5p.action.dXBsb2FkLWZpbGU.desc": {
+          "source": "Upload a file for use with the Gemini API for multimodal content generation",
+          "message": "Suba un archivo para usarlo con la API de Gemini para la generación de contenido multimodal"
+        },
+        "app.R2VtaW5p.action.dXBsb2FkLWZpbGU.display_name": {
+          "source": "Upload File",
+          "message": "Cargar archivo"
+        },
+        "app.R2VtaW5p.action.dXBsb2FkLWZpbGU.option.ZGlzcGxheV9uYW1l.desc": {
+          "source": "Optional display name for the uploaded file. If not provided, the file name from the uploaded file is used",
+          "message": "Nombre para mostrar opcional para el archivo subido. Si no se proporciona, se utiliza el nombre de archivo del archivo subido"
+        },
+        "app.R2VtaW5p.action.dXBsb2FkLWZpbGU.option.ZGlzcGxheV9uYW1l.display_name": {
+          "source": "Display Name",
+          "message": "Nombre para mostrar"
+        },
+        "app.R2VtaW5p.action.dXBsb2FkLWZpbGU.option.ZGlzcGxheV9uYW1l.short_desc": {
+          "source": "Display name for the uploaded file",
+          "message": "Nombre para mostrar del archivo subido"
+        },
+        "app.R2VtaW5p.action.dXBsb2FkLWZpbGU.option.ZmlsZQ.desc": {
+          "source": "The file to upload to Google Gemini for use with multimodal content generation",
+          "message": "El archivo para subir a Google Gemini para su uso con la generación de contenido multimodal"
+        },
+        "app.R2VtaW5p.action.dXBsb2FkLWZpbGU.option.ZmlsZQ.display_name": {
+          "source": "File",
+          "message": "Archivo"
+        },
+        "app.R2VtaW5p.action.dXBsb2FkLWZpbGU.option.ZmlsZQ.short_desc": {
+          "source": "The file to upload",
+          "message": "El archivo que se va a subir"
+        },
+        "app.R2VtaW5p.action.dXBsb2FkLWZpbGU.short_desc": {
+          "source": "Upload a file for use with the Gemini API",
+          "message": "Subir un archivo para usarlo con la API de Gemini"
+        },
+        "app.R2VtaW5p.desc": {
+          "source": "Google Gemini generative AI services including text generation, embeddings, streaming, and multimodal content",
+          "message": "Servicios de IA generativa de Google Gemini, incluidos generación de texto, embeddings, streaming y contenido multimodal"
+        },
+        "app.R2VtaW5p.display_name": {
+          "source": "Google Gemini",
+          "message": "Google Gemini"
+        },
+        "app.R2VtaW5p.short_desc": {
+          "source": "Google Gemini AI services",
+          "message": "Servicios de IA de Google Gemini"
+        }
+      }
+    }
+  }
+}

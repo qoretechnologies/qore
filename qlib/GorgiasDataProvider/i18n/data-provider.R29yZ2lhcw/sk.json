@@ -1,0 +1,2125 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "sk": {
+      "messages": {
+        "app.R29yZ2lhcw.action.Y3JlYXRlLW1lc3NhZ2U.desc": {
+          "source": "Add a new message (reply or internal note) to a Gorgias ticket",
+          "message": "Pridať novú správu (odpoveď alebo internú poznámku) do Gorgias tiketu"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLW1lc3NhZ2U.display_name": {
+          "source": "Create a Message",
+          "message": "Vytvoriť správu"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLW1lc3NhZ2U.option.Y2hhbm5lbA.allowed-value.c3RyaW5nOmFwaQ.display_name": {
+          "source": "API",
+          "message": "API"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLW1lc3NhZ2U.option.Y2hhbm5lbA.allowed-value.c3RyaW5nOmNoYXQ.display_name": {
+          "source": "Chat",
+          "message": "Chat"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLW1lc3NhZ2U.option.Y2hhbm5lbA.allowed-value.c3RyaW5nOmNvbnRhY3RfZm9ybQ.display_name": {
+          "source": "Contact Form",
+          "message": "Kontaktný formulár"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLW1lc3NhZ2U.option.Y2hhbm5lbA.allowed-value.c3RyaW5nOmVtYWls.display_name": {
+          "source": "Email",
+          "message": "E-mail"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLW1lc3NhZ2U.option.Y2hhbm5lbA.allowed-value.c3RyaW5nOmZhY2Vib29r.display_name": {
+          "source": "Facebook",
+          "message": "Facebook"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLW1lc3NhZ2U.option.Y2hhbm5lbA.allowed-value.c3RyaW5nOmhlbHAtY2VudGVy.display_name": {
+          "source": "Help Center",
+          "message": "Centrum pomoci"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLW1lc3NhZ2U.option.Y2hhbm5lbA.allowed-value.c3RyaW5nOmluc3RhZ3JhbQ.display_name": {
+          "source": "Instagram",
+          "message": "Instagram"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLW1lc3NhZ2U.option.Y2hhbm5lbA.allowed-value.c3RyaW5nOmludGVybmFsLW5vdGU.display_name": {
+          "source": "Internal Note",
+          "message": "Interná poznámka"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLW1lc3NhZ2U.option.Y2hhbm5lbA.allowed-value.c3RyaW5nOnBob25l.display_name": {
+          "source": "Phone",
+          "message": "Telefón"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLW1lc3NhZ2U.option.Y2hhbm5lbA.allowed-value.c3RyaW5nOnNtcw.display_name": {
+          "source": "SMS",
+          "message": "SMS"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLW1lc3NhZ2U.option.Y2hhbm5lbA.allowed-value.c3RyaW5nOnR3aXR0ZXI.display_name": {
+          "source": "Twitter",
+          "message": "Twitter"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLW1lc3NhZ2U.option.Y2hhbm5lbA.allowed-value.c3RyaW5nOndoYXRzYXBw.display_name": {
+          "source": "WhatsApp",
+          "message": "WhatsApp"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLW1lc3NhZ2U.option.Y2hhbm5lbA.desc": {
+          "source": "The channel for the message",
+          "message": "Kanál pre správu"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLW1lc3NhZ2U.option.Y2hhbm5lbA.display_name": {
+          "source": "Channel",
+          "message": "Kanál"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLW1lc3NhZ2U.option.Y2hhbm5lbA.short_desc": {
+          "source": "Message channel",
+          "message": "Kanál správy"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLW1lc3NhZ2U.option.YXR0YWNobWVudHM.desc": {
+          "source": "List of file attachments for the message. Each attachment requires a `url` pointing to the file location, and optionally `name`, `content_type`, `size`, and `public` fields",
+          "message": "Zoznam príloh súborov pre správu. Každá príloha vyžaduje pole `url` odkazujúce na umiestnenie súboru a voliteľné polia `name`, `content_type`, `size` a `public`"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLW1lc3NhZ2U.option.YXR0YWNobWVudHM.display_name": {
+          "source": "Attachments",
+          "message": "Prílohy"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLW1lc3NhZ2U.option.YXR0YWNobWVudHM.short_desc": {
+          "source": "File attachments",
+          "message": "Prílohy súborov"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLW1lc3NhZ2U.option.Ym9keV90ZXh0.desc": {
+          "source": "The plain text body of the message. Provide either `body_text` or `body_html`",
+          "message": "Textové telo správy (plain text). Zadajte buď `body_text` alebo `body_html`"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLW1lc3NhZ2U.option.Ym9keV90ZXh0.display_name": {
+          "source": "Body Text",
+          "message": "Text tela správy"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLW1lc3NhZ2U.option.Ym9keV90ZXh0.short_desc": {
+          "source": "Plain text body",
+          "message": "Telo v čistom texte"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLW1lc3NhZ2U.option.Ym9keV9odG1s.desc": {
+          "source": "The HTML body of the message. Provide either `body_text` or `body_html`",
+          "message": "HTML telo správy. Zadajte buď `body_text` alebo `body_html`"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLW1lc3NhZ2U.option.Ym9keV9odG1s.display_name": {
+          "source": "Body HTML",
+          "message": "HTML tela správy"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLW1lc3NhZ2U.option.Ym9keV9odG1s.short_desc": {
+          "source": "HTML body",
+          "message": "HTML telo"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLW1lc3NhZ2U.option.ZnJvbV9hZ2VudA.desc": {
+          "source": "Whether the message is from an agent (`True`) or customer (`False`)",
+          "message": "Či je správa od agenta (`True`) alebo od zákazníka (`False`)"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLW1lc3NhZ2U.option.ZnJvbV9hZ2VudA.display_name": {
+          "source": "From Agent",
+          "message": "Od agenta"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLW1lc3NhZ2U.option.ZnJvbV9hZ2VudA.short_desc": {
+          "source": "Whether from agent",
+          "message": "Či je od agenta"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLW1lc3NhZ2U.option.c2VuZGVy.desc": {
+          "source": "The sender of the message. Provide `id` for agents or `email` for customers",
+          "message": "Odosielateľ správy. Zadajte `id` pre agentov alebo `email` pre zákazníkov"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLW1lc3NhZ2U.option.c2VuZGVy.display_name": {
+          "source": "Sender",
+          "message": "Odosielateľ"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLW1lc3NhZ2U.option.c2VuZGVy.short_desc": {
+          "source": "Message sender",
+          "message": "Odosielateľ správy"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLW1lc3NhZ2U.option.c3ViamVjdA.desc": {
+          "source": "The subject line of the message (for email channel)",
+          "message": "Predmet správy (pre e-mailový kanál)"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLW1lc3NhZ2U.option.c3ViamVjdA.display_name": {
+          "source": "Subject",
+          "message": "Predmet"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLW1lc3NhZ2U.option.c3ViamVjdA.short_desc": {
+          "source": "Message subject",
+          "message": "Predmet správy"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLW1lc3NhZ2U.option.cmVjZWl2ZXI.desc": {
+          "source": "The receiver of the message. Provide `id` for an agent or `email` for a customer",
+          "message": "Príjemca správy. Zadajte `id` pre agenta alebo `email` pre zákazníka"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLW1lc3NhZ2U.option.cmVjZWl2ZXI.display_name": {
+          "source": "Receiver",
+          "message": "Príjemca"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLW1lc3NhZ2U.option.cmVjZWl2ZXI.short_desc": {
+          "source": "Message receiver",
+          "message": "Príjemca správy"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLW1lc3NhZ2U.option.dGlja2V0X2lk.desc": {
+          "source": "The ID of the ticket to add the message to",
+          "message": "ID tiketu, do ktorého sa má pridať správa"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLW1lc3NhZ2U.option.dGlja2V0X2lk.display_name": {
+          "source": "Ticket ID",
+          "message": "ID tiketu"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLW1lc3NhZ2U.option.dGlja2V0X2lk.short_desc": {
+          "source": "The ticket to add a message to",
+          "message": "Tiket, do ktorého sa má pridať správa"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLW1lc3NhZ2U.option.dmlh.allowed-value.c3RyaW5nOmFwaQ.display_name": {
+          "source": "API",
+          "message": "API"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLW1lc3NhZ2U.option.dmlh.allowed-value.c3RyaW5nOmNoYXQ.display_name": {
+          "source": "Chat",
+          "message": "Chat"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLW1lc3NhZ2U.option.dmlh.allowed-value.c3RyaW5nOmNvbnRhY3RfZm9ybQ.display_name": {
+          "source": "Contact Form",
+          "message": "Kontaktný formulár"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLW1lc3NhZ2U.option.dmlh.allowed-value.c3RyaW5nOmVtYWls.display_name": {
+          "source": "Email",
+          "message": "E-mail"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLW1lc3NhZ2U.option.dmlh.allowed-value.c3RyaW5nOmZhY2Vib29r.display_name": {
+          "source": "Facebook",
+          "message": "Facebook"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLW1lc3NhZ2U.option.dmlh.allowed-value.c3RyaW5nOmhlbHAtY2VudGVy.display_name": {
+          "source": "Help Center",
+          "message": "Centrum pomoci"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLW1lc3NhZ2U.option.dmlh.allowed-value.c3RyaW5nOmhlbHBkZXNr.display_name": {
+          "source": "Helpdesk",
+          "message": "Helpdesk"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLW1lc3NhZ2U.option.dmlh.allowed-value.c3RyaW5nOmluc3RhZ3JhbQ.display_name": {
+          "source": "Instagram",
+          "message": "Instagram"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLW1lc3NhZ2U.option.dmlh.allowed-value.c3RyaW5nOnBob25l.display_name": {
+          "source": "Phone",
+          "message": "Telefón"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLW1lc3NhZ2U.option.dmlh.allowed-value.c3RyaW5nOnNtcw.display_name": {
+          "source": "SMS",
+          "message": "SMS"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLW1lc3NhZ2U.option.dmlh.allowed-value.c3RyaW5nOnR3aXR0ZXI.display_name": {
+          "source": "Twitter",
+          "message": "Twitter"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLW1lc3NhZ2U.option.dmlh.allowed-value.c3RyaW5nOndoYXRzYXBw.display_name": {
+          "source": "WhatsApp",
+          "message": "WhatsApp"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLW1lc3NhZ2U.option.dmlh.desc": {
+          "source": "How the message was created",
+          "message": "Spôsob, akým bola správa vytvorená"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLW1lc3NhZ2U.option.dmlh.display_name": {
+          "source": "Via",
+          "message": "Cez"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLW1lc3NhZ2U.option.dmlh.short_desc": {
+          "source": "Message source",
+          "message": "Zdroj správy"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLW1lc3NhZ2U.short_desc": {
+          "source": "Add a message to a ticket",
+          "message": "Pridať správu do tiketu"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLWN1c3RvbWVy.desc": {
+          "source": "Create a new Gorgias customer profile",
+          "message": "Vytvoriť nový zákaznícky profil v Gorgias"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLWN1c3RvbWVy.display_name": {
+          "source": "Create a Customer",
+          "message": "Vytvoriť zákazníka"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLWN1c3RvbWVy.option.Y2hhbm5lbHM.desc": {
+          "source": "List of communication channels for the customer. Each channel has an `address`, `type`, and optional `preferred` flag",
+          "message": "Zoznam komunikačných kanálov pre zákazníka. Každý kanál má `address`, `type` a voliteľný príznak `preferred`"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLWN1c3RvbWVy.option.Y2hhbm5lbHM.display_name": {
+          "source": "Channels",
+          "message": "Kanály"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLWN1c3RvbWVy.option.Y2hhbm5lbHM.short_desc": {
+          "source": "Communication channels",
+          "message": "Komunikačné kanály"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLWN1c3RvbWVy.option.ZW1haWw.desc": {
+          "source": "The primary email address of the customer",
+          "message": "Primárna e-mailová adresa zákazníka"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLWN1c3RvbWVy.option.ZW1haWw.display_name": {
+          "source": "Email",
+          "message": "E-mail"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLWN1c3RvbWVy.option.ZW1haWw.short_desc": {
+          "source": "Customer email address",
+          "message": "E-mailová adresa zákazníka"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLWN1c3RvbWVy.option.ZXh0ZXJuYWxfaWQ.desc": {
+          "source": "An external identifier for the customer from an integrated system",
+          "message": "Externý identifikátor zákazníka z integrovaného systému"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLWN1c3RvbWVy.option.ZXh0ZXJuYWxfaWQ.display_name": {
+          "source": "External ID",
+          "message": "Externé ID"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLWN1c3RvbWVy.option.ZXh0ZXJuYWxfaWQ.short_desc": {
+          "source": "External identifier",
+          "message": "Externý identifikátor"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLWN1c3RvbWVy.option.Zmlyc3RuYW1l.desc": {
+          "source": "The first name of the customer",
+          "message": "Meno zákazníka"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLWN1c3RvbWVy.option.Zmlyc3RuYW1l.display_name": {
+          "source": "First Name",
+          "message": "Meno"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLWN1c3RvbWVy.option.Zmlyc3RuYW1l.short_desc": {
+          "source": "Customer first name",
+          "message": "Meno zákazníka"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLWN1c3RvbWVy.option.bGFuZ3VhZ2U.desc": {
+          "source": "The preferred language of the customer (ISO 639-1 code)",
+          "message": "Preferovaný jazyk zákazníka (kód ISO 639-1)"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLWN1c3RvbWVy.option.bGFuZ3VhZ2U.display_name": {
+          "source": "Language",
+          "message": "Jazyk"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLWN1c3RvbWVy.option.bGFuZ3VhZ2U.short_desc": {
+          "source": "Preferred language",
+          "message": "Preferovaný jazyk"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLWN1c3RvbWVy.option.bGFzdG5hbWU.desc": {
+          "source": "The last name of the customer",
+          "message": "Priezvisko zákazníka"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLWN1c3RvbWVy.option.bGFzdG5hbWU.display_name": {
+          "source": "Last Name",
+          "message": "Priezvisko"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLWN1c3RvbWVy.option.bGFzdG5hbWU.short_desc": {
+          "source": "Customer last name",
+          "message": "Priezvisko zákazníka"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLWN1c3RvbWVy.option.bm90ZQ.desc": {
+          "source": "Internal notes about the customer",
+          "message": "Interné poznámky o zákazníkovi"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLWN1c3RvbWVy.option.bm90ZQ.display_name": {
+          "source": "Note",
+          "message": "Poznámka"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLWN1c3RvbWVy.option.bm90ZQ.short_desc": {
+          "source": "Internal note",
+          "message": "Interná poznámka"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLWN1c3RvbWVy.option.bmFtZQ.desc": {
+          "source": "The full name of the customer",
+          "message": "Celé meno zákazníka"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLWN1c3RvbWVy.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "Názov"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLWN1c3RvbWVy.option.bmFtZQ.short_desc": {
+          "source": "Full name",
+          "message": "Celé meno"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLWN1c3RvbWVy.option.dGltZXpvbmU.desc": {
+          "source": "The timezone of the customer (e.g., `America/New_York`)",
+          "message": "Časové pásmo zákazníka (napr. `America/New_York`)"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLWN1c3RvbWVy.option.dGltZXpvbmU.display_name": {
+          "source": "Timezone",
+          "message": "Časové pásmo"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLWN1c3RvbWVy.option.dGltZXpvbmU.short_desc": {
+          "source": "Customer timezone",
+          "message": "Časové pásmo zákazníka"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLWN1c3RvbWVy.short_desc": {
+          "source": "Create a new customer",
+          "message": "Vytvoriť nového zákazníka"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLXRhZw.desc": {
+          "source": "Create a new Gorgias tag for organizing tickets",
+          "message": "Vytvoriť novú Gorgias značku na organizáciu tiketov"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLXRhZw.display_name": {
+          "source": "Create a Tag",
+          "message": "Vytvoriť značku"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLXRhZw.option.ZGVjb3JhdGlvbg.desc": {
+          "source": "Visual decoration settings for the tag",
+          "message": "Nastavenia vizuálneho štýlu pre značku"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLXRhZw.option.ZGVjb3JhdGlvbg.display_name": {
+          "source": "Decoration",
+          "message": "Vizuálny štýl"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLXRhZw.option.ZGVjb3JhdGlvbg.short_desc": {
+          "source": "Visual decoration",
+          "message": "Vizuálny štýl"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLXRhZw.option.ZGVzY3JpcHRpb24.desc": {
+          "source": "A short description of the tag",
+          "message": "Krátky popis značky"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLXRhZw.option.ZGVzY3JpcHRpb24.display_name": {
+          "source": "Description",
+          "message": "Popis"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLXRhZw.option.ZGVzY3JpcHRpb24.short_desc": {
+          "source": "Tag description",
+          "message": "Popis značky"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLXRhZw.option.bmFtZQ.desc": {
+          "source": "The name of the tag (min 1, max 256 characters)",
+          "message": "Názov značky (min. 1, max. 256 znakov)"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLXRhZw.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "Názov"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLXRhZw.option.bmFtZQ.short_desc": {
+          "source": "Tag name",
+          "message": "Názov štítka"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLXRhZw.short_desc": {
+          "source": "Create a new tag",
+          "message": "Vytvoriť nový štítok"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLXRpY2tldA.desc": {
+          "source": "Create a new Gorgias support ticket with messages, channel, and optional assignment",
+          "message": "Vytvoriť nový Gorgias tiket podpory so správami, kanálom a voliteľným priradením"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLXRpY2tldA.display_name": {
+          "source": "Create a Ticket",
+          "message": "Vytvoriť tiket"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLXRpY2tldA.option.Y2hhbm5lbA.allowed-value.c3RyaW5nOmFwaQ.display_name": {
+          "source": "API",
+          "message": "API"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLXRpY2tldA.option.Y2hhbm5lbA.allowed-value.c3RyaW5nOmNoYXQ.display_name": {
+          "source": "Chat",
+          "message": "Chat"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLXRpY2tldA.option.Y2hhbm5lbA.allowed-value.c3RyaW5nOmNvbnRhY3RfZm9ybQ.display_name": {
+          "source": "Contact Form",
+          "message": "Kontaktný formulár"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLXRpY2tldA.option.Y2hhbm5lbA.allowed-value.c3RyaW5nOmVtYWls.display_name": {
+          "source": "Email",
+          "message": "E-mail"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLXRpY2tldA.option.Y2hhbm5lbA.allowed-value.c3RyaW5nOmZhY2Vib29r.display_name": {
+          "source": "Facebook",
+          "message": "Facebook"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLXRpY2tldA.option.Y2hhbm5lbA.allowed-value.c3RyaW5nOmhlbHAtY2VudGVy.display_name": {
+          "source": "Help Center",
+          "message": "Centrum pomoci"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLXRpY2tldA.option.Y2hhbm5lbA.allowed-value.c3RyaW5nOmluc3RhZ3JhbQ.display_name": {
+          "source": "Instagram",
+          "message": "Instagram"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLXRpY2tldA.option.Y2hhbm5lbA.allowed-value.c3RyaW5nOmludGVybmFsLW5vdGU.display_name": {
+          "source": "Internal Note",
+          "message": "Interná poznámka"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLXRpY2tldA.option.Y2hhbm5lbA.allowed-value.c3RyaW5nOnBob25l.display_name": {
+          "source": "Phone",
+          "message": "Telefón"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLXRpY2tldA.option.Y2hhbm5lbA.allowed-value.c3RyaW5nOnNtcw.display_name": {
+          "source": "SMS",
+          "message": "SMS"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLXRpY2tldA.option.Y2hhbm5lbA.allowed-value.c3RyaW5nOnR3aXR0ZXI.display_name": {
+          "source": "Twitter",
+          "message": "Twitter"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLXRpY2tldA.option.Y2hhbm5lbA.allowed-value.c3RyaW5nOndoYXRzYXBw.display_name": {
+          "source": "WhatsApp",
+          "message": "WhatsApp"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLXRpY2tldA.option.Y2hhbm5lbA.desc": {
+          "source": "The channel for the ticket (e.g., `email`, `chat`, `api`)",
+          "message": "Kanál pre tiket (napr. `email`, `chat`, `api`)"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLXRpY2tldA.option.Y2hhbm5lbA.display_name": {
+          "source": "Channel",
+          "message": "Kanál"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLXRpY2tldA.option.Y2hhbm5lbA.short_desc": {
+          "source": "Communication channel",
+          "message": "Komunikačný kanál"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLXRpY2tldA.option.Y3VzdG9tZXI.desc": {
+          "source": "The customer for this ticket. Provide `id` to reference an existing customer, or `email` to match or create by email address",
+          "message": "Zákazník pre tento tiket. Uveďte `id` na odkazovanie na existujúceho zákazníka alebo `email` na vyhľadanie alebo vytvorenie podľa e-mailovej adresy"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLXRpY2tldA.option.Y3VzdG9tZXI.display_name": {
+          "source": "Customer",
+          "message": "Zákazník"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLXRpY2tldA.option.Y3VzdG9tZXI.short_desc": {
+          "source": "Customer data",
+          "message": "Údaje zákazníka"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLXRpY2tldA.option.YXNzaWduZWVfdGVhbQ.desc": {
+          "source": "The team to assign to this ticket",
+          "message": "Tím, ktorý sa má priradiť k tomuto tiketu"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLXRpY2tldA.option.YXNzaWduZWVfdGVhbQ.display_name": {
+          "source": "Assignee Team",
+          "message": "Priradený tím"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLXRpY2tldA.option.YXNzaWduZWVfdGVhbQ.short_desc": {
+          "source": "Assigned team",
+          "message": "Priradený tím"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLXRpY2tldA.option.YXNzaWduZWVfdXNlcg.desc": {
+          "source": "The agent to assign to this ticket",
+          "message": "Agent, ktorý sa má priradiť k tomuto tiketu"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLXRpY2tldA.option.YXNzaWduZWVfdXNlcg.display_name": {
+          "source": "Assignee User",
+          "message": "Priradený používateľ"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLXRpY2tldA.option.YXNzaWduZWVfdXNlcg.short_desc": {
+          "source": "Assigned agent",
+          "message": "Priradený agent"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLXRpY2tldA.option.ZXh0ZXJuYWxfaWQ.desc": {
+          "source": "An external identifier for the ticket (max 255 characters)",
+          "message": "Externý identifikátor tiketu (max. 255 znakov)"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLXRpY2tldA.option.ZXh0ZXJuYWxfaWQ.display_name": {
+          "source": "External ID",
+          "message": "Externé ID"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLXRpY2tldA.option.ZXh0ZXJuYWxfaWQ.short_desc": {
+          "source": "External identifier",
+          "message": "Externý identifikátor"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLXRpY2tldA.option.bGFuZ3VhZ2U.desc": {
+          "source": "The language of the ticket content",
+          "message": "Jazyk obsahu tiketu"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLXRpY2tldA.option.bGFuZ3VhZ2U.display_name": {
+          "source": "Language",
+          "message": "Jazyk"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLXRpY2tldA.option.bGFuZ3VhZ2U.short_desc": {
+          "source": "Ticket language",
+          "message": "Jazyk tiketu"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLXRpY2tldA.option.bWVzc2FnZXM.desc": {
+          "source": "List of initial messages for the ticket. Required field. Each message must have `channel`, `from_agent`, and `via`. Provide either `body_text` or `body_html` for message content. Up to 500 messages per ticket",
+          "message": "Zoznam počiatočných správ pre tiket. Povinné pole. Každá správa musí obsahovať `channel`, `from_agent` a `via`. Uveďte buď `body_text` alebo `body_html` pre obsah správy. Maximálne 500 správ na tiket"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLXRpY2tldA.option.bWVzc2FnZXM.display_name": {
+          "source": "Messages",
+          "message": "Správy"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLXRpY2tldA.option.bWVzc2FnZXM.short_desc": {
+          "source": "Initial messages",
+          "message": "Počiatočné správy"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLXRpY2tldA.option.c3BhbQ.desc": {
+          "source": "Whether to mark the ticket as spam. Default: `False`",
+          "message": "Určuje, či sa má tiket označiť ako spam. Predvolené: `False`"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLXRpY2tldA.option.c3BhbQ.display_name": {
+          "source": "Spam",
+          "message": "Spam"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLXRpY2tldA.option.c3BhbQ.short_desc": {
+          "source": "Mark as spam",
+          "message": "Označiť ako spam"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLXRpY2tldA.option.c3RhdHVz.allowed-value.c3RyaW5nOm9wZW4.display_name": {
+          "source": "Open",
+          "message": "Otvorená"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLXRpY2tldA.option.c3RhdHVz.allowed-value.c3RyaW5nOmNsb3NlZA.display_name": {
+          "source": "Closed",
+          "message": "Zatvorené"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLXRpY2tldA.option.c3RhdHVz.desc": {
+          "source": "The initial status of the ticket",
+          "message": "Počiatočný stav tiketu"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLXRpY2tldA.option.c3RhdHVz.display_name": {
+          "source": "Status",
+          "message": "Stav"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLXRpY2tldA.option.c3RhdHVz.short_desc": {
+          "source": "Ticket status",
+          "message": "Stav tiketu"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLXRpY2tldA.option.c3ViamVjdA.desc": {
+          "source": "The subject line of the ticket (max 998 characters)",
+          "message": "Predmet tiketu (max. 998 znakov)"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLXRpY2tldA.option.c3ViamVjdA.display_name": {
+          "source": "Subject",
+          "message": "Predmet"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLXRpY2tldA.option.c3ViamVjdA.short_desc": {
+          "source": "Ticket subject line",
+          "message": "Predmet tiketu"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLXRpY2tldA.option.cHJpb3JpdHk.allowed-value.c3RyaW5nOm5vcm1hbA.display_name": {
+          "source": "Normal",
+          "message": "Normálne"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLXRpY2tldA.option.cHJpb3JpdHk.allowed-value.c3RyaW5nOmNyaXRpY2Fs.display_name": {
+          "source": "Critical",
+          "message": "Kritická"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLXRpY2tldA.option.cHJpb3JpdHk.allowed-value.c3RyaW5nOmhpZ2g.display_name": {
+          "source": "High",
+          "message": "Vysoká"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLXRpY2tldA.option.cHJpb3JpdHk.allowed-value.c3RyaW5nOmxvdw.display_name": {
+          "source": "Low",
+          "message": "Nízka"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLXRpY2tldA.option.cHJpb3JpdHk.desc": {
+          "source": "The priority level of the ticket",
+          "message": "Úroveň priority tiketu"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLXRpY2tldA.option.cHJpb3JpdHk.display_name": {
+          "source": "Priority",
+          "message": "Priorita"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLXRpY2tldA.option.cHJpb3JpdHk.short_desc": {
+          "source": "Ticket priority",
+          "message": "Priorita tiketu"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLXRpY2tldA.option.dGFncw.desc": {
+          "source": "List of tags to apply to the ticket. Each tag must have a `name` field",
+          "message": "Zoznam značiek, ktoré sa majú použiť na tiket. Každá značka musí obsahovať pole `name`"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLXRpY2tldA.option.dGFncw.display_name": {
+          "source": "Tags",
+          "message": "Značky"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLXRpY2tldA.option.dGFncw.short_desc": {
+          "source": "Tags to apply",
+          "message": "Značky na použitie"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLXRpY2tldA.option.dmlh.allowed-value.c3RyaW5nOmFwaQ.display_name": {
+          "source": "API",
+          "message": "API"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLXRpY2tldA.option.dmlh.allowed-value.c3RyaW5nOmNoYXQ.display_name": {
+          "source": "Chat",
+          "message": "Chat"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLXRpY2tldA.option.dmlh.allowed-value.c3RyaW5nOmNvbnRhY3RfZm9ybQ.display_name": {
+          "source": "Contact Form",
+          "message": "Kontaktný formulár"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLXRpY2tldA.option.dmlh.allowed-value.c3RyaW5nOmVtYWls.display_name": {
+          "source": "Email",
+          "message": "E-mail"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLXRpY2tldA.option.dmlh.allowed-value.c3RyaW5nOmZhY2Vib29r.display_name": {
+          "source": "Facebook",
+          "message": "Facebook"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLXRpY2tldA.option.dmlh.allowed-value.c3RyaW5nOmhlbHAtY2VudGVy.display_name": {
+          "source": "Help Center",
+          "message": "Centrum pomoci"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLXRpY2tldA.option.dmlh.allowed-value.c3RyaW5nOmhlbHBkZXNr.display_name": {
+          "source": "Helpdesk",
+          "message": "Helpdesk"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLXRpY2tldA.option.dmlh.allowed-value.c3RyaW5nOmluc3RhZ3JhbQ.display_name": {
+          "source": "Instagram",
+          "message": "Instagram"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLXRpY2tldA.option.dmlh.allowed-value.c3RyaW5nOnBob25l.display_name": {
+          "source": "Phone",
+          "message": "Telefón"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLXRpY2tldA.option.dmlh.allowed-value.c3RyaW5nOnNtcw.display_name": {
+          "source": "SMS",
+          "message": "SMS"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLXRpY2tldA.option.dmlh.allowed-value.c3RyaW5nOnR3aXR0ZXI.display_name": {
+          "source": "Twitter",
+          "message": "Twitter"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLXRpY2tldA.option.dmlh.allowed-value.c3RyaW5nOndoYXRzYXBw.display_name": {
+          "source": "WhatsApp",
+          "message": "WhatsApp"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLXRpY2tldA.option.dmlh.desc": {
+          "source": "How the ticket was created. Required field",
+          "message": "Spôsob vytvorenia tiketu. Povinné pole"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLXRpY2tldA.option.dmlh.display_name": {
+          "source": "Via",
+          "message": "Cez"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLXRpY2tldA.option.dmlh.short_desc": {
+          "source": "Ticket source",
+          "message": "Zdroj tiketu"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLXRpY2tldA.short_desc": {
+          "source": "Create a new support ticket",
+          "message": "Vytvoriť nový tiket podpory"
+        },
+        "app.R29yZ2lhcw.action.Z2V0LW1lc3NhZ2U.desc": {
+          "source": "Retrieve a single message from a Gorgias ticket",
+          "message": "Získať jednu správu z tiketu Gorgias"
+        },
+        "app.R29yZ2lhcw.action.Z2V0LW1lc3NhZ2U.display_name": {
+          "source": "Get a Message",
+          "message": "Získať správu"
+        },
+        "app.R29yZ2lhcw.action.Z2V0LW1lc3NhZ2U.option.bWVzc2FnZV9pZA.display_name": {
+          "source": "Message ID",
+          "message": "ID správy"
+        },
+        "app.R29yZ2lhcw.action.Z2V0LW1lc3NhZ2U.option.bWVzc2FnZV9pZA.short_desc": {
+          "source": "The message ID",
+          "message": "ID správy"
+        },
+        "app.R29yZ2lhcw.action.Z2V0LW1lc3NhZ2U.option.dGlja2V0X2lk.display_name": {
+          "source": "Ticket ID",
+          "message": "ID tiketu"
+        },
+        "app.R29yZ2lhcw.action.Z2V0LW1lc3NhZ2U.option.dGlja2V0X2lk.short_desc": {
+          "source": "The ticket containing the message",
+          "message": "Tiket obsahujúci správu"
+        },
+        "app.R29yZ2lhcw.action.Z2V0LW1lc3NhZ2U.short_desc": {
+          "source": "Get a single message by ID",
+          "message": "Získať jednu správu podľa ID"
+        },
+        "app.R29yZ2lhcw.action.Z2V0LWN1c3RvbWVy.desc": {
+          "source": "Retrieve a single Gorgias customer by their ID",
+          "message": "Získať jedného zákazníka Gorgias podľa jeho ID"
+        },
+        "app.R29yZ2lhcw.action.Z2V0LWN1c3RvbWVy.display_name": {
+          "source": "Get a Customer",
+          "message": "Získať zákazníka"
+        },
+        "app.R29yZ2lhcw.action.Z2V0LWN1c3RvbWVy.option.Y3VzdG9tZXJfaWQ.display_name": {
+          "source": "Customer ID",
+          "message": "ID zákazníka"
+        },
+        "app.R29yZ2lhcw.action.Z2V0LWN1c3RvbWVy.option.Y3VzdG9tZXJfaWQ.short_desc": {
+          "source": "The customer ID",
+          "message": "ID zákazníka"
+        },
+        "app.R29yZ2lhcw.action.Z2V0LWN1c3RvbWVy.short_desc": {
+          "source": "Get a single customer by ID",
+          "message": "Získať jedného zákazníka podľa ID"
+        },
+        "app.R29yZ2lhcw.action.Z2V0LXRhZw.desc": {
+          "source": "Retrieve a single Gorgias tag by its ID",
+          "message": "Získať jednu značku Gorgias podľa jej ID"
+        },
+        "app.R29yZ2lhcw.action.Z2V0LXRhZw.display_name": {
+          "source": "Get a Tag",
+          "message": "Získať značku"
+        },
+        "app.R29yZ2lhcw.action.Z2V0LXRhZw.option.dGFnX2lk.display_name": {
+          "source": "Tag ID",
+          "message": "ID štítka"
+        },
+        "app.R29yZ2lhcw.action.Z2V0LXRhZw.option.dGFnX2lk.short_desc": {
+          "source": "The tag ID",
+          "message": "ID štítka"
+        },
+        "app.R29yZ2lhcw.action.Z2V0LXRhZw.short_desc": {
+          "source": "Get a single tag by ID",
+          "message": "Získať jeden štítok podľa ID"
+        },
+        "app.R29yZ2lhcw.action.Z2V0LXRpY2tldA.desc": {
+          "source": "Retrieve a single Gorgias ticket by its ID",
+          "message": "Získať jeden tiket Gorgias podľa jeho ID"
+        },
+        "app.R29yZ2lhcw.action.Z2V0LXRpY2tldA.display_name": {
+          "source": "Get a Ticket",
+          "message": "Získať tiket"
+        },
+        "app.R29yZ2lhcw.action.Z2V0LXRpY2tldA.option.dGlja2V0X2lk.display_name": {
+          "source": "Ticket ID",
+          "message": "ID tiketu"
+        },
+        "app.R29yZ2lhcw.action.Z2V0LXRpY2tldA.option.dGlja2V0X2lk.short_desc": {
+          "source": "The ticket ID",
+          "message": "ID tiketu"
+        },
+        "app.R29yZ2lhcw.action.Z2V0LXRpY2tldA.short_desc": {
+          "source": "Get a single ticket by ID",
+          "message": "Získať jeden tiket podľa ID"
+        },
+        "app.R29yZ2lhcw.action.Z2V0LXVzZXI.desc": {
+          "source": "Retrieve a single Gorgias user (agent) by their ID",
+          "message": "Získať jedného používateľa Gorgias (agenta) podľa jeho ID"
+        },
+        "app.R29yZ2lhcw.action.Z2V0LXVzZXI.display_name": {
+          "source": "Get a User",
+          "message": "Získať používateľa"
+        },
+        "app.R29yZ2lhcw.action.Z2V0LXVzZXI.option.dXNlcl9pZA.display_name": {
+          "source": "User ID",
+          "message": "ID používateľa"
+        },
+        "app.R29yZ2lhcw.action.Z2V0LXVzZXI.option.dXNlcl9pZA.short_desc": {
+          "source": "The user ID",
+          "message": "ID používateľa"
+        },
+        "app.R29yZ2lhcw.action.Z2V0LXVzZXI.short_desc": {
+          "source": "Get a single user by ID",
+          "message": "Získať jedného používateľa podľa ID"
+        },
+        "app.R29yZ2lhcw.action.ZGVsZXRlLW1lc3NhZ2U.desc": {
+          "source": "Permanently delete a message from a Gorgias ticket",
+          "message": "Trvalo odstrániť správu z tiketu Gorgias"
+        },
+        "app.R29yZ2lhcw.action.ZGVsZXRlLW1lc3NhZ2U.display_name": {
+          "source": "Delete a Message",
+          "message": "Odstrániť správu"
+        },
+        "app.R29yZ2lhcw.action.ZGVsZXRlLW1lc3NhZ2U.option.bWVzc2FnZV9pZA.desc": {
+          "source": "The ID of the message to delete",
+          "message": "ID správy, ktorú chcete odstrániť"
+        },
+        "app.R29yZ2lhcw.action.ZGVsZXRlLW1lc3NhZ2U.option.bWVzc2FnZV9pZA.display_name": {
+          "source": "Message ID",
+          "message": "ID správy"
+        },
+        "app.R29yZ2lhcw.action.ZGVsZXRlLW1lc3NhZ2U.option.bWVzc2FnZV9pZA.short_desc": {
+          "source": "The message to delete",
+          "message": "Správa na odstránenie"
+        },
+        "app.R29yZ2lhcw.action.ZGVsZXRlLW1lc3NhZ2U.option.dGlja2V0X2lk.desc": {
+          "source": "The ID of the ticket containing the message to delete",
+          "message": "ID tiketu obsahujúceho správu na odstránenie"
+        },
+        "app.R29yZ2lhcw.action.ZGVsZXRlLW1lc3NhZ2U.option.dGlja2V0X2lk.display_name": {
+          "source": "Ticket ID",
+          "message": "ID tiketu"
+        },
+        "app.R29yZ2lhcw.action.ZGVsZXRlLW1lc3NhZ2U.option.dGlja2V0X2lk.short_desc": {
+          "source": "The ticket containing the message",
+          "message": "Tiket obsahujúci správu"
+        },
+        "app.R29yZ2lhcw.action.ZGVsZXRlLW1lc3NhZ2U.short_desc": {
+          "source": "Delete an existing message",
+          "message": "Odstrániť existujúcu správu"
+        },
+        "app.R29yZ2lhcw.action.ZGVsZXRlLWN1c3RvbWVy.desc": {
+          "source": "Permanently delete a Gorgias customer",
+          "message": "Trvalo odstrániť zákazníka Gorgias"
+        },
+        "app.R29yZ2lhcw.action.ZGVsZXRlLWN1c3RvbWVy.display_name": {
+          "source": "Delete a Customer",
+          "message": "Odstrániť zákazníka"
+        },
+        "app.R29yZ2lhcw.action.ZGVsZXRlLWN1c3RvbWVy.option.Y3VzdG9tZXJfaWQ.desc": {
+          "source": "The ID of the customer to delete",
+          "message": "ID zákazníka, ktorý sa má odstrániť"
+        },
+        "app.R29yZ2lhcw.action.ZGVsZXRlLWN1c3RvbWVy.option.Y3VzdG9tZXJfaWQ.display_name": {
+          "source": "Customer ID",
+          "message": "ID zákazníka"
+        },
+        "app.R29yZ2lhcw.action.ZGVsZXRlLWN1c3RvbWVy.option.Y3VzdG9tZXJfaWQ.short_desc": {
+          "source": "The customer to delete",
+          "message": "Zákazník na odstránenie"
+        },
+        "app.R29yZ2lhcw.action.ZGVsZXRlLWN1c3RvbWVy.short_desc": {
+          "source": "Delete an existing customer",
+          "message": "Odstrániť existujúceho zákazníka"
+        },
+        "app.R29yZ2lhcw.action.ZGVsZXRlLXRhZw.desc": {
+          "source": "Permanently delete a Gorgias tag",
+          "message": "Trvalo odstrániť značku Gorgias"
+        },
+        "app.R29yZ2lhcw.action.ZGVsZXRlLXRhZw.display_name": {
+          "source": "Delete a Tag",
+          "message": "Odstrániť značku"
+        },
+        "app.R29yZ2lhcw.action.ZGVsZXRlLXRhZw.option.dGFnX2lk.desc": {
+          "source": "The ID of the tag to delete",
+          "message": "ID značky na odstránenie"
+        },
+        "app.R29yZ2lhcw.action.ZGVsZXRlLXRhZw.option.dGFnX2lk.display_name": {
+          "source": "Tag ID",
+          "message": "ID štítka"
+        },
+        "app.R29yZ2lhcw.action.ZGVsZXRlLXRhZw.option.dGFnX2lk.short_desc": {
+          "source": "The tag to delete",
+          "message": "Značka na odstránenie"
+        },
+        "app.R29yZ2lhcw.action.ZGVsZXRlLXRhZw.short_desc": {
+          "source": "Delete an existing tag",
+          "message": "Odstrániť existujúcu značku"
+        },
+        "app.R29yZ2lhcw.action.ZGVsZXRlLXRpY2tldA.desc": {
+          "source": "Permanently delete a Gorgias ticket",
+          "message": "Trvalo odstrániť tiket Gorgias"
+        },
+        "app.R29yZ2lhcw.action.ZGVsZXRlLXRpY2tldA.display_name": {
+          "source": "Delete a Ticket",
+          "message": "Vymazať tiket"
+        },
+        "app.R29yZ2lhcw.action.ZGVsZXRlLXRpY2tldA.option.dGlja2V0X2lk.desc": {
+          "source": "The ID of the ticket to delete",
+          "message": "ID tiketu na odstránenie"
+        },
+        "app.R29yZ2lhcw.action.ZGVsZXRlLXRpY2tldA.option.dGlja2V0X2lk.display_name": {
+          "source": "Ticket ID",
+          "message": "ID tiketu"
+        },
+        "app.R29yZ2lhcw.action.ZGVsZXRlLXRpY2tldA.option.dGlja2V0X2lk.short_desc": {
+          "source": "The ticket to delete",
+          "message": "Tiket na odstránenie"
+        },
+        "app.R29yZ2lhcw.action.ZGVsZXRlLXRpY2tldA.short_desc": {
+          "source": "Delete an existing ticket",
+          "message": "Odstrániť existujúci tiket"
+        },
+        "app.R29yZ2lhcw.action.bGlzdC10YWdz.desc": {
+          "source": "List all Gorgias tags",
+          "message": "Zoznam všetkých značiek Gorgias"
+        },
+        "app.R29yZ2lhcw.action.bGlzdC10YWdz.display_name": {
+          "source": "List Tags",
+          "message": "Zoznam značiek"
+        },
+        "app.R29yZ2lhcw.action.bGlzdC10YWdz.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "Limit"
+        },
+        "app.R29yZ2lhcw.action.bGlzdC10YWdz.option.bGltaXQ.short_desc": {
+          "source": "Maximum results",
+          "message": "Maximálny počet výsledkov"
+        },
+        "app.R29yZ2lhcw.action.bGlzdC10YWdz.option.dGFnX2lk.display_name": {
+          "source": "Tag ID",
+          "message": "ID štítka"
+        },
+        "app.R29yZ2lhcw.action.bGlzdC10YWdz.option.dGFnX2lk.short_desc": {
+          "source": "Get a specific tag",
+          "message": "Získať konkrétnu značku"
+        },
+        "app.R29yZ2lhcw.action.bGlzdC10YWdz.short_desc": {
+          "source": "List tags",
+          "message": "Zoznam značiek"
+        },
+        "app.R29yZ2lhcw.action.bGlzdC10aWNrZXRz.desc": {
+          "source": "List Gorgias support tickets with optional filtering by status, assignee, customer, and channel",
+          "message": "Zoznam tiketov podpory Gorgias s voliteľným filtrovaním podľa stavu, priradenej osoby, zákazníka a kanála"
+        },
+        "app.R29yZ2lhcw.action.bGlzdC10aWNrZXRz.display_name": {
+          "source": "List Tickets",
+          "message": "Zoznam tiketov"
+        },
+        "app.R29yZ2lhcw.action.bGlzdC10aWNrZXRz.option.Y2hhbm5lbA.allowed-value.c3RyaW5nOmFwaQ.display_name": {
+          "source": "API",
+          "message": "API"
+        },
+        "app.R29yZ2lhcw.action.bGlzdC10aWNrZXRz.option.Y2hhbm5lbA.allowed-value.c3RyaW5nOmNoYXQ.display_name": {
+          "source": "Chat",
+          "message": "Chat"
+        },
+        "app.R29yZ2lhcw.action.bGlzdC10aWNrZXRz.option.Y2hhbm5lbA.allowed-value.c3RyaW5nOmNvbnRhY3RfZm9ybQ.display_name": {
+          "source": "Contact Form",
+          "message": "Kontaktný formulár"
+        },
+        "app.R29yZ2lhcw.action.bGlzdC10aWNrZXRz.option.Y2hhbm5lbA.allowed-value.c3RyaW5nOmVtYWls.display_name": {
+          "source": "Email",
+          "message": "E-mail"
+        },
+        "app.R29yZ2lhcw.action.bGlzdC10aWNrZXRz.option.Y2hhbm5lbA.allowed-value.c3RyaW5nOmZhY2Vib29r.display_name": {
+          "source": "Facebook",
+          "message": "Facebook"
+        },
+        "app.R29yZ2lhcw.action.bGlzdC10aWNrZXRz.option.Y2hhbm5lbA.allowed-value.c3RyaW5nOmhlbHAtY2VudGVy.display_name": {
+          "source": "Help Center",
+          "message": "Centrum pomoci"
+        },
+        "app.R29yZ2lhcw.action.bGlzdC10aWNrZXRz.option.Y2hhbm5lbA.allowed-value.c3RyaW5nOmluc3RhZ3JhbQ.display_name": {
+          "source": "Instagram",
+          "message": "Instagram"
+        },
+        "app.R29yZ2lhcw.action.bGlzdC10aWNrZXRz.option.Y2hhbm5lbA.allowed-value.c3RyaW5nOmludGVybmFsLW5vdGU.display_name": {
+          "source": "Internal Note",
+          "message": "Interná poznámka"
+        },
+        "app.R29yZ2lhcw.action.bGlzdC10aWNrZXRz.option.Y2hhbm5lbA.allowed-value.c3RyaW5nOnBob25l.display_name": {
+          "source": "Phone",
+          "message": "Telefón"
+        },
+        "app.R29yZ2lhcw.action.bGlzdC10aWNrZXRz.option.Y2hhbm5lbA.allowed-value.c3RyaW5nOnNtcw.display_name": {
+          "source": "SMS",
+          "message": "SMS"
+        },
+        "app.R29yZ2lhcw.action.bGlzdC10aWNrZXRz.option.Y2hhbm5lbA.allowed-value.c3RyaW5nOnR3aXR0ZXI.display_name": {
+          "source": "Twitter",
+          "message": "Twitter"
+        },
+        "app.R29yZ2lhcw.action.bGlzdC10aWNrZXRz.option.Y2hhbm5lbA.allowed-value.c3RyaW5nOndoYXRzYXBw.display_name": {
+          "source": "WhatsApp",
+          "message": "WhatsApp"
+        },
+        "app.R29yZ2lhcw.action.bGlzdC10aWNrZXRz.option.Y2hhbm5lbA.display_name": {
+          "source": "Channel",
+          "message": "Kanál"
+        },
+        "app.R29yZ2lhcw.action.bGlzdC10aWNrZXRz.option.Y2hhbm5lbA.short_desc": {
+          "source": "Filter by channel",
+          "message": "Filtrovať podľa kanála"
+        },
+        "app.R29yZ2lhcw.action.bGlzdC10aWNrZXRz.option.Y3VzdG9tZXJfaWQ.display_name": {
+          "source": "Customer ID",
+          "message": "ID zákazníka"
+        },
+        "app.R29yZ2lhcw.action.bGlzdC10aWNrZXRz.option.Y3VzdG9tZXJfaWQ.short_desc": {
+          "source": "Filter by customer",
+          "message": "Filtrovať podľa zákazníka"
+        },
+        "app.R29yZ2lhcw.action.bGlzdC10aWNrZXRz.option.YXNzaWduZWVfdXNlcl9pZA.display_name": {
+          "source": "Assignee User ID",
+          "message": "ID priradeného používateľa"
+        },
+        "app.R29yZ2lhcw.action.bGlzdC10aWNrZXRz.option.YXNzaWduZWVfdXNlcl9pZA.short_desc": {
+          "source": "Filter by assigned agent",
+          "message": "Filtrovať podľa priradeného agenta"
+        },
+        "app.R29yZ2lhcw.action.bGlzdC10aWNrZXRz.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "Limit"
+        },
+        "app.R29yZ2lhcw.action.bGlzdC10aWNrZXRz.option.bGltaXQ.short_desc": {
+          "source": "Maximum results",
+          "message": "Maximálny počet výsledkov"
+        },
+        "app.R29yZ2lhcw.action.bGlzdC10aWNrZXRz.option.c3RhdHVz.allowed-value.c3RyaW5nOm9wZW4.display_name": {
+          "source": "Open",
+          "message": "Otvorená"
+        },
+        "app.R29yZ2lhcw.action.bGlzdC10aWNrZXRz.option.c3RhdHVz.allowed-value.c3RyaW5nOmNsb3NlZA.display_name": {
+          "source": "Closed",
+          "message": "Zatvorené"
+        },
+        "app.R29yZ2lhcw.action.bGlzdC10aWNrZXRz.option.c3RhdHVz.display_name": {
+          "source": "Status",
+          "message": "Stav"
+        },
+        "app.R29yZ2lhcw.action.bGlzdC10aWNrZXRz.option.c3RhdHVz.short_desc": {
+          "source": "Filter by status",
+          "message": "Filtrovať podľa stavu"
+        },
+        "app.R29yZ2lhcw.action.bGlzdC10aWNrZXRz.option.dGlja2V0X2lk.display_name": {
+          "source": "Ticket ID",
+          "message": "ID tiketu"
+        },
+        "app.R29yZ2lhcw.action.bGlzdC10aWNrZXRz.option.dGlja2V0X2lk.short_desc": {
+          "source": "Get a specific ticket",
+          "message": "Získať konkrétny tiket"
+        },
+        "app.R29yZ2lhcw.action.bGlzdC10aWNrZXRz.short_desc": {
+          "source": "List support tickets",
+          "message": "Zoznam tiketov podpory"
+        },
+        "app.R29yZ2lhcw.action.bGlzdC11c2Vycw.desc": {
+          "source": "List all Gorgias helpdesk agents (users)",
+          "message": "Zoznam všetkých helpdesk agentov Gorgias (používateľov)"
+        },
+        "app.R29yZ2lhcw.action.bGlzdC11c2Vycw.display_name": {
+          "source": "List Users",
+          "message": "Zoznam používateľov"
+        },
+        "app.R29yZ2lhcw.action.bGlzdC11c2Vycw.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "Limit"
+        },
+        "app.R29yZ2lhcw.action.bGlzdC11c2Vycw.option.bGltaXQ.short_desc": {
+          "source": "Maximum results",
+          "message": "Maximálny počet výsledkov"
+        },
+        "app.R29yZ2lhcw.action.bGlzdC11c2Vycw.option.dXNlcl9pZA.display_name": {
+          "source": "User ID",
+          "message": "ID používateľa"
+        },
+        "app.R29yZ2lhcw.action.bGlzdC11c2Vycw.option.dXNlcl9pZA.short_desc": {
+          "source": "Get a specific user",
+          "message": "Získať konkrétneho používateľa"
+        },
+        "app.R29yZ2lhcw.action.bGlzdC11c2Vycw.short_desc": {
+          "source": "List helpdesk agents",
+          "message": "Zoznam agentov helpdesku"
+        },
+        "app.R29yZ2lhcw.action.bGlzdC1jdXN0b21lcnM.desc": {
+          "source": "List Gorgias customers with optional filtering",
+          "message": "Zoznam zákazníkov Gorgias s voliteľným filtrovaním"
+        },
+        "app.R29yZ2lhcw.action.bGlzdC1jdXN0b21lcnM.display_name": {
+          "source": "List Customers",
+          "message": "Zoznam zákazníkov"
+        },
+        "app.R29yZ2lhcw.action.bGlzdC1jdXN0b21lcnM.option.Y3VzdG9tZXJfaWQ.display_name": {
+          "source": "Customer ID",
+          "message": "ID zákazníka"
+        },
+        "app.R29yZ2lhcw.action.bGlzdC1jdXN0b21lcnM.option.Y3VzdG9tZXJfaWQ.short_desc": {
+          "source": "Get a specific customer",
+          "message": "Získať konkrétneho zákazníka"
+        },
+        "app.R29yZ2lhcw.action.bGlzdC1jdXN0b21lcnM.option.ZW1haWw.display_name": {
+          "source": "Email",
+          "message": "E-mail"
+        },
+        "app.R29yZ2lhcw.action.bGlzdC1jdXN0b21lcnM.option.ZW1haWw.short_desc": {
+          "source": "Filter by email",
+          "message": "Filtrovať podľa e-mailu"
+        },
+        "app.R29yZ2lhcw.action.bGlzdC1jdXN0b21lcnM.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "Limit"
+        },
+        "app.R29yZ2lhcw.action.bGlzdC1jdXN0b21lcnM.option.bGltaXQ.short_desc": {
+          "source": "Maximum results",
+          "message": "Maximálny počet výsledkov"
+        },
+        "app.R29yZ2lhcw.action.bGlzdC1jdXN0b21lcnM.short_desc": {
+          "source": "List customers",
+          "message": "Zoznam zákazníkov"
+        },
+        "app.R29yZ2lhcw.action.bGlzdC1tZXNzYWdlcw.desc": {
+          "source": "List all messages for a specific Gorgias ticket",
+          "message": "Zoznam všetkých správ pre konkrétny tiket Gorgias"
+        },
+        "app.R29yZ2lhcw.action.bGlzdC1tZXNzYWdlcw.display_name": {
+          "source": "List Messages",
+          "message": "Zoznam správ"
+        },
+        "app.R29yZ2lhcw.action.bGlzdC1tZXNzYWdlcw.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "Limit"
+        },
+        "app.R29yZ2lhcw.action.bGlzdC1tZXNzYWdlcw.option.bGltaXQ.short_desc": {
+          "source": "Maximum results",
+          "message": "Maximálny počet výsledkov"
+        },
+        "app.R29yZ2lhcw.action.bGlzdC1tZXNzYWdlcw.option.bWVzc2FnZV9pZA.display_name": {
+          "source": "Message ID",
+          "message": "ID správy"
+        },
+        "app.R29yZ2lhcw.action.bGlzdC1tZXNzYWdlcw.option.bWVzc2FnZV9pZA.short_desc": {
+          "source": "Get a specific message",
+          "message": "Získať konkrétnu správu"
+        },
+        "app.R29yZ2lhcw.action.bGlzdC1tZXNzYWdlcw.option.dGlja2V0X2lk.display_name": {
+          "source": "Ticket ID",
+          "message": "ID tiketu"
+        },
+        "app.R29yZ2lhcw.action.bGlzdC1tZXNzYWdlcw.option.dGlja2V0X2lk.short_desc": {
+          "source": "The ticket to list messages for",
+          "message": "Tiket, pre ktorý sa majú zobraziť správy"
+        },
+        "app.R29yZ2lhcw.action.bGlzdC1tZXNzYWdlcw.short_desc": {
+          "source": "List messages for a ticket",
+          "message": "Zoznam správ pre tiket"
+        },
+        "app.R29yZ2lhcw.action.bWFrZS1hcGktY2FsbA.desc": {
+          "source": "Make a custom HTTP / REST API call to **Gorgias** using the configured connection's authentication.\n\nSpecify the HTTP method, the URI path (relative to the connection's API base URL), optional query parameters, headers, and request body. The response is returned as a hash containing the status code, response headers, and response body.\n\nUse this action for endpoints that are not yet exposed as first-class actions on this app.",
+          "message": "Vytvorte vlastné volanie HTTP / REST API do služby **Gorgias** pomocou overenia nakonfigurovaného pripojenia.\n\nZadajte metódu HTTP, cestu URI (relatívnu k základnej adrese URL rozhrania API pripojenia), voliteľné parametre dopytu, hlavičky a telo požiadavky. Odpoveď sa vráti ako hash obsahujúci stavový kód, hlavičky odpovede a telo odpovede.\n\nTúto akciu použite pre koncové body, ktoré ešte nie sú sprístupnené ako prvotriedne akcie v tejto aplikácii."
+        },
+        "app.R29yZ2lhcw.action.bWFrZS1hcGktY2FsbA.display_name": {
+          "source": "Make an API call",
+          "message": "Urobiť volanie API"
+        },
+        "app.R29yZ2lhcw.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.desc": {
+          "source": "The request body. The effective type depends on `body_type`: JSON/form/YAML expect a hash, XML/text expect a string, multipart expects a file structure, binary expects raw bytes.",
+          "message": "Telo požiadavky. Efektívny typ závisí od `body_type`: JSON/formulár/YAML očakávajú hash, XML/text očakávajú reťazec, multipart očakáva štruktúru súboru, binárny typ očakáva neopracované bajty."
+        },
+        "app.R29yZ2lhcw.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.display_name": {
+          "source": "Body",
+          "message": "Telo"
+        },
+        "app.R29yZ2lhcw.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.short_desc": {
+          "source": "The request body",
+          "message": "Telo požiadavky"
+        },
+        "app.R29yZ2lhcw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.desc": {
+          "source": "Upload a file using `multipart/form-data`. The body must be a @ref DataProvider::FileDataType \"FileDataType\" structure (filename + content + mime_type). The framework builds the multipart envelope and sets the boundary header.",
+          "message": "Odoslať súbor pomocou `multipart/form-data`. Telo musí byť štruktúra @ref DataProvider::FileDataType \"FileDataType\" (filename + content + mime_type). Rámec vytvorí obálku multipart a nastaví hlavičku boundary."
+        },
+        "app.R29yZ2lhcw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.display_name": {
+          "source": "Multipart Form",
+          "message": "Multipart formulár"
+        },
+        "app.R29yZ2lhcw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.short_desc": {
+          "source": "Upload a file using multipart/form-data",
+          "message": "Odoslať súbor pomocou multipart/form-data"
+        },
+        "app.R29yZ2lhcw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.desc": {
+          "source": "Pass the body to the REST client unchanged; the client decides serialization based on its configured `data` option and the value type",
+          "message": "Odovzdať telo klientovi REST bez zmeny; klient rozhodne o serializácii na základe svojej konfigurovanej možnosti `data` a typu hodnoty"
+        },
+        "app.R29yZ2lhcw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.display_name": {
+          "source": "Auto",
+          "message": "Auto"
+        },
+        "app.R29yZ2lhcw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.short_desc": {
+          "source": "Pass-through; use connection serialization and let the REST client decide",
+          "message": "Priamy prechod; použiť serializáciu spojenia a nechať rozhodnúť klienta REST"
+        },
+        "app.R29yZ2lhcw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.desc": {
+          "source": "Send the body as raw bytes. The body must be a binary value. Sets `Content-Type: application/octet-stream` unless overridden by `hdr`.",
+          "message": "Odoslať telo ako neopracované bajty. Telo musí byť binárna hodnota. Nastavuje `Content-Type: application/octet-stream`, pokiaľ nie je prepísané pomocou `hdr`."
+        },
+        "app.R29yZ2lhcw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.display_name": {
+          "source": "Raw Binary",
+          "message": "Surové binárne dáta"
+        },
+        "app.R29yZ2lhcw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.short_desc": {
+          "source": "Send body as raw bytes",
+          "message": "Odoslať telo ako neopracované bajty"
+        },
+        "app.R29yZ2lhcw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.desc": {
+          "source": "Serialize a hash of form fields as `application/x-www-form-urlencoded`. The body must be a hash whose values are scalars (strings/numbers/booleans).",
+          "message": "Serializovať hash polí formulára ako `application/x-www-form-urlencoded`. Telo musí byť hash, ktorého hodnoty sú skaláre (reťazce/čísla/booleovské hodnoty)."
+        },
+        "app.R29yZ2lhcw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.display_name": {
+          "source": "Form (URL-encoded)",
+          "message": "Formulár (kódovaný v URL)"
+        },
+        "app.R29yZ2lhcw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.short_desc": {
+          "source": "Serialize body as application/x-www-form-urlencoded form fields",
+          "message": "Serializovať telo ako polia formulára application/x-www-form-urlencoded"
+        },
+        "app.R29yZ2lhcw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.desc": {
+          "source": "Serialize the body as JSON; sets `Content-Type: application/json`. The body should be a hash, list, or scalar value.",
+          "message": "Serializovať telo ako JSON; nastavuje `Content-Type: application/json`. Telo by malo byť hash, zoznam alebo skalárna hodnota."
+        },
+        "app.R29yZ2lhcw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.display_name": {
+          "source": "JSON",
+          "message": "JSON"
+        },
+        "app.R29yZ2lhcw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.short_desc": {
+          "source": "Serialize body as JSON",
+          "message": "Serializovať telo ako JSON"
+        },
+        "app.R29yZ2lhcw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.desc": {
+          "source": "Send the body as plain text. The body must be a string. Sets `Content-Type: text/plain`.",
+          "message": "Odoslať telo ako čistý text. Telo musí byť reťazec. Nastavuje `Content-Type: text/plain`."
+        },
+        "app.R29yZ2lhcw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.display_name": {
+          "source": "Plain Text",
+          "message": "Čistý text"
+        },
+        "app.R29yZ2lhcw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.short_desc": {
+          "source": "Send body as text/plain",
+          "message": "Odoslať telo ako text/plain"
+        },
+        "app.R29yZ2lhcw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.desc": {
+          "source": "Send the body as XML. If the body is a hash it is serialized to XML; if it is a string it is sent verbatim. Sets `Content-Type: application/xml`.",
+          "message": "Odoslať telo ako XML. Ak je telo hash, serializuje sa do XML; ak je to reťazec, odosiela sa doslovne. Nastavuje `Content-Type: application/xml`."
+        },
+        "app.R29yZ2lhcw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.display_name": {
+          "source": "XML",
+          "message": "XML"
+        },
+        "app.R29yZ2lhcw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.short_desc": {
+          "source": "Send body as XML",
+          "message": "Odoslať telo ako XML"
+        },
+        "app.R29yZ2lhcw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.desc": {
+          "source": "Send the body as YAML. If the body is a hash it is serialized to YAML; if it is a string it is sent verbatim. Sets `Content-Type: application/x-yaml`.",
+          "message": "Odoslať telo ako YAML. Ak je telo hash, serializuje sa do YAML; ak je to reťazec, odosiela sa doslovne. Nastavuje `Content-Type: application/x-yaml`."
+        },
+        "app.R29yZ2lhcw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.display_name": {
+          "source": "YAML",
+          "message": "YAML"
+        },
+        "app.R29yZ2lhcw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.short_desc": {
+          "source": "Send body as YAML",
+          "message": "Odoslať telo ako YAML"
+        },
+        "app.R29yZ2lhcw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.desc": {
+          "source": "Selects the body serialization mode and the corresponding `Content-Type` header. Changing this field reshapes the `body` editor - selecting JSON exposes a JSON editor, selecting Multipart Form exposes a file picker, and so on.",
+          "message": "Vyberie režim serializácie tela a zodpovedajúcu hlavičku `Content-Type`. Zmena tohto poľa zmení editor `body` - výber JSON zobrazí editor JSON, výber Multipart Form zobrazí výber súborov a podobne."
+        },
+        "app.R29yZ2lhcw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.display_name": {
+          "source": "Body Type",
+          "message": "Typ tela"
+        },
+        "app.R29yZ2lhcw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.short_desc": {
+          "source": "How the body is serialized and what Content-Type is sent",
+          "message": "Ako sa telo serializuje a aký Content-Type sa odosiela"
+        },
+        "app.R29yZ2lhcw.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.desc": {
+          "source": "If `True`, non-2xx HTTP responses return as the normal response hash (with the actual status code) instead of raising `REST-RESPONSE-ERROR`. Useful for handling 4xx/5xx as data - e.g. checking whether a resource exists. Overrides the connection's `error_passthru` setting for this call only.",
+          "message": "Ak je `True`, odpovede HTTP iné ako 2xx sa vrátia ako normálny hash odpovede (s reálnym stavovým kódom) namiesto vyvolania `REST-RESPONSE-ERROR`. Užitočné na spracovanie 4xx/5xx ako dát – napr. kontrola, či zdroj existuje. Prepíše nastavenie `error_passthru` spojenia len pre toto volanie."
+        },
+        "app.R29yZ2lhcw.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.display_name": {
+          "source": "Return Errors as Data",
+          "message": "Vrátiť chyby ako dáta"
+        },
+        "app.R29yZ2lhcw.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.short_desc": {
+          "source": "Return non-2xx responses normally instead of throwing",
+          "message": "Vrátiť odpovede iné ako 2xx normálne namiesto vyvolania výnimky"
+        },
+        "app.R29yZ2lhcw.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.desc": {
+          "source": "Optional list of HTTP status codes treated as success. If set and the response status is not in this list, the action throws `REST-STATUS-ERROR`. When unset, the REST client's default behavior applies (typically: 2xx is success, non-2xx throws).",
+          "message": "Voliteľný zoznam stavových kódov HTTP považovaných za úspech. Ak je nastavený a stav odpovede nie je v tomto zozname, akcia vyvolá `REST-STATUS-ERROR`. Ak nie je nastavený, uplatní sa predvolené správanie klienta REST (zvyčajne: 2xx je úspech, iné ako 2xx vyvolá výnimku)."
+        },
+        "app.R29yZ2lhcw.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.display_name": {
+          "source": "Expected Status Codes",
+          "message": "Očakávané stavové kódy"
+        },
+        "app.R29yZ2lhcw.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.short_desc": {
+          "source": "Response status codes treated as success",
+          "message": "Stavové kódy odpovede považované za úspech"
+        },
+        "app.R29yZ2lhcw.action.bWFrZS1hcGktY2FsbA.option.aGRy.desc": {
+          "source": "Hash of custom headers added to the request. These override any default headers set by `body_type` (e.g. supplying `Content-Type` here wins over the body-type default).",
+          "message": "Hash vlastných hlavičiek pridaných k požiadavke. Tie prepíšu akékoľvek predvolené hlavičky nastavené pomocou `body_type` (napr. zadanie `Content-Type` na tomto mieste má prednosť pred predvolenou hodnotou typu tela)."
+        },
+        "app.R29yZ2lhcw.action.bWFrZS1hcGktY2FsbA.option.aGRy.display_name": {
+          "source": "Custom Headers",
+          "message": "Vlastné hlavičky"
+        },
+        "app.R29yZ2lhcw.action.bWFrZS1hcGktY2FsbA.option.aGRy.short_desc": {
+          "source": "Extra request headers",
+          "message": "Dodatočné hlavičky požiadavky"
+        },
+        "app.R29yZ2lhcw.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.desc": {
+          "source": "If `True`, the response hash includes a `debug` sub-hash containing the request method/URL/headers (with sensitive values redacted), request and response sizes, and round-trip duration. Useful when investigating slow or failing calls. Off by default to keep responses lean.",
+          "message": "Ak je `True`, hash odpovede obsahuje pod-hash `debug` obsahujúci metódu/URL/hlavičky požiadavky (so skrytými citlivými hodnotami), veľkosti požiadavky a odpovede a trvanie celého cyklu. Užitočné pri vyšetrovaní pomalých alebo zlyhávajúcich volaní. Predvolene vypnuté, aby odpovede zostali stručné."
+        },
+        "app.R29yZ2lhcw.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.display_name": {
+          "source": "Include Debug Info",
+          "message": "Zahrnúť ladiace informácie"
+        },
+        "app.R29yZ2lhcw.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.short_desc": {
+          "source": "Include request/timing/size debug info in the response",
+          "message": "Zahrnúť ladiace informácie o požiadavke/časovaní/veľkosti do odpovede"
+        },
+        "app.R29yZ2lhcw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.desc": {
+          "source": "HTTP `OPTIONS`",
+          "message": "HTTP `OPTIONS`"
+        },
+        "app.R29yZ2lhcw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.display_name": {
+          "source": "OPTIONS",
+          "message": "OPTIONS"
+        },
+        "app.R29yZ2lhcw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.short_desc": {
+          "source": "HTTP OPTIONS",
+          "message": "HTTP OPTIONS"
+        },
+        "app.R29yZ2lhcw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.desc": {
+          "source": "HTTP `DELETE`",
+          "message": "HTTP `DELETE`"
+        },
+        "app.R29yZ2lhcw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.display_name": {
+          "source": "DELETE",
+          "message": "DELETE"
+        },
+        "app.R29yZ2lhcw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.short_desc": {
+          "source": "HTTP DELETE",
+          "message": "HTTP DELETE"
+        },
+        "app.R29yZ2lhcw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.desc": {
+          "source": "HTTP `GET`",
+          "message": "HTTP `GET`"
+        },
+        "app.R29yZ2lhcw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.display_name": {
+          "source": "GET",
+          "message": "GET"
+        },
+        "app.R29yZ2lhcw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.short_desc": {
+          "source": "HTTP GET",
+          "message": "HTTP GET"
+        },
+        "app.R29yZ2lhcw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.desc": {
+          "source": "HTTP `HEAD`",
+          "message": "HTTP `HEAD`"
+        },
+        "app.R29yZ2lhcw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.display_name": {
+          "source": "HEAD",
+          "message": "HEAD"
+        },
+        "app.R29yZ2lhcw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.short_desc": {
+          "source": "HTTP HEAD",
+          "message": "HTTP HEAD"
+        },
+        "app.R29yZ2lhcw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.desc": {
+          "source": "HTTP `PATCH`",
+          "message": "HTTP `PATCH`"
+        },
+        "app.R29yZ2lhcw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.display_name": {
+          "source": "PATCH",
+          "message": "PATCH"
+        },
+        "app.R29yZ2lhcw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.short_desc": {
+          "source": "HTTP PATCH",
+          "message": "HTTP PATCH"
+        },
+        "app.R29yZ2lhcw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.desc": {
+          "source": "HTTP `POST`",
+          "message": "HTTP `POST`"
+        },
+        "app.R29yZ2lhcw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.display_name": {
+          "source": "POST",
+          "message": "POST"
+        },
+        "app.R29yZ2lhcw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.short_desc": {
+          "source": "HTTP POST",
+          "message": "HTTP POST"
+        },
+        "app.R29yZ2lhcw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.desc": {
+          "source": "HTTP `PUT`",
+          "message": "HTTP `PUT`"
+        },
+        "app.R29yZ2lhcw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.display_name": {
+          "source": "PUT",
+          "message": "PUT"
+        },
+        "app.R29yZ2lhcw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.short_desc": {
+          "source": "HTTP PUT",
+          "message": "HTTP PUT"
+        },
+        "app.R29yZ2lhcw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.desc": {
+          "source": "HTTP `TRACE`",
+          "message": "HTTP `TRACE`"
+        },
+        "app.R29yZ2lhcw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.display_name": {
+          "source": "TRACE",
+          "message": "TRACE"
+        },
+        "app.R29yZ2lhcw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.short_desc": {
+          "source": "HTTP TRACE",
+          "message": "HTTP TRACE"
+        },
+        "app.R29yZ2lhcw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "Metóda HTTP, ktorá sa má použiť pre požiadavku"
+        },
+        "app.R29yZ2lhcw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.display_name": {
+          "source": "HTTP Method",
+          "message": "Metóda HTTP"
+        },
+        "app.R29yZ2lhcw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.short_desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "Metóda HTTP, ktorá sa má použiť pre požiadavku"
+        },
+        "app.R29yZ2lhcw.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain `{name}` placeholders that are replaced from `path_vars`. Example: `/users/{id}/comments`.",
+          "message": "Cesta URI relatívna k základnej adrese URL API spojenia. Môže obsahovať žolíky `{name}`, ktoré sú nahradené z `path_vars`. Príklad: `/users/{id}/comments`."
+        },
+        "app.R29yZ2lhcw.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.display_name": {
+          "source": "URI Path",
+          "message": "Cesta URI"
+        },
+        "app.R29yZ2lhcw.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.short_desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain '{name}' placeholders that are replaced from 'path_vars'. Example: '/users/{id}/comments'",
+          "message": "Cesta URI relatívna k základnej URL adrese API pripojenia. Môže obsahovať zastupiteľné objekty '{name}', ktoré sa nahradia z 'path_vars'. Príklad: '/users/{id}/comments'"
+        },
+        "app.R29yZ2lhcw.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.desc": {
+          "source": "Hash of values substituted into `{name}` placeholders in the URI path. Example: with `path = /users/{id}` and `path_vars = {id: 123}` the framework sends `/users/123`. Values are URL-encoded.",
+          "message": "Hash hodnôt nahradených do zastupiteľných objektov `{name}` v ceste URI. Príklad: s `path = /users/{id}` a `path_vars = {id: 123}` rozhranie odosiela `/users/123`. Hodnoty sú zakódované v URL."
+        },
+        "app.R29yZ2lhcw.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.display_name": {
+          "source": "Path Variables",
+          "message": "Premenné cesty"
+        },
+        "app.R29yZ2lhcw.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.short_desc": {
+          "source": "Values for {name} placeholders in path",
+          "message": "Hodnoty pre zastupiteľné objekty {name} v ceste"
+        },
+        "app.R29yZ2lhcw.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.desc": {
+          "source": "Hash of query string parameters to append to the URI path. Values are URL-encoded; list values are joined with `,`.",
+          "message": "Hash parametrov reťazca dopytu na pripojenie k ceste URI. Hodnoty sú zakódované v URL; hodnoty zoznamu sú spojené pomocou `,`."
+        },
+        "app.R29yZ2lhcw.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.display_name": {
+          "source": "Query Arguments",
+          "message": "Argumenty dopytu"
+        },
+        "app.R29yZ2lhcw.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.short_desc": {
+          "source": "Query string parameters",
+          "message": "Parametre reťazca dopytu"
+        },
+        "app.R29yZ2lhcw.action.bWFrZS1hcGktY2FsbA.short_desc": {
+          "source": "Make a custom API call to Gorgias",
+          "message": "Vytvoriť vlastné volanie API do Gorgias"
+        },
+        "app.R29yZ2lhcw.action.bmV3LXRpY2tldA.desc": {
+          "source": "Fires when a new ticket is created in Gorgias",
+          "message": "Spustí sa pri vytvorení nového tiketu v Gorgias"
+        },
+        "app.R29yZ2lhcw.action.bmV3LXRpY2tldA.display_name": {
+          "source": "New Ticket",
+          "message": "Nový tiket"
+        },
+        "app.R29yZ2lhcw.action.bmV3LXRpY2tldA.short_desc": {
+          "source": "Trigger when a new ticket is created",
+          "message": "Spustiť pri vytvorení nového tiketu"
+        },
+        "app.R29yZ2lhcw.action.dGlja2V0LXVwZGF0ZQ.desc": {
+          "source": "Fires when a ticket is modified in Gorgias",
+          "message": "Spustí sa pri úprave tiketu v Gorgias"
+        },
+        "app.R29yZ2lhcw.action.dGlja2V0LXVwZGF0ZQ.display_name": {
+          "source": "Ticket Updated",
+          "message": "Tiket aktualizovaný"
+        },
+        "app.R29yZ2lhcw.action.dGlja2V0LXVwZGF0ZQ.short_desc": {
+          "source": "Trigger when a ticket is updated",
+          "message": "Spustiť pri aktualizácii tiketu"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLW1lc3NhZ2U.desc": {
+          "source": "Update the body, channel, or other properties of a message on a ticket",
+          "message": "Aktualizovať telo, kanál alebo iné vlastnosti správy v tikete"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLW1lc3NhZ2U.display_name": {
+          "source": "Update a Message",
+          "message": "Aktualizovať správu"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLW1lc3NhZ2U.option.Y2hhbm5lbA.allowed-value.c3RyaW5nOmFwaQ.display_name": {
+          "source": "API",
+          "message": "API"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLW1lc3NhZ2U.option.Y2hhbm5lbA.allowed-value.c3RyaW5nOmNoYXQ.display_name": {
+          "source": "Chat",
+          "message": "Chat"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLW1lc3NhZ2U.option.Y2hhbm5lbA.allowed-value.c3RyaW5nOmNvbnRhY3RfZm9ybQ.display_name": {
+          "source": "Contact Form",
+          "message": "Kontaktný formulár"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLW1lc3NhZ2U.option.Y2hhbm5lbA.allowed-value.c3RyaW5nOmVtYWls.display_name": {
+          "source": "Email",
+          "message": "E-mail"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLW1lc3NhZ2U.option.Y2hhbm5lbA.allowed-value.c3RyaW5nOmZhY2Vib29r.display_name": {
+          "source": "Facebook",
+          "message": "Facebook"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLW1lc3NhZ2U.option.Y2hhbm5lbA.allowed-value.c3RyaW5nOmhlbHAtY2VudGVy.display_name": {
+          "source": "Help Center",
+          "message": "Centrum pomoci"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLW1lc3NhZ2U.option.Y2hhbm5lbA.allowed-value.c3RyaW5nOmluc3RhZ3JhbQ.display_name": {
+          "source": "Instagram",
+          "message": "Instagram"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLW1lc3NhZ2U.option.Y2hhbm5lbA.allowed-value.c3RyaW5nOmludGVybmFsLW5vdGU.display_name": {
+          "source": "Internal Note",
+          "message": "Interná poznámka"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLW1lc3NhZ2U.option.Y2hhbm5lbA.allowed-value.c3RyaW5nOnBob25l.display_name": {
+          "source": "Phone",
+          "message": "Telefón"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLW1lc3NhZ2U.option.Y2hhbm5lbA.allowed-value.c3RyaW5nOnNtcw.display_name": {
+          "source": "SMS",
+          "message": "SMS"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLW1lc3NhZ2U.option.Y2hhbm5lbA.allowed-value.c3RyaW5nOnR3aXR0ZXI.display_name": {
+          "source": "Twitter",
+          "message": "Twitter"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLW1lc3NhZ2U.option.Y2hhbm5lbA.allowed-value.c3RyaW5nOndoYXRzYXBw.display_name": {
+          "source": "WhatsApp",
+          "message": "WhatsApp"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLW1lc3NhZ2U.option.Y2hhbm5lbA.desc": {
+          "source": "The channel for the message",
+          "message": "Kanál pre správu"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLW1lc3NhZ2U.option.Y2hhbm5lbA.display_name": {
+          "source": "Channel",
+          "message": "Kanál"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLW1lc3NhZ2U.option.Y2hhbm5lbA.short_desc": {
+          "source": "Message channel",
+          "message": "Kanál správy"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLW1lc3NhZ2U.option.YXR0YWNobWVudHM.desc": {
+          "source": "Updated list of file attachments for the message",
+          "message": "Aktualizovaný zoznam príloh súborov pre správu"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLW1lc3NhZ2U.option.YXR0YWNobWVudHM.display_name": {
+          "source": "Attachments",
+          "message": "Prílohy"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLW1lc3NhZ2U.option.YXR0YWNobWVudHM.short_desc": {
+          "source": "File attachments",
+          "message": "Prílohy súborov"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLW1lc3NhZ2U.option.Ym9keV90ZXh0.desc": {
+          "source": "The updated plain text body of the message",
+          "message": "Aktualizovaný čistý text tela správy"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLW1lc3NhZ2U.option.Ym9keV90ZXh0.display_name": {
+          "source": "Body Text",
+          "message": "Text tela správy"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLW1lc3NhZ2U.option.Ym9keV90ZXh0.short_desc": {
+          "source": "Plain text body",
+          "message": "Telo v čistom texte"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLW1lc3NhZ2U.option.Ym9keV9odG1s.desc": {
+          "source": "The updated HTML body of the message",
+          "message": "Aktualizované HTML telo správy"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLW1lc3NhZ2U.option.Ym9keV9odG1s.display_name": {
+          "source": "Body HTML",
+          "message": "HTML tela správy"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLW1lc3NhZ2U.option.Ym9keV9odG1s.short_desc": {
+          "source": "HTML body",
+          "message": "HTML telo"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLW1lc3NhZ2U.option.ZXh0ZXJuYWxfaWQ.desc": {
+          "source": "An external identifier for the message",
+          "message": "Externý identifikátor správy"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLW1lc3NhZ2U.option.ZXh0ZXJuYWxfaWQ.display_name": {
+          "source": "External ID",
+          "message": "Externé ID"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLW1lc3NhZ2U.option.ZXh0ZXJuYWxfaWQ.short_desc": {
+          "source": "External identifier",
+          "message": "Externý identifikátor"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLW1lc3NhZ2U.option.ZnJvbV9hZ2VudA.desc": {
+          "source": "Whether the message is from an agent (`True`) or customer (`False`)",
+          "message": "Či je správa od agenta (`True`) alebo od zákazníka (`False`)"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLW1lc3NhZ2U.option.ZnJvbV9hZ2VudA.display_name": {
+          "source": "From Agent",
+          "message": "Od agenta"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLW1lc3NhZ2U.option.ZnJvbV9hZ2VudA.short_desc": {
+          "source": "Whether from agent",
+          "message": "Či je od agenta"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLW1lc3NhZ2U.option.bWVzc2FnZV9pZA.desc": {
+          "source": "The ID of the message to update",
+          "message": "ID správy, ktorá sa má aktualizovať"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLW1lc3NhZ2U.option.bWVzc2FnZV9pZA.display_name": {
+          "source": "Message ID",
+          "message": "ID správy"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLW1lc3NhZ2U.option.bWVzc2FnZV9pZA.short_desc": {
+          "source": "The message to update",
+          "message": "Správa na aktualizáciu"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLW1lc3NhZ2U.option.c2VuZGVy.desc": {
+          "source": "The sender of the message. Provide `id` for agents or `email` for customers",
+          "message": "Odosielateľ správy. Zadajte `id` pre agentov alebo `email` pre zákazníkov"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLW1lc3NhZ2U.option.c2VuZGVy.display_name": {
+          "source": "Sender",
+          "message": "Odosielateľ"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLW1lc3NhZ2U.option.c2VuZGVy.short_desc": {
+          "source": "Message sender",
+          "message": "Odosielateľ správy"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLW1lc3NhZ2U.option.c3ViamVjdA.desc": {
+          "source": "The updated subject line of the message",
+          "message": "Aktualizovaný predmet správy"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLW1lc3NhZ2U.option.c3ViamVjdA.display_name": {
+          "source": "Subject",
+          "message": "Predmet"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLW1lc3NhZ2U.option.c3ViamVjdA.short_desc": {
+          "source": "Message subject",
+          "message": "Predmet správy"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLW1lc3NhZ2U.option.cmVjZWl2ZXI.desc": {
+          "source": "The receiver of the message. Provide `id` for an agent or `email` for a customer",
+          "message": "Príjemca správy. Zadajte `id` pre agenta alebo `email` pre zákazníka"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLW1lc3NhZ2U.option.cmVjZWl2ZXI.display_name": {
+          "source": "Receiver",
+          "message": "Príjemca"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLW1lc3NhZ2U.option.cmVjZWl2ZXI.short_desc": {
+          "source": "Message receiver",
+          "message": "Príjemca správy"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLW1lc3NhZ2U.option.dGlja2V0X2lk.desc": {
+          "source": "The ID of the ticket containing the message to update",
+          "message": "ID tiketu obsahujúceho správu, ktorá sa má aktualizovať"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLW1lc3NhZ2U.option.dGlja2V0X2lk.display_name": {
+          "source": "Ticket ID",
+          "message": "ID tiketu"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLW1lc3NhZ2U.option.dGlja2V0X2lk.short_desc": {
+          "source": "The ticket containing the message",
+          "message": "Tiket obsahujúci správu"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLW1lc3NhZ2U.option.dmlh.allowed-value.c3RyaW5nOmFwaQ.display_name": {
+          "source": "API",
+          "message": "API"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLW1lc3NhZ2U.option.dmlh.allowed-value.c3RyaW5nOmNoYXQ.display_name": {
+          "source": "Chat",
+          "message": "Chat"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLW1lc3NhZ2U.option.dmlh.allowed-value.c3RyaW5nOmNvbnRhY3RfZm9ybQ.display_name": {
+          "source": "Contact Form",
+          "message": "Kontaktný formulár"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLW1lc3NhZ2U.option.dmlh.allowed-value.c3RyaW5nOmVtYWls.display_name": {
+          "source": "Email",
+          "message": "E-mail"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLW1lc3NhZ2U.option.dmlh.allowed-value.c3RyaW5nOmZhY2Vib29r.display_name": {
+          "source": "Facebook",
+          "message": "Facebook"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLW1lc3NhZ2U.option.dmlh.allowed-value.c3RyaW5nOmhlbHAtY2VudGVy.display_name": {
+          "source": "Help Center",
+          "message": "Centrum pomoci"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLW1lc3NhZ2U.option.dmlh.allowed-value.c3RyaW5nOmhlbHBkZXNr.display_name": {
+          "source": "Helpdesk",
+          "message": "Helpdesk"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLW1lc3NhZ2U.option.dmlh.allowed-value.c3RyaW5nOmluc3RhZ3JhbQ.display_name": {
+          "source": "Instagram",
+          "message": "Instagram"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLW1lc3NhZ2U.option.dmlh.allowed-value.c3RyaW5nOnBob25l.display_name": {
+          "source": "Phone",
+          "message": "Telefón"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLW1lc3NhZ2U.option.dmlh.allowed-value.c3RyaW5nOnNtcw.display_name": {
+          "source": "SMS",
+          "message": "SMS"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLW1lc3NhZ2U.option.dmlh.allowed-value.c3RyaW5nOnR3aXR0ZXI.display_name": {
+          "source": "Twitter",
+          "message": "Twitter"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLW1lc3NhZ2U.option.dmlh.allowed-value.c3RyaW5nOndoYXRzYXBw.display_name": {
+          "source": "WhatsApp",
+          "message": "WhatsApp"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLW1lc3NhZ2U.option.dmlh.desc": {
+          "source": "How the message was created",
+          "message": "Spôsob, akým bola správa vytvorená"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLW1lc3NhZ2U.option.dmlh.display_name": {
+          "source": "Via",
+          "message": "Cez"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLW1lc3NhZ2U.option.dmlh.short_desc": {
+          "source": "Message source",
+          "message": "Zdroj správy"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLW1lc3NhZ2U.short_desc": {
+          "source": "Update an existing message",
+          "message": "Aktualizovať existujúcu správu"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLWN1c3RvbWVy.desc": {
+          "source": "Update the name, email, or other properties of a customer",
+          "message": "Aktualizovať meno, e-mail alebo iné vlastnosti zákazníka"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLWN1c3RvbWVy.display_name": {
+          "source": "Update a Customer",
+          "message": "Aktualizovať zákazníka"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLWN1c3RvbWVy.option.Y2hhbm5lbHM.desc": {
+          "source": "List of communication channels for the customer. Each channel has an `address`, `type`, and optional `preferred` flag",
+          "message": "Zoznam komunikačných kanálov pre zákazníka. Každý kanál má `address`, `type` a voliteľný príznak `preferred`"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLWN1c3RvbWVy.option.Y2hhbm5lbHM.display_name": {
+          "source": "Channels",
+          "message": "Kanály"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLWN1c3RvbWVy.option.Y2hhbm5lbHM.short_desc": {
+          "source": "Communication channels",
+          "message": "Komunikačné kanály"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLWN1c3RvbWVy.option.Y3VzdG9tZXJfaWQ.desc": {
+          "source": "The ID of the customer to update",
+          "message": "ID zákazníka, ktorý sa má aktualizovať"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLWN1c3RvbWVy.option.Y3VzdG9tZXJfaWQ.display_name": {
+          "source": "Customer ID",
+          "message": "ID zákazníka"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLWN1c3RvbWVy.option.Y3VzdG9tZXJfaWQ.short_desc": {
+          "source": "The customer to update",
+          "message": "Zákazník na aktualizáciu"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLWN1c3RvbWVy.option.ZW1haWw.desc": {
+          "source": "The primary email address of the customer",
+          "message": "Primárna e-mailová adresa zákazníka"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLWN1c3RvbWVy.option.ZW1haWw.display_name": {
+          "source": "Email",
+          "message": "E-mail"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLWN1c3RvbWVy.option.ZW1haWw.short_desc": {
+          "source": "Customer email address",
+          "message": "E-mailová adresa zákazníka"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLWN1c3RvbWVy.option.ZXh0ZXJuYWxfaWQ.desc": {
+          "source": "An external identifier for the customer",
+          "message": "Externý identifikátor zákazníka"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLWN1c3RvbWVy.option.ZXh0ZXJuYWxfaWQ.display_name": {
+          "source": "External ID",
+          "message": "Externé ID"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLWN1c3RvbWVy.option.ZXh0ZXJuYWxfaWQ.short_desc": {
+          "source": "External identifier",
+          "message": "Externý identifikátor"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLWN1c3RvbWVy.option.Zmlyc3RuYW1l.desc": {
+          "source": "The first name of the customer",
+          "message": "Meno zákazníka"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLWN1c3RvbWVy.option.Zmlyc3RuYW1l.display_name": {
+          "source": "First Name",
+          "message": "Meno"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLWN1c3RvbWVy.option.Zmlyc3RuYW1l.short_desc": {
+          "source": "Customer first name",
+          "message": "Meno zákazníka"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLWN1c3RvbWVy.option.bGFuZ3VhZ2U.desc": {
+          "source": "The preferred language of the customer (ISO 639-1 code)",
+          "message": "Preferovaný jazyk zákazníka (kód ISO 639-1)"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLWN1c3RvbWVy.option.bGFuZ3VhZ2U.display_name": {
+          "source": "Language",
+          "message": "Jazyk"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLWN1c3RvbWVy.option.bGFuZ3VhZ2U.short_desc": {
+          "source": "Preferred language",
+          "message": "Preferovaný jazyk"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLWN1c3RvbWVy.option.bGFzdG5hbWU.desc": {
+          "source": "The last name of the customer",
+          "message": "Priezvisko zákazníka"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLWN1c3RvbWVy.option.bGFzdG5hbWU.display_name": {
+          "source": "Last Name",
+          "message": "Priezvisko"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLWN1c3RvbWVy.option.bGFzdG5hbWU.short_desc": {
+          "source": "Customer last name",
+          "message": "Priezvisko zákazníka"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLWN1c3RvbWVy.option.bm90ZQ.desc": {
+          "source": "Internal notes about the customer",
+          "message": "Interné poznámky o zákazníkovi"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLWN1c3RvbWVy.option.bm90ZQ.display_name": {
+          "source": "Note",
+          "message": "Poznámka"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLWN1c3RvbWVy.option.bm90ZQ.short_desc": {
+          "source": "Internal note",
+          "message": "Interná poznámka"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLWN1c3RvbWVy.option.bmFtZQ.desc": {
+          "source": "The full name of the customer",
+          "message": "Celé meno zákazníka"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLWN1c3RvbWVy.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "Názov"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLWN1c3RvbWVy.option.bmFtZQ.short_desc": {
+          "source": "Full name",
+          "message": "Celé meno"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLWN1c3RvbWVy.option.dGltZXpvbmU.desc": {
+          "source": "The timezone of the customer",
+          "message": "Časové pásmo zákazníka"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLWN1c3RvbWVy.option.dGltZXpvbmU.display_name": {
+          "source": "Timezone",
+          "message": "Časové pásmo"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLWN1c3RvbWVy.option.dGltZXpvbmU.short_desc": {
+          "source": "Customer timezone",
+          "message": "Časové pásmo zákazníka"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLWN1c3RvbWVy.short_desc": {
+          "source": "Update an existing customer",
+          "message": "Aktualizovať existujúceho zákazníka"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLXRhZw.desc": {
+          "source": "Update the name or decoration of a tag",
+          "message": "Aktualizovať názov alebo dekoráciu značky"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLXRhZw.display_name": {
+          "source": "Update a Tag",
+          "message": "Aktualizovať značku"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLXRhZw.option.ZGVjb3JhdGlvbg.desc": {
+          "source": "Visual decoration settings for the tag",
+          "message": "Nastavenia vizuálneho štýlu pre značku"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLXRhZw.option.ZGVjb3JhdGlvbg.display_name": {
+          "source": "Decoration",
+          "message": "Vizuálny štýl"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLXRhZw.option.ZGVjb3JhdGlvbg.short_desc": {
+          "source": "Visual decoration",
+          "message": "Vizuálny štýl"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLXRhZw.option.ZGVzY3JpcHRpb24.desc": {
+          "source": "A short description of the tag",
+          "message": "Krátky popis značky"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLXRhZw.option.ZGVzY3JpcHRpb24.display_name": {
+          "source": "Description",
+          "message": "Popis"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLXRhZw.option.ZGVzY3JpcHRpb24.short_desc": {
+          "source": "Tag description",
+          "message": "Popis značky"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLXRhZw.option.bmFtZQ.desc": {
+          "source": "The new name of the tag (min 1, max 256 characters)",
+          "message": "Nový názov značky (min. 1, max. 256 znakov)"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLXRhZw.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "Názov"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLXRhZw.option.bmFtZQ.short_desc": {
+          "source": "Tag name",
+          "message": "Názov štítka"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLXRhZw.option.dGFnX2lk.desc": {
+          "source": "The ID of the tag to update",
+          "message": "ID značky, ktorá sa má aktualizovať"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLXRhZw.option.dGFnX2lk.display_name": {
+          "source": "Tag ID",
+          "message": "ID štítka"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLXRhZw.option.dGFnX2lk.short_desc": {
+          "source": "The tag to update",
+          "message": "Značka na aktualizáciu"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLXRhZw.short_desc": {
+          "source": "Update an existing tag",
+          "message": "Aktualizovať existujúcu značku"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLXRpY2tldA.desc": {
+          "source": "Update the status, priority, assignment, or other properties of a ticket",
+          "message": "Aktualizovať stav, prioritu, priradenie alebo iné vlastnosti tiketu"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLXRpY2tldA.display_name": {
+          "source": "Update a Ticket",
+          "message": "Aktualizovať tiket"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLXRpY2tldA.option.Y3VzdG9tZXI.desc": {
+          "source": "Update the customer associated with this ticket. Provide `id` to reference an existing customer, or `email` to match by email address",
+          "message": "Aktualizujte zákazníka priradeného k tomuto tiketu. Zadajte `id` na odkazovanie na existujúceho zákazníka alebo `email` na priradenie podľa e-mailovej adresy"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLXRpY2tldA.option.Y3VzdG9tZXI.display_name": {
+          "source": "Customer",
+          "message": "Zákazník"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLXRpY2tldA.option.Y3VzdG9tZXI.short_desc": {
+          "source": "Customer data",
+          "message": "Údaje zákazníka"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLXRpY2tldA.option.YXNzaWduZWVfdGVhbQ.desc": {
+          "source": "The team to assign, or `NOTHING` to unassign",
+          "message": "Tím na priradenie alebo `NOTHING` na zrušenie priradenia"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLXRpY2tldA.option.YXNzaWduZWVfdGVhbQ.display_name": {
+          "source": "Assignee Team",
+          "message": "Priradený tím"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLXRpY2tldA.option.YXNzaWduZWVfdGVhbQ.short_desc": {
+          "source": "Assigned team",
+          "message": "Priradený tím"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLXRpY2tldA.option.YXNzaWduZWVfdXNlcg.desc": {
+          "source": "The agent to assign, or `NOTHING` to unassign",
+          "message": "Agent na priradenie alebo `NOTHING` na zrušenie priradenia"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLXRpY2tldA.option.YXNzaWduZWVfdXNlcg.display_name": {
+          "source": "Assignee User",
+          "message": "Priradený používateľ"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLXRpY2tldA.option.YXNzaWduZWVfdXNlcg.short_desc": {
+          "source": "Assigned agent",
+          "message": "Priradený agent"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLXRpY2tldA.option.ZXh0ZXJuYWxfaWQ.desc": {
+          "source": "An external identifier for the ticket (max 255 characters)",
+          "message": "Externý identifikátor tiketu (max. 255 znakov)"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLXRpY2tldA.option.ZXh0ZXJuYWxfaWQ.display_name": {
+          "source": "External ID",
+          "message": "Externé ID"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLXRpY2tldA.option.ZXh0ZXJuYWxfaWQ.short_desc": {
+          "source": "External identifier",
+          "message": "Externý identifikátor"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLXRpY2tldA.option.c25vb3plX2RhdGV0aW1l.desc": {
+          "source": "ISO 8601 timestamp until which to snooze the ticket",
+          "message": "Časová pečiatka ISO 8601, do ktorej sa má tiket odložiť"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLXRpY2tldA.option.c25vb3plX2RhdGV0aW1l.display_name": {
+          "source": "Snooze Until",
+          "message": "Odložiť do"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLXRpY2tldA.option.c25vb3plX2RhdGV0aW1l.short_desc": {
+          "source": "Snooze datetime",
+          "message": "Dátum a čas odloženia"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLXRpY2tldA.option.c3BhbQ.desc": {
+          "source": "Whether to mark the ticket as spam",
+          "message": "Či sa má tiket označiť ako spam"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLXRpY2tldA.option.c3BhbQ.display_name": {
+          "source": "Spam",
+          "message": "Spam"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLXRpY2tldA.option.c3BhbQ.short_desc": {
+          "source": "Mark as spam",
+          "message": "Označiť ako spam"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLXRpY2tldA.option.c3RhdHVz.allowed-value.c3RyaW5nOm9wZW4.display_name": {
+          "source": "Open",
+          "message": "Otvorená"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLXRpY2tldA.option.c3RhdHVz.allowed-value.c3RyaW5nOmNsb3NlZA.display_name": {
+          "source": "Closed",
+          "message": "Zatvorené"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLXRpY2tldA.option.c3RhdHVz.desc": {
+          "source": "The new status of the ticket",
+          "message": "Nový stav tiketu"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLXRpY2tldA.option.c3RhdHVz.display_name": {
+          "source": "Status",
+          "message": "Stav"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLXRpY2tldA.option.c3RhdHVz.short_desc": {
+          "source": "Ticket status",
+          "message": "Stav tiketu"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLXRpY2tldA.option.c3ViamVjdA.desc": {
+          "source": "The new subject line (max 998 characters)",
+          "message": "Nový predmet (max. 998 znakov)"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLXRpY2tldA.option.c3ViamVjdA.display_name": {
+          "source": "Subject",
+          "message": "Predmet"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLXRpY2tldA.option.c3ViamVjdA.short_desc": {
+          "source": "Ticket subject",
+          "message": "Predmet tiketu"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLXRpY2tldA.option.cHJpb3JpdHk.allowed-value.c3RyaW5nOm5vcm1hbA.display_name": {
+          "source": "Normal",
+          "message": "Normálne"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLXRpY2tldA.option.cHJpb3JpdHk.allowed-value.c3RyaW5nOmNyaXRpY2Fs.display_name": {
+          "source": "Critical",
+          "message": "Kritická"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLXRpY2tldA.option.cHJpb3JpdHk.allowed-value.c3RyaW5nOmhpZ2g.display_name": {
+          "source": "High",
+          "message": "Vysoká"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLXRpY2tldA.option.cHJpb3JpdHk.allowed-value.c3RyaW5nOmxvdw.display_name": {
+          "source": "Low",
+          "message": "Nízka"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLXRpY2tldA.option.cHJpb3JpdHk.desc": {
+          "source": "The new priority level",
+          "message": "Nová úroveň priority"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLXRpY2tldA.option.cHJpb3JpdHk.display_name": {
+          "source": "Priority",
+          "message": "Priorita"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLXRpY2tldA.option.cHJpb3JpdHk.short_desc": {
+          "source": "Ticket priority",
+          "message": "Priorita tiketu"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLXRpY2tldA.option.dGFncw.desc": {
+          "source": "List of tags to set on the ticket. Replaces existing tags. Each tag must have a `name` field",
+          "message": "Zoznam značiek, ktoré sa majú nastaviť na tikete. Nahrádza existujúce značky. Každá značka musí mať pole `name`"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLXRpY2tldA.option.dGFncw.display_name": {
+          "source": "Tags",
+          "message": "Značky"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLXRpY2tldA.option.dGFncw.short_desc": {
+          "source": "Tags to set",
+          "message": "Značky na nastavenie"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLXRpY2tldA.option.dGlja2V0X2lk.desc": {
+          "source": "The ID of the ticket to update",
+          "message": "ID tiketu, ktorý sa má aktualizovať"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLXRpY2tldA.option.dGlja2V0X2lk.display_name": {
+          "source": "Ticket ID",
+          "message": "ID tiketu"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLXRpY2tldA.option.dGlja2V0X2lk.short_desc": {
+          "source": "The ticket to update",
+          "message": "Tiket na aktualizáciu"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLXRpY2tldA.short_desc": {
+          "source": "Update an existing ticket",
+          "message": "Aktualizovať existujúci tiket"
+        },
+        "app.R29yZ2lhcw.desc": {
+          "source": "Gorgias is a customer support and helpdesk platform for e-commerce and SaaS businesses.\n\nThis integration supports managing tickets, customers, tags, messages, and monitoring ticket events.",
+          "message": "Gorgias je platforma zákazníckej podpory a helpdesku pre podniky v oblasti elektronického obchodu a SaaS.\n\nTáto integrácia podporuje správu tiketov, zákazníkov, značiek, správ a sledovanie udalostí tiketov."
+        },
+        "app.R29yZ2lhcw.display_name": {
+          "source": "Gorgias",
+          "message": "Gorgias"
+        },
+        "app.R29yZ2lhcw.short_desc": {
+          "source": "Gorgias customer support and helpdesk platform",
+          "message": "Platforma zákazníckej podpory a helpdesku Gorgias"
+        }
+      }
+    }
+  }
+}

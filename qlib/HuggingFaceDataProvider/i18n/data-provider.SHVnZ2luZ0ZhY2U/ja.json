@@ -1,0 +1,1569 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "ja": {
+      "messages": {
+        "app.SHVnZ2luZ0ZhY2U.action.Y2hhdC1jb21wbGV0aW9ucw.desc": {
+          "source": "Send a chat completion request to a model hosted on Hugging Face via the Inference API. Compatible with the OpenAI chat completions format.",
+          "message": "Inference API を介して Hugging Face 上でホストされているモデルにチャット補完リクエストを送信します。OpenAI チャット補完形式と互換性があります。"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.Y2hhdC1jb21wbGV0aW9ucw.display_name": {
+          "source": "Chat Completions",
+          "message": "チャット補完"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.Y2hhdC1jb21wbGV0aW9ucw.option.ZnJlcXVlbmN5X3BlbmFsdHk.desc": {
+          "source": "Penalizes new tokens based on their existing frequency in the text so far. Values between `-2.0` and `2.0`; positive values decrease the likelihood of repeated tokens",
+          "message": "これまでのテキスト内の出現頻度に基づいて新しいトークンにペナルティを課します。`-2.0` から `2.0` までの値。正の値を指定すると、トークンの重複確率が減少します"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.Y2hhdC1jb21wbGV0aW9ucw.option.ZnJlcXVlbmN5X3BlbmFsdHk.display_name": {
+          "source": "Frequency Penalty",
+          "message": "頻度ペナルティ"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.Y2hhdC1jb21wbGV0aW9ucw.option.ZnJlcXVlbmN5X3BlbmFsdHk.short_desc": {
+          "source": "Penalize tokens by frequency",
+          "message": "頻度に応じてトークンにペナルティを課す"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.Y2hhdC1jb21wbGV0aW9ucw.option.bG9ncHJvYnM.desc": {
+          "source": "Whether to return log probabilities of the output tokens. If `True`, returns the log probabilities of each output token in the `choices` response",
+          "message": "出力トークンの対数確率を返すかどうか。`True` の場合、`choices` レスポンス内の各出力トークンの対数確率を返します"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.Y2hhdC1jb21wbGV0aW9ucw.option.bG9ncHJvYnM.display_name": {
+          "source": "Log Probabilities",
+          "message": "対数確率"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.Y2hhdC1jb21wbGV0aW9ucw.option.bG9ncHJvYnM.short_desc": {
+          "source": "Return log probabilities of output tokens",
+          "message": "出力トークンの対数確率を返す"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.Y2hhdC1jb21wbGV0aW9ucw.option.bW9kZWw.desc": {
+          "source": "The model ID to use for inference (e.g. `meta-llama/Llama-3.1-8B-Instruct`)",
+          "message": "推論に使用するモデル ID (例: `meta-llama/Llama-3.1-8B-Instruct`)"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.Y2hhdC1jb21wbGV0aW9ucw.option.bW9kZWw.display_name": {
+          "source": "Model",
+          "message": "モデル"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.Y2hhdC1jb21wbGV0aW9ucw.option.bW9kZWw.short_desc": {
+          "source": "Model ID for inference",
+          "message": "推論用モデル ID"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.Y2hhdC1jb21wbGV0aW9ucw.option.bWF4X3Rva2Vucw.desc": {
+          "source": "The maximum number of tokens to generate in the response",
+          "message": "レスポンスで生成する最大トークン数"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.Y2hhdC1jb21wbGV0aW9ucw.option.bWF4X3Rva2Vucw.display_name": {
+          "source": "Max Tokens",
+          "message": "最大トークン数"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.Y2hhdC1jb21wbGV0aW9ucw.option.bWF4X3Rva2Vucw.short_desc": {
+          "source": "Maximum tokens to generate",
+          "message": "生成する最大トークン数"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.Y2hhdC1jb21wbGV0aW9ucw.option.bWVzc2FnZXM.desc": {
+          "source": "A list of messages comprising the conversation so far",
+          "message": "これまでの会話を構成するメッセージのリスト"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.Y2hhdC1jb21wbGV0aW9ucw.option.bWVzc2FnZXM.display_name": {
+          "source": "Messages",
+          "message": "メッセージ"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.Y2hhdC1jb21wbGV0aW9ucw.option.bWVzc2FnZXM.short_desc": {
+          "source": "List of chat messages",
+          "message": "チャット メッセージのリスト"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.Y2hhdC1jb21wbGV0aW9ucw.option.c2VlZA.desc": {
+          "source": "If specified, the system will attempt to sample deterministically so that repeated requests with the same seed and parameters return the same result",
+          "message": "指定した場合、同じシード値とパラメータを持つ反復リクエストが同じ結果を返すように、システムは決定論的なサンプリングを試みます"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.Y2hhdC1jb21wbGV0aW9ucw.option.c2VlZA.display_name": {
+          "source": "Seed",
+          "message": "シード"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.Y2hhdC1jb21wbGV0aW9ucw.option.c2VlZA.short_desc": {
+          "source": "Random seed for deterministic output",
+          "message": "決定論的出力のためのランダム シード"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.Y2hhdC1jb21wbGV0aW9ucw.option.c3RvcA.desc": {
+          "source": "Up to 4 sequences where the model will stop generating further tokens",
+          "message": "モデルがそれ以上のトークン生成を停止する最大 4 つのシーケンス"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.Y2hhdC1jb21wbGV0aW9ucw.option.c3RvcA.display_name": {
+          "source": "Stop Sequences",
+          "message": "停止シーケンス"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.Y2hhdC1jb21wbGV0aW9ucw.option.c3RvcA.short_desc": {
+          "source": "Stop sequences",
+          "message": "停止シーケンス"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.Y2hhdC1jb21wbGV0aW9ucw.option.cHJlc2VuY2VfcGVuYWx0eQ.desc": {
+          "source": "Penalizes new tokens based on whether they appear in the text so far. Values between `-2.0` and `2.0`; positive values increase the likelihood of new topics",
+          "message": "これまでのテキストに出現したかどうかに基づいて新しいトークンにペナルティを課します。`-2.0` から `2.0` までの値。正の値を指定すると、新しいトピックの確率が増加します"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.Y2hhdC1jb21wbGV0aW9ucw.option.cHJlc2VuY2VfcGVuYWx0eQ.display_name": {
+          "source": "Presence Penalty",
+          "message": "存在ペナルティ"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.Y2hhdC1jb21wbGV0aW9ucw.option.cHJlc2VuY2VfcGVuYWx0eQ.short_desc": {
+          "source": "Penalize tokens by presence",
+          "message": "存在によるトークンのペナルティ"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.Y2hhdC1jb21wbGV0aW9ucw.option.cmVzcG9uc2VfZm9ybWF0.desc": {
+          "source": "Specifies the output format. Use `json_object` to force the model to output valid JSON. The model must be instructed via the prompt to produce JSON output",
+          "message": "出力フォーマットを指定します。`json_object` を使用してモデルに有効な JSON の出力を強制します。モデルにはプロンプトを介して JSON 出力を生成するよう指示する必要があります"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.Y2hhdC1jb21wbGV0aW9ucw.option.cmVzcG9uc2VfZm9ybWF0.display_name": {
+          "source": "Response Format",
+          "message": "レスポンス形式"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.Y2hhdC1jb21wbGV0aW9ucw.option.cmVzcG9uc2VfZm9ybWF0.short_desc": {
+          "source": "Output format for the response",
+          "message": "レスポンスの出力フォーマット"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.Y2hhdC1jb21wbGV0aW9ucw.option.dG9wX2xvZ3Byb2Jz.desc": {
+          "source": "An integer between `0` and `5` specifying the number of most likely tokens to return at each token position, each with an associated log probability. Requires `logprobs` to be set to `True`",
+          "message": "各トークン位置で返す最も可能性の高いトークンの数を指定する `0` から `5` までの整数（各トークンに関連する対数確率を含む）。`logprobs` を `True` に設定する必要があります"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.Y2hhdC1jb21wbGV0aW9ucw.option.dG9wX2xvZ3Byb2Jz.display_name": {
+          "source": "Top Log Probabilities",
+          "message": "上位対数確率"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.Y2hhdC1jb21wbGV0aW9ucw.option.dG9wX2xvZ3Byb2Jz.short_desc": {
+          "source": "Number of most likely tokens to return",
+          "message": "返される最も可能性の高いトークンの数"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.Y2hhdC1jb21wbGV0aW9ucw.option.dG9wX3A.desc": {
+          "source": "Nucleus sampling parameter. The model considers tokens with `top_p` probability mass",
+          "message": "Nucleus サンプリング パラメータ。モデルは確率質量 `top_p` を持つトークンを考慮します"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.Y2hhdC1jb21wbGV0aW9ucw.option.dG9wX3A.display_name": {
+          "source": "Top P",
+          "message": "Top P"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.Y2hhdC1jb21wbGV0aW9ucw.option.dG9wX3A.short_desc": {
+          "source": "Nucleus sampling threshold",
+          "message": "Nucleus サンプリングのしきい値"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.Y2hhdC1jb21wbGV0aW9ucw.option.dGVtcGVyYXR1cmU.desc": {
+          "source": "Sampling temperature between `0.0` and `2.0`. Higher values make output more random, lower values make it more deterministic",
+          "message": "`0.0` から `2.0` までのサンプリング温度。値が高いほど出力がランダムになり、値が低いほど決定論的になります"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.Y2hhdC1jb21wbGV0aW9ucw.option.dGVtcGVyYXR1cmU.display_name": {
+          "source": "Temperature",
+          "message": "温度"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.Y2hhdC1jb21wbGV0aW9ucw.option.dGVtcGVyYXR1cmU.short_desc": {
+          "source": "Sampling temperature",
+          "message": "サンプリング温度"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.Y2hhdC1jb21wbGV0aW9ucw.short_desc": {
+          "source": "Send a chat completion request via the Inference API",
+          "message": "Inference API 経由でチャット補完リクエストを送信"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.Y3JlYXRlLW1vZGVs.desc": {
+          "source": "Create a new model repository on Hugging Face Hub",
+          "message": "Hugging Face Hub 上に新しいモデル リポジトリを作成します"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.Y3JlYXRlLW1vZGVs.display_name": {
+          "source": "Create Model",
+          "message": "モデルの作成"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.Y3JlYXRlLW1vZGVs.option.b3JnYW5pemF0aW9u.desc": {
+          "source": "Organization namespace. If not specified, the repository will be created under the authenticated user's namespace",
+          "message": "組織の名前空間。指定しない場合、リポジトリは認証されたユーザーの名前空間下に作成されます"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.Y3JlYXRlLW1vZGVs.option.b3JnYW5pemF0aW9u.display_name": {
+          "source": "Organization",
+          "message": "組織"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.Y3JlYXRlLW1vZGVs.option.b3JnYW5pemF0aW9u.short_desc": {
+          "source": "Organization namespace",
+          "message": "組織の名前空間"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.Y3JlYXRlLW1vZGVs.option.bmFtZQ.desc": {
+          "source": "The name of the repository to create",
+          "message": "作成するリポジトリの名前"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.Y3JlYXRlLW1vZGVs.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "名前"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.Y3JlYXRlLW1vZGVs.option.bmFtZQ.short_desc": {
+          "source": "Repository name",
+          "message": "リポジトリ名"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.Y3JlYXRlLW1vZGVs.option.cHJpdmF0ZQ.desc": {
+          "source": "Whether the repository should be private. Default: `False`",
+          "message": "リポジトリを非公開にするかどうか。デフォルト: `False`"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.Y3JlYXRlLW1vZGVs.option.cHJpdmF0ZQ.display_name": {
+          "source": "Private",
+          "message": "プライベート"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.Y3JlYXRlLW1vZGVs.option.cHJpdmF0ZQ.short_desc": {
+          "source": "Whether the repository is private",
+          "message": "リポジトリがプライベートかどうか"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.Y3JlYXRlLW1vZGVs.short_desc": {
+          "source": "Create a new model repository",
+          "message": "新しいモデル リポジトリを作成"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.Y3JlYXRlLWRhdGFzZXQ.desc": {
+          "source": "Create a new dataset repository on Hugging Face Hub",
+          "message": "Hugging Face Hub 上に新しいデータセット リポジトリを作成します"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.Y3JlYXRlLWRhdGFzZXQ.display_name": {
+          "source": "Create Dataset",
+          "message": "データセットの作成"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.Y3JlYXRlLWRhdGFzZXQ.option.b3JnYW5pemF0aW9u.desc": {
+          "source": "Organization namespace. If not specified, the repository will be created under the authenticated user's namespace",
+          "message": "組織の名前空間。指定しない場合、リポジトリは認証されたユーザーの名前空間下に作成されます"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.Y3JlYXRlLWRhdGFzZXQ.option.b3JnYW5pemF0aW9u.display_name": {
+          "source": "Organization",
+          "message": "組織"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.Y3JlYXRlLWRhdGFzZXQ.option.b3JnYW5pemF0aW9u.short_desc": {
+          "source": "Organization namespace",
+          "message": "組織の名前空間"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.Y3JlYXRlLWRhdGFzZXQ.option.bmFtZQ.desc": {
+          "source": "The name of the repository to create",
+          "message": "作成するリポジトリの名前"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.Y3JlYXRlLWRhdGFzZXQ.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "名前"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.Y3JlYXRlLWRhdGFzZXQ.option.bmFtZQ.short_desc": {
+          "source": "Repository name",
+          "message": "リポジトリ名"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.Y3JlYXRlLWRhdGFzZXQ.option.cHJpdmF0ZQ.desc": {
+          "source": "Whether the repository should be private. Default: `False`",
+          "message": "リポジトリを非公開にするかどうか。デフォルト: `False`"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.Y3JlYXRlLWRhdGFzZXQ.option.cHJpdmF0ZQ.display_name": {
+          "source": "Private",
+          "message": "プライベート"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.Y3JlYXRlLWRhdGFzZXQ.option.cHJpdmF0ZQ.short_desc": {
+          "source": "Whether the repository is private",
+          "message": "リポジトリがプライベートかどうか"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.Y3JlYXRlLWRhdGFzZXQ.short_desc": {
+          "source": "Create a new dataset repository",
+          "message": "新しいデータセット リポジトリを作成"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.Y3JlYXRlLXNwYWNl.desc": {
+          "source": "Create a new Space on Hugging Face Hub",
+          "message": "Hugging Face Hub 上に新しい Space を作成します"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.Y3JlYXRlLXNwYWNl.display_name": {
+          "source": "Create Space",
+          "message": "Space の作成"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.Y3JlYXRlLXNwYWNl.option.b3JnYW5pemF0aW9u.desc": {
+          "source": "Organization namespace. If not specified, the repository will be created under the authenticated user's namespace",
+          "message": "組織の名前空間。指定しない場合、リポジトリは認証されたユーザーの名前空間下に作成されます"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.Y3JlYXRlLXNwYWNl.option.b3JnYW5pemF0aW9u.display_name": {
+          "source": "Organization",
+          "message": "組織"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.Y3JlYXRlLXNwYWNl.option.b3JnYW5pemF0aW9u.short_desc": {
+          "source": "Organization namespace",
+          "message": "組織の名前空間"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.Y3JlYXRlLXNwYWNl.option.bmFtZQ.desc": {
+          "source": "The name of the repository to create",
+          "message": "作成するリポジトリの名前"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.Y3JlYXRlLXNwYWNl.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "名前"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.Y3JlYXRlLXNwYWNl.option.bmFtZQ.short_desc": {
+          "source": "Repository name",
+          "message": "リポジトリ名"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.Y3JlYXRlLXNwYWNl.option.c3BhY2VfaGFyZHdhcmU.allowed-value.c3RyaW5nOmExMDAtbGFyZ2U.display_name": {
+          "source": "A100 Large",
+          "message": "A100 Large"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.Y3JlYXRlLXNwYWNl.option.c3BhY2VfaGFyZHdhcmU.allowed-value.c3RyaW5nOmExMDB4NA.display_name": {
+          "source": "A100 x4",
+          "message": "A100 x4"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.Y3JlYXRlLXNwYWNl.option.c3BhY2VfaGFyZHdhcmU.allowed-value.c3RyaW5nOmExMDB4OA.display_name": {
+          "source": "A100 x8",
+          "message": "A100 x8"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.Y3JlYXRlLXNwYWNl.option.c3BhY2VfaGFyZHdhcmU.allowed-value.c3RyaW5nOmExMGctbGFyZ2U.display_name": {
+          "source": "A10G Large",
+          "message": "A10G Large"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.Y3JlYXRlLXNwYWNl.option.c3BhY2VfaGFyZHdhcmU.allowed-value.c3RyaW5nOmExMGctbGFyZ2V4Mg.display_name": {
+          "source": "A10G Large x2",
+          "message": "A10G Large x2"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.Y3JlYXRlLXNwYWNl.option.c3BhY2VfaGFyZHdhcmU.allowed-value.c3RyaW5nOmExMGctbGFyZ2V4NA.display_name": {
+          "source": "A10G Large x4",
+          "message": "A10G Large x4"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.Y3JlYXRlLXNwYWNl.option.c3BhY2VfaGFyZHdhcmU.allowed-value.c3RyaW5nOmExMGctc21hbGw.display_name": {
+          "source": "A10G Small",
+          "message": "A10G Small"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.Y3JlYXRlLXNwYWNl.option.c3BhY2VfaGFyZHdhcmU.allowed-value.c3RyaW5nOmNwdS11cGdyYWRl.display_name": {
+          "source": "CPU Upgrade",
+          "message": "CPU Upgrade"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.Y3JlYXRlLXNwYWNl.option.c3BhY2VfaGFyZHdhcmU.allowed-value.c3RyaW5nOmNwdS14bA.display_name": {
+          "source": "CPU XL",
+          "message": "CPU XL"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.Y3JlYXRlLXNwYWNl.option.c3BhY2VfaGFyZHdhcmU.allowed-value.c3RyaW5nOmNwdS1iYXNpYw.display_name": {
+          "source": "CPU Basic",
+          "message": "CPU Basic"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.Y3JlYXRlLXNwYWNl.option.c3BhY2VfaGFyZHdhcmU.allowed-value.c3RyaW5nOmNwdS1wZXJmb3JtYW5jZQ.display_name": {
+          "source": "CPU Performance",
+          "message": "CPU Performance"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.Y3JlYXRlLXNwYWNl.option.c3BhY2VfaGFyZHdhcmU.allowed-value.c3RyaW5nOmgyMDA.display_name": {
+          "source": "H200",
+          "message": "H200"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.Y3JlYXRlLXNwYWNl.option.c3BhY2VfaGFyZHdhcmU.allowed-value.c3RyaW5nOmgyMDB4Mg.display_name": {
+          "source": "H200 x2",
+          "message": "H200 x2"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.Y3JlYXRlLXNwYWNl.option.c3BhY2VfaGFyZHdhcmU.allowed-value.c3RyaW5nOmgyMDB4NA.display_name": {
+          "source": "H200 x4",
+          "message": "H200 x4"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.Y3JlYXRlLXNwYWNl.option.c3BhY2VfaGFyZHdhcmU.allowed-value.c3RyaW5nOmgyMDB4OA.display_name": {
+          "source": "H200 x8",
+          "message": "H200 x8"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.Y3JlYXRlLXNwYWNl.option.c3BhY2VfaGFyZHdhcmU.allowed-value.c3RyaW5nOmw0MHN4MQ.display_name": {
+          "source": "L40S x1",
+          "message": "L40S x1"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.Y3JlYXRlLXNwYWNl.option.c3BhY2VfaGFyZHdhcmU.allowed-value.c3RyaW5nOmw0MHN4NA.display_name": {
+          "source": "L40S x4",
+          "message": "L40S x4"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.Y3JlYXRlLXNwYWNl.option.c3BhY2VfaGFyZHdhcmU.allowed-value.c3RyaW5nOmw0MHN4OA.display_name": {
+          "source": "L40S x8",
+          "message": "L40S x8"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.Y3JlYXRlLXNwYWNl.option.c3BhY2VfaGFyZHdhcmU.allowed-value.c3RyaW5nOmw0eDE.display_name": {
+          "source": "L4 x1",
+          "message": "L4 x1"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.Y3JlYXRlLXNwYWNl.option.c3BhY2VfaGFyZHdhcmU.allowed-value.c3RyaW5nOmw0eDQ.display_name": {
+          "source": "L4 x4",
+          "message": "L4 x4"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.Y3JlYXRlLXNwYWNl.option.c3BhY2VfaGFyZHdhcmU.allowed-value.c3RyaW5nOnQ0LW1lZGl1bQ.display_name": {
+          "source": "T4 Medium",
+          "message": "T4 Medium"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.Y3JlYXRlLXNwYWNl.option.c3BhY2VfaGFyZHdhcmU.allowed-value.c3RyaW5nOnQ0LXNtYWxs.display_name": {
+          "source": "T4 Small",
+          "message": "T4 Small"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.Y3JlYXRlLXNwYWNl.option.c3BhY2VfaGFyZHdhcmU.allowed-value.c3RyaW5nOnplcm8tYTEwZw.display_name": {
+          "source": "ZeroGPU A10G",
+          "message": "ZeroGPU A10G"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.Y3JlYXRlLXNwYWNl.option.c3BhY2VfaGFyZHdhcmU.desc": {
+          "source": "The hardware tier for the Space",
+          "message": "Space のハードウェア層"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.Y3JlYXRlLXNwYWNl.option.c3BhY2VfaGFyZHdhcmU.display_name": {
+          "source": "Hardware",
+          "message": "ハードウェア"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.Y3JlYXRlLXNwYWNl.option.c3BhY2VfaGFyZHdhcmU.short_desc": {
+          "source": "Space hardware tier",
+          "message": "Space ハードウェア層"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.Y3JlYXRlLXNwYWNl.option.c3BhY2Vfc2Rr.allowed-value.c3RyaW5nOmRvY2tlcg.display_name": {
+          "source": "Docker",
+          "message": "Docker"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.Y3JlYXRlLXNwYWNl.option.c3BhY2Vfc2Rr.allowed-value.c3RyaW5nOmdyYWRpbw.display_name": {
+          "source": "Gradio",
+          "message": "Gradio"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.Y3JlYXRlLXNwYWNl.option.c3BhY2Vfc2Rr.allowed-value.c3RyaW5nOnN0YXRpYw.display_name": {
+          "source": "Static",
+          "message": "Static"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.Y3JlYXRlLXNwYWNl.option.c3BhY2Vfc2Rr.allowed-value.c3RyaW5nOnN0cmVhbWxpdA.display_name": {
+          "source": "Streamlit",
+          "message": "Streamlit"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.Y3JlYXRlLXNwYWNl.option.c3BhY2Vfc2Rr.desc": {
+          "source": "The SDK to use for the Space",
+          "message": "Spaceに使用するSDK"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.Y3JlYXRlLXNwYWNl.option.c3BhY2Vfc2Rr.display_name": {
+          "source": "SDK",
+          "message": "SDK"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.Y3JlYXRlLXNwYWNl.option.c3BhY2Vfc2Rr.short_desc": {
+          "source": "Space SDK",
+          "message": "Space SDK"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.Y3JlYXRlLXNwYWNl.option.cHJpdmF0ZQ.desc": {
+          "source": "Whether the repository should be private. Default: `False`",
+          "message": "リポジトリを非公開にするかどうか。デフォルト: `False`"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.Y3JlYXRlLXNwYWNl.option.cHJpdmF0ZQ.display_name": {
+          "source": "Private",
+          "message": "プライベート"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.Y3JlYXRlLXNwYWNl.option.cHJpdmF0ZQ.short_desc": {
+          "source": "Whether the repository is private",
+          "message": "リポジトリがプライベートかどうか"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.Y3JlYXRlLXNwYWNl.short_desc": {
+          "source": "Create a new Space",
+          "message": "新しいSpaceを作成"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.Z2V0LW1vZGVs.desc": {
+          "source": "Retrieve detailed information for a specific model by its repository ID",
+          "message": "リポジトリIDで特定のモデルの詳細情報を取得"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.Z2V0LW1vZGVs.display_name": {
+          "source": "Get Model",
+          "message": "モデルの取得"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.Z2V0LW1vZGVs.option.cmVwb19pZA.desc": {
+          "source": "The model repository ID in `namespace/name` format (e.g. `meta-llama/Llama-3.1-8B`)",
+          "message": "`namespace/name`形式のモデルリポジトリID（例: `meta-llama/Llama-3.1-8B`）"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.Z2V0LW1vZGVs.option.cmVwb19pZA.display_name": {
+          "source": "Repository ID",
+          "message": "リポジトリID"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.Z2V0LW1vZGVs.option.cmVwb19pZA.short_desc": {
+          "source": "Model repository ID in namespace/name format",
+          "message": "namespace/name形式のモデルリポジトリID"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.Z2V0LW1vZGVs.short_desc": {
+          "source": "Get details for a specific model",
+          "message": "特定のモデルの詳細を取得"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.Z2V0LWRhdGFzZXQ.desc": {
+          "source": "Retrieve detailed information for a specific dataset by its repository ID",
+          "message": "リポジトリIDで特定のデータセットの詳細情報を取得"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.Z2V0LWRhdGFzZXQ.display_name": {
+          "source": "Get Dataset",
+          "message": "データセットを取得"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.Z2V0LWRhdGFzZXQ.option.cmVwb19pZA.desc": {
+          "source": "The dataset repository ID in `namespace/name` format (e.g. `stanfordnlp/imdb`)",
+          "message": "`namespace/name`形式のデータセットリポジトリID（例: `stanfordnlp/imdb`）"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.Z2V0LWRhdGFzZXQ.option.cmVwb19pZA.display_name": {
+          "source": "Repository ID",
+          "message": "リポジトリID"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.Z2V0LWRhdGFzZXQ.option.cmVwb19pZA.short_desc": {
+          "source": "Dataset repository ID in namespace/name format",
+          "message": "namespace/name形式のデータセットリポジトリID"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.Z2V0LWRhdGFzZXQ.short_desc": {
+          "source": "Get details for a specific dataset",
+          "message": "特定のデータセットの詳細を取得"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.Z2V0LXNwYWNl.desc": {
+          "source": "Retrieve detailed information for a specific Space by its repository ID",
+          "message": "リポジトリIDで特定のSpaceの詳細情報を取得"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.Z2V0LXNwYWNl.display_name": {
+          "source": "Get Space",
+          "message": "スペースを取得"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.Z2V0LXNwYWNl.option.cmVwb19pZA.desc": {
+          "source": "The Space repository ID in `namespace/name` format (e.g. `gradio/chatbot`)",
+          "message": "`namespace/name`形式のSpaceリポジトリID（例: `gradio/chatbot`）"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.Z2V0LXNwYWNl.option.cmVwb19pZA.display_name": {
+          "source": "Repository ID",
+          "message": "リポジトリID"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.Z2V0LXNwYWNl.option.cmVwb19pZA.short_desc": {
+          "source": "Space repository ID in namespace/name format",
+          "message": "namespace/name形式のSpaceリポジトリID"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.Z2V0LXNwYWNl.short_desc": {
+          "source": "Get details for a specific Space",
+          "message": "特定のSpaceの詳細を取得"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.ZGVsZXRlLW1vZGVs.desc": {
+          "source": "Delete a model repository from Hugging Face Hub",
+          "message": "Hugging Face Hubからモデルリポジトリを削除"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.ZGVsZXRlLW1vZGVs.display_name": {
+          "source": "Delete Model",
+          "message": "モデルを削除"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.ZGVsZXRlLW1vZGVs.option.cmVwb19pZA.desc": {
+          "source": "The model repository ID in `namespace/name` format to delete",
+          "message": "削除する`namespace/name`形式のモデルリポジトリID"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.ZGVsZXRlLW1vZGVs.option.cmVwb19pZA.display_name": {
+          "source": "Repository ID",
+          "message": "リポジトリID"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.ZGVsZXRlLW1vZGVs.option.cmVwb19pZA.short_desc": {
+          "source": "Model repository ID in namespace/name format",
+          "message": "namespace/name形式のモデルリポジトリID"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.ZGVsZXRlLW1vZGVs.short_desc": {
+          "source": "Delete a model repository",
+          "message": "モデルリポジトリを削除"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.ZGVsZXRlLWRhdGFzZXQ.desc": {
+          "source": "Delete a dataset repository from Hugging Face Hub",
+          "message": "Hugging Face Hubからデータセットリポジトリを削除"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.ZGVsZXRlLWRhdGFzZXQ.display_name": {
+          "source": "Delete Dataset",
+          "message": "データセットを削除"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.ZGVsZXRlLWRhdGFzZXQ.option.cmVwb19pZA.desc": {
+          "source": "The dataset repository ID in `namespace/name` format to delete",
+          "message": "削除する`namespace/name`形式のデータセットリポジトリID"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.ZGVsZXRlLWRhdGFzZXQ.option.cmVwb19pZA.display_name": {
+          "source": "Repository ID",
+          "message": "リポジトリID"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.ZGVsZXRlLWRhdGFzZXQ.option.cmVwb19pZA.short_desc": {
+          "source": "Dataset repository ID in namespace/name format",
+          "message": "namespace/name形式のデータセットリポジトリID"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.ZGVsZXRlLWRhdGFzZXQ.short_desc": {
+          "source": "Delete a dataset repository",
+          "message": "データセットリポジトリを削除"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.ZGVsZXRlLXNwYWNl.desc": {
+          "source": "Delete a Space from Hugging Face Hub",
+          "message": "Hugging Face HubからSpaceを削除"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.ZGVsZXRlLXNwYWNl.display_name": {
+          "source": "Delete Space",
+          "message": "Spaceを削除"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.ZGVsZXRlLXNwYWNl.option.cmVwb19pZA.desc": {
+          "source": "The Space repository ID in `namespace/name` format to delete",
+          "message": "削除する`namespace/name`形式のSpaceリポジトリID"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.ZGVsZXRlLXNwYWNl.option.cmVwb19pZA.display_name": {
+          "source": "Repository ID",
+          "message": "リポジトリID"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.ZGVsZXRlLXNwYWNl.option.cmVwb19pZA.short_desc": {
+          "source": "Space repository ID in namespace/name format",
+          "message": "namespace/name形式のSpaceリポジトリID"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.ZGVsZXRlLXNwYWNl.short_desc": {
+          "source": "Delete a Space",
+          "message": "スペースの削除"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.bGlzdC1kYXRhc2V0cw.desc": {
+          "source": "List datasets on Hugging Face Hub with optional search, filtering, and sorting",
+          "message": "任意の検索、フィルタリング、並べ替えを使用してHugging Face Hub上のデータセットを一覧表示"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.bGlzdC1kYXRhc2V0cw.display_name": {
+          "source": "List Datasets",
+          "message": "データセット一覧"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.bGlzdC1kYXRhc2V0cw.option.YXV0aG9y.desc": {
+          "source": "Filter results by a specific author or organization (e.g. `meta-llama`)",
+          "message": "特定の作成者または組織で結果をフィルタリング（例: `meta-llama`）"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.bGlzdC1kYXRhc2V0cw.option.YXV0aG9y.display_name": {
+          "source": "Author",
+          "message": "作成者"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.bGlzdC1kYXRhc2V0cw.option.YXV0aG9y.short_desc": {
+          "source": "Filter by author or organization",
+          "message": "作成者または組織でフィルタリング"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.bGlzdC1kYXRhc2V0cw.option.ZGlyZWN0aW9u.allowed-value.aW50Oi0x.display_name": {
+          "source": "Descending",
+          "message": "降順"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.bGlzdC1kYXRhc2V0cw.option.ZGlyZWN0aW9u.allowed-value.aW50OjE.display_name": {
+          "source": "Ascending",
+          "message": "昇順"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.bGlzdC1kYXRhc2V0cw.option.ZGlyZWN0aW9u.desc": {
+          "source": "Sort direction",
+          "message": "ソート方向"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.bGlzdC1kYXRhc2V0cw.option.ZGlyZWN0aW9u.display_name": {
+          "source": "Direction",
+          "message": "方向"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.bGlzdC1kYXRhc2V0cw.option.ZGlyZWN0aW9u.short_desc": {
+          "source": "Sort direction",
+          "message": "ソート方向"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.bGlzdC1kYXRhc2V0cw.option.ZmlsdGVy.desc": {
+          "source": "A list of tags to filter results by (e.g. `text-generation`, `pytorch`)",
+          "message": "結果をフィルタリングするためのタグのリスト（例: `text-generation`、`pytorch`）"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.bGlzdC1kYXRhc2V0cw.option.ZmlsdGVy.display_name": {
+          "source": "Filter",
+          "message": "フィルター"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.bGlzdC1kYXRhc2V0cw.option.ZmlsdGVy.short_desc": {
+          "source": "Filter by tags",
+          "message": "タグで絞り込み"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.bGlzdC1kYXRhc2V0cw.option.ZnVsbA.desc": {
+          "source": "Whether to fetch all metadata including last modified time, SHA, files, and tags",
+          "message": "最終変更日時、SHA、ファイル、タグを含むすべてのメタデータを取得するかどうか"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.bGlzdC1kYXRhc2V0cw.option.ZnVsbA.display_name": {
+          "source": "Include Full Data",
+          "message": "完全なデータを含める"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.bGlzdC1kYXRhc2V0cw.option.ZnVsbA.short_desc": {
+          "source": "Fetch all metadata",
+          "message": "すべてのメタデータを取得"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.bGlzdC1kYXRhc2V0cw.option.bGltaXQ.desc": {
+          "source": "Maximum number of results to return. Default: `30`",
+          "message": "返す結果の最大数。デフォルト: `30`"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.bGlzdC1kYXRhc2V0cw.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "上限"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.bGlzdC1kYXRhc2V0cw.option.bGltaXQ.short_desc": {
+          "source": "Maximum number of results to return",
+          "message": "返す結果の最大数"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.bGlzdC1kYXRhc2V0cw.option.c29ydA.allowed-value.c3RyaW5nOmNyZWF0ZWRBdA.display_name": {
+          "source": "Created At",
+          "message": "作成日時"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.bGlzdC1kYXRhc2V0cw.option.c29ydA.allowed-value.c3RyaW5nOmRvd25sb2Fkcw.display_name": {
+          "source": "Downloads",
+          "message": "ダウンロード数"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.bGlzdC1kYXRhc2V0cw.option.c29ydA.allowed-value.c3RyaW5nOmxhc3RNb2RpZmllZA.display_name": {
+          "source": "Last Modified",
+          "message": "最終更新日時"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.bGlzdC1kYXRhc2V0cw.option.c29ydA.allowed-value.c3RyaW5nOmxpa2Vz.display_name": {
+          "source": "Likes",
+          "message": "高評価数"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.bGlzdC1kYXRhc2V0cw.option.c29ydA.allowed-value.c3RyaW5nOnRyZW5kaW5nU2NvcmU.display_name": {
+          "source": "Trending",
+          "message": "トレンド"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.bGlzdC1kYXRhc2V0cw.option.c29ydA.desc": {
+          "source": "Property to sort results by",
+          "message": "結果を並べ替えるプロパティ"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.bGlzdC1kYXRhc2V0cw.option.c29ydA.display_name": {
+          "source": "Sort",
+          "message": "ソート"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.bGlzdC1kYXRhc2V0cw.option.c29ydA.short_desc": {
+          "source": "Property to use for sorting",
+          "message": "並べ替えに使用するプロパティ"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.bGlzdC1kYXRhc2V0cw.option.c2VhcmNo.desc": {
+          "source": "A string that will be contained in the returned models, datasets, or spaces",
+          "message": "返されるモデル、データセット、またはSpaceに含まれる文字列"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.bGlzdC1kYXRhc2V0cw.option.c2VhcmNo.display_name": {
+          "source": "Search",
+          "message": "検索"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.bGlzdC1kYXRhc2V0cw.option.c2VhcmNo.short_desc": {
+          "source": "Filter by search query",
+          "message": "検索クエリでフィルタリング"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.bGlzdC1kYXRhc2V0cw.short_desc": {
+          "source": "List Hugging Face datasets",
+          "message": "Hugging Faceデータセットを一覧表示"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.bGlzdC1tb2RlbHM.desc": {
+          "source": "List models on Hugging Face Hub with optional search, filtering, and sorting",
+          "message": "任意の検索、フィルタリング、並べ替えを使用してHugging Face Hub上のモデルを一覧表示"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.bGlzdC1tb2RlbHM.display_name": {
+          "source": "List Models",
+          "message": "モデルのリスト"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.bGlzdC1tb2RlbHM.option.Y29uZmln.desc": {
+          "source": "Whether to also fetch the model configuration files",
+          "message": "モデル設定ファイルも取得するかどうか"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.bGlzdC1tb2RlbHM.option.Y29uZmln.display_name": {
+          "source": "Include Config",
+          "message": "設定を含める"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.bGlzdC1tb2RlbHM.option.Y29uZmln.short_desc": {
+          "source": "Include model configuration",
+          "message": "モデル設定を含める"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.bGlzdC1tb2RlbHM.option.Y2FyZERhdGE.desc": {
+          "source": "Whether to include model card metadata such as carbon emissions, metrics, and dataset tags",
+          "message": "二酸化炭素排出量、メトリクス、データセットタグなどのモデルカードメタデータを含めるかどうか"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.bGlzdC1tb2RlbHM.option.Y2FyZERhdGE.display_name": {
+          "source": "Include Card Data",
+          "message": "カードデータを含める"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.bGlzdC1tb2RlbHM.option.Y2FyZERhdGE.short_desc": {
+          "source": "Include model card metadata",
+          "message": "モデルカードメタデータを含める"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.bGlzdC1tb2RlbHM.option.YXV0aG9y.desc": {
+          "source": "Filter results by a specific author or organization (e.g. `meta-llama`)",
+          "message": "特定の作成者または組織で結果をフィルタリング（例: `meta-llama`）"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.bGlzdC1tb2RlbHM.option.YXV0aG9y.display_name": {
+          "source": "Author",
+          "message": "作成者"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.bGlzdC1tb2RlbHM.option.YXV0aG9y.short_desc": {
+          "source": "Filter by author or organization",
+          "message": "作成者または組織でフィルタリング"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.bGlzdC1tb2RlbHM.option.ZGlyZWN0aW9u.allowed-value.aW50Oi0x.display_name": {
+          "source": "Descending",
+          "message": "降順"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.bGlzdC1tb2RlbHM.option.ZGlyZWN0aW9u.allowed-value.aW50OjE.display_name": {
+          "source": "Ascending",
+          "message": "昇順"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.bGlzdC1tb2RlbHM.option.ZGlyZWN0aW9u.desc": {
+          "source": "Sort direction",
+          "message": "ソート方向"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.bGlzdC1tb2RlbHM.option.ZGlyZWN0aW9u.display_name": {
+          "source": "Direction",
+          "message": "方向"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.bGlzdC1tb2RlbHM.option.ZGlyZWN0aW9u.short_desc": {
+          "source": "Sort direction",
+          "message": "ソート方向"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.bGlzdC1tb2RlbHM.option.ZmlsdGVy.desc": {
+          "source": "A list of tags to filter results by (e.g. `text-generation`, `pytorch`)",
+          "message": "結果をフィルタリングするためのタグのリスト（例: `text-generation`、`pytorch`）"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.bGlzdC1tb2RlbHM.option.ZmlsdGVy.display_name": {
+          "source": "Filter",
+          "message": "フィルター"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.bGlzdC1tb2RlbHM.option.ZmlsdGVy.short_desc": {
+          "source": "Filter by tags",
+          "message": "タグで絞り込み"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.bGlzdC1tb2RlbHM.option.ZnVsbA.desc": {
+          "source": "Whether to fetch all metadata including last modified time, SHA, files, and tags",
+          "message": "最終変更日時、SHA、ファイル、タグを含むすべてのメタデータを取得するかどうか"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.bGlzdC1tb2RlbHM.option.ZnVsbA.display_name": {
+          "source": "Include Full Data",
+          "message": "完全なデータを含める"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.bGlzdC1tb2RlbHM.option.ZnVsbA.short_desc": {
+          "source": "Fetch all metadata",
+          "message": "すべてのメタデータを取得"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.bGlzdC1tb2RlbHM.option.bGltaXQ.desc": {
+          "source": "Maximum number of results to return. Default: `30`",
+          "message": "返す結果の最大数。デフォルト: `30`"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.bGlzdC1tb2RlbHM.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "上限"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.bGlzdC1tb2RlbHM.option.bGltaXQ.short_desc": {
+          "source": "Maximum number of results to return",
+          "message": "返す結果の最大数"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.bGlzdC1tb2RlbHM.option.c29ydA.allowed-value.c3RyaW5nOmNyZWF0ZWRBdA.display_name": {
+          "source": "Created At",
+          "message": "作成日時"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.bGlzdC1tb2RlbHM.option.c29ydA.allowed-value.c3RyaW5nOmRvd25sb2Fkcw.display_name": {
+          "source": "Downloads",
+          "message": "ダウンロード数"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.bGlzdC1tb2RlbHM.option.c29ydA.allowed-value.c3RyaW5nOmxhc3RNb2RpZmllZA.display_name": {
+          "source": "Last Modified",
+          "message": "最終更新日時"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.bGlzdC1tb2RlbHM.option.c29ydA.allowed-value.c3RyaW5nOmxpa2Vz.display_name": {
+          "source": "Likes",
+          "message": "高評価数"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.bGlzdC1tb2RlbHM.option.c29ydA.allowed-value.c3RyaW5nOnRyZW5kaW5nU2NvcmU.display_name": {
+          "source": "Trending",
+          "message": "トレンド"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.bGlzdC1tb2RlbHM.option.c29ydA.desc": {
+          "source": "Property to sort results by",
+          "message": "結果を並べ替えるプロパティ"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.bGlzdC1tb2RlbHM.option.c29ydA.display_name": {
+          "source": "Sort",
+          "message": "ソート"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.bGlzdC1tb2RlbHM.option.c29ydA.short_desc": {
+          "source": "Property to use for sorting",
+          "message": "並べ替えに使用するプロパティ"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.bGlzdC1tb2RlbHM.option.c2VhcmNo.desc": {
+          "source": "A string that will be contained in the returned models, datasets, or spaces",
+          "message": "返されるモデル、データセット、またはSpaceに含まれる文字列"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.bGlzdC1tb2RlbHM.option.c2VhcmNo.display_name": {
+          "source": "Search",
+          "message": "検索"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.bGlzdC1tb2RlbHM.option.c2VhcmNo.short_desc": {
+          "source": "Filter by search query",
+          "message": "検索クエリでフィルタリング"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.bGlzdC1tb2RlbHM.option.cGlwZWxpbmVfdGFn.desc": {
+          "source": "Filter models by their pipeline task type (e.g. `text-generation`, `text-classification`, `image-classification`)",
+          "message": "パイプラインタスクタイプでモデルをフィルタリング（例: `text-generation`、`text-classification`、`image-classification`）"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.bGlzdC1tb2RlbHM.option.cGlwZWxpbmVfdGFn.display_name": {
+          "source": "Pipeline Tag",
+          "message": "パイプラインタグ"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.bGlzdC1tb2RlbHM.option.cGlwZWxpbmVfdGFn.short_desc": {
+          "source": "Filter by ML task type",
+          "message": "MLタスクタイプでフィルタリング"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.bGlzdC1tb2RlbHM.short_desc": {
+          "source": "List Hugging Face models",
+          "message": "Hugging Faceモデルを一覧表示"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.bGlzdC1zcGFjZXM.desc": {
+          "source": "List Spaces on Hugging Face Hub with optional search, filtering, and sorting",
+          "message": "任意の検索、フィルタリング、並べ替えを使用してHugging Face Hub上のSpaceを一覧表示"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.bGlzdC1zcGFjZXM.display_name": {
+          "source": "List Spaces",
+          "message": "スペースの一覧表示"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.bGlzdC1zcGFjZXM.option.YXV0aG9y.desc": {
+          "source": "Filter results by a specific author or organization (e.g. `meta-llama`)",
+          "message": "特定の作成者または組織で結果をフィルタリング（例: `meta-llama`）"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.bGlzdC1zcGFjZXM.option.YXV0aG9y.display_name": {
+          "source": "Author",
+          "message": "作成者"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.bGlzdC1zcGFjZXM.option.YXV0aG9y.short_desc": {
+          "source": "Filter by author or organization",
+          "message": "作成者または組織でフィルタリング"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.bGlzdC1zcGFjZXM.option.ZGlyZWN0aW9u.allowed-value.aW50Oi0x.display_name": {
+          "source": "Descending",
+          "message": "降順"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.bGlzdC1zcGFjZXM.option.ZGlyZWN0aW9u.allowed-value.aW50OjE.display_name": {
+          "source": "Ascending",
+          "message": "昇順"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.bGlzdC1zcGFjZXM.option.ZGlyZWN0aW9u.desc": {
+          "source": "Sort direction",
+          "message": "ソート方向"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.bGlzdC1zcGFjZXM.option.ZGlyZWN0aW9u.display_name": {
+          "source": "Direction",
+          "message": "方向"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.bGlzdC1zcGFjZXM.option.ZGlyZWN0aW9u.short_desc": {
+          "source": "Sort direction",
+          "message": "ソート方向"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.bGlzdC1zcGFjZXM.option.ZmlsdGVy.desc": {
+          "source": "A list of tags to filter results by (e.g. `text-generation`, `pytorch`)",
+          "message": "結果をフィルタリングするためのタグのリスト（例: `text-generation`、`pytorch`）"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.bGlzdC1zcGFjZXM.option.ZmlsdGVy.display_name": {
+          "source": "Filter",
+          "message": "フィルター"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.bGlzdC1zcGFjZXM.option.ZmlsdGVy.short_desc": {
+          "source": "Filter by tags",
+          "message": "タグで絞り込み"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.bGlzdC1zcGFjZXM.option.ZnVsbA.desc": {
+          "source": "Whether to fetch all metadata including last modified time, SHA, files, and tags",
+          "message": "最終変更日時、SHA、ファイル、タグを含むすべてのメタデータを取得するかどうか"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.bGlzdC1zcGFjZXM.option.ZnVsbA.display_name": {
+          "source": "Include Full Data",
+          "message": "完全なデータを含める"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.bGlzdC1zcGFjZXM.option.ZnVsbA.short_desc": {
+          "source": "Fetch all metadata",
+          "message": "すべてのメタデータを取得"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.bGlzdC1zcGFjZXM.option.bGltaXQ.desc": {
+          "source": "Maximum number of results to return. Default: `30`",
+          "message": "返す結果の最大数。デフォルト: `30`"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.bGlzdC1zcGFjZXM.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "上限"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.bGlzdC1zcGFjZXM.option.bGltaXQ.short_desc": {
+          "source": "Maximum number of results to return",
+          "message": "返す結果の最大数"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.bGlzdC1zcGFjZXM.option.c29ydA.allowed-value.c3RyaW5nOmNyZWF0ZWRBdA.display_name": {
+          "source": "Created At",
+          "message": "作成日時"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.bGlzdC1zcGFjZXM.option.c29ydA.allowed-value.c3RyaW5nOmxhc3RNb2RpZmllZA.display_name": {
+          "source": "Last Modified",
+          "message": "最終更新日時"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.bGlzdC1zcGFjZXM.option.c29ydA.allowed-value.c3RyaW5nOmxpa2Vz.display_name": {
+          "source": "Likes",
+          "message": "高評価数"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.bGlzdC1zcGFjZXM.option.c29ydA.allowed-value.c3RyaW5nOnRyZW5kaW5nU2NvcmU.display_name": {
+          "source": "Trending",
+          "message": "トレンド"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.bGlzdC1zcGFjZXM.option.c29ydA.desc": {
+          "source": "Property to sort results by",
+          "message": "結果を並べ替えるプロパティ"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.bGlzdC1zcGFjZXM.option.c29ydA.display_name": {
+          "source": "Sort",
+          "message": "ソート"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.bGlzdC1zcGFjZXM.option.c29ydA.short_desc": {
+          "source": "Property to use for sorting",
+          "message": "並べ替えに使用するプロパティ"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.bGlzdC1zcGFjZXM.option.c2VhcmNo.desc": {
+          "source": "A string that will be contained in the returned models, datasets, or spaces",
+          "message": "返されるモデル、データセット、またはSpaceに含まれる文字列"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.bGlzdC1zcGFjZXM.option.c2VhcmNo.display_name": {
+          "source": "Search",
+          "message": "検索"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.bGlzdC1zcGFjZXM.option.c2VhcmNo.short_desc": {
+          "source": "Filter by search query",
+          "message": "検索クエリでフィルタリング"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.bGlzdC1zcGFjZXM.short_desc": {
+          "source": "List Hugging Face Spaces",
+          "message": "Hugging Face Spacesを一覧表示"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.bWFrZS1hcGktY2FsbA.desc": {
+          "source": "Make a custom HTTP / REST API call to **Hugging Face** using the configured connection's authentication.\n\nSpecify the HTTP method, the URI path (relative to the connection's API base URL), optional query parameters, headers, and request body. The response is returned as a hash containing the status code, response headers, and response body.\n\nUse this action for endpoints that are not yet exposed as first-class actions on this app.",
+          "message": "設定された接続の認証情報を使用して、**Hugging Face**へのカスタムHTTP / REST API呼び出しを実行します。\n\nHTTPメソッド、URIパス（接続のAPIベースURLに対する相対パス）、オプションのクエリパラメータ、ヘッダー、リクエスト本文を指定します。レスポンスはステータスコード、レスポンスヘッダー、レスポンス本文を含むハッシュとして返されます。\n\nこのアプリでファーストクラスのアクションとしてまだ公開されていないエンドポイントに対してこのアクションを使用します。"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.bWFrZS1hcGktY2FsbA.display_name": {
+          "source": "Make an API call",
+          "message": "API コールを実行"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.desc": {
+          "source": "The request body. The effective type depends on `body_type`: JSON/form/YAML expect a hash, XML/text expect a string, multipart expects a file structure, binary expects raw bytes.",
+          "message": "リクエストボディ。有効な型は`body_type`に依存します。JSON/form/YAMLはハッシュを期待し、XML/textは文字列を期待し、multipartはファイル構造を期待し、binaryは生バイトを期待します。"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.display_name": {
+          "source": "Body",
+          "message": "ボディ"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.short_desc": {
+          "source": "The request body",
+          "message": "リクエストボディ"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.desc": {
+          "source": "Upload a file using `multipart/form-data`. The body must be a @ref DataProvider::FileDataType \"FileDataType\" structure (filename + content + mime_type). The framework builds the multipart envelope and sets the boundary header.",
+          "message": "`multipart/form-data`を使用してファイルをアップロードします。ボディは@ref DataProvider::FileDataType \"FileDataType\"構造（filename + content + mime_type）である必要があります。フレームワークがmultipartエンベロープを構築し、boundaryヘッダーを設定します。"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.display_name": {
+          "source": "Multipart Form",
+          "message": "マルチパートフォーム"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.short_desc": {
+          "source": "Upload a file using multipart/form-data",
+          "message": "multipart/form-dataを使用してファイルをアップロード"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.desc": {
+          "source": "Pass the body to the REST client unchanged; the client decides serialization based on its configured `data` option and the value type",
+          "message": "ボディを変更せずにRESTクライアントに渡します。クライアントは設定された`data`オプションと値の型に基づいてシリアライズを決定します"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.display_name": {
+          "source": "Auto",
+          "message": "自動"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.short_desc": {
+          "source": "Pass-through; use connection serialization and let the REST client decide",
+          "message": "パススルー。接続のシリアライズを使用し、RESTクライアントに決定させます"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.desc": {
+          "source": "Send the body as raw bytes. The body must be a binary value. Sets `Content-Type: application/octet-stream` unless overridden by `hdr`.",
+          "message": "ボディを生バイトとして送信します。ボディはバイナリ値である必要があります。`hdr`によってオーバーライドされない限り、`Content-Type: application/octet-stream`を設定します。"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.display_name": {
+          "source": "Raw Binary",
+          "message": "生バイナリ"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.short_desc": {
+          "source": "Send body as raw bytes",
+          "message": "ボディを生バイトとして送信"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.desc": {
+          "source": "Serialize a hash of form fields as `application/x-www-form-urlencoded`. The body must be a hash whose values are scalars (strings/numbers/booleans).",
+          "message": "フォームフィールドのハッシュを`application/x-www-form-urlencoded`としてシリアライズします。ボディは値がスカラー（文字列/数値/ブール値）のハッシュである必要があります。"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.display_name": {
+          "source": "Form (URL-encoded)",
+          "message": "フォーム (URLエンコード)"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.short_desc": {
+          "source": "Serialize body as application/x-www-form-urlencoded form fields",
+          "message": "ボディをapplication/x-www-form-urlencodedフォームフィールドとしてシリアライズ"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.desc": {
+          "source": "Serialize the body as JSON; sets `Content-Type: application/json`. The body should be a hash, list, or scalar value.",
+          "message": "ボディをJSONとしてシリアライズします。`Content-Type: application/json`を設定します。ボディはハッシュ、リスト、またはスカラー値である必要があります。"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.display_name": {
+          "source": "JSON",
+          "message": "JSON"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.short_desc": {
+          "source": "Serialize body as JSON",
+          "message": "ボディをJSONとしてシリアライズ"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.desc": {
+          "source": "Send the body as plain text. The body must be a string. Sets `Content-Type: text/plain`.",
+          "message": "ボディをプレーンテキストとして送信します。ボディは文字列である必要があります。`Content-Type: text/plain`を設定します。"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.display_name": {
+          "source": "Plain Text",
+          "message": "プレーンテキスト"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.short_desc": {
+          "source": "Send body as text/plain",
+          "message": "ボディをtext/plainとして送信"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.desc": {
+          "source": "Send the body as XML. If the body is a hash it is serialized to XML; if it is a string it is sent verbatim. Sets `Content-Type: application/xml`.",
+          "message": "ボディをXMLとして送信します。ボディがハッシュの場合はXMLにシリアライズされ、文字列の場合はそのまま送信されます。`Content-Type: application/xml`を設定します。"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.display_name": {
+          "source": "XML",
+          "message": "XML"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.short_desc": {
+          "source": "Send body as XML",
+          "message": "ボディをXMLとして送信"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.desc": {
+          "source": "Send the body as YAML. If the body is a hash it is serialized to YAML; if it is a string it is sent verbatim. Sets `Content-Type: application/x-yaml`.",
+          "message": "ボディをYAMLとして送信します。ボディがハッシュの場合はYAMLにシリアライズされ、文字列の場合はそのまま送信されます。`Content-Type: application/x-yaml`を設定します。"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.display_name": {
+          "source": "YAML",
+          "message": "YAML"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.short_desc": {
+          "source": "Send body as YAML",
+          "message": "ボディをYAMLとして送信"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.desc": {
+          "source": "Selects the body serialization mode and the corresponding `Content-Type` header. Changing this field reshapes the `body` editor - selecting JSON exposes a JSON editor, selecting Multipart Form exposes a file picker, and so on.",
+          "message": "ボディのシリアライズモードと対応する`Content-Type`ヘッダーを選択します。このフィールドを変更すると`body`エディターの形状が変わります。JSONを選択するとJSONエディターが表示され、マルチパートフォームを選択するとファイルピッカーが表示される、などです。"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.display_name": {
+          "source": "Body Type",
+          "message": "ボディタイプ"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.short_desc": {
+          "source": "How the body is serialized and what Content-Type is sent",
+          "message": "ボディのシリアライズ方法および送信されるContent-Type"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.desc": {
+          "source": "If `True`, non-2xx HTTP responses return as the normal response hash (with the actual status code) instead of raising `REST-RESPONSE-ERROR`. Useful for handling 4xx/5xx as data - e.g. checking whether a resource exists. Overrides the connection's `error_passthru` setting for this call only.",
+          "message": "`True`の場合、2xx以外のHTTPレスポンスは`REST-RESPONSE-ERROR`を発生させる代わりに（実際のステータスコードを含む）通常のレスポンスハッシュとして返されます。リソースが存在するかどうかの確認など、4xx/5xxをデータとして処理する場合に便利です。この呼び出しに限り、接続の`error_passthru`設定をオーバーライドします。"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.display_name": {
+          "source": "Return Errors as Data",
+          "message": "エラーをデータとして返す"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.short_desc": {
+          "source": "Return non-2xx responses normally instead of throwing",
+          "message": "例外をスローする代わりに2xx以外のレスポンスを通常通り返す"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.desc": {
+          "source": "Optional list of HTTP status codes treated as success. If set and the response status is not in this list, the action throws `REST-STATUS-ERROR`. When unset, the REST client's default behavior applies (typically: 2xx is success, non-2xx throws).",
+          "message": "成功として扱われるHTTPステータスコードのオプションリスト。設定されていてレスポンスステータスがこのリストに含まれない場合、アクションは`REST-STATUS-ERROR`をスローします。未設定の場合、RESTクライアントのデフォルト動作が適用されます（通常：2xxは成功、2xx以外はスロー）。"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.display_name": {
+          "source": "Expected Status Codes",
+          "message": "期待されるステータスコード"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.short_desc": {
+          "source": "Response status codes treated as success",
+          "message": "成功として扱われるレスポンスステータスコード"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.bWFrZS1hcGktY2FsbA.option.aGRy.desc": {
+          "source": "Hash of custom headers added to the request. These override any default headers set by `body_type` (e.g. supplying `Content-Type` here wins over the body-type default).",
+          "message": "リクエストに追加されるカスタムヘッダーのハッシュ。これらは`body_type`によって設定されたデフォルトヘッダーをオーバーライドします（例：ここで`Content-Type`を指定すると、ボディタイプのデフォルトより優先されます）。"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.bWFrZS1hcGktY2FsbA.option.aGRy.display_name": {
+          "source": "Custom Headers",
+          "message": "カスタムヘッダー"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.bWFrZS1hcGktY2FsbA.option.aGRy.short_desc": {
+          "source": "Extra request headers",
+          "message": "追加のリクエストヘッダー"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.desc": {
+          "source": "If `True`, the response hash includes a `debug` sub-hash containing the request method/URL/headers (with sensitive values redacted), request and response sizes, and round-trip duration. Useful when investigating slow or failing calls. Off by default to keep responses lean.",
+          "message": "`True`の場合、レスポンスハッシュにはリクエストメソッド/URL/ヘッダー（機密値は伏字処理済み）、リクエストとレスポンスのサイズ、およびラウンドトリップ時間を含む`debug`サブハッシュが含まれます。遅い呼び出しや失敗した呼び出しを調査する際に便利です。レスポンスを軽量に保つため、デフォルトではオフになっています。"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.display_name": {
+          "source": "Include Debug Info",
+          "message": "デバッグ情報を含める"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.short_desc": {
+          "source": "Include request/timing/size debug info in the response",
+          "message": "レスポンスにリクエスト/タイミング/サイズのデバッグ情報を含める"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.desc": {
+          "source": "HTTP `OPTIONS`",
+          "message": "HTTP `OPTIONS`"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.display_name": {
+          "source": "OPTIONS",
+          "message": "OPTIONS"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.short_desc": {
+          "source": "HTTP OPTIONS",
+          "message": "HTTP OPTIONS"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.desc": {
+          "source": "HTTP `DELETE`",
+          "message": "HTTP `DELETE`"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.display_name": {
+          "source": "DELETE",
+          "message": "DELETE"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.short_desc": {
+          "source": "HTTP DELETE",
+          "message": "HTTP DELETE"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.desc": {
+          "source": "HTTP `GET`",
+          "message": "HTTP `GET`"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.display_name": {
+          "source": "GET",
+          "message": "GET"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.short_desc": {
+          "source": "HTTP GET",
+          "message": "HTTP GET"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.desc": {
+          "source": "HTTP `HEAD`",
+          "message": "HTTP `HEAD`"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.display_name": {
+          "source": "HEAD",
+          "message": "HEAD"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.short_desc": {
+          "source": "HTTP HEAD",
+          "message": "HTTP HEAD"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.desc": {
+          "source": "HTTP `PATCH`",
+          "message": "HTTP `PATCH`"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.display_name": {
+          "source": "PATCH",
+          "message": "PATCH"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.short_desc": {
+          "source": "HTTP PATCH",
+          "message": "HTTP PATCH"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.desc": {
+          "source": "HTTP `POST`",
+          "message": "HTTP `POST`"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.display_name": {
+          "source": "POST",
+          "message": "POST"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.short_desc": {
+          "source": "HTTP POST",
+          "message": "HTTP POST"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.desc": {
+          "source": "HTTP `PUT`",
+          "message": "HTTP `PUT`"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.display_name": {
+          "source": "PUT",
+          "message": "PUT"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.short_desc": {
+          "source": "HTTP PUT",
+          "message": "HTTP PUT"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.desc": {
+          "source": "HTTP `TRACE`",
+          "message": "HTTP `TRACE`"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.display_name": {
+          "source": "TRACE",
+          "message": "TRACE"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.short_desc": {
+          "source": "HTTP TRACE",
+          "message": "HTTP TRACE"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "リクエストに使用するHTTPメソッド"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.display_name": {
+          "source": "HTTP Method",
+          "message": "HTTPメソッド"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.short_desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "リクエストに使用するHTTPメソッド"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain `{name}` placeholders that are replaced from `path_vars`. Example: `/users/{id}/comments`.",
+          "message": "接続のAPIベースURLに対する相対URIパス。`path_vars`から置換される`{name}`プレースホルダーを含めることができます。例: `/users/{id}/comments`。"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.display_name": {
+          "source": "URI Path",
+          "message": "URIパス"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.short_desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain '{name}' placeholders that are replaced from 'path_vars'. Example: '/users/{id}/comments'",
+          "message": "接続のAPIベースURLに対する相対URIパス。'path_vars' から置換される '{name}' プレースホルダーを含めることができます。例: '/users/{id}/comments'"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.desc": {
+          "source": "Hash of values substituted into `{name}` placeholders in the URI path. Example: with `path = /users/{id}` and `path_vars = {id: 123}` the framework sends `/users/123`. Values are URL-encoded.",
+          "message": "URIパス内の `{name}` プレースホルダーに置換される値のハッシュ。例: `path = /users/{id}` と `path_vars = {id: 123}` を指定すると、フレームワークは `/users/123` を送信します。値はURLエンコードされます。"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.display_name": {
+          "source": "Path Variables",
+          "message": "パス変数"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.short_desc": {
+          "source": "Values for {name} placeholders in path",
+          "message": "パス内の {name} プレースホルダーの値"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.desc": {
+          "source": "Hash of query string parameters to append to the URI path. Values are URL-encoded; list values are joined with `,`.",
+          "message": "URIパスに追加するクエリ文字列パラメータのハッシュ。値はURLエンコードされます。リスト値は `,` で結合されます。"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.display_name": {
+          "source": "Query Arguments",
+          "message": "クエリ引数"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.short_desc": {
+          "source": "Query string parameters",
+          "message": "クエリ文字列パラメータ"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.bWFrZS1hcGktY2FsbA.short_desc": {
+          "source": "Make a custom API call to Hugging Face",
+          "message": "Hugging FaceへのカスタムAPI呼び出しを実行"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.dXBkYXRlLW1vZGVs.desc": {
+          "source": "Update settings for an existing model repository on Hugging Face Hub",
+          "message": "Hugging Face Hub上の既存のモデルリポジトリの設定を更新"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.dXBkYXRlLW1vZGVs.display_name": {
+          "source": "Update Model",
+          "message": "モデルを更新"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.dXBkYXRlLW1vZGVs.option.Z2F0ZWQ.allowed-value.c3RyaW5nOm1hbnVhbA.display_name": {
+          "source": "Manual",
+          "message": "手動"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.dXBkYXRlLW1vZGVs.option.Z2F0ZWQ.allowed-value.c3RyaW5nOmF1dG8.display_name": {
+          "source": "Auto",
+          "message": "自動"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.dXBkYXRlLW1vZGVs.option.Z2F0ZWQ.allowed-value.c3RyaW5nOmZhbHNl.display_name": {
+          "source": "Not Gated",
+          "message": "非ゲート"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.dXBkYXRlLW1vZGVs.option.Z2F0ZWQ.desc": {
+          "source": "Gating mode for the repository",
+          "message": "リポジトリのゲーティングモード"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.dXBkYXRlLW1vZGVs.option.Z2F0ZWQ.display_name": {
+          "source": "Gated",
+          "message": "ゲート設定"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.dXBkYXRlLW1vZGVs.option.Z2F0ZWQ.short_desc": {
+          "source": "Gating mode for the repository",
+          "message": "リポジトリのゲーティングモード"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.dXBkYXRlLW1vZGVs.option.ZGlzY3Vzc2lvbnNEaXNhYmxlZA.desc": {
+          "source": "Whether to disable the discussions feature on this repository",
+          "message": "このリポジトリのディスカッション機能を無効にするかどうか"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.dXBkYXRlLW1vZGVs.option.ZGlzY3Vzc2lvbnNEaXNhYmxlZA.display_name": {
+          "source": "Disable Discussions",
+          "message": "ディスカッションを無効化"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.dXBkYXRlLW1vZGVs.option.ZGlzY3Vzc2lvbnNEaXNhYmxlZA.short_desc": {
+          "source": "Disable discussions on the repository",
+          "message": "リポジトリのディスカッションを無効化"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.dXBkYXRlLW1vZGVs.option.cmVwb19pZA.desc": {
+          "source": "The model repository ID in `namespace/name` format (e.g. `meta-llama/Llama-3.1-8B`)",
+          "message": "`namespace/name`形式のモデルリポジトリID（例: `meta-llama/Llama-3.1-8B`）"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.dXBkYXRlLW1vZGVs.option.cmVwb19pZA.display_name": {
+          "source": "Repository ID",
+          "message": "リポジトリID"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.dXBkYXRlLW1vZGVs.option.cmVwb19pZA.short_desc": {
+          "source": "Model repository ID in namespace/name format",
+          "message": "namespace/name形式のモデルリポジトリID"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.dXBkYXRlLW1vZGVs.option.dmlzaWJpbGl0eQ.allowed-value.c3RyaW5nOnB1YmxpYw.display_name": {
+          "source": "Public",
+          "message": "パブリック"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.dXBkYXRlLW1vZGVs.option.dmlzaWJpbGl0eQ.allowed-value.c3RyaW5nOnByaXZhdGU.display_name": {
+          "source": "Private",
+          "message": "プライベート"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.dXBkYXRlLW1vZGVs.option.dmlzaWJpbGl0eQ.desc": {
+          "source": "Repository visibility setting",
+          "message": "リポジトリの公開設定"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.dXBkYXRlLW1vZGVs.option.dmlzaWJpbGl0eQ.display_name": {
+          "source": "Visibility",
+          "message": "公開設定"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.dXBkYXRlLW1vZGVs.option.dmlzaWJpbGl0eQ.short_desc": {
+          "source": "Repository visibility",
+          "message": "リポジトリの公開状態"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.dXBkYXRlLW1vZGVs.short_desc": {
+          "source": "Update model repository settings",
+          "message": "モデルリポジトリ設定を更新"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.dXBkYXRlLWRhdGFzZXQ.desc": {
+          "source": "Update settings for an existing dataset repository on Hugging Face Hub",
+          "message": "Hugging Face Hub上の既存のデータセットリポジトリ設定を更新"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.dXBkYXRlLWRhdGFzZXQ.display_name": {
+          "source": "Update Dataset",
+          "message": "データセットを更新"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.dXBkYXRlLWRhdGFzZXQ.option.Z2F0ZWQ.allowed-value.c3RyaW5nOm1hbnVhbA.display_name": {
+          "source": "Manual",
+          "message": "手動"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.dXBkYXRlLWRhdGFzZXQ.option.Z2F0ZWQ.allowed-value.c3RyaW5nOmF1dG8.display_name": {
+          "source": "Auto",
+          "message": "自動"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.dXBkYXRlLWRhdGFzZXQ.option.Z2F0ZWQ.allowed-value.c3RyaW5nOmZhbHNl.display_name": {
+          "source": "Not Gated",
+          "message": "非ゲート"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.dXBkYXRlLWRhdGFzZXQ.option.Z2F0ZWQ.desc": {
+          "source": "Gating mode for the repository",
+          "message": "リポジトリのゲーティングモード"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.dXBkYXRlLWRhdGFzZXQ.option.Z2F0ZWQ.display_name": {
+          "source": "Gated",
+          "message": "ゲート設定"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.dXBkYXRlLWRhdGFzZXQ.option.Z2F0ZWQ.short_desc": {
+          "source": "Gating mode for the repository",
+          "message": "リポジトリのゲーティングモード"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.dXBkYXRlLWRhdGFzZXQ.option.ZGlzY3Vzc2lvbnNEaXNhYmxlZA.desc": {
+          "source": "Whether to disable the discussions feature on this repository",
+          "message": "このリポジトリのディスカッション機能を無効にするかどうか"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.dXBkYXRlLWRhdGFzZXQ.option.ZGlzY3Vzc2lvbnNEaXNhYmxlZA.display_name": {
+          "source": "Disable Discussions",
+          "message": "ディスカッションを無効化"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.dXBkYXRlLWRhdGFzZXQ.option.ZGlzY3Vzc2lvbnNEaXNhYmxlZA.short_desc": {
+          "source": "Disable discussions on the repository",
+          "message": "リポジトリのディスカッションを無効化"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.dXBkYXRlLWRhdGFzZXQ.option.cmVwb19pZA.desc": {
+          "source": "The dataset repository ID in `namespace/name` format (e.g. `stanfordnlp/imdb`)",
+          "message": "`namespace/name`形式のデータセットリポジトリID（例: `stanfordnlp/imdb`）"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.dXBkYXRlLWRhdGFzZXQ.option.cmVwb19pZA.display_name": {
+          "source": "Repository ID",
+          "message": "リポジトリID"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.dXBkYXRlLWRhdGFzZXQ.option.cmVwb19pZA.short_desc": {
+          "source": "Dataset repository ID in namespace/name format",
+          "message": "namespace/name形式のデータセットリポジトリID"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.dXBkYXRlLWRhdGFzZXQ.option.dmlzaWJpbGl0eQ.allowed-value.c3RyaW5nOnB1YmxpYw.display_name": {
+          "source": "Public",
+          "message": "パブリック"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.dXBkYXRlLWRhdGFzZXQ.option.dmlzaWJpbGl0eQ.allowed-value.c3RyaW5nOnByaXZhdGU.display_name": {
+          "source": "Private",
+          "message": "プライベート"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.dXBkYXRlLWRhdGFzZXQ.option.dmlzaWJpbGl0eQ.desc": {
+          "source": "Repository visibility setting",
+          "message": "リポジトリの公開設定"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.dXBkYXRlLWRhdGFzZXQ.option.dmlzaWJpbGl0eQ.display_name": {
+          "source": "Visibility",
+          "message": "公開設定"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.dXBkYXRlLWRhdGFzZXQ.option.dmlzaWJpbGl0eQ.short_desc": {
+          "source": "Repository visibility",
+          "message": "リポジトリの公開状態"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.dXBkYXRlLWRhdGFzZXQ.short_desc": {
+          "source": "Update dataset repository settings",
+          "message": "データセットリポジトリ設定を更新"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.dXBkYXRlLXNwYWNl.desc": {
+          "source": "Update settings for an existing Space on Hugging Face Hub",
+          "message": "Hugging Face Hub上の既存のSpace設定を更新"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.dXBkYXRlLXNwYWNl.display_name": {
+          "source": "Update Space",
+          "message": "Spaceを更新"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.dXBkYXRlLXNwYWNl.option.Z2F0ZWQ.allowed-value.c3RyaW5nOm1hbnVhbA.display_name": {
+          "source": "Manual",
+          "message": "手動"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.dXBkYXRlLXNwYWNl.option.Z2F0ZWQ.allowed-value.c3RyaW5nOmF1dG8.display_name": {
+          "source": "Auto",
+          "message": "自動"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.dXBkYXRlLXNwYWNl.option.Z2F0ZWQ.allowed-value.c3RyaW5nOmZhbHNl.display_name": {
+          "source": "Not Gated",
+          "message": "非ゲート"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.dXBkYXRlLXNwYWNl.option.Z2F0ZWQ.desc": {
+          "source": "Gating mode for the Space",
+          "message": "Spaceのゲーティングモード"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.dXBkYXRlLXNwYWNl.option.Z2F0ZWQ.display_name": {
+          "source": "Gated",
+          "message": "ゲート設定"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.dXBkYXRlLXNwYWNl.option.Z2F0ZWQ.short_desc": {
+          "source": "Gating mode for the Space",
+          "message": "Spaceのゲーティングモード"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.dXBkYXRlLXNwYWNl.option.ZGlzY3Vzc2lvbnNEaXNhYmxlZA.desc": {
+          "source": "Whether to disable the discussions feature on this Space",
+          "message": "このSpaceのディスカッション機能を無効にするかどうか"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.dXBkYXRlLXNwYWNl.option.ZGlzY3Vzc2lvbnNEaXNhYmxlZA.display_name": {
+          "source": "Disable Discussions",
+          "message": "ディスカッションを無効化"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.dXBkYXRlLXNwYWNl.option.ZGlzY3Vzc2lvbnNEaXNhYmxlZA.short_desc": {
+          "source": "Disable discussions on the Space",
+          "message": "Spaceのディスカッションを無効化"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.dXBkYXRlLXNwYWNl.option.cmVwb19pZA.desc": {
+          "source": "The Space repository ID in `namespace/name` format (e.g. `gradio/chatbot`)",
+          "message": "`namespace/name`形式のSpaceリポジトリID（例: `gradio/chatbot`）"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.dXBkYXRlLXNwYWNl.option.cmVwb19pZA.display_name": {
+          "source": "Repository ID",
+          "message": "リポジトリID"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.dXBkYXRlLXNwYWNl.option.cmVwb19pZA.short_desc": {
+          "source": "Space repository ID in namespace/name format",
+          "message": "namespace/name形式のSpaceリポジトリID"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.dXBkYXRlLXNwYWNl.option.dmlzaWJpbGl0eQ.allowed-value.c3RyaW5nOnB1YmxpYw.display_name": {
+          "source": "Public",
+          "message": "パブリック"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.dXBkYXRlLXNwYWNl.option.dmlzaWJpbGl0eQ.allowed-value.c3RyaW5nOnByaXZhdGU.display_name": {
+          "source": "Private",
+          "message": "プライベート"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.dXBkYXRlLXNwYWNl.option.dmlzaWJpbGl0eQ.allowed-value.c3RyaW5nOnByb3RlY3RlZA.display_name": {
+          "source": "Protected",
+          "message": "保護"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.dXBkYXRlLXNwYWNl.option.dmlzaWJpbGl0eQ.desc": {
+          "source": "Space visibility setting",
+          "message": "Spaceの公開設定"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.dXBkYXRlLXNwYWNl.option.dmlzaWJpbGl0eQ.display_name": {
+          "source": "Visibility",
+          "message": "公開設定"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.dXBkYXRlLXNwYWNl.option.dmlzaWJpbGl0eQ.short_desc": {
+          "source": "Space visibility",
+          "message": "Spaceの公開状態"
+        },
+        "app.SHVnZ2luZ0ZhY2U.action.dXBkYXRlLXNwYWNl.short_desc": {
+          "source": "Update Space settings",
+          "message": "Space設定を更新"
+        },
+        "app.SHVnZ2luZ0ZhY2U.desc": {
+          "source": "Hugging Face Hub and Inference API integration providing:\n- **Models**: List, create, update, and delete ML models on the Hub\n- **Datasets**: Manage datasets for training and evaluation\n- **Spaces**: Deploy and manage interactive ML applications\n- **Inference API**: Chat completions with hosted models",
+          "message": "以下を提供するHugging Face HubおよびInference API統合:\n- **モデル**: Hub上のMLモデルのリスト、作成、更新、削除\n- **データセット**: トレーニングおよび評価用データセットの管理\n- **Spaces**: インタラクティブなMLアプリケーションのデプロイと管理\n- **Inference API**: ホストされたモデルによるチャット補完"
+        },
+        "app.SHVnZ2luZ0ZhY2U.display_name": {
+          "source": "Hugging Face",
+          "message": "Hugging Face"
+        },
+        "app.SHVnZ2luZ0ZhY2U.short_desc": {
+          "source": "Hugging Face Hub and Inference API services",
+          "message": "Hugging Face HubおよびInference APIサービス"
+        }
+      }
+    }
+  }
+}

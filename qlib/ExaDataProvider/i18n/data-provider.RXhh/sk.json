@@ -1,0 +1,649 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "sk": {
+      "messages": {
+        "app.RXhh.action.Y29udGVudHM.desc": {
+          "source": "Fetches text content, highlight extracts, and AI-summarized snippets for one or more URLs via Exa's `/contents` endpoint.",
+          "message": "Získa textový obsah, výňatky zvýraznení a zhrnuté úryvky pomocou AI pre jednu alebo viacero adries URL prostredníctvom koncového bodu `/contents` od Exa."
+        },
+        "app.RXhh.action.Y29udGVudHM.display_name": {
+          "source": "Fetch Page Contents",
+          "message": "Získať obsah stránok"
+        },
+        "app.RXhh.action.Y29udGVudHM.option.aGlnaGxpZ2h0cw.desc": {
+          "source": "Highlight options: `{num_sentences, highlights_per_url, query}`.",
+          "message": "Možnosti zvýraznenia: `{num_sentences, highlights_per_url, query}`."
+        },
+        "app.RXhh.action.Y29udGVudHM.option.aGlnaGxpZ2h0cw.display_name": {
+          "source": "Highlights",
+          "message": "Zvýraznenia"
+        },
+        "app.RXhh.action.Y29udGVudHM.option.aGlnaGxpZ2h0cw.short_desc": {
+          "source": "Highlight configuration hash",
+          "message": "Konfiguračný hash zvýraznení"
+        },
+        "app.RXhh.action.Y29udGVudHM.option.aWRz.desc": {
+          "source": "Result IDs from a prior search (or absolute URLs).",
+          "message": "ID výsledkov z predchádzajúceho vyhľadávania (alebo absolútne adresy URL)."
+        },
+        "app.RXhh.action.Y29udGVudHM.option.aWRz.display_name": {
+          "source": "IDs",
+          "message": "ID"
+        },
+        "app.RXhh.action.Y29udGVudHM.option.aWRz.short_desc": {
+          "source": "List of Exa result IDs (or URLs)",
+          "message": "Zoznam ID výsledkov Exa (alebo adries URL)"
+        },
+        "app.RXhh.action.Y29udGVudHM.option.c3VtbWFyeQ.desc": {
+          "source": "Summary options: `{query}` to drive a guided summary.",
+          "message": "Možnosti zhrnutia: `{query}` na riadenie sprevádzaného zhrnutia."
+        },
+        "app.RXhh.action.Y29udGVudHM.option.c3VtbWFyeQ.display_name": {
+          "source": "Summary",
+          "message": "Zhrnutie"
+        },
+        "app.RXhh.action.Y29udGVudHM.option.c3VtbWFyeQ.short_desc": {
+          "source": "Summary configuration hash",
+          "message": "Konfiguračný hash zhrnutia"
+        },
+        "app.RXhh.action.Y29udGVudHM.option.dGV4dA.desc": {
+          "source": "When `True`, results include the full text content of each page.",
+          "message": "Ak je `True`, výsledky zahŕňajú úplný textový obsah každej stránky."
+        },
+        "app.RXhh.action.Y29udGVudHM.option.dGV4dA.display_name": {
+          "source": "Text",
+          "message": "Text"
+        },
+        "app.RXhh.action.Y29udGVudHM.option.dGV4dA.short_desc": {
+          "source": "Include full text content",
+          "message": "Zahrnúť úplný textový obsah"
+        },
+        "app.RXhh.action.Y29udGVudHM.short_desc": {
+          "source": "Fetch text / highlights / summaries for URLs",
+          "message": "Získať text / zvýraznenia / zhrnutia pre adresy URL"
+        },
+        "app.RXhh.action.ZmluZC1zaW1pbGFy.desc": {
+          "source": "Finds pages similar to a seed URL via Exa's `/findSimilar` endpoint.",
+          "message": "Nájde stránky podobné zdrojovej adrese URL prostredníctvom koncového bodu `/findSimilar` od Exa."
+        },
+        "app.RXhh.action.ZmluZC1zaW1pbGFy.display_name": {
+          "source": "Find Similar Pages",
+          "message": "Nájsť podobné stránky"
+        },
+        "app.RXhh.action.ZmluZC1zaW1pbGFy.option.Y29udGVudHM.desc": {
+          "source": "Same as on `/search`; saves a follow-up call to `/contents`.",
+          "message": "Rovnaké ako pri `/search`; ušetrí následné volanie na `/contents`."
+        },
+        "app.RXhh.action.ZmluZC1zaW1pbGFy.option.Y29udGVudHM.display_name": {
+          "source": "Contents Config",
+          "message": "Konfigurácia obsahu"
+        },
+        "app.RXhh.action.ZmluZC1zaW1pbGFy.option.Y29udGVudHM.short_desc": {
+          "source": "Include text/highlights/summary in results",
+          "message": "Zahrnúť text/zvýraznenia/zhrnutie do výsledkov"
+        },
+        "app.RXhh.action.ZmluZC1zaW1pbGFy.option.ZXhjbHVkZV9kb21haW5z.desc": {
+          "source": "List of domains to exclude.",
+          "message": "Zoznam domén na vylúčenie."
+        },
+        "app.RXhh.action.ZmluZC1zaW1pbGFy.option.ZXhjbHVkZV9kb21haW5z.display_name": {
+          "source": "Exclude Domains",
+          "message": "Vylúčiť domény"
+        },
+        "app.RXhh.action.ZmluZC1zaW1pbGFy.option.ZXhjbHVkZV9kb21haW5z.short_desc": {
+          "source": "Exclude these domains",
+          "message": "Vylúčiť tieto domény"
+        },
+        "app.RXhh.action.ZmluZC1zaW1pbGFy.option.ZXhjbHVkZV9zb3VyY2VfZG9tYWlu.desc": {
+          "source": "When `True`, results don't include the seed URL's own domain.",
+          "message": "Keď je `True`, výsledky nezahŕňajú vlastnú doménu zdrojovej URL."
+        },
+        "app.RXhh.action.ZmluZC1zaW1pbGFy.option.ZXhjbHVkZV9zb3VyY2VfZG9tYWlu.display_name": {
+          "source": "Exclude Source Domain",
+          "message": "Vylúčiť zdrojovú doménu"
+        },
+        "app.RXhh.action.ZmluZC1zaW1pbGFy.option.ZXhjbHVkZV9zb3VyY2VfZG9tYWlu.short_desc": {
+          "source": "Skip pages from the seed URL's own domain",
+          "message": "Preskočiť stránky z vlastnej domény zdrojovej URL"
+        },
+        "app.RXhh.action.ZmluZC1zaW1pbGFy.option.aW5jbHVkZV9kb21haW5z.desc": {
+          "source": "List of domains to restrict results to.",
+          "message": "Zoznam domén, na ktoré sa majú obmedziť výsledky."
+        },
+        "app.RXhh.action.ZmluZC1zaW1pbGFy.option.aW5jbHVkZV9kb21haW5z.display_name": {
+          "source": "Include Domains",
+          "message": "Zahrnúť domény"
+        },
+        "app.RXhh.action.ZmluZC1zaW1pbGFy.option.aW5jbHVkZV9kb21haW5z.short_desc": {
+          "source": "Restrict results to these domains",
+          "message": "Obmedziť výsledky na tieto domény"
+        },
+        "app.RXhh.action.ZmluZC1zaW1pbGFy.option.bnVtX3Jlc3VsdHM.desc": {
+          "source": "Number of similar pages to return.  Default 10.",
+          "message": "Počet podobných stránok, ktoré sa majú vrátiť. Predvolená hodnota je 10."
+        },
+        "app.RXhh.action.ZmluZC1zaW1pbGFy.option.bnVtX3Jlc3VsdHM.display_name": {
+          "source": "Number of Results",
+          "message": "Počet výsledkov"
+        },
+        "app.RXhh.action.ZmluZC1zaW1pbGFy.option.bnVtX3Jlc3VsdHM.short_desc": {
+          "source": "Number of similar results",
+          "message": "Počet podobných výsledkov"
+        },
+        "app.RXhh.action.ZmluZC1zaW1pbGFy.option.dXJs.desc": {
+          "source": "Seed URL.",
+          "message": "Zdrojová URL."
+        },
+        "app.RXhh.action.ZmluZC1zaW1pbGFy.option.dXJs.display_name": {
+          "source": "Seed URL",
+          "message": "Zdrojová URL"
+        },
+        "app.RXhh.action.ZmluZC1zaW1pbGFy.option.dXJs.short_desc": {
+          "source": "URL to find similar pages for",
+          "message": "URL, pre ktorú sa majú nájsť podobné stránky"
+        },
+        "app.RXhh.action.ZmluZC1zaW1pbGFy.short_desc": {
+          "source": "Find pages similar to a seed URL using Exa's neural search",
+          "message": "Nájsť stránky podobné zdrojovej URL pomocou neurálneho vyhľadávania Exa"
+        },
+        "app.RXhh.action.bWFrZS1hcGktY2FsbA.desc": {
+          "source": "Make a custom HTTP / REST API call to **Exa** using the configured connection's authentication.\n\nSpecify the HTTP method, the URI path (relative to the connection's API base URL), optional query parameters, headers, and request body. The response is returned as a hash containing the status code, response headers, and response body.\n\nUse this action for endpoints that are not yet exposed as first-class actions on this app.",
+          "message": "Vytvorte vlastné volanie HTTP / REST API do **Exa** pomocou autentifikácie nakonfigurovaného pripojenia.\n\nZadajte metódu HTTP, cestu URI (relatívnu k základnej URL API pripojenia), voliteľné parametre dotazu, hlavičky a telo požiadavky. Odpoveď sa vracia ako hash obsahujúci stavový kód, hlavičky odpovede a telo odpovede.\n\nTúto akciu použite pre koncové body, ktoré ešte nie sú sprístupnené ako prvotriedne akcie v tejto aplikácii."
+        },
+        "app.RXhh.action.bWFrZS1hcGktY2FsbA.display_name": {
+          "source": "Make an API call",
+          "message": "Urobiť volanie API"
+        },
+        "app.RXhh.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.desc": {
+          "source": "The request body. The effective type depends on `body_type`: JSON/form/YAML expect a hash, XML/text expect a string, multipart expects a file structure, binary expects raw bytes.",
+          "message": "Telo požiadavky. Efektívny typ závisí od `body_type`: JSON/formulár/YAML očakávajú hash, XML/text očakávajú reťazec, multipart očakáva štruktúru súboru, binárny typ očakáva neopracované bajty."
+        },
+        "app.RXhh.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.display_name": {
+          "source": "Body",
+          "message": "Telo"
+        },
+        "app.RXhh.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.short_desc": {
+          "source": "The request body",
+          "message": "Telo požiadavky"
+        },
+        "app.RXhh.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.desc": {
+          "source": "Upload a file using `multipart/form-data`. The body must be a @ref DataProvider::FileDataType \"FileDataType\" structure (filename + content + mime_type). The framework builds the multipart envelope and sets the boundary header.",
+          "message": "Odoslať súbor pomocou `multipart/form-data`. Telo musí byť štruktúra @ref DataProvider::FileDataType \"FileDataType\" (filename + content + mime_type). Rámec vytvorí obálku multipart a nastaví hlavičku boundary."
+        },
+        "app.RXhh.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.display_name": {
+          "source": "Multipart Form",
+          "message": "Multipart formulár"
+        },
+        "app.RXhh.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.short_desc": {
+          "source": "Upload a file using multipart/form-data",
+          "message": "Odoslať súbor pomocou multipart/form-data"
+        },
+        "app.RXhh.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.desc": {
+          "source": "Pass the body to the REST client unchanged; the client decides serialization based on its configured `data` option and the value type",
+          "message": "Odovzdať telo klientovi REST bez zmeny; klient rozhodne o serializácii na základe svojej konfigurovanej možnosti `data` a typu hodnoty"
+        },
+        "app.RXhh.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.display_name": {
+          "source": "Auto",
+          "message": "Auto"
+        },
+        "app.RXhh.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.short_desc": {
+          "source": "Pass-through; use connection serialization and let the REST client decide",
+          "message": "Priamy prechod; použiť serializáciu spojenia a nechať rozhodnúť klienta REST"
+        },
+        "app.RXhh.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.desc": {
+          "source": "Send the body as raw bytes. The body must be a binary value. Sets `Content-Type: application/octet-stream` unless overridden by `hdr`.",
+          "message": "Odoslať telo ako neopracované bajty. Telo musí byť binárna hodnota. Nastavuje `Content-Type: application/octet-stream`, pokiaľ nie je prepísané pomocou `hdr`."
+        },
+        "app.RXhh.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.display_name": {
+          "source": "Raw Binary",
+          "message": "Surové binárne dáta"
+        },
+        "app.RXhh.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.short_desc": {
+          "source": "Send body as raw bytes",
+          "message": "Odoslať telo ako neopracované bajty"
+        },
+        "app.RXhh.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.desc": {
+          "source": "Serialize a hash of form fields as `application/x-www-form-urlencoded`. The body must be a hash whose values are scalars (strings/numbers/booleans).",
+          "message": "Serializovať hash polí formulára ako `application/x-www-form-urlencoded`. Telo musí byť hash, ktorého hodnoty sú skaláre (reťazce/čísla/booleovské hodnoty)."
+        },
+        "app.RXhh.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.display_name": {
+          "source": "Form (URL-encoded)",
+          "message": "Formulár (kódovaný v URL)"
+        },
+        "app.RXhh.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.short_desc": {
+          "source": "Serialize body as application/x-www-form-urlencoded form fields",
+          "message": "Serializovať telo ako polia formulára application/x-www-form-urlencoded"
+        },
+        "app.RXhh.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.desc": {
+          "source": "Serialize the body as JSON; sets `Content-Type: application/json`. The body should be a hash, list, or scalar value.",
+          "message": "Serializovať telo ako JSON; nastavuje `Content-Type: application/json`. Telo by malo byť hash, zoznam alebo skalárna hodnota."
+        },
+        "app.RXhh.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.display_name": {
+          "source": "JSON",
+          "message": "JSON"
+        },
+        "app.RXhh.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.short_desc": {
+          "source": "Serialize body as JSON",
+          "message": "Serializovať telo ako JSON"
+        },
+        "app.RXhh.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.desc": {
+          "source": "Send the body as plain text. The body must be a string. Sets `Content-Type: text/plain`.",
+          "message": "Odoslať telo ako čistý text. Telo musí byť reťazec. Nastavuje `Content-Type: text/plain`."
+        },
+        "app.RXhh.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.display_name": {
+          "source": "Plain Text",
+          "message": "Čistý text"
+        },
+        "app.RXhh.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.short_desc": {
+          "source": "Send body as text/plain",
+          "message": "Odoslať telo ako text/plain"
+        },
+        "app.RXhh.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.desc": {
+          "source": "Send the body as XML. If the body is a hash it is serialized to XML; if it is a string it is sent verbatim. Sets `Content-Type: application/xml`.",
+          "message": "Odoslať telo ako XML. Ak je telo hash, serializuje sa do XML; ak je to reťazec, odosiela sa doslovne. Nastavuje `Content-Type: application/xml`."
+        },
+        "app.RXhh.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.display_name": {
+          "source": "XML",
+          "message": "XML"
+        },
+        "app.RXhh.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.short_desc": {
+          "source": "Send body as XML",
+          "message": "Odoslať telo ako XML"
+        },
+        "app.RXhh.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.desc": {
+          "source": "Send the body as YAML. If the body is a hash it is serialized to YAML; if it is a string it is sent verbatim. Sets `Content-Type: application/x-yaml`.",
+          "message": "Odoslať telo ako YAML. Ak je telo hash, serializuje sa do YAML; ak je to reťazec, odosiela sa doslovne. Nastavuje `Content-Type: application/x-yaml`."
+        },
+        "app.RXhh.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.display_name": {
+          "source": "YAML",
+          "message": "YAML"
+        },
+        "app.RXhh.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.short_desc": {
+          "source": "Send body as YAML",
+          "message": "Odoslať telo ako YAML"
+        },
+        "app.RXhh.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.desc": {
+          "source": "Selects the body serialization mode and the corresponding `Content-Type` header. Changing this field reshapes the `body` editor - selecting JSON exposes a JSON editor, selecting Multipart Form exposes a file picker, and so on.",
+          "message": "Vyberie režim serializácie tela a zodpovedajúcu hlavičku `Content-Type`. Zmena tohto poľa zmení editor `body` - výber JSON zobrazí editor JSON, výber Multipart Form zobrazí výber súborov a podobne."
+        },
+        "app.RXhh.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.display_name": {
+          "source": "Body Type",
+          "message": "Typ tela"
+        },
+        "app.RXhh.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.short_desc": {
+          "source": "How the body is serialized and what Content-Type is sent",
+          "message": "Ako sa telo serializuje a aký Content-Type sa odosiela"
+        },
+        "app.RXhh.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.desc": {
+          "source": "If `True`, non-2xx HTTP responses return as the normal response hash (with the actual status code) instead of raising `REST-RESPONSE-ERROR`. Useful for handling 4xx/5xx as data - e.g. checking whether a resource exists. Overrides the connection's `error_passthru` setting for this call only.",
+          "message": "Ak je `True`, odpovede HTTP iné ako 2xx sa vrátia ako normálny hash odpovede (s reálnym stavovým kódom) namiesto vyvolania `REST-RESPONSE-ERROR`. Užitočné na spracovanie 4xx/5xx ako dát – napr. kontrola, či zdroj existuje. Prepíše nastavenie `error_passthru` spojenia len pre toto volanie."
+        },
+        "app.RXhh.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.display_name": {
+          "source": "Return Errors as Data",
+          "message": "Vrátiť chyby ako dáta"
+        },
+        "app.RXhh.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.short_desc": {
+          "source": "Return non-2xx responses normally instead of throwing",
+          "message": "Vrátiť odpovede iné ako 2xx normálne namiesto vyvolania výnimky"
+        },
+        "app.RXhh.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.desc": {
+          "source": "Optional list of HTTP status codes treated as success. If set and the response status is not in this list, the action throws `REST-STATUS-ERROR`. When unset, the REST client's default behavior applies (typically: 2xx is success, non-2xx throws).",
+          "message": "Voliteľný zoznam stavových kódov HTTP považovaných za úspech. Ak je nastavený a stav odpovede nie je v tomto zozname, akcia vyvolá `REST-STATUS-ERROR`. Ak nie je nastavený, uplatní sa predvolené správanie klienta REST (zvyčajne: 2xx je úspech, iné ako 2xx vyvolá výnimku)."
+        },
+        "app.RXhh.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.display_name": {
+          "source": "Expected Status Codes",
+          "message": "Očakávané stavové kódy"
+        },
+        "app.RXhh.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.short_desc": {
+          "source": "Response status codes treated as success",
+          "message": "Stavové kódy odpovede považované za úspech"
+        },
+        "app.RXhh.action.bWFrZS1hcGktY2FsbA.option.aGRy.desc": {
+          "source": "Hash of custom headers added to the request. These override any default headers set by `body_type` (e.g. supplying `Content-Type` here wins over the body-type default).",
+          "message": "Hash vlastných hlavičiek pridaných k požiadavke. Tie prepíšu akékoľvek predvolené hlavičky nastavené pomocou `body_type` (napr. zadanie `Content-Type` na tomto mieste má prednosť pred predvolenou hodnotou typu tela)."
+        },
+        "app.RXhh.action.bWFrZS1hcGktY2FsbA.option.aGRy.display_name": {
+          "source": "Custom Headers",
+          "message": "Vlastné hlavičky"
+        },
+        "app.RXhh.action.bWFrZS1hcGktY2FsbA.option.aGRy.short_desc": {
+          "source": "Extra request headers",
+          "message": "Dodatočné hlavičky požiadavky"
+        },
+        "app.RXhh.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.desc": {
+          "source": "If `True`, the response hash includes a `debug` sub-hash containing the request method/URL/headers (with sensitive values redacted), request and response sizes, and round-trip duration. Useful when investigating slow or failing calls. Off by default to keep responses lean.",
+          "message": "Ak je `True`, hash odpovede obsahuje pod-hash `debug` obsahujúci metódu/URL/hlavičky požiadavky (so skrytými citlivými hodnotami), veľkosti požiadavky a odpovede a trvanie celého cyklu. Užitočné pri vyšetrovaní pomalých alebo zlyhávajúcich volaní. Predvolene vypnuté, aby odpovede zostali stručné."
+        },
+        "app.RXhh.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.display_name": {
+          "source": "Include Debug Info",
+          "message": "Zahrnúť ladiace informácie"
+        },
+        "app.RXhh.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.short_desc": {
+          "source": "Include request/timing/size debug info in the response",
+          "message": "Zahrnúť ladiace informácie o požiadavke/časovaní/veľkosti do odpovede"
+        },
+        "app.RXhh.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.desc": {
+          "source": "HTTP `OPTIONS`",
+          "message": "HTTP `OPTIONS`"
+        },
+        "app.RXhh.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.display_name": {
+          "source": "OPTIONS",
+          "message": "OPTIONS"
+        },
+        "app.RXhh.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.short_desc": {
+          "source": "HTTP OPTIONS",
+          "message": "HTTP OPTIONS"
+        },
+        "app.RXhh.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.desc": {
+          "source": "HTTP `DELETE`",
+          "message": "HTTP `DELETE`"
+        },
+        "app.RXhh.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.display_name": {
+          "source": "DELETE",
+          "message": "DELETE"
+        },
+        "app.RXhh.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.short_desc": {
+          "source": "HTTP DELETE",
+          "message": "HTTP DELETE"
+        },
+        "app.RXhh.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.desc": {
+          "source": "HTTP `GET`",
+          "message": "HTTP `GET`"
+        },
+        "app.RXhh.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.display_name": {
+          "source": "GET",
+          "message": "GET"
+        },
+        "app.RXhh.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.short_desc": {
+          "source": "HTTP GET",
+          "message": "HTTP GET"
+        },
+        "app.RXhh.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.desc": {
+          "source": "HTTP `HEAD`",
+          "message": "HTTP `HEAD`"
+        },
+        "app.RXhh.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.display_name": {
+          "source": "HEAD",
+          "message": "HEAD"
+        },
+        "app.RXhh.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.short_desc": {
+          "source": "HTTP HEAD",
+          "message": "HTTP HEAD"
+        },
+        "app.RXhh.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.desc": {
+          "source": "HTTP `PATCH`",
+          "message": "HTTP `PATCH`"
+        },
+        "app.RXhh.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.display_name": {
+          "source": "PATCH",
+          "message": "PATCH"
+        },
+        "app.RXhh.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.short_desc": {
+          "source": "HTTP PATCH",
+          "message": "HTTP PATCH"
+        },
+        "app.RXhh.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.desc": {
+          "source": "HTTP `POST`",
+          "message": "HTTP `POST`"
+        },
+        "app.RXhh.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.display_name": {
+          "source": "POST",
+          "message": "POST"
+        },
+        "app.RXhh.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.short_desc": {
+          "source": "HTTP POST",
+          "message": "HTTP POST"
+        },
+        "app.RXhh.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.desc": {
+          "source": "HTTP `PUT`",
+          "message": "HTTP `PUT`"
+        },
+        "app.RXhh.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.display_name": {
+          "source": "PUT",
+          "message": "PUT"
+        },
+        "app.RXhh.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.short_desc": {
+          "source": "HTTP PUT",
+          "message": "HTTP PUT"
+        },
+        "app.RXhh.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.desc": {
+          "source": "HTTP `TRACE`",
+          "message": "HTTP `TRACE`"
+        },
+        "app.RXhh.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.display_name": {
+          "source": "TRACE",
+          "message": "TRACE"
+        },
+        "app.RXhh.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.short_desc": {
+          "source": "HTTP TRACE",
+          "message": "HTTP TRACE"
+        },
+        "app.RXhh.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "Metóda HTTP, ktorá sa má použiť pre požiadavku"
+        },
+        "app.RXhh.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.display_name": {
+          "source": "HTTP Method",
+          "message": "Metóda HTTP"
+        },
+        "app.RXhh.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.short_desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "Metóda HTTP, ktorá sa má použiť pre požiadavku"
+        },
+        "app.RXhh.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain `{name}` placeholders that are replaced from `path_vars`. Example: `/users/{id}/comments`.",
+          "message": "Cesta URI relatívna k základnej adrese URL API spojenia. Môže obsahovať žolíky `{name}`, ktoré sú nahradené z `path_vars`. Príklad: `/users/{id}/comments`."
+        },
+        "app.RXhh.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.display_name": {
+          "source": "URI Path",
+          "message": "Cesta URI"
+        },
+        "app.RXhh.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.short_desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain '{name}' placeholders that are replaced from 'path_vars'. Example: '/users/{id}/comments'",
+          "message": "Cesta URI relatívna k základnej URL adrese API pripojenia. Môže obsahovať zastupiteľné objekty '{name}', ktoré sa nahradia z 'path_vars'. Príklad: '/users/{id}/comments'"
+        },
+        "app.RXhh.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.desc": {
+          "source": "Hash of values substituted into `{name}` placeholders in the URI path. Example: with `path = /users/{id}` and `path_vars = {id: 123}` the framework sends `/users/123`. Values are URL-encoded.",
+          "message": "Hash hodnôt nahradených do zastupiteľných objektov `{name}` v ceste URI. Príklad: s `path = /users/{id}` a `path_vars = {id: 123}` rozhranie odosiela `/users/123`. Hodnoty sú zakódované v URL."
+        },
+        "app.RXhh.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.display_name": {
+          "source": "Path Variables",
+          "message": "Premenné cesty"
+        },
+        "app.RXhh.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.short_desc": {
+          "source": "Values for {name} placeholders in path",
+          "message": "Hodnoty pre zastupiteľné objekty {name} v ceste"
+        },
+        "app.RXhh.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.desc": {
+          "source": "Hash of query string parameters to append to the URI path. Values are URL-encoded; list values are joined with `,`.",
+          "message": "Hash parametrov reťazca dopytu na pripojenie k ceste URI. Hodnoty sú zakódované v URL; hodnoty zoznamu sú spojené pomocou `,`."
+        },
+        "app.RXhh.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.display_name": {
+          "source": "Query Arguments",
+          "message": "Argumenty dopytu"
+        },
+        "app.RXhh.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.short_desc": {
+          "source": "Query string parameters",
+          "message": "Parametre reťazca dopytu"
+        },
+        "app.RXhh.action.bWFrZS1hcGktY2FsbA.short_desc": {
+          "source": "Make a custom API call to Exa",
+          "message": "Vykonať vlastné volanie API do Exa"
+        },
+        "app.RXhh.action.c2VhcmNo.desc": {
+          "source": "Performs a neural, keyword, or auto-routed web search via Exa's `/search` endpoint and returns ranked results with title, url, and optional text content / highlights.",
+          "message": "Vykoná neurálne, kľúčovými slovami alebo automaticky smerované webové vyhľadávanie cez koncový bod `/search` služby Exa a vráti zoradené výsledky s názvom, adresou URL a voliteľným textovým obsahom / zvýrazneniami."
+        },
+        "app.RXhh.action.c2VhcmNo.display_name": {
+          "source": "Neural Search",
+          "message": "Neurálne vyhľadávanie"
+        },
+        "app.RXhh.action.c2VhcmNo.option.Y29udGVudHM.desc": {
+          "source": "Hash configuring content fetching alongside the search: `{text: True, highlights: {...}, summary: {...}}`.  Saves a follow-up call to `/contents`.",
+          "message": "Hash konfigurujúci načítanie obsahu popri vyhľadávaní: `{text: True, highlights: {...}, summary: {...}}`. Šetrí následné volanie `/contents`."
+        },
+        "app.RXhh.action.c2VhcmNo.option.Y29udGVudHM.display_name": {
+          "source": "Contents Config",
+          "message": "Konfigurácia obsahu"
+        },
+        "app.RXhh.action.c2VhcmNo.option.Y29udGVudHM.short_desc": {
+          "source": "Include text/highlights/summary in results",
+          "message": "Zahrnúť text/zvýraznenia/zhrnutie do výsledkov"
+        },
+        "app.RXhh.action.c2VhcmNo.option.Y2F0ZWdvcnk.allowed-value.c3RyaW5nOm5ld3M.display_name": {
+          "source": "News",
+          "message": "Správy"
+        },
+        "app.RXhh.action.c2VhcmNo.option.Y2F0ZWdvcnk.allowed-value.c3RyaW5nOmNvbXBhbnk.display_name": {
+          "source": "Company",
+          "message": "Spoločnosť"
+        },
+        "app.RXhh.action.c2VhcmNo.option.Y2F0ZWdvcnk.allowed-value.c3RyaW5nOmdpdGh1Yg.display_name": {
+          "source": "GitHub",
+          "message": "GitHub"
+        },
+        "app.RXhh.action.c2VhcmNo.option.Y2F0ZWdvcnk.allowed-value.c3RyaW5nOnBkZg.display_name": {
+          "source": "PDF",
+          "message": "PDF"
+        },
+        "app.RXhh.action.c2VhcmNo.option.Y2F0ZWdvcnk.allowed-value.c3RyaW5nOnBlcnNvbmFsIHNpdGU.display_name": {
+          "source": "Personal Site",
+          "message": "Osobná stránka"
+        },
+        "app.RXhh.action.c2VhcmNo.option.Y2F0ZWdvcnk.allowed-value.c3RyaW5nOnJlc2VhcmNoIHBhcGVy.display_name": {
+          "source": "Research Paper",
+          "message": "Výskumná práca"
+        },
+        "app.RXhh.action.c2VhcmNo.option.Y2F0ZWdvcnk.allowed-value.c3RyaW5nOnR3ZWV0.display_name": {
+          "source": "Tweet",
+          "message": "Tweet"
+        },
+        "app.RXhh.action.c2VhcmNo.option.Y2F0ZWdvcnk.desc": {
+          "source": "Filter results by entity category.",
+          "message": "Filtrovať výsledky podľa kategórie entity."
+        },
+        "app.RXhh.action.c2VhcmNo.option.Y2F0ZWdvcnk.display_name": {
+          "source": "Category",
+          "message": "Kategória"
+        },
+        "app.RXhh.action.c2VhcmNo.option.Y2F0ZWdvcnk.short_desc": {
+          "source": "Result category filter (company, paper, etc.)",
+          "message": "Filter kategórie výsledkov (spoločnosť, článok atď.)"
+        },
+        "app.RXhh.action.c2VhcmNo.option.ZW5kX3B1Ymxpc2hlZF9kYXRl.desc": {
+          "source": "Restrict results to pages published on or before this ISO date.",
+          "message": "Obmedziť výsledky na stránky publikované v tento dátum ISO alebo pred ním."
+        },
+        "app.RXhh.action.c2VhcmNo.option.ZW5kX3B1Ymxpc2hlZF9kYXRl.display_name": {
+          "source": "End Published Date",
+          "message": "Dátum ukončenia publikovania"
+        },
+        "app.RXhh.action.c2VhcmNo.option.ZW5kX3B1Ymxpc2hlZF9kYXRl.short_desc": {
+          "source": "Only pages published on/before this ISO date",
+          "message": "Iba stránky publikované v tento dátum ISO alebo pred ním"
+        },
+        "app.RXhh.action.c2VhcmNo.option.ZXhjbHVkZV9kb21haW5z.desc": {
+          "source": "List of domains to exclude from results.",
+          "message": "Zoznam domén, ktoré sa majú vylúčiť z výsledkov."
+        },
+        "app.RXhh.action.c2VhcmNo.option.ZXhjbHVkZV9kb21haW5z.display_name": {
+          "source": "Exclude Domains",
+          "message": "Vylúčiť domény"
+        },
+        "app.RXhh.action.c2VhcmNo.option.ZXhjbHVkZV9kb21haW5z.short_desc": {
+          "source": "Exclude these domains",
+          "message": "Vylúčiť tieto domény"
+        },
+        "app.RXhh.action.c2VhcmNo.option.aW5jbHVkZV9kb21haW5z.desc": {
+          "source": "List of domains to restrict results to.",
+          "message": "Zoznam domén, na ktoré sa majú obmedziť výsledky."
+        },
+        "app.RXhh.action.c2VhcmNo.option.aW5jbHVkZV9kb21haW5z.display_name": {
+          "source": "Include Domains",
+          "message": "Zahrnúť domény"
+        },
+        "app.RXhh.action.c2VhcmNo.option.aW5jbHVkZV9kb21haW5z.short_desc": {
+          "source": "Restrict results to these domains",
+          "message": "Obmedziť výsledky na tieto domény"
+        },
+        "app.RXhh.action.c2VhcmNo.option.bnVtX3Jlc3VsdHM.desc": {
+          "source": "Number of results.  Default 10.",
+          "message": "Počet výsledkov. Predvolená hodnota je 10."
+        },
+        "app.RXhh.action.c2VhcmNo.option.bnVtX3Jlc3VsdHM.display_name": {
+          "source": "Number of Results",
+          "message": "Počet výsledkov"
+        },
+        "app.RXhh.action.c2VhcmNo.option.bnVtX3Jlc3VsdHM.short_desc": {
+          "source": "Number of results to return",
+          "message": "Počet výsledkov, ktoré sa majú vrátiť"
+        },
+        "app.RXhh.action.c2VhcmNo.option.c3RhcnRfcHVibGlzaGVkX2RhdGU.desc": {
+          "source": "Restrict results to pages published on or after this ISO date.",
+          "message": "Obmedziť výsledky na stránky publikované v tento dátum ISO alebo po ňom."
+        },
+        "app.RXhh.action.c2VhcmNo.option.c3RhcnRfcHVibGlzaGVkX2RhdGU.display_name": {
+          "source": "Start Published Date",
+          "message": "Dátum začiatku publikovania"
+        },
+        "app.RXhh.action.c2VhcmNo.option.c3RhcnRfcHVibGlzaGVkX2RhdGU.short_desc": {
+          "source": "Only pages published on/after this ISO date",
+          "message": "Iba stránky publikované v tento dátum ISO alebo po ňom"
+        },
+        "app.RXhh.action.c2VhcmNo.option.cXVlcnk.desc": {
+          "source": "The search query in natural language.",
+          "message": "Vyhľadávací dotaz v prirodzenom jazyku."
+        },
+        "app.RXhh.action.c2VhcmNo.option.cXVlcnk.display_name": {
+          "source": "Query",
+          "message": "Dopyt"
+        },
+        "app.RXhh.action.c2VhcmNo.option.cXVlcnk.short_desc": {
+          "source": "Search query (natural language)",
+          "message": "Vyhľadávací dotaz (prirodzený jazyk)"
+        },
+        "app.RXhh.action.c2VhcmNo.option.dHlwZQ.allowed-value.c3RyaW5nOm5ldXJhbA.display_name": {
+          "source": "Neural",
+          "message": "Neurálne"
+        },
+        "app.RXhh.action.c2VhcmNo.option.dHlwZQ.allowed-value.c3RyaW5nOmF1dG8.display_name": {
+          "source": "Auto",
+          "message": "Auto"
+        },
+        "app.RXhh.action.c2VhcmNo.option.dHlwZQ.allowed-value.c3RyaW5nOmtleXdvcmQ.display_name": {
+          "source": "Keyword",
+          "message": "Kľúčové slovo"
+        },
+        "app.RXhh.action.c2VhcmNo.option.dHlwZQ.desc": {
+          "source": "Search type.  `neural` uses embeddings; `keyword` is traditional; `auto` routes between them.",
+          "message": "Typ vyhľadávania. `neural` používa embeddingy; `keyword` je tradičné; `auto` medzi nimi smeruje."
+        },
+        "app.RXhh.action.c2VhcmNo.option.dHlwZQ.display_name": {
+          "source": "Search Type",
+          "message": "Typ vyhľadávania"
+        },
+        "app.RXhh.action.c2VhcmNo.option.dHlwZQ.short_desc": {
+          "source": "neural / keyword / auto",
+          "message": "neurálne / kľúčové slovo / auto"
+        },
+        "app.RXhh.action.c2VhcmNo.short_desc": {
+          "source": "Neural / keyword / auto web search via Exa",
+          "message": "Neurálne / kľúčové slovo / auto webové vyhľadávanie cez Exa"
+        },
+        "app.RXhh.desc": {
+          "source": "Provides access to [Exa](https://exa.ai) (formerly Metaphor) — a neural web-search API that complements keyword search with embedding-based semantic retrieval.\n\n**Common use cases**:\n- **Semantic search** where keyword matching fails (e.g. \"companies similar to X\", \"papers about Y\")\n- **Discovery** via `find-similar` from a known seed URL\n- **Agent tools**: register `exa_search` / `exa_find_similar` / `exa_contents` as tools an LLM can invoke (see @ref exarestclientintro \"ExaRestClient\" docs)",
+          "message": "Poskytuje prístup k službe [Exa](https://exa.ai) (predtým Metaphor) — rozhraniu API pre neurálne webové vyhľadávanie, ktoré dopĺňa vyhľadávanie podľa kľúčových slov o sémantické vyhľadávanie založené na embeddingoch.\n\n**Bežné prípady použitia**:\n- **Sémantické vyhľadávanie**, kde vyhľadávanie podľa kľúčových slov zlyháva (napr. „spoločnosti podobné X“, „články o Y“)\n- **Objavovanie** cez `find-similar` zo známej zdrojovej URL\n- **Nástroje agenta**: zaregistrujte `exa_search` / `exa_find_similar` / `exa_contents` ako nástroje, ktoré môže LLM vyvolať (pozri dokumentáciu @ref exarestclientintro \"ExaRestClient\")"
+        },
+        "app.RXhh.display_name": {
+          "source": "Exa",
+          "message": "Exa"
+        },
+        "app.RXhh.short_desc": {
+          "source": "Exa (Metaphor) neural web search for semantic retrieval",
+          "message": "Neurálne webové vyhľadávanie Exa (Metaphor) na sémantické vyhľadávanie"
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,2201 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "ja": {
+      "messages": {
+        "app.RmlyZWNyYXds.action.Y2FuY2VsLWFnZW50.desc": {
+          "source": "Cancels an in-progress agent job by its ID.",
+          "message": "進行中のエージェントジョブをそのIDでキャンセルします。"
+        },
+        "app.RmlyZWNyYXds.action.Y2FuY2VsLWFnZW50.display_name": {
+          "source": "Cancel an Agent Job",
+          "message": "エージェントジョブのキャンセル"
+        },
+        "app.RmlyZWNyYXds.action.Y2FuY2VsLWFnZW50.option.aWQ.desc": {
+          "source": "The unique identifier of the agent job to cancel",
+          "message": "キャンセルするエージェントジョブの一意の識別子"
+        },
+        "app.RmlyZWNyYXds.action.Y2FuY2VsLWFnZW50.option.aWQ.display_name": {
+          "source": "Job ID",
+          "message": "ジョブID"
+        },
+        "app.RmlyZWNyYXds.action.Y2FuY2VsLWFnZW50.option.aWQ.short_desc": {
+          "source": "The agent job ID to cancel",
+          "message": "キャンセルするエージェントジョブID"
+        },
+        "app.RmlyZWNyYXds.action.Y2FuY2VsLWFnZW50.short_desc": {
+          "source": "Cancel an in-progress agent job",
+          "message": "進行中のエージェントジョブをキャンセル"
+        },
+        "app.RmlyZWNyYXds.action.Y2FuY2VsLWJhdGNoLXNjcmFwZQ.desc": {
+          "source": "Cancels an in-progress batch scrape job by its ID.",
+          "message": "進行中の一括スクレイプジョブをそのIDでキャンセルします。"
+        },
+        "app.RmlyZWNyYXds.action.Y2FuY2VsLWJhdGNoLXNjcmFwZQ.display_name": {
+          "source": "Cancel a Batch Scrape",
+          "message": "一括スクレイプのキャンセル"
+        },
+        "app.RmlyZWNyYXds.action.Y2FuY2VsLWJhdGNoLXNjcmFwZQ.option.aWQ.desc": {
+          "source": "The unique identifier of the batch scrape job to cancel",
+          "message": "キャンセルする一括スクレイプジョブの一意の識別子"
+        },
+        "app.RmlyZWNyYXds.action.Y2FuY2VsLWJhdGNoLXNjcmFwZQ.option.aWQ.display_name": {
+          "source": "Job ID",
+          "message": "ジョブID"
+        },
+        "app.RmlyZWNyYXds.action.Y2FuY2VsLWJhdGNoLXNjcmFwZQ.option.aWQ.short_desc": {
+          "source": "The batch scrape job ID to cancel",
+          "message": "キャンセルする一括スクレイプジョブID"
+        },
+        "app.RmlyZWNyYXds.action.Y2FuY2VsLWJhdGNoLXNjcmFwZQ.short_desc": {
+          "source": "Cancel an in-progress batch scrape job",
+          "message": "進行中の一括スクレイプジョブをキャンセル"
+        },
+        "app.RmlyZWNyYXds.action.Y2FuY2VsLWNyYXds.desc": {
+          "source": "Cancels an in-progress crawl job by its ID.",
+          "message": "進行中のクロールジョブをそのIDでキャンセルします。"
+        },
+        "app.RmlyZWNyYXds.action.Y2FuY2VsLWNyYXds.display_name": {
+          "source": "Cancel a Crawl",
+          "message": "クロールのキャンセル"
+        },
+        "app.RmlyZWNyYXds.action.Y2FuY2VsLWNyYXds.option.aWQ.desc": {
+          "source": "The unique identifier of the crawl job to cancel",
+          "message": "キャンセルするクロールジョブの一意の識別子"
+        },
+        "app.RmlyZWNyYXds.action.Y2FuY2VsLWNyYXds.option.aWQ.display_name": {
+          "source": "Job ID",
+          "message": "ジョブID"
+        },
+        "app.RmlyZWNyYXds.action.Y2FuY2VsLWNyYXds.option.aWQ.short_desc": {
+          "source": "The crawl job ID to cancel",
+          "message": "キャンセルするクロールジョブID"
+        },
+        "app.RmlyZWNyYXds.action.Y2FuY2VsLWNyYXds.short_desc": {
+          "source": "Cancel an in-progress crawl job",
+          "message": "進行中のクロールジョブをキャンセル"
+        },
+        "app.RmlyZWNyYXds.action.Y3Jhd2w.desc": {
+          "source": "Crawls a website starting from the given URL and returns scraped data for all discovered pages.\n\nThe operation runs asynchronously and automatically polls until the crawl completes. Supports path filtering, depth control, sitemap handling, and webhook notifications.",
+          "message": "指定されたURLからWebサイトをクロールし、検出されたすべてのページのスクレイプデータを返します。\n\nこの操作は非同期で実行され、クロールが完了するまで自動的にポーリングします。パスフィルタリング、深度制御、サイトマップ処理、Webhook通知をサポートしています。"
+        },
+        "app.RmlyZWNyYXds.action.Y3Jhd2w.display_name": {
+          "source": "Crawl a Website",
+          "message": "Webサイトのクロール"
+        },
+        "app.RmlyZWNyYXds.action.Y3Jhd2w.option.Y3Jhd2xFbnRpcmVEb21haW4.desc": {
+          "source": "If `True`, the entire domain is crawled, including all subdomains",
+          "message": "`True`の場合、すべてのサブドメインを含むドメイン全体がクロールされます"
+        },
+        "app.RmlyZWNyYXds.action.Y3Jhd2w.option.Y3Jhd2xFbnRpcmVEb21haW4.display_name": {
+          "source": "Crawl Entire Domain",
+          "message": "ドメイン全体をクロール"
+        },
+        "app.RmlyZWNyYXds.action.Y3Jhd2w.option.Y3Jhd2xFbnRpcmVEb21haW4.short_desc": {
+          "source": "Crawl the entire domain",
+          "message": "ドメイン全体をクロール"
+        },
+        "app.RmlyZWNyYXds.action.Y3Jhd2w.option.YWxsb3dFeHRlcm5hbExpbmtz.desc": {
+          "source": "If `True`, links to external domains are followed",
+          "message": "`True`の場合、外部ドメインへのリンクをたどります"
+        },
+        "app.RmlyZWNyYXds.action.Y3Jhd2w.option.YWxsb3dFeHRlcm5hbExpbmtz.display_name": {
+          "source": "Allow External Links",
+          "message": "外部リンクを許可"
+        },
+        "app.RmlyZWNyYXds.action.Y3Jhd2w.option.YWxsb3dFeHRlcm5hbExpbmtz.short_desc": {
+          "source": "Follow external links",
+          "message": "外部リンクをたどる"
+        },
+        "app.RmlyZWNyYXds.action.Y3Jhd2w.option.YWxsb3dTdWJkb21haW5z.desc": {
+          "source": "If `True`, subdomains of the starting URL are included in crawling",
+          "message": "`True`の場合、開始URLのサブドメインがクロール対象に含まれます"
+        },
+        "app.RmlyZWNyYXds.action.Y3Jhd2w.option.YWxsb3dTdWJkb21haW5z.display_name": {
+          "source": "Allow Subdomains",
+          "message": "サブドメインを許可"
+        },
+        "app.RmlyZWNyYXds.action.Y3Jhd2w.option.YWxsb3dTdWJkb21haW5z.short_desc": {
+          "source": "Allow subdomain crawling",
+          "message": "サブドメインのクロールを許可"
+        },
+        "app.RmlyZWNyYXds.action.Y3Jhd2w.option.ZGVkdXBsaWNhdGVTaW1pbGFyVVJMcw.desc": {
+          "source": "If `True`, URL variants (`www.`/non-`www.`, `http`/`https`, trailing slashes, `index.html`) are normalized and treated as duplicates. Defaults to `True`",
+          "message": "`True`の場合、URLのバリエーション（`www.`/非`www.`、`http`/`https`、末尾のスラッシュ、`index.html`）が正規化され、重複として扱われます。デフォルトは`True`です"
+        },
+        "app.RmlyZWNyYXds.action.Y3Jhd2w.option.ZGVkdXBsaWNhdGVTaW1pbGFyVVJMcw.display_name": {
+          "source": "Deduplicate Similar URLs",
+          "message": "類似URLの重複排除"
+        },
+        "app.RmlyZWNyYXds.action.Y3Jhd2w.option.ZGVkdXBsaWNhdGVTaW1pbGFyVVJMcw.short_desc": {
+          "source": "Treat URL variants as duplicates",
+          "message": "URLのバリエーションを重複として扱う"
+        },
+        "app.RmlyZWNyYXds.action.Y3Jhd2w.option.ZGVsYXk.desc": {
+          "source": "Delay in seconds between each request during crawling",
+          "message": "クロール中の各リクエスト間の遅延（秒単位）"
+        },
+        "app.RmlyZWNyYXds.action.Y3Jhd2w.option.ZGVsYXk.display_name": {
+          "source": "Delay",
+          "message": "遅延"
+        },
+        "app.RmlyZWNyYXds.action.Y3Jhd2w.option.ZGVsYXk.short_desc": {
+          "source": "Delay between requests in seconds",
+          "message": "リクエスト間の遅延（秒単位）"
+        },
+        "app.RmlyZWNyYXds.action.Y3Jhd2w.option.ZXhjbHVkZVBhdGhz.desc": {
+          "source": "List of URL pathname regex patterns; matching URLs are excluded from the crawl (e.g., `^/admin/.*`, `\\.pdf$`)",
+          "message": "URLパス名の正規表現パターンのリスト。一致するURLはクロールから除外されます（例: `^/admin/.*`、`\\.pdf$`）"
+        },
+        "app.RmlyZWNyYXds.action.Y3Jhd2w.option.ZXhjbHVkZVBhdGhz.display_name": {
+          "source": "Exclude Paths",
+          "message": "除外パス"
+        },
+        "app.RmlyZWNyYXds.action.Y3Jhd2w.option.ZXhjbHVkZVBhdGhz.short_desc": {
+          "source": "URL pathname regex patterns to exclude",
+          "message": "除外するURLパス名の正規表現パターン"
+        },
+        "app.RmlyZWNyYXds.action.Y3Jhd2w.option.aW5jbHVkZVBhdGhz.desc": {
+          "source": "List of URL pathname regex patterns; only matching URLs are crawled (e.g., `^/blog/.*`, `^/docs/.*`)",
+          "message": "URLパス名の正規表現パターンのリスト。一致するURLのみがクロールされます（例: `^/blog/.*`、`^/docs/.*`）"
+        },
+        "app.RmlyZWNyYXds.action.Y3Jhd2w.option.aW5jbHVkZVBhdGhz.display_name": {
+          "source": "Include Paths",
+          "message": "対象パス"
+        },
+        "app.RmlyZWNyYXds.action.Y3Jhd2w.option.aW5jbHVkZVBhdGhz.short_desc": {
+          "source": "URL pathname regex patterns to include",
+          "message": "対象とするURLパス名の正規表現パターン"
+        },
+        "app.RmlyZWNyYXds.action.Y3Jhd2w.option.aWdub3JlUXVlcnlQYXJhbWV0ZXJz.desc": {
+          "source": "If `True`, URLs with different query parameters are treated as the same page",
+          "message": "`True`の場合、異なるクエリパラメータを持つURLは同一ページとして扱われます"
+        },
+        "app.RmlyZWNyYXds.action.Y3Jhd2w.option.aWdub3JlUXVlcnlQYXJhbWV0ZXJz.display_name": {
+          "source": "Ignore Query Parameters",
+          "message": "クエリパラメータを無視"
+        },
+        "app.RmlyZWNyYXds.action.Y3Jhd2w.option.aWdub3JlUXVlcnlQYXJhbWV0ZXJz.short_desc": {
+          "source": "Ignore URL query parameters",
+          "message": "URLクエリパラメータを無視"
+        },
+        "app.RmlyZWNyYXds.action.Y3Jhd2w.option.aWdub3JlUm9ib3RzVHh0.desc": {
+          "source": "If `True`, the crawl ignores `robots.txt` directives. Enterprise feature — contact Firecrawl support to enable",
+          "message": "`True`の場合、クロールは`robots.txt`ディレクティブを無視します。Enterprise機能 — 有効にするにはFirecrawlサポートにお問い合わせください"
+        },
+        "app.RmlyZWNyYXds.action.Y3Jhd2w.option.aWdub3JlUm9ib3RzVHh0.display_name": {
+          "source": "Ignore robots.txt",
+          "message": "robots.txtを無視"
+        },
+        "app.RmlyZWNyYXds.action.Y3Jhd2w.option.aWdub3JlUm9ib3RzVHh0.short_desc": {
+          "source": "Bypass robots.txt directives",
+          "message": "robots.txtディレクティブをバイパス"
+        },
+        "app.RmlyZWNyYXds.action.Y3Jhd2w.option.bGltaXQ.desc": {
+          "source": "Maximum number of pages to crawl. Defaults to `10000`",
+          "message": "クロールする最大ページ数。デフォルトは`10000`です"
+        },
+        "app.RmlyZWNyYXds.action.Y3Jhd2w.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "上限"
+        },
+        "app.RmlyZWNyYXds.action.Y3Jhd2w.option.bGltaXQ.short_desc": {
+          "source": "Maximum number of pages to crawl",
+          "message": "クロールする最大ページ数"
+        },
+        "app.RmlyZWNyYXds.action.Y3Jhd2w.option.bWF4Q29uY3VycmVuY3k.desc": {
+          "source": "Maximum number of concurrent requests during crawling",
+          "message": "クロール中の最大同時リクエスト数"
+        },
+        "app.RmlyZWNyYXds.action.Y3Jhd2w.option.bWF4Q29uY3VycmVuY3k.display_name": {
+          "source": "Max Concurrency",
+          "message": "最大同時実行数"
+        },
+        "app.RmlyZWNyYXds.action.Y3Jhd2w.option.bWF4Q29uY3VycmVuY3k.short_desc": {
+          "source": "Maximum concurrent requests",
+          "message": "最大同時リクエスト数"
+        },
+        "app.RmlyZWNyYXds.action.Y3Jhd2w.option.bWF4RGlzY292ZXJ5RGVwdGg.desc": {
+          "source": "Maximum depth of links to follow from the starting URL",
+          "message": "開始URLからたどるリンクの最大深度"
+        },
+        "app.RmlyZWNyYXds.action.Y3Jhd2w.option.bWF4RGlzY292ZXJ5RGVwdGg.display_name": {
+          "source": "Max Discovery Depth",
+          "message": "最大検出深度"
+        },
+        "app.RmlyZWNyYXds.action.Y3Jhd2w.option.bWF4RGlzY292ZXJ5RGVwdGg.short_desc": {
+          "source": "Maximum link depth to follow",
+          "message": "たどる最大リンク深度"
+        },
+        "app.RmlyZWNyYXds.action.Y3Jhd2w.option.c2NyYXBlT3B0aW9ucw.desc": {
+          "source": "Options applied when scraping each crawled page, such as `formats`, `onlyMainContent`, `includeTags`, `excludeTags`",
+          "message": "クロールされた各ページをスクレイピングする際に適用されるオプション（`formats`、`onlyMainContent`、`includeTags`、`excludeTags`など）"
+        },
+        "app.RmlyZWNyYXds.action.Y3Jhd2w.option.c2NyYXBlT3B0aW9ucw.display_name": {
+          "source": "Scrape Options",
+          "message": "スクレイプオプション"
+        },
+        "app.RmlyZWNyYXds.action.Y3Jhd2w.option.c2NyYXBlT3B0aW9ucw.short_desc": {
+          "source": "Options for scraping each page",
+          "message": "各ページのスクレイプオプション"
+        },
+        "app.RmlyZWNyYXds.action.Y3Jhd2w.option.c2l0ZW1hcA.allowed-value.c3RyaW5nOm9ubHk.display_name": {
+          "source": "Only",
+          "message": "のみ"
+        },
+        "app.RmlyZWNyYXds.action.Y3Jhd2w.option.c2l0ZW1hcA.allowed-value.c3RyaW5nOmluY2x1ZGU.display_name": {
+          "source": "Include",
+          "message": "Include"
+        },
+        "app.RmlyZWNyYXds.action.Y3Jhd2w.option.c2l0ZW1hcA.allowed-value.c3RyaW5nOnNraXA.display_name": {
+          "source": "Skip",
+          "message": "スキップ"
+        },
+        "app.RmlyZWNyYXds.action.Y3Jhd2w.option.c2l0ZW1hcA.desc": {
+          "source": "How to handle the sitemap when crawling",
+          "message": "クロール時のサイトマップの処理方法"
+        },
+        "app.RmlyZWNyYXds.action.Y3Jhd2w.option.c2l0ZW1hcA.display_name": {
+          "source": "Sitemap",
+          "message": "サイトマップ"
+        },
+        "app.RmlyZWNyYXds.action.Y3Jhd2w.option.c2l0ZW1hcA.short_desc": {
+          "source": "Sitemap handling mode",
+          "message": "サイトマップ処理モード"
+        },
+        "app.RmlyZWNyYXds.action.Y3Jhd2w.option.cHJvbXB0.desc": {
+          "source": "An optional AI prompt for filtering or processing crawl results",
+          "message": "クロール結果のフィルタリングまたは処理用のオプションのAIプロンプト"
+        },
+        "app.RmlyZWNyYXds.action.Y3Jhd2w.option.cHJvbXB0.display_name": {
+          "source": "Prompt",
+          "message": "プロンプト"
+        },
+        "app.RmlyZWNyYXds.action.Y3Jhd2w.option.cHJvbXB0.short_desc": {
+          "source": "AI prompt for filtering results",
+          "message": "結果フィルタリング用AIプロンプト"
+        },
+        "app.RmlyZWNyYXds.action.Y3Jhd2w.option.cm9ib3RzVXNlckFnZW50.desc": {
+          "source": "User-agent string used when evaluating `robots.txt` rules. Enterprise feature — contact Firecrawl support to enable",
+          "message": "`robots.txt`ルールを評価する際に使用されるユーザーエージェント文字列。Enterprise機能 — 有効にするにはFirecrawlサポートにお問い合わせください"
+        },
+        "app.RmlyZWNyYXds.action.Y3Jhd2w.option.cm9ib3RzVXNlckFnZW50.display_name": {
+          "source": "robots.txt User Agent",
+          "message": "robots.txtユーザーエージェント"
+        },
+        "app.RmlyZWNyYXds.action.Y3Jhd2w.option.cm9ib3RzVXNlckFnZW50.short_desc": {
+          "source": "User-agent for robots.txt evaluation",
+          "message": "robots.txt評価用ユーザーエージェント"
+        },
+        "app.RmlyZWNyYXds.action.Y3Jhd2w.option.cmVnZXhPbkZ1bGxVUkw.desc": {
+          "source": "If `True`, `includePaths` and `excludePaths` patterns are matched against the full URL including query parameters. If `False` (default), patterns are matched against the pathname only",
+          "message": "`True` の場合、`includePaths` および `excludePaths` のパターンはクエリパラメータを含む完全な URL に対してマッチングされます。`False`（デフォルト）の場合、パターンはパス名に対してのみマッチングされます"
+        },
+        "app.RmlyZWNyYXds.action.Y3Jhd2w.option.cmVnZXhPbkZ1bGxVUkw.display_name": {
+          "source": "Regex on Full URL",
+          "message": "完全 URL に対する正規表現"
+        },
+        "app.RmlyZWNyYXds.action.Y3Jhd2w.option.cmVnZXhPbkZ1bGxVUkw.short_desc": {
+          "source": "Match patterns against full URL",
+          "message": "完全な URL に対してパターンをマッチング"
+        },
+        "app.RmlyZWNyYXds.action.Y3Jhd2w.option.d2ViaG9vaw.desc": {
+          "source": "Webhook configuration to receive notifications during the crawl",
+          "message": "クロール中に通知を受信するための Webhook 設定"
+        },
+        "app.RmlyZWNyYXds.action.Y3Jhd2w.option.d2ViaG9vaw.display_name": {
+          "source": "Webhook",
+          "message": "Webhook"
+        },
+        "app.RmlyZWNyYXds.action.Y3Jhd2w.option.d2ViaG9vaw.short_desc": {
+          "source": "Webhook configuration for notifications",
+          "message": "通知用の Webhook 設定"
+        },
+        "app.RmlyZWNyYXds.action.Y3Jhd2w.option.dXJs.desc": {
+          "source": "The starting URL of the website to crawl",
+          "message": "クロールする Web サイトの開始 URL"
+        },
+        "app.RmlyZWNyYXds.action.Y3Jhd2w.option.dXJs.display_name": {
+          "source": "URL",
+          "message": "URL"
+        },
+        "app.RmlyZWNyYXds.action.Y3Jhd2w.option.dXJs.short_desc": {
+          "source": "The starting URL to crawl",
+          "message": "クロールを開始する URL"
+        },
+        "app.RmlyZWNyYXds.action.Y3Jhd2w.option.emVyb0RhdGFSZXRlbnRpb24.desc": {
+          "source": "If `True`, Firecrawl does not retain any crawl data on its servers after returning the response. Enterprise feature — contact Firecrawl support to enable",
+          "message": "`True` の場合、Firecrawl はレスポンスを返した後にサーバー上にクロールデータを保持しません。エンタープライズ機能 — 有効化するには Firecrawl サポートにお問い合わせください"
+        },
+        "app.RmlyZWNyYXds.action.Y3Jhd2w.option.emVyb0RhdGFSZXRlbnRpb24.display_name": {
+          "source": "Zero Data Retention",
+          "message": "ゼロデータ保持"
+        },
+        "app.RmlyZWNyYXds.action.Y3Jhd2w.option.emVyb0RhdGFSZXRlbnRpb24.short_desc": {
+          "source": "Disable Firecrawl-side data retention",
+          "message": "Firecrawl 側でのデータ保持を無効化"
+        },
+        "app.RmlyZWNyYXds.action.Y3Jhd2w.short_desc": {
+          "source": "Crawl a website and return scraped data for all pages",
+          "message": "Web サイトをクロールし、すべてのページのスクレイピングデータを返す"
+        },
+        "app.RmlyZWNyYXds.action.YWdlbnQ.desc": {
+          "source": "Uses an AI agent to find and extract data from the web based on a natural language prompt.\n\nThe agent autonomously browses web pages, follows links, and extracts data matching the prompt. The operation runs asynchronously and automatically polls until the agent completes.",
+          "message": "自然言語プロンプトに基づいて Web からデータを検索および抽出するために AI エージェントを使用します。\n\nエージェントは自律的に Web ページを閲覧し、リンクをたどり、プロンプトに一致するデータを抽出します。この操作は非同期で実行され、エージェントが完了するまで自動的にポーリングします。"
+        },
+        "app.RmlyZWNyYXds.action.YWdlbnQ.display_name": {
+          "source": "Run AI Agent",
+          "message": "AI エージェントを実行"
+        },
+        "app.RmlyZWNyYXds.action.YWdlbnQ.option.bW9kZWw.allowed-value.c3RyaW5nOnNwYXJrLTEtbWluaQ.display_name": {
+          "source": "Spark 1 Mini",
+          "message": "Spark 1 Mini"
+        },
+        "app.RmlyZWNyYXds.action.YWdlbnQ.option.bW9kZWw.allowed-value.c3RyaW5nOnNwYXJrLTEtcHJv.display_name": {
+          "source": "Spark 1 Pro",
+          "message": "Spark 1 Pro"
+        },
+        "app.RmlyZWNyYXds.action.YWdlbnQ.option.bW9kZWw.desc": {
+          "source": "The agent model to use for the task",
+          "message": "タスクに使用するエージェントモデル"
+        },
+        "app.RmlyZWNyYXds.action.YWdlbnQ.option.bW9kZWw.display_name": {
+          "source": "Model",
+          "message": "モデル"
+        },
+        "app.RmlyZWNyYXds.action.YWdlbnQ.option.bW9kZWw.short_desc": {
+          "source": "Agent model to use",
+          "message": "使用するエージェントモデル"
+        },
+        "app.RmlyZWNyYXds.action.YWdlbnQ.option.bWF4Q3JlZGl0cw.desc": {
+          "source": "Maximum number of API credits to use for this agent task. Defaults to `2500`",
+          "message": "このエージェントタスクに使用する API クレジットの最大数。デフォルトは `2500`"
+        },
+        "app.RmlyZWNyYXds.action.YWdlbnQ.option.bWF4Q3JlZGl0cw.display_name": {
+          "source": "Max Credits",
+          "message": "最大クレジット数"
+        },
+        "app.RmlyZWNyYXds.action.YWdlbnQ.option.bWF4Q3JlZGl0cw.short_desc": {
+          "source": "Maximum credits to use",
+          "message": "使用する最大クレジット数"
+        },
+        "app.RmlyZWNyYXds.action.YWdlbnQ.option.c2NoZW1h.desc": {
+          "source": "A JSON Schema object defining the structure of the output data. Used to guide the agent and validate the output format.\n\n**Example**: `{\"type\": \"object\", \"properties\": {\"name\": {\"type\": \"string\"}, \"price\": {\"type\": \"number\"}}}`",
+          "message": "出力データの構造を定義する JSON Schema オブジェクト。エージェントのガイドおよび出力形式の検証に使用されます。\n\n**例**: `{\"type\": \"object\", \"properties\": {\"name\": {\"type\": \"string\"}, \"price\": {\"type\": \"number\"}}}`"
+        },
+        "app.RmlyZWNyYXds.action.YWdlbnQ.option.c2NoZW1h.display_name": {
+          "source": "Schema",
+          "message": "スキーマ"
+        },
+        "app.RmlyZWNyYXds.action.YWdlbnQ.option.c2NoZW1h.short_desc": {
+          "source": "JSON Schema for output",
+          "message": "出力用の JSON Schema"
+        },
+        "app.RmlyZWNyYXds.action.YWdlbnQ.option.c3RyaWN0Q29uc3RyYWluVG9VUkxz.desc": {
+          "source": "If `True`, the agent is strictly limited to searching only the provided URLs and does not follow links to other pages",
+          "message": "`True` の場合、エージェントは提供された URL のみの検索に厳密に制限され、他のページへのリンクをたどりません"
+        },
+        "app.RmlyZWNyYXds.action.YWdlbnQ.option.c3RyaWN0Q29uc3RyYWluVG9VUkxz.display_name": {
+          "source": "Strict Constrain to URLs",
+          "message": "URL への厳密な制限"
+        },
+        "app.RmlyZWNyYXds.action.YWdlbnQ.option.c3RyaWN0Q29uc3RyYWluVG9VUkxz.short_desc": {
+          "source": "Strictly limit to provided URLs",
+          "message": "提供された URL に厳密に制限"
+        },
+        "app.RmlyZWNyYXds.action.YWdlbnQ.option.cHJvbXB0.desc": {
+          "source": "Natural language prompt describing what data to find and extract (maximum 10000 characters)",
+          "message": "検索および抽出するデータを説明する自然言語プロンプト（最大 10000 文字）"
+        },
+        "app.RmlyZWNyYXds.action.YWdlbnQ.option.cHJvbXB0.display_name": {
+          "source": "Prompt",
+          "message": "プロンプト"
+        },
+        "app.RmlyZWNyYXds.action.YWdlbnQ.option.cHJvbXB0.short_desc": {
+          "source": "The agent prompt",
+          "message": "エージェントプロンプト"
+        },
+        "app.RmlyZWNyYXds.action.YWdlbnQ.option.dXJscw.desc": {
+          "source": "Optional list of URLs to constrain the agent's search scope",
+          "message": "エージェントの検索範囲を制限するための任意の URL リスト"
+        },
+        "app.RmlyZWNyYXds.action.YWdlbnQ.option.dXJscw.display_name": {
+          "source": "URLs",
+          "message": "URL"
+        },
+        "app.RmlyZWNyYXds.action.YWdlbnQ.option.dXJscw.short_desc": {
+          "source": "URLs to search",
+          "message": "検索する URL"
+        },
+        "app.RmlyZWNyYXds.action.YWdlbnQ.short_desc": {
+          "source": "Use an AI agent to find and extract data from the web",
+          "message": "AI エージェントを使用して Web からデータを検索および抽出"
+        },
+        "app.RmlyZWNyYXds.action.YmF0Y2gtc2NyYXBl.desc": {
+          "source": "Scrapes multiple web pages in batch and returns their content. Supports the same scrape options as the single scrape action.\n\nThe operation runs asynchronously and automatically polls until all pages are scraped.",
+          "message": "複数の Web ページを一括でスクレイピングし、そのコンテンツを返します。単一スクレイピングアクションと同じスクレイプオプションをサポートします。\n\nこの操作は非同期で実行され、すべてのページがスクレイピングされるまで自動的にポーリングします。"
+        },
+        "app.RmlyZWNyYXds.action.YmF0Y2gtc2NyYXBl.display_name": {
+          "source": "Batch Scrape Web Pages",
+          "message": "Web ページの一括スクレイプ"
+        },
+        "app.RmlyZWNyYXds.action.YmF0Y2gtc2NyYXBl.option.YWN0aW9ucw.desc": {
+          "source": "List of browser actions to perform before scraping each page. Each action is a hash with a `type` key and action-specific parameters.\n\n**Available actions**:\n- `wait` — wait for duration (`milliseconds`) or element (`selector`)\n- `click` — click an element (`selector`, `all`)\n- `write` — type text into the focused element (`text`)\n- `press` — press a keyboard key (`key`)\n- `scroll` — scroll the page (`direction`: `up`/`down`; optional `selector`)\n- `screenshot` — take a screenshot (`fullPage`, `quality`, `viewport`)\n- `scrape` — capture the page content at its current state\n- `executeJavascript` — run JavaScript code (`script`)\n- `pdf` — generate a PDF (`format`, `landscape`, `scale`)",
+          "message": "各ページをスクレイピングする前に実行するブラウザアクションのリスト。各アクションは `type` キーとアクション固有のパラメータを持つハッシュです。\n\n**使用可能なアクション**:\n- `wait` — 期間（`milliseconds`）または要素（`selector`）を待機\n- `click` — 要素をクリック（`selector`、`all`）\n- `write` — フォーカスされた要素にテキストを入力（`text`）\n- `press` — キーボードキーを押下（`key`）\n- `scroll` — ページをスクロール（`direction`: `up`/`down`、オプション `selector`）\n- `screenshot` — スクリーンショットを取得（`fullPage`、`quality`、`viewport`）\n- `scrape` — 現在の状態のページコンテンツをキャプチャ\n- `executeJavascript` — JavaScript コードを実行（`script`）\n- `pdf` — PDF を生成（`format`、`landscape`、`scale`）"
+        },
+        "app.RmlyZWNyYXds.action.YmF0Y2gtc2NyYXBl.option.YWN0aW9ucw.display_name": {
+          "source": "Actions",
+          "message": "アクション"
+        },
+        "app.RmlyZWNyYXds.action.YmF0Y2gtc2NyYXBl.option.YWN0aW9ucw.short_desc": {
+          "source": "Browser actions to perform",
+          "message": "実行するブラウザアクション"
+        },
+        "app.RmlyZWNyYXds.action.YmF0Y2gtc2NyYXBl.option.YmxvY2tBZHM.desc": {
+          "source": "If `True`, advertisements are blocked during scraping",
+          "message": "`True` の場合、スクレイピング中に広告がブロックされます"
+        },
+        "app.RmlyZWNyYXds.action.YmF0Y2gtc2NyYXBl.option.YmxvY2tBZHM.display_name": {
+          "source": "Block Ads",
+          "message": "広告をブロック"
+        },
+        "app.RmlyZWNyYXds.action.YmF0Y2gtc2NyYXBl.option.YmxvY2tBZHM.short_desc": {
+          "source": "Block advertisements",
+          "message": "広告をブロック"
+        },
+        "app.RmlyZWNyYXds.action.YmF0Y2gtc2NyYXBl.option.ZXhjbHVkZVRhZ3M.desc": {
+          "source": "List of HTML tags to exclude from the output (e.g., `nav`, `footer`)",
+          "message": "出力から除外する HTML タグのリスト（例: `nav`、`footer`）"
+        },
+        "app.RmlyZWNyYXds.action.YmF0Y2gtc2NyYXBl.option.ZXhjbHVkZVRhZ3M.display_name": {
+          "source": "Exclude Tags",
+          "message": "タグを除外"
+        },
+        "app.RmlyZWNyYXds.action.YmF0Y2gtc2NyYXBl.option.ZXhjbHVkZVRhZ3M.short_desc": {
+          "source": "HTML tags to exclude",
+          "message": "除外する HTML タグ"
+        },
+        "app.RmlyZWNyYXds.action.YmF0Y2gtc2NyYXBl.option.Zm9ybWF0cw.allowed-value.c3RyaW5nOm1hcmtkb3du.display_name": {
+          "source": "Markdown",
+          "message": "Markdown"
+        },
+        "app.RmlyZWNyYXds.action.YmF0Y2gtc2NyYXBl.option.Zm9ybWF0cw.allowed-value.c3RyaW5nOmF1ZGlv.display_name": {
+          "source": "Audio",
+          "message": "オーディオ"
+        },
+        "app.RmlyZWNyYXds.action.YmF0Y2gtc2NyYXBl.option.Zm9ybWF0cw.allowed-value.c3RyaW5nOmJyYW5kaW5n.display_name": {
+          "source": "Branding",
+          "message": "ブランディング"
+        },
+        "app.RmlyZWNyYXds.action.YmF0Y2gtc2NyYXBl.option.Zm9ybWF0cw.allowed-value.c3RyaW5nOmNoYW5nZVRyYWNraW5n.display_name": {
+          "source": "Change Tracking",
+          "message": "変更追跡"
+        },
+        "app.RmlyZWNyYXds.action.YmF0Y2gtc2NyYXBl.option.Zm9ybWF0cw.allowed-value.c3RyaW5nOmh0bWw.display_name": {
+          "source": "HTML",
+          "message": "HTML"
+        },
+        "app.RmlyZWNyYXds.action.YmF0Y2gtc2NyYXBl.option.Zm9ybWF0cw.allowed-value.c3RyaW5nOmltYWdlcw.display_name": {
+          "source": "Images",
+          "message": "画像"
+        },
+        "app.RmlyZWNyYXds.action.YmF0Y2gtc2NyYXBl.option.Zm9ybWF0cw.allowed-value.c3RyaW5nOmpzb24.display_name": {
+          "source": "JSON",
+          "message": "JSON"
+        },
+        "app.RmlyZWNyYXds.action.YmF0Y2gtc2NyYXBl.option.Zm9ybWF0cw.allowed-value.c3RyaW5nOmxpbmtz.display_name": {
+          "source": "Links",
+          "message": "リンク"
+        },
+        "app.RmlyZWNyYXds.action.YmF0Y2gtc2NyYXBl.option.Zm9ybWF0cw.allowed-value.c3RyaW5nOnJhd0h0bWw.display_name": {
+          "source": "Raw HTML",
+          "message": "生の HTML"
+        },
+        "app.RmlyZWNyYXds.action.YmF0Y2gtc2NyYXBl.option.Zm9ybWF0cw.allowed-value.c3RyaW5nOnN1bW1hcnk.display_name": {
+          "source": "Summary",
+          "message": "概要"
+        },
+        "app.RmlyZWNyYXds.action.YmF0Y2gtc2NyYXBl.option.Zm9ybWF0cw.allowed-value.c3RyaW5nOnNjcmVlbnNob3Q.display_name": {
+          "source": "Screenshot",
+          "message": "スクリーンショット"
+        },
+        "app.RmlyZWNyYXds.action.YmF0Y2gtc2NyYXBl.option.Zm9ybWF0cw.desc": {
+          "source": "List of output formats to return from each scrape",
+          "message": "各スクレイプから返す出力形式のリスト"
+        },
+        "app.RmlyZWNyYXds.action.YmF0Y2gtc2NyYXBl.option.Zm9ybWF0cw.display_name": {
+          "source": "Formats",
+          "message": "形式"
+        },
+        "app.RmlyZWNyYXds.action.YmF0Y2gtc2NyYXBl.option.Zm9ybWF0cw.short_desc": {
+          "source": "Output formats to return",
+          "message": "返す出力形式"
+        },
+        "app.RmlyZWNyYXds.action.YmF0Y2gtc2NyYXBl.option.aGVhZGVycw.desc": {
+          "source": "Custom HTTP headers to send with each scrape request",
+          "message": "各スクレイプリクエストで送信するカスタム HTTP ヘッダー"
+        },
+        "app.RmlyZWNyYXds.action.YmF0Y2gtc2NyYXBl.option.aGVhZGVycw.display_name": {
+          "source": "Headers",
+          "message": "ヘッダー"
+        },
+        "app.RmlyZWNyYXds.action.YmF0Y2gtc2NyYXBl.option.aGVhZGVycw.short_desc": {
+          "source": "Custom HTTP headers",
+          "message": "カスタムHTTPヘッダー"
+        },
+        "app.RmlyZWNyYXds.action.YmF0Y2gtc2NyYXBl.option.aW5jbHVkZVRhZ3M.desc": {
+          "source": "List of HTML tags to include in the output (e.g., `article`, `main`). Only content within these tags is returned",
+          "message": "出力に含める HTML タグのリスト（例: `article`、`main`）。これらのタグ内のコンテンツのみが返されます"
+        },
+        "app.RmlyZWNyYXds.action.YmF0Y2gtc2NyYXBl.option.aW5jbHVkZVRhZ3M.display_name": {
+          "source": "Include Tags",
+          "message": "タグを含める"
+        },
+        "app.RmlyZWNyYXds.action.YmF0Y2gtc2NyYXBl.option.aW5jbHVkZVRhZ3M.short_desc": {
+          "source": "HTML tags to include",
+          "message": "含める HTML タグ"
+        },
+        "app.RmlyZWNyYXds.action.YmF0Y2gtc2NyYXBl.option.aWdub3JlSW52YWxpZFVSTHM.desc": {
+          "source": "If `True`, invalid URLs in the list are skipped instead of causing an error",
+          "message": "`True` の場合、リスト内の無効な URL はエラーを発生させずにスキップされます"
+        },
+        "app.RmlyZWNyYXds.action.YmF0Y2gtc2NyYXBl.option.aWdub3JlSW52YWxpZFVSTHM.display_name": {
+          "source": "Ignore Invalid URLs",
+          "message": "無効な URL を無視"
+        },
+        "app.RmlyZWNyYXds.action.YmF0Y2gtc2NyYXBl.option.aWdub3JlSW52YWxpZFVSTHM.short_desc": {
+          "source": "Ignore invalid URLs",
+          "message": "無効な URL を無視"
+        },
+        "app.RmlyZWNyYXds.action.YmF0Y2gtc2NyYXBl.option.b25seU1haW5Db250ZW50.desc": {
+          "source": "If `True`, only the main content of each page is returned",
+          "message": "`True` の場合、各ページのメインコンテンツのみが返されます"
+        },
+        "app.RmlyZWNyYXds.action.YmF0Y2gtc2NyYXBl.option.b25seU1haW5Db250ZW50.display_name": {
+          "source": "Only Main Content",
+          "message": "メインコンテンツのみ"
+        },
+        "app.RmlyZWNyYXds.action.YmF0Y2gtc2NyYXBl.option.b25seU1haW5Db250ZW50.short_desc": {
+          "source": "Extract only the main content",
+          "message": "メインコンテンツのみを抽出"
+        },
+        "app.RmlyZWNyYXds.action.YmF0Y2gtc2NyYXBl.option.b25seUNsZWFuQ29udGVudA.desc": {
+          "source": "If `True`, an LLM-based cleanup pass is applied to each page to remove navigation, ads, and boilerplate. Defaults to `False`",
+          "message": "`True` の場合、各ページに LLM ベースのクリーンアップパスが適用され、ナビゲーション、広告、ボイラープレートが削除されます。デフォルトは `False`"
+        },
+        "app.RmlyZWNyYXds.action.YmF0Y2gtc2NyYXBl.option.b25seUNsZWFuQ29udGVudA.display_name": {
+          "source": "Only Clean Content",
+          "message": "クリーンなコンテンツのみ"
+        },
+        "app.RmlyZWNyYXds.action.YmF0Y2gtc2NyYXBl.option.b25seUNsZWFuQ29udGVudA.short_desc": {
+          "source": "Apply LLM-based content cleanup",
+          "message": "LLM ベースのコンテンツクリーンアップを適用"
+        },
+        "app.RmlyZWNyYXds.action.YmF0Y2gtc2NyYXBl.option.bG9jYXRpb24.desc": {
+          "source": "Geolocation settings for the scrape requests",
+          "message": "スクレイプリクエストのジオロケーション設定"
+        },
+        "app.RmlyZWNyYXds.action.YmF0Y2gtc2NyYXBl.option.bG9jYXRpb24.display_name": {
+          "source": "Location",
+          "message": "位置情報"
+        },
+        "app.RmlyZWNyYXds.action.YmF0Y2gtc2NyYXBl.option.bG9jYXRpb24.short_desc": {
+          "source": "Geolocation settings",
+          "message": "位置情報設定"
+        },
+        "app.RmlyZWNyYXds.action.YmF0Y2gtc2NyYXBl.option.bW9iaWxl.desc": {
+          "source": "If `True`, pages are scraped using a mobile user agent",
+          "message": "`True` の場合、モバイルユーザーエージェントを使用してページをスクレイピングします"
+        },
+        "app.RmlyZWNyYXds.action.YmF0Y2gtc2NyYXBl.option.bW9iaWxl.display_name": {
+          "source": "Mobile",
+          "message": "携帯電話"
+        },
+        "app.RmlyZWNyYXds.action.YmF0Y2gtc2NyYXBl.option.bW9iaWxl.short_desc": {
+          "source": "Use mobile user agent",
+          "message": "モバイルユーザーエージェントを使用"
+        },
+        "app.RmlyZWNyYXds.action.YmF0Y2gtc2NyYXBl.option.bWF4Q29uY3VycmVuY3k.desc": {
+          "source": "Maximum number of concurrent scrape requests",
+          "message": "同時スクレイピングリクエストの最大数"
+        },
+        "app.RmlyZWNyYXds.action.YmF0Y2gtc2NyYXBl.option.bWF4Q29uY3VycmVuY3k.display_name": {
+          "source": "Max Concurrency",
+          "message": "最大同時実行数"
+        },
+        "app.RmlyZWNyYXds.action.YmF0Y2gtc2NyYXBl.option.bWF4Q29uY3VycmVuY3k.short_desc": {
+          "source": "Maximum concurrent requests",
+          "message": "最大同時リクエスト数"
+        },
+        "app.RmlyZWNyYXds.action.YmF0Y2gtc2NyYXBl.option.bWF4QWdl.desc": {
+          "source": "Maximum age in milliseconds for cached content. If a cached version of the page exists and is younger than this value, it is returned instead of re-scraping. Defaults to `172800000` (48 hours)",
+          "message": "キャッシュされたコンテンツの最大有効期間（ミリ秒単位）。ページのキャッシュバージョンが存在し、この値よりも新しい場合、再スクレイピングせずにそれを返します。デフォルトは `172800000`（48時間）です"
+        },
+        "app.RmlyZWNyYXds.action.YmF0Y2gtc2NyYXBl.option.bWF4QWdl.display_name": {
+          "source": "Max Age",
+          "message": "最大有効期間"
+        },
+        "app.RmlyZWNyYXds.action.YmF0Y2gtc2NyYXBl.option.bWF4QWdl.short_desc": {
+          "source": "Cache freshness threshold in milliseconds",
+          "message": "キャッシュの鮮度しきい値（ミリ秒単位）"
+        },
+        "app.RmlyZWNyYXds.action.YmF0Y2gtc2NyYXBl.option.bWluQWdl.desc": {
+          "source": "Minimum age in milliseconds for a cache-only lookup. If set, only cached content older than this value is returned; no fresh scrape is triggered if no cache entry exists",
+          "message": "キャッシュ専用ルックアップの最小有効期間（ミリ秒単位）。設定されている場合、この値より古いキャッシュコンテンツのみが返されます。キャッシュエントリが存在しない場合、新しいスクレイピングはトリガーされません"
+        },
+        "app.RmlyZWNyYXds.action.YmF0Y2gtc2NyYXBl.option.bWluQWdl.display_name": {
+          "source": "Min Age",
+          "message": "最小有効期間"
+        },
+        "app.RmlyZWNyYXds.action.YmF0Y2gtc2NyYXBl.option.bWluQWdl.short_desc": {
+          "source": "Minimum cache age in milliseconds",
+          "message": "最小キャッシュ有効期間（ミリ秒単位）"
+        },
+        "app.RmlyZWNyYXds.action.YmF0Y2gtc2NyYXBl.option.c2tpcFRsc1ZlcmlmaWNhdGlvbg.desc": {
+          "source": "If `True`, TLS certificate verification is skipped",
+          "message": "`True` の場合、TLS証明書の検証をスキップします"
+        },
+        "app.RmlyZWNyYXds.action.YmF0Y2gtc2NyYXBl.option.c2tpcFRsc1ZlcmlmaWNhdGlvbg.display_name": {
+          "source": "Skip TLS Verification",
+          "message": "TLS検証をスキップ"
+        },
+        "app.RmlyZWNyYXds.action.YmF0Y2gtc2NyYXBl.option.c2tpcFRsc1ZlcmlmaWNhdGlvbg.short_desc": {
+          "source": "Skip TLS certificate verification",
+          "message": "TLS証明書の検証をスキップ"
+        },
+        "app.RmlyZWNyYXds.action.YmF0Y2gtc2NyYXBl.option.c3RvcmVJbkNhY2hl.desc": {
+          "source": "If `True`, the scraped content is stored in the Firecrawl cache so that subsequent scrapes within `maxAge` can reuse it. Defaults to `True`",
+          "message": "`True` の場合、スクレイピングされたコンテンツは Firecrawl キャッシュに保存され、`maxAge` 内の後続のスクレイピングで再利用できます。デフォルトは `True` です"
+        },
+        "app.RmlyZWNyYXds.action.YmF0Y2gtc2NyYXBl.option.c3RvcmVJbkNhY2hl.display_name": {
+          "source": "Store In Cache",
+          "message": "キャッシュに保存"
+        },
+        "app.RmlyZWNyYXds.action.YmF0Y2gtc2NyYXBl.option.c3RvcmVJbkNhY2hl.short_desc": {
+          "source": "Cache the scraped content",
+          "message": "スクレイピングしたコンテンツをキャッシュする"
+        },
+        "app.RmlyZWNyYXds.action.YmF0Y2gtc2NyYXBl.option.cGFyc2Vycw.desc": {
+          "source": "List of parser configurations for PDF processing. Each entry specifies a parser type and processing options",
+          "message": "PDF処理用のパーサー設定のリスト。各エントリでパーサータイプと処理オプションを指定します"
+        },
+        "app.RmlyZWNyYXds.action.YmF0Y2gtc2NyYXBl.option.cGFyc2Vycw.display_name": {
+          "source": "Parsers",
+          "message": "パーサー"
+        },
+        "app.RmlyZWNyYXds.action.YmF0Y2gtc2NyYXBl.option.cGFyc2Vycw.short_desc": {
+          "source": "PDF parser configuration",
+          "message": "PDFパーサー設定"
+        },
+        "app.RmlyZWNyYXds.action.YmF0Y2gtc2NyYXBl.option.cHJvZmlsZQ.desc": {
+          "source": "Named browser profile to reuse session state (cookies, local storage) across scrape requests. Set `saveChanges` to `True` to persist changes back to the profile",
+          "message": "スクレイピングリクエスト間でセッション状態（Cookie、ローカルストレージ）を再利用するための名前付きブラウザプロファイル。変更をプロファイルに永続化するには、`saveChanges` を `True` に設定します"
+        },
+        "app.RmlyZWNyYXds.action.YmF0Y2gtc2NyYXBl.option.cHJvZmlsZQ.display_name": {
+          "source": "Profile",
+          "message": "プロファイル"
+        },
+        "app.RmlyZWNyYXds.action.YmF0Y2gtc2NyYXBl.option.cHJvZmlsZQ.short_desc": {
+          "source": "Persistent browser profile",
+          "message": "永続ブラウザプロファイル"
+        },
+        "app.RmlyZWNyYXds.action.YmF0Y2gtc2NyYXBl.option.cHJveHk.allowed-value.c3RyaW5nOmF1dG8.display_name": {
+          "source": "Auto",
+          "message": "自動"
+        },
+        "app.RmlyZWNyYXds.action.YmF0Y2gtc2NyYXBl.option.cHJveHk.allowed-value.c3RyaW5nOmJhc2lj.display_name": {
+          "source": "Basic",
+          "message": "ベーシック"
+        },
+        "app.RmlyZWNyYXds.action.YmF0Y2gtc2NyYXBl.option.cHJveHk.allowed-value.c3RyaW5nOmVuaGFuY2Vk.display_name": {
+          "source": "Enhanced",
+          "message": "Enhanced"
+        },
+        "app.RmlyZWNyYXds.action.YmF0Y2gtc2NyYXBl.option.cHJveHk.desc": {
+          "source": "The proxy configuration to use for scrape requests",
+          "message": "スクレイピングリクエストに使用するプロキシ設定"
+        },
+        "app.RmlyZWNyYXds.action.YmF0Y2gtc2NyYXBl.option.cHJveHk.display_name": {
+          "source": "Proxy",
+          "message": "プロキシ"
+        },
+        "app.RmlyZWNyYXds.action.YmF0Y2gtc2NyYXBl.option.cHJveHk.short_desc": {
+          "source": "Proxy configuration",
+          "message": "プロキシ設定"
+        },
+        "app.RmlyZWNyYXds.action.YmF0Y2gtc2NyYXBl.option.cmVtb3ZlQmFzZTY0SW1hZ2Vz.desc": {
+          "source": "If `True`, base64-encoded images are removed from the output",
+          "message": "`True` の場合、Base64エンコードされた画像が出力から削除されます"
+        },
+        "app.RmlyZWNyYXds.action.YmF0Y2gtc2NyYXBl.option.cmVtb3ZlQmFzZTY0SW1hZ2Vz.display_name": {
+          "source": "Remove Base64 Images",
+          "message": "Base64画像を削除"
+        },
+        "app.RmlyZWNyYXds.action.YmF0Y2gtc2NyYXBl.option.cmVtb3ZlQmFzZTY0SW1hZ2Vz.short_desc": {
+          "source": "Remove base64-encoded images",
+          "message": "Base64エンコードされた画像を削除"
+        },
+        "app.RmlyZWNyYXds.action.YmF0Y2gtc2NyYXBl.option.d2FpdEZvcg.desc": {
+          "source": "Time to wait in milliseconds for each page to load before scraping. Useful for pages with dynamic content",
+          "message": "スクレイピング前に各ページの読み込みを待機する時間（ミリ秒単位）。動的コンテンツを含むページに役立ちます"
+        },
+        "app.RmlyZWNyYXds.action.YmF0Y2gtc2NyYXBl.option.d2FpdEZvcg.display_name": {
+          "source": "Wait For",
+          "message": "待機時間"
+        },
+        "app.RmlyZWNyYXds.action.YmF0Y2gtc2NyYXBl.option.d2FpdEZvcg.short_desc": {
+          "source": "Wait time in milliseconds",
+          "message": "待機時間（ミリ秒単位）"
+        },
+        "app.RmlyZWNyYXds.action.YmF0Y2gtc2NyYXBl.option.d2ViaG9vaw.desc": {
+          "source": "Webhook configuration to receive notifications during the batch scrape",
+          "message": "バッチスクレイピング中に通知を受信するための Webhook 設定"
+        },
+        "app.RmlyZWNyYXds.action.YmF0Y2gtc2NyYXBl.option.d2ViaG9vaw.display_name": {
+          "source": "Webhook",
+          "message": "Webhook"
+        },
+        "app.RmlyZWNyYXds.action.YmF0Y2gtc2NyYXBl.option.d2ViaG9vaw.short_desc": {
+          "source": "Webhook configuration for notifications",
+          "message": "通知用の Webhook 設定"
+        },
+        "app.RmlyZWNyYXds.action.YmF0Y2gtc2NyYXBl.option.dGltZW91dA.desc": {
+          "source": "Maximum time in milliseconds to wait for each scrape to complete. Range: `1000`-`300000`",
+          "message": "各スクレイピングが完了するのを待機する最大時間（ミリ秒単位）。範囲: `1000`〜`300000`"
+        },
+        "app.RmlyZWNyYXds.action.YmF0Y2gtc2NyYXBl.option.dGltZW91dA.display_name": {
+          "source": "Timeout",
+          "message": "タイムアウト"
+        },
+        "app.RmlyZWNyYXds.action.YmF0Y2gtc2NyYXBl.option.dGltZW91dA.short_desc": {
+          "source": "Timeout in milliseconds",
+          "message": "タイムアウト（ミリ秒単位）"
+        },
+        "app.RmlyZWNyYXds.action.YmF0Y2gtc2NyYXBl.option.dXJscw.desc": {
+          "source": "List of URLs to scrape in batch",
+          "message": "一括スクレイピングするURLのリスト"
+        },
+        "app.RmlyZWNyYXds.action.YmF0Y2gtc2NyYXBl.option.dXJscw.display_name": {
+          "source": "URLs",
+          "message": "URL"
+        },
+        "app.RmlyZWNyYXds.action.YmF0Y2gtc2NyYXBl.option.dXJscw.short_desc": {
+          "source": "List of URLs to scrape",
+          "message": "スクレイピングするURLのリスト"
+        },
+        "app.RmlyZWNyYXds.action.YmF0Y2gtc2NyYXBl.option.emVyb0RhdGFSZXRlbnRpb24.desc": {
+          "source": "If `True`, Firecrawl does not retain any scraped data on its servers after returning the response. Useful for privacy/compliance-sensitive workloads. Enterprise feature — contact Firecrawl support to enable",
+          "message": "`True` の場合、Firecrawl はレスポンスを返した後にスクレイピングされたデータをサーバー上に保持しません。プライバシーやコンプライアンスに配慮が必要なワークロードに役立ちます。エンタープライズ機能 — 有効にするには Firecrawl サポートにお問い合わせください"
+        },
+        "app.RmlyZWNyYXds.action.YmF0Y2gtc2NyYXBl.option.emVyb0RhdGFSZXRlbnRpb24.display_name": {
+          "source": "Zero Data Retention",
+          "message": "ゼロデータ保持"
+        },
+        "app.RmlyZWNyYXds.action.YmF0Y2gtc2NyYXBl.option.emVyb0RhdGFSZXRlbnRpb24.short_desc": {
+          "source": "Disable Firecrawl-side data retention",
+          "message": "Firecrawl 側でのデータ保持を無効化"
+        },
+        "app.RmlyZWNyYXds.action.YmF0Y2gtc2NyYXBl.short_desc": {
+          "source": "Scrape multiple web pages in batch",
+          "message": "複数のWebページを一括スクレイピング"
+        },
+        "app.RmlyZWNyYXds.action.Z2V0LWFnZW50LXN0YXR1cw.desc": {
+          "source": "Gets the current status and results of an agent job by its ID.",
+          "message": "IDによってエージェントジョブの現在のステータスと結果を取得します。"
+        },
+        "app.RmlyZWNyYXds.action.Z2V0LWFnZW50LXN0YXR1cw.display_name": {
+          "source": "Get Agent Status",
+          "message": "エージェントステータスの取得"
+        },
+        "app.RmlyZWNyYXds.action.Z2V0LWFnZW50LXN0YXR1cw.option.aWQ.desc": {
+          "source": "The unique identifier of the agent job to check",
+          "message": "確認するエージェントジョブの一意の識別子"
+        },
+        "app.RmlyZWNyYXds.action.Z2V0LWFnZW50LXN0YXR1cw.option.aWQ.display_name": {
+          "source": "Job ID",
+          "message": "ジョブID"
+        },
+        "app.RmlyZWNyYXds.action.Z2V0LWFnZW50LXN0YXR1cw.option.aWQ.short_desc": {
+          "source": "The agent job ID",
+          "message": "エージェントジョブID"
+        },
+        "app.RmlyZWNyYXds.action.Z2V0LWFnZW50LXN0YXR1cw.short_desc": {
+          "source": "Get the status and results of an agent job",
+          "message": "エージェントジョブのステータスと結果を取得"
+        },
+        "app.RmlyZWNyYXds.action.Z2V0LWJhdGNoLXNjcmFwZS1zdGF0dXM.desc": {
+          "source": "Gets the current status and results of a batch scrape job by its ID.",
+          "message": "IDによってバッチスクレイピングジョブの現在のステータスと結果を取得します。"
+        },
+        "app.RmlyZWNyYXds.action.Z2V0LWJhdGNoLXNjcmFwZS1zdGF0dXM.display_name": {
+          "source": "Get Batch Scrape Status",
+          "message": "バッチスクレイピングステータスの取得"
+        },
+        "app.RmlyZWNyYXds.action.Z2V0LWJhdGNoLXNjcmFwZS1zdGF0dXM.option.aWQ.desc": {
+          "source": "The unique identifier of the batch scrape job to check",
+          "message": "確認するバッチスクレイピングジョブの一意の識別子"
+        },
+        "app.RmlyZWNyYXds.action.Z2V0LWJhdGNoLXNjcmFwZS1zdGF0dXM.option.aWQ.display_name": {
+          "source": "Job ID",
+          "message": "ジョブID"
+        },
+        "app.RmlyZWNyYXds.action.Z2V0LWJhdGNoLXNjcmFwZS1zdGF0dXM.option.aWQ.short_desc": {
+          "source": "The batch scrape job ID",
+          "message": "バッチスクレイピングジョブID"
+        },
+        "app.RmlyZWNyYXds.action.Z2V0LWJhdGNoLXNjcmFwZS1zdGF0dXM.short_desc": {
+          "source": "Get the status and results of a batch scrape job",
+          "message": "バッチスクレイピングジョブのステータスと結果を取得"
+        },
+        "app.RmlyZWNyYXds.action.Z2V0LWNyYXdsLXN0YXR1cw.desc": {
+          "source": "Gets the current status and results of a crawl job by its ID.",
+          "message": "IDによってクロールジョブの現在のステータスと結果を取得します。"
+        },
+        "app.RmlyZWNyYXds.action.Z2V0LWNyYXdsLXN0YXR1cw.display_name": {
+          "source": "Get Crawl Status",
+          "message": "クロールステータスの取得"
+        },
+        "app.RmlyZWNyYXds.action.Z2V0LWNyYXdsLXN0YXR1cw.option.aWQ.desc": {
+          "source": "The unique identifier of the crawl job to check",
+          "message": "確認するクロールジョブの一意の識別子"
+        },
+        "app.RmlyZWNyYXds.action.Z2V0LWNyYXdsLXN0YXR1cw.option.aWQ.display_name": {
+          "source": "Job ID",
+          "message": "ジョブID"
+        },
+        "app.RmlyZWNyYXds.action.Z2V0LWNyYXdsLXN0YXR1cw.option.aWQ.short_desc": {
+          "source": "The crawl job ID",
+          "message": "クロールジョブID"
+        },
+        "app.RmlyZWNyYXds.action.Z2V0LWNyYXdsLXN0YXR1cw.short_desc": {
+          "source": "Get the status and results of a crawl job",
+          "message": "クロールジョブのステータスと結果を取得"
+        },
+        "app.RmlyZWNyYXds.action.Z2V0LWV4dHJhY3Qtc3RhdHVz.desc": {
+          "source": "Gets the current status and results of an extraction job by its ID.",
+          "message": "IDによって抽出ジョブの現在のステータスと結果を取得します。"
+        },
+        "app.RmlyZWNyYXds.action.Z2V0LWV4dHJhY3Qtc3RhdHVz.display_name": {
+          "source": "Get Extraction Status",
+          "message": "抽出ステータスの取得"
+        },
+        "app.RmlyZWNyYXds.action.Z2V0LWV4dHJhY3Qtc3RhdHVz.option.aWQ.desc": {
+          "source": "The unique identifier of the extraction job to check",
+          "message": "確認する抽出ジョブの一意の識別子"
+        },
+        "app.RmlyZWNyYXds.action.Z2V0LWV4dHJhY3Qtc3RhdHVz.option.aWQ.display_name": {
+          "source": "Job ID",
+          "message": "ジョブID"
+        },
+        "app.RmlyZWNyYXds.action.Z2V0LWV4dHJhY3Qtc3RhdHVz.option.aWQ.short_desc": {
+          "source": "The extraction job ID",
+          "message": "抽出ジョブID"
+        },
+        "app.RmlyZWNyYXds.action.Z2V0LWV4dHJhY3Qtc3RhdHVz.short_desc": {
+          "source": "Get the status and results of an extraction job",
+          "message": "抽出ジョブのステータスと結果を取得"
+        },
+        "app.RmlyZWNyYXds.action.ZXh0cmFjdA.desc": {
+          "source": "Extracts structured data from one or more web pages using AI.\n\nProvide a natural language prompt and/or a JSON Schema to guide the extraction. The operation runs asynchronously and automatically polls until the extraction completes.",
+          "message": "AIを使用して1つ以上のWebページから構造化データを抽出します。\n\n抽出を指示するために、自然言語プロンプトや JSON Schema を指定します。この操作は非同期で実行され、抽出が完了するまで自動的にポーリングします。"
+        },
+        "app.RmlyZWNyYXds.action.ZXh0cmFjdA.display_name": {
+          "source": "Extract Structured Data",
+          "message": "構造化データの抽出"
+        },
+        "app.RmlyZWNyYXds.action.ZXh0cmFjdA.option.ZW5hYmxlV2ViU2VhcmNo.desc": {
+          "source": "If `True`, web search is enabled to supplement extraction with additional data from search results",
+          "message": "`True` の場合、検索結果からの追加データで抽出を補完するためにWeb検索が有効になります"
+        },
+        "app.RmlyZWNyYXds.action.ZXh0cmFjdA.option.ZW5hYmxlV2ViU2VhcmNo.display_name": {
+          "source": "Enable Web Search",
+          "message": "Web検索を有効化"
+        },
+        "app.RmlyZWNyYXds.action.ZXh0cmFjdA.option.ZW5hYmxlV2ViU2VhcmNo.short_desc": {
+          "source": "Enable web search",
+          "message": "Web検索を有効にする"
+        },
+        "app.RmlyZWNyYXds.action.ZXh0cmFjdA.option.aW5jbHVkZVN1YmRvbWFpbnM.desc": {
+          "source": "If `True`, subdomain URLs are included in the extraction",
+          "message": "`True` の場合、サブドメインURLが抽出に含まれます"
+        },
+        "app.RmlyZWNyYXds.action.ZXh0cmFjdA.option.aW5jbHVkZVN1YmRvbWFpbnM.display_name": {
+          "source": "Include Subdomains",
+          "message": "サブドメインを含める"
+        },
+        "app.RmlyZWNyYXds.action.ZXh0cmFjdA.option.aW5jbHVkZVN1YmRvbWFpbnM.short_desc": {
+          "source": "Include subdomain URLs",
+          "message": "サブドメインのURLを含める"
+        },
+        "app.RmlyZWNyYXds.action.ZXh0cmFjdA.option.aWdub3JlSW52YWxpZFVSTHM.desc": {
+          "source": "If `True`, invalid URLs in the list are skipped instead of causing an error",
+          "message": "`True` の場合、リスト内の無効な URL はエラーを発生させずにスキップされます"
+        },
+        "app.RmlyZWNyYXds.action.ZXh0cmFjdA.option.aWdub3JlSW52YWxpZFVSTHM.display_name": {
+          "source": "Ignore Invalid URLs",
+          "message": "無効な URL を無視"
+        },
+        "app.RmlyZWNyYXds.action.ZXh0cmFjdA.option.aWdub3JlSW52YWxpZFVSTHM.short_desc": {
+          "source": "Ignore invalid URLs",
+          "message": "無効な URL を無視"
+        },
+        "app.RmlyZWNyYXds.action.ZXh0cmFjdA.option.aWdub3JlU2l0ZW1hcA.desc": {
+          "source": "If `True`, the sitemap is ignored when discovering pages to extract from",
+          "message": "`True` の場合、抽出対象ページの検出時にサイトマップは無視されます"
+        },
+        "app.RmlyZWNyYXds.action.ZXh0cmFjdA.option.aWdub3JlU2l0ZW1hcA.display_name": {
+          "source": "Ignore Sitemap",
+          "message": "サイトマップを無視"
+        },
+        "app.RmlyZWNyYXds.action.ZXh0cmFjdA.option.aWdub3JlU2l0ZW1hcA.short_desc": {
+          "source": "Ignore the sitemap",
+          "message": "サイトマップを無視する"
+        },
+        "app.RmlyZWNyYXds.action.ZXh0cmFjdA.option.c2NoZW1h.desc": {
+          "source": "A JSON Schema object defining the structure of the data to extract. Used to guide the extraction and validate the output format.\n\n**Example**: `{\"type\": \"object\", \"properties\": {\"name\": {\"type\": \"string\"}, \"price\": {\"type\": \"number\"}}}`",
+          "message": "抽出するデータの構造を定義する JSON Schema オブジェクト。抽出の指針および出力フォーマットの検証に使用されます。\n\n**例**: `{\"type\": \"object\", \"properties\": {\"name\": {\"type\": \"string\"}, \"price\": {\"type\": \"number\"}}}`"
+        },
+        "app.RmlyZWNyYXds.action.ZXh0cmFjdA.option.c2NoZW1h.display_name": {
+          "source": "Schema",
+          "message": "スキーマ"
+        },
+        "app.RmlyZWNyYXds.action.ZXh0cmFjdA.option.c2NoZW1h.short_desc": {
+          "source": "JSON Schema for extraction",
+          "message": "抽出用 JSON Schema"
+        },
+        "app.RmlyZWNyYXds.action.ZXh0cmFjdA.option.c2NyYXBlT3B0aW9ucw.desc": {
+          "source": "Options applied when scraping each page during extraction, such as `formats`, `onlyMainContent`, `includeTags`, `excludeTags`",
+          "message": "抽出時に各ページをスクレイピングする際に適用されるオプション（`formats`、`onlyMainContent`、`includeTags`、`excludeTags` など）"
+        },
+        "app.RmlyZWNyYXds.action.ZXh0cmFjdA.option.c2NyYXBlT3B0aW9ucw.display_name": {
+          "source": "Scrape Options",
+          "message": "スクレイプオプション"
+        },
+        "app.RmlyZWNyYXds.action.ZXh0cmFjdA.option.c2NyYXBlT3B0aW9ucw.short_desc": {
+          "source": "Options for scraping pages",
+          "message": "ページスクレイピングのオプション"
+        },
+        "app.RmlyZWNyYXds.action.ZXh0cmFjdA.option.c2hvd1NvdXJjZXM.desc": {
+          "source": "If `True`, the source URLs used for extraction are included in the response",
+          "message": "`True` の場合、抽出に使用されたソース URL がレスポンスに含まれます"
+        },
+        "app.RmlyZWNyYXds.action.ZXh0cmFjdA.option.c2hvd1NvdXJjZXM.display_name": {
+          "source": "Show Sources",
+          "message": "ソースを表示"
+        },
+        "app.RmlyZWNyYXds.action.ZXh0cmFjdA.option.c2hvd1NvdXJjZXM.short_desc": {
+          "source": "Include source URLs",
+          "message": "ソース URL を含める"
+        },
+        "app.RmlyZWNyYXds.action.ZXh0cmFjdA.option.cHJvbXB0.desc": {
+          "source": "Natural language prompt describing what data to extract from the pages",
+          "message": "ページから抽出するデータを記述した自然言語プロンプト"
+        },
+        "app.RmlyZWNyYXds.action.ZXh0cmFjdA.option.cHJvbXB0.display_name": {
+          "source": "Prompt",
+          "message": "プロンプト"
+        },
+        "app.RmlyZWNyYXds.action.ZXh0cmFjdA.option.cHJvbXB0.short_desc": {
+          "source": "Extraction prompt",
+          "message": "抽出プロンプト"
+        },
+        "app.RmlyZWNyYXds.action.ZXh0cmFjdA.option.dXJscw.desc": {
+          "source": "List of URLs to extract data from (supports glob patterns like `https://example.com/blog/*`)",
+          "message": "データ抽出元の URL リスト（`https://example.com/blog/*` などの glob パターンをサポート）"
+        },
+        "app.RmlyZWNyYXds.action.ZXh0cmFjdA.option.dXJscw.display_name": {
+          "source": "URLs",
+          "message": "URL"
+        },
+        "app.RmlyZWNyYXds.action.ZXh0cmFjdA.option.dXJscw.short_desc": {
+          "source": "URLs to extract from",
+          "message": "抽出元の URL"
+        },
+        "app.RmlyZWNyYXds.action.ZXh0cmFjdA.short_desc": {
+          "source": "Extract structured data from web pages using AI",
+          "message": "AI を使用して Web ページから構造化データを抽出"
+        },
+        "app.RmlyZWNyYXds.action.bWFrZS1hcGktY2FsbA.desc": {
+          "source": "Make a custom HTTP / REST API call to **Firecrawl** using the configured connection's authentication.\n\nSpecify the HTTP method, the URI path (relative to the connection's API base URL), optional query parameters, headers, and request body. The response is returned as a hash containing the status code, response headers, and response body.\n\nUse this action for endpoints that are not yet exposed as first-class actions on this app.",
+          "message": "設定された接続の認証情報を使用して、**Firecrawl** へのカスタム HTTP / REST API コールを実行します。\n\nHTTP メソッド、URI パス（接続の API ベース URL からの相対パス）、任意のクエリパラメーター、ヘッダー、リクエスト本文を指定します。レスポンスはステータスコード、レスポンスヘッダー、レスポンス本文を含むハッシュとして返されます。\n\nこのアプリでファーストクラスのアクションとしてまだ提供されていないエンドポイントに対してこのアクションを使用します。"
+        },
+        "app.RmlyZWNyYXds.action.bWFrZS1hcGktY2FsbA.display_name": {
+          "source": "Make an API call",
+          "message": "API コールを実行"
+        },
+        "app.RmlyZWNyYXds.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.desc": {
+          "source": "The request body. The effective type depends on `body_type`: JSON/form/YAML expect a hash, XML/text expect a string, multipart expects a file structure, binary expects raw bytes.",
+          "message": "リクエストボディ。有効な型は`body_type`に依存します。JSON/form/YAMLはハッシュを期待し、XML/textは文字列を期待し、multipartはファイル構造を期待し、binaryは生バイトを期待します。"
+        },
+        "app.RmlyZWNyYXds.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.display_name": {
+          "source": "Body",
+          "message": "ボディ"
+        },
+        "app.RmlyZWNyYXds.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.short_desc": {
+          "source": "The request body",
+          "message": "リクエストボディ"
+        },
+        "app.RmlyZWNyYXds.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.desc": {
+          "source": "Upload a file using `multipart/form-data`. The body must be a @ref DataProvider::FileDataType \"FileDataType\" structure (filename + content + mime_type). The framework builds the multipart envelope and sets the boundary header.",
+          "message": "`multipart/form-data`を使用してファイルをアップロードします。ボディは@ref DataProvider::FileDataType \"FileDataType\"構造（filename + content + mime_type）である必要があります。フレームワークがmultipartエンベロープを構築し、boundaryヘッダーを設定します。"
+        },
+        "app.RmlyZWNyYXds.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.display_name": {
+          "source": "Multipart Form",
+          "message": "マルチパートフォーム"
+        },
+        "app.RmlyZWNyYXds.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.short_desc": {
+          "source": "Upload a file using multipart/form-data",
+          "message": "multipart/form-dataを使用してファイルをアップロード"
+        },
+        "app.RmlyZWNyYXds.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.desc": {
+          "source": "Pass the body to the REST client unchanged; the client decides serialization based on its configured `data` option and the value type",
+          "message": "ボディを変更せずにRESTクライアントに渡します。クライアントは設定された`data`オプションと値の型に基づいてシリアライズを決定します"
+        },
+        "app.RmlyZWNyYXds.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.display_name": {
+          "source": "Auto",
+          "message": "自動"
+        },
+        "app.RmlyZWNyYXds.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.short_desc": {
+          "source": "Pass-through; use connection serialization and let the REST client decide",
+          "message": "パススルー。接続のシリアライズを使用し、RESTクライアントに決定させます"
+        },
+        "app.RmlyZWNyYXds.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.desc": {
+          "source": "Send the body as raw bytes. The body must be a binary value. Sets `Content-Type: application/octet-stream` unless overridden by `hdr`.",
+          "message": "ボディを生バイトとして送信します。ボディはバイナリ値である必要があります。`hdr`によってオーバーライドされない限り、`Content-Type: application/octet-stream`を設定します。"
+        },
+        "app.RmlyZWNyYXds.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.display_name": {
+          "source": "Raw Binary",
+          "message": "生バイナリ"
+        },
+        "app.RmlyZWNyYXds.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.short_desc": {
+          "source": "Send body as raw bytes",
+          "message": "ボディを生バイトとして送信"
+        },
+        "app.RmlyZWNyYXds.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.desc": {
+          "source": "Serialize a hash of form fields as `application/x-www-form-urlencoded`. The body must be a hash whose values are scalars (strings/numbers/booleans).",
+          "message": "フォームフィールドのハッシュを`application/x-www-form-urlencoded`としてシリアライズします。ボディは値がスカラー（文字列/数値/ブール値）のハッシュである必要があります。"
+        },
+        "app.RmlyZWNyYXds.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.display_name": {
+          "source": "Form (URL-encoded)",
+          "message": "フォーム (URLエンコード)"
+        },
+        "app.RmlyZWNyYXds.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.short_desc": {
+          "source": "Serialize body as application/x-www-form-urlencoded form fields",
+          "message": "ボディをapplication/x-www-form-urlencodedフォームフィールドとしてシリアライズ"
+        },
+        "app.RmlyZWNyYXds.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.desc": {
+          "source": "Serialize the body as JSON; sets `Content-Type: application/json`. The body should be a hash, list, or scalar value.",
+          "message": "ボディをJSONとしてシリアライズします。`Content-Type: application/json`を設定します。ボディはハッシュ、リスト、またはスカラー値である必要があります。"
+        },
+        "app.RmlyZWNyYXds.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.display_name": {
+          "source": "JSON",
+          "message": "JSON"
+        },
+        "app.RmlyZWNyYXds.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.short_desc": {
+          "source": "Serialize body as JSON",
+          "message": "ボディをJSONとしてシリアライズ"
+        },
+        "app.RmlyZWNyYXds.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.desc": {
+          "source": "Send the body as plain text. The body must be a string. Sets `Content-Type: text/plain`.",
+          "message": "ボディをプレーンテキストとして送信します。ボディは文字列である必要があります。`Content-Type: text/plain`を設定します。"
+        },
+        "app.RmlyZWNyYXds.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.display_name": {
+          "source": "Plain Text",
+          "message": "プレーンテキスト"
+        },
+        "app.RmlyZWNyYXds.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.short_desc": {
+          "source": "Send body as text/plain",
+          "message": "ボディをtext/plainとして送信"
+        },
+        "app.RmlyZWNyYXds.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.desc": {
+          "source": "Send the body as XML. If the body is a hash it is serialized to XML; if it is a string it is sent verbatim. Sets `Content-Type: application/xml`.",
+          "message": "ボディをXMLとして送信します。ボディがハッシュの場合はXMLにシリアライズされ、文字列の場合はそのまま送信されます。`Content-Type: application/xml`を設定します。"
+        },
+        "app.RmlyZWNyYXds.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.display_name": {
+          "source": "XML",
+          "message": "XML"
+        },
+        "app.RmlyZWNyYXds.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.short_desc": {
+          "source": "Send body as XML",
+          "message": "ボディをXMLとして送信"
+        },
+        "app.RmlyZWNyYXds.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.desc": {
+          "source": "Send the body as YAML. If the body is a hash it is serialized to YAML; if it is a string it is sent verbatim. Sets `Content-Type: application/x-yaml`.",
+          "message": "ボディをYAMLとして送信します。ボディがハッシュの場合はYAMLにシリアライズされ、文字列の場合はそのまま送信されます。`Content-Type: application/x-yaml`を設定します。"
+        },
+        "app.RmlyZWNyYXds.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.display_name": {
+          "source": "YAML",
+          "message": "YAML"
+        },
+        "app.RmlyZWNyYXds.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.short_desc": {
+          "source": "Send body as YAML",
+          "message": "ボディをYAMLとして送信"
+        },
+        "app.RmlyZWNyYXds.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.desc": {
+          "source": "Selects the body serialization mode and the corresponding `Content-Type` header. Changing this field reshapes the `body` editor - selecting JSON exposes a JSON editor, selecting Multipart Form exposes a file picker, and so on.",
+          "message": "ボディのシリアライズモードと対応する`Content-Type`ヘッダーを選択します。このフィールドを変更すると`body`エディターの形状が変わります。JSONを選択するとJSONエディターが表示され、マルチパートフォームを選択するとファイルピッカーが表示される、などです。"
+        },
+        "app.RmlyZWNyYXds.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.display_name": {
+          "source": "Body Type",
+          "message": "ボディタイプ"
+        },
+        "app.RmlyZWNyYXds.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.short_desc": {
+          "source": "How the body is serialized and what Content-Type is sent",
+          "message": "ボディのシリアライズ方法および送信されるContent-Type"
+        },
+        "app.RmlyZWNyYXds.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.desc": {
+          "source": "If `True`, non-2xx HTTP responses return as the normal response hash (with the actual status code) instead of raising `REST-RESPONSE-ERROR`. Useful for handling 4xx/5xx as data - e.g. checking whether a resource exists. Overrides the connection's `error_passthru` setting for this call only.",
+          "message": "`True`の場合、2xx以外のHTTPレスポンスは`REST-RESPONSE-ERROR`を発生させる代わりに（実際のステータスコードを含む）通常のレスポンスハッシュとして返されます。リソースが存在するかどうかの確認など、4xx/5xxをデータとして処理する場合に便利です。この呼び出しに限り、接続の`error_passthru`設定をオーバーライドします。"
+        },
+        "app.RmlyZWNyYXds.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.display_name": {
+          "source": "Return Errors as Data",
+          "message": "エラーをデータとして返す"
+        },
+        "app.RmlyZWNyYXds.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.short_desc": {
+          "source": "Return non-2xx responses normally instead of throwing",
+          "message": "例外をスローする代わりに2xx以外のレスポンスを通常通り返す"
+        },
+        "app.RmlyZWNyYXds.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.desc": {
+          "source": "Optional list of HTTP status codes treated as success. If set and the response status is not in this list, the action throws `REST-STATUS-ERROR`. When unset, the REST client's default behavior applies (typically: 2xx is success, non-2xx throws).",
+          "message": "成功として扱われるHTTPステータスコードのオプションリスト。設定されていてレスポンスステータスがこのリストに含まれない場合、アクションは`REST-STATUS-ERROR`をスローします。未設定の場合、RESTクライアントのデフォルト動作が適用されます（通常：2xxは成功、2xx以外はスロー）。"
+        },
+        "app.RmlyZWNyYXds.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.display_name": {
+          "source": "Expected Status Codes",
+          "message": "期待されるステータスコード"
+        },
+        "app.RmlyZWNyYXds.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.short_desc": {
+          "source": "Response status codes treated as success",
+          "message": "成功として扱われるレスポンスステータスコード"
+        },
+        "app.RmlyZWNyYXds.action.bWFrZS1hcGktY2FsbA.option.aGRy.desc": {
+          "source": "Hash of custom headers added to the request. These override any default headers set by `body_type` (e.g. supplying `Content-Type` here wins over the body-type default).",
+          "message": "リクエストに追加されるカスタムヘッダーのハッシュ。これらは`body_type`によって設定されたデフォルトヘッダーをオーバーライドします（例：ここで`Content-Type`を指定すると、ボディタイプのデフォルトより優先されます）。"
+        },
+        "app.RmlyZWNyYXds.action.bWFrZS1hcGktY2FsbA.option.aGRy.display_name": {
+          "source": "Custom Headers",
+          "message": "カスタムヘッダー"
+        },
+        "app.RmlyZWNyYXds.action.bWFrZS1hcGktY2FsbA.option.aGRy.short_desc": {
+          "source": "Extra request headers",
+          "message": "追加のリクエストヘッダー"
+        },
+        "app.RmlyZWNyYXds.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.desc": {
+          "source": "If `True`, the response hash includes a `debug` sub-hash containing the request method/URL/headers (with sensitive values redacted), request and response sizes, and round-trip duration. Useful when investigating slow or failing calls. Off by default to keep responses lean.",
+          "message": "`True`の場合、レスポンスハッシュにはリクエストメソッド/URL/ヘッダー（機密値は伏字処理済み）、リクエストとレスポンスのサイズ、およびラウンドトリップ時間を含む`debug`サブハッシュが含まれます。遅い呼び出しや失敗した呼び出しを調査する際に便利です。レスポンスを軽量に保つため、デフォルトではオフになっています。"
+        },
+        "app.RmlyZWNyYXds.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.display_name": {
+          "source": "Include Debug Info",
+          "message": "デバッグ情報を含める"
+        },
+        "app.RmlyZWNyYXds.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.short_desc": {
+          "source": "Include request/timing/size debug info in the response",
+          "message": "レスポンスにリクエスト/タイミング/サイズのデバッグ情報を含める"
+        },
+        "app.RmlyZWNyYXds.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.desc": {
+          "source": "HTTP `OPTIONS`",
+          "message": "HTTP `OPTIONS`"
+        },
+        "app.RmlyZWNyYXds.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.display_name": {
+          "source": "OPTIONS",
+          "message": "OPTIONS"
+        },
+        "app.RmlyZWNyYXds.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.short_desc": {
+          "source": "HTTP OPTIONS",
+          "message": "HTTP OPTIONS"
+        },
+        "app.RmlyZWNyYXds.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.desc": {
+          "source": "HTTP `DELETE`",
+          "message": "HTTP `DELETE`"
+        },
+        "app.RmlyZWNyYXds.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.display_name": {
+          "source": "DELETE",
+          "message": "DELETE"
+        },
+        "app.RmlyZWNyYXds.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.short_desc": {
+          "source": "HTTP DELETE",
+          "message": "HTTP DELETE"
+        },
+        "app.RmlyZWNyYXds.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.desc": {
+          "source": "HTTP `GET`",
+          "message": "HTTP `GET`"
+        },
+        "app.RmlyZWNyYXds.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.display_name": {
+          "source": "GET",
+          "message": "GET"
+        },
+        "app.RmlyZWNyYXds.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.short_desc": {
+          "source": "HTTP GET",
+          "message": "HTTP GET"
+        },
+        "app.RmlyZWNyYXds.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.desc": {
+          "source": "HTTP `HEAD`",
+          "message": "HTTP `HEAD`"
+        },
+        "app.RmlyZWNyYXds.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.display_name": {
+          "source": "HEAD",
+          "message": "HEAD"
+        },
+        "app.RmlyZWNyYXds.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.short_desc": {
+          "source": "HTTP HEAD",
+          "message": "HTTP HEAD"
+        },
+        "app.RmlyZWNyYXds.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.desc": {
+          "source": "HTTP `PATCH`",
+          "message": "HTTP `PATCH`"
+        },
+        "app.RmlyZWNyYXds.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.display_name": {
+          "source": "PATCH",
+          "message": "PATCH"
+        },
+        "app.RmlyZWNyYXds.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.short_desc": {
+          "source": "HTTP PATCH",
+          "message": "HTTP PATCH"
+        },
+        "app.RmlyZWNyYXds.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.desc": {
+          "source": "HTTP `POST`",
+          "message": "HTTP `POST`"
+        },
+        "app.RmlyZWNyYXds.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.display_name": {
+          "source": "POST",
+          "message": "POST"
+        },
+        "app.RmlyZWNyYXds.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.short_desc": {
+          "source": "HTTP POST",
+          "message": "HTTP POST"
+        },
+        "app.RmlyZWNyYXds.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.desc": {
+          "source": "HTTP `PUT`",
+          "message": "HTTP `PUT`"
+        },
+        "app.RmlyZWNyYXds.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.display_name": {
+          "source": "PUT",
+          "message": "PUT"
+        },
+        "app.RmlyZWNyYXds.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.short_desc": {
+          "source": "HTTP PUT",
+          "message": "HTTP PUT"
+        },
+        "app.RmlyZWNyYXds.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.desc": {
+          "source": "HTTP `TRACE`",
+          "message": "HTTP `TRACE`"
+        },
+        "app.RmlyZWNyYXds.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.display_name": {
+          "source": "TRACE",
+          "message": "TRACE"
+        },
+        "app.RmlyZWNyYXds.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.short_desc": {
+          "source": "HTTP TRACE",
+          "message": "HTTP TRACE"
+        },
+        "app.RmlyZWNyYXds.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "リクエストに使用するHTTPメソッド"
+        },
+        "app.RmlyZWNyYXds.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.display_name": {
+          "source": "HTTP Method",
+          "message": "HTTPメソッド"
+        },
+        "app.RmlyZWNyYXds.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.short_desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "リクエストに使用するHTTPメソッド"
+        },
+        "app.RmlyZWNyYXds.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain `{name}` placeholders that are replaced from `path_vars`. Example: `/users/{id}/comments`.",
+          "message": "接続のAPIベースURLに対する相対URIパス。`path_vars`から置換される`{name}`プレースホルダーを含めることができます。例: `/users/{id}/comments`。"
+        },
+        "app.RmlyZWNyYXds.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.display_name": {
+          "source": "URI Path",
+          "message": "URIパス"
+        },
+        "app.RmlyZWNyYXds.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.short_desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain '{name}' placeholders that are replaced from 'path_vars'. Example: '/users/{id}/comments'",
+          "message": "接続のAPIベースURLに対する相対URIパス。'path_vars' から置換される '{name}' プレースホルダーを含めることができます。例: '/users/{id}/comments'"
+        },
+        "app.RmlyZWNyYXds.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.desc": {
+          "source": "Hash of values substituted into `{name}` placeholders in the URI path. Example: with `path = /users/{id}` and `path_vars = {id: 123}` the framework sends `/users/123`. Values are URL-encoded.",
+          "message": "URIパス内の `{name}` プレースホルダーに置換される値のハッシュ。例: `path = /users/{id}` と `path_vars = {id: 123}` を指定すると、フレームワークは `/users/123` を送信します。値はURLエンコードされます。"
+        },
+        "app.RmlyZWNyYXds.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.display_name": {
+          "source": "Path Variables",
+          "message": "パス変数"
+        },
+        "app.RmlyZWNyYXds.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.short_desc": {
+          "source": "Values for {name} placeholders in path",
+          "message": "パス内の {name} プレースホルダーの値"
+        },
+        "app.RmlyZWNyYXds.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.desc": {
+          "source": "Hash of query string parameters to append to the URI path. Values are URL-encoded; list values are joined with `,`.",
+          "message": "URIパスに追加するクエリ文字列パラメータのハッシュ。値はURLエンコードされます。リスト値は `,` で結合されます。"
+        },
+        "app.RmlyZWNyYXds.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.display_name": {
+          "source": "Query Arguments",
+          "message": "クエリ引数"
+        },
+        "app.RmlyZWNyYXds.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.short_desc": {
+          "source": "Query string parameters",
+          "message": "クエリ文字列パラメータ"
+        },
+        "app.RmlyZWNyYXds.action.bWFrZS1hcGktY2FsbA.short_desc": {
+          "source": "Make a custom API call to Firecrawl",
+          "message": "Firecrawl へのカスタム API コールを実行"
+        },
+        "app.RmlyZWNyYXds.action.bWFw.desc": {
+          "source": "Maps a website to discover all URLs without scraping page content. Returns a list of discovered links.\n\nSupports search filtering, subdomain inclusion, sitemap usage, and geolocation settings.",
+          "message": "ページコンテンツをスクレイピングせずに Web サイトをマップしてすべての URL を検出します。検出されたリンクのリストを返します。\n\n検索フィルタリング、サブドメインの包含、サイトマップの使用、および位置情報設定をサポートしています。"
+        },
+        "app.RmlyZWNyYXds.action.bWFw.display_name": {
+          "source": "Map a Website",
+          "message": "Web サイトをマップ"
+        },
+        "app.RmlyZWNyYXds.action.bWFw.option.aW5jbHVkZVN1YmRvbWFpbnM.desc": {
+          "source": "If `True`, subdomain URLs are included in the results",
+          "message": "`True` の場合、結果にサブドメインの URL が含まれます"
+        },
+        "app.RmlyZWNyYXds.action.bWFw.option.aW5jbHVkZVN1YmRvbWFpbnM.display_name": {
+          "source": "Include Subdomains",
+          "message": "サブドメインを含める"
+        },
+        "app.RmlyZWNyYXds.action.bWFw.option.aW5jbHVkZVN1YmRvbWFpbnM.short_desc": {
+          "source": "Include subdomain URLs",
+          "message": "サブドメインのURLを含める"
+        },
+        "app.RmlyZWNyYXds.action.bWFw.option.aWdub3JlQ2FjaGU.desc": {
+          "source": "If `True`, cached results are ignored and a fresh map is generated",
+          "message": "`True` の場合、キャッシュされた結果は無視され、最新のマップが生成されます"
+        },
+        "app.RmlyZWNyYXds.action.bWFw.option.aWdub3JlQ2FjaGU.display_name": {
+          "source": "Ignore Cache",
+          "message": "キャッシュを無視"
+        },
+        "app.RmlyZWNyYXds.action.bWFw.option.aWdub3JlQ2FjaGU.short_desc": {
+          "source": "Ignore cached results",
+          "message": "キャッシュされた結果を無視する"
+        },
+        "app.RmlyZWNyYXds.action.bWFw.option.aWdub3JlUXVlcnlQYXJhbWV0ZXJz.desc": {
+          "source": "If `True`, URLs with different query parameters are treated as the same page",
+          "message": "`True`の場合、異なるクエリパラメータを持つURLは同一ページとして扱われます"
+        },
+        "app.RmlyZWNyYXds.action.bWFw.option.aWdub3JlUXVlcnlQYXJhbWV0ZXJz.display_name": {
+          "source": "Ignore Query Parameters",
+          "message": "クエリパラメータを無視"
+        },
+        "app.RmlyZWNyYXds.action.bWFw.option.aWdub3JlUXVlcnlQYXJhbWV0ZXJz.short_desc": {
+          "source": "Ignore URL query parameters",
+          "message": "URLクエリパラメータを無視"
+        },
+        "app.RmlyZWNyYXds.action.bWFw.option.bG9jYXRpb24.desc": {
+          "source": "Geolocation settings for the map request",
+          "message": "マップリクエストの位置情報設定"
+        },
+        "app.RmlyZWNyYXds.action.bWFw.option.bG9jYXRpb24.display_name": {
+          "source": "Location",
+          "message": "位置情報"
+        },
+        "app.RmlyZWNyYXds.action.bWFw.option.bG9jYXRpb24.short_desc": {
+          "source": "Geolocation settings",
+          "message": "位置情報設定"
+        },
+        "app.RmlyZWNyYXds.action.bWFw.option.bGltaXQ.desc": {
+          "source": "Maximum number of links to return. Defaults to `5000`",
+          "message": "返されるリンクの最大数。デフォルトは `5000` です"
+        },
+        "app.RmlyZWNyYXds.action.bWFw.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "上限"
+        },
+        "app.RmlyZWNyYXds.action.bWFw.option.bGltaXQ.short_desc": {
+          "source": "Maximum number of links to return",
+          "message": "返されるリンクの最大数"
+        },
+        "app.RmlyZWNyYXds.action.bWFw.option.c2VhcmNo.desc": {
+          "source": "An optional search query to filter the discovered URLs",
+          "message": "検出された URL をフィルタリングするための任意の検索クエリ"
+        },
+        "app.RmlyZWNyYXds.action.bWFw.option.c2VhcmNo.display_name": {
+          "source": "Search",
+          "message": "検索"
+        },
+        "app.RmlyZWNyYXds.action.bWFw.option.c2VhcmNo.short_desc": {
+          "source": "Search query to filter URLs",
+          "message": "URL をフィルタリングする検索クエリ"
+        },
+        "app.RmlyZWNyYXds.action.bWFw.option.c2l0ZW1hcA.allowed-value.c3RyaW5nOm9ubHk.display_name": {
+          "source": "Only",
+          "message": "のみ"
+        },
+        "app.RmlyZWNyYXds.action.bWFw.option.c2l0ZW1hcA.allowed-value.c3RyaW5nOmluY2x1ZGU.display_name": {
+          "source": "Include",
+          "message": "Include"
+        },
+        "app.RmlyZWNyYXds.action.bWFw.option.c2l0ZW1hcA.allowed-value.c3RyaW5nOnNraXA.display_name": {
+          "source": "Skip",
+          "message": "スキップ"
+        },
+        "app.RmlyZWNyYXds.action.bWFw.option.c2l0ZW1hcA.desc": {
+          "source": "How to handle the sitemap when mapping URLs",
+          "message": "URL マッピング時のサイトマップの処理方法"
+        },
+        "app.RmlyZWNyYXds.action.bWFw.option.c2l0ZW1hcA.display_name": {
+          "source": "Sitemap",
+          "message": "サイトマップ"
+        },
+        "app.RmlyZWNyYXds.action.bWFw.option.c2l0ZW1hcA.short_desc": {
+          "source": "Sitemap handling mode",
+          "message": "サイトマップ処理モード"
+        },
+        "app.RmlyZWNyYXds.action.bWFw.option.dGltZW91dA.desc": {
+          "source": "Maximum time in milliseconds to wait for the map operation to complete",
+          "message": "マップ操作の完了を待機する最大時間（ミリ秒）"
+        },
+        "app.RmlyZWNyYXds.action.bWFw.option.dGltZW91dA.display_name": {
+          "source": "Timeout",
+          "message": "タイムアウト"
+        },
+        "app.RmlyZWNyYXds.action.bWFw.option.dGltZW91dA.short_desc": {
+          "source": "Timeout in milliseconds",
+          "message": "タイムアウト（ミリ秒単位）"
+        },
+        "app.RmlyZWNyYXds.action.bWFw.option.dXJs.desc": {
+          "source": "The starting URL of the website to map",
+          "message": "マップする Web サイトの開始 URL"
+        },
+        "app.RmlyZWNyYXds.action.bWFw.option.dXJs.display_name": {
+          "source": "URL",
+          "message": "URL"
+        },
+        "app.RmlyZWNyYXds.action.bWFw.option.dXJs.short_desc": {
+          "source": "The URL to map",
+          "message": "マップする URL"
+        },
+        "app.RmlyZWNyYXds.action.bWFw.short_desc": {
+          "source": "Discover all URLs on a website without scraping content",
+          "message": "コンテンツをスクレイピングせずに Web サイト上のすべての URL を検出"
+        },
+        "app.RmlyZWNyYXds.action.c2NyYXBl.desc": {
+          "source": "Scrapes a single web page at the given URL and returns its content in the requested formats (markdown, HTML, links, images, etc.).\n\nSupports browser actions, geolocation, proxy configuration, and content filtering via include/exclude tags.",
+          "message": "指定された URL の単一の Web ページをスクレイピングし、要求された形式（Markdown、HTML、リンク、画像など）でそのコンテンツを返します。\n\nブラウザアクション、位置情報、プロキシ設定、include/exclude タグによるコンテンツフィルタリングをサポートしています。"
+        },
+        "app.RmlyZWNyYXds.action.c2NyYXBl.display_name": {
+          "source": "Scrape a Web Page",
+          "message": "Web ページをスクレイピング"
+        },
+        "app.RmlyZWNyYXds.action.c2NyYXBl.option.YWN0aW9ucw.desc": {
+          "source": "List of browser actions to perform before scraping. Each action is a hash with a `type` key and action-specific parameters.\n\n**Available actions**:\n- `wait` — wait for duration (`milliseconds`) or element (`selector`)\n- `click` — click an element (`selector`, `all`)\n- `write` — type text into the focused element (`text`)\n- `press` — press a keyboard key (`key`)\n- `scroll` — scroll the page (`direction`: `up`/`down`; optional `selector`)\n- `screenshot` — take a screenshot (`fullPage`, `quality`, `viewport`)\n- `scrape` — capture the page content at its current state\n- `executeJavascript` — run JavaScript code (`script`)\n- `pdf` — generate a PDF (`format`, `landscape`, `scale`)",
+          "message": "スクレイピング前に実行するブラウザアクションのリスト。各アクションは `type` キーとアクション固有のパラメーターを持つハッシュです。\n\n**利用可能なアクション**:\n- `wait` — 指定時間（`milliseconds`）または要素（`selector`）を待機\n- `click` — 要素をクリック（`selector`、`all`）\n- `write` — フォーカスされている要素にテキストを入力（`text`）\n- `press` — キーボードのキーを押下（`key`）\n- `scroll` — ページをスクロール（`direction`: `up`/`down`、オプション: `selector`）\n- `screenshot` — スクリーンショットを取得（`fullPage`、`quality`、`viewport`）\n- `scrape` — 現在の状態のページコンテンツをキャプチャ\n- `executeJavascript` — JavaScript コードを実行（`script`）\n- `pdf` — PDF を生成（`format`、`landscape`、`scale`）"
+        },
+        "app.RmlyZWNyYXds.action.c2NyYXBl.option.YWN0aW9ucw.display_name": {
+          "source": "Actions",
+          "message": "アクション"
+        },
+        "app.RmlyZWNyYXds.action.c2NyYXBl.option.YWN0aW9ucw.short_desc": {
+          "source": "Browser actions to perform",
+          "message": "実行するブラウザアクション"
+        },
+        "app.RmlyZWNyYXds.action.c2NyYXBl.option.YmxvY2tBZHM.desc": {
+          "source": "If `True`, advertisements are blocked during scraping",
+          "message": "`True` の場合、スクレイピング中に広告がブロックされます"
+        },
+        "app.RmlyZWNyYXds.action.c2NyYXBl.option.YmxvY2tBZHM.display_name": {
+          "source": "Block Ads",
+          "message": "広告をブロック"
+        },
+        "app.RmlyZWNyYXds.action.c2NyYXBl.option.YmxvY2tBZHM.short_desc": {
+          "source": "Block advertisements",
+          "message": "広告をブロック"
+        },
+        "app.RmlyZWNyYXds.action.c2NyYXBl.option.ZXhjbHVkZVRhZ3M.desc": {
+          "source": "List of HTML tags to exclude from the output (e.g., `nav`, `footer`)",
+          "message": "出力から除外する HTML タグのリスト（例: `nav`、`footer`）"
+        },
+        "app.RmlyZWNyYXds.action.c2NyYXBl.option.ZXhjbHVkZVRhZ3M.display_name": {
+          "source": "Exclude Tags",
+          "message": "タグを除外"
+        },
+        "app.RmlyZWNyYXds.action.c2NyYXBl.option.ZXhjbHVkZVRhZ3M.short_desc": {
+          "source": "HTML tags to exclude",
+          "message": "除外する HTML タグ"
+        },
+        "app.RmlyZWNyYXds.action.c2NyYXBl.option.Zm9ybWF0cw.allowed-value.c3RyaW5nOm1hcmtkb3du.display_name": {
+          "source": "Markdown",
+          "message": "Markdown"
+        },
+        "app.RmlyZWNyYXds.action.c2NyYXBl.option.Zm9ybWF0cw.allowed-value.c3RyaW5nOmF1ZGlv.display_name": {
+          "source": "Audio",
+          "message": "オーディオ"
+        },
+        "app.RmlyZWNyYXds.action.c2NyYXBl.option.Zm9ybWF0cw.allowed-value.c3RyaW5nOmJyYW5kaW5n.display_name": {
+          "source": "Branding",
+          "message": "ブランディング"
+        },
+        "app.RmlyZWNyYXds.action.c2NyYXBl.option.Zm9ybWF0cw.allowed-value.c3RyaW5nOmNoYW5nZVRyYWNraW5n.display_name": {
+          "source": "Change Tracking",
+          "message": "変更追跡"
+        },
+        "app.RmlyZWNyYXds.action.c2NyYXBl.option.Zm9ybWF0cw.allowed-value.c3RyaW5nOmh0bWw.display_name": {
+          "source": "HTML",
+          "message": "HTML"
+        },
+        "app.RmlyZWNyYXds.action.c2NyYXBl.option.Zm9ybWF0cw.allowed-value.c3RyaW5nOmltYWdlcw.display_name": {
+          "source": "Images",
+          "message": "画像"
+        },
+        "app.RmlyZWNyYXds.action.c2NyYXBl.option.Zm9ybWF0cw.allowed-value.c3RyaW5nOmpzb24.display_name": {
+          "source": "JSON",
+          "message": "JSON"
+        },
+        "app.RmlyZWNyYXds.action.c2NyYXBl.option.Zm9ybWF0cw.allowed-value.c3RyaW5nOmxpbmtz.display_name": {
+          "source": "Links",
+          "message": "リンク"
+        },
+        "app.RmlyZWNyYXds.action.c2NyYXBl.option.Zm9ybWF0cw.allowed-value.c3RyaW5nOnJhd0h0bWw.display_name": {
+          "source": "Raw HTML",
+          "message": "生の HTML"
+        },
+        "app.RmlyZWNyYXds.action.c2NyYXBl.option.Zm9ybWF0cw.allowed-value.c3RyaW5nOnN1bW1hcnk.display_name": {
+          "source": "Summary",
+          "message": "概要"
+        },
+        "app.RmlyZWNyYXds.action.c2NyYXBl.option.Zm9ybWF0cw.allowed-value.c3RyaW5nOnNjcmVlbnNob3Q.display_name": {
+          "source": "Screenshot",
+          "message": "スクリーンショット"
+        },
+        "app.RmlyZWNyYXds.action.c2NyYXBl.option.Zm9ybWF0cw.desc": {
+          "source": "List of output formats to return from the scrape",
+          "message": "スクレイピングから返される出力形式のリスト"
+        },
+        "app.RmlyZWNyYXds.action.c2NyYXBl.option.Zm9ybWF0cw.display_name": {
+          "source": "Formats",
+          "message": "形式"
+        },
+        "app.RmlyZWNyYXds.action.c2NyYXBl.option.Zm9ybWF0cw.short_desc": {
+          "source": "Output formats to return",
+          "message": "返す出力形式"
+        },
+        "app.RmlyZWNyYXds.action.c2NyYXBl.option.aGVhZGVycw.desc": {
+          "source": "Custom HTTP headers to send with the scrape request",
+          "message": "スクレイピングリクエストと共に送信するカスタム HTTP ヘッダー"
+        },
+        "app.RmlyZWNyYXds.action.c2NyYXBl.option.aGVhZGVycw.display_name": {
+          "source": "Headers",
+          "message": "ヘッダー"
+        },
+        "app.RmlyZWNyYXds.action.c2NyYXBl.option.aGVhZGVycw.short_desc": {
+          "source": "Custom HTTP headers",
+          "message": "カスタムHTTPヘッダー"
+        },
+        "app.RmlyZWNyYXds.action.c2NyYXBl.option.aW5jbHVkZVRhZ3M.desc": {
+          "source": "List of HTML tags to include in the output (e.g., `article`, `main`). Only content within these tags is returned",
+          "message": "出力に含める HTML タグのリスト（例: `article`、`main`）。これらのタグ内のコンテンツのみが返されます"
+        },
+        "app.RmlyZWNyYXds.action.c2NyYXBl.option.aW5jbHVkZVRhZ3M.display_name": {
+          "source": "Include Tags",
+          "message": "タグを含める"
+        },
+        "app.RmlyZWNyYXds.action.c2NyYXBl.option.aW5jbHVkZVRhZ3M.short_desc": {
+          "source": "HTML tags to include",
+          "message": "含める HTML タグ"
+        },
+        "app.RmlyZWNyYXds.action.c2NyYXBl.option.b25seU1haW5Db250ZW50.desc": {
+          "source": "If `True`, only the main content of the page is returned, excluding headers, navigation, footers, etc. Defaults to `True`",
+          "message": "`True` の場合、ヘッダー、ナビゲーション、フッターなどを除き、ページのメインコンテンツのみが返されます。デフォルトは `True` です"
+        },
+        "app.RmlyZWNyYXds.action.c2NyYXBl.option.b25seU1haW5Db250ZW50.display_name": {
+          "source": "Only Main Content",
+          "message": "メインコンテンツのみ"
+        },
+        "app.RmlyZWNyYXds.action.c2NyYXBl.option.b25seU1haW5Db250ZW50.short_desc": {
+          "source": "Extract only the main content",
+          "message": "メインコンテンツのみを抽出"
+        },
+        "app.RmlyZWNyYXds.action.c2NyYXBl.option.b25seUNsZWFuQ29udGVudA.desc": {
+          "source": "If `True`, an LLM-based cleanup pass is applied to remove navigation, ads, and boilerplate. Defaults to `False`",
+          "message": "`True` の場合、LLM ベースのクリーンアップパスが適用され、ナビゲーション、広告、定型文が削除されます。デフォルトは `False` です"
+        },
+        "app.RmlyZWNyYXds.action.c2NyYXBl.option.b25seUNsZWFuQ29udGVudA.display_name": {
+          "source": "Only Clean Content",
+          "message": "クリーンなコンテンツのみ"
+        },
+        "app.RmlyZWNyYXds.action.c2NyYXBl.option.b25seUNsZWFuQ29udGVudA.short_desc": {
+          "source": "Apply LLM-based content cleanup",
+          "message": "LLM ベースのコンテンツクリーンアップを適用"
+        },
+        "app.RmlyZWNyYXds.action.c2NyYXBl.option.bG9jYXRpb24.desc": {
+          "source": "Geolocation settings for the scrape request",
+          "message": "スクレイピングリクエストの位置情報設定"
+        },
+        "app.RmlyZWNyYXds.action.c2NyYXBl.option.bG9jYXRpb24.display_name": {
+          "source": "Location",
+          "message": "位置情報"
+        },
+        "app.RmlyZWNyYXds.action.c2NyYXBl.option.bG9jYXRpb24.short_desc": {
+          "source": "Geolocation settings",
+          "message": "位置情報設定"
+        },
+        "app.RmlyZWNyYXds.action.c2NyYXBl.option.bW9iaWxl.desc": {
+          "source": "If `True`, the page is scraped using a mobile user agent",
+          "message": "`True` の場合、モバイルユーザーエージェントを使用してページがスクレイピングされます"
+        },
+        "app.RmlyZWNyYXds.action.c2NyYXBl.option.bW9iaWxl.display_name": {
+          "source": "Mobile",
+          "message": "携帯電話"
+        },
+        "app.RmlyZWNyYXds.action.c2NyYXBl.option.bW9iaWxl.short_desc": {
+          "source": "Use mobile user agent",
+          "message": "モバイルユーザーエージェントを使用"
+        },
+        "app.RmlyZWNyYXds.action.c2NyYXBl.option.bWF4QWdl.desc": {
+          "source": "Maximum age in milliseconds for cached content. If a cached version of the page exists and is younger than this value, it is returned instead of re-scraping. Defaults to `172800000` (48 hours)",
+          "message": "キャッシュされたコンテンツの最大有効期間（ミリ秒単位）。ページのキャッシュバージョンが存在し、この値よりも新しい場合、再スクレイピングせずにそれを返します。デフォルトは `172800000`（48時間）です"
+        },
+        "app.RmlyZWNyYXds.action.c2NyYXBl.option.bWF4QWdl.display_name": {
+          "source": "Max Age",
+          "message": "最大有効期間"
+        },
+        "app.RmlyZWNyYXds.action.c2NyYXBl.option.bWF4QWdl.short_desc": {
+          "source": "Cache freshness threshold in milliseconds",
+          "message": "キャッシュの鮮度しきい値（ミリ秒単位）"
+        },
+        "app.RmlyZWNyYXds.action.c2NyYXBl.option.bWluQWdl.desc": {
+          "source": "Minimum age in milliseconds for a cache-only lookup. If set, only cached content older than this value is returned; no fresh scrape is triggered if no cache entry exists",
+          "message": "キャッシュ専用ルックアップの最小有効期間（ミリ秒単位）。設定されている場合、この値より古いキャッシュコンテンツのみが返されます。キャッシュエントリが存在しない場合、新しいスクレイピングはトリガーされません"
+        },
+        "app.RmlyZWNyYXds.action.c2NyYXBl.option.bWluQWdl.display_name": {
+          "source": "Min Age",
+          "message": "最小有効期間"
+        },
+        "app.RmlyZWNyYXds.action.c2NyYXBl.option.bWluQWdl.short_desc": {
+          "source": "Minimum cache age in milliseconds",
+          "message": "最小キャッシュ有効期間（ミリ秒単位）"
+        },
+        "app.RmlyZWNyYXds.action.c2NyYXBl.option.c2tpcFRsc1ZlcmlmaWNhdGlvbg.desc": {
+          "source": "If `True`, TLS certificate verification is skipped",
+          "message": "`True` の場合、TLS証明書の検証をスキップします"
+        },
+        "app.RmlyZWNyYXds.action.c2NyYXBl.option.c2tpcFRsc1ZlcmlmaWNhdGlvbg.display_name": {
+          "source": "Skip TLS Verification",
+          "message": "TLS検証をスキップ"
+        },
+        "app.RmlyZWNyYXds.action.c2NyYXBl.option.c2tpcFRsc1ZlcmlmaWNhdGlvbg.short_desc": {
+          "source": "Skip TLS certificate verification",
+          "message": "TLS証明書の検証をスキップ"
+        },
+        "app.RmlyZWNyYXds.action.c2NyYXBl.option.c3RvcmVJbkNhY2hl.desc": {
+          "source": "If `True`, the scraped content is stored in the Firecrawl cache so that subsequent scrapes within `maxAge` can reuse it. Defaults to `True`",
+          "message": "`True` の場合、スクレイピングされたコンテンツは Firecrawl キャッシュに保存され、`maxAge` 内の後続のスクレイピングで再利用できます。デフォルトは `True` です"
+        },
+        "app.RmlyZWNyYXds.action.c2NyYXBl.option.c3RvcmVJbkNhY2hl.display_name": {
+          "source": "Store In Cache",
+          "message": "キャッシュに保存"
+        },
+        "app.RmlyZWNyYXds.action.c2NyYXBl.option.c3RvcmVJbkNhY2hl.short_desc": {
+          "source": "Cache the scraped content",
+          "message": "スクレイピングしたコンテンツをキャッシュする"
+        },
+        "app.RmlyZWNyYXds.action.c2NyYXBl.option.cGFyc2Vycw.desc": {
+          "source": "List of parser configurations for PDF processing. Each entry specifies a parser type and processing options",
+          "message": "PDF処理用のパーサー設定のリスト。各エントリでパーサータイプと処理オプションを指定します"
+        },
+        "app.RmlyZWNyYXds.action.c2NyYXBl.option.cGFyc2Vycw.display_name": {
+          "source": "Parsers",
+          "message": "パーサー"
+        },
+        "app.RmlyZWNyYXds.action.c2NyYXBl.option.cGFyc2Vycw.short_desc": {
+          "source": "PDF parser configuration",
+          "message": "PDFパーサー設定"
+        },
+        "app.RmlyZWNyYXds.action.c2NyYXBl.option.cHJvZmlsZQ.desc": {
+          "source": "Named browser profile to reuse session state (cookies, local storage) across scrape requests. Set `saveChanges` to `True` to persist changes back to the profile",
+          "message": "スクレイピングリクエスト間でセッション状態（Cookie、ローカルストレージ）を再利用するための名前付きブラウザプロファイル。変更をプロファイルに永続化するには、`saveChanges` を `True` に設定します"
+        },
+        "app.RmlyZWNyYXds.action.c2NyYXBl.option.cHJvZmlsZQ.display_name": {
+          "source": "Profile",
+          "message": "プロファイル"
+        },
+        "app.RmlyZWNyYXds.action.c2NyYXBl.option.cHJvZmlsZQ.short_desc": {
+          "source": "Persistent browser profile",
+          "message": "永続ブラウザプロファイル"
+        },
+        "app.RmlyZWNyYXds.action.c2NyYXBl.option.cHJveHk.allowed-value.c3RyaW5nOmF1dG8.display_name": {
+          "source": "Auto",
+          "message": "自動"
+        },
+        "app.RmlyZWNyYXds.action.c2NyYXBl.option.cHJveHk.allowed-value.c3RyaW5nOmJhc2lj.display_name": {
+          "source": "Basic",
+          "message": "ベーシック"
+        },
+        "app.RmlyZWNyYXds.action.c2NyYXBl.option.cHJveHk.allowed-value.c3RyaW5nOmVuaGFuY2Vk.display_name": {
+          "source": "Enhanced",
+          "message": "Enhanced"
+        },
+        "app.RmlyZWNyYXds.action.c2NyYXBl.option.cHJveHk.desc": {
+          "source": "The proxy configuration to use for the scrape request",
+          "message": "スクレイピングリクエストに使用するプロキシ設定"
+        },
+        "app.RmlyZWNyYXds.action.c2NyYXBl.option.cHJveHk.display_name": {
+          "source": "Proxy",
+          "message": "プロキシ"
+        },
+        "app.RmlyZWNyYXds.action.c2NyYXBl.option.cHJveHk.short_desc": {
+          "source": "Proxy configuration",
+          "message": "プロキシ設定"
+        },
+        "app.RmlyZWNyYXds.action.c2NyYXBl.option.cmVtb3ZlQmFzZTY0SW1hZ2Vz.desc": {
+          "source": "If `True`, base64-encoded images are removed from the output",
+          "message": "`True` の場合、Base64エンコードされた画像が出力から削除されます"
+        },
+        "app.RmlyZWNyYXds.action.c2NyYXBl.option.cmVtb3ZlQmFzZTY0SW1hZ2Vz.display_name": {
+          "source": "Remove Base64 Images",
+          "message": "Base64画像を削除"
+        },
+        "app.RmlyZWNyYXds.action.c2NyYXBl.option.cmVtb3ZlQmFzZTY0SW1hZ2Vz.short_desc": {
+          "source": "Remove base64-encoded images",
+          "message": "Base64エンコードされた画像を削除"
+        },
+        "app.RmlyZWNyYXds.action.c2NyYXBl.option.d2FpdEZvcg.desc": {
+          "source": "Time to wait in milliseconds for the page to load before scraping. Useful for pages with dynamic content",
+          "message": "スクレイピング前にページの読み込みを待機する時間（ミリ秒）。動的コンテンツを含むページに有効です"
+        },
+        "app.RmlyZWNyYXds.action.c2NyYXBl.option.d2FpdEZvcg.display_name": {
+          "source": "Wait For",
+          "message": "待機時間"
+        },
+        "app.RmlyZWNyYXds.action.c2NyYXBl.option.d2FpdEZvcg.short_desc": {
+          "source": "Wait time in milliseconds",
+          "message": "待機時間（ミリ秒単位）"
+        },
+        "app.RmlyZWNyYXds.action.c2NyYXBl.option.dGltZW91dA.desc": {
+          "source": "Maximum time in milliseconds to wait for the scrape to complete",
+          "message": "スクレイピングの完了を待機する最大時間（ミリ秒）"
+        },
+        "app.RmlyZWNyYXds.action.c2NyYXBl.option.dGltZW91dA.display_name": {
+          "source": "Timeout",
+          "message": "タイムアウト"
+        },
+        "app.RmlyZWNyYXds.action.c2NyYXBl.option.dGltZW91dA.short_desc": {
+          "source": "Timeout in milliseconds",
+          "message": "タイムアウト（ミリ秒単位）"
+        },
+        "app.RmlyZWNyYXds.action.c2NyYXBl.option.dXJs.desc": {
+          "source": "The URL of the web page to scrape",
+          "message": "スクレイピングする Web ページの URL"
+        },
+        "app.RmlyZWNyYXds.action.c2NyYXBl.option.dXJs.display_name": {
+          "source": "URL",
+          "message": "URL"
+        },
+        "app.RmlyZWNyYXds.action.c2NyYXBl.option.dXJs.short_desc": {
+          "source": "The URL to scrape",
+          "message": "スクレイピングする URL"
+        },
+        "app.RmlyZWNyYXds.action.c2NyYXBl.option.emVyb0RhdGFSZXRlbnRpb24.desc": {
+          "source": "If `True`, Firecrawl does not retain any scraped data on its servers after returning the response. Useful for privacy/compliance-sensitive workloads. Enterprise feature — contact Firecrawl support to enable",
+          "message": "`True` の場合、Firecrawl はレスポンスを返した後にスクレイピングされたデータをサーバー上に保持しません。プライバシーやコンプライアンスに配慮が必要なワークロードに役立ちます。エンタープライズ機能 — 有効にするには Firecrawl サポートにお問い合わせください"
+        },
+        "app.RmlyZWNyYXds.action.c2NyYXBl.option.emVyb0RhdGFSZXRlbnRpb24.display_name": {
+          "source": "Zero Data Retention",
+          "message": "ゼロデータ保持"
+        },
+        "app.RmlyZWNyYXds.action.c2NyYXBl.option.emVyb0RhdGFSZXRlbnRpb24.short_desc": {
+          "source": "Disable Firecrawl-side data retention",
+          "message": "Firecrawl 側でのデータ保持を無効化"
+        },
+        "app.RmlyZWNyYXds.action.c2NyYXBl.short_desc": {
+          "source": "Scrape a single web page and return its content",
+          "message": "単一の Web ページをスクレイピングしてそのコンテンツを返す"
+        },
+        "app.RmlyZWNyYXds.action.c2VhcmNo.desc": {
+          "source": "Searches the web for the given query and returns scraped results for matching pages.\n\nSupports time filtering, geographic location, country codes, and scrape options for result pages.",
+          "message": "指定されたクエリで Web を検索し、一致するページのスクレイピング結果を返します。\n\n時間フィルタリング、地理的位置、国コード、結果ページのスクレイピングオプションをサポートしています。"
+        },
+        "app.RmlyZWNyYXds.action.c2VhcmNo.display_name": {
+          "source": "Search the Web",
+          "message": "Web を検索"
+        },
+        "app.RmlyZWNyYXds.action.c2VhcmNo.option.Y291bnRyeQ.desc": {
+          "source": "Country code for the search (e.g., `us`, `gb`, `de`)",
+          "message": "検索用の国コード（例: `us`、`gb`、`de`）"
+        },
+        "app.RmlyZWNyYXds.action.c2VhcmNo.option.Y291bnRyeQ.display_name": {
+          "source": "Country",
+          "message": "国"
+        },
+        "app.RmlyZWNyYXds.action.c2VhcmNo.option.Y291bnRyeQ.short_desc": {
+          "source": "Country code",
+          "message": "国コード"
+        },
+        "app.RmlyZWNyYXds.action.c2VhcmNo.option.Y2F0ZWdvcmllcw.allowed-value.c3RyaW5nOmdpdGh1Yg.display_name": {
+          "source": "GitHub",
+          "message": "GitHub"
+        },
+        "app.RmlyZWNyYXds.action.c2VhcmNo.option.Y2F0ZWdvcmllcw.allowed-value.c3RyaW5nOnBkZg.display_name": {
+          "source": "PDF",
+          "message": "PDF"
+        },
+        "app.RmlyZWNyYXds.action.c2VhcmNo.option.Y2F0ZWdvcmllcw.allowed-value.c3RyaW5nOnJlc2VhcmNo.display_name": {
+          "source": "Research",
+          "message": "リサーチ"
+        },
+        "app.RmlyZWNyYXds.action.c2VhcmNo.option.Y2F0ZWdvcmllcw.desc": {
+          "source": "List of content categories to filter search results",
+          "message": "検索結果をフィルタリングするコンテンツカテゴリのリスト"
+        },
+        "app.RmlyZWNyYXds.action.c2VhcmNo.option.Y2F0ZWdvcmllcw.display_name": {
+          "source": "Categories",
+          "message": "カテゴリ"
+        },
+        "app.RmlyZWNyYXds.action.c2VhcmNo.option.Y2F0ZWdvcmllcw.short_desc": {
+          "source": "Filter results by content category",
+          "message": "コンテンツカテゴリで結果をフィルタリング"
+        },
+        "app.RmlyZWNyYXds.action.c2VhcmNo.option.ZW50ZXJwcmlzZQ.allowed-value.c3RyaW5nOmFub24.display_name": {
+          "source": "Anonymized Zero Data Retention",
+          "message": "匿名化された Zero Data Retention"
+        },
+        "app.RmlyZWNyYXds.action.c2VhcmNo.option.ZW50ZXJwcmlzZQ.allowed-value.c3RyaW5nOnpkcg.display_name": {
+          "source": "End-to-End Zero Data Retention",
+          "message": "エンドツーエンドの Zero Data Retention"
+        },
+        "app.RmlyZWNyYXds.action.c2VhcmNo.option.ZW50ZXJwcmlzZQ.desc": {
+          "source": "Enterprise search options for Zero Data Retention (ZDR). Must be enabled for your team",
+          "message": "Zero Data Retention（ZDR）向けの Enterprise 検索オプション。チームで有効化されている必要があります"
+        },
+        "app.RmlyZWNyYXds.action.c2VhcmNo.option.ZW50ZXJwcmlzZQ.display_name": {
+          "source": "Enterprise",
+          "message": "Enterprise"
+        },
+        "app.RmlyZWNyYXds.action.c2VhcmNo.option.ZW50ZXJwcmlzZQ.short_desc": {
+          "source": "Enterprise search options",
+          "message": "Enterprise 検索オプション"
+        },
+        "app.RmlyZWNyYXds.action.c2VhcmNo.option.aWdub3JlSW52YWxpZFVSTHM.desc": {
+          "source": "If `True`, invalid URLs in results are skipped instead of causing an error",
+          "message": "`True` の場合、結果内の無効な URL はエラーを発生させずにスキップされます"
+        },
+        "app.RmlyZWNyYXds.action.c2VhcmNo.option.aWdub3JlSW52YWxpZFVSTHM.display_name": {
+          "source": "Ignore Invalid URLs",
+          "message": "無効な URL を無視"
+        },
+        "app.RmlyZWNyYXds.action.c2VhcmNo.option.aWdub3JlSW52YWxpZFVSTHM.short_desc": {
+          "source": "Ignore invalid URLs",
+          "message": "無効な URL を無視"
+        },
+        "app.RmlyZWNyYXds.action.c2VhcmNo.option.bG9jYXRpb24.desc": {
+          "source": "Geographic location for the search query (e.g., `United States`)",
+          "message": "検索クエリの地理的位置（例: `United States`）"
+        },
+        "app.RmlyZWNyYXds.action.c2VhcmNo.option.bG9jYXRpb24.display_name": {
+          "source": "Location",
+          "message": "位置情報"
+        },
+        "app.RmlyZWNyYXds.action.c2VhcmNo.option.bG9jYXRpb24.short_desc": {
+          "source": "Search location",
+          "message": "検索場所"
+        },
+        "app.RmlyZWNyYXds.action.c2VhcmNo.option.bGltaXQ.desc": {
+          "source": "Maximum number of results to return. Defaults to `5`, maximum `100`",
+          "message": "返される結果の最大数。デフォルトは `5`、最大 `100` です。"
+        },
+        "app.RmlyZWNyYXds.action.c2VhcmNo.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "上限"
+        },
+        "app.RmlyZWNyYXds.action.c2VhcmNo.option.bGltaXQ.short_desc": {
+          "source": "Maximum number of results",
+          "message": "結果の最大件数"
+        },
+        "app.RmlyZWNyYXds.action.c2VhcmNo.option.c291cmNlcw.allowed-value.c3RyaW5nOm5ld3M.display_name": {
+          "source": "News",
+          "message": "ニュース"
+        },
+        "app.RmlyZWNyYXds.action.c2VhcmNo.option.c291cmNlcw.allowed-value.c3RyaW5nOmltYWdlcw.display_name": {
+          "source": "Images",
+          "message": "画像"
+        },
+        "app.RmlyZWNyYXds.action.c2VhcmNo.option.c291cmNlcw.allowed-value.c3RyaW5nOndlYg.display_name": {
+          "source": "Web",
+          "message": "Web"
+        },
+        "app.RmlyZWNyYXds.action.c2VhcmNo.option.c291cmNlcw.desc": {
+          "source": "List of source types to include in search results. Defaults to `web` only if not specified",
+          "message": "検索結果に含めるソースタイプのリスト。指定しない場合のデフォルトは `web` のみです"
+        },
+        "app.RmlyZWNyYXds.action.c2VhcmNo.option.c291cmNlcw.display_name": {
+          "source": "Sources",
+          "message": "ソース"
+        },
+        "app.RmlyZWNyYXds.action.c2VhcmNo.option.c291cmNlcw.short_desc": {
+          "source": "Filter results by source type",
+          "message": "ソースタイプで結果を絞り込む"
+        },
+        "app.RmlyZWNyYXds.action.c2VhcmNo.option.c2NyYXBlT3B0aW9ucw.desc": {
+          "source": "Options applied when scraping each search result page, such as `formats`, `onlyMainContent`, `includeTags`, `excludeTags`",
+          "message": "各検索結果ページをスクレイピングする際に適用されるオプション（`formats`、`onlyMainContent`、`includeTags`、`excludeTags` など）"
+        },
+        "app.RmlyZWNyYXds.action.c2VhcmNo.option.c2NyYXBlT3B0aW9ucw.display_name": {
+          "source": "Scrape Options",
+          "message": "スクレイプオプション"
+        },
+        "app.RmlyZWNyYXds.action.c2VhcmNo.option.c2NyYXBlT3B0aW9ucw.short_desc": {
+          "source": "Options for scraping search results",
+          "message": "検索結果をスクレイピングするためのオプション"
+        },
+        "app.RmlyZWNyYXds.action.c2VhcmNo.option.cXVlcnk.desc": {
+          "source": "The search query string (maximum 500 characters)",
+          "message": "検索クエリ文字列（最大500文字）"
+        },
+        "app.RmlyZWNyYXds.action.c2VhcmNo.option.cXVlcnk.display_name": {
+          "source": "Query",
+          "message": "クエリ"
+        },
+        "app.RmlyZWNyYXds.action.c2VhcmNo.option.cXVlcnk.short_desc": {
+          "source": "The search query",
+          "message": "検索クエリ"
+        },
+        "app.RmlyZWNyYXds.action.c2VhcmNo.option.dGJz.desc": {
+          "source": "Time-based search filter string (e.g., `qdr:d` for past day, `qdr:w` for past week, `qdr:m` for past month)",
+          "message": "時間ベースの検索フィルター文字列（例: 過去1日の場合は `qdr:d`、過去1週間の場合は `qdr:w`、過去1か月の場合は `qdr:m`）"
+        },
+        "app.RmlyZWNyYXds.action.c2VhcmNo.option.dGJz.display_name": {
+          "source": "Time Filter",
+          "message": "時間フィルター"
+        },
+        "app.RmlyZWNyYXds.action.c2VhcmNo.option.dGJz.short_desc": {
+          "source": "Time-based search filter",
+          "message": "時間ベースの検索フィルター"
+        },
+        "app.RmlyZWNyYXds.action.c2VhcmNo.option.dGltZW91dA.desc": {
+          "source": "Maximum time in milliseconds to wait for the search to complete",
+          "message": "検索が完了するのを待機する最大時間（ミリ秒）"
+        },
+        "app.RmlyZWNyYXds.action.c2VhcmNo.option.dGltZW91dA.display_name": {
+          "source": "Timeout",
+          "message": "タイムアウト"
+        },
+        "app.RmlyZWNyYXds.action.c2VhcmNo.option.dGltZW91dA.short_desc": {
+          "source": "Timeout in milliseconds",
+          "message": "タイムアウト（ミリ秒単位）"
+        },
+        "app.RmlyZWNyYXds.action.c2VhcmNo.short_desc": {
+          "source": "Search the web and return scraped results",
+          "message": "Webを検索してスクレイピング結果を返す"
+        },
+        "app.RmlyZWNyYXds.action.cGFyc2U.desc": {
+          "source": "Uploads a local or non-public document (PDF, DOCX, XLSX, HTML, etc.) up to 50 MB and converts it to clean, LLM-ready content in the requested formats.\n\nThe request is sent as `multipart/form-data` with the file binary in a `file` part and the parse options as a JSON-encoded `options` part. Supported file extensions: `.html`, `.htm`, `.pdf`, `.docx`, `.doc`, `.odt`, `.rtf`, `.xlsx`, `.xls`.",
+          "message": "ローカルまたは非公開のドキュメント（PDF、DOCX、XLSX、HTMLなど、最大50 MB）をアップロードし、要求された形式のクリーンでLLM対応のコンテンツに変換します。\n\nリクエストは `multipart/form-data` として送信され、ファイルのバイナリは `file` パートに、パースオプションはJSONエンコードされた `options` パートに含まれます。サポートされているファイル拡張子: `.html`、`.htm`、`.pdf`、`.docx`、`.doc`、`.odt`、`.rtf`、`.xlsx`、`.xls`。"
+        },
+        "app.RmlyZWNyYXds.action.cGFyc2U.display_name": {
+          "source": "Parse a Document",
+          "message": "ドキュメントをパース"
+        },
+        "app.RmlyZWNyYXds.action.cGFyc2U.option.YmxvY2tBZHM.desc": {
+          "source": "If `True`, advertisements and popups are blocked. Defaults to `True`",
+          "message": "`True` の場合、広告とポップアップがブロックされます。デフォルトは `True` です"
+        },
+        "app.RmlyZWNyYXds.action.cGFyc2U.option.YmxvY2tBZHM.display_name": {
+          "source": "Block Ads",
+          "message": "広告をブロック"
+        },
+        "app.RmlyZWNyYXds.action.cGFyc2U.option.YmxvY2tBZHM.short_desc": {
+          "source": "Block advertisements",
+          "message": "広告をブロック"
+        },
+        "app.RmlyZWNyYXds.action.cGFyc2U.option.ZXhjbHVkZVRhZ3M.desc": {
+          "source": "List of HTML tags to exclude from the output (e.g., `nav`, `footer`)",
+          "message": "出力から除外する HTML タグのリスト（例: `nav`、`footer`）"
+        },
+        "app.RmlyZWNyYXds.action.cGFyc2U.option.ZXhjbHVkZVRhZ3M.display_name": {
+          "source": "Exclude Tags",
+          "message": "タグを除外"
+        },
+        "app.RmlyZWNyYXds.action.cGFyc2U.option.ZXhjbHVkZVRhZ3M.short_desc": {
+          "source": "HTML tags to exclude",
+          "message": "除外する HTML タグ"
+        },
+        "app.RmlyZWNyYXds.action.cGFyc2U.option.Zm9ybWF0cw.allowed-value.c3RyaW5nOm1hcmtkb3du.display_name": {
+          "source": "Markdown",
+          "message": "Markdown"
+        },
+        "app.RmlyZWNyYXds.action.cGFyc2U.option.Zm9ybWF0cw.allowed-value.c3RyaW5nOmh0bWw.display_name": {
+          "source": "HTML",
+          "message": "HTML"
+        },
+        "app.RmlyZWNyYXds.action.cGFyc2U.option.Zm9ybWF0cw.allowed-value.c3RyaW5nOmltYWdlcw.display_name": {
+          "source": "Images",
+          "message": "画像"
+        },
+        "app.RmlyZWNyYXds.action.cGFyc2U.option.Zm9ybWF0cw.allowed-value.c3RyaW5nOmpzb24.display_name": {
+          "source": "JSON",
+          "message": "JSON"
+        },
+        "app.RmlyZWNyYXds.action.cGFyc2U.option.Zm9ybWF0cw.allowed-value.c3RyaW5nOmxpbmtz.display_name": {
+          "source": "Links",
+          "message": "リンク"
+        },
+        "app.RmlyZWNyYXds.action.cGFyc2U.option.Zm9ybWF0cw.allowed-value.c3RyaW5nOnJhd0h0bWw.display_name": {
+          "source": "Raw HTML",
+          "message": "生の HTML"
+        },
+        "app.RmlyZWNyYXds.action.cGFyc2U.option.Zm9ybWF0cw.allowed-value.c3RyaW5nOnN1bW1hcnk.display_name": {
+          "source": "Summary",
+          "message": "概要"
+        },
+        "app.RmlyZWNyYXds.action.cGFyc2U.option.Zm9ybWF0cw.desc": {
+          "source": "List of output formats to return from the parse. Defaults to `markdown`",
+          "message": "パースから返される出力形式のリスト。デフォルトは `markdown` です"
+        },
+        "app.RmlyZWNyYXds.action.cGFyc2U.option.Zm9ybWF0cw.display_name": {
+          "source": "Formats",
+          "message": "形式"
+        },
+        "app.RmlyZWNyYXds.action.cGFyc2U.option.Zm9ybWF0cw.short_desc": {
+          "source": "Output formats to return",
+          "message": "返す出力形式"
+        },
+        "app.RmlyZWNyYXds.action.cGFyc2U.option.ZmlsZQ.desc": {
+          "source": "The document to upload and parse. Supported file types: `.html`, `.htm`, `.pdf`, `.docx`, `.doc`, `.odt`, `.rtf`, `.xlsx`, `.xls`. Maximum size: 50 MB",
+          "message": "アップロードしてパースするドキュメント。サポートされているファイルタイプ: `.html`、`.htm`、`.pdf`、`.docx`、`.doc`、`.odt`、`.rtf`、`.xlsx`、`.xls`。最大サイズ: 50 MB"
+        },
+        "app.RmlyZWNyYXds.action.cGFyc2U.option.ZmlsZQ.display_name": {
+          "source": "File",
+          "message": "ファイル"
+        },
+        "app.RmlyZWNyYXds.action.cGFyc2U.option.ZmlsZQ.short_desc": {
+          "source": "The document to parse",
+          "message": "パースするドキュメント"
+        },
+        "app.RmlyZWNyYXds.action.cGFyc2U.option.aGVhZGVycw.desc": {
+          "source": "Custom HTTP headers to use for any embedded resource fetches performed during parsing",
+          "message": "パース中に実行される埋め込みリソースの取得に使用するカスタムHTTPヘッダー"
+        },
+        "app.RmlyZWNyYXds.action.cGFyc2U.option.aGVhZGVycw.display_name": {
+          "source": "Headers",
+          "message": "ヘッダー"
+        },
+        "app.RmlyZWNyYXds.action.cGFyc2U.option.aGVhZGVycw.short_desc": {
+          "source": "Custom HTTP headers",
+          "message": "カスタムHTTPヘッダー"
+        },
+        "app.RmlyZWNyYXds.action.cGFyc2U.option.aW5jbHVkZVRhZ3M.desc": {
+          "source": "List of HTML tags to include in the output (e.g., `article`, `main`). Only content within these tags is returned",
+          "message": "出力に含める HTML タグのリスト（例: `article`、`main`）。これらのタグ内のコンテンツのみが返されます"
+        },
+        "app.RmlyZWNyYXds.action.cGFyc2U.option.aW5jbHVkZVRhZ3M.display_name": {
+          "source": "Include Tags",
+          "message": "タグを含める"
+        },
+        "app.RmlyZWNyYXds.action.cGFyc2U.option.aW5jbHVkZVRhZ3M.short_desc": {
+          "source": "HTML tags to include",
+          "message": "含める HTML タグ"
+        },
+        "app.RmlyZWNyYXds.action.cGFyc2U.option.b25seU1haW5Db250ZW50.desc": {
+          "source": "If `True`, only the main content of the document is returned, excluding headers, navigation, footers, etc. Defaults to `True`",
+          "message": "`True` の場合、ヘッダー、ナビゲーション、フッターなどを除いたドキュメントのメインコンテンツのみが返されます。デフォルトは `True` です"
+        },
+        "app.RmlyZWNyYXds.action.cGFyc2U.option.b25seU1haW5Db250ZW50.display_name": {
+          "source": "Only Main Content",
+          "message": "メインコンテンツのみ"
+        },
+        "app.RmlyZWNyYXds.action.cGFyc2U.option.b25seU1haW5Db250ZW50.short_desc": {
+          "source": "Extract only the main content",
+          "message": "メインコンテンツのみを抽出"
+        },
+        "app.RmlyZWNyYXds.action.cGFyc2U.option.c2tpcFRsc1ZlcmlmaWNhdGlvbg.desc": {
+          "source": "If `True`, TLS certificate verification is skipped for any embedded resource fetches performed during parsing. Defaults to `True`",
+          "message": "`True` の場合、パース中に実行される埋め込みリソースの取得においてTLS証明書の検証がスキップされます。デフォルトは `True` です"
+        },
+        "app.RmlyZWNyYXds.action.cGFyc2U.option.c2tpcFRsc1ZlcmlmaWNhdGlvbg.display_name": {
+          "source": "Skip TLS Verification",
+          "message": "TLS検証をスキップ"
+        },
+        "app.RmlyZWNyYXds.action.cGFyc2U.option.c2tpcFRsc1ZlcmlmaWNhdGlvbg.short_desc": {
+          "source": "Skip TLS certificate verification",
+          "message": "TLS証明書の検証をスキップ"
+        },
+        "app.RmlyZWNyYXds.action.cGFyc2U.option.cGFyc2Vycw.desc": {
+          "source": "List of parser configurations for PDF processing. Each entry specifies a parser type and processing options",
+          "message": "PDF処理用のパーサー設定のリスト。各エントリでパーサータイプと処理オプションを指定します"
+        },
+        "app.RmlyZWNyYXds.action.cGFyc2U.option.cGFyc2Vycw.display_name": {
+          "source": "Parsers",
+          "message": "パーサー"
+        },
+        "app.RmlyZWNyYXds.action.cGFyc2U.option.cGFyc2Vycw.short_desc": {
+          "source": "PDF parser configuration",
+          "message": "PDFパーサー設定"
+        },
+        "app.RmlyZWNyYXds.action.cGFyc2U.option.cHJveHk.allowed-value.c3RyaW5nOmF1dG8.display_name": {
+          "source": "Auto",
+          "message": "自動"
+        },
+        "app.RmlyZWNyYXds.action.cGFyc2U.option.cHJveHk.allowed-value.c3RyaW5nOmJhc2lj.display_name": {
+          "source": "Basic",
+          "message": "ベーシック"
+        },
+        "app.RmlyZWNyYXds.action.cGFyc2U.option.cHJveHk.desc": {
+          "source": "The proxy configuration to use for any embedded resource fetches performed during parsing",
+          "message": "パース中に実行される埋め込みリソースの取得に使用するプロキシ設定"
+        },
+        "app.RmlyZWNyYXds.action.cGFyc2U.option.cHJveHk.display_name": {
+          "source": "Proxy",
+          "message": "プロキシ"
+        },
+        "app.RmlyZWNyYXds.action.cGFyc2U.option.cHJveHk.short_desc": {
+          "source": "Proxy configuration",
+          "message": "プロキシ設定"
+        },
+        "app.RmlyZWNyYXds.action.cGFyc2U.option.cmVtb3ZlQmFzZTY0SW1hZ2Vz.desc": {
+          "source": "If `True`, base64-encoded images are stripped from the output (alt text is preserved). Defaults to `True`",
+          "message": "`True` の場合、Base64エンコードされた画像が出力から削除されます（altテキストは保持されます）。デフォルトは `True` です"
+        },
+        "app.RmlyZWNyYXds.action.cGFyc2U.option.cmVtb3ZlQmFzZTY0SW1hZ2Vz.display_name": {
+          "source": "Remove Base64 Images",
+          "message": "Base64画像を削除"
+        },
+        "app.RmlyZWNyYXds.action.cGFyc2U.option.cmVtb3ZlQmFzZTY0SW1hZ2Vz.short_desc": {
+          "source": "Remove base64-encoded images",
+          "message": "Base64エンコードされた画像を削除"
+        },
+        "app.RmlyZWNyYXds.action.cGFyc2U.option.dGltZW91dA.desc": {
+          "source": "Maximum time in milliseconds to wait for the parse to complete. Defaults to `30000` (30 seconds); maximum `300000` (5 minutes)",
+          "message": "パースが完了するのを待機する最大時間（ミリ秒）。デフォルトは `30000`（30秒）、最大 `300000`（5分）です"
+        },
+        "app.RmlyZWNyYXds.action.cGFyc2U.option.dGltZW91dA.display_name": {
+          "source": "Timeout",
+          "message": "タイムアウト"
+        },
+        "app.RmlyZWNyYXds.action.cGFyc2U.option.dGltZW91dA.short_desc": {
+          "source": "Timeout in milliseconds",
+          "message": "タイムアウト（ミリ秒単位）"
+        },
+        "app.RmlyZWNyYXds.action.cGFyc2U.option.emVyb0RhdGFSZXRlbnRpb24.desc": {
+          "source": "If `True`, Firecrawl does not retain any parsed data on its servers after returning the response. Enterprise feature — contact Firecrawl support to enable",
+          "message": "`True` の場合、Firecrawlはレスポンスを返した後にサーバー上にパース済みデータを保持しません。Enterprise機能 — 有効にするにはFirecrawlサポートにお問い合わせください"
+        },
+        "app.RmlyZWNyYXds.action.cGFyc2U.option.emVyb0RhdGFSZXRlbnRpb24.display_name": {
+          "source": "Zero Data Retention",
+          "message": "ゼロデータ保持"
+        },
+        "app.RmlyZWNyYXds.action.cGFyc2U.option.emVyb0RhdGFSZXRlbnRpb24.short_desc": {
+          "source": "Disable Firecrawl-side data retention",
+          "message": "Firecrawl 側でのデータ保持を無効化"
+        },
+        "app.RmlyZWNyYXds.action.cGFyc2U.short_desc": {
+          "source": "Upload a document and convert it to LLM-ready data",
+          "message": "ドキュメントをアップロードしてLLM対応データに変換"
+        },
+        "app.RmlyZWNyYXds.desc": {
+          "source": "Firecrawl provides APIs for web scraping, crawling, URL mapping, web search, structured data extraction, and AI agent tasks.\n\nThis integration supports 15 actions covering single-page scraping, multi-page crawling, batch scraping, URL discovery, web search, AI-powered extraction, document parsing, and autonomous agent tasks.",
+          "message": "Firecrawlは、Webスクレイピング、クローリング、URLマッピング、Web検索、構造化データ抽出、AIエージェントタスク用のAPIを提供します。\n\nこの統合は、単一ページスクレイピング、複数ページクローリング、一括スクレイピング、URL検出、Web検索、AIを活用した抽出、ドキュメントパース、自律型エージェントタスクをカバーする15のアクションをサポートしています。"
+        },
+        "app.RmlyZWNyYXds.display_name": {
+          "source": "Firecrawl",
+          "message": "Firecrawl"
+        },
+        "app.RmlyZWNyYXds.short_desc": {
+          "source": "Firecrawl web scraping and crawling platform",
+          "message": "Firecrawl Webスクレイピングおよびクローリングプラットフォーム"
+        }
+      }
+    }
+  }
+}

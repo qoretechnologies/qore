@@ -1,0 +1,205 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "cs": {
+      "messages": {
+        "app.RGF0YUdlbmVyYXRvcg.action.Z2VuZXJhdGUtZnJvbS10ZW1wbGF0ZQ.desc": {
+          "source": "Generate a stream of records by repeating and varying a template record with optional randomization for testing data pipelines",
+          "message": "Vygenerovat proud záznamů opakováním a obměňováním šablony záznamu s volitelnou randomizací pro testování datových pipeline"
+        },
+        "app.RGF0YUdlbmVyYXRvcg.action.Z2VuZXJhdGUtZnJvbS10ZW1wbGF0ZQ.display_name": {
+          "source": "Generate From Template",
+          "message": "Generovat ze šablony"
+        },
+        "app.RGF0YUdlbmVyYXRvcg.action.Z2VuZXJhdGUtZnJvbS10ZW1wbGF0ZQ.option.Y291bnQ.desc": {
+          "source": "The total number of records to generate from the template; must be a non-negative integer; defaults to 10",
+          "message": "Celkový počet záznamů k vygenerování ze šablony; musí být nezáporné celé číslo; výchozí hodnota je 10"
+        },
+        "app.RGF0YUdlbmVyYXRvcg.action.Z2VuZXJhdGUtZnJvbS10ZW1wbGF0ZQ.option.Y291bnQ.display_name": {
+          "source": "Record Count",
+          "message": "Počet záznamů"
+        },
+        "app.RGF0YUdlbmVyYXRvcg.action.Z2VuZXJhdGUtZnJvbS10ZW1wbGF0ZQ.option.Y291bnQ.short_desc": {
+          "source": "Number of records to generate",
+          "message": "Počet záznamů k vygenerování"
+        },
+        "app.RGF0YUdlbmVyYXRvcg.action.Z2VuZXJhdGUtZnJvbS10ZW1wbGF0ZQ.option.YmFzZV9kYXRl.desc": {
+          "source": "A fixed date/time value used as the reference point for generating date fields; when provided with a seed, this ensures full cross-run reproducibility of date fields; if not provided, the current date/time at the start of generation is used",
+          "message": "Pevná hodnota data/času použitá jako referenční bod pro generování polí s datem; při zadání se seedem zajistí úplnou reprodukovatelnost polí s datem napříč běhy; pokud není zadána, použije se aktuální datum/čas při spuštění generování"
+        },
+        "app.RGF0YUdlbmVyYXRvcg.action.Z2VuZXJhdGUtZnJvbS10ZW1wbGF0ZQ.option.YmFzZV9kYXRl.display_name": {
+          "source": "Base Date",
+          "message": "Základní datum"
+        },
+        "app.RGF0YUdlbmVyYXRvcg.action.Z2VuZXJhdGUtZnJvbS10ZW1wbGF0ZQ.option.YmFzZV9kYXRl.short_desc": {
+          "source": "Fixed base date for date field generation",
+          "message": "Pevné základní datum pro generování polí s datem"
+        },
+        "app.RGF0YUdlbmVyYXRvcg.action.Z2VuZXJhdGUtZnJvbS10ZW1wbGF0ZQ.option.aW5jbHVkZV9udWxscw.desc": {
+          "source": "When `True` and strategy is `random`, approximately 10%% of field values will be set to `NOTHING` (null); useful for testing null handling in data pipelines; defaults to `False`",
+          "message": "Pokud je `True` a strategie je `random`, přibližně 10 %% hodnot polí bude nastaveno na `NOTHING` (null); užitečné pro testování zpracování hodnot null v datových pipelinech; výchozí hodnota je `False`"
+        },
+        "app.RGF0YUdlbmVyYXRvcg.action.Z2VuZXJhdGUtZnJvbS10ZW1wbGF0ZQ.option.aW5jbHVkZV9udWxscw.display_name": {
+          "source": "Include Nulls",
+          "message": "Zahrnout hodnoty null"
+        },
+        "app.RGF0YUdlbmVyYXRvcg.action.Z2VuZXJhdGUtZnJvbS10ZW1wbGF0ZQ.option.aW5jbHVkZV9udWxscw.short_desc": {
+          "source": "Whether to randomly include null values",
+          "message": "Zda náhodně zahrnovat hodnoty null"
+        },
+        "app.RGF0YUdlbmVyYXRvcg.action.Z2VuZXJhdGUtZnJvbS10ZW1wbGF0ZQ.option.c2VlZA.desc": {
+          "source": "An integer seed for the random number generator for reproducible output; only effective with `random` strategy",
+          "message": "Celočíselný seed pro generátor náhodných čísel pro reprodukovatelný výstup; účinné pouze se strategií `random`"
+        },
+        "app.RGF0YUdlbmVyYXRvcg.action.Z2VuZXJhdGUtZnJvbS10ZW1wbGF0ZQ.option.c2VlZA.display_name": {
+          "source": "Random Seed",
+          "message": "Náhodný seed"
+        },
+        "app.RGF0YUdlbmVyYXRvcg.action.Z2VuZXJhdGUtZnJvbS10ZW1wbGF0ZQ.option.c2VlZA.short_desc": {
+          "source": "Seed for reproducible random generation",
+          "message": "Seed pro reprodukovatelné náhodné generování"
+        },
+        "app.RGF0YUdlbmVyYXRvcg.action.Z2VuZXJhdGUtZnJvbS10ZW1wbGF0ZQ.option.c3RyYXRlZ3k.allowed-value.c3RyaW5nOnJhbmRvbQ.desc": {
+          "source": "Apply random variations to template values",
+          "message": "Použít náhodné variace na hodnoty šablony"
+        },
+        "app.RGF0YUdlbmVyYXRvcg.action.Z2VuZXJhdGUtZnJvbS10ZW1wbGF0ZQ.option.c3RyYXRlZ3k.allowed-value.c3RyaW5nOnNlcXVlbnRpYWw.desc": {
+          "source": "Vary template values deterministically by record index",
+          "message": "Měnit hodnoty šablony deterministicky podle indexu záznamu"
+        },
+        "app.RGF0YUdlbmVyYXRvcg.action.Z2VuZXJhdGUtZnJvbS10ZW1wbGF0ZQ.option.c3RyYXRlZ3k.desc": {
+          "source": "The strategy for varying template values across generated records; `sequential` adds the record index to numeric values and appends it as a suffix to strings; `random` applies random variations; defaults to `sequential`",
+          "message": "Strategie pro obměnu hodnot šablony napříč vygenerovanými záznamy; `sequential` přičítá index záznamu k číselným hodnotám a připojuje jej jako příponu k řetězcům; `random` aplikuje náhodné variace; výchozí hodnota je `sequential`"
+        },
+        "app.RGF0YUdlbmVyYXRvcg.action.Z2VuZXJhdGUtZnJvbS10ZW1wbGF0ZQ.option.c3RyYXRlZ3k.display_name": {
+          "source": "Generation Strategy",
+          "message": "Strategie generování"
+        },
+        "app.RGF0YUdlbmVyYXRvcg.action.Z2VuZXJhdGUtZnJvbS10ZW1wbGF0ZQ.option.c3RyYXRlZ3k.short_desc": {
+          "source": "How template values are varied",
+          "message": "Jak jsou obměňovány hodnoty šablony"
+        },
+        "app.RGF0YUdlbmVyYXRvcg.action.Z2VuZXJhdGUtZnJvbS10ZW1wbGF0ZQ.option.dGVtcGxhdGU.desc": {
+          "source": "A hash representing a single record whose structure and values will be used as the basis for all generated records; field types are inferred from the template values; each generated record varies the template values based on the record index or randomly",
+          "message": "Hash reprezentující jeden záznam, jehož struktura a hodnoty budou použity jako základ pro všechny vygenerované záznamy; typy polí jsou odvozeny z hodnot šablony; každý vygenerovaný záznam mění hodnoty šablony na základě indexu záznamu nebo náhodně"
+        },
+        "app.RGF0YUdlbmVyYXRvcg.action.Z2VuZXJhdGUtZnJvbS10ZW1wbGF0ZQ.option.dGVtcGxhdGU.display_name": {
+          "source": "Template Record",
+          "message": "Záznam šablony"
+        },
+        "app.RGF0YUdlbmVyYXRvcg.action.Z2VuZXJhdGUtZnJvbS10ZW1wbGF0ZQ.option.dGVtcGxhdGU.short_desc": {
+          "source": "A sample record to use as a template",
+          "message": "Vzorový záznam pro použití jako šablona"
+        },
+        "app.RGF0YUdlbmVyYXRvcg.action.Z2VuZXJhdGUtZnJvbS10ZW1wbGF0ZQ.short_desc": {
+          "source": "Generate records based on a template record",
+          "message": "Generovat záznamy na základě záznamu šablony"
+        },
+        "app.RGF0YUdlbmVyYXRvcg.action.Z2VuZXJhdGUtcmVjb3Jkcw.desc": {
+          "source": "Generate a stream of records with configurable count, field types, and data generation strategy for testing data pipelines",
+          "message": "Generovat proud záznamů s konfigurovatelným počtem, typy polí a strategií generování dat pro testování datových pipelines"
+        },
+        "app.RGF0YUdlbmVyYXRvcg.action.Z2VuZXJhdGUtcmVjb3Jkcw.display_name": {
+          "source": "Generate Records",
+          "message": "Generovat záznamy"
+        },
+        "app.RGF0YUdlbmVyYXRvcg.action.Z2VuZXJhdGUtcmVjb3Jkcw.option.Y291bnQ.desc": {
+          "source": "The total number of records to generate in the output stream; must be a non-negative integer; defaults to 10",
+          "message": "Celkový počet záznamů, které se mají vygenerovat ve výstupním proudu; musí být nezáporné celé číslo; výchozí hodnota je 10"
+        },
+        "app.RGF0YUdlbmVyYXRvcg.action.Z2VuZXJhdGUtcmVjb3Jkcw.option.Y291bnQ.display_name": {
+          "source": "Record Count",
+          "message": "Počet záznamů"
+        },
+        "app.RGF0YUdlbmVyYXRvcg.action.Z2VuZXJhdGUtcmVjb3Jkcw.option.Y291bnQ.short_desc": {
+          "source": "Number of records to generate",
+          "message": "Počet záznamů k vygenerování"
+        },
+        "app.RGF0YUdlbmVyYXRvcg.action.Z2VuZXJhdGUtcmVjb3Jkcw.option.YmFzZV9kYXRl.desc": {
+          "source": "A fixed date/time value used as the reference point for generating date fields; when provided with a seed, this ensures full cross-run reproducibility of date fields; if not provided, the current date/time at the start of generation is used",
+          "message": "Pevná hodnota data/času použitá jako referenční bod pro generování polí s datem; při zadání se seedem zajistí úplnou reprodukovatelnost polí s datem napříč běhy; pokud není zadána, použije se aktuální datum/čas při spuštění generování"
+        },
+        "app.RGF0YUdlbmVyYXRvcg.action.Z2VuZXJhdGUtcmVjb3Jkcw.option.YmFzZV9kYXRl.display_name": {
+          "source": "Base Date",
+          "message": "Základní datum"
+        },
+        "app.RGF0YUdlbmVyYXRvcg.action.Z2VuZXJhdGUtcmVjb3Jkcw.option.YmFzZV9kYXRl.short_desc": {
+          "source": "Fixed base date for date field generation",
+          "message": "Pevné základní datum pro generování polí s datem"
+        },
+        "app.RGF0YUdlbmVyYXRvcg.action.Z2VuZXJhdGUtcmVjb3Jkcw.option.ZmllbGRz.desc": {
+          "source": "A list of field definition hashes, each with keys: `name` (string, the field name), `type` (string, one of: `string`, `int`, `float`, `bool`, `date`), and optionally `desc` (string, field description).\n\nIf not provided, a default schema is used with fields: `id` (int), `name` (string), `value` (float), `active` (bool), `created` (date)",
+          "message": "Seznam hashů definic polí, každý s klíči: `name` (string, název pole), `type` (string, jeden z: `string`, `int`, `float`, `bool`, `date`) a volitelně `desc` (string, popis pole).\n\nPokud není zadáno, použije se výchozí schéma s poli: `id` (int), `name` (string), `value` (float), `active` (bool), `created` (date)"
+        },
+        "app.RGF0YUdlbmVyYXRvcg.action.Z2VuZXJhdGUtcmVjb3Jkcw.option.ZmllbGRz.display_name": {
+          "source": "Field Definitions",
+          "message": "Definice polí"
+        },
+        "app.RGF0YUdlbmVyYXRvcg.action.Z2VuZXJhdGUtcmVjb3Jkcw.option.ZmllbGRz.short_desc": {
+          "source": "Schema definition for generated records",
+          "message": "Definice schématu pro vygenerované záznamy"
+        },
+        "app.RGF0YUdlbmVyYXRvcg.action.Z2VuZXJhdGUtcmVjb3Jkcw.option.aW5jbHVkZV9udWxscw.desc": {
+          "source": "When `True` and strategy is `random`, approximately 10%% of field values will be set to `NOTHING` (null); useful for testing null handling in data pipelines; defaults to `False`",
+          "message": "Pokud je `True` a strategie je `random`, přibližně 10 %% hodnot polí bude nastaveno na `NOTHING` (null); užitečné pro testování zpracování hodnot null v datových pipelinech; výchozí hodnota je `False`"
+        },
+        "app.RGF0YUdlbmVyYXRvcg.action.Z2VuZXJhdGUtcmVjb3Jkcw.option.aW5jbHVkZV9udWxscw.display_name": {
+          "source": "Include Nulls",
+          "message": "Zahrnout hodnoty null"
+        },
+        "app.RGF0YUdlbmVyYXRvcg.action.Z2VuZXJhdGUtcmVjb3Jkcw.option.aW5jbHVkZV9udWxscw.short_desc": {
+          "source": "Whether to randomly include null values",
+          "message": "Zda náhodně zahrnovat hodnoty null"
+        },
+        "app.RGF0YUdlbmVyYXRvcg.action.Z2VuZXJhdGUtcmVjb3Jkcw.option.c2VlZA.desc": {
+          "source": "An integer seed for the random number generator; when provided, the same seed will always produce the same sequence of records, enabling reproducible test data; only effective with `random` strategy",
+          "message": "Celočíselný seed pro generátor náhodných čísel; pokud je zadán, stejný seed vždy vyprodukuje stejnou posloupnost záznamů, což umožňuje reprodukovatelná testovací data; účinné pouze se strategií `random`"
+        },
+        "app.RGF0YUdlbmVyYXRvcg.action.Z2VuZXJhdGUtcmVjb3Jkcw.option.c2VlZA.display_name": {
+          "source": "Random Seed",
+          "message": "Náhodný seed"
+        },
+        "app.RGF0YUdlbmVyYXRvcg.action.Z2VuZXJhdGUtcmVjb3Jkcw.option.c2VlZA.short_desc": {
+          "source": "Seed for reproducible random generation",
+          "message": "Seed pro reprodukovatelné náhodné generování"
+        },
+        "app.RGF0YUdlbmVyYXRvcg.action.Z2VuZXJhdGUtcmVjb3Jkcw.option.c3RyYXRlZ3k.allowed-value.c3RyaW5nOnJhbmRvbQ.desc": {
+          "source": "Generate pseudo-random values for each field",
+          "message": "Generovat pseudonáhodné hodnoty pro každé pole"
+        },
+        "app.RGF0YUdlbmVyYXRvcg.action.Z2VuZXJhdGUtcmVjb3Jkcw.option.c3RyYXRlZ3k.allowed-value.c3RyaW5nOnNlcXVlbnRpYWw.desc": {
+          "source": "Generate deterministic values incrementing with each record index",
+          "message": "Generovat deterministické hodnoty zvyšující se s každým indexem záznamu"
+        },
+        "app.RGF0YUdlbmVyYXRvcg.action.Z2VuZXJhdGUtcmVjb3Jkcw.option.c3RyYXRlZ3k.desc": {
+          "source": "The strategy used to generate field values; `sequential` produces deterministic values based on the record index; `random` produces pseudo-random values; defaults to `sequential`",
+          "message": "Strategie použitá pro generování hodnot polí; `sequential` vytváří deterministické hodnoty na základě indexu záznamu; `random` vytváří pseudonáhodné hodnoty; výchozí hodnota je `sequential`"
+        },
+        "app.RGF0YUdlbmVyYXRvcg.action.Z2VuZXJhdGUtcmVjb3Jkcw.option.c3RyYXRlZ3k.display_name": {
+          "source": "Generation Strategy",
+          "message": "Strategie generování"
+        },
+        "app.RGF0YUdlbmVyYXRvcg.action.Z2VuZXJhdGUtcmVjb3Jkcw.option.c3RyYXRlZ3k.short_desc": {
+          "source": "How field values are generated",
+          "message": "Jak jsou generovány hodnoty polí"
+        },
+        "app.RGF0YUdlbmVyYXRvcg.action.Z2VuZXJhdGUtcmVjb3Jkcw.short_desc": {
+          "source": "Generate a stream of records with a configurable schema",
+          "message": "Generovat proud záznamů s konfigurovatelným schématem"
+        },
+        "app.RGF0YUdlbmVyYXRvcg.desc": {
+          "source": "Generate configurable record streams for testing data pipelines without any external service connections",
+          "message": "Generovat konfigurovatelné proudy záznamů pro testování datových pipelines bez připojení k externím službám"
+        },
+        "app.RGF0YUdlbmVyYXRvcg.display_name": {
+          "source": "Data Generator",
+          "message": "Generátor dat"
+        },
+        "app.RGF0YUdlbmVyYXRvcg.short_desc": {
+          "source": "Generate test record streams",
+          "message": "Generovat testovací proudy záznamů"
+        }
+      }
+    }
+  }
+}

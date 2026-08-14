@@ -1,0 +1,905 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "pl": {
+      "messages": {
+        "app.UW9yZQ.action.Y29ycmVsYXRpb24.desc": {
+          "source": "Computes the Pearson correlation coefficient between all pairs of configured numeric fields to measure how strongly they move together. Values range from `-1.0` (perfect inverse relationship) to `1.0` (perfect direct relationship), with `0.0` meaning no linear relationship.\n\nFor example, it can show that temperature and ice cream sales are strongly correlated (`0.92`) while humidity and sales are weakly correlated (`-0.15`).",
+          "message": "Oblicza współczynnik korelacji Pearsona pomiędzy wszystkimi parami skonfigurowanych pól numerycznych, aby zmierzyć siłę ich współzależności. Wartości mieszczą się w zakresie od `-1.0` (idealna zależność odwrotna) do `1.0` (idealna zależność wprost), przy czym `0.0` oznacza brak zależności liniowej.\n\nNa przykład może wykazać, że temperatura i sprzedaż lodów są silnie skorelowane (`0.92`), podczas gdy wilgotność i sprzedaż są słabo skorelowane (`-0.15`)."
+        },
+        "app.UW9yZQ.action.Y29ycmVsYXRpb24.display_name": {
+          "source": "Find Related Fields",
+          "message": "Znajdź powiązane pola"
+        },
+        "app.UW9yZQ.action.Y29ycmVsYXRpb24.option.ZmllbGRz.desc": {
+          "source": "A list of numeric field names to compute correlations between; at least 2 fields are required; supports dot-notation for nested fields (e.g. `sensor.temperature`)",
+          "message": "Lista nazw pól numerycznych, pomiędzy którymi mają zostać obliczone korelacje; wymagane są co najmniej 2 pola; obsługuje notację z kropką dla pól zagnieżdżonych (np. `sensor.temperature`)"
+        },
+        "app.UW9yZQ.action.Y29ycmVsYXRpb24.option.ZmllbGRz.display_name": {
+          "source": "Field Names",
+          "message": "Nazwy pól"
+        },
+        "app.UW9yZQ.action.Y29ycmVsYXRpb24.option.ZmllbGRz.short_desc": {
+          "source": "Numeric field names (at least 2)",
+          "message": "Nazwy pól numerycznych (co najmniej 2)"
+        },
+        "app.UW9yZQ.action.Y29ycmVsYXRpb24.option.d2luZG93X3NpemU.desc": {
+          "source": "The number of records to accumulate before computing the correlation matrix; the window is cleared after each computation.\n\n**Sizing guidance**: correlation needs enough data for stable results; use at least `30` for basic correlation, `100`+ for reliable results",
+          "message": "Liczba rekordów do zgromadzenia przed obliczeniem macierzy korelacji; okno jest czyszczone po każdym obliczeniu.\n\n**Wskazówki dotyczące rozmiaru**: korelacja wymaga wystarczającej ilości danych do uzyskania stabilnych wyników; użyj co najmniej `30` dla podstawowej korelacji, `100`+ dla wiarygodnych wyników"
+        },
+        "app.UW9yZQ.action.Y29ycmVsYXRpb24.option.d2luZG93X3NpemU.display_name": {
+          "source": "Window Size",
+          "message": "Rozmiar okna"
+        },
+        "app.UW9yZQ.action.Y29ycmVsYXRpb24.option.d2luZG93X3NpemU.short_desc": {
+          "source": "Number of records per correlation window",
+          "message": "Liczba rekordów na okno korelacji"
+        },
+        "app.UW9yZQ.action.Y29ycmVsYXRpb24.short_desc": {
+          "source": "Measures how strongly fields move together",
+          "message": "Mierzy, jak silnie pola zmieniają się razem"
+        },
+        "app.UW9yZQ.action.Y3Jvc3MtY29ycmVsYXRpb24.desc": {
+          "source": "Computes time-lagged cross-correlation between two fields to discover whether changes in one field predict changes in another after a delay.\n\nFor example, it can show that a spike in marketing spend correlates with increased revenue 3 periods later (`lag = 3`, `correlation = 0.85`).",
+          "message": "Oblicza korelację wzajemną z przesunięciem czasowym między dwoma polami, aby wykryć, czy zmiany w jednym polu pozwalają przewidzieć zmiany w drugim po pewnym opóźnieniu.\n\nNa przykład może wykazać, że skok wydatków marketingowych koreluje ze wzrostem przychodów 3 okresy później (`lag = 3`, `correlation = 0.85`)."
+        },
+        "app.UW9yZQ.action.Y3Jvc3MtY29ycmVsYXRpb24.display_name": {
+          "source": "Find Delayed Relationships",
+          "message": "Znajdź opóźnione zależności"
+        },
+        "app.UW9yZQ.action.Y3Jvc3MtY29ycmVsYXRpb24.option.ZmllbGRfeA.desc": {
+          "source": "The first numeric field for cross-correlation analysis; supports dot-notation for nested fields (e.g. `sensor.temperature`)",
+          "message": "Pierwsze pole numeryczne do analizy korelacji wzajemnej; obsługuje notację z kropką dla pól zagnieżdżonych (np. `sensor.temperature`)"
+        },
+        "app.UW9yZQ.action.Y3Jvc3MtY29ycmVsYXRpb24.option.ZmllbGRfeA.display_name": {
+          "source": "First Field",
+          "message": "Pierwsze pole"
+        },
+        "app.UW9yZQ.action.Y3Jvc3MtY29ycmVsYXRpb24.option.ZmllbGRfeA.short_desc": {
+          "source": "First numeric field name",
+          "message": "Nazwa pierwszego pola numerycznego"
+        },
+        "app.UW9yZQ.action.Y3Jvc3MtY29ycmVsYXRpb24.option.ZmllbGRfeQ.desc": {
+          "source": "The second numeric field; positive lag means this field is delayed relative to `field_x`; supports dot-notation for nested fields",
+          "message": "Drugie pole numeryczne; dodatnie przesunięcie oznacza, że to pole jest opóźnione względem `field_x`; obsługuje notację z kropką dla pól zagnieżdżonych"
+        },
+        "app.UW9yZQ.action.Y3Jvc3MtY29ycmVsYXRpb24.option.ZmllbGRfeQ.display_name": {
+          "source": "Second Field",
+          "message": "Drugie pole"
+        },
+        "app.UW9yZQ.action.Y3Jvc3MtY29ycmVsYXRpb24.option.ZmllbGRfeQ.short_desc": {
+          "source": "Second numeric field name",
+          "message": "Nazwa drugiego pola numerycznego"
+        },
+        "app.UW9yZQ.action.Y3Jvc3MtY29ycmVsYXRpb24.option.bWF4X2xhZw.desc": {
+          "source": "The maximum number of time steps to shift one field relative to the other; set to `0` to use `window_size / 4` automatically; default: `0` (auto)",
+          "message": "Maksymalna liczba kroków czasowych przesunięcia jednego pola względem drugiego; ustaw `0`, aby automatycznie użyć `window_size / 4`; domyślnie: `0` (auto)"
+        },
+        "app.UW9yZQ.action.Y3Jvc3MtY29ycmVsYXRpb24.option.bWF4X2xhZw.display_name": {
+          "source": "Maximum Lag",
+          "message": "Maksymalne przesunięcie (Lag)"
+        },
+        "app.UW9yZQ.action.Y3Jvc3MtY29ycmVsYXRpb24.option.bWF4X2xhZw.short_desc": {
+          "source": "Maximum lag to compute (0 = auto)",
+          "message": "Maksymalne opóźnienie do obliczenia (0 = auto)"
+        },
+        "app.UW9yZQ.action.Y3Jvc3MtY29ycmVsYXRpb24.option.d2luZG93X3NpemU.desc": {
+          "source": "The number of records to accumulate before computing cross-correlations.\n\n**Sizing guidance**: use at least `50` for basic lag detection, `200`+ for reliable results; the window must be at least 4 times the maximum lag you expect to find",
+          "message": "Liczba rekordów do zgromadzenia przed obliczeniem korelacji wzajemnych.\n\n**Wskazówki dotyczące rozmiaru**: użyj co najmniej `50` do podstawowego wykrywania opóźnień, `200`+ dla wiarygodnych wyników; okno musi być co najmniej 4 razy większe niż maksymalne oczekiwane opóźnienie"
+        },
+        "app.UW9yZQ.action.Y3Jvc3MtY29ycmVsYXRpb24.option.d2luZG93X3NpemU.display_name": {
+          "source": "Window Size",
+          "message": "Rozmiar okna"
+        },
+        "app.UW9yZQ.action.Y3Jvc3MtY29ycmVsYXRpb24.option.d2luZG93X3NpemU.short_desc": {
+          "source": "Number of records per analysis window",
+          "message": "Liczba rekordów na okno analizy"
+        },
+        "app.UW9yZQ.action.Y3Jvc3MtY29ycmVsYXRpb24.short_desc": {
+          "source": "Discovers if changes in one field predict changes in another",
+          "message": "Wykrywa, czy zmiany w jednym polu pozwalają przewidzieć zmiany w innym"
+        },
+        "app.UW9yZQ.action.YW5vbWFseS1kZXRlY3Rpb24.desc": {
+          "source": "Detect anomalous values in each configured numeric field using z-score analysis against a sliding window; emits one analytics event per input record indicating whether the value exceeds the configured `threshold`",
+          "message": "Wykrywaj wartości anomalne w każdym skonfigurowanym polu numerycznym przy użyciu analizy z-score względem okna przesuwnego; emituje jedno zdarzenie analityczne na rekord wejściowy wskazujące, czy wartość przekracza skonfigurowany `threshold`"
+        },
+        "app.UW9yZQ.action.YW5vbWFseS1kZXRlY3Rpb24.display_name": {
+          "source": "Anomaly Detection",
+          "message": "Wykrywanie anomalii"
+        },
+        "app.UW9yZQ.action.YW5vbWFseS1kZXRlY3Rpb24.option.ZmllbGRz.desc": {
+          "source": "A list of field names to compute analytics for; each field must contain numeric values in the input records; supports dot-notation for nested fields (e.g. `sensor.temperature`)",
+          "message": "Lista nazw pól, dla których mają zostać obliczone analizy; każde pole musi zawierać wartości numeryczne w rekordach wejściowych; obsługuje notację z kropką dla pól zagnieżdżonych (np. `sensor.temperature`)"
+        },
+        "app.UW9yZQ.action.YW5vbWFseS1kZXRlY3Rpb24.option.ZmllbGRz.display_name": {
+          "source": "Field Names",
+          "message": "Nazwy pól"
+        },
+        "app.UW9yZQ.action.YW5vbWFseS1kZXRlY3Rpb24.option.ZmllbGRz.short_desc": {
+          "source": "Field names to analyze",
+          "message": "Nazwy pól do analizy"
+        },
+        "app.UW9yZQ.action.YW5vbWFseS1kZXRlY3Rpb24.option.d2luZG93X3NpemU.desc": {
+          "source": "The number of records to accumulate in each analytics window; for window-level processors, an event is emitted when the window is full; for record-level processors, this controls the sliding window size.\n\n**Sizing guidance**: use `20`–`50` for real-time alerting where fast response matters, `100`–`500` for general trend and statistics analysis, or `1000`+ for high-frequency data where you need stable long-term statistics; the window must be large enough to capture at least one full cycle of any pattern you want to detect",
+          "message": "Liczba rekordów do zgromadzenia w każdym oknie analitycznym; w przypadku procesorów na poziomie okna zdarzenie jest emitowane po zapełnieniu okna; w przypadku procesorów na poziomie rekordu steruje to rozmiarem okna przesuwnego.\n\n**Wskazówki dotyczące rozmiaru**: użyj `20`–`50` dla alertów w czasie rzeczywistym, gdzie liczy się szybka reakcja, `100`–`500` dla ogólnej analizy trendów i statystyk lub `1000`+ dla danych o wysokiej częstotliwości, gdzie potrzebne są stabilne statystyki długoterminowe; okno musi być wystarczająco duże, aby uchwycić co najmniej jeden pełny cykl dowolnego wzorca, który chcesz wykryć"
+        },
+        "app.UW9yZQ.action.YW5vbWFseS1kZXRlY3Rpb24.option.d2luZG93X3NpemU.display_name": {
+          "source": "Window Size",
+          "message": "Rozmiar okna"
+        },
+        "app.UW9yZQ.action.YW5vbWFseS1kZXRlY3Rpb24.option.d2luZG93X3NpemU.short_desc": {
+          "source": "Number of records in each analytics window",
+          "message": "Liczba rekordów w każdym oknie analizy"
+        },
+        "app.UW9yZQ.action.YW5vbWFseS1kZXRlY3Rpb24.option.dGhyZXNob2xk.desc": {
+          "source": "How many standard deviations from the average a value must be to count as anomalous (this is called a *z-score*); for example, a threshold of `3.0` means a value must be more than 3 standard deviations away from the average to be flagged.\n\n**Typical values**: `2.0` (sensitive — flags ~5% of random data), `3.0` (standard — flags ~0.3%), `4.0` (conservative — only extreme outliers); must be greater than `0`; default: `3.0`",
+          "message": "Ile odchyleń standardowych od średniej musi wynosić wartość, aby została uznana za anomalię (nazywa się to *z-score*); na przykład próg `3.0` oznacza, że wartość musi różnić się o więcej niż 3 odchylenia standardowe od średniej, aby została oznaczona.\n\n**Typowe wartości**: `2.0` (czuły — oznacza ~5% losowych danych), `3.0` (standardowy — oznacza ~0,3%), `4.0` (konserwatywny — tylko skrajne wartości odstające); musi być większy niż `0`; domyślnie: `3.0`"
+        },
+        "app.UW9yZQ.action.YW5vbWFseS1kZXRlY3Rpb24.option.dGhyZXNob2xk.display_name": {
+          "source": "Anomaly Threshold",
+          "message": "Próg anomalii"
+        },
+        "app.UW9yZQ.action.YW5vbWFseS1kZXRlY3Rpb24.option.dGhyZXNob2xk.short_desc": {
+          "source": "Z-score threshold for flagging anomalies",
+          "message": "Próg z-score do oznaczania anomalii"
+        },
+        "app.UW9yZQ.action.YW5vbWFseS1kZXRlY3Rpb24.short_desc": {
+          "source": "Detect anomalous values using z-score analysis per record",
+          "message": "Wykrywaj anomalne wartości przy użyciu analizy z-score dla każdego rekordu"
+        },
+        "app.UW9yZQ.action.Z3JvdXAtYnk.desc": {
+          "source": "Group records by one or more field values and compute aggregate functions per group; emits one output record per group on flush with the group field values and computed aggregates.\n\nSupported aggregate functions: `count()`, `sum(field)`, `avg(field)`, `min(field)`, `max(field)`, `first(field)`, `last(field)`",
+          "message": "Grupuj rekordy według wartości jednego lub większej liczby pól i obliczaj funkcje agregujące dla każdej grupy; emituje jeden rekord wyjściowy dla grupy podczas opróżniania z wartościami pól grupy i obliczonymi agregatami.\n\nObsługiwane funkcje agregujące: `count()`, `sum(field)`, `avg(field)`, `min(field)`, `max(field)`, `first(field)`, `last(field)`"
+        },
+        "app.UW9yZQ.action.Z3JvdXAtYnk.display_name": {
+          "source": "Group By and Aggregate",
+          "message": "Grupuj i agreguj"
+        },
+        "app.UW9yZQ.action.Z3JvdXAtYnk.option.YWdncmVnYXRlcw.desc": {
+          "source": "Comma-separated aggregate expressions in the format `name=op(field)` or `op(field)`.\n\nSupported operations: `count()`, `sum(field)`, `avg(field)`, `min(field)`, `max(field)`, `first(field)`, `last(field)`.\n\nOutput field name defaults to `op_field` (or `count` for `count()`). Example: `total=sum(amount),orders=count(),avg_price=avg(price)`",
+          "message": "Wyrażenia agregujące oddzielone przecinkami w formacie `name=op(field)` lub `op(field)`.\n\nObsługiwane operacje: `count()`, `sum(field)`, `avg(field)`, `min(field)`, `max(field)`, `first(field)`, `last(field)`.\n\nNazwa pola wyjściowego domyślnie przyjmuje wartość `op_field` (lub `count` dla `count()`). Przykład: `total=sum(amount),orders=count(),avg_price=avg(price)`"
+        },
+        "app.UW9yZQ.action.Z3JvdXAtYnk.option.YWdncmVnYXRlcw.display_name": {
+          "source": "Aggregate Expressions",
+          "message": "Wyrażenia agregujące"
+        },
+        "app.UW9yZQ.action.Z3JvdXAtYnk.option.YWdncmVnYXRlcw.short_desc": {
+          "source": "Aggregate expressions to compute per group",
+          "message": "Wyrażenia agregujące do obliczenia dla każdej grupy"
+        },
+        "app.UW9yZQ.action.Z3JvdXAtYnk.option.Z3JvdXBfYnk.desc": {
+          "source": "A list of field names to group records by; records with the same values for these fields are grouped together; if not provided, all records are aggregated into a single group; supports dot-notation for nested fields (e.g. `address.city`)",
+          "message": "Lista nazw pól, według których mają być grupowane rekordy; rekordy o takich samych wartościach w tych polach są grupowane razem; jeśli nie podano, wszystkie rekordy są agregowane do pojedynczej grupy; obsługuje notację z kropką dla pól zagnieżdżonych (np. `address.city`)"
+        },
+        "app.UW9yZQ.action.Z3JvdXAtYnk.option.Z3JvdXBfYnk.display_name": {
+          "source": "Group By Fields",
+          "message": "Pola grupowania"
+        },
+        "app.UW9yZQ.action.Z3JvdXAtYnk.option.Z3JvdXBfYnk.short_desc": {
+          "source": "Field names to group records by",
+          "message": "Nazwy pól, według których grupowane są rekordy"
+        },
+        "app.UW9yZQ.action.Z3JvdXAtYnk.short_desc": {
+          "source": "Group records by field values and compute aggregates per group",
+          "message": "Grupuj rekordy według wartości pól i obliczaj agregacje dla każdej grupy"
+        },
+        "app.UW9yZQ.action.ZXdtYS1jb250cm9sLWNoYXJ0.desc": {
+          "source": "Monitors a process using an Exponentially Weighted Moving Average (EWMA) control chart to detect when values drift outside the normal operating range. The EWMA smooths out noise while detecting sustained shifts. Each record is classified as `normal`, `upper_violation`, or `lower_violation`.\n\nFor example, it can detect when a server's average response time gradually drifts upward beyond its normal range.",
+          "message": "Monitoruje proces za pomocą karty kontrolnej EWMA (wykładniczo ważonej średniej ruchomej), aby wykrywać, kiedy wartości wykraczają poza normalny zakres roboczy. EWMA wygładza szum, jednocześnie wykrywając trwałe przesunięcia. Każdy rekord jest klasyfikowany jako `normal`, `upper_violation` lub `lower_violation`.\n\nNa przykład może wykryć, kiedy średni czas odpowiedzi serwera stopniowo rośnie poza normalny zakres."
+        },
+        "app.UW9yZQ.action.ZXdtYS1jb250cm9sLWNoYXJ0.display_name": {
+          "source": "Monitor Process Stability",
+          "message": "Monitoruj stabilność procesu"
+        },
+        "app.UW9yZQ.action.ZXdtYS1jb250cm9sLWNoYXJ0.option.ZmllbGRz.desc": {
+          "source": "A list of field names to compute analytics for; each field must contain numeric values in the input records; supports dot-notation for nested fields (e.g. `sensor.temperature`)",
+          "message": "Lista nazw pól, dla których mają zostać obliczone analizy; każde pole musi zawierać wartości numeryczne w rekordach wejściowych; obsługuje notację z kropką dla pól zagnieżdżonych (np. `sensor.temperature`)"
+        },
+        "app.UW9yZQ.action.ZXdtYS1jb250cm9sLWNoYXJ0.option.ZmllbGRz.display_name": {
+          "source": "Field Names",
+          "message": "Nazwy pól"
+        },
+        "app.UW9yZQ.action.ZXdtYS1jb250cm9sLWNoYXJ0.option.ZmllbGRz.short_desc": {
+          "source": "Field names to analyze",
+          "message": "Nazwy pól do analizy"
+        },
+        "app.UW9yZQ.action.ZXdtYS1jb250cm9sLWNoYXJ0.option.bGFtYmRh.desc": {
+          "source": "How quickly the EWMA reacts to changes; higher values (closer to `1.0`) react faster but are more sensitive to noise; lower values produce smoother trends.\n\n**Typical values**: `0.1` (slow, smooth — best for detecting small persistent shifts), `0.2` (standard), `0.4` (responsive — closer to a raw signal); must be between `0` (exclusive) and `1` (inclusive); default: `0.2`",
+          "message": "Jak szybko EWMA reaguje na zmiany; wyższe wartości (bliższe `1.0`) reagują szybciej, ale są bardziej wrażliwe na szum; niższe wartości dają gładsze trendy.\n\n**Typowe wartości**: `0.1` (wolne, gładkie — najlepsze do wykrywania małych, trwałych przesunięć), `0.2` (standardowe), `0.4` (reagujące — bliższe surowemu sygnałowi); musi mieścić się w zakresie od `0` (otwarty) do `1` (domknięty); domyślnie: `0.2`"
+        },
+        "app.UW9yZQ.action.ZXdtYS1jb250cm9sLWNoYXJ0.option.bGFtYmRh.display_name": {
+          "source": "Smoothing Factor",
+          "message": "Współczynnik wygładzania"
+        },
+        "app.UW9yZQ.action.ZXdtYS1jb250cm9sLWNoYXJ0.option.bGFtYmRh.short_desc": {
+          "source": "EWMA smoothing parameter (0-1)",
+          "message": "Parametr wygładzania EWMA (0-1)"
+        },
+        "app.UW9yZQ.action.ZXdtYS1jb250cm9sLWNoYXJ0.option.c2lnbWFfbXVsdGlwbGllcg.desc": {
+          "source": "How wide the control limits are as a multiple of the standard deviation; larger values mean fewer false alarms but slower detection of real shifts.\n\n**Typical values**: `2.0` (sensitive — catches small shifts quickly), `3.0` (standard — good balance of sensitivity and false alarms); default: `3.0`",
+          "message": "Szerokość granic kontrolnych jako wielokrotność odchylenia standardowego; większe wartości oznaczają mniej fałszywych alarmów, ale wolniejsze wykrywanie rzeczywistych przesunięć.\n\n**Typowe wartości**: `2.0` (wrażliwe — szybko wykrywa małe przesunięcia), `3.0` (standardowe — dobry kompromis między czułością a fałszywymi alarmami); domyślnie: `3.0`"
+        },
+        "app.UW9yZQ.action.ZXdtYS1jb250cm9sLWNoYXJ0.option.c2lnbWFfbXVsdGlwbGllcg.display_name": {
+          "source": "Control Limit Width",
+          "message": "Szerokość granicy kontrolnej"
+        },
+        "app.UW9yZQ.action.ZXdtYS1jb250cm9sLWNoYXJ0.option.c2lnbWFfbXVsdGlwbGllcg.short_desc": {
+          "source": "Number of standard deviations for control limits",
+          "message": "Liczba odchyleń standardowych dla granic kontrolnych"
+        },
+        "app.UW9yZQ.action.ZXdtYS1jb250cm9sLWNoYXJ0.option.d2luZG93X3NpemU.desc": {
+          "source": "The number of records to accumulate in each analytics window; for window-level processors, an event is emitted when the window is full; for record-level processors, this controls the sliding window size.\n\n**Sizing guidance**: use `20`–`50` for real-time alerting where fast response matters, `100`–`500` for general trend and statistics analysis, or `1000`+ for high-frequency data where you need stable long-term statistics; the window must be large enough to capture at least one full cycle of any pattern you want to detect",
+          "message": "Liczba rekordów do zgromadzenia w każdym oknie analitycznym; w przypadku procesorów na poziomie okna zdarzenie jest emitowane po zapełnieniu okna; w przypadku procesorów na poziomie rekordu steruje to rozmiarem okna przesuwnego.\n\n**Wskazówki dotyczące rozmiaru**: użyj `20`–`50` dla alertów w czasie rzeczywistym, gdzie liczy się szybka reakcja, `100`–`500` dla ogólnej analizy trendów i statystyk lub `1000`+ dla danych o wysokiej częstotliwości, gdzie potrzebne są stabilne statystyki długoterminowe; okno musi być wystarczająco duże, aby uchwycić co najmniej jeden pełny cykl dowolnego wzorca, który chcesz wykryć"
+        },
+        "app.UW9yZQ.action.ZXdtYS1jb250cm9sLWNoYXJ0.option.d2luZG93X3NpemU.display_name": {
+          "source": "Window Size",
+          "message": "Rozmiar okna"
+        },
+        "app.UW9yZQ.action.ZXdtYS1jb250cm9sLWNoYXJ0.option.d2luZG93X3NpemU.short_desc": {
+          "source": "Number of records in each analytics window",
+          "message": "Liczba rekordów w każdym oknie analizy"
+        },
+        "app.UW9yZQ.action.ZXdtYS1jb250cm9sLWNoYXJ0.option.dGFyZ2V0.desc": {
+          "source": "The expected center/target value for the process; when not set, the mean of the sliding window history is used automatically; set to any value (including `0`) to use a fixed center line; default: auto (use window mean)",
+          "message": "Oczekiwana wartość środkowa/docelowa dla procesu; jeśli nie jest ustawiona, automatycznie używana jest średnia z historii ruchomego okna; ustaw dowolną wartość (w tym `0`), aby użyć stałej linii środkowej; domyślnie: auto (użyj średniej z okna)"
+        },
+        "app.UW9yZQ.action.ZXdtYS1jb250cm9sLWNoYXJ0.option.dGFyZ2V0.display_name": {
+          "source": "Target Value",
+          "message": "Wartość docelowa"
+        },
+        "app.UW9yZQ.action.ZXdtYS1jb250cm9sLWNoYXJ0.option.dGFyZ2V0.short_desc": {
+          "source": "Center line target value (omit for auto from window mean)",
+          "message": "Wartość docelowa linii środkowej (pomiń, aby obliczyć automatycznie ze średniej okna)"
+        },
+        "app.UW9yZQ.action.ZXdtYS1jb250cm9sLWNoYXJ0.short_desc": {
+          "source": "Detects when values drift outside normal operating range",
+          "message": "Wykrywa, kiedy wartości wykraczają poza normalny zakres roboczy"
+        },
+        "app.UW9yZQ.action.ZmlsdGVyLXJlY29yZHM.desc": {
+          "source": "Filter pipeline records using either a structured `where_cond` expression or a `dpql_where` string; matching records pass through, non-matching records are dropped",
+          "message": "Filtruj rekordy potoku za pomocą ustrukturyzowanego wyrażenia `where_cond` lub ciągu `dpql_where`; pasujące rekordy są przekazywane dalej, a niepasujące są odrzucane"
+        },
+        "app.UW9yZQ.action.ZmlsdGVyLXJlY29yZHM.display_name": {
+          "source": "Filter Records",
+          "message": "Filtruj rekordy"
+        },
+        "app.UW9yZQ.action.ZmlsdGVyLXJlY29yZHM.option.ZHBxbF93aGVyZQ.desc": {
+          "source": "A DPQL string expression to filter records; use this option when writing the predicate directly as text instead of using the expression builder",
+          "message": "Wyrażenie tekstowe DPQL do filtrowania rekordów; użyj tej opcji, pisząc predykat bezpośrednio jako tekst zamiast korzystać z kreatora wyrażeń"
+        },
+        "app.UW9yZQ.action.ZmlsdGVyLXJlY29yZHM.option.ZHBxbF93aGVyZQ.display_name": {
+          "source": "DPQL Filter",
+          "message": "Filtr DPQL"
+        },
+        "app.UW9yZQ.action.ZmlsdGVyLXJlY29yZHM.option.ZHBxbF93aGVyZQ.short_desc": {
+          "source": "A DPQL string filter expression",
+          "message": "Wyrażenie filtrujące w postaci ciągu DPQL"
+        },
+        "app.UW9yZQ.action.ZmlsdGVyLXJlY29yZHM.option.d2hlcmVfY29uZA.desc": {
+          "source": "A boolean expression to filter records; matching records pass through, non-matching records are dropped",
+          "message": "Wyrażenie logiczne do filtrowania rekordów; pasujące rekordy są przekazywane dalej, a niepasujące są odrzucane"
+        },
+        "app.UW9yZQ.action.ZmlsdGVyLXJlY29yZHM.option.d2hlcmVfY29uZA.display_name": {
+          "source": "Filter Expression",
+          "message": "Wyrażenie filtru"
+        },
+        "app.UW9yZQ.action.ZmlsdGVyLXJlY29yZHM.option.d2hlcmVfY29uZA.short_desc": {
+          "source": "A boolean filter expression",
+          "message": "Logiczne wyrażenie filtrujące"
+        },
+        "app.UW9yZQ.action.ZmlsdGVyLXJlY29yZHM.short_desc": {
+          "source": "Filter records by expression or DPQL string",
+          "message": "Filtruj rekordy według wyrażenia lub ciągu DPQL"
+        },
+        "app.UW9yZQ.action.aGlzdG9ncmFt.desc": {
+          "source": "Creates a frequency distribution by dividing the range of values into bins and counting how many values fall in each bin. Supports `uniform` (equal-width) and `quantile` (equal-count) binning.\n\nFor example, for response times it can show that 80% of requests complete in 0-100ms, 15% in 100-200ms, and 5% take over 200ms.",
+          "message": "Tworzy rozkład częstości, dzieląc zakres wartości na przedziały (koszyki) i zliczając, ile wartości wpada do każdego przedziału. Obsługuje podział `uniform` (o równej szerokości) i `quantile` (o równej liczności).\n\nNa przykład w przypadku czasów odpowiedzi może pokazać, że 80% żądań wykonuje się w 0-100 ms, 15% w 100-200 ms, a 5% trwa powyżej 200 ms."
+        },
+        "app.UW9yZQ.action.aGlzdG9ncmFt.display_name": {
+          "source": "Count Value Ranges",
+          "message": "Zliczaj zakresy wartości"
+        },
+        "app.UW9yZQ.action.aGlzdG9ncmFt.option.YmluX21ldGhvZA.allowed-value.c3RyaW5nOnF1YW50aWxl.display_name": {
+          "source": "Quantile (equal-count bins)",
+          "message": "Kwantyl (przedziały o równej liczności)"
+        },
+        "app.UW9yZQ.action.aGlzdG9ncmFt.option.YmluX21ldGhvZA.allowed-value.c3RyaW5nOnVuaWZvcm0.display_name": {
+          "source": "Uniform (equal-width bins)",
+          "message": "Jednostajny (przedziały o równej szerokości)"
+        },
+        "app.UW9yZQ.action.aGlzdG9ncmFt.option.YmluX21ldGhvZA.desc": {
+          "source": "How to determine bin boundaries: `uniform` (equal-width) or `quantile` (equal-count)",
+          "message": "Sposób wyznaczania granic przedziałów: `uniform` (o równej szerokości) lub `quantile` (o równej liczności)"
+        },
+        "app.UW9yZQ.action.aGlzdG9ncmFt.option.YmluX21ldGhvZA.display_name": {
+          "source": "Binning Method",
+          "message": "Metoda podziału na przedziały"
+        },
+        "app.UW9yZQ.action.aGlzdG9ncmFt.option.YmluX21ldGhvZA.short_desc": {
+          "source": "Method used to determine bin boundaries",
+          "message": "Metoda używana do wyznaczania granic przedziałów"
+        },
+        "app.UW9yZQ.action.aGlzdG9ncmFt.option.ZmllbGRz.desc": {
+          "source": "A list of field names to compute analytics for; each field must contain numeric values in the input records; supports dot-notation for nested fields (e.g. `sensor.temperature`)",
+          "message": "Lista nazw pól, dla których mają zostać obliczone analizy; każde pole musi zawierać wartości numeryczne w rekordach wejściowych; obsługuje notację z kropką dla pól zagnieżdżonych (np. `sensor.temperature`)"
+        },
+        "app.UW9yZQ.action.aGlzdG9ncmFt.option.ZmllbGRz.display_name": {
+          "source": "Field Names",
+          "message": "Nazwy pól"
+        },
+        "app.UW9yZQ.action.aGlzdG9ncmFt.option.ZmllbGRz.short_desc": {
+          "source": "Field names to analyze",
+          "message": "Nazwy pól do analizy"
+        },
+        "app.UW9yZQ.action.aGlzdG9ncmFt.option.bl9iaW5z.desc": {
+          "source": "The number of bins to divide the value range into; more bins show finer detail but need more data to be meaningful; default: `10`",
+          "message": "Liczba przedziałów, na które ma zostać podzielony zakres wartości; większa liczba przedziałów pokazuje więcej szczegółów, ale wymaga więcej danych, aby zachować sens; domyślnie: `10`"
+        },
+        "app.UW9yZQ.action.aGlzdG9ncmFt.option.bl9iaW5z.display_name": {
+          "source": "Number of Bins",
+          "message": "Liczba przedziałów"
+        },
+        "app.UW9yZQ.action.aGlzdG9ncmFt.option.bl9iaW5z.short_desc": {
+          "source": "Number of histogram bins",
+          "message": "Liczba przedziałów histogramu"
+        },
+        "app.UW9yZQ.action.aGlzdG9ncmFt.option.d2luZG93X3NpemU.desc": {
+          "source": "The number of records to accumulate in each analytics window; for window-level processors, an event is emitted when the window is full; for record-level processors, this controls the sliding window size.\n\n**Sizing guidance**: use `20`–`50` for real-time alerting where fast response matters, `100`–`500` for general trend and statistics analysis, or `1000`+ for high-frequency data where you need stable long-term statistics; the window must be large enough to capture at least one full cycle of any pattern you want to detect",
+          "message": "Liczba rekordów do zgromadzenia w każdym oknie analitycznym; w przypadku procesorów na poziomie okna zdarzenie jest emitowane po zapełnieniu okna; w przypadku procesorów na poziomie rekordu steruje to rozmiarem okna przesuwnego.\n\n**Wskazówki dotyczące rozmiaru**: użyj `20`–`50` dla alertów w czasie rzeczywistym, gdzie liczy się szybka reakcja, `100`–`500` dla ogólnej analizy trendów i statystyk lub `1000`+ dla danych o wysokiej częstotliwości, gdzie potrzebne są stabilne statystyki długoterminowe; okno musi być wystarczająco duże, aby uchwycić co najmniej jeden pełny cykl dowolnego wzorca, który chcesz wykryć"
+        },
+        "app.UW9yZQ.action.aGlzdG9ncmFt.option.d2luZG93X3NpemU.display_name": {
+          "source": "Window Size",
+          "message": "Rozmiar okna"
+        },
+        "app.UW9yZQ.action.aGlzdG9ncmFt.option.d2luZG93X3NpemU.short_desc": {
+          "source": "Number of records in each analytics window",
+          "message": "Liczba rekordów w każdym oknie analizy"
+        },
+        "app.UW9yZQ.action.aGlzdG9ncmFt.short_desc": {
+          "source": "Groups values into ranges and counts how many fall in each",
+          "message": "Grupuje wartości w zakresy i zlicza, ile z nich przypada na każdy"
+        },
+        "app.UW9yZQ.action.bW92aW5nLWF2ZXJhZ2U.desc": {
+          "source": "Compute simple moving average (`SMA`) and exponential moving average (`EMA`) for each configured numeric field; emits one analytics event per input record with the current `SMA` and `EMA` values",
+          "message": "Oblicz prostą średnią ruchomą (`SMA`) i wykładniczą średnią ruchomą (`EMA`) dla każdego skonfigurowanego pola numerycznego; emituje jedno zdarzenie analityczne na rekord wejściowy z bieżącymi wartościami `SMA` i `EMA`"
+        },
+        "app.UW9yZQ.action.bW92aW5nLWF2ZXJhZ2U.display_name": {
+          "source": "Moving Average",
+          "message": "Średnia ruchoma"
+        },
+        "app.UW9yZQ.action.bW92aW5nLWF2ZXJhZ2U.option.ZW1hX2FscGhh.desc": {
+          "source": "Controls how much weight is given to the most recent value vs. historical values when computing the exponential moving average (EMA); higher values make the average respond faster to recent changes but also make it noisier.\n\n**Typical values**: `0.1` (smooth, slow to react), `0.2` (balanced, good default), `0.5` (responsive, tracks changes quickly); must be between `0.0` and `1.0` exclusive; default: `0.2`",
+          "message": "Kontroluje wagę przypisywaną najnowszej wartości w porównaniu z wartościami historycznymi podczas obliczania wykładniczej średniej ruchomej (EMA); wyższe wartości sprawiają, że średnia szybciej reaguje na ostatnie zmiany, ale staje się bardziej zaszumiona.\n\n**Typowe wartości**: `0.1` (wygładzona, wolno reagująca), `0.2` (zrównoważona, dobra wartość domyślna), `0.5` (reagująca, szybko śledząca zmiany); musi mieścić się w przedziale otwartym od `0.0` do `1.0`; domyślnie: `0.2`"
+        },
+        "app.UW9yZQ.action.bW92aW5nLWF2ZXJhZ2U.option.ZW1hX2FscGhh.display_name": {
+          "source": "EMA Smoothing Factor",
+          "message": "Współczynnik wygładzania EMA"
+        },
+        "app.UW9yZQ.action.bW92aW5nLWF2ZXJhZ2U.option.ZW1hX2FscGhh.short_desc": {
+          "source": "Smoothing factor for exponential moving average (0-1)",
+          "message": "Współczynnik wygładzania dla wykładniczej średniej ruchomej (0-1)"
+        },
+        "app.UW9yZQ.action.bW92aW5nLWF2ZXJhZ2U.option.ZmllbGRz.desc": {
+          "source": "A list of field names to compute analytics for; each field must contain numeric values in the input records; supports dot-notation for nested fields (e.g. `sensor.temperature`)",
+          "message": "Lista nazw pól, dla których mają zostać obliczone analizy; każde pole musi zawierać wartości numeryczne w rekordach wejściowych; obsługuje notację z kropką dla pól zagnieżdżonych (np. `sensor.temperature`)"
+        },
+        "app.UW9yZQ.action.bW92aW5nLWF2ZXJhZ2U.option.ZmllbGRz.display_name": {
+          "source": "Field Names",
+          "message": "Nazwy pól"
+        },
+        "app.UW9yZQ.action.bW92aW5nLWF2ZXJhZ2U.option.ZmllbGRz.short_desc": {
+          "source": "Field names to analyze",
+          "message": "Nazwy pól do analizy"
+        },
+        "app.UW9yZQ.action.bW92aW5nLWF2ZXJhZ2U.option.d2luZG93X3NpemU.desc": {
+          "source": "The number of records to accumulate in each analytics window; for window-level processors, an event is emitted when the window is full; for record-level processors, this controls the sliding window size.\n\n**Sizing guidance**: use `20`–`50` for real-time alerting where fast response matters, `100`–`500` for general trend and statistics analysis, or `1000`+ for high-frequency data where you need stable long-term statistics; the window must be large enough to capture at least one full cycle of any pattern you want to detect",
+          "message": "Liczba rekordów do zgromadzenia w każdym oknie analitycznym; w przypadku procesorów na poziomie okna zdarzenie jest emitowane po zapełnieniu okna; w przypadku procesorów na poziomie rekordu steruje to rozmiarem okna przesuwnego.\n\n**Wskazówki dotyczące rozmiaru**: użyj `20`–`50` dla alertów w czasie rzeczywistym, gdzie liczy się szybka reakcja, `100`–`500` dla ogólnej analizy trendów i statystyk lub `1000`+ dla danych o wysokiej częstotliwości, gdzie potrzebne są stabilne statystyki długoterminowe; okno musi być wystarczająco duże, aby uchwycić co najmniej jeden pełny cykl dowolnego wzorca, który chcesz wykryć"
+        },
+        "app.UW9yZQ.action.bW92aW5nLWF2ZXJhZ2U.option.d2luZG93X3NpemU.display_name": {
+          "source": "Window Size",
+          "message": "Rozmiar okna"
+        },
+        "app.UW9yZQ.action.bW92aW5nLWF2ZXJhZ2U.option.d2luZG93X3NpemU.short_desc": {
+          "source": "Number of records in each analytics window",
+          "message": "Liczba rekordów w każdym oknie analizy"
+        },
+        "app.UW9yZQ.action.bW92aW5nLWF2ZXJhZ2U.short_desc": {
+          "source": "Compute simple and exponential moving averages per record",
+          "message": "Obliczaj proste i wykładnicze średnie ruchome dla każdego rekordu"
+        },
+        "app.UW9yZQ.action.c2V0LWZpZWxkcw.desc": {
+          "source": "Add or overwrite fields with constant values in each record passing through the pipeline",
+          "message": "Dodawaj lub nadpisuj pola stałymi wartościami w każdym rekordzie przechodzącym przez potok"
+        },
+        "app.UW9yZQ.action.c2V0LWZpZWxkcw.display_name": {
+          "source": "Set Fields",
+          "message": "Ustaw pola"
+        },
+        "app.UW9yZQ.action.c2V0LWZpZWxkcw.option.ZmllbGRz.desc": {
+          "source": "A hash of field names and values to set on each record; existing fields are overwritten, new fields are added",
+          "message": "Tablica asocjacyjna nazw i wartości pól do ustawienia w każdym rekordzie; istniejące pola zostaną nadpisane, nowe pola zostaną dodane"
+        },
+        "app.UW9yZQ.action.c2V0LWZpZWxkcw.option.ZmllbGRz.display_name": {
+          "source": "Fields",
+          "message": "Pola"
+        },
+        "app.UW9yZQ.action.c2V0LWZpZWxkcw.option.ZmllbGRz.short_desc": {
+          "source": "A hash of field names and values to set",
+          "message": "Tablica asocjacyjna nazw i wartości pól do ustawienia"
+        },
+        "app.UW9yZQ.action.c2V0LWZpZWxkcw.short_desc": {
+          "source": "Set fields to constant values in each record",
+          "message": "Ustaw pola na wartości stałe w każdym rekordzie"
+        },
+        "app.UW9yZQ.action.c2Vhc29uYWxpdHktZGV0ZWN0aW9u.desc": {
+          "source": "Detects repeating cyclical patterns in the data using autocorrelation analysis. It automatically identifies the dominant period without requiring the user to specify it upfront.\n\nFor example, it can discover that sales data has a weekly pattern (`period = 7`) with a correlation of `0.85`, or that a temperature sensor shows both daily (`period = 24`) and yearly patterns.",
+          "message": "Wykrywa powtarzające się wzorce cykliczne w danych za pomocą analizy autokorelacji. Automatycznie identyfikuje dominujący okres bez konieczności wcześniejszego określania go przez użytkownika.\n\nNa przykład może wykryć, że dane sprzedaży wykazują wzorzec tygodniowy (`period = 7`) z korelacją `0.85` lub że czujnik temperatury wykazuje zarówno wzorce dobowe (`period = 24`), jak i roczne."
+        },
+        "app.UW9yZQ.action.c2Vhc29uYWxpdHktZGV0ZWN0aW9u.display_name": {
+          "source": "Detect Repeating Patterns",
+          "message": "Wykrywaj powtarzające się wzorce"
+        },
+        "app.UW9yZQ.action.c2Vhc29uYWxpdHktZGV0ZWN0aW9u.option.ZmllbGRz.desc": {
+          "source": "A list of field names to compute analytics for; each field must contain numeric values in the input records; supports dot-notation for nested fields (e.g. `sensor.temperature`)",
+          "message": "Lista nazw pól, dla których mają zostać obliczone analizy; każde pole musi zawierać wartości numeryczne w rekordach wejściowych; obsługuje notację z kropką dla pól zagnieżdżonych (np. `sensor.temperature`)"
+        },
+        "app.UW9yZQ.action.c2Vhc29uYWxpdHktZGV0ZWN0aW9u.option.ZmllbGRz.display_name": {
+          "source": "Field Names",
+          "message": "Nazwy pól"
+        },
+        "app.UW9yZQ.action.c2Vhc29uYWxpdHktZGV0ZWN0aW9u.option.ZmllbGRz.short_desc": {
+          "source": "Field names to analyze",
+          "message": "Nazwy pól do analizy"
+        },
+        "app.UW9yZQ.action.c2Vhc29uYWxpdHktZGV0ZWN0aW9u.option.bWF4X3BlcmlvZA.desc": {
+          "source": "The maximum period (in records) to search for; set to `0` to use `window_size / 3` automatically; the window size should be at least 3 times the expected maximum period; default: `0` (auto)",
+          "message": "Maksymalny okres (w rekordach) do wyszukania; ustaw `0`, aby automatycznie użyć `window_size / 3`; rozmiar okna powinien wynosić co najmniej 3-krotność oczekiwanego maksymalnego okresu; domyślnie: `0` (auto)"
+        },
+        "app.UW9yZQ.action.c2Vhc29uYWxpdHktZGV0ZWN0aW9u.option.bWF4X3BlcmlvZA.display_name": {
+          "source": "Maximum Period",
+          "message": "Maksymalny okres"
+        },
+        "app.UW9yZQ.action.c2Vhc29uYWxpdHktZGV0ZWN0aW9u.option.bWF4X3BlcmlvZA.short_desc": {
+          "source": "Maximum seasonal period to search for",
+          "message": "Maksymalny okres sezonowy do wyszukania"
+        },
+        "app.UW9yZQ.action.c2Vhc29uYWxpdHktZGV0ZWN0aW9u.option.bWluX2NvcnJlbGF0aW9u.desc": {
+          "source": "The minimum strength of a repeating pattern (measured as autocorrelation, `0`–`1`) for it to be reported; autocorrelation measures how similar a data series is to a shifted copy of itself.\n\n**Typical values**: `0.2` (detect weak/noisy patterns), `0.3` (balanced default), `0.5` (only report strong, clear patterns); default: `0.3`",
+          "message": "Minimalna siła powtarzającego się wzorca (mierzona jako autokorelacja, `0`–`1`), aby został zaraportowany; autokorelacja mierzy podobieństwo szeregu danych do jego przesuniętej kopii.\n\n**Typowe wartości**: `0.2` (wykrywanie słabych/zaszumionych wzorców), `0.3` (zrównoważona wartość domyślna), `0.5` (raportowanie tylko silnych, wyraźnych wzorców); domyślnie: `0.3`"
+        },
+        "app.UW9yZQ.action.c2Vhc29uYWxpdHktZGV0ZWN0aW9u.option.bWluX2NvcnJlbGF0aW9u.display_name": {
+          "source": "Minimum Correlation",
+          "message": "Minimalna korelacja"
+        },
+        "app.UW9yZQ.action.c2Vhc29uYWxpdHktZGV0ZWN0aW9u.option.bWluX2NvcnJlbGF0aW9u.short_desc": {
+          "source": "Minimum autocorrelation to report as significant",
+          "message": "Minimalna autokorelacja uznawana za istotną"
+        },
+        "app.UW9yZQ.action.c2Vhc29uYWxpdHktZGV0ZWN0aW9u.option.d2luZG93X3NpemU.desc": {
+          "source": "The number of records to accumulate in each analytics window; for window-level processors, an event is emitted when the window is full; for record-level processors, this controls the sliding window size.\n\n**Sizing guidance**: use `20`–`50` for real-time alerting where fast response matters, `100`–`500` for general trend and statistics analysis, or `1000`+ for high-frequency data where you need stable long-term statistics; the window must be large enough to capture at least one full cycle of any pattern you want to detect",
+          "message": "Liczba rekordów do zgromadzenia w każdym oknie analitycznym; w przypadku procesorów na poziomie okna zdarzenie jest emitowane po zapełnieniu okna; w przypadku procesorów na poziomie rekordu steruje to rozmiarem okna przesuwnego.\n\n**Wskazówki dotyczące rozmiaru**: użyj `20`–`50` dla alertów w czasie rzeczywistym, gdzie liczy się szybka reakcja, `100`–`500` dla ogólnej analizy trendów i statystyk lub `1000`+ dla danych o wysokiej częstotliwości, gdzie potrzebne są stabilne statystyki długoterminowe; okno musi być wystarczająco duże, aby uchwycić co najmniej jeden pełny cykl dowolnego wzorca, który chcesz wykryć"
+        },
+        "app.UW9yZQ.action.c2Vhc29uYWxpdHktZGV0ZWN0aW9u.option.d2luZG93X3NpemU.display_name": {
+          "source": "Window Size",
+          "message": "Rozmiar okna"
+        },
+        "app.UW9yZQ.action.c2Vhc29uYWxpdHktZGV0ZWN0aW9u.option.d2luZG93X3NpemU.short_desc": {
+          "source": "Number of records in each analytics window",
+          "message": "Liczba rekordów w każdym oknie analizy"
+        },
+        "app.UW9yZQ.action.c2Vhc29uYWxpdHktZGV0ZWN0aW9u.short_desc": {
+          "source": "Finds cyclical patterns in data automatically",
+          "message": "Automatycznie znajduje cykliczne wzorce w danych"
+        },
+        "app.UW9yZQ.action.c2VhcmNoLXJlcGxhY2U.desc": {
+          "source": "Perform search and replace on a string field in each record; supports both literal string matching and regular expression patterns",
+          "message": "Wykonaj operację znajdź i zamień na polu tekstowym w każdym rekordzie; obsługuje zarówno dopasowywanie dosłownego ciągu, jak i wzorce wyrażeń regularnych"
+        },
+        "app.UW9yZQ.action.c2VhcmNoLXJlcGxhY2U.display_name": {
+          "source": "Search and Replace",
+          "message": "Znajdź i zamień"
+        },
+        "app.UW9yZQ.action.c2VhcmNoLXJlcGxhY2U.option.ZmllbGQ.desc": {
+          "source": "The name of the record field to apply the search and replace operation on; the field must contain a string value; supports dot-notation for nested fields (e.g. `address.street`)",
+          "message": "Nazwa pola rekordu, na którym ma zostać wykonana operacja znajdź i zamień; pole musi zawierać wartość tekstową; obsługuje notację z kropką dla pól zagnieżdżonych (np. `address.street`)"
+        },
+        "app.UW9yZQ.action.c2VhcmNoLXJlcGxhY2U.option.ZmllbGQ.display_name": {
+          "source": "Field Name",
+          "message": "Nazwa pola"
+        },
+        "app.UW9yZQ.action.c2VhcmNoLXJlcGxhY2U.option.ZmllbGQ.short_desc": {
+          "source": "Field to apply search and replace on",
+          "message": "Pole, na którym ma zostać wykonana operacja znajdź i zamień"
+        },
+        "app.UW9yZQ.action.c2VhcmNoLXJlcGxhY2U.option.aXNfcmVnZXg.desc": {
+          "source": "If `True`, the search pattern is treated as a regular expression; if `False`, it is treated as a literal string",
+          "message": "Jeśli `True`, wzorzec wyszukiwania jest traktowany jako wyrażenie regularne; jeśli `False`, jest traktowany jako ciąg dosłowny"
+        },
+        "app.UW9yZQ.action.c2VhcmNoLXJlcGxhY2U.option.aXNfcmVnZXg.display_name": {
+          "source": "Use Regex",
+          "message": "Użyj wyrażenia regularnego"
+        },
+        "app.UW9yZQ.action.c2VhcmNoLXJlcGxhY2U.option.aXNfcmVnZXg.short_desc": {
+          "source": "Use regex matching instead of literal",
+          "message": "Użyj dopasowywania wyrażeń regularnych zamiast dosłownego"
+        },
+        "app.UW9yZQ.action.c2VhcmNoLXJlcGxhY2U.option.c2VhcmNo.desc": {
+          "source": "The search string or regular expression pattern to find in the field value; when regex mode is enabled, supports full Qore regular expression syntax",
+          "message": "Ciąg wyszukiwania lub wzorzec wyrażenia regularnego do znalezienia w wartości pola; gdy tryb wyrażeń regularnych jest włączony, obsługuje pełną składnię wyrażeń regularnych Qore"
+        },
+        "app.UW9yZQ.action.c2VhcmNoLXJlcGxhY2U.option.c2VhcmNo.display_name": {
+          "source": "Search Pattern",
+          "message": "Wzorzec wyszukiwania"
+        },
+        "app.UW9yZQ.action.c2VhcmNoLXJlcGxhY2U.option.c2VhcmNo.short_desc": {
+          "source": "Text or regex pattern to search for",
+          "message": "Wyszukiwany tekst lub wzorzec wyrażenia regularnego"
+        },
+        "app.UW9yZQ.action.c2VhcmNoLXJlcGxhY2U.option.cmVnZXhfb3B0aW9ucw.allowed-value.c3RyaW5nOlJFX011bHRpTGluZQ.desc": {
+          "source": "Makes start-of-line `^` or end-of-line `$` match after or before any newline in the subject string",
+          "message": "Powoduje dopasowanie początku wiersza `^` lub końca wiersza `$` po lub przed dowolnym znakiem nowego wiersza w badanym ciągu"
+        },
+        "app.UW9yZQ.action.c2VhcmNoLXJlcGxhY2U.option.cmVnZXhfb3B0aW9ucw.allowed-value.c3RyaW5nOlJFX011bHRpTGluZQ.display_name": {
+          "source": "Multiline?",
+          "message": "Wielowierszowy?"
+        },
+        "app.UW9yZQ.action.c2VhcmNoLXJlcGxhY2U.option.cmVnZXhfb3B0aW9ucw.allowed-value.c3RyaW5nOlJFX011bHRpTGluZQ.short_desc": {
+          "source": "Makes start-of-line '^' or end-of-line '$' match after or before any newline in the subject string",
+          "message": "Powoduje dopasowanie początku wiersza '^' lub końca wiersza '$' po lub przed dowolnym znakiem nowego wiersza w badanym ciągu"
+        },
+        "app.UW9yZQ.action.c2VhcmNoLXJlcGxhY2U.option.cmVnZXhfb3B0aW9ucw.allowed-value.c3RyaW5nOlJFX0Nhc2VsZXNz.desc": {
+          "source": "Ignore case when matching",
+          "message": "Ignoruj wielkość liter podczas dopasowywania"
+        },
+        "app.UW9yZQ.action.c2VhcmNoLXJlcGxhY2U.option.cmVnZXhfb3B0aW9ucw.allowed-value.c3RyaW5nOlJFX0Nhc2VsZXNz.display_name": {
+          "source": "Ignore Case?",
+          "message": "Ignorować wielkość liter?"
+        },
+        "app.UW9yZQ.action.c2VhcmNoLXJlcGxhY2U.option.cmVnZXhfb3B0aW9ucw.allowed-value.c3RyaW5nOlJFX0Nhc2VsZXNz.short_desc": {
+          "source": "Ignore case when matching",
+          "message": "Ignoruj wielkość liter podczas dopasowywania"
+        },
+        "app.UW9yZQ.action.c2VhcmNoLXJlcGxhY2U.option.cmVnZXhfb3B0aW9ucw.allowed-value.c3RyaW5nOlJFX0RvdEFsbA.desc": {
+          "source": "The dot `.` character matches also a newline",
+          "message": "Znak kropki `.` dopasowuje również znak nowego wiersza"
+        },
+        "app.UW9yZQ.action.c2VhcmNoLXJlcGxhY2U.option.cmVnZXhfb3B0aW9ucw.allowed-value.c3RyaW5nOlJFX0RvdEFsbA.display_name": {
+          "source": "Dot Matches Newline?",
+          "message": "Kropka dopasowuje nowy wiersz?"
+        },
+        "app.UW9yZQ.action.c2VhcmNoLXJlcGxhY2U.option.cmVnZXhfb3B0aW9ucw.allowed-value.c3RyaW5nOlJFX0RvdEFsbA.short_desc": {
+          "source": "The dot '.' character matches also a newline",
+          "message": "Znak kropki '.' dopasowuje również znak nowego wiersza"
+        },
+        "app.UW9yZQ.action.c2VhcmNoLXJlcGxhY2U.option.cmVnZXhfb3B0aW9ucw.allowed-value.c3RyaW5nOlJFX0V4dGVuZGVk.desc": {
+          "source": "Ignores whitespace characters and enables comments prefixed by `#`",
+          "message": "Ignoruje białe znaki i włącza komentarze poprzedzone `#`"
+        },
+        "app.UW9yZQ.action.c2VhcmNoLXJlcGxhY2U.option.cmVnZXhfb3B0aW9ucw.allowed-value.c3RyaW5nOlJFX0V4dGVuZGVk.display_name": {
+          "source": "Extended Regex?",
+          "message": "Rozszerzone wyrażenie regularne?"
+        },
+        "app.UW9yZQ.action.c2VhcmNoLXJlcGxhY2U.option.cmVnZXhfb3B0aW9ucw.allowed-value.c3RyaW5nOlJFX0V4dGVuZGVk.short_desc": {
+          "source": "Ignores whitespace characters and enables comments prefixed by '#'",
+          "message": "Ignoruje białe znaki i włącza komentarze poprzedzone '#'"
+        },
+        "app.UW9yZQ.action.c2VhcmNoLXJlcGxhY2U.option.cmVnZXhfb3B0aW9ucw.allowed-value.c3RyaW5nOlJFX0dsb2JhbA.desc": {
+          "source": "Match all occurrences, not just the first",
+          "message": "Dopasuj wszystkie wystąpienia, nie tylko pierwsze"
+        },
+        "app.UW9yZQ.action.c2VhcmNoLXJlcGxhY2U.option.cmVnZXhfb3B0aW9ucw.allowed-value.c3RyaW5nOlJFX0dsb2JhbA.display_name": {
+          "source": "Global?",
+          "message": "Globalny?"
+        },
+        "app.UW9yZQ.action.c2VhcmNoLXJlcGxhY2U.option.cmVnZXhfb3B0aW9ucw.allowed-value.c3RyaW5nOlJFX0dsb2JhbA.short_desc": {
+          "source": "Match all occurrences, not just the first",
+          "message": "Dopasuj wszystkie wystąpienia, nie tylko pierwsze"
+        },
+        "app.UW9yZQ.action.c2VhcmNoLXJlcGxhY2U.option.cmVnZXhfb3B0aW9ucw.allowed-value.c3RyaW5nOlJFX1VuaWNvZGU.desc": {
+          "source": "Character matches match the full Unicode character set",
+          "message": "Dopasowania znaków obejmują pełny zestaw znaków Unicode"
+        },
+        "app.UW9yZQ.action.c2VhcmNoLXJlcGxhY2U.option.cmVnZXhfb3B0aW9ucw.allowed-value.c3RyaW5nOlJFX1VuaWNvZGU.display_name": {
+          "source": "Full Unicode?",
+          "message": "Pełny Unicode?"
+        },
+        "app.UW9yZQ.action.c2VhcmNoLXJlcGxhY2U.option.cmVnZXhfb3B0aW9ucw.allowed-value.c3RyaW5nOlJFX1VuaWNvZGU.short_desc": {
+          "source": "Character matches match the full Unicode character set",
+          "message": "Dopasowania znaków obejmują pełny zestaw znaków Unicode"
+        },
+        "app.UW9yZQ.action.c2VhcmNoLXJlcGxhY2U.option.cmVnZXhfb3B0aW9ucw.desc": {
+          "source": "A list of regular expression option names to apply when performing regex matching (e.g. `RE_Global`, `RE_Caseless`)",
+          "message": "Lista nazw opcji wyrażeń regularnych do zastosowania podczas dopasowywania wyrażeń regularnych (np. `RE_Global`, `RE_Caseless`)"
+        },
+        "app.UW9yZQ.action.c2VhcmNoLXJlcGxhY2U.option.cmVnZXhfb3B0aW9ucw.display_name": {
+          "source": "Regex Options",
+          "message": "Opcje wyrażeń regularnych"
+        },
+        "app.UW9yZQ.action.c2VhcmNoLXJlcGxhY2U.option.cmVnZXhfb3B0aW9ucw.short_desc": {
+          "source": "Regular expression options for matching",
+          "message": "Opcje wyrażeń regularnych dla dopasowywania"
+        },
+        "app.UW9yZQ.action.c2VhcmNoLXJlcGxhY2U.option.cmVwbGFjZQ.desc": {
+          "source": "The replacement string to substitute for matches",
+          "message": "Ciąg zastępczy do wstawienia w miejsce dopasowań"
+        },
+        "app.UW9yZQ.action.c2VhcmNoLXJlcGxhY2U.option.cmVwbGFjZQ.display_name": {
+          "source": "Replacement String",
+          "message": "Ciąg zastępczy"
+        },
+        "app.UW9yZQ.action.c2VhcmNoLXJlcGxhY2U.option.cmVwbGFjZQ.short_desc": {
+          "source": "Replacement text",
+          "message": "Tekst zastępczy"
+        },
+        "app.UW9yZQ.action.c2VhcmNoLXJlcGxhY2U.short_desc": {
+          "source": "Search and replace text in a record field",
+          "message": "Wyszukaj i zamień tekst w polu rekordu"
+        },
+        "app.UW9yZQ.action.c2VsZWN0LWZpZWxkcw.desc": {
+          "source": "Select specific fields from each record and optionally rename them; only the selected fields appear in the output.\n\nUse `name` to keep a field as-is, or `new_name=old_name` to rename it",
+          "message": "Wybierz określone pola z każdego rekordu i opcjonalnie zmień ich nazwy; na wyjściu pojawią się tylko wybrane pola.\n\nUżyj `name`, aby zachować pole bez zmian, lub `new_name=old_name`, aby zmienić jego nazwę"
+        },
+        "app.UW9yZQ.action.c2VsZWN0LWZpZWxkcw.display_name": {
+          "source": "Select Fields",
+          "message": "Wybierz pola"
+        },
+        "app.UW9yZQ.action.c2VsZWN0LWZpZWxkcw.option.ZmllbGRz.desc": {
+          "source": "A list of field specifications; use `name` to keep a field as-is, or `new_name=old_name` to rename a field (e.g. `name`, `email`, `customer_name=name`)",
+          "message": "Lista specyfikacji pól; użyj `name`, aby zachować pole bez zmian, lub `new_name=old_name`, aby zmienić nazwę pola (np. `name`, `email`, `customer_name=name`)"
+        },
+        "app.UW9yZQ.action.c2VsZWN0LWZpZWxkcw.option.ZmllbGRz.display_name": {
+          "source": "Field List",
+          "message": "Lista pól"
+        },
+        "app.UW9yZQ.action.c2VsZWN0LWZpZWxkcw.option.ZmllbGRz.short_desc": {
+          "source": "Field specs to select",
+          "message": "Specyfikacje pól do wybrania"
+        },
+        "app.UW9yZQ.action.c2VsZWN0LWZpZWxkcw.short_desc": {
+          "source": "Select and optionally rename fields from records",
+          "message": "Wybierz i opcjonalnie zmień nazwy pól z rekordów"
+        },
+        "app.UW9yZQ.action.cGVyY2VudGlsZQ.desc": {
+          "source": "Analyzes the distribution of numeric values in each window by computing percentiles (median, quartiles, and custom values), interquartile range (`iqr`), skewness (whether the data leans left or right), and kurtosis (whether values cluster tightly or spread out).\n\nFor example, for transaction amounts it can show that 50% are under $100, 90% are under $500, and the spread between the 25th and 75th percentile is $200.",
+          "message": "Analizuje rozkład wartości liczbowych w każdym oknie, obliczając percentyle (medianę, kwartyle i wartości niestandardowe), rozstęp międzykwartylowy (`iqr`), skośność (czy dane przechylają się w lewo, czy w prawo) oraz kurtozę (czy wartości skupiają się gęsto, czy są rozproszone).\n\nNa przykład w przypadku kwot transakcji może pokazać, że 50% wynosi poniżej 100 USD, 90% poniżej 500 USD, a rozstęp między 25. a 75. percentylem wynosi 200 USD."
+        },
+        "app.UW9yZQ.action.cGVyY2VudGlsZQ.display_name": {
+          "source": "Calculate Data Distribution",
+          "message": "Oblicz rozkład danych"
+        },
+        "app.UW9yZQ.action.cGVyY2VudGlsZQ.option.ZmllbGRz.desc": {
+          "source": "A list of field names to compute analytics for; each field must contain numeric values in the input records; supports dot-notation for nested fields (e.g. `sensor.temperature`)",
+          "message": "Lista nazw pól, dla których mają zostać obliczone analizy; każde pole musi zawierać wartości numeryczne w rekordach wejściowych; obsługuje notację z kropką dla pól zagnieżdżonych (np. `sensor.temperature`)"
+        },
+        "app.UW9yZQ.action.cGVyY2VudGlsZQ.option.ZmllbGRz.display_name": {
+          "source": "Field Names",
+          "message": "Nazwy pól"
+        },
+        "app.UW9yZQ.action.cGVyY2VudGlsZQ.option.ZmllbGRz.short_desc": {
+          "source": "Field names to analyze",
+          "message": "Nazwy pól do analizy"
+        },
+        "app.UW9yZQ.action.cGVyY2VudGlsZQ.option.cGVyY2VudGlsZXM.desc": {
+          "source": "A comma-separated list of percentile values to compute (`0`–`100`); for example, `50` is the median, `25` and `75` are the lower and upper quartiles; default: `\"25,50,75,90,95,99\"`",
+          "message": "Rozdzielana przecinkami lista wartości percentyli do obliczenia (`0`–`100`); na przykład `50` to mediana, `25` i `75` to dolny i górny kwartyl; domyślnie: `\"25,50,75,90,95,99\"`"
+        },
+        "app.UW9yZQ.action.cGVyY2VudGlsZQ.option.cGVyY2VudGlsZXM.display_name": {
+          "source": "Percentile Values",
+          "message": "Wartości percentyli"
+        },
+        "app.UW9yZQ.action.cGVyY2VudGlsZQ.option.cGVyY2VudGlsZXM.short_desc": {
+          "source": "Comma-separated percentile values to compute",
+          "message": "Rozdzielane przecinkami wartości percentyli do obliczenia"
+        },
+        "app.UW9yZQ.action.cGVyY2VudGlsZQ.option.d2luZG93X3NpemU.desc": {
+          "source": "The number of records to accumulate in each analytics window; for window-level processors, an event is emitted when the window is full; for record-level processors, this controls the sliding window size.\n\n**Sizing guidance**: use `20`–`50` for real-time alerting where fast response matters, `100`–`500` for general trend and statistics analysis, or `1000`+ for high-frequency data where you need stable long-term statistics; the window must be large enough to capture at least one full cycle of any pattern you want to detect",
+          "message": "Liczba rekordów do zgromadzenia w każdym oknie analitycznym; w przypadku procesorów na poziomie okna zdarzenie jest emitowane po zapełnieniu okna; w przypadku procesorów na poziomie rekordu steruje to rozmiarem okna przesuwnego.\n\n**Wskazówki dotyczące rozmiaru**: użyj `20`–`50` dla alertów w czasie rzeczywistym, gdzie liczy się szybka reakcja, `100`–`500` dla ogólnej analizy trendów i statystyk lub `1000`+ dla danych o wysokiej częstotliwości, gdzie potrzebne są stabilne statystyki długoterminowe; okno musi być wystarczająco duże, aby uchwycić co najmniej jeden pełny cykl dowolnego wzorca, który chcesz wykryć"
+        },
+        "app.UW9yZQ.action.cGVyY2VudGlsZQ.option.d2luZG93X3NpemU.display_name": {
+          "source": "Window Size",
+          "message": "Rozmiar okna"
+        },
+        "app.UW9yZQ.action.cGVyY2VudGlsZQ.option.d2luZG93X3NpemU.short_desc": {
+          "source": "Number of records in each analytics window",
+          "message": "Liczba rekordów w każdym oknie analizy"
+        },
+        "app.UW9yZQ.action.cGVyY2VudGlsZQ.short_desc": {
+          "source": "Computes median, quartiles, and spread of values",
+          "message": "Oblicza medianę, kwartyle i rozstęp wartości"
+        },
+        "app.UW9yZQ.action.cmF0ZS1vZi1jaGFuZ2U.desc": {
+          "source": "Computes the `rate_of_change` (first derivative), `acceleration` (second derivative), and `percent_change` for each record relative to its sliding window history.\n\nFor example, it can show that revenue is growing at $1,000/period and accelerating (the growth rate is itself increasing).",
+          "message": "Oblicza `rate_of_change` (pierwszą pochodną), `acceleration` (drugą pochodną) oraz `percent_change` dla każdego rekordu w odniesieniu do jego historii w oknie przesuwnym.\n\nNa przykład może pokazać, że przychody rosną o 1000 USD/okres i przyspieszają (tempo wzrostu samo w sobie rośnie)."
+        },
+        "app.UW9yZQ.action.cmF0ZS1vZi1jaGFuZ2U.display_name": {
+          "source": "Measure Speed of Change",
+          "message": "Mierz tempo zmian"
+        },
+        "app.UW9yZQ.action.cmF0ZS1vZi1jaGFuZ2U.option.ZmllbGRz.desc": {
+          "source": "A list of field names to compute analytics for; each field must contain numeric values in the input records; supports dot-notation for nested fields (e.g. `sensor.temperature`)",
+          "message": "Lista nazw pól, dla których mają zostać obliczone analizy; każde pole musi zawierać wartości numeryczne w rekordach wejściowych; obsługuje notację z kropką dla pól zagnieżdżonych (np. `sensor.temperature`)"
+        },
+        "app.UW9yZQ.action.cmF0ZS1vZi1jaGFuZ2U.option.ZmllbGRz.display_name": {
+          "source": "Field Names",
+          "message": "Nazwy pól"
+        },
+        "app.UW9yZQ.action.cmF0ZS1vZi1jaGFuZ2U.option.ZmllbGRz.short_desc": {
+          "source": "Field names to analyze",
+          "message": "Nazwy pól do analizy"
+        },
+        "app.UW9yZQ.action.cmF0ZS1vZi1jaGFuZ2U.option.c21vb3RoaW5n.desc": {
+          "source": "When enabled, applies a simple moving average over the window before computing derivatives, reducing noise in the rate of change; disable for raw point-to-point rates; default: `True`",
+          "message": "Gdy ta opcja jest włączona, stosuje prostą średnią kroczącą w oknie przed obliczeniem pochodnych, redukując szum w tempie zmian; wyłącz dla surowych wskaźników punkt-punkt; domyślnie: `True`"
+        },
+        "app.UW9yZQ.action.cmF0ZS1vZi1jaGFuZ2U.option.c21vb3RoaW5n.display_name": {
+          "source": "Apply Smoothing",
+          "message": "Zastosuj wygładzanie"
+        },
+        "app.UW9yZQ.action.cmF0ZS1vZi1jaGFuZ2U.option.c21vb3RoaW5n.short_desc": {
+          "source": "Apply simple moving average smoothing before differentiation",
+          "message": "Zastosuj wygładzanie prostą średnią kroczącą przed różniczkowaniem"
+        },
+        "app.UW9yZQ.action.cmF0ZS1vZi1jaGFuZ2U.option.d2luZG93X3NpemU.desc": {
+          "source": "The number of records to accumulate in each analytics window; for window-level processors, an event is emitted when the window is full; for record-level processors, this controls the sliding window size.\n\n**Sizing guidance**: use `20`–`50` for real-time alerting where fast response matters, `100`–`500` for general trend and statistics analysis, or `1000`+ for high-frequency data where you need stable long-term statistics; the window must be large enough to capture at least one full cycle of any pattern you want to detect",
+          "message": "Liczba rekordów do zgromadzenia w każdym oknie analitycznym; w przypadku procesorów na poziomie okna zdarzenie jest emitowane po zapełnieniu okna; w przypadku procesorów na poziomie rekordu steruje to rozmiarem okna przesuwnego.\n\n**Wskazówki dotyczące rozmiaru**: użyj `20`–`50` dla alertów w czasie rzeczywistym, gdzie liczy się szybka reakcja, `100`–`500` dla ogólnej analizy trendów i statystyk lub `1000`+ dla danych o wysokiej częstotliwości, gdzie potrzebne są stabilne statystyki długoterminowe; okno musi być wystarczająco duże, aby uchwycić co najmniej jeden pełny cykl dowolnego wzorca, który chcesz wykryć"
+        },
+        "app.UW9yZQ.action.cmF0ZS1vZi1jaGFuZ2U.option.d2luZG93X3NpemU.display_name": {
+          "source": "Window Size",
+          "message": "Rozmiar okna"
+        },
+        "app.UW9yZQ.action.cmF0ZS1vZi1jaGFuZ2U.option.d2luZG93X3NpemU.short_desc": {
+          "source": "Number of records in each analytics window",
+          "message": "Liczba rekordów w każdym oknie analizy"
+        },
+        "app.UW9yZQ.action.cmF0ZS1vZi1jaGFuZ2U.short_desc": {
+          "source": "Tracks how fast values are changing and accelerating",
+          "message": "Śledzi, jak szybko wartości się zmieniają i przyspieszają"
+        },
+        "app.UW9yZQ.action.cmVjb3JkLWxpbWl0.desc": {
+          "source": "Limit the number of records passing through the pipeline; the first N records pass through and all subsequent records are dropped",
+          "message": "Ogranicz liczbę rekordów przechodzących przez potok; pierwsze N rekordów przechodzi, a wszystkie kolejne są odrzucane"
+        },
+        "app.UW9yZQ.action.cmVjb3JkLWxpbWl0.display_name": {
+          "source": "Record Limit",
+          "message": "Limit rekordów"
+        },
+        "app.UW9yZQ.action.cmVjb3JkLWxpbWl0.option.bGltaXQ.desc": {
+          "source": "The maximum number of records to pass through the pipeline; once the limit is reached, all subsequent records are dropped",
+          "message": "Maksymalna liczba rekordów przechodzących przez potok; po osiągnięciu limitu wszystkie kolejne rekordy są odrzucane"
+        },
+        "app.UW9yZQ.action.cmVjb3JkLWxpbWl0.option.bGltaXQ.display_name": {
+          "source": "Record Limit",
+          "message": "Limit rekordów"
+        },
+        "app.UW9yZQ.action.cmVjb3JkLWxpbWl0.option.bGltaXQ.short_desc": {
+          "source": "Maximum number of records to pass through",
+          "message": "Maksymalna liczba rekordów do przepuszczenia"
+        },
+        "app.UW9yZQ.action.cmVjb3JkLWxpbWl0.short_desc": {
+          "source": "Limit the number of records passing through",
+          "message": "Ogranicz liczbę przepuszczanych rekordów"
+        },
+        "app.UW9yZQ.action.cmVtb3ZlLWZpZWxkcw.desc": {
+          "source": "Remove one or more fields from each record passing through the pipeline; fields not in the removal list are passed through unchanged",
+          "message": "Usuń jedno lub więcej pól z każdego rekordu przechodzącego przez potok; pola spoza listy usuwania są przekazywane bez zmian"
+        },
+        "app.UW9yZQ.action.cmVtb3ZlLWZpZWxkcw.display_name": {
+          "source": "Remove Fields",
+          "message": "Usuń pola"
+        },
+        "app.UW9yZQ.action.cmVtb3ZlLWZpZWxkcw.option.ZmllbGRz.desc": {
+          "source": "A list of field names to remove from each record",
+          "message": "Lista nazw pól do usunięcia z każdego rekordu"
+        },
+        "app.UW9yZQ.action.cmVtb3ZlLWZpZWxkcw.option.ZmllbGRz.display_name": {
+          "source": "Fields to Remove",
+          "message": "Pola do usunięcia"
+        },
+        "app.UW9yZQ.action.cmVtb3ZlLWZpZWxkcw.option.ZmllbGRz.short_desc": {
+          "source": "Field names to remove",
+          "message": "Nazwy pól do usunięcia"
+        },
+        "app.UW9yZQ.action.cmVtb3ZlLWZpZWxkcw.short_desc": {
+          "source": "Remove specified fields from records",
+          "message": "Usuń określone pola z rekordów"
+        },
+        "app.UW9yZQ.action.cnVubmluZy1zdGF0cw.desc": {
+          "source": "Compute running statistics over a sliding window of records for each configured numeric field; emits one analytics event per field when each window is full.\n\nComputed statistics:\n- `count`, `sum`, `avg` (mean)\n- `min_val`, `max_val`\n- `stddev` (standard deviation), `variance`",
+          "message": "Oblicz statystyki kroczące w oknie przesuwnym rekordów dla każdego skonfigurowanego pola numerycznego; emituje jedno zdarzenie analityczne na pole, gdy każde okno jest pełne.\n\nObliczane statystyki:\n- `count`, `sum`, `avg` (średnia)\n- `min_val`, `max_val`\n- `stddev` (odchylenie standardowe), `variance`"
+        },
+        "app.UW9yZQ.action.cnVubmluZy1zdGF0cw.display_name": {
+          "source": "Running Statistics",
+          "message": "Statystyki kroczące"
+        },
+        "app.UW9yZQ.action.cnVubmluZy1zdGF0cw.option.ZmllbGRz.desc": {
+          "source": "A list of field names to compute analytics for; each field must contain numeric values in the input records; supports dot-notation for nested fields (e.g. `sensor.temperature`)",
+          "message": "Lista nazw pól, dla których mają zostać obliczone analizy; każde pole musi zawierać wartości numeryczne w rekordach wejściowych; obsługuje notację z kropką dla pól zagnieżdżonych (np. `sensor.temperature`)"
+        },
+        "app.UW9yZQ.action.cnVubmluZy1zdGF0cw.option.ZmllbGRz.display_name": {
+          "source": "Field Names",
+          "message": "Nazwy pól"
+        },
+        "app.UW9yZQ.action.cnVubmluZy1zdGF0cw.option.ZmllbGRz.short_desc": {
+          "source": "Field names to analyze",
+          "message": "Nazwy pól do analizy"
+        },
+        "app.UW9yZQ.action.cnVubmluZy1zdGF0cw.option.d2luZG93X3NpemU.desc": {
+          "source": "The number of records to accumulate in each analytics window; for window-level processors, an event is emitted when the window is full; for record-level processors, this controls the sliding window size.\n\n**Sizing guidance**: use `20`–`50` for real-time alerting where fast response matters, `100`–`500` for general trend and statistics analysis, or `1000`+ for high-frequency data where you need stable long-term statistics; the window must be large enough to capture at least one full cycle of any pattern you want to detect",
+          "message": "Liczba rekordów do zgromadzenia w każdym oknie analitycznym; w przypadku procesorów na poziomie okna zdarzenie jest emitowane po zapełnieniu okna; w przypadku procesorów na poziomie rekordu steruje to rozmiarem okna przesuwnego.\n\n**Wskazówki dotyczące rozmiaru**: użyj `20`–`50` dla alertów w czasie rzeczywistym, gdzie liczy się szybka reakcja, `100`–`500` dla ogólnej analizy trendów i statystyk lub `1000`+ dla danych o wysokiej częstotliwości, gdzie potrzebne są stabilne statystyki długoterminowe; okno musi być wystarczająco duże, aby uchwycić co najmniej jeden pełny cykl dowolnego wzorca, który chcesz wykryć"
+        },
+        "app.UW9yZQ.action.cnVubmluZy1zdGF0cw.option.d2luZG93X3NpemU.display_name": {
+          "source": "Window Size",
+          "message": "Rozmiar okna"
+        },
+        "app.UW9yZQ.action.cnVubmluZy1zdGF0cw.option.d2luZG93X3NpemU.short_desc": {
+          "source": "Number of records in each analytics window",
+          "message": "Liczba rekordów w każdym oknie analizy"
+        },
+        "app.UW9yZQ.action.cnVubmluZy1zdGF0cw.short_desc": {
+          "source": "Compute running statistics over windows of numeric records",
+          "message": "Obliczaj statystyki kroczące w oknach rekordów numerycznych"
+        },
+        "app.UW9yZQ.action.dHJlbmQtYW5hbHlzaXM.desc": {
+          "source": "Compute linear regression trend analysis (`slope`, `intercept`, `r_squared`, `direction`) over a window of records for each configured numeric field; emits one analytics event per field when each window is full with the trend direction (`rising`, `falling`, or `flat`)",
+          "message": "Oblicz analizę trendu metodą regresji liniowej (`slope`, `intercept`, `r_squared`, `direction`) w oknie rekordów dla każdego skonfigurowanego pola numerycznego; emituje jedno zdarzenie analityczne na pole, gdy każde okno jest pełne, z kierunkiem trendu (`rising`, `falling` lub `flat`)"
+        },
+        "app.UW9yZQ.action.dHJlbmQtYW5hbHlzaXM.display_name": {
+          "source": "Trend Analysis",
+          "message": "Analiza trendu"
+        },
+        "app.UW9yZQ.action.dHJlbmQtYW5hbHlzaXM.option.ZGlyZWN0aW9uX3RocmVzaG9sZA.desc": {
+          "source": "The minimum slope magnitude for the trend to be classified as `rising` or `falling`; slopes below this threshold are classified as `flat`.\n\n**Typical values**: `0.001` (sensitive — detects very gradual trends), `0.01` (moderate), `0.1` (only strong trends); use smaller values when your data has a large scale and meaningful trends have small slopes; must be >= `0`; default: `0.001`",
+          "message": "Minimalna wielkość nachylenia, aby trend został sklasyfikowany jako `rising` lub `falling`; nachylenia poniżej tego progu są klasyfikowane jako `flat`.\n\n**Typowe wartości**: `0.001` (czuły — wykrywa bardzo łagodne trendy), `0.01` (umiarkowany), `0.1` (tylko silne trendy); używaj mniejszych wartości, gdy Twoje dane mają dużą skalę, a istotne trendy mają małe nachylenia; musi być >= `0`; domyślnie: `0.001`"
+        },
+        "app.UW9yZQ.action.dHJlbmQtYW5hbHlzaXM.option.ZGlyZWN0aW9uX3RocmVzaG9sZA.display_name": {
+          "source": "Direction Threshold",
+          "message": "Próg kierunku"
+        },
+        "app.UW9yZQ.action.dHJlbmQtYW5hbHlzaXM.option.ZGlyZWN0aW9uX3RocmVzaG9sZA.short_desc": {
+          "source": "Minimum absolute slope to classify as rising or falling",
+          "message": "Minimalne bezwzględne nachylenie do sklasyfikowania jako rosnące lub spadające"
+        },
+        "app.UW9yZQ.action.dHJlbmQtYW5hbHlzaXM.option.ZmllbGRz.desc": {
+          "source": "A list of field names to compute analytics for; each field must contain numeric values in the input records; supports dot-notation for nested fields (e.g. `sensor.temperature`)",
+          "message": "Lista nazw pól, dla których mają zostać obliczone analizy; każde pole musi zawierać wartości numeryczne w rekordach wejściowych; obsługuje notację z kropką dla pól zagnieżdżonych (np. `sensor.temperature`)"
+        },
+        "app.UW9yZQ.action.dHJlbmQtYW5hbHlzaXM.option.ZmllbGRz.display_name": {
+          "source": "Field Names",
+          "message": "Nazwy pól"
+        },
+        "app.UW9yZQ.action.dHJlbmQtYW5hbHlzaXM.option.ZmllbGRz.short_desc": {
+          "source": "Field names to analyze",
+          "message": "Nazwy pól do analizy"
+        },
+        "app.UW9yZQ.action.dHJlbmQtYW5hbHlzaXM.option.d2luZG93X3NpemU.desc": {
+          "source": "The number of records to accumulate in each analytics window; for window-level processors, an event is emitted when the window is full; for record-level processors, this controls the sliding window size.\n\n**Sizing guidance**: use `20`–`50` for real-time alerting where fast response matters, `100`–`500` for general trend and statistics analysis, or `1000`+ for high-frequency data where you need stable long-term statistics; the window must be large enough to capture at least one full cycle of any pattern you want to detect",
+          "message": "Liczba rekordów do zgromadzenia w każdym oknie analitycznym; w przypadku procesorów na poziomie okna zdarzenie jest emitowane po zapełnieniu okna; w przypadku procesorów na poziomie rekordu steruje to rozmiarem okna przesuwnego.\n\n**Wskazówki dotyczące rozmiaru**: użyj `20`–`50` dla alertów w czasie rzeczywistym, gdzie liczy się szybka reakcja, `100`–`500` dla ogólnej analizy trendów i statystyk lub `1000`+ dla danych o wysokiej częstotliwości, gdzie potrzebne są stabilne statystyki długoterminowe; okno musi być wystarczająco duże, aby uchwycić co najmniej jeden pełny cykl dowolnego wzorca, który chcesz wykryć"
+        },
+        "app.UW9yZQ.action.dHJlbmQtYW5hbHlzaXM.option.d2luZG93X3NpemU.display_name": {
+          "source": "Window Size",
+          "message": "Rozmiar okna"
+        },
+        "app.UW9yZQ.action.dHJlbmQtYW5hbHlzaXM.option.d2luZG93X3NpemU.short_desc": {
+          "source": "Number of records in each analytics window",
+          "message": "Liczba rekordów w każdym oknie analizy"
+        },
+        "app.UW9yZQ.action.dHJlbmQtYW5hbHlzaXM.short_desc": {
+          "source": "Detect trends using linear regression over windows of records",
+          "message": "Wykrywaj trendy za pomocą regresji liniowej w oknach rekordów"
+        },
+        "app.UW9yZQ.desc": {
+          "source": "Built-in Qore data pipeline processors for filtering, transforming, and manipulating records in data pipelines",
+          "message": "Wbudowane procesory potoków danych Qore do filtrowania, przekształcania i modyfikowania rekordów w potokach danych"
+        },
+        "app.UW9yZQ.display_name": {
+          "source": "Qore",
+          "message": "Qore"
+        },
+        "app.UW9yZQ.short_desc": {
+          "source": "Built-in data pipeline processors",
+          "message": "Wbudowane procesory potoków danych"
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,1465 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "it": {
+      "messages": {
+        "app.VGFibGVhdQ.action.Y3JlYXRlLXByb2plY3Q.desc": {
+          "source": "Create a new project in Tableau",
+          "message": "Crea un nuovo progetto in Tableau"
+        },
+        "app.VGFibGVhdQ.action.Y3JlYXRlLXByb2plY3Q.display_name": {
+          "source": "Create a Project",
+          "message": "Crea un progetto"
+        },
+        "app.VGFibGVhdQ.action.Y3JlYXRlLXByb2plY3Q.option.Y29udGVudF9wZXJtaXNzaW9ucw.allowed-value.c3RyaW5nOk1hbmFnZWRCeU93bmVy.display_name": {
+          "source": "Managed By Owner",
+          "message": "Gestito dal proprietario"
+        },
+        "app.VGFibGVhdQ.action.Y3JlYXRlLXByb2plY3Q.option.Y29udGVudF9wZXJtaXNzaW9ucw.allowed-value.c3RyaW5nOkxvY2tlZFRvUHJvamVjdA.display_name": {
+          "source": "Locked To Project",
+          "message": "Bloccato sul progetto"
+        },
+        "app.VGFibGVhdQ.action.Y3JlYXRlLXByb2plY3Q.option.Y29udGVudF9wZXJtaXNzaW9ucw.allowed-value.c3RyaW5nOkxvY2tlZFRvUHJvamVjdFdpdGhvdXROZXN0ZWQ.display_name": {
+          "source": "Locked To Project Without Nested",
+          "message": "Bloccato sul progetto senza nidificati"
+        },
+        "app.VGFibGVhdQ.action.Y3JlYXRlLXByb2plY3Q.option.Y29udGVudF9wZXJtaXNzaW9ucw.desc": {
+          "source": "The content permissions mode for the project",
+          "message": "La modalità delle autorizzazioni per i contenuti per il progetto"
+        },
+        "app.VGFibGVhdQ.action.Y3JlYXRlLXByb2plY3Q.option.Y29udGVudF9wZXJtaXNzaW9ucw.display_name": {
+          "source": "Content Permissions",
+          "message": "Autorizzazioni per i contenuti"
+        },
+        "app.VGFibGVhdQ.action.Y3JlYXRlLXByb2plY3Q.option.Y29udGVudF9wZXJtaXNzaW9ucw.short_desc": {
+          "source": "The content permissions mode",
+          "message": "La modalità delle autorizzazioni per i contenuti"
+        },
+        "app.VGFibGVhdQ.action.Y3JlYXRlLXByb2plY3Q.option.ZGVzY3JpcHRpb24.desc": {
+          "source": "A description of the project",
+          "message": "Una descrizione del progetto"
+        },
+        "app.VGFibGVhdQ.action.Y3JlYXRlLXByb2plY3Q.option.ZGVzY3JpcHRpb24.display_name": {
+          "source": "Description",
+          "message": "Descrizione"
+        },
+        "app.VGFibGVhdQ.action.Y3JlYXRlLXByb2plY3Q.option.ZGVzY3JpcHRpb24.short_desc": {
+          "source": "The project description",
+          "message": "La descrizione del progetto"
+        },
+        "app.VGFibGVhdQ.action.Y3JlYXRlLXByb2plY3Q.option.bmFtZQ.desc": {
+          "source": "The name of the project to create",
+          "message": "Il nome del progetto da creare"
+        },
+        "app.VGFibGVhdQ.action.Y3JlYXRlLXByb2plY3Q.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "Nome"
+        },
+        "app.VGFibGVhdQ.action.Y3JlYXRlLXByb2plY3Q.option.bmFtZQ.short_desc": {
+          "source": "The name of the project",
+          "message": "Il nome del progetto"
+        },
+        "app.VGFibGVhdQ.action.Y3JlYXRlLXByb2plY3Q.option.cGFyZW50X3Byb2plY3RfaWQ.desc": {
+          "source": "The ID of the parent project, if creating a nested project",
+          "message": "L'ID del progetto padre, se si crea un progetto nidificato"
+        },
+        "app.VGFibGVhdQ.action.Y3JlYXRlLXByb2plY3Q.option.cGFyZW50X3Byb2plY3RfaWQ.display_name": {
+          "source": "Parent Project ID",
+          "message": "ID progetto padre"
+        },
+        "app.VGFibGVhdQ.action.Y3JlYXRlLXByb2plY3Q.option.cGFyZW50X3Byb2plY3RfaWQ.short_desc": {
+          "source": "The parent project ID",
+          "message": "L'ID del progetto padre"
+        },
+        "app.VGFibGVhdQ.action.Y3JlYXRlLXByb2plY3Q.short_desc": {
+          "source": "Create a new project",
+          "message": "Crea un nuovo progetto"
+        },
+        "app.VGFibGVhdQ.action.Y3JlYXRlLXVzZXI.desc": {
+          "source": "Create a new user in Tableau",
+          "message": "Crea un nuovo utente in Tableau"
+        },
+        "app.VGFibGVhdQ.action.Y3JlYXRlLXVzZXI.display_name": {
+          "source": "Create a User",
+          "message": "Crea un utente"
+        },
+        "app.VGFibGVhdQ.action.Y3JlYXRlLXVzZXI.option.YXV0aF9zZXR0aW5n.allowed-value.c3RyaW5nOk9wZW5JRA.desc": {
+          "source": "OpenID Connect authentication",
+          "message": "Autenticazione OpenID Connect"
+        },
+        "app.VGFibGVhdQ.action.Y3JlYXRlLXVzZXI.option.YXV0aF9zZXR0aW5n.allowed-value.c3RyaW5nOlNBTUw.desc": {
+          "source": "SAML authentication",
+          "message": "Autenticazione SAML"
+        },
+        "app.VGFibGVhdQ.action.Y3JlYXRlLXVzZXI.option.YXV0aF9zZXR0aW5n.allowed-value.c3RyaW5nOlNlcnZlckRlZmF1bHQ.desc": {
+          "source": "Use server default authentication",
+          "message": "Usa l'autenticazione predefinita del server"
+        },
+        "app.VGFibGVhdQ.action.Y3JlYXRlLXVzZXI.option.YXV0aF9zZXR0aW5n.allowed-value.c3RyaW5nOlRhYmxlYXVJRFdpdGhNRkE.desc": {
+          "source": "Tableau ID with multi-factor authentication",
+          "message": "Tableau ID con autenticazione a più fattori"
+        },
+        "app.VGFibGVhdQ.action.Y3JlYXRlLXVzZXI.option.YXV0aF9zZXR0aW5n.desc": {
+          "source": "The authentication setting for the user",
+          "message": "L'impostazione di autenticazione per l'utente"
+        },
+        "app.VGFibGVhdQ.action.Y3JlYXRlLXVzZXI.option.YXV0aF9zZXR0aW5n.display_name": {
+          "source": "Auth Setting",
+          "message": "Impostazione autenticazione"
+        },
+        "app.VGFibGVhdQ.action.Y3JlYXRlLXVzZXI.option.YXV0aF9zZXR0aW5n.short_desc": {
+          "source": "The authentication setting",
+          "message": "L'impostazione di autenticazione"
+        },
+        "app.VGFibGVhdQ.action.Y3JlYXRlLXVzZXI.option.bmFtZQ.desc": {
+          "source": "The username for the new user",
+          "message": "Il nome utente per il nuovo utente"
+        },
+        "app.VGFibGVhdQ.action.Y3JlYXRlLXVzZXI.option.bmFtZQ.display_name": {
+          "source": "Username",
+          "message": "Nome utente"
+        },
+        "app.VGFibGVhdQ.action.Y3JlYXRlLXVzZXI.option.bmFtZQ.short_desc": {
+          "source": "The username",
+          "message": "Il nome utente"
+        },
+        "app.VGFibGVhdQ.action.Y3JlYXRlLXVzZXI.option.c2l0ZV9yb2xl.allowed-value.c3RyaW5nOkNyZWF0b3I.display_name": {
+          "source": "Creator",
+          "message": "Creatore"
+        },
+        "app.VGFibGVhdQ.action.Y3JlYXRlLXVzZXI.option.c2l0ZV9yb2xl.allowed-value.c3RyaW5nOkV4cGxvcmVy.display_name": {
+          "source": "Explorer",
+          "message": "Explorer"
+        },
+        "app.VGFibGVhdQ.action.Y3JlYXRlLXVzZXI.option.c2l0ZV9yb2xl.allowed-value.c3RyaW5nOkV4cGxvcmVyQ2FuUHVibGlzaA.display_name": {
+          "source": "Explorer (Can Publish)",
+          "message": "Explorer (può pubblicare)"
+        },
+        "app.VGFibGVhdQ.action.Y3JlYXRlLXVzZXI.option.c2l0ZV9yb2xl.allowed-value.c3RyaW5nOlNpdGVBZG1pbmlzdHJhdG9yQ3JlYXRvcg.display_name": {
+          "source": "Site Administrator Creator",
+          "message": "Site Administrator Creator"
+        },
+        "app.VGFibGVhdQ.action.Y3JlYXRlLXVzZXI.option.c2l0ZV9yb2xl.allowed-value.c3RyaW5nOlNpdGVBZG1pbmlzdHJhdG9yRXhwbG9yZXI.display_name": {
+          "source": "Site Administrator Explorer",
+          "message": "Site Administrator Explorer"
+        },
+        "app.VGFibGVhdQ.action.Y3JlYXRlLXVzZXI.option.c2l0ZV9yb2xl.allowed-value.c3RyaW5nOlVubGljZW5zZWQ.display_name": {
+          "source": "Unlicensed",
+          "message": "Senza licenza"
+        },
+        "app.VGFibGVhdQ.action.Y3JlYXRlLXVzZXI.option.c2l0ZV9yb2xl.allowed-value.c3RyaW5nOlZpZXdlcg.display_name": {
+          "source": "Viewer",
+          "message": "Visualizzatore"
+        },
+        "app.VGFibGVhdQ.action.Y3JlYXRlLXVzZXI.option.c2l0ZV9yb2xl.desc": {
+          "source": "The site role for the user",
+          "message": "Il ruolo sul sito per l'utente"
+        },
+        "app.VGFibGVhdQ.action.Y3JlYXRlLXVzZXI.option.c2l0ZV9yb2xl.display_name": {
+          "source": "Site Role",
+          "message": "Ruolo sul sito"
+        },
+        "app.VGFibGVhdQ.action.Y3JlYXRlLXVzZXI.option.c2l0ZV9yb2xl.short_desc": {
+          "source": "The site role for the user",
+          "message": "Il ruolo sul sito per l'utente"
+        },
+        "app.VGFibGVhdQ.action.Y3JlYXRlLXVzZXI.short_desc": {
+          "source": "Create a new user",
+          "message": "Crea un nuovo utente"
+        },
+        "app.VGFibGVhdQ.action.YWRkLXRhZy10by1kYXRhc291cmNl.desc": {
+          "source": "Add a tag to a datasource in Tableau",
+          "message": "Aggiungi un tag a un'origine dati in Tableau"
+        },
+        "app.VGFibGVhdQ.action.YWRkLXRhZy10by1kYXRhc291cmNl.display_name": {
+          "source": "Add Tag to Datasource",
+          "message": "Aggiungi tag all'origine dati"
+        },
+        "app.VGFibGVhdQ.action.YWRkLXRhZy10by1kYXRhc291cmNl.option.ZGF0YXNvdXJjZV9pZA.desc": {
+          "source": "The unique identifier of the datasource to add a tag to",
+          "message": "L'identificatore univoco dell'origine dati a cui aggiungere un tag"
+        },
+        "app.VGFibGVhdQ.action.YWRkLXRhZy10by1kYXRhc291cmNl.option.ZGF0YXNvdXJjZV9pZA.display_name": {
+          "source": "Datasource ID",
+          "message": "ID origine dati"
+        },
+        "app.VGFibGVhdQ.action.YWRkLXRhZy10by1kYXRhc291cmNl.option.ZGF0YXNvdXJjZV9pZA.short_desc": {
+          "source": "The datasource to tag",
+          "message": "L'origine dati da taggare"
+        },
+        "app.VGFibGVhdQ.action.YWRkLXRhZy10by1kYXRhc291cmNl.option.dGFnX25hbWU.desc": {
+          "source": "The name of the tag to add to the datasource",
+          "message": "Il nome del tag da aggiungere all'origine dati"
+        },
+        "app.VGFibGVhdQ.action.YWRkLXRhZy10by1kYXRhc291cmNl.option.dGFnX25hbWU.display_name": {
+          "source": "Tag Name",
+          "message": "Nome tag"
+        },
+        "app.VGFibGVhdQ.action.YWRkLXRhZy10by1kYXRhc291cmNl.option.dGFnX25hbWU.short_desc": {
+          "source": "The tag to add",
+          "message": "Il tag da aggiungere"
+        },
+        "app.VGFibGVhdQ.action.YWRkLXRhZy10by1kYXRhc291cmNl.short_desc": {
+          "source": "Add a tag to a datasource",
+          "message": "Aggiungi un tag a un'origine dati"
+        },
+        "app.VGFibGVhdQ.action.Z2V0LWRhdGFzb3VyY2U.desc": {
+          "source": "Retrieve a single datasource by ID from Tableau",
+          "message": "Recupera una singola origine dati per ID da Tableau"
+        },
+        "app.VGFibGVhdQ.action.Z2V0LWRhdGFzb3VyY2U.display_name": {
+          "source": "Get a Datasource",
+          "message": "Ottieni un'origine dati"
+        },
+        "app.VGFibGVhdQ.action.Z2V0LWRhdGFzb3VyY2U.option.ZGF0YXNvdXJjZV9pZA.display_name": {
+          "source": "Datasource ID",
+          "message": "ID origine dati"
+        },
+        "app.VGFibGVhdQ.action.Z2V0LWRhdGFzb3VyY2U.option.ZGF0YXNvdXJjZV9pZA.short_desc": {
+          "source": "The datasource ID",
+          "message": "L'ID dell'origine dati"
+        },
+        "app.VGFibGVhdQ.action.Z2V0LWRhdGFzb3VyY2U.short_desc": {
+          "source": "Get a single datasource by ID",
+          "message": "Ottieni una singola origine dati per ID"
+        },
+        "app.VGFibGVhdQ.action.Z2V0LWV4dHJhY3QtcmVmcmVzaC10YXNr.desc": {
+          "source": "Retrieve a single extract refresh task by ID from Tableau",
+          "message": "Recupera una singola attività di aggiornamento dell'estratto per ID da Tableau"
+        },
+        "app.VGFibGVhdQ.action.Z2V0LWV4dHJhY3QtcmVmcmVzaC10YXNr.display_name": {
+          "source": "Get an Extract Refresh Task",
+          "message": "Ottieni un'attività di aggiornamento dell'estratto"
+        },
+        "app.VGFibGVhdQ.action.Z2V0LWV4dHJhY3QtcmVmcmVzaC10YXNr.option.dGFza19pZA.display_name": {
+          "source": "Task ID",
+          "message": "ID attività"
+        },
+        "app.VGFibGVhdQ.action.Z2V0LWV4dHJhY3QtcmVmcmVzaC10YXNr.option.dGFza19pZA.short_desc": {
+          "source": "The task ID",
+          "message": "L'ID dell'attività"
+        },
+        "app.VGFibGVhdQ.action.Z2V0LWV4dHJhY3QtcmVmcmVzaC10YXNr.short_desc": {
+          "source": "Get a single extract refresh task by ID",
+          "message": "Ottieni una singola attività di aggiornamento dell'estratto per ID"
+        },
+        "app.VGFibGVhdQ.action.Z2V0LXByb2plY3Q.desc": {
+          "source": "Retrieve a single project by ID from Tableau",
+          "message": "Recupera un singolo progetto per ID da Tableau"
+        },
+        "app.VGFibGVhdQ.action.Z2V0LXByb2plY3Q.display_name": {
+          "source": "Get a Project",
+          "message": "Ottieni un progetto"
+        },
+        "app.VGFibGVhdQ.action.Z2V0LXByb2plY3Q.option.cHJvamVjdF9pZA.display_name": {
+          "source": "Project ID",
+          "message": "ID progetto"
+        },
+        "app.VGFibGVhdQ.action.Z2V0LXByb2plY3Q.option.cHJvamVjdF9pZA.short_desc": {
+          "source": "The project ID",
+          "message": "L'ID del progetto"
+        },
+        "app.VGFibGVhdQ.action.Z2V0LXByb2plY3Q.short_desc": {
+          "source": "Get a single project by ID",
+          "message": "Ottieni un singolo progetto per ID"
+        },
+        "app.VGFibGVhdQ.action.Z2V0LXVzZXI.desc": {
+          "source": "Retrieve a single user by ID from Tableau",
+          "message": "Recupera un singolo utente per ID da Tableau"
+        },
+        "app.VGFibGVhdQ.action.Z2V0LXVzZXI.display_name": {
+          "source": "Get a User",
+          "message": "Ottieni un utente"
+        },
+        "app.VGFibGVhdQ.action.Z2V0LXVzZXI.option.dXNlcl9pZA.display_name": {
+          "source": "User ID",
+          "message": "ID utente"
+        },
+        "app.VGFibGVhdQ.action.Z2V0LXVzZXI.option.dXNlcl9pZA.short_desc": {
+          "source": "The user ID",
+          "message": "L'ID dell'utente"
+        },
+        "app.VGFibGVhdQ.action.Z2V0LXVzZXI.short_desc": {
+          "source": "Get a single user by ID",
+          "message": "Ottieni un singolo utente tramite ID"
+        },
+        "app.VGFibGVhdQ.action.ZG93bmxvYWQtZGF0YXNvdXJjZQ.desc": {
+          "source": "Download the datasource file content from Tableau",
+          "message": "Scarica il contenuto del file dell'origine dati da Tableau"
+        },
+        "app.VGFibGVhdQ.action.ZG93bmxvYWQtZGF0YXNvdXJjZQ.display_name": {
+          "source": "Download a Datasource",
+          "message": "Scarica un'origine dati"
+        },
+        "app.VGFibGVhdQ.action.ZG93bmxvYWQtZGF0YXNvdXJjZQ.option.ZGF0YXNvdXJjZV9pZA.desc": {
+          "source": "The unique identifier of the datasource to download",
+          "message": "L'identificatore univoco dell'origine dati da scaricare"
+        },
+        "app.VGFibGVhdQ.action.ZG93bmxvYWQtZGF0YXNvdXJjZQ.option.ZGF0YXNvdXJjZV9pZA.display_name": {
+          "source": "Datasource ID",
+          "message": "ID origine dati"
+        },
+        "app.VGFibGVhdQ.action.ZG93bmxvYWQtZGF0YXNvdXJjZQ.option.ZGF0YXNvdXJjZV9pZA.short_desc": {
+          "source": "The datasource to download",
+          "message": "L'origine dati da scaricare"
+        },
+        "app.VGFibGVhdQ.action.ZG93bmxvYWQtZGF0YXNvdXJjZQ.short_desc": {
+          "source": "Download a datasource file",
+          "message": "Scarica un file di origine dati"
+        },
+        "app.VGFibGVhdQ.action.ZGF0YXNvdXJjZS11cGRhdGVk.desc": {
+          "source": "Fires when a datasource is updated in Tableau. Uses webhooks to detect events.",
+          "message": "Si attiva quando un'origine dati viene aggiornata in Tableau. Utilizza i webhook per rilevare gli eventi."
+        },
+        "app.VGFibGVhdQ.action.ZGF0YXNvdXJjZS11cGRhdGVk.display_name": {
+          "source": "Datasource Updated",
+          "message": "Origine dati aggiornata"
+        },
+        "app.VGFibGVhdQ.action.ZGF0YXNvdXJjZS11cGRhdGVk.option.cG9sbF9pbnRlcnZhbA.desc": {
+          "source": "How often to check for new events (minimum 30 seconds)",
+          "message": "Frequenza di controllo dei nuovi eventi (minimo 30 secondi)"
+        },
+        "app.VGFibGVhdQ.action.ZGF0YXNvdXJjZS11cGRhdGVk.option.cG9sbF9pbnRlcnZhbA.display_name": {
+          "source": "Poll Interval",
+          "message": "Intervallo di polling"
+        },
+        "app.VGFibGVhdQ.action.ZGF0YXNvdXJjZS11cGRhdGVk.option.cG9sbF9pbnRlcnZhbA.short_desc": {
+          "source": "Polling interval in seconds",
+          "message": "Intervallo di polling in secondi"
+        },
+        "app.VGFibGVhdQ.action.ZGF0YXNvdXJjZS11cGRhdGVk.short_desc": {
+          "source": "Trigger when a datasource is updated",
+          "message": "Si attiva quando un'origine dati viene aggiornata"
+        },
+        "app.VGFibGVhdQ.action.ZGF0YXNvdXJjZS1jcmVhdGVk.desc": {
+          "source": "Fires when a new datasource is created in Tableau. Uses webhooks to detect events.",
+          "message": "Si attiva quando viene creata una nuova origine dati in Tableau. Utilizza i webhook per rilevare gli eventi."
+        },
+        "app.VGFibGVhdQ.action.ZGF0YXNvdXJjZS1jcmVhdGVk.display_name": {
+          "source": "Datasource Created",
+          "message": "Origine dati creata"
+        },
+        "app.VGFibGVhdQ.action.ZGF0YXNvdXJjZS1jcmVhdGVk.option.cG9sbF9pbnRlcnZhbA.desc": {
+          "source": "How often to check for new events (minimum 30 seconds)",
+          "message": "Frequenza di controllo dei nuovi eventi (minimo 30 secondi)"
+        },
+        "app.VGFibGVhdQ.action.ZGF0YXNvdXJjZS1jcmVhdGVk.option.cG9sbF9pbnRlcnZhbA.display_name": {
+          "source": "Poll Interval",
+          "message": "Intervallo di polling"
+        },
+        "app.VGFibGVhdQ.action.ZGF0YXNvdXJjZS1jcmVhdGVk.option.cG9sbF9pbnRlcnZhbA.short_desc": {
+          "source": "Polling interval in seconds",
+          "message": "Intervallo di polling in secondi"
+        },
+        "app.VGFibGVhdQ.action.ZGF0YXNvdXJjZS1jcmVhdGVk.short_desc": {
+          "source": "Trigger when a datasource is created",
+          "message": "Si attiva quando viene creata un'origine dati"
+        },
+        "app.VGFibGVhdQ.action.ZGF0YXNvdXJjZS1kZWxldGVk.desc": {
+          "source": "Fires when a datasource is deleted in Tableau. Uses webhooks to detect events.",
+          "message": "Si attiva quando un'origine dati viene eliminata in Tableau. Utilizza i webhook per rilevare gli eventi."
+        },
+        "app.VGFibGVhdQ.action.ZGF0YXNvdXJjZS1kZWxldGVk.display_name": {
+          "source": "Datasource Deleted",
+          "message": "Origine dati eliminata"
+        },
+        "app.VGFibGVhdQ.action.ZGF0YXNvdXJjZS1kZWxldGVk.option.cG9sbF9pbnRlcnZhbA.desc": {
+          "source": "How often to check for new events (minimum 30 seconds)",
+          "message": "Frequenza di controllo dei nuovi eventi (minimo 30 secondi)"
+        },
+        "app.VGFibGVhdQ.action.ZGF0YXNvdXJjZS1kZWxldGVk.option.cG9sbF9pbnRlcnZhbA.display_name": {
+          "source": "Poll Interval",
+          "message": "Intervallo di polling"
+        },
+        "app.VGFibGVhdQ.action.ZGF0YXNvdXJjZS1kZWxldGVk.option.cG9sbF9pbnRlcnZhbA.short_desc": {
+          "source": "Polling interval in seconds",
+          "message": "Intervallo di polling in secondi"
+        },
+        "app.VGFibGVhdQ.action.ZGF0YXNvdXJjZS1kZWxldGVk.short_desc": {
+          "source": "Trigger when a datasource is deleted",
+          "message": "Si attiva quando un'origine dati viene eliminata"
+        },
+        "app.VGFibGVhdQ.action.ZGF0YXNvdXJjZS1yZWZyZXNoLWZhaWxlZA.desc": {
+          "source": "Fires when a datasource extract refresh fails in Tableau. Uses webhooks to detect events.",
+          "message": "Si attiva quando l'aggiornamento dell'estratto di un'origine dati non riesce in Tableau. Utilizza i webhook per rilevare gli eventi."
+        },
+        "app.VGFibGVhdQ.action.ZGF0YXNvdXJjZS1yZWZyZXNoLWZhaWxlZA.display_name": {
+          "source": "Datasource Refresh Failed",
+          "message": "Aggiornamento origine dati non riuscito"
+        },
+        "app.VGFibGVhdQ.action.ZGF0YXNvdXJjZS1yZWZyZXNoLWZhaWxlZA.option.cG9sbF9pbnRlcnZhbA.desc": {
+          "source": "How often to check for new events (minimum 30 seconds)",
+          "message": "Frequenza di controllo dei nuovi eventi (minimo 30 secondi)"
+        },
+        "app.VGFibGVhdQ.action.ZGF0YXNvdXJjZS1yZWZyZXNoLWZhaWxlZA.option.cG9sbF9pbnRlcnZhbA.display_name": {
+          "source": "Poll Interval",
+          "message": "Intervallo di polling"
+        },
+        "app.VGFibGVhdQ.action.ZGF0YXNvdXJjZS1yZWZyZXNoLWZhaWxlZA.option.cG9sbF9pbnRlcnZhbA.short_desc": {
+          "source": "Polling interval in seconds",
+          "message": "Intervallo di polling in secondi"
+        },
+        "app.VGFibGVhdQ.action.ZGF0YXNvdXJjZS1yZWZyZXNoLWZhaWxlZA.short_desc": {
+          "source": "Trigger when a datasource refresh fails",
+          "message": "Si attiva quando l'aggiornamento di un'origine dati non riesce"
+        },
+        "app.VGFibGVhdQ.action.ZGF0YXNvdXJjZS1yZWZyZXNoLXN0YXJ0ZWQ.desc": {
+          "source": "Fires when a datasource extract refresh starts in Tableau. Uses webhooks to detect events.",
+          "message": "Si attiva quando viene avviato l'aggiornamento dell'estratto di un'origine dati in Tableau. Utilizza i webhook per rilevare gli eventi."
+        },
+        "app.VGFibGVhdQ.action.ZGF0YXNvdXJjZS1yZWZyZXNoLXN0YXJ0ZWQ.display_name": {
+          "source": "Datasource Refresh Started",
+          "message": "Aggiornamento origine dati avviato"
+        },
+        "app.VGFibGVhdQ.action.ZGF0YXNvdXJjZS1yZWZyZXNoLXN0YXJ0ZWQ.option.cG9sbF9pbnRlcnZhbA.desc": {
+          "source": "How often to check for new events (minimum 30 seconds)",
+          "message": "Frequenza di controllo dei nuovi eventi (minimo 30 secondi)"
+        },
+        "app.VGFibGVhdQ.action.ZGF0YXNvdXJjZS1yZWZyZXNoLXN0YXJ0ZWQ.option.cG9sbF9pbnRlcnZhbA.display_name": {
+          "source": "Poll Interval",
+          "message": "Intervallo di polling"
+        },
+        "app.VGFibGVhdQ.action.ZGF0YXNvdXJjZS1yZWZyZXNoLXN0YXJ0ZWQ.option.cG9sbF9pbnRlcnZhbA.short_desc": {
+          "source": "Polling interval in seconds",
+          "message": "Intervallo di polling in secondi"
+        },
+        "app.VGFibGVhdQ.action.ZGF0YXNvdXJjZS1yZWZyZXNoLXN0YXJ0ZWQ.short_desc": {
+          "source": "Trigger when a datasource refresh starts",
+          "message": "Si attiva quando viene avviato l'aggiornamento di un'origine dati"
+        },
+        "app.VGFibGVhdQ.action.ZGF0YXNvdXJjZS1yZWZyZXNoLXN1Y2NlZWRlZA.desc": {
+          "source": "Fires when a datasource extract refresh succeeds in Tableau. Uses webhooks to detect events.",
+          "message": "Si attiva quando l'aggiornamento dell'estratto di un'origine dati ha esito positivo in Tableau. Utilizza i webhook per rilevare gli eventi."
+        },
+        "app.VGFibGVhdQ.action.ZGF0YXNvdXJjZS1yZWZyZXNoLXN1Y2NlZWRlZA.display_name": {
+          "source": "Datasource Refresh Succeeded",
+          "message": "Aggiornamento origine dati completato"
+        },
+        "app.VGFibGVhdQ.action.ZGF0YXNvdXJjZS1yZWZyZXNoLXN1Y2NlZWRlZA.option.cG9sbF9pbnRlcnZhbA.desc": {
+          "source": "How often to check for new events (minimum 30 seconds)",
+          "message": "Frequenza di controllo dei nuovi eventi (minimo 30 secondi)"
+        },
+        "app.VGFibGVhdQ.action.ZGF0YXNvdXJjZS1yZWZyZXNoLXN1Y2NlZWRlZA.option.cG9sbF9pbnRlcnZhbA.display_name": {
+          "source": "Poll Interval",
+          "message": "Intervallo di polling"
+        },
+        "app.VGFibGVhdQ.action.ZGF0YXNvdXJjZS1yZWZyZXNoLXN1Y2NlZWRlZA.option.cG9sbF9pbnRlcnZhbA.short_desc": {
+          "source": "Polling interval in seconds",
+          "message": "Intervallo di polling in secondi"
+        },
+        "app.VGFibGVhdQ.action.ZGF0YXNvdXJjZS1yZWZyZXNoLXN1Y2NlZWRlZA.short_desc": {
+          "source": "Trigger when a datasource refresh succeeds",
+          "message": "Si attiva quando l'aggiornamento di un'origine dati ha esito positivo"
+        },
+        "app.VGFibGVhdQ.action.ZGVsZXRlLWRhdGFzb3VyY2U.desc": {
+          "source": "Delete a datasource from Tableau",
+          "message": "Elimina un'origine dati da Tableau"
+        },
+        "app.VGFibGVhdQ.action.ZGVsZXRlLWRhdGFzb3VyY2U.display_name": {
+          "source": "Delete a Datasource",
+          "message": "Elimina un'origine dati"
+        },
+        "app.VGFibGVhdQ.action.ZGVsZXRlLWRhdGFzb3VyY2U.option.ZGF0YXNvdXJjZV9pZA.desc": {
+          "source": "The unique identifier of the datasource to delete",
+          "message": "L'identificativo univoco dell'origine dati da eliminare"
+        },
+        "app.VGFibGVhdQ.action.ZGVsZXRlLWRhdGFzb3VyY2U.option.ZGF0YXNvdXJjZV9pZA.display_name": {
+          "source": "Datasource ID",
+          "message": "ID origine dati"
+        },
+        "app.VGFibGVhdQ.action.ZGVsZXRlLWRhdGFzb3VyY2U.option.ZGF0YXNvdXJjZV9pZA.short_desc": {
+          "source": "The datasource to delete",
+          "message": "L'origine dati da eliminare"
+        },
+        "app.VGFibGVhdQ.action.ZGVsZXRlLWRhdGFzb3VyY2U.short_desc": {
+          "source": "Delete a datasource",
+          "message": "Elimina un'origine dati"
+        },
+        "app.VGFibGVhdQ.action.ZGVsZXRlLWV4dHJhY3QtcmVmcmVzaC10YXNr.desc": {
+          "source": "Delete an extract refresh task from Tableau",
+          "message": "Elimina un'attività di aggiornamento dell'estratto da Tableau"
+        },
+        "app.VGFibGVhdQ.action.ZGVsZXRlLWV4dHJhY3QtcmVmcmVzaC10YXNr.display_name": {
+          "source": "Delete an Extract Refresh Task",
+          "message": "Elimina un'attività di aggiornamento dell'estratto"
+        },
+        "app.VGFibGVhdQ.action.ZGVsZXRlLWV4dHJhY3QtcmVmcmVzaC10YXNr.option.dGFza19pZA.desc": {
+          "source": "The unique identifier of the extract refresh task to delete",
+          "message": "L'identificativo univoco dell'attività di aggiornamento dell'estratto da eliminare"
+        },
+        "app.VGFibGVhdQ.action.ZGVsZXRlLWV4dHJhY3QtcmVmcmVzaC10YXNr.option.dGFza19pZA.display_name": {
+          "source": "Task ID",
+          "message": "ID attività"
+        },
+        "app.VGFibGVhdQ.action.ZGVsZXRlLWV4dHJhY3QtcmVmcmVzaC10YXNr.option.dGFza19pZA.short_desc": {
+          "source": "The extract refresh task to delete",
+          "message": "L'attività di aggiornamento dell'estratto da eliminare"
+        },
+        "app.VGFibGVhdQ.action.ZGVsZXRlLWV4dHJhY3QtcmVmcmVzaC10YXNr.short_desc": {
+          "source": "Delete an extract refresh task",
+          "message": "Elimina un'attività di aggiornamento dell'estratto"
+        },
+        "app.VGFibGVhdQ.action.ZGVsZXRlLXByb2plY3Q.desc": {
+          "source": "Delete a project from Tableau",
+          "message": "Elimina un progetto da Tableau"
+        },
+        "app.VGFibGVhdQ.action.ZGVsZXRlLXByb2plY3Q.display_name": {
+          "source": "Delete a Project",
+          "message": "Elimina un progetto"
+        },
+        "app.VGFibGVhdQ.action.ZGVsZXRlLXByb2plY3Q.option.cHJvamVjdF9pZA.desc": {
+          "source": "The unique identifier of the project to delete",
+          "message": "L'identificatore univoco del progetto da eliminare"
+        },
+        "app.VGFibGVhdQ.action.ZGVsZXRlLXByb2plY3Q.option.cHJvamVjdF9pZA.display_name": {
+          "source": "Project ID",
+          "message": "ID progetto"
+        },
+        "app.VGFibGVhdQ.action.ZGVsZXRlLXByb2plY3Q.option.cHJvamVjdF9pZA.short_desc": {
+          "source": "The project to delete",
+          "message": "Il progetto da eliminare"
+        },
+        "app.VGFibGVhdQ.action.ZGVsZXRlLXByb2plY3Q.short_desc": {
+          "source": "Delete a project",
+          "message": "Elimina un progetto"
+        },
+        "app.VGFibGVhdQ.action.ZGVsZXRlLXRhZy1mcm9tLWRhdGFzb3VyY2U.desc": {
+          "source": "Remove a tag from a datasource in Tableau",
+          "message": "Rimuove un tag da un'origine dati in Tableau"
+        },
+        "app.VGFibGVhdQ.action.ZGVsZXRlLXRhZy1mcm9tLWRhdGFzb3VyY2U.display_name": {
+          "source": "Delete Tag from Datasource",
+          "message": "Elimina tag dall'origine dati"
+        },
+        "app.VGFibGVhdQ.action.ZGVsZXRlLXRhZy1mcm9tLWRhdGFzb3VyY2U.option.ZGF0YXNvdXJjZV9pZA.desc": {
+          "source": "The unique identifier of the datasource to remove a tag from",
+          "message": "L'identificativo univoco dell'origine dati da cui rimuovere un tag"
+        },
+        "app.VGFibGVhdQ.action.ZGVsZXRlLXRhZy1mcm9tLWRhdGFzb3VyY2U.option.ZGF0YXNvdXJjZV9pZA.display_name": {
+          "source": "Datasource ID",
+          "message": "ID origine dati"
+        },
+        "app.VGFibGVhdQ.action.ZGVsZXRlLXRhZy1mcm9tLWRhdGFzb3VyY2U.option.ZGF0YXNvdXJjZV9pZA.short_desc": {
+          "source": "The datasource to remove the tag from",
+          "message": "L'origine dati da cui rimuovere il tag"
+        },
+        "app.VGFibGVhdQ.action.ZGVsZXRlLXRhZy1mcm9tLWRhdGFzb3VyY2U.option.dGFnX25hbWU.desc": {
+          "source": "The name of the tag to remove from the datasource",
+          "message": "Il nome del tag da rimuovere dall'origine dati"
+        },
+        "app.VGFibGVhdQ.action.ZGVsZXRlLXRhZy1mcm9tLWRhdGFzb3VyY2U.option.dGFnX25hbWU.display_name": {
+          "source": "Tag Name",
+          "message": "Nome tag"
+        },
+        "app.VGFibGVhdQ.action.ZGVsZXRlLXRhZy1mcm9tLWRhdGFzb3VyY2U.option.dGFnX25hbWU.short_desc": {
+          "source": "The tag to remove",
+          "message": "Il tag da rimuovere"
+        },
+        "app.VGFibGVhdQ.action.ZGVsZXRlLXRhZy1mcm9tLWRhdGFzb3VyY2U.short_desc": {
+          "source": "Remove a tag from a datasource",
+          "message": "Rimuovi un tag da un'origine dati"
+        },
+        "app.VGFibGVhdQ.action.ZGVsZXRlLXVzZXI.desc": {
+          "source": "Delete a user from Tableau",
+          "message": "Elimina un utente da Tableau"
+        },
+        "app.VGFibGVhdQ.action.ZGVsZXRlLXVzZXI.display_name": {
+          "source": "Delete a User",
+          "message": "Elimina un utente"
+        },
+        "app.VGFibGVhdQ.action.ZGVsZXRlLXVzZXI.option.dXNlcl9pZA.desc": {
+          "source": "The unique identifier of the user to delete",
+          "message": "L'identificatore univoco dell'utente da eliminare"
+        },
+        "app.VGFibGVhdQ.action.ZGVsZXRlLXVzZXI.option.dXNlcl9pZA.display_name": {
+          "source": "User ID",
+          "message": "ID utente"
+        },
+        "app.VGFibGVhdQ.action.ZGVsZXRlLXVzZXI.option.dXNlcl9pZA.short_desc": {
+          "source": "The user to delete",
+          "message": "L'utente da eliminare"
+        },
+        "app.VGFibGVhdQ.action.ZGVsZXRlLXVzZXI.short_desc": {
+          "source": "Delete a user",
+          "message": "Elimina un utente"
+        },
+        "app.VGFibGVhdQ.action.bGlzdC1leHRyYWN0LXJlZnJlc2gtdGFza3M.desc": {
+          "source": "List extract refresh tasks in Tableau with optional filtering",
+          "message": "Elenca le attività di aggiornamento degli estratti in Tableau con filtri opzionali"
+        },
+        "app.VGFibGVhdQ.action.bGlzdC1leHRyYWN0LXJlZnJlc2gtdGFza3M.display_name": {
+          "source": "List Extract Refresh Tasks",
+          "message": "Elenca attività di aggiornamento dell'estratto"
+        },
+        "app.VGFibGVhdQ.action.bGlzdC1leHRyYWN0LXJlZnJlc2gtdGFza3M.option.bGltaXQ.desc": {
+          "source": "Maximum number of results to return",
+          "message": "Numero massimo di risultati da restituire"
+        },
+        "app.VGFibGVhdQ.action.bGlzdC1leHRyYWN0LXJlZnJlc2gtdGFza3M.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "Limite"
+        },
+        "app.VGFibGVhdQ.action.bGlzdC1leHRyYWN0LXJlZnJlc2gtdGFza3M.option.bGltaXQ.short_desc": {
+          "source": "Maximum results",
+          "message": "Risultati massimi"
+        },
+        "app.VGFibGVhdQ.action.bGlzdC1leHRyYWN0LXJlZnJlc2gtdGFza3M.option.dGFza19pZA.desc": {
+          "source": "Filter by task ID for single record lookup",
+          "message": "Filtra per ID attività per la ricerca di un singolo record"
+        },
+        "app.VGFibGVhdQ.action.bGlzdC1leHRyYWN0LXJlZnJlc2gtdGFza3M.option.dGFza19pZA.display_name": {
+          "source": "Task ID",
+          "message": "ID attività"
+        },
+        "app.VGFibGVhdQ.action.bGlzdC1leHRyYWN0LXJlZnJlc2gtdGFza3M.option.dGFza19pZA.short_desc": {
+          "source": "Filter by task ID",
+          "message": "Filtra per ID attività"
+        },
+        "app.VGFibGVhdQ.action.bGlzdC1leHRyYWN0LXJlZnJlc2gtdGFza3M.short_desc": {
+          "source": "List extract refresh tasks",
+          "message": "Elenca le attività di aggiornamento dell'estratto"
+        },
+        "app.VGFibGVhdQ.action.bWFrZS1hcGktY2FsbA.desc": {
+          "source": "Make a custom HTTP / REST API call to **Tableau** using the configured connection's authentication.\n\nSpecify the HTTP method, the URI path (relative to the connection's API base URL), optional query parameters, headers, and request body. The response is returned as a hash containing the status code, response headers, and response body.\n\nUse this action for endpoints that are not yet exposed as first-class actions on this app.",
+          "message": "Esegui una chiamata API HTTP / REST personalizzata a **Tableau** utilizzando l'autenticazione della connessione configurata.\n\nSpecifica il metodo HTTP, il percorso URI (relativo all'URL di base dell'API della connessione), i parametri di query opzionali, le intestazioni e il corpo della richiesta. La risposta viene restituita come hash contenente il codice di stato, le intestazioni di risposta e il corpo della risposta.\n\nUtilizza questa azione per gli endpoint che non sono ancora esposti come azioni native in questa app."
+        },
+        "app.VGFibGVhdQ.action.bWFrZS1hcGktY2FsbA.display_name": {
+          "source": "Make an API call",
+          "message": "Esegui una chiamata API"
+        },
+        "app.VGFibGVhdQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.desc": {
+          "source": "The request body. The effective type depends on `body_type`: JSON/form/YAML expect a hash, XML/text expect a string, multipart expects a file structure, binary expects raw bytes.",
+          "message": "Il corpo della richiesta. Il tipo effettivo dipende da `body_type`: JSON/form/YAML richiedono un hash, XML/testo richiedono una stringa, multipart richiede una struttura di file, binario richiede byte grezzi."
+        },
+        "app.VGFibGVhdQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.display_name": {
+          "source": "Body",
+          "message": "Corpo"
+        },
+        "app.VGFibGVhdQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.short_desc": {
+          "source": "The request body",
+          "message": "Il corpo della richiesta"
+        },
+        "app.VGFibGVhdQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.desc": {
+          "source": "Upload a file using `multipart/form-data`. The body must be a @ref DataProvider::FileDataType \"FileDataType\" structure (filename + content + mime_type). The framework builds the multipart envelope and sets the boundary header.",
+          "message": "Carica un file utilizzando `multipart/form-data`. Il corpo deve essere una struttura @ref DataProvider::FileDataType \"FileDataType\" (nome file + contenuto + mime_type). Il framework costruisce l'inviluppo multipart e imposta l'intestazione del boundary."
+        },
+        "app.VGFibGVhdQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.display_name": {
+          "source": "Multipart Form",
+          "message": "Modulo Multipart"
+        },
+        "app.VGFibGVhdQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.short_desc": {
+          "source": "Upload a file using multipart/form-data",
+          "message": "Carica un file utilizzando multipart/form-data"
+        },
+        "app.VGFibGVhdQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.desc": {
+          "source": "Pass the body to the REST client unchanged; the client decides serialization based on its configured `data` option and the value type",
+          "message": "Passa il corpo al client REST inalterato; il client decide la serializzazione in base alla sua opzione `data` configurata e al tipo di valore"
+        },
+        "app.VGFibGVhdQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.display_name": {
+          "source": "Auto",
+          "message": "Auto"
+        },
+        "app.VGFibGVhdQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.short_desc": {
+          "source": "Pass-through; use connection serialization and let the REST client decide",
+          "message": "Pass-through; usa la serializzazione della connessione e lascia decidere al client REST"
+        },
+        "app.VGFibGVhdQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.desc": {
+          "source": "Send the body as raw bytes. The body must be a binary value. Sets `Content-Type: application/octet-stream` unless overridden by `hdr`.",
+          "message": "Invia il corpo come byte grezzi. Il corpo deve essere un valore binario. Imposta `Content-Type: application/octet-stream` a meno che non sia sovrascritto da `hdr`."
+        },
+        "app.VGFibGVhdQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.display_name": {
+          "source": "Raw Binary",
+          "message": "Binario grezzo"
+        },
+        "app.VGFibGVhdQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.short_desc": {
+          "source": "Send body as raw bytes",
+          "message": "Invia il corpo come byte grezzi"
+        },
+        "app.VGFibGVhdQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.desc": {
+          "source": "Serialize a hash of form fields as `application/x-www-form-urlencoded`. The body must be a hash whose values are scalars (strings/numbers/booleans).",
+          "message": "Serializza un hash di campi modulo come `application/x-www-form-urlencoded`. Il corpo deve essere un hash i cui valori sono scalari (stringhe/numeri/booleani)."
+        },
+        "app.VGFibGVhdQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.display_name": {
+          "source": "Form (URL-encoded)",
+          "message": "Form (URL-encoded)"
+        },
+        "app.VGFibGVhdQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.short_desc": {
+          "source": "Serialize body as application/x-www-form-urlencoded form fields",
+          "message": "Serializza il corpo come campi del modulo application/x-www-form-urlencoded"
+        },
+        "app.VGFibGVhdQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.desc": {
+          "source": "Serialize the body as JSON; sets `Content-Type: application/json`. The body should be a hash, list, or scalar value.",
+          "message": "Serializza il corpo come JSON; imposta `Content-Type: application/json`. Il corpo deve essere un hash, un elenco o un valore scalare."
+        },
+        "app.VGFibGVhdQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.display_name": {
+          "source": "JSON",
+          "message": "JSON"
+        },
+        "app.VGFibGVhdQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.short_desc": {
+          "source": "Serialize body as JSON",
+          "message": "Serializza il corpo come JSON"
+        },
+        "app.VGFibGVhdQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.desc": {
+          "source": "Send the body as plain text. The body must be a string. Sets `Content-Type: text/plain`.",
+          "message": "Invia il corpo come testo semplice. Il corpo deve essere una stringa. Imposta `Content-Type: text/plain`."
+        },
+        "app.VGFibGVhdQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.display_name": {
+          "source": "Plain Text",
+          "message": "Testo normale"
+        },
+        "app.VGFibGVhdQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.short_desc": {
+          "source": "Send body as text/plain",
+          "message": "Invia il corpo come text/plain"
+        },
+        "app.VGFibGVhdQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.desc": {
+          "source": "Send the body as XML. If the body is a hash it is serialized to XML; if it is a string it is sent verbatim. Sets `Content-Type: application/xml`.",
+          "message": "Invia il corpo come XML. Se il corpo è un hash viene serializzato in XML; se è una stringa viene inviato testualmente. Imposta `Content-Type: application/xml`."
+        },
+        "app.VGFibGVhdQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.display_name": {
+          "source": "XML",
+          "message": "XML"
+        },
+        "app.VGFibGVhdQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.short_desc": {
+          "source": "Send body as XML",
+          "message": "Invia il corpo come XML"
+        },
+        "app.VGFibGVhdQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.desc": {
+          "source": "Send the body as YAML. If the body is a hash it is serialized to YAML; if it is a string it is sent verbatim. Sets `Content-Type: application/x-yaml`.",
+          "message": "Invia il corpo come YAML. Se il corpo è un hash viene serializzato in YAML; se è una stringa viene inviato testualmente. Imposta `Content-Type: application/x-yaml`."
+        },
+        "app.VGFibGVhdQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.display_name": {
+          "source": "YAML",
+          "message": "YAML"
+        },
+        "app.VGFibGVhdQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.short_desc": {
+          "source": "Send body as YAML",
+          "message": "Invia il corpo come YAML"
+        },
+        "app.VGFibGVhdQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.desc": {
+          "source": "Selects the body serialization mode and the corresponding `Content-Type` header. Changing this field reshapes the `body` editor - selecting JSON exposes a JSON editor, selecting Multipart Form exposes a file picker, and so on.",
+          "message": "Seleziona la modalità di serializzazione del corpo e la corrispondente intestazione `Content-Type`. La modifica di questo campo riorganizza l'editor `body`: selezionando JSON viene mostrato un editor JSON, selezionando Modulo Multipart viene mostrato un selettore di file e così via."
+        },
+        "app.VGFibGVhdQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.display_name": {
+          "source": "Body Type",
+          "message": "Tipo di corpo"
+        },
+        "app.VGFibGVhdQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.short_desc": {
+          "source": "How the body is serialized and what Content-Type is sent",
+          "message": "Come viene serializzato il corpo e quale Content-Type viene inviato"
+        },
+        "app.VGFibGVhdQ.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.desc": {
+          "source": "If `True`, non-2xx HTTP responses return as the normal response hash (with the actual status code) instead of raising `REST-RESPONSE-ERROR`. Useful for handling 4xx/5xx as data - e.g. checking whether a resource exists. Overrides the connection's `error_passthru` setting for this call only.",
+          "message": "Se `True`, le risposte HTTP diverse da 2xx ritornano come normale hash di risposta (con il codice di stato effettivo) invece di sollevare `REST-RESPONSE-ERROR`. Utile per gestire 4xx/5xx come dati, ad es. per verificare se una risorsa esiste. Sovrascrive l'impostazione `error_passthru` della connessione solo per questa chiamata."
+        },
+        "app.VGFibGVhdQ.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.display_name": {
+          "source": "Return Errors as Data",
+          "message": "Restituisci errori come dati"
+        },
+        "app.VGFibGVhdQ.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.short_desc": {
+          "source": "Return non-2xx responses normally instead of throwing",
+          "message": "Restituisci normalmente le risposte non 2xx invece di generare un'eccezione"
+        },
+        "app.VGFibGVhdQ.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.desc": {
+          "source": "Optional list of HTTP status codes treated as success. If set and the response status is not in this list, the action throws `REST-STATUS-ERROR`. When unset, the REST client's default behavior applies (typically: 2xx is success, non-2xx throws).",
+          "message": "Elenco opzionale di codici di stato HTTP trattati come successo. Se impostato e lo stato della risposta non è in questo elenco, l'azione genera `REST-STATUS-ERROR`. Quando non è impostato, si applica il comportamento predefinito del client REST (in genere: 2xx è successo, non-2xx genera un'eccezione)."
+        },
+        "app.VGFibGVhdQ.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.display_name": {
+          "source": "Expected Status Codes",
+          "message": "Codici di stato previsti"
+        },
+        "app.VGFibGVhdQ.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.short_desc": {
+          "source": "Response status codes treated as success",
+          "message": "Codici di stato della risposta trattati come successo"
+        },
+        "app.VGFibGVhdQ.action.bWFrZS1hcGktY2FsbA.option.aGRy.desc": {
+          "source": "Hash of custom headers added to the request. These override any default headers set by `body_type` (e.g. supplying `Content-Type` here wins over the body-type default).",
+          "message": "Hash di intestazioni personalizzate aggiunte alla richiesta. Queste sovrascrivono qualsiasi intestazione predefinita impostata da `body_type` (ad es. fornire `Content-Type` qui ha la precedenza sul valore predefinito del tipo di corpo)."
+        },
+        "app.VGFibGVhdQ.action.bWFrZS1hcGktY2FsbA.option.aGRy.display_name": {
+          "source": "Custom Headers",
+          "message": "Intestazioni personalizzate"
+        },
+        "app.VGFibGVhdQ.action.bWFrZS1hcGktY2FsbA.option.aGRy.short_desc": {
+          "source": "Extra request headers",
+          "message": "Intestazioni della richiesta aggiuntive"
+        },
+        "app.VGFibGVhdQ.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.desc": {
+          "source": "If `True`, the response hash includes a `debug` sub-hash containing the request method/URL/headers (with sensitive values redacted), request and response sizes, and round-trip duration. Useful when investigating slow or failing calls. Off by default to keep responses lean.",
+          "message": "Se `True`, l'hash della risposta include un sotto-hash `debug` contenente il metodo/URL/intestazioni della richiesta (con i valori sensibili oscurati), le dimensioni della richiesta e della risposta e la durata di andata e ritorno. Utile quando si indagano chiamate lente o con errori. Disattivato per impostazione predefinita per mantenere le risposte snelle."
+        },
+        "app.VGFibGVhdQ.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.display_name": {
+          "source": "Include Debug Info",
+          "message": "Includi informazioni di debug"
+        },
+        "app.VGFibGVhdQ.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.short_desc": {
+          "source": "Include request/timing/size debug info in the response",
+          "message": "Includi le informazioni di debug relative a richiesta/tempi/dimensioni nella risposta"
+        },
+        "app.VGFibGVhdQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.desc": {
+          "source": "HTTP `OPTIONS`",
+          "message": "HTTP `OPTIONS`"
+        },
+        "app.VGFibGVhdQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.display_name": {
+          "source": "OPTIONS",
+          "message": "OPTIONS"
+        },
+        "app.VGFibGVhdQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.short_desc": {
+          "source": "HTTP OPTIONS",
+          "message": "HTTP OPTIONS"
+        },
+        "app.VGFibGVhdQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.desc": {
+          "source": "HTTP `DELETE`",
+          "message": "HTTP `DELETE`"
+        },
+        "app.VGFibGVhdQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.display_name": {
+          "source": "DELETE",
+          "message": "DELETE"
+        },
+        "app.VGFibGVhdQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.short_desc": {
+          "source": "HTTP DELETE",
+          "message": "HTTP DELETE"
+        },
+        "app.VGFibGVhdQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.desc": {
+          "source": "HTTP `GET`",
+          "message": "HTTP `GET`"
+        },
+        "app.VGFibGVhdQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.display_name": {
+          "source": "GET",
+          "message": "GET"
+        },
+        "app.VGFibGVhdQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.short_desc": {
+          "source": "HTTP GET",
+          "message": "HTTP GET"
+        },
+        "app.VGFibGVhdQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.desc": {
+          "source": "HTTP `HEAD`",
+          "message": "HTTP `HEAD`"
+        },
+        "app.VGFibGVhdQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.display_name": {
+          "source": "HEAD",
+          "message": "HEAD"
+        },
+        "app.VGFibGVhdQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.short_desc": {
+          "source": "HTTP HEAD",
+          "message": "HTTP HEAD"
+        },
+        "app.VGFibGVhdQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.desc": {
+          "source": "HTTP `PATCH`",
+          "message": "HTTP `PATCH`"
+        },
+        "app.VGFibGVhdQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.display_name": {
+          "source": "PATCH",
+          "message": "PATCH"
+        },
+        "app.VGFibGVhdQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.short_desc": {
+          "source": "HTTP PATCH",
+          "message": "HTTP PATCH"
+        },
+        "app.VGFibGVhdQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.desc": {
+          "source": "HTTP `POST`",
+          "message": "HTTP `POST`"
+        },
+        "app.VGFibGVhdQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.display_name": {
+          "source": "POST",
+          "message": "POST"
+        },
+        "app.VGFibGVhdQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.short_desc": {
+          "source": "HTTP POST",
+          "message": "HTTP POST"
+        },
+        "app.VGFibGVhdQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.desc": {
+          "source": "HTTP `PUT`",
+          "message": "HTTP `PUT`"
+        },
+        "app.VGFibGVhdQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.display_name": {
+          "source": "PUT",
+          "message": "PUT"
+        },
+        "app.VGFibGVhdQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.short_desc": {
+          "source": "HTTP PUT",
+          "message": "HTTP PUT"
+        },
+        "app.VGFibGVhdQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.desc": {
+          "source": "HTTP `TRACE`",
+          "message": "HTTP `TRACE`"
+        },
+        "app.VGFibGVhdQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.display_name": {
+          "source": "TRACE",
+          "message": "TRACE"
+        },
+        "app.VGFibGVhdQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.short_desc": {
+          "source": "HTTP TRACE",
+          "message": "HTTP TRACE"
+        },
+        "app.VGFibGVhdQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "Il metodo HTTP da utilizzare per la richiesta"
+        },
+        "app.VGFibGVhdQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.display_name": {
+          "source": "HTTP Method",
+          "message": "Metodo HTTP"
+        },
+        "app.VGFibGVhdQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.short_desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "Il metodo HTTP da utilizzare per la richiesta"
+        },
+        "app.VGFibGVhdQ.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain `{name}` placeholders that are replaced from `path_vars`. Example: `/users/{id}/comments`.",
+          "message": "Il percorso URI relativo all'URL di base dell'API della connessione. Può contenere segnaposto `{name}` che vengono sostituiti da `path_vars`. Esempio: `/users/{id}/comments`."
+        },
+        "app.VGFibGVhdQ.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.display_name": {
+          "source": "URI Path",
+          "message": "Percorso URI"
+        },
+        "app.VGFibGVhdQ.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.short_desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain '{name}' placeholders that are replaced from 'path_vars'. Example: '/users/{id}/comments'",
+          "message": "Il percorso URI relativo all'URL di base dell'API della connessione. Può contenere segnaposto '{name}' che vengono sostituiti da 'path_vars'. Esempio: '/users/{id}/comments'"
+        },
+        "app.VGFibGVhdQ.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.desc": {
+          "source": "Hash of values substituted into `{name}` placeholders in the URI path. Example: with `path = /users/{id}` and `path_vars = {id: 123}` the framework sends `/users/123`. Values are URL-encoded.",
+          "message": "Hash dei valori sostituiti nei segnaposto `{name}` nel percorso URI. Esempio: con `path = /users/{id}` e `path_vars = {id: 123}` il framework invia `/users/123`. I valori sono codificati in URL."
+        },
+        "app.VGFibGVhdQ.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.display_name": {
+          "source": "Path Variables",
+          "message": "Variabili del percorso"
+        },
+        "app.VGFibGVhdQ.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.short_desc": {
+          "source": "Values for {name} placeholders in path",
+          "message": "Valori per i segnaposto {name} nel percorso"
+        },
+        "app.VGFibGVhdQ.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.desc": {
+          "source": "Hash of query string parameters to append to the URI path. Values are URL-encoded; list values are joined with `,`.",
+          "message": "Hash dei parametri della stringa di query da aggiungere al percorso URI. I valori sono codificati in URL; i valori dell'elenco sono uniti con `,`."
+        },
+        "app.VGFibGVhdQ.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.display_name": {
+          "source": "Query Arguments",
+          "message": "Argomenti della query"
+        },
+        "app.VGFibGVhdQ.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.short_desc": {
+          "source": "Query string parameters",
+          "message": "Parametri della stringa di query"
+        },
+        "app.VGFibGVhdQ.action.bWFrZS1hcGktY2FsbA.short_desc": {
+          "source": "Make a custom API call to Tableau",
+          "message": "Esegui una chiamata API personalizzata a Tableau"
+        },
+        "app.VGFibGVhdQ.action.c2VhcmNoLWRhdGFzb3VyY2Vz.desc": {
+          "source": "Search for datasources in Tableau with optional filtering",
+          "message": "Cerca origini dati in Tableau con filtri opzionali"
+        },
+        "app.VGFibGVhdQ.action.c2VhcmNoLWRhdGFzb3VyY2Vz.display_name": {
+          "source": "Search Datasources",
+          "message": "Cerca origini dati"
+        },
+        "app.VGFibGVhdQ.action.c2VhcmNoLWRhdGFzb3VyY2Vz.option.ZGF0YXNvdXJjZV9pZA.desc": {
+          "source": "Filter by datasource ID for single record lookup",
+          "message": "Filtra per ID origine dati per la ricerca di un singolo record"
+        },
+        "app.VGFibGVhdQ.action.c2VhcmNoLWRhdGFzb3VyY2Vz.option.ZGF0YXNvdXJjZV9pZA.display_name": {
+          "source": "Datasource ID",
+          "message": "ID origine dati"
+        },
+        "app.VGFibGVhdQ.action.c2VhcmNoLWRhdGFzb3VyY2Vz.option.ZGF0YXNvdXJjZV9pZA.short_desc": {
+          "source": "Filter by datasource ID",
+          "message": "Filtra per ID origine dati"
+        },
+        "app.VGFibGVhdQ.action.c2VhcmNoLWRhdGFzb3VyY2Vz.option.bGltaXQ.desc": {
+          "source": "Maximum number of results to return",
+          "message": "Numero massimo di risultati da restituire"
+        },
+        "app.VGFibGVhdQ.action.c2VhcmNoLWRhdGFzb3VyY2Vz.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "Limite"
+        },
+        "app.VGFibGVhdQ.action.c2VhcmNoLWRhdGFzb3VyY2Vz.option.bGltaXQ.short_desc": {
+          "source": "Maximum results",
+          "message": "Risultati massimi"
+        },
+        "app.VGFibGVhdQ.action.c2VhcmNoLWRhdGFzb3VyY2Vz.option.bmFtZQ.desc": {
+          "source": "Filter datasources by name",
+          "message": "Filtra le origini dati per nome"
+        },
+        "app.VGFibGVhdQ.action.c2VhcmNoLWRhdGFzb3VyY2Vz.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "Nome"
+        },
+        "app.VGFibGVhdQ.action.c2VhcmNoLWRhdGFzb3VyY2Vz.option.bmFtZQ.short_desc": {
+          "source": "Filter by name",
+          "message": "Filtra per nome"
+        },
+        "app.VGFibGVhdQ.action.c2VhcmNoLWRhdGFzb3VyY2Vz.short_desc": {
+          "source": "Search for datasources",
+          "message": "Cerca origini dati"
+        },
+        "app.VGFibGVhdQ.action.c2VhcmNoLXByb2plY3Rz.desc": {
+          "source": "Search for projects in Tableau with optional filtering",
+          "message": "Cerca progetti in Tableau con filtri opzionali"
+        },
+        "app.VGFibGVhdQ.action.c2VhcmNoLXByb2plY3Rz.display_name": {
+          "source": "Search Projects",
+          "message": "Cerca progetti"
+        },
+        "app.VGFibGVhdQ.action.c2VhcmNoLXByb2plY3Rz.option.bGltaXQ.desc": {
+          "source": "Maximum number of results to return",
+          "message": "Numero massimo di risultati da restituire"
+        },
+        "app.VGFibGVhdQ.action.c2VhcmNoLXByb2plY3Rz.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "Limite"
+        },
+        "app.VGFibGVhdQ.action.c2VhcmNoLXByb2plY3Rz.option.bGltaXQ.short_desc": {
+          "source": "Maximum results",
+          "message": "Risultati massimi"
+        },
+        "app.VGFibGVhdQ.action.c2VhcmNoLXByb2plY3Rz.option.bmFtZQ.desc": {
+          "source": "Filter projects by name",
+          "message": "Filtra i progetti per nome"
+        },
+        "app.VGFibGVhdQ.action.c2VhcmNoLXByb2plY3Rz.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "Nome"
+        },
+        "app.VGFibGVhdQ.action.c2VhcmNoLXByb2plY3Rz.option.bmFtZQ.short_desc": {
+          "source": "Filter by name",
+          "message": "Filtra per nome"
+        },
+        "app.VGFibGVhdQ.action.c2VhcmNoLXByb2plY3Rz.option.cHJvamVjdF9pZA.desc": {
+          "source": "Filter by project ID for single record lookup",
+          "message": "Filtra per ID progetto per la ricerca di un singolo record"
+        },
+        "app.VGFibGVhdQ.action.c2VhcmNoLXByb2plY3Rz.option.cHJvamVjdF9pZA.display_name": {
+          "source": "Project ID",
+          "message": "ID progetto"
+        },
+        "app.VGFibGVhdQ.action.c2VhcmNoLXByb2plY3Rz.option.cHJvamVjdF9pZA.short_desc": {
+          "source": "Filter by project ID",
+          "message": "Filtra per ID progetto"
+        },
+        "app.VGFibGVhdQ.action.c2VhcmNoLXByb2plY3Rz.short_desc": {
+          "source": "Search for projects",
+          "message": "Cerca progetti"
+        },
+        "app.VGFibGVhdQ.action.c2VhcmNoLXVzZXJz.desc": {
+          "source": "Search for users in Tableau with optional filtering",
+          "message": "Cerca utenti in Tableau con filtri opzionali"
+        },
+        "app.VGFibGVhdQ.action.c2VhcmNoLXVzZXJz.display_name": {
+          "source": "Search Users",
+          "message": "Cerca utenti"
+        },
+        "app.VGFibGVhdQ.action.c2VhcmNoLXVzZXJz.option.bGltaXQ.desc": {
+          "source": "Maximum number of results to return",
+          "message": "Numero massimo di risultati da restituire"
+        },
+        "app.VGFibGVhdQ.action.c2VhcmNoLXVzZXJz.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "Limite"
+        },
+        "app.VGFibGVhdQ.action.c2VhcmNoLXVzZXJz.option.bGltaXQ.short_desc": {
+          "source": "Maximum results",
+          "message": "Risultati massimi"
+        },
+        "app.VGFibGVhdQ.action.c2VhcmNoLXVzZXJz.option.bmFtZQ.desc": {
+          "source": "Filter users by name",
+          "message": "Filtra gli utenti per nome"
+        },
+        "app.VGFibGVhdQ.action.c2VhcmNoLXVzZXJz.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "Nome"
+        },
+        "app.VGFibGVhdQ.action.c2VhcmNoLXVzZXJz.option.bmFtZQ.short_desc": {
+          "source": "Filter by name",
+          "message": "Filtra per nome"
+        },
+        "app.VGFibGVhdQ.action.c2VhcmNoLXVzZXJz.option.c2l0ZV9yb2xl.allowed-value.c3RyaW5nOkNyZWF0b3I.display_name": {
+          "source": "Creator",
+          "message": "Creatore"
+        },
+        "app.VGFibGVhdQ.action.c2VhcmNoLXVzZXJz.option.c2l0ZV9yb2xl.allowed-value.c3RyaW5nOkV4cGxvcmVy.display_name": {
+          "source": "Explorer",
+          "message": "Explorer"
+        },
+        "app.VGFibGVhdQ.action.c2VhcmNoLXVzZXJz.option.c2l0ZV9yb2xl.allowed-value.c3RyaW5nOkV4cGxvcmVyQ2FuUHVibGlzaA.display_name": {
+          "source": "Explorer (Can Publish)",
+          "message": "Explorer (può pubblicare)"
+        },
+        "app.VGFibGVhdQ.action.c2VhcmNoLXVzZXJz.option.c2l0ZV9yb2xl.allowed-value.c3RyaW5nOlNpdGVBZG1pbmlzdHJhdG9yQ3JlYXRvcg.display_name": {
+          "source": "Site Administrator Creator",
+          "message": "Site Administrator Creator"
+        },
+        "app.VGFibGVhdQ.action.c2VhcmNoLXVzZXJz.option.c2l0ZV9yb2xl.allowed-value.c3RyaW5nOlNpdGVBZG1pbmlzdHJhdG9yRXhwbG9yZXI.display_name": {
+          "source": "Site Administrator Explorer",
+          "message": "Site Administrator Explorer"
+        },
+        "app.VGFibGVhdQ.action.c2VhcmNoLXVzZXJz.option.c2l0ZV9yb2xl.allowed-value.c3RyaW5nOlVubGljZW5zZWQ.display_name": {
+          "source": "Unlicensed",
+          "message": "Senza licenza"
+        },
+        "app.VGFibGVhdQ.action.c2VhcmNoLXVzZXJz.option.c2l0ZV9yb2xl.allowed-value.c3RyaW5nOlZpZXdlcg.display_name": {
+          "source": "Viewer",
+          "message": "Visualizzatore"
+        },
+        "app.VGFibGVhdQ.action.c2VhcmNoLXVzZXJz.option.c2l0ZV9yb2xl.desc": {
+          "source": "Filter users by site role",
+          "message": "Filtra gli utenti per ruolo del sito"
+        },
+        "app.VGFibGVhdQ.action.c2VhcmNoLXVzZXJz.option.c2l0ZV9yb2xl.display_name": {
+          "source": "Site Role",
+          "message": "Ruolo sul sito"
+        },
+        "app.VGFibGVhdQ.action.c2VhcmNoLXVzZXJz.option.c2l0ZV9yb2xl.short_desc": {
+          "source": "Filter by site role",
+          "message": "Filtra per ruolo del sito"
+        },
+        "app.VGFibGVhdQ.action.c2VhcmNoLXVzZXJz.option.dXNlcl9pZA.desc": {
+          "source": "Filter by user ID for single record lookup",
+          "message": "Filtra per ID utente per la ricerca di un singolo record"
+        },
+        "app.VGFibGVhdQ.action.c2VhcmNoLXVzZXJz.option.dXNlcl9pZA.display_name": {
+          "source": "User ID",
+          "message": "ID utente"
+        },
+        "app.VGFibGVhdQ.action.c2VhcmNoLXVzZXJz.option.dXNlcl9pZA.short_desc": {
+          "source": "Filter by user ID",
+          "message": "Filtra per ID utente"
+        },
+        "app.VGFibGVhdQ.action.c2VhcmNoLXVzZXJz.short_desc": {
+          "source": "Search for users",
+          "message": "Cerca utenti"
+        },
+        "app.VGFibGVhdQ.action.d2F0Y2gtZGF0YXNvdXJjZXM.desc": {
+          "source": "Fires when new datasources are detected in Tableau. Uses polling to detect new records.",
+          "message": "Si attiva quando vengono rilevate nuove origini dati in Tableau. Utilizza il polling per rilevare nuovi record."
+        },
+        "app.VGFibGVhdQ.action.d2F0Y2gtZGF0YXNvdXJjZXM.display_name": {
+          "source": "New Datasource",
+          "message": "Nuova origine dati"
+        },
+        "app.VGFibGVhdQ.action.d2F0Y2gtZGF0YXNvdXJjZXM.option.cG9sbF9pbnRlcnZhbA.desc": {
+          "source": "How often to check for new records (minimum 30 seconds)",
+          "message": "Frequenza con cui verificare la presenza di nuovi record (minimo 30 secondi)"
+        },
+        "app.VGFibGVhdQ.action.d2F0Y2gtZGF0YXNvdXJjZXM.option.cG9sbF9pbnRlcnZhbA.display_name": {
+          "source": "Poll Interval",
+          "message": "Intervallo di polling"
+        },
+        "app.VGFibGVhdQ.action.d2F0Y2gtZGF0YXNvdXJjZXM.option.cG9sbF9pbnRlcnZhbA.short_desc": {
+          "source": "Polling interval in seconds",
+          "message": "Intervallo di polling in secondi"
+        },
+        "app.VGFibGVhdQ.action.d2F0Y2gtZGF0YXNvdXJjZXM.short_desc": {
+          "source": "Trigger when a new datasource appears",
+          "message": "Si attiva quando compare una nuova origine dati"
+        },
+        "app.VGFibGVhdQ.action.d2F0Y2gtcHJvamVjdHM.desc": {
+          "source": "Fires when new projects are detected in Tableau. Uses polling to detect new records.",
+          "message": "Si attiva quando vengono rilevati nuovi progetti in Tableau. Utilizza il polling per rilevare nuovi record."
+        },
+        "app.VGFibGVhdQ.action.d2F0Y2gtcHJvamVjdHM.display_name": {
+          "source": "New Project",
+          "message": "Nuovo progetto"
+        },
+        "app.VGFibGVhdQ.action.d2F0Y2gtcHJvamVjdHM.option.cG9sbF9pbnRlcnZhbA.desc": {
+          "source": "How often to check for new records (minimum 30 seconds)",
+          "message": "Frequenza con cui verificare la presenza di nuovi record (minimo 30 secondi)"
+        },
+        "app.VGFibGVhdQ.action.d2F0Y2gtcHJvamVjdHM.option.cG9sbF9pbnRlcnZhbA.display_name": {
+          "source": "Poll Interval",
+          "message": "Intervallo di polling"
+        },
+        "app.VGFibGVhdQ.action.d2F0Y2gtcHJvamVjdHM.option.cG9sbF9pbnRlcnZhbA.short_desc": {
+          "source": "Polling interval in seconds",
+          "message": "Intervallo di polling in secondi"
+        },
+        "app.VGFibGVhdQ.action.d2F0Y2gtcHJvamVjdHM.short_desc": {
+          "source": "Trigger when a new project appears",
+          "message": "Si attiva quando compare un nuovo progetto"
+        },
+        "app.VGFibGVhdQ.action.dXBkYXRlLWRhdGFzb3VyY2U.desc": {
+          "source": "Update an existing datasource in Tableau",
+          "message": "Aggiorna un'origine dati esistente in Tableau"
+        },
+        "app.VGFibGVhdQ.action.dXBkYXRlLWRhdGFzb3VyY2U.display_name": {
+          "source": "Update a Datasource",
+          "message": "Aggiorna un'origine dati"
+        },
+        "app.VGFibGVhdQ.action.dXBkYXRlLWRhdGFzb3VyY2U.option.Y2VydGlmaWNhdGlvbl9ub3Rl.desc": {
+          "source": "A note about the datasource certification",
+          "message": "Una nota relativa alla certificazione dell'origine dati"
+        },
+        "app.VGFibGVhdQ.action.dXBkYXRlLWRhdGFzb3VyY2U.option.Y2VydGlmaWNhdGlvbl9ub3Rl.display_name": {
+          "source": "Certification Note",
+          "message": "Nota di certificazione"
+        },
+        "app.VGFibGVhdQ.action.dXBkYXRlLWRhdGFzb3VyY2U.option.Y2VydGlmaWNhdGlvbl9ub3Rl.short_desc": {
+          "source": "The certification note",
+          "message": "La nota di certificazione"
+        },
+        "app.VGFibGVhdQ.action.dXBkYXRlLWRhdGFzb3VyY2U.option.ZGF0YXNvdXJjZV9pZA.desc": {
+          "source": "The unique identifier of the datasource to update",
+          "message": "L'identificatore univoco dell'origine dati da aggiornare"
+        },
+        "app.VGFibGVhdQ.action.dXBkYXRlLWRhdGFzb3VyY2U.option.ZGF0YXNvdXJjZV9pZA.display_name": {
+          "source": "Datasource ID",
+          "message": "ID origine dati"
+        },
+        "app.VGFibGVhdQ.action.dXBkYXRlLWRhdGFzb3VyY2U.option.ZGF0YXNvdXJjZV9pZA.short_desc": {
+          "source": "The datasource ID to update",
+          "message": "L'ID dell'origine dati da aggiornare"
+        },
+        "app.VGFibGVhdQ.action.dXBkYXRlLWRhdGFzb3VyY2U.option.aXNfY2VydGlmaWVk.desc": {
+          "source": "Whether the datasource is certified",
+          "message": "Indica se l'origine dati è certificata"
+        },
+        "app.VGFibGVhdQ.action.dXBkYXRlLWRhdGFzb3VyY2U.option.aXNfY2VydGlmaWVk.display_name": {
+          "source": "Is Certified",
+          "message": "È certificata"
+        },
+        "app.VGFibGVhdQ.action.dXBkYXRlLWRhdGFzb3VyY2U.option.aXNfY2VydGlmaWVk.short_desc": {
+          "source": "Whether the datasource is certified",
+          "message": "Indica se l'origine dati è certificata"
+        },
+        "app.VGFibGVhdQ.action.dXBkYXRlLWRhdGFzb3VyY2U.option.bmFtZQ.desc": {
+          "source": "The new name of the datasource",
+          "message": "Il nuovo nome dell'origine dati"
+        },
+        "app.VGFibGVhdQ.action.dXBkYXRlLWRhdGFzb3VyY2U.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "Nome"
+        },
+        "app.VGFibGVhdQ.action.dXBkYXRlLWRhdGFzb3VyY2U.option.bmFtZQ.short_desc": {
+          "source": "The new datasource name",
+          "message": "Il nuovo nome dell'origine dati"
+        },
+        "app.VGFibGVhdQ.action.dXBkYXRlLWRhdGFzb3VyY2U.option.cHJvamVjdF9pZA.desc": {
+          "source": "The ID of the project to move the datasource to",
+          "message": "L'ID del progetto in cui spostare l'origine dati"
+        },
+        "app.VGFibGVhdQ.action.dXBkYXRlLWRhdGFzb3VyY2U.option.cHJvamVjdF9pZA.display_name": {
+          "source": "Project ID",
+          "message": "ID progetto"
+        },
+        "app.VGFibGVhdQ.action.dXBkYXRlLWRhdGFzb3VyY2U.option.cHJvamVjdF9pZA.short_desc": {
+          "source": "The project to move the datasource to",
+          "message": "Il progetto in cui spostare l'origine dati"
+        },
+        "app.VGFibGVhdQ.action.dXBkYXRlLWRhdGFzb3VyY2U.short_desc": {
+          "source": "Update an existing datasource",
+          "message": "Aggiorna un'origine dati esistente"
+        },
+        "app.VGFibGVhdQ.action.dXBkYXRlLXByb2plY3Q.desc": {
+          "source": "Update an existing project in Tableau",
+          "message": "Aggiorna un progetto esistente in Tableau"
+        },
+        "app.VGFibGVhdQ.action.dXBkYXRlLXByb2plY3Q.display_name": {
+          "source": "Update a Project",
+          "message": "Aggiorna un progetto"
+        },
+        "app.VGFibGVhdQ.action.dXBkYXRlLXByb2plY3Q.option.Y29udGVudF9wZXJtaXNzaW9ucw.allowed-value.c3RyaW5nOk1hbmFnZWRCeU93bmVy.display_name": {
+          "source": "Managed By Owner",
+          "message": "Gestito dal proprietario"
+        },
+        "app.VGFibGVhdQ.action.dXBkYXRlLXByb2plY3Q.option.Y29udGVudF9wZXJtaXNzaW9ucw.allowed-value.c3RyaW5nOkxvY2tlZFRvUHJvamVjdA.display_name": {
+          "source": "Locked To Project",
+          "message": "Bloccato sul progetto"
+        },
+        "app.VGFibGVhdQ.action.dXBkYXRlLXByb2plY3Q.option.Y29udGVudF9wZXJtaXNzaW9ucw.allowed-value.c3RyaW5nOkxvY2tlZFRvUHJvamVjdFdpdGhvdXROZXN0ZWQ.display_name": {
+          "source": "Locked To Project Without Nested",
+          "message": "Bloccato sul progetto senza nidificati"
+        },
+        "app.VGFibGVhdQ.action.dXBkYXRlLXByb2plY3Q.option.Y29udGVudF9wZXJtaXNzaW9ucw.desc": {
+          "source": "The content permissions mode for the project",
+          "message": "La modalità delle autorizzazioni per i contenuti per il progetto"
+        },
+        "app.VGFibGVhdQ.action.dXBkYXRlLXByb2plY3Q.option.Y29udGVudF9wZXJtaXNzaW9ucw.display_name": {
+          "source": "Content Permissions",
+          "message": "Autorizzazioni per i contenuti"
+        },
+        "app.VGFibGVhdQ.action.dXBkYXRlLXByb2plY3Q.option.Y29udGVudF9wZXJtaXNzaW9ucw.short_desc": {
+          "source": "The content permissions mode",
+          "message": "La modalità delle autorizzazioni per i contenuti"
+        },
+        "app.VGFibGVhdQ.action.dXBkYXRlLXByb2plY3Q.option.ZGVzY3JpcHRpb24.desc": {
+          "source": "The new description of the project",
+          "message": "La nuova descrizione del progetto"
+        },
+        "app.VGFibGVhdQ.action.dXBkYXRlLXByb2plY3Q.option.ZGVzY3JpcHRpb24.display_name": {
+          "source": "Description",
+          "message": "Descrizione"
+        },
+        "app.VGFibGVhdQ.action.dXBkYXRlLXByb2plY3Q.option.ZGVzY3JpcHRpb24.short_desc": {
+          "source": "The new project description",
+          "message": "La nuova descrizione del progetto"
+        },
+        "app.VGFibGVhdQ.action.dXBkYXRlLXByb2plY3Q.option.bmFtZQ.desc": {
+          "source": "The new name of the project",
+          "message": "Il nuovo nome del progetto"
+        },
+        "app.VGFibGVhdQ.action.dXBkYXRlLXByb2plY3Q.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "Nome"
+        },
+        "app.VGFibGVhdQ.action.dXBkYXRlLXByb2plY3Q.option.bmFtZQ.short_desc": {
+          "source": "The new project name",
+          "message": "Il nuovo nome del progetto"
+        },
+        "app.VGFibGVhdQ.action.dXBkYXRlLXByb2plY3Q.option.cGFyZW50X3Byb2plY3RfaWQ.desc": {
+          "source": "The new parent project ID for moving the project",
+          "message": "Il nuovo ID del progetto padre per spostare il progetto"
+        },
+        "app.VGFibGVhdQ.action.dXBkYXRlLXByb2plY3Q.option.cGFyZW50X3Byb2plY3RfaWQ.display_name": {
+          "source": "Parent Project ID",
+          "message": "ID progetto padre"
+        },
+        "app.VGFibGVhdQ.action.dXBkYXRlLXByb2plY3Q.option.cGFyZW50X3Byb2plY3RfaWQ.short_desc": {
+          "source": "The new parent project ID",
+          "message": "Il nuovo ID del progetto padre"
+        },
+        "app.VGFibGVhdQ.action.dXBkYXRlLXByb2plY3Q.option.cHJvamVjdF9pZA.desc": {
+          "source": "The unique identifier of the project to update",
+          "message": "L'identificatore univoco del progetto da aggiornare"
+        },
+        "app.VGFibGVhdQ.action.dXBkYXRlLXByb2plY3Q.option.cHJvamVjdF9pZA.display_name": {
+          "source": "Project ID",
+          "message": "ID progetto"
+        },
+        "app.VGFibGVhdQ.action.dXBkYXRlLXByb2plY3Q.option.cHJvamVjdF9pZA.short_desc": {
+          "source": "The project ID to update",
+          "message": "L'ID del progetto da aggiornare"
+        },
+        "app.VGFibGVhdQ.action.dXBkYXRlLXByb2plY3Q.short_desc": {
+          "source": "Update an existing project",
+          "message": "Aggiorna un progetto esistente"
+        },
+        "app.VGFibGVhdQ.action.dXBkYXRlLXVzZXI.desc": {
+          "source": "Update an existing user in Tableau",
+          "message": "Aggiorna un utente esistente in Tableau"
+        },
+        "app.VGFibGVhdQ.action.dXBkYXRlLXVzZXI.display_name": {
+          "source": "Update a User",
+          "message": "Aggiorna un utente"
+        },
+        "app.VGFibGVhdQ.action.dXBkYXRlLXVzZXI.option.YXV0aF9zZXR0aW5n.allowed-value.c3RyaW5nOk9wZW5JRA.desc": {
+          "source": "OpenID Connect authentication",
+          "message": "Autenticazione OpenID Connect"
+        },
+        "app.VGFibGVhdQ.action.dXBkYXRlLXVzZXI.option.YXV0aF9zZXR0aW5n.allowed-value.c3RyaW5nOlNBTUw.desc": {
+          "source": "SAML authentication",
+          "message": "Autenticazione SAML"
+        },
+        "app.VGFibGVhdQ.action.dXBkYXRlLXVzZXI.option.YXV0aF9zZXR0aW5n.allowed-value.c3RyaW5nOlNlcnZlckRlZmF1bHQ.desc": {
+          "source": "Use server default authentication",
+          "message": "Usa l'autenticazione predefinita del server"
+        },
+        "app.VGFibGVhdQ.action.dXBkYXRlLXVzZXI.option.YXV0aF9zZXR0aW5n.allowed-value.c3RyaW5nOlRhYmxlYXVJRFdpdGhNRkE.desc": {
+          "source": "Tableau ID with multi-factor authentication",
+          "message": "Tableau ID con autenticazione a più fattori"
+        },
+        "app.VGFibGVhdQ.action.dXBkYXRlLXVzZXI.option.YXV0aF9zZXR0aW5n.desc": {
+          "source": "The new authentication setting for the user",
+          "message": "La nuova impostazione di autenticazione per l'utente"
+        },
+        "app.VGFibGVhdQ.action.dXBkYXRlLXVzZXI.option.YXV0aF9zZXR0aW5n.display_name": {
+          "source": "Auth Setting",
+          "message": "Impostazione autenticazione"
+        },
+        "app.VGFibGVhdQ.action.dXBkYXRlLXVzZXI.option.YXV0aF9zZXR0aW5n.short_desc": {
+          "source": "The authentication setting",
+          "message": "L'impostazione di autenticazione"
+        },
+        "app.VGFibGVhdQ.action.dXBkYXRlLXVzZXI.option.ZW1haWw.desc": {
+          "source": "The new email address of the user",
+          "message": "Il nuovo indirizzo email dell'utente"
+        },
+        "app.VGFibGVhdQ.action.dXBkYXRlLXVzZXI.option.ZW1haWw.display_name": {
+          "source": "Email",
+          "message": "E-mail"
+        },
+        "app.VGFibGVhdQ.action.dXBkYXRlLXVzZXI.option.ZW1haWw.short_desc": {
+          "source": "The user's email address",
+          "message": "L'indirizzo email dell'utente"
+        },
+        "app.VGFibGVhdQ.action.dXBkYXRlLXVzZXI.option.ZnVsbF9uYW1l.desc": {
+          "source": "The new full name of the user",
+          "message": "Il nuovo nome completo dell'utente"
+        },
+        "app.VGFibGVhdQ.action.dXBkYXRlLXVzZXI.option.ZnVsbF9uYW1l.display_name": {
+          "source": "Full Name",
+          "message": "Nome completo"
+        },
+        "app.VGFibGVhdQ.action.dXBkYXRlLXVzZXI.option.ZnVsbF9uYW1l.short_desc": {
+          "source": "The user's full name",
+          "message": "Il nome completo dell'utente"
+        },
+        "app.VGFibGVhdQ.action.dXBkYXRlLXVzZXI.option.c2l0ZV9yb2xl.allowed-value.c3RyaW5nOkNyZWF0b3I.display_name": {
+          "source": "Creator",
+          "message": "Creatore"
+        },
+        "app.VGFibGVhdQ.action.dXBkYXRlLXVzZXI.option.c2l0ZV9yb2xl.allowed-value.c3RyaW5nOkV4cGxvcmVy.display_name": {
+          "source": "Explorer",
+          "message": "Explorer"
+        },
+        "app.VGFibGVhdQ.action.dXBkYXRlLXVzZXI.option.c2l0ZV9yb2xl.allowed-value.c3RyaW5nOkV4cGxvcmVyQ2FuUHVibGlzaA.display_name": {
+          "source": "Explorer (Can Publish)",
+          "message": "Explorer (può pubblicare)"
+        },
+        "app.VGFibGVhdQ.action.dXBkYXRlLXVzZXI.option.c2l0ZV9yb2xl.allowed-value.c3RyaW5nOlNpdGVBZG1pbmlzdHJhdG9yQ3JlYXRvcg.display_name": {
+          "source": "Site Administrator Creator",
+          "message": "Site Administrator Creator"
+        },
+        "app.VGFibGVhdQ.action.dXBkYXRlLXVzZXI.option.c2l0ZV9yb2xl.allowed-value.c3RyaW5nOlNpdGVBZG1pbmlzdHJhdG9yRXhwbG9yZXI.display_name": {
+          "source": "Site Administrator Explorer",
+          "message": "Site Administrator Explorer"
+        },
+        "app.VGFibGVhdQ.action.dXBkYXRlLXVzZXI.option.c2l0ZV9yb2xl.allowed-value.c3RyaW5nOlVubGljZW5zZWQ.display_name": {
+          "source": "Unlicensed",
+          "message": "Senza licenza"
+        },
+        "app.VGFibGVhdQ.action.dXBkYXRlLXVzZXI.option.c2l0ZV9yb2xl.allowed-value.c3RyaW5nOlZpZXdlcg.display_name": {
+          "source": "Viewer",
+          "message": "Visualizzatore"
+        },
+        "app.VGFibGVhdQ.action.dXBkYXRlLXVzZXI.option.c2l0ZV9yb2xl.desc": {
+          "source": "The new site role for the user",
+          "message": "Il nuovo ruolo nel sito per l'utente"
+        },
+        "app.VGFibGVhdQ.action.dXBkYXRlLXVzZXI.option.c2l0ZV9yb2xl.display_name": {
+          "source": "Site Role",
+          "message": "Ruolo sul sito"
+        },
+        "app.VGFibGVhdQ.action.dXBkYXRlLXVzZXI.option.c2l0ZV9yb2xl.short_desc": {
+          "source": "The user's site role",
+          "message": "Il ruolo nel sito dell'utente"
+        },
+        "app.VGFibGVhdQ.action.dXBkYXRlLXVzZXI.option.dXNlcl9pZA.desc": {
+          "source": "The unique identifier of the user to update",
+          "message": "L'identificatore univoco dell'utente da aggiornare"
+        },
+        "app.VGFibGVhdQ.action.dXBkYXRlLXVzZXI.option.dXNlcl9pZA.display_name": {
+          "source": "User ID",
+          "message": "ID utente"
+        },
+        "app.VGFibGVhdQ.action.dXBkYXRlLXVzZXI.option.dXNlcl9pZA.short_desc": {
+          "source": "The user ID to update",
+          "message": "L'ID dell'utente da aggiornare"
+        },
+        "app.VGFibGVhdQ.action.dXBkYXRlLXVzZXI.short_desc": {
+          "source": "Update an existing user",
+          "message": "Aggiorna un utente esistente"
+        },
+        "app.VGFibGVhdQ.desc": {
+          "source": "Tableau is a visual analytics and business intelligence platform for data exploration and dashboard creation.\n\nThis integration supports datasources, projects, users, extract refresh tasks, and event triggers.",
+          "message": "Tableau è una piattaforma di analisi visiva e business intelligence per l'esplorazione dei dati e la creazione di dashboard.\n\nQuesta integrazione supporta origini dati, progetti, utenti, attività di aggiornamento dell'estratto e trigger di eventi."
+        },
+        "app.VGFibGVhdQ.display_name": {
+          "source": "Tableau",
+          "message": "Tableau"
+        },
+        "app.VGFibGVhdQ.short_desc": {
+          "source": "Tableau analytics and data visualization platform",
+          "message": "Piattaforma di analisi e visualizzazione dei dati Tableau"
+        }
+      }
+    }
+  }
+}

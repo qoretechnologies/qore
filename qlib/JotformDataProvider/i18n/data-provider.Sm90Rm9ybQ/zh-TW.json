@@ -1,0 +1,657 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "zh-TW": {
+      "messages": {
+        "app.Sm90Rm9ybQ.action.Y3JlYXRlLXN1Ym1pc3Npb24.desc": {
+          "source": "Submit data to a form programmatically. Select a form first to see available fields.",
+          "message": "以程式化方式向表單提交資料。請先選擇表單以檢視可用欄位。"
+        },
+        "app.Sm90Rm9ybQ.action.Y3JlYXRlLXN1Ym1pc3Npb24.display_name": {
+          "source": "Create Submission",
+          "message": "建立提交資料"
+        },
+        "app.Sm90Rm9ybQ.action.Y3JlYXRlLXN1Ym1pc3Npb24.option.Zm9ybUlE.desc": {
+          "source": "Select the form to create a submission for. The submission fields will update based on your selection.",
+          "message": "選取要建立提交資料的表單。提交欄位將根據您的選取項目進行更新。"
+        },
+        "app.Sm90Rm9ybQ.action.Y3JlYXRlLXN1Ym1pc3Npb24.option.Zm9ybUlE.display_name": {
+          "source": "Form",
+          "message": "表單"
+        },
+        "app.Sm90Rm9ybQ.action.Y3JlYXRlLXN1Ym1pc3Npb24.option.Zm9ybUlE.short_desc": {
+          "source": "The form to submit to",
+          "message": "要提交的目標表單"
+        },
+        "app.Sm90Rm9ybQ.action.Y3JlYXRlLXN1Ym1pc3Npb24.short_desc": {
+          "source": "Create a new form submission",
+          "message": "建立新的表單提交資料"
+        },
+        "app.Sm90Rm9ybQ.action.Z2V0LWZvcm0.desc": {
+          "source": "Retrieve details of a specific form including title, status, and submission count",
+          "message": "擷取特定表單的詳細資訊，包括標題、狀態及提交數量"
+        },
+        "app.Sm90Rm9ybQ.action.Z2V0LWZvcm0.display_name": {
+          "source": "Get Form",
+          "message": "取得表單"
+        },
+        "app.Sm90Rm9ybQ.action.Z2V0LWZvcm0.option.Zm9ybUlE.desc": {
+          "source": "The form to retrieve",
+          "message": "要擷取的表單"
+        },
+        "app.Sm90Rm9ybQ.action.Z2V0LWZvcm0.option.Zm9ybUlE.display_name": {
+          "source": "Form",
+          "message": "表單"
+        },
+        "app.Sm90Rm9ybQ.action.Z2V0LWZvcm0.option.Zm9ybUlE.short_desc": {
+          "source": "The form to retrieve",
+          "message": "要擷取的表單"
+        },
+        "app.Sm90Rm9ybQ.action.Z2V0LWZvcm0.short_desc": {
+          "source": "Get form details",
+          "message": "取得表單詳細資訊"
+        },
+        "app.Sm90Rm9ybQ.action.Z2V0LWZvcm0tc3VibWlzc2lvbnM.desc": {
+          "source": "Retrieve all submissions for a specific form with optional filtering and pagination",
+          "message": "擷取特定表單的所有提交資料，支援選填的篩選與分頁"
+        },
+        "app.Sm90Rm9ybQ.action.Z2V0LWZvcm0tc3VibWlzc2lvbnM.display_name": {
+          "source": "Get Form Submissions",
+          "message": "取得表單提交項目"
+        },
+        "app.Sm90Rm9ybQ.action.Z2V0LWZvcm0tc3VibWlzc2lvbnM.option.Zm9ybUlE.desc": {
+          "source": "Select the form to retrieve submissions for",
+          "message": "選取要擷取提交資料的表單"
+        },
+        "app.Sm90Rm9ybQ.action.Z2V0LWZvcm0tc3VibWlzc2lvbnM.option.Zm9ybUlE.display_name": {
+          "source": "Form",
+          "message": "表單"
+        },
+        "app.Sm90Rm9ybQ.action.Z2V0LWZvcm0tc3VibWlzc2lvbnM.option.Zm9ybUlE.short_desc": {
+          "source": "The form to get submissions from",
+          "message": "要取得提交資料的表單"
+        },
+        "app.Sm90Rm9ybQ.action.Z2V0LWZvcm0tc3VibWlzc2lvbnM.option.ZmlsdGVy.desc": {
+          "source": "Filter submissions using JotForm filter syntax (e.g., {\"status\": \"ACTIVE\"})",
+          "message": "使用 JotForm 篩選語法篩選提交資料（例如 {\"status\": \"ACTIVE\"}）"
+        },
+        "app.Sm90Rm9ybQ.action.Z2V0LWZvcm0tc3VibWlzc2lvbnM.option.ZmlsdGVy.display_name": {
+          "source": "Filter",
+          "message": "濾波器"
+        },
+        "app.Sm90Rm9ybQ.action.Z2V0LWZvcm0tc3VibWlzc2lvbnM.option.ZmlsdGVy.short_desc": {
+          "source": "Filter conditions",
+          "message": "篩選條件"
+        },
+        "app.Sm90Rm9ybQ.action.Z2V0LWZvcm0tc3VibWlzc2lvbnM.option.b3JkZXJieQ.desc": {
+          "source": "Field to sort by (e.g., `created_at`, `updated_at`)",
+          "message": "用於排序的欄位（例如 `created_at`、`updated_at`）"
+        },
+        "app.Sm90Rm9ybQ.action.Z2V0LWZvcm0tc3VibWlzc2lvbnM.option.b3JkZXJieQ.display_name": {
+          "source": "Order By",
+          "message": "排序依據"
+        },
+        "app.Sm90Rm9ybQ.action.Z2V0LWZvcm0tc3VibWlzc2lvbnM.option.b3JkZXJieQ.short_desc": {
+          "source": "Sort order",
+          "message": "排序順序"
+        },
+        "app.Sm90Rm9ybQ.action.Z2V0LWZvcm0tc3VibWlzc2lvbnM.option.bGltaXQ.desc": {
+          "source": "Maximum number of submissions to return",
+          "message": "要傳回的最大提交資料筆數"
+        },
+        "app.Sm90Rm9ybQ.action.Z2V0LWZvcm0tc3VibWlzc2lvbnM.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "限制"
+        },
+        "app.Sm90Rm9ybQ.action.Z2V0LWZvcm0tc3VibWlzc2lvbnM.option.bGltaXQ.short_desc": {
+          "source": "Maximum results",
+          "message": "最大結果數"
+        },
+        "app.Sm90Rm9ybQ.action.Z2V0LWZvcm0tc3VibWlzc2lvbnM.short_desc": {
+          "source": "List submissions for a form",
+          "message": "列出表單的提交資料"
+        },
+        "app.Sm90Rm9ybQ.action.Z2V0LWZvcm0tcmVwb3J0cw.desc": {
+          "source": "Retrieve reports and analytics for a specific form",
+          "message": "擷取特定表單的報告與分析資料"
+        },
+        "app.Sm90Rm9ybQ.action.Z2V0LWZvcm0tcmVwb3J0cw.display_name": {
+          "source": "Get Form Reports",
+          "message": "取得表單報告"
+        },
+        "app.Sm90Rm9ybQ.action.Z2V0LWZvcm0tcmVwb3J0cw.option.Zm9ybUlE.desc": {
+          "source": "The form to retrieve reports for",
+          "message": "要擷取報告的表單"
+        },
+        "app.Sm90Rm9ybQ.action.Z2V0LWZvcm0tcmVwb3J0cw.option.Zm9ybUlE.display_name": {
+          "source": "Form",
+          "message": "表單"
+        },
+        "app.Sm90Rm9ybQ.action.Z2V0LWZvcm0tcmVwb3J0cw.option.Zm9ybUlE.short_desc": {
+          "source": "The form to get reports for",
+          "message": "要取得報告的表單"
+        },
+        "app.Sm90Rm9ybQ.action.Z2V0LWZvcm0tcmVwb3J0cw.short_desc": {
+          "source": "Get form analytics and reports",
+          "message": "取得表單分析與報告"
+        },
+        "app.Sm90Rm9ybQ.action.Z2V0LWZvcm1z.desc": {
+          "source": "Retrieve all forms in the JotForm account with optional filtering",
+          "message": "擷取 JotForm 帳戶中的所有表單，支援選填篩選"
+        },
+        "app.Sm90Rm9ybQ.action.Z2V0LWZvcm1z.display_name": {
+          "source": "Get Forms",
+          "message": "取得表單清單"
+        },
+        "app.Sm90Rm9ybQ.action.Z2V0LWZvcm1z.option.ZmlsdGVy.desc": {
+          "source": "Filter forms using JotForm filter syntax (e.g., {\"status\": \"ENABLED\"})",
+          "message": "使用 JotForm 篩選語法篩選表單（例如 {\"status\": \"ENABLED\"}）"
+        },
+        "app.Sm90Rm9ybQ.action.Z2V0LWZvcm1z.option.ZmlsdGVy.display_name": {
+          "source": "Filter",
+          "message": "濾波器"
+        },
+        "app.Sm90Rm9ybQ.action.Z2V0LWZvcm1z.option.ZmlsdGVy.short_desc": {
+          "source": "Filter conditions",
+          "message": "篩選條件"
+        },
+        "app.Sm90Rm9ybQ.action.Z2V0LWZvcm1z.option.b3JkZXJieQ.desc": {
+          "source": "Field to sort by (e.g., `created_at`, `updated_at`, `title`)",
+          "message": "用於排序的欄位（例如 `created_at`、`updated_at`、`title`）"
+        },
+        "app.Sm90Rm9ybQ.action.Z2V0LWZvcm1z.option.b3JkZXJieQ.display_name": {
+          "source": "Order By",
+          "message": "排序依據"
+        },
+        "app.Sm90Rm9ybQ.action.Z2V0LWZvcm1z.option.b3JkZXJieQ.short_desc": {
+          "source": "Sort order",
+          "message": "排序順序"
+        },
+        "app.Sm90Rm9ybQ.action.Z2V0LWZvcm1z.option.bGltaXQ.desc": {
+          "source": "Maximum number of forms to return",
+          "message": "返回的最大表單數量"
+        },
+        "app.Sm90Rm9ybQ.action.Z2V0LWZvcm1z.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "限制"
+        },
+        "app.Sm90Rm9ybQ.action.Z2V0LWZvcm1z.option.bGltaXQ.short_desc": {
+          "source": "Maximum results",
+          "message": "最大結果數"
+        },
+        "app.Sm90Rm9ybQ.action.Z2V0LWZvcm1z.short_desc": {
+          "source": "List all forms",
+          "message": "列出所有表單"
+        },
+        "app.Sm90Rm9ybQ.action.Z2V0LXN1Ym1pc3Npb24.desc": {
+          "source": "Retrieve a specific submission by its ID",
+          "message": "依 ID 擷取特定提交資料"
+        },
+        "app.Sm90Rm9ybQ.action.Z2V0LXN1Ym1pc3Npb24.display_name": {
+          "source": "Get Submission",
+          "message": "取得提交資料"
+        },
+        "app.Sm90Rm9ybQ.action.Z2V0LXN1Ym1pc3Npb24.option.c3VibWlzc2lvbklE.desc": {
+          "source": "The unique ID of the submission to retrieve",
+          "message": "要擷取的提交資料唯一 ID"
+        },
+        "app.Sm90Rm9ybQ.action.Z2V0LXN1Ym1pc3Npb24.option.c3VibWlzc2lvbklE.display_name": {
+          "source": "Submission ID",
+          "message": "提交 ID"
+        },
+        "app.Sm90Rm9ybQ.action.Z2V0LXN1Ym1pc3Npb24.option.c3VibWlzc2lvbklE.short_desc": {
+          "source": "The submission to retrieve",
+          "message": "要擷取的提交資料"
+        },
+        "app.Sm90Rm9ybQ.action.Z2V0LXN1Ym1pc3Npb24.short_desc": {
+          "source": "Get a specific form submission",
+          "message": "取得特定表單提交資料"
+        },
+        "app.Sm90Rm9ybQ.action.ZGVsZXRlLXN1Ym1pc3Npb24.desc": {
+          "source": "Permanently delete a submission from a form",
+          "message": "從表單中永久刪除一筆提交資料"
+        },
+        "app.Sm90Rm9ybQ.action.ZGVsZXRlLXN1Ym1pc3Npb24.display_name": {
+          "source": "Delete Submission",
+          "message": "刪除提交資料"
+        },
+        "app.Sm90Rm9ybQ.action.ZGVsZXRlLXN1Ym1pc3Npb24.option.c3VibWlzc2lvbklE.desc": {
+          "source": "The ID of the submission to delete",
+          "message": "要刪除的提交資料 ID"
+        },
+        "app.Sm90Rm9ybQ.action.ZGVsZXRlLXN1Ym1pc3Npb24.option.c3VibWlzc2lvbklE.display_name": {
+          "source": "Submission ID",
+          "message": "提交 ID"
+        },
+        "app.Sm90Rm9ybQ.action.ZGVsZXRlLXN1Ym1pc3Npb24.option.c3VibWlzc2lvbklE.short_desc": {
+          "source": "The submission to delete",
+          "message": "要刪除的提交資料"
+        },
+        "app.Sm90Rm9ybQ.action.ZGVsZXRlLXN1Ym1pc3Npb24.short_desc": {
+          "source": "Delete a form submission",
+          "message": "刪除表單提交資料"
+        },
+        "app.Sm90Rm9ybQ.action.bWFrZS1hcGktY2FsbA.desc": {
+          "source": "Make a custom HTTP / REST API call to **JotForm** using the configured connection's authentication.\n\nSpecify the HTTP method, the URI path (relative to the connection's API base URL), optional query parameters, headers, and request body. The response is returned as a hash containing the status code, response headers, and response body.\n\nUse this action for endpoints that are not yet exposed as first-class actions on this app.",
+          "message": "使用已設定連線的驗證向 **JotForm** 發起自訂 HTTP / REST API 呼叫。\n\n指定 HTTP 方法、URI 路徑（相對於連線的 API 基本 URL）、選填查詢參數、標頭以及請求內文。回應將以包含狀態碼、回應標頭和回應內文的雜湊形式傳回。\n\n當此應用程式尚未將特定端點封裝為一級動作時，請使用此動作。"
+        },
+        "app.Sm90Rm9ybQ.action.bWFrZS1hcGktY2FsbA.display_name": {
+          "source": "Make an API call",
+          "message": "進行 API 呼叫"
+        },
+        "app.Sm90Rm9ybQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.desc": {
+          "source": "The request body. The effective type depends on `body_type`: JSON/form/YAML expect a hash, XML/text expect a string, multipart expects a file structure, binary expects raw bytes.",
+          "message": "請求主體。有效類型取決於 `body_type`：JSON/表單/YAML 預期為雜湊，XML/文字預期為字串，multipart 預期為檔案結構，二進位預期為原始位元組。"
+        },
+        "app.Sm90Rm9ybQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.display_name": {
+          "source": "Body",
+          "message": "內文"
+        },
+        "app.Sm90Rm9ybQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.short_desc": {
+          "source": "The request body",
+          "message": "請求主體"
+        },
+        "app.Sm90Rm9ybQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.desc": {
+          "source": "Upload a file using `multipart/form-data`. The body must be a @ref DataProvider::FileDataType \"FileDataType\" structure (filename + content + mime_type). The framework builds the multipart envelope and sets the boundary header.",
+          "message": "使用 `multipart/form-data` 上傳檔案。主體必須是 @ref DataProvider::FileDataType \"FileDataType\" 結構 (filename + content + mime_type)。框架會建立 multipart 信封並設定 boundary 標頭。"
+        },
+        "app.Sm90Rm9ybQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.display_name": {
+          "source": "Multipart Form",
+          "message": "Multipart 表單"
+        },
+        "app.Sm90Rm9ybQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.short_desc": {
+          "source": "Upload a file using multipart/form-data",
+          "message": "使用 multipart/form-data 上傳檔案"
+        },
+        "app.Sm90Rm9ybQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.desc": {
+          "source": "Pass the body to the REST client unchanged; the client decides serialization based on its configured `data` option and the value type",
+          "message": "將主體原封不動地傳遞給 REST 用戶端；用戶端會根據其設定的 `data` 選項與數值類型來決定序列化方式"
+        },
+        "app.Sm90Rm9ybQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.display_name": {
+          "source": "Auto",
+          "message": "自動"
+        },
+        "app.Sm90Rm9ybQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.short_desc": {
+          "source": "Pass-through; use connection serialization and let the REST client decide",
+          "message": "透傳；使用連線序列化並由 REST 用戶端決定"
+        },
+        "app.Sm90Rm9ybQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.desc": {
+          "source": "Send the body as raw bytes. The body must be a binary value. Sets `Content-Type: application/octet-stream` unless overridden by `hdr`.",
+          "message": "將主體作為原始位元組傳送。主體必須是二進位值。除非被 `hdr` 覆寫，否則會設定 `Content-Type: application/octet-stream`。"
+        },
+        "app.Sm90Rm9ybQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.display_name": {
+          "source": "Raw Binary",
+          "message": "原始二進位"
+        },
+        "app.Sm90Rm9ybQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.short_desc": {
+          "source": "Send body as raw bytes",
+          "message": "將主體作為原始位元組傳送"
+        },
+        "app.Sm90Rm9ybQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.desc": {
+          "source": "Serialize a hash of form fields as `application/x-www-form-urlencoded`. The body must be a hash whose values are scalars (strings/numbers/booleans).",
+          "message": "將表單欄位的雜湊序列化為 `application/x-www-form-urlencoded`。主體必須是值為純量 (字串/數字/布林值) 的雜湊。"
+        },
+        "app.Sm90Rm9ybQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.display_name": {
+          "source": "Form (URL-encoded)",
+          "message": "表單 (URL 編碼)"
+        },
+        "app.Sm90Rm9ybQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.short_desc": {
+          "source": "Serialize body as application/x-www-form-urlencoded form fields",
+          "message": "將主體序列化為 application/x-www-form-urlencoded 表單欄位"
+        },
+        "app.Sm90Rm9ybQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.desc": {
+          "source": "Serialize the body as JSON; sets `Content-Type: application/json`. The body should be a hash, list, or scalar value.",
+          "message": "將主體序列化為 JSON；設定 `Content-Type: application/json`。主體應為雜湊、清單或純量值。"
+        },
+        "app.Sm90Rm9ybQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.display_name": {
+          "source": "JSON",
+          "message": "JSON"
+        },
+        "app.Sm90Rm9ybQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.short_desc": {
+          "source": "Serialize body as JSON",
+          "message": "將主體序列化為 JSON"
+        },
+        "app.Sm90Rm9ybQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.desc": {
+          "source": "Send the body as plain text. The body must be a string. Sets `Content-Type: text/plain`.",
+          "message": "將主體作為純文字傳送。主體必須是字串。設定 `Content-Type: text/plain`。"
+        },
+        "app.Sm90Rm9ybQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.display_name": {
+          "source": "Plain Text",
+          "message": "純文字"
+        },
+        "app.Sm90Rm9ybQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.short_desc": {
+          "source": "Send body as text/plain",
+          "message": "將主體作為 text/plain 傳送"
+        },
+        "app.Sm90Rm9ybQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.desc": {
+          "source": "Send the body as XML. If the body is a hash it is serialized to XML; if it is a string it is sent verbatim. Sets `Content-Type: application/xml`.",
+          "message": "將主體作為 XML 傳送。若主體為雜湊，則會序列化為 XML；若為字串，則原樣傳送。設定 `Content-Type: application/xml`。"
+        },
+        "app.Sm90Rm9ybQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.display_name": {
+          "source": "XML",
+          "message": "XML"
+        },
+        "app.Sm90Rm9ybQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.short_desc": {
+          "source": "Send body as XML",
+          "message": "將主體作為 XML 傳送"
+        },
+        "app.Sm90Rm9ybQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.desc": {
+          "source": "Send the body as YAML. If the body is a hash it is serialized to YAML; if it is a string it is sent verbatim. Sets `Content-Type: application/x-yaml`.",
+          "message": "將主體作為 YAML 傳送。若主體為雜湊，則會序列化為 YAML；若為字串，則原樣傳送。設定 `Content-Type: application/x-yaml`。"
+        },
+        "app.Sm90Rm9ybQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.display_name": {
+          "source": "YAML",
+          "message": "YAML"
+        },
+        "app.Sm90Rm9ybQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.short_desc": {
+          "source": "Send body as YAML",
+          "message": "將主體作為 YAML 傳送"
+        },
+        "app.Sm90Rm9ybQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.desc": {
+          "source": "Selects the body serialization mode and the corresponding `Content-Type` header. Changing this field reshapes the `body` editor - selecting JSON exposes a JSON editor, selecting Multipart Form exposes a file picker, and so on.",
+          "message": "選擇主體序列化模式與相應的 `Content-Type` 標頭。變更此欄位會重塑 `body` 編輯器 - 選擇 JSON 會顯示 JSON 編輯器，選擇 Multipart Form 會顯示檔案選擇器，依此類推。"
+        },
+        "app.Sm90Rm9ybQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.display_name": {
+          "source": "Body Type",
+          "message": "主體類型"
+        },
+        "app.Sm90Rm9ybQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.short_desc": {
+          "source": "How the body is serialized and what Content-Type is sent",
+          "message": "主體如何序列化以及傳送何種 Content-Type"
+        },
+        "app.Sm90Rm9ybQ.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.desc": {
+          "source": "If `True`, non-2xx HTTP responses return as the normal response hash (with the actual status code) instead of raising `REST-RESPONSE-ERROR`. Useful for handling 4xx/5xx as data - e.g. checking whether a resource exists. Overrides the connection's `error_passthru` setting for this call only.",
+          "message": "若為 `True`，非 2xx 的 HTTP 回應將作為正常的回應雜湊 (包含實際狀態碼) 返回，而不是引發 `REST-RESPONSE-ERROR`。適用於將 4xx/5xx 作為資料處理 - 例如檢查資源是否存在。僅針對本次呼叫覆寫連線的 `error_passthru` 設定。"
+        },
+        "app.Sm90Rm9ybQ.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.display_name": {
+          "source": "Return Errors as Data",
+          "message": "將錯誤作為資料返回"
+        },
+        "app.Sm90Rm9ybQ.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.short_desc": {
+          "source": "Return non-2xx responses normally instead of throwing",
+          "message": "正常返回非 2xx 回應，而不是拋出例外"
+        },
+        "app.Sm90Rm9ybQ.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.desc": {
+          "source": "Optional list of HTTP status codes treated as success. If set and the response status is not in this list, the action throws `REST-STATUS-ERROR`. When unset, the REST client's default behavior applies (typically: 2xx is success, non-2xx throws).",
+          "message": "視為成功的選擇性 HTTP 狀態碼清單。若已設定且回應狀態不在此清單中，該動作將拋出 `REST-STATUS-ERROR`。未設定時，套用 REST 用戶端的預設行為 (通常：2xx 代表成功，非 2xx 拋出例外)。"
+        },
+        "app.Sm90Rm9ybQ.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.display_name": {
+          "source": "Expected Status Codes",
+          "message": "預期的狀態碼"
+        },
+        "app.Sm90Rm9ybQ.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.short_desc": {
+          "source": "Response status codes treated as success",
+          "message": "視為成功的回應狀態碼"
+        },
+        "app.Sm90Rm9ybQ.action.bWFrZS1hcGktY2FsbA.option.aGRy.desc": {
+          "source": "Hash of custom headers added to the request. These override any default headers set by `body_type` (e.g. supplying `Content-Type` here wins over the body-type default).",
+          "message": "新增至請求的自訂標頭雜湊。這些會覆寫由 `body_type` 設定的任何預設標頭 (例如：在此處提供 `Content-Type` 會優先於主體類型的預設值)。"
+        },
+        "app.Sm90Rm9ybQ.action.bWFrZS1hcGktY2FsbA.option.aGRy.display_name": {
+          "source": "Custom Headers",
+          "message": "自訂標頭"
+        },
+        "app.Sm90Rm9ybQ.action.bWFrZS1hcGktY2FsbA.option.aGRy.short_desc": {
+          "source": "Extra request headers",
+          "message": "額外的請求標頭"
+        },
+        "app.Sm90Rm9ybQ.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.desc": {
+          "source": "If `True`, the response hash includes a `debug` sub-hash containing the request method/URL/headers (with sensitive values redacted), request and response sizes, and round-trip duration. Useful when investigating slow or failing calls. Off by default to keep responses lean.",
+          "message": "若為 `True`，回應雜湊包含一個 `debug` 子雜湊，其中包含請求方法/URL/標頭 (敏感值已遮蔽)、請求與回應大小以及來回時間。在調查過慢或失敗的呼叫時很有用。預設關閉以維持回應精簡。"
+        },
+        "app.Sm90Rm9ybQ.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.display_name": {
+          "source": "Include Debug Info",
+          "message": "包含除錯資訊"
+        },
+        "app.Sm90Rm9ybQ.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.short_desc": {
+          "source": "Include request/timing/size debug info in the response",
+          "message": "在回應中包含請求/時序/大小除錯資訊"
+        },
+        "app.Sm90Rm9ybQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.desc": {
+          "source": "HTTP `OPTIONS`",
+          "message": "HTTP `OPTIONS`"
+        },
+        "app.Sm90Rm9ybQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.display_name": {
+          "source": "OPTIONS",
+          "message": "OPTIONS"
+        },
+        "app.Sm90Rm9ybQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.short_desc": {
+          "source": "HTTP OPTIONS",
+          "message": "HTTP OPTIONS"
+        },
+        "app.Sm90Rm9ybQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.desc": {
+          "source": "HTTP `DELETE`",
+          "message": "HTTP `DELETE`"
+        },
+        "app.Sm90Rm9ybQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.display_name": {
+          "source": "DELETE",
+          "message": "DELETE"
+        },
+        "app.Sm90Rm9ybQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.short_desc": {
+          "source": "HTTP DELETE",
+          "message": "HTTP DELETE"
+        },
+        "app.Sm90Rm9ybQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.desc": {
+          "source": "HTTP `GET`",
+          "message": "HTTP `GET`"
+        },
+        "app.Sm90Rm9ybQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.display_name": {
+          "source": "GET",
+          "message": "GET"
+        },
+        "app.Sm90Rm9ybQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.short_desc": {
+          "source": "HTTP GET",
+          "message": "HTTP GET"
+        },
+        "app.Sm90Rm9ybQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.desc": {
+          "source": "HTTP `HEAD`",
+          "message": "HTTP `HEAD`"
+        },
+        "app.Sm90Rm9ybQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.display_name": {
+          "source": "HEAD",
+          "message": "HEAD"
+        },
+        "app.Sm90Rm9ybQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.short_desc": {
+          "source": "HTTP HEAD",
+          "message": "HTTP HEAD"
+        },
+        "app.Sm90Rm9ybQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.desc": {
+          "source": "HTTP `PATCH`",
+          "message": "HTTP `PATCH`"
+        },
+        "app.Sm90Rm9ybQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.display_name": {
+          "source": "PATCH",
+          "message": "PATCH"
+        },
+        "app.Sm90Rm9ybQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.short_desc": {
+          "source": "HTTP PATCH",
+          "message": "HTTP PATCH"
+        },
+        "app.Sm90Rm9ybQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.desc": {
+          "source": "HTTP `POST`",
+          "message": "HTTP `POST`"
+        },
+        "app.Sm90Rm9ybQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.display_name": {
+          "source": "POST",
+          "message": "POST"
+        },
+        "app.Sm90Rm9ybQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.short_desc": {
+          "source": "HTTP POST",
+          "message": "HTTP POST"
+        },
+        "app.Sm90Rm9ybQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.desc": {
+          "source": "HTTP `PUT`",
+          "message": "HTTP `PUT`"
+        },
+        "app.Sm90Rm9ybQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.display_name": {
+          "source": "PUT",
+          "message": "PUT"
+        },
+        "app.Sm90Rm9ybQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.short_desc": {
+          "source": "HTTP PUT",
+          "message": "HTTP PUT"
+        },
+        "app.Sm90Rm9ybQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.desc": {
+          "source": "HTTP `TRACE`",
+          "message": "HTTP `TRACE`"
+        },
+        "app.Sm90Rm9ybQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.display_name": {
+          "source": "TRACE",
+          "message": "TRACE"
+        },
+        "app.Sm90Rm9ybQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.short_desc": {
+          "source": "HTTP TRACE",
+          "message": "HTTP TRACE"
+        },
+        "app.Sm90Rm9ybQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "用於請求的 HTTP 方法"
+        },
+        "app.Sm90Rm9ybQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.display_name": {
+          "source": "HTTP Method",
+          "message": "HTTP 方法"
+        },
+        "app.Sm90Rm9ybQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.short_desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "用於請求的 HTTP 方法"
+        },
+        "app.Sm90Rm9ybQ.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain `{name}` placeholders that are replaced from `path_vars`. Example: `/users/{id}/comments`.",
+          "message": "相於連線 API 基本 URL 的 URI 路徑。可能包含從 `path_vars` 替換的 `{name}` 預留位置。範例：`/users/{id}/comments`。"
+        },
+        "app.Sm90Rm9ybQ.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.display_name": {
+          "source": "URI Path",
+          "message": "URI 路徑"
+        },
+        "app.Sm90Rm9ybQ.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.short_desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain '{name}' placeholders that are replaced from 'path_vars'. Example: '/users/{id}/comments'",
+          "message": "相對於連線 API 基底 URL 的 URI 路徑。可能包含從 'path_vars' 替換的 '{name}' 預留位置。範例：'/users/{id}/comments'"
+        },
+        "app.Sm90Rm9ybQ.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.desc": {
+          "source": "Hash of values substituted into `{name}` placeholders in the URI path. Example: with `path = /users/{id}` and `path_vars = {id: 123}` the framework sends `/users/123`. Values are URL-encoded.",
+          "message": "替換至 URI 路徑中 `{name}` 預留位置的值 Hash。範例：使用 `path = /users/{id}` 與 `path_vars = {id: 123}` 時，框架會傳送 `/users/123`。數值均經過 URL 編碼。"
+        },
+        "app.Sm90Rm9ybQ.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.display_name": {
+          "source": "Path Variables",
+          "message": "路徑變數"
+        },
+        "app.Sm90Rm9ybQ.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.short_desc": {
+          "source": "Values for {name} placeholders in path",
+          "message": "路徑中 {name} 預留位置的值"
+        },
+        "app.Sm90Rm9ybQ.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.desc": {
+          "source": "Hash of query string parameters to append to the URI path. Values are URL-encoded; list values are joined with `,`.",
+          "message": "要附加至 URI 路徑的查詢字串參數 Hash。數值均經過 URL 編碼；清單值會使用 `,` 連接。"
+        },
+        "app.Sm90Rm9ybQ.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.display_name": {
+          "source": "Query Arguments",
+          "message": "查詢引數"
+        },
+        "app.Sm90Rm9ybQ.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.short_desc": {
+          "source": "Query string parameters",
+          "message": "查詢字串參數"
+        },
+        "app.Sm90Rm9ybQ.action.bWFrZS1hcGktY2FsbA.short_desc": {
+          "source": "Make a custom API call to JotForm",
+          "message": "對 JotForm 進行自訂 API 呼叫"
+        },
+        "app.Sm90Rm9ybQ.action.bmV3LXBheW1lbnQ.desc": {
+          "source": "Fires when a payment is completed on a form with payment integration.\n\n**Note:** This trigger only works for payments made through the form UI.",
+          "message": "當在整合付款功能的表單上完成付款時觸發。\n\n**附註：**此觸發程序僅適用於透過表單使用者介面完成的付款。"
+        },
+        "app.Sm90Rm9ybQ.action.bmV3LXBheW1lbnQ.display_name": {
+          "source": "New Payment",
+          "message": "新付款"
+        },
+        "app.Sm90Rm9ybQ.action.bmV3LXBheW1lbnQ.option.Zm9ybUlE.desc": {
+          "source": "Select the form (with payment integration) to monitor for payments",
+          "message": "選取要監控付款的表單（具備付款整合）"
+        },
+        "app.Sm90Rm9ybQ.action.bmV3LXBheW1lbnQ.option.Zm9ybUlE.display_name": {
+          "source": "Form",
+          "message": "表單"
+        },
+        "app.Sm90Rm9ybQ.action.bmV3LXBheW1lbnQ.option.Zm9ybUlE.short_desc": {
+          "source": "The form to watch for payments",
+          "message": "要監控付款的表單"
+        },
+        "app.Sm90Rm9ybQ.action.bmV3LXBheW1lbnQ.short_desc": {
+          "source": "Trigger when a payment is received",
+          "message": "收到付款時觸發"
+        },
+        "app.Sm90Rm9ybQ.action.bmV3LXN1Ym1pc3Npb24.desc": {
+          "source": "Fires when a new submission is received on a form via the JotForm UI.\n\n**Note:** This trigger only works for submissions made through the form UI, not for API-created submissions. This is a JotForm platform limitation.",
+          "message": "當透過 JotForm 使用者介面在表單上收到新提交資料時觸發。\n\n**附註：**此觸發程序僅適用於透過表單使用者介面進行的提交，不適用於透過 API 建立的提交。這是 JotForm 平台的限制。"
+        },
+        "app.Sm90Rm9ybQ.action.bmV3LXN1Ym1pc3Npb24.display_name": {
+          "source": "New Submission",
+          "message": "新提交資料"
+        },
+        "app.Sm90Rm9ybQ.action.bmV3LXN1Ym1pc3Npb24.option.Zm9ybUlE.desc": {
+          "source": "Select the form to monitor for new submissions",
+          "message": "選取要監控新提交資料的表單"
+        },
+        "app.Sm90Rm9ybQ.action.bmV3LXN1Ym1pc3Npb24.option.Zm9ybUlE.display_name": {
+          "source": "Form",
+          "message": "表單"
+        },
+        "app.Sm90Rm9ybQ.action.bmV3LXN1Ym1pc3Npb24.option.Zm9ybUlE.short_desc": {
+          "source": "The form to watch for submissions",
+          "message": "要監控提交資料的表單"
+        },
+        "app.Sm90Rm9ybQ.action.bmV3LXN1Ym1pc3Npb24.short_desc": {
+          "source": "Trigger when a form receives a new submission",
+          "message": "當表單收到新提交資料時觸發"
+        },
+        "app.Sm90Rm9ybQ.action.dXBkYXRlLXN1Ym1pc3Npb24.desc": {
+          "source": "Modify the answers in an existing form submission. Select a form first to see available fields.",
+          "message": "修改現有表單提交中的回覆。請先選取表單以查看可用欄位。"
+        },
+        "app.Sm90Rm9ybQ.action.dXBkYXRlLXN1Ym1pc3Npb24.display_name": {
+          "source": "Update Submission",
+          "message": "更新提交"
+        },
+        "app.Sm90Rm9ybQ.action.dXBkYXRlLXN1Ym1pc3Npb24.option.Zm9ybUlE.desc": {
+          "source": "Select the form to get field definitions for the submission update. The submission fields will update based on your selection.",
+          "message": "選取表單以取得用於提交更新的欄位定義。提交欄位將根據您的選取進行更新。"
+        },
+        "app.Sm90Rm9ybQ.action.dXBkYXRlLXN1Ym1pc3Npb24.option.Zm9ybUlE.display_name": {
+          "source": "Form",
+          "message": "表單"
+        },
+        "app.Sm90Rm9ybQ.action.dXBkYXRlLXN1Ym1pc3Npb24.option.Zm9ybUlE.short_desc": {
+          "source": "The form containing the submission",
+          "message": "包含該提交的表單"
+        },
+        "app.Sm90Rm9ybQ.action.dXBkYXRlLXN1Ym1pc3Npb24.option.c3VibWlzc2lvbklE.desc": {
+          "source": "The ID of the submission to update",
+          "message": "要更新的提交 ID"
+        },
+        "app.Sm90Rm9ybQ.action.dXBkYXRlLXN1Ym1pc3Npb24.option.c3VibWlzc2lvbklE.display_name": {
+          "source": "Submission ID",
+          "message": "提交 ID"
+        },
+        "app.Sm90Rm9ybQ.action.dXBkYXRlLXN1Ym1pc3Npb24.option.c3VibWlzc2lvbklE.short_desc": {
+          "source": "The submission to update",
+          "message": "要更新的提交"
+        },
+        "app.Sm90Rm9ybQ.action.dXBkYXRlLXN1Ym1pc3Npb24.short_desc": {
+          "source": "Update an existing submission",
+          "message": "更新現有提交"
+        },
+        "app.Sm90Rm9ybQ.desc": {
+          "source": "JotForm is an online form builder that enables creating forms, collecting submissions, and processing payments. This integration enables managing form submissions through the JotForm REST API.\n\n**Note:** Webhook-based triggers only fire for submissions made through the JotForm UI, not for API-created submissions.",
+          "message": "JotForm 是一個線上表單建立工具，可用於建立表單、收集提交內容以及處理付款。此整合可透過 JotForm REST API 管理表單提交。\n\n**注意：**基於 Webhook 的觸發程序僅對透過 JotForm 使用者介面進行的提交觸發，不適用於透過 API 建立的提交。"
+        },
+        "app.Sm90Rm9ybQ.display_name": {
+          "source": "JotForm",
+          "message": "JotForm"
+        },
+        "app.Sm90Rm9ybQ.short_desc": {
+          "source": "JotForm online form builder and data collection",
+          "message": "JotForm 線上表單建立工具與資料收集"
+        }
+      }
+    }
+  }
+}

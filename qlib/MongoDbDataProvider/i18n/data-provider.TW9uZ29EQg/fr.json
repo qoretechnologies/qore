@@ -1,0 +1,237 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "fr": {
+      "messages": {
+        "app.TW9uZ29EQg.action.YWdncmVnYXRl.desc": {
+          "source": "Execute an aggregation pipeline on a MongoDB collection",
+          "message": "Exécuter un pipeline d'agrégation sur une collection MongoDB"
+        },
+        "app.TW9uZ29EQg.action.YWdncmVnYXRl.display_name": {
+          "source": "Aggregation Pipeline",
+          "message": "Pipeline d'agrégation"
+        },
+        "app.TW9uZ29EQg.action.YWdncmVnYXRl.option.Y29sbGVjdGlvbg.desc": {
+          "source": "The name of the MongoDB collection",
+          "message": "Le nom de la collection MongoDB"
+        },
+        "app.TW9uZ29EQg.action.YWdncmVnYXRl.option.Y29sbGVjdGlvbg.display_name": {
+          "source": "Collection",
+          "message": "Collection"
+        },
+        "app.TW9uZ29EQg.action.YWdncmVnYXRl.option.Y29sbGVjdGlvbg.short_desc": {
+          "source": "MongoDB collection name",
+          "message": "Nom de la collection MongoDB"
+        },
+        "app.TW9uZ29EQg.action.YWdncmVnYXRl.option.ZGF0YWJhc2U.desc": {
+          "source": "The name of the MongoDB database",
+          "message": "Le nom de la base de données MongoDB"
+        },
+        "app.TW9uZ29EQg.action.YWdncmVnYXRl.option.ZGF0YWJhc2U.display_name": {
+          "source": "Database",
+          "message": "Base de données"
+        },
+        "app.TW9uZ29EQg.action.YWdncmVnYXRl.option.ZGF0YWJhc2U.short_desc": {
+          "source": "MongoDB database name",
+          "message": "Nom de la base de données MongoDB"
+        },
+        "app.TW9uZ29EQg.action.YWdncmVnYXRl.short_desc": {
+          "source": "Run aggregation pipeline",
+          "message": "Exécuter le pipeline d'agrégation"
+        },
+        "app.TW9uZ29EQg.action.YnVsaw.desc": {
+          "source": "Execute bulk insert, update, and delete operations on a MongoDB collection",
+          "message": "Exécuter des opérations groupées d'insertion, de mise à jour et de suppression sur une collection MongoDB"
+        },
+        "app.TW9uZ29EQg.action.YnVsaw.display_name": {
+          "source": "Bulk Operations",
+          "message": "Opérations en bloc"
+        },
+        "app.TW9uZ29EQg.action.YnVsaw.option.Y29sbGVjdGlvbg.desc": {
+          "source": "The name of the MongoDB collection",
+          "message": "Le nom de la collection MongoDB"
+        },
+        "app.TW9uZ29EQg.action.YnVsaw.option.Y29sbGVjdGlvbg.display_name": {
+          "source": "Collection",
+          "message": "Collection"
+        },
+        "app.TW9uZ29EQg.action.YnVsaw.option.Y29sbGVjdGlvbg.short_desc": {
+          "source": "MongoDB collection name",
+          "message": "Nom de la collection MongoDB"
+        },
+        "app.TW9uZ29EQg.action.YnVsaw.option.ZGF0YWJhc2U.desc": {
+          "source": "The name of the MongoDB database",
+          "message": "Le nom de la base de données MongoDB"
+        },
+        "app.TW9uZ29EQg.action.YnVsaw.option.ZGF0YWJhc2U.display_name": {
+          "source": "Database",
+          "message": "Base de données"
+        },
+        "app.TW9uZ29EQg.action.YnVsaw.option.ZGF0YWJhc2U.short_desc": {
+          "source": "MongoDB database name",
+          "message": "Nom de la base de données MongoDB"
+        },
+        "app.TW9uZ29EQg.action.YnVsaw.short_desc": {
+          "source": "Execute bulk write operations",
+          "message": "Exécuter des opérations d'écriture groupées"
+        },
+        "app.TW9uZ29EQg.action.ZGVsZXRl.desc": {
+          "source": "Delete one or more documents from a MongoDB collection",
+          "message": "Supprimer un ou plusieurs documents d'une collection MongoDB"
+        },
+        "app.TW9uZ29EQg.action.ZGVsZXRl.display_name": {
+          "source": "Delete Documents",
+          "message": "Supprimer les documents"
+        },
+        "app.TW9uZ29EQg.action.ZGVsZXRl.option.Y29sbGVjdGlvbg.desc": {
+          "source": "The name of the MongoDB collection",
+          "message": "Le nom de la collection MongoDB"
+        },
+        "app.TW9uZ29EQg.action.ZGVsZXRl.option.Y29sbGVjdGlvbg.display_name": {
+          "source": "Collection",
+          "message": "Collection"
+        },
+        "app.TW9uZ29EQg.action.ZGVsZXRl.option.Y29sbGVjdGlvbg.short_desc": {
+          "source": "MongoDB collection name",
+          "message": "Nom de la collection MongoDB"
+        },
+        "app.TW9uZ29EQg.action.ZGVsZXRl.option.ZGF0YWJhc2U.desc": {
+          "source": "The name of the MongoDB database",
+          "message": "Le nom de la base de données MongoDB"
+        },
+        "app.TW9uZ29EQg.action.ZGVsZXRl.option.ZGF0YWJhc2U.display_name": {
+          "source": "Database",
+          "message": "Base de données"
+        },
+        "app.TW9uZ29EQg.action.ZGVsZXRl.option.ZGF0YWJhc2U.short_desc": {
+          "source": "MongoDB database name",
+          "message": "Nom de la base de données MongoDB"
+        },
+        "app.TW9uZ29EQg.action.ZGVsZXRl.short_desc": {
+          "source": "Delete documents from a collection",
+          "message": "Supprimer des documents d'une collection"
+        },
+        "app.TW9uZ29EQg.action.ZmluZA.desc": {
+          "source": "Find documents in a MongoDB collection using query filters",
+          "message": "Rechercher des documents dans une collection MongoDB à l'aide de filtres de requête"
+        },
+        "app.TW9uZ29EQg.action.ZmluZA.display_name": {
+          "source": "Find Documents",
+          "message": "Rechercher des documents"
+        },
+        "app.TW9uZ29EQg.action.ZmluZA.option.Y29sbGVjdGlvbg.desc": {
+          "source": "The name of the MongoDB collection",
+          "message": "Le nom de la collection MongoDB"
+        },
+        "app.TW9uZ29EQg.action.ZmluZA.option.Y29sbGVjdGlvbg.display_name": {
+          "source": "Collection",
+          "message": "Collection"
+        },
+        "app.TW9uZ29EQg.action.ZmluZA.option.Y29sbGVjdGlvbg.short_desc": {
+          "source": "MongoDB collection name",
+          "message": "Nom de la collection MongoDB"
+        },
+        "app.TW9uZ29EQg.action.ZmluZA.option.ZGF0YWJhc2U.desc": {
+          "source": "The name of the MongoDB database",
+          "message": "Le nom de la base de données MongoDB"
+        },
+        "app.TW9uZ29EQg.action.ZmluZA.option.ZGF0YWJhc2U.display_name": {
+          "source": "Database",
+          "message": "Base de données"
+        },
+        "app.TW9uZ29EQg.action.ZmluZA.option.ZGF0YWJhc2U.short_desc": {
+          "source": "MongoDB database name",
+          "message": "Nom de la base de données MongoDB"
+        },
+        "app.TW9uZ29EQg.action.ZmluZA.short_desc": {
+          "source": "Query documents in a collection",
+          "message": "Interroger des documents dans une collection"
+        },
+        "app.TW9uZ29EQg.action.aW5zZXJ0.desc": {
+          "source": "Insert one or more documents into a MongoDB collection",
+          "message": "Insérer un ou plusieurs documents dans une collection MongoDB"
+        },
+        "app.TW9uZ29EQg.action.aW5zZXJ0.display_name": {
+          "source": "Insert Document",
+          "message": "Insérer un document"
+        },
+        "app.TW9uZ29EQg.action.aW5zZXJ0.option.Y29sbGVjdGlvbg.desc": {
+          "source": "The name of the MongoDB collection",
+          "message": "Le nom de la collection MongoDB"
+        },
+        "app.TW9uZ29EQg.action.aW5zZXJ0.option.Y29sbGVjdGlvbg.display_name": {
+          "source": "Collection",
+          "message": "Collection"
+        },
+        "app.TW9uZ29EQg.action.aW5zZXJ0.option.Y29sbGVjdGlvbg.short_desc": {
+          "source": "MongoDB collection name",
+          "message": "Nom de la collection MongoDB"
+        },
+        "app.TW9uZ29EQg.action.aW5zZXJ0.option.ZGF0YWJhc2U.desc": {
+          "source": "The name of the MongoDB database",
+          "message": "Le nom de la base de données MongoDB"
+        },
+        "app.TW9uZ29EQg.action.aW5zZXJ0.option.ZGF0YWJhc2U.display_name": {
+          "source": "Database",
+          "message": "Base de données"
+        },
+        "app.TW9uZ29EQg.action.aW5zZXJ0.option.ZGF0YWJhc2U.short_desc": {
+          "source": "MongoDB database name",
+          "message": "Nom de la base de données MongoDB"
+        },
+        "app.TW9uZ29EQg.action.aW5zZXJ0.short_desc": {
+          "source": "Insert a document into a collection",
+          "message": "Insérer un document dans une collection"
+        },
+        "app.TW9uZ29EQg.action.dXBkYXRl.desc": {
+          "source": "Update one or more documents in a MongoDB collection",
+          "message": "Mettre à jour un ou plusieurs documents dans une collection MongoDB"
+        },
+        "app.TW9uZ29EQg.action.dXBkYXRl.display_name": {
+          "source": "Update Documents",
+          "message": "Mettre à jour les documents"
+        },
+        "app.TW9uZ29EQg.action.dXBkYXRl.option.Y29sbGVjdGlvbg.desc": {
+          "source": "The name of the MongoDB collection",
+          "message": "Le nom de la collection MongoDB"
+        },
+        "app.TW9uZ29EQg.action.dXBkYXRl.option.Y29sbGVjdGlvbg.display_name": {
+          "source": "Collection",
+          "message": "Collection"
+        },
+        "app.TW9uZ29EQg.action.dXBkYXRl.option.Y29sbGVjdGlvbg.short_desc": {
+          "source": "MongoDB collection name",
+          "message": "Nom de la collection MongoDB"
+        },
+        "app.TW9uZ29EQg.action.dXBkYXRl.option.ZGF0YWJhc2U.desc": {
+          "source": "The name of the MongoDB database",
+          "message": "Le nom de la base de données MongoDB"
+        },
+        "app.TW9uZ29EQg.action.dXBkYXRl.option.ZGF0YWJhc2U.display_name": {
+          "source": "Database",
+          "message": "Base de données"
+        },
+        "app.TW9uZ29EQg.action.dXBkYXRl.option.ZGF0YWJhc2U.short_desc": {
+          "source": "MongoDB database name",
+          "message": "Nom de la base de données MongoDB"
+        },
+        "app.TW9uZ29EQg.action.dXBkYXRl.short_desc": {
+          "source": "Update documents in a collection",
+          "message": "Mettre à jour des documents dans une collection"
+        },
+        "app.TW9uZ29EQg.desc": {
+          "source": "MongoDB is a document-oriented NoSQL database for high volume data storage",
+          "message": "MongoDB est une base de données NoSQL orientée document pour le stockage de données à haut volume"
+        },
+        "app.TW9uZ29EQg.display_name": {
+          "source": "MongoDB Server",
+          "message": "Serveur MongoDB"
+        },
+        "app.TW9uZ29EQg.short_desc": {
+          "source": "MongoDB NoSQL database",
+          "message": "Base de données NoSQL MongoDB"
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,1425 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "ko": {
+      "messages": {
+        "app.TGluZWFy.action.Y29tbWVudC1jcmVhdGVk.desc": {
+          "source": "Fires when a new comment is added to any issue in Linear. Uses webhooks for real-time notifications.",
+          "message": "Linear의 모든 이슈에 새 댓글이 추가될 때 실행됩니다. 실시간 알림에 웹훅을 사용합니다."
+        },
+        "app.TGluZWFy.action.Y29tbWVudC1jcmVhdGVk.display_name": {
+          "source": "Comment Created",
+          "message": "댓글 생성됨"
+        },
+        "app.TGluZWFy.action.Y29tbWVudC1jcmVhdGVk.short_desc": {
+          "source": "Trigger when a new comment is created",
+          "message": "새 댓글이 생성될 때 트리거"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLWN5Y2xl.desc": {
+          "source": "Create a new cycle for time-boxed work",
+          "message": "기한이 정해진 작업을 위한 새 사이클 생성"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLWN5Y2xl.display_name": {
+          "source": "Create Cycle",
+          "message": "사이클 생성"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLWN5Y2xl.option.ZW5kc0F0.desc": {
+          "source": "The end date of the cycle",
+          "message": "사이클 종료일"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLWN5Y2xl.option.ZW5kc0F0.display_name": {
+          "source": "Ends At",
+          "message": "종료 일시"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLWN5Y2xl.option.ZW5kc0F0.short_desc": {
+          "source": "When the cycle ends",
+          "message": "사이클이 종료되는 시점"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLWN5Y2xl.option.bmFtZQ.desc": {
+          "source": "The name of the cycle",
+          "message": "사이클 이름"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLWN5Y2xl.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "이름"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLWN5Y2xl.option.bmFtZQ.short_desc": {
+          "source": "The cycle name",
+          "message": "사이클 이름"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLWN5Y2xl.option.c3RhcnRzQXQ.desc": {
+          "source": "The start date of the cycle",
+          "message": "사이클 시작일"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLWN5Y2xl.option.c3RhcnRzQXQ.display_name": {
+          "source": "Starts At",
+          "message": "시작 일시"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLWN5Y2xl.option.c3RhcnRzQXQ.short_desc": {
+          "source": "When the cycle starts",
+          "message": "사이클이 시작되는 시점"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLWN5Y2xl.option.dGVhbUlk.desc": {
+          "source": "The team to create the cycle in",
+          "message": "사이클을 생성할 팀"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLWN5Y2xl.option.dGVhbUlk.display_name": {
+          "source": "Team",
+          "message": "팀"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLWN5Y2xl.option.dGVhbUlk.short_desc": {
+          "source": "The team to create the cycle in",
+          "message": "사이클을 생성할 팀"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLWN5Y2xl.short_desc": {
+          "source": "Create a new cycle (sprint) in Linear",
+          "message": "Linear에 새 사이클(스프린트) 생성"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLWNvbW1lbnQ.desc": {
+          "source": "Create a new comment on an existing Linear issue",
+          "message": "기존 Linear 이슈에 새 댓글 생성"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLWNvbW1lbnQ.display_name": {
+          "source": "Create Comment",
+          "message": "댓글 생성"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLWNvbW1lbnQ.option.Ym9keQ.desc": {
+          "source": "The body/content of the comment in markdown format",
+          "message": "마크다운 형식의 댓글 본문/내용"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLWNvbW1lbnQ.option.Ym9keQ.display_name": {
+          "source": "Body",
+          "message": "본문"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLWNvbW1lbnQ.option.Ym9keQ.short_desc": {
+          "source": "The comment body",
+          "message": "댓글 본문"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLWNvbW1lbnQ.option.aXNzdWVJZA.desc": {
+          "source": "The issue to add the comment to",
+          "message": "댓글을 추가할 이슈"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLWNvbW1lbnQ.option.aXNzdWVJZA.display_name": {
+          "source": "Issue",
+          "message": "이슈"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLWNvbW1lbnQ.option.aXNzdWVJZA.short_desc": {
+          "source": "The issue to add the comment to",
+          "message": "댓글을 추가할 이슈"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLWNvbW1lbnQ.short_desc": {
+          "source": "Add a comment to a Linear issue",
+          "message": "Linear 이슈에 댓글 추가"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLWlzc3Vl.desc": {
+          "source": "Create a new issue in a Linear team with title, description, priority, and other attributes",
+          "message": "Linear 팀에 제목, 설명, 우선순위 및 기타 속성을 사용하여 새 이슈 생성"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLWlzc3Vl.display_name": {
+          "source": "Create Issue",
+          "message": "이슈 생성"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLWlzc3Vl.option.Y3ljbGVJZA.desc": {
+          "source": "The cycle (sprint) to add the issue to",
+          "message": "이슈를 추가할 사이클(스프린트)"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLWlzc3Vl.option.Y3ljbGVJZA.display_name": {
+          "source": "Cycle",
+          "message": "사이클"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLWlzc3Vl.option.Y3ljbGVJZA.short_desc": {
+          "source": "The cycle/sprint",
+          "message": "사이클/스프린트"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLWlzc3Vl.option.YXNzaWduZWVJZA.desc": {
+          "source": "The user to assign the issue to",
+          "message": "이슈를 할당할 사용자"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLWlzc3Vl.option.YXNzaWduZWVJZA.display_name": {
+          "source": "Assignee",
+          "message": "담당자"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLWlzc3Vl.option.YXNzaWduZWVJZA.short_desc": {
+          "source": "The user to assign the issue to",
+          "message": "이슈를 할당할 사용자"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLWlzc3Vl.option.ZGVzY3JpcHRpb24.desc": {
+          "source": "The description of the issue in markdown format",
+          "message": "마크다운 형식의 이슈 설명"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLWlzc3Vl.option.ZGVzY3JpcHRpb24.display_name": {
+          "source": "Description",
+          "message": "설명"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLWlzc3Vl.option.ZGVzY3JpcHRpb24.short_desc": {
+          "source": "The issue description",
+          "message": "이슈 설명"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLWlzc3Vl.option.ZXN0aW1hdGU.desc": {
+          "source": "The estimated complexity/effort",
+          "message": "예상 복잡도/공수"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLWlzc3Vl.option.ZXN0aW1hdGU.display_name": {
+          "source": "Estimate",
+          "message": "추정치"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLWlzc3Vl.option.ZXN0aW1hdGU.short_desc": {
+          "source": "The issue estimate",
+          "message": "이슈 추정치"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLWlzc3Vl.option.bGFiZWxJZHM.desc": {
+          "source": "Labels to attach to the issue",
+          "message": "이슈에 연결할 라벨"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLWlzc3Vl.option.bGFiZWxJZHM.display_name": {
+          "source": "Labels",
+          "message": "라벨"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLWlzc3Vl.option.bGFiZWxJZHM.short_desc": {
+          "source": "The labels",
+          "message": "라벨"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLWlzc3Vl.option.c3RhdGVJZA.desc": {
+          "source": "The workflow state to set on the issue",
+          "message": "이슈에 설정할 워크플로 상태"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLWlzc3Vl.option.c3RhdGVJZA.display_name": {
+          "source": "State",
+          "message": "주/도"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLWlzc3Vl.option.c3RhdGVJZA.short_desc": {
+          "source": "The workflow state",
+          "message": "워크플로 상태"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLWlzc3Vl.option.cGFyZW50SWQ.desc": {
+          "source": "The parent issue for creating a sub-issue",
+          "message": "하위 이슈를 생성할 상위 이슈"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLWlzc3Vl.option.cGFyZW50SWQ.display_name": {
+          "source": "Parent Issue",
+          "message": "상위 이슈"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLWlzc3Vl.option.cGFyZW50SWQ.short_desc": {
+          "source": "The parent issue",
+          "message": "상위 이슈"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLWlzc3Vl.option.cHJpb3JpdHk.allowed-value.aW50OjA.desc": {
+          "source": "No priority",
+          "message": "우선순위 없음"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLWlzc3Vl.option.cHJpb3JpdHk.allowed-value.aW50OjA.display_name": {
+          "source": "No Priority",
+          "message": "우선순위 없음"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLWlzc3Vl.option.cHJpb3JpdHk.allowed-value.aW50OjE.desc": {
+          "source": "Urgent priority",
+          "message": "긴급 우선순위"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLWlzc3Vl.option.cHJpb3JpdHk.allowed-value.aW50OjE.display_name": {
+          "source": "Urgent",
+          "message": "긴급"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLWlzc3Vl.option.cHJpb3JpdHk.allowed-value.aW50OjI.desc": {
+          "source": "High priority",
+          "message": "높은 우선순위"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLWlzc3Vl.option.cHJpb3JpdHk.allowed-value.aW50OjI.display_name": {
+          "source": "High",
+          "message": "높음"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLWlzc3Vl.option.cHJpb3JpdHk.allowed-value.aW50OjM.desc": {
+          "source": "Normal priority",
+          "message": "보통 우선순위"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLWlzc3Vl.option.cHJpb3JpdHk.allowed-value.aW50OjM.display_name": {
+          "source": "Normal",
+          "message": "보통"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLWlzc3Vl.option.cHJpb3JpdHk.allowed-value.aW50OjQ.desc": {
+          "source": "Low priority",
+          "message": "낮은 우선순위"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLWlzc3Vl.option.cHJpb3JpdHk.allowed-value.aW50OjQ.display_name": {
+          "source": "Low",
+          "message": "낮음"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLWlzc3Vl.option.cHJpb3JpdHk.desc": {
+          "source": "The priority of the issue",
+          "message": "이슈의 우선순위"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLWlzc3Vl.option.cHJpb3JpdHk.display_name": {
+          "source": "Priority",
+          "message": "우선순위"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLWlzc3Vl.option.cHJpb3JpdHk.short_desc": {
+          "source": "The issue priority",
+          "message": "이슈 우선순위"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLWlzc3Vl.option.cHJvamVjdElk.desc": {
+          "source": "The project to add the issue to",
+          "message": "이슈를 추가할 프로젝트"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLWlzc3Vl.option.cHJvamVjdElk.display_name": {
+          "source": "Project",
+          "message": "프로젝트"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLWlzc3Vl.option.cHJvamVjdElk.short_desc": {
+          "source": "The project",
+          "message": "프로젝트"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLWlzc3Vl.option.dGVhbUlk.desc": {
+          "source": "The team to create the issue in",
+          "message": "이슈를 생성할 팀"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLWlzc3Vl.option.dGVhbUlk.display_name": {
+          "source": "Team",
+          "message": "팀"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLWlzc3Vl.option.dGVhbUlk.short_desc": {
+          "source": "The team to create the issue in",
+          "message": "이슈를 생성할 팀"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLWlzc3Vl.option.dGl0bGU.desc": {
+          "source": "The title of the issue",
+          "message": "이슈 제목"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLWlzc3Vl.option.dGl0bGU.display_name": {
+          "source": "Title",
+          "message": "제목"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLWlzc3Vl.option.dGl0bGU.short_desc": {
+          "source": "The issue title",
+          "message": "이슈 제목"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLWlzc3Vl.short_desc": {
+          "source": "Create a new issue in Linear",
+          "message": "Linear에서 새 이슈 생성"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLWxhYmVs.desc": {
+          "source": "Create a new label for categorizing issues",
+          "message": "이슈 분류를 위한 새 라벨 생성"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLWxhYmVs.display_name": {
+          "source": "Create Label",
+          "message": "라벨 생성"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLWxhYmVs.option.Y29sb3I.desc": {
+          "source": "The color of the label in hex format",
+          "message": "16진수 형식의 라벨 색상"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLWxhYmVs.option.Y29sb3I.display_name": {
+          "source": "Color",
+          "message": "색상"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLWxhYmVs.option.Y29sb3I.short_desc": {
+          "source": "The label color",
+          "message": "라벨 색상"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLWxhYmVs.option.ZGVzY3JpcHRpb24.desc": {
+          "source": "The description of the label",
+          "message": "라벨 설명"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLWxhYmVs.option.ZGVzY3JpcHRpb24.display_name": {
+          "source": "Description",
+          "message": "설명"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLWxhYmVs.option.ZGVzY3JpcHRpb24.short_desc": {
+          "source": "The label description",
+          "message": "라벨 설명"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLWxhYmVs.option.bmFtZQ.desc": {
+          "source": "The name of the label",
+          "message": "라벨 이름"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLWxhYmVs.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "이름"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLWxhYmVs.option.bmFtZQ.short_desc": {
+          "source": "The label name",
+          "message": "라벨 이름"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLWxhYmVs.option.dGVhbUlk.desc": {
+          "source": "The team to create the label in (leave empty for workspace labels)",
+          "message": "라벨을 생성할 팀(워크스페이스 라벨의 경우 비워 둠)"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLWxhYmVs.option.dGVhbUlk.display_name": {
+          "source": "Team",
+          "message": "팀"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLWxhYmVs.option.dGVhbUlk.short_desc": {
+          "source": "The team to create the label in",
+          "message": "라벨을 생성할 팀"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLWxhYmVs.short_desc": {
+          "source": "Create a new label in Linear",
+          "message": "Linear에서 새 라벨 생성"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLXByb2plY3Q.desc": {
+          "source": "Create a new project for organizing related issues",
+          "message": "관련 이슈 정리를 위한 새 프로젝트 생성"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLXByb2plY3Q.display_name": {
+          "source": "Create Project",
+          "message": "프로젝트 생성"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLXByb2plY3Q.option.ZGVzY3JpcHRpb24.desc": {
+          "source": "The description of the project",
+          "message": "프로젝트 설명"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLXByb2plY3Q.option.ZGVzY3JpcHRpb24.display_name": {
+          "source": "Description",
+          "message": "설명"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLXByb2plY3Q.option.ZGVzY3JpcHRpb24.short_desc": {
+          "source": "The project description",
+          "message": "프로젝트 설명"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLXByb2plY3Q.option.bGVhZElk.desc": {
+          "source": "The user leading the project",
+          "message": "프로젝트를 이끄는 사용자"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLXByb2plY3Q.option.bGVhZElk.display_name": {
+          "source": "Lead",
+          "message": "리드"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLXByb2plY3Q.option.bGVhZElk.short_desc": {
+          "source": "The project lead",
+          "message": "프로젝트 리드"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLXByb2plY3Q.option.bmFtZQ.desc": {
+          "source": "The name of the project",
+          "message": "프로젝트 이름"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLXByb2plY3Q.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "이름"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLXByb2plY3Q.option.bmFtZQ.short_desc": {
+          "source": "The project name",
+          "message": "프로젝트 이름"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLXByb2plY3Q.option.c3RhcnREYXRl.desc": {
+          "source": "The planned start date of the project",
+          "message": "프로젝트의 계획된 시작일"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLXByb2plY3Q.option.c3RhcnREYXRl.display_name": {
+          "source": "Start Date",
+          "message": "시작일"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLXByb2plY3Q.option.c3RhcnREYXRl.short_desc": {
+          "source": "The project start date",
+          "message": "프로젝트 시작일"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLXByb2plY3Q.option.c3RhdGU.allowed-value.c3RyaW5nOmNhbmNlbGVk.desc": {
+          "source": "Canceled project",
+          "message": "취소된 프로젝트"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLXByb2plY3Q.option.c3RhdGU.allowed-value.c3RyaW5nOmNhbmNlbGVk.display_name": {
+          "source": "Canceled",
+          "message": "취소됨"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLXByb2plY3Q.option.c3RhdGU.allowed-value.c3RyaW5nOmNvbXBsZXRlZA.desc": {
+          "source": "Completed project",
+          "message": "완료된 프로젝트"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLXByb2plY3Q.option.c3RhdGU.allowed-value.c3RyaW5nOmNvbXBsZXRlZA.display_name": {
+          "source": "Completed",
+          "message": "완료됨"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLXByb2plY3Q.option.c3RhdGU.allowed-value.c3RyaW5nOnBhdXNlZA.desc": {
+          "source": "Paused project",
+          "message": "일시 중지된 프로젝트"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLXByb2plY3Q.option.c3RhdGU.allowed-value.c3RyaW5nOnBhdXNlZA.display_name": {
+          "source": "Paused",
+          "message": "일시중지"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLXByb2plY3Q.option.c3RhdGU.allowed-value.c3RyaW5nOnBsYW5uZWQ.desc": {
+          "source": "Planned project",
+          "message": "계획된 프로젝트"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLXByb2plY3Q.option.c3RhdGU.allowed-value.c3RyaW5nOnBsYW5uZWQ.display_name": {
+          "source": "Planned",
+          "message": "계획됨"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLXByb2plY3Q.option.c3RhdGU.allowed-value.c3RyaW5nOnN0YXJ0ZWQ.desc": {
+          "source": "Started project",
+          "message": "시작된 프로젝트"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLXByb2plY3Q.option.c3RhdGU.allowed-value.c3RyaW5nOnN0YXJ0ZWQ.display_name": {
+          "source": "Started",
+          "message": "시작됨"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLXByb2plY3Q.option.c3RhdGU.desc": {
+          "source": "The initial state of the project",
+          "message": "프로젝트의 초기 상태"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLXByb2plY3Q.option.c3RhdGU.display_name": {
+          "source": "State",
+          "message": "주/도"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLXByb2plY3Q.option.c3RhdGU.short_desc": {
+          "source": "The project state",
+          "message": "프로젝트 상태"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLXByb2plY3Q.option.dGFyZ2V0RGF0ZQ.desc": {
+          "source": "The target completion date of the project",
+          "message": "프로젝트의 목표 완료일"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLXByb2plY3Q.option.dGFyZ2V0RGF0ZQ.display_name": {
+          "source": "Target Date",
+          "message": "목표일"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLXByb2plY3Q.option.dGFyZ2V0RGF0ZQ.short_desc": {
+          "source": "The project target date",
+          "message": "프로젝트 목표일"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLXByb2plY3Q.option.dGVhbUlkcw.desc": {
+          "source": "The teams to associate with the project",
+          "message": "프로젝트와 연결할 팀"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLXByb2plY3Q.option.dGVhbUlkcw.display_name": {
+          "source": "Teams",
+          "message": "팀"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLXByb2plY3Q.option.dGVhbUlkcw.short_desc": {
+          "source": "The teams to associate with the project",
+          "message": "프로젝트와 연결할 팀"
+        },
+        "app.TGluZWFy.action.Y3JlYXRlLXByb2plY3Q.short_desc": {
+          "source": "Create a new project in Linear",
+          "message": "Linear에서 새 프로젝트 생성"
+        },
+        "app.TGluZWFy.action.YXJjaGl2ZS1pc3N1ZQ.desc": {
+          "source": "Archive (soft delete) a Linear issue",
+          "message": "Linear 이슈 보관(소프트 삭제)"
+        },
+        "app.TGluZWFy.action.YXJjaGl2ZS1pc3N1ZQ.display_name": {
+          "source": "Archive Issue",
+          "message": "이슈 보관"
+        },
+        "app.TGluZWFy.action.YXJjaGl2ZS1pc3N1ZQ.option.aWQ.desc": {
+          "source": "The issue to archive",
+          "message": "보관할 이슈"
+        },
+        "app.TGluZWFy.action.YXJjaGl2ZS1pc3N1ZQ.option.aWQ.display_name": {
+          "source": "Issue",
+          "message": "이슈"
+        },
+        "app.TGluZWFy.action.YXJjaGl2ZS1pc3N1ZQ.option.aWQ.short_desc": {
+          "source": "The issue to archive",
+          "message": "보관할 이슈"
+        },
+        "app.TGluZWFy.action.YXJjaGl2ZS1pc3N1ZQ.short_desc": {
+          "source": "Archive a Linear issue",
+          "message": "Linear 이슈 보관"
+        },
+        "app.TGluZWFy.action.Z2V0LWlzc3Vl.desc": {
+          "source": "Retrieve a specific issue by its ID",
+          "message": "ID로 특정 이슈 조회"
+        },
+        "app.TGluZWFy.action.Z2V0LWlzc3Vl.display_name": {
+          "source": "Get Issue",
+          "message": "이슈 가져오기"
+        },
+        "app.TGluZWFy.action.Z2V0LWlzc3Vl.option.aWQ.desc": {
+          "source": "The issue to retrieve",
+          "message": "조회할 이슈"
+        },
+        "app.TGluZWFy.action.Z2V0LWlzc3Vl.option.aWQ.display_name": {
+          "source": "Issue",
+          "message": "이슈"
+        },
+        "app.TGluZWFy.action.Z2V0LWlzc3Vl.option.aWQ.short_desc": {
+          "source": "The issue to retrieve",
+          "message": "조회할 이슈"
+        },
+        "app.TGluZWFy.action.Z2V0LWlzc3Vl.short_desc": {
+          "source": "Get a specific issue from Linear",
+          "message": "Linear에서 특정 이슈 가져오기"
+        },
+        "app.TGluZWFy.action.Z2V0LXRlYW0.desc": {
+          "source": "Retrieve a specific team by its ID",
+          "message": "ID로 특정 팀 조회"
+        },
+        "app.TGluZWFy.action.Z2V0LXRlYW0.display_name": {
+          "source": "Get Team",
+          "message": "팀 가져오기"
+        },
+        "app.TGluZWFy.action.Z2V0LXRlYW0.option.aWQ.desc": {
+          "source": "The team to retrieve",
+          "message": "조회할 팀"
+        },
+        "app.TGluZWFy.action.Z2V0LXRlYW0.option.aWQ.display_name": {
+          "source": "Team",
+          "message": "팀"
+        },
+        "app.TGluZWFy.action.Z2V0LXRlYW0.option.aWQ.short_desc": {
+          "source": "The team to retrieve",
+          "message": "조회할 팀"
+        },
+        "app.TGluZWFy.action.Z2V0LXRlYW0.short_desc": {
+          "source": "Get a specific team from Linear",
+          "message": "Linear에서 특정 팀 가져오기"
+        },
+        "app.TGluZWFy.action.aXNzdWUtY3JlYXRlZA.desc": {
+          "source": "Fires when a new issue is created in Linear. Uses webhooks for real-time notifications.",
+          "message": "Linear에서 새 이슈가 생성될 때 실행됩니다. 실시간 알림을 위해 웹훅을 사용합니다."
+        },
+        "app.TGluZWFy.action.aXNzdWUtY3JlYXRlZA.display_name": {
+          "source": "Issue Created",
+          "message": "이슈 생성됨"
+        },
+        "app.TGluZWFy.action.aXNzdWUtY3JlYXRlZA.option.dGVhbUlk.desc": {
+          "source": "Only trigger for issues created in this team (optional)",
+          "message": "이 팀에서 생성된 이슈에 대해서만 트리거(선택 사항)"
+        },
+        "app.TGluZWFy.action.aXNzdWUtY3JlYXRlZA.option.dGVhbUlk.display_name": {
+          "source": "Team",
+          "message": "팀"
+        },
+        "app.TGluZWFy.action.aXNzdWUtY3JlYXRlZA.option.dGVhbUlk.short_desc": {
+          "source": "Filter to issues from a specific team",
+          "message": "특정 팀의 이슈로 필터링"
+        },
+        "app.TGluZWFy.action.aXNzdWUtY3JlYXRlZA.short_desc": {
+          "source": "Trigger when a new issue is created",
+          "message": "새 이슈가 생성될 때 트리거"
+        },
+        "app.TGluZWFy.action.aXNzdWUtdXBkYXRlZA.desc": {
+          "source": "Fires when an existing issue is updated in Linear. Uses webhooks for real-time notifications.",
+          "message": "Linear에서 기존 이슈가 업데이트될 때 실행됩니다. 실시간 알림을 위해 웹훅을 사용합니다."
+        },
+        "app.TGluZWFy.action.aXNzdWUtdXBkYXRlZA.display_name": {
+          "source": "Issue Updated",
+          "message": "이슈 업데이트됨"
+        },
+        "app.TGluZWFy.action.aXNzdWUtdXBkYXRlZA.option.dGVhbUlk.desc": {
+          "source": "Only trigger for issues updated in this team (optional)",
+          "message": "이 팀에서 업데이트된 이슈에 대해서만 트리거(선택 사항)"
+        },
+        "app.TGluZWFy.action.aXNzdWUtdXBkYXRlZA.option.dGVhbUlk.display_name": {
+          "source": "Team",
+          "message": "팀"
+        },
+        "app.TGluZWFy.action.aXNzdWUtdXBkYXRlZA.option.dGVhbUlk.short_desc": {
+          "source": "Filter to issues from a specific team",
+          "message": "특정 팀의 이슈로 필터링"
+        },
+        "app.TGluZWFy.action.aXNzdWUtdXBkYXRlZA.short_desc": {
+          "source": "Trigger when an issue is updated",
+          "message": "이슈가 업데이트될 때 트리거"
+        },
+        "app.TGluZWFy.action.bWFrZS1hcGktY2FsbA.desc": {
+          "source": "Make a custom HTTP / REST API call to **Linear** using the configured connection's authentication.\n\nSpecify the HTTP method, the URI path (relative to the connection's API base URL), optional query parameters, headers, and request body. The response is returned as a hash containing the status code, response headers, and response body.\n\nUse this action for endpoints that are not yet exposed as first-class actions on this app.",
+          "message": "구성된 연결의 인증을 사용하여 **Linear**에 사용자 정의 HTTP / REST API 호출을 수행합니다.\n\nHTTP 메서드, URI 경로(연결의 API 기본 URL 기준 상대 경로), 선택적 쿼리 매개변수, 헤더 및 요청 본문을 지정합니다. 응답은 상태 코드, 응답 헤더 및 응답 본문이 포함된 해시로 반환됩니다.\n\n이 앱에서 기본 액션으로 아직 노출되지 않은 엔드포인트에 대해 이 액션을 사용하세요."
+        },
+        "app.TGluZWFy.action.bWFrZS1hcGktY2FsbA.display_name": {
+          "source": "Make an API call",
+          "message": "API 호출 실행"
+        },
+        "app.TGluZWFy.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.desc": {
+          "source": "The request body. The effective type depends on `body_type`: JSON/form/YAML expect a hash, XML/text expect a string, multipart expects a file structure, binary expects raw bytes.",
+          "message": "요청 본문입니다. 유효한 유형은 `body_type`에 따라 달라집니다. JSON/form/YAML은 해시를, XML/text는 문자열을, multipart는 파일 구조를, binary는 원시 바이트를 요구합니다."
+        },
+        "app.TGluZWFy.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.display_name": {
+          "source": "Body",
+          "message": "본문"
+        },
+        "app.TGluZWFy.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.short_desc": {
+          "source": "The request body",
+          "message": "요청 본문"
+        },
+        "app.TGluZWFy.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.desc": {
+          "source": "Upload a file using `multipart/form-data`. The body must be a @ref DataProvider::FileDataType \"FileDataType\" structure (filename + content + mime_type). The framework builds the multipart envelope and sets the boundary header.",
+          "message": "`multipart/form-data`을(를) 사용하여 파일을 업로드합니다. 본문은 @ref DataProvider::FileDataType \"FileDataType\" 구조(filename + content + mime_type)여야 합니다. 프레임워크가 multipart 봉투를 작성하고 boundary 헤더를 설정합니다."
+        },
+        "app.TGluZWFy.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.display_name": {
+          "source": "Multipart Form",
+          "message": "멀티파트 폼"
+        },
+        "app.TGluZWFy.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.short_desc": {
+          "source": "Upload a file using multipart/form-data",
+          "message": "multipart/form-data를 사용하여 파일 업로드"
+        },
+        "app.TGluZWFy.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.desc": {
+          "source": "Pass the body to the REST client unchanged; the client decides serialization based on its configured `data` option and the value type",
+          "message": "본문을 변경하지 않고 REST 클라이언트에 전달합니다. 클라이언트는 구성된 `data` 옵션과 값 유형을 기반으로 직렬화를 결정합니다."
+        },
+        "app.TGluZWFy.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.display_name": {
+          "source": "Auto",
+          "message": "자동"
+        },
+        "app.TGluZWFy.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.short_desc": {
+          "source": "Pass-through; use connection serialization and let the REST client decide",
+          "message": "패스스루: 연결 직렬화를 사용하고 REST 클라이언트가 결정하도록 합니다."
+        },
+        "app.TGluZWFy.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.desc": {
+          "source": "Send the body as raw bytes. The body must be a binary value. Sets `Content-Type: application/octet-stream` unless overridden by `hdr`.",
+          "message": "본문을 원시 바이트로 전송합니다. 본문은 바이너리 값이어야 합니다. `hdr`에 의해 재정의되지 않는 한 `Content-Type: application/octet-stream`을(를) 설정합니다."
+        },
+        "app.TGluZWFy.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.display_name": {
+          "source": "Raw Binary",
+          "message": "원시 바이너리"
+        },
+        "app.TGluZWFy.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.short_desc": {
+          "source": "Send body as raw bytes",
+          "message": "본문을 원시 바이트로 전송"
+        },
+        "app.TGluZWFy.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.desc": {
+          "source": "Serialize a hash of form fields as `application/x-www-form-urlencoded`. The body must be a hash whose values are scalars (strings/numbers/booleans).",
+          "message": "폼 필드의 해시를 `application/x-www-form-urlencoded`(으)로 직렬화합니다. 본문은 값이 스칼라(문자열/숫자/불리언)인 해시여야 합니다."
+        },
+        "app.TGluZWFy.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.display_name": {
+          "source": "Form (URL-encoded)",
+          "message": "폼 (URL 인코딩)"
+        },
+        "app.TGluZWFy.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.short_desc": {
+          "source": "Serialize body as application/x-www-form-urlencoded form fields",
+          "message": "본문을 application/x-www-form-urlencoded 폼 필드로 직렬화"
+        },
+        "app.TGluZWFy.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.desc": {
+          "source": "Serialize the body as JSON; sets `Content-Type: application/json`. The body should be a hash, list, or scalar value.",
+          "message": "본문을 JSON으로 직렬화하며, `Content-Type: application/json`을(를) 설정합니다. 본문은 해시, 리스트 또는 스칼라 값이어야 합니다."
+        },
+        "app.TGluZWFy.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.display_name": {
+          "source": "JSON",
+          "message": "JSON"
+        },
+        "app.TGluZWFy.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.short_desc": {
+          "source": "Serialize body as JSON",
+          "message": "본문을 JSON으로 직렬화"
+        },
+        "app.TGluZWFy.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.desc": {
+          "source": "Send the body as plain text. The body must be a string. Sets `Content-Type: text/plain`.",
+          "message": "본문을 일반 텍스트로 전송합니다. 본문은 문자열이어야 합니다. `Content-Type: text/plain`을(를) 설정합니다."
+        },
+        "app.TGluZWFy.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.display_name": {
+          "source": "Plain Text",
+          "message": "일반 텍스트"
+        },
+        "app.TGluZWFy.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.short_desc": {
+          "source": "Send body as text/plain",
+          "message": "본문을 text/plain으로 전송"
+        },
+        "app.TGluZWFy.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.desc": {
+          "source": "Send the body as XML. If the body is a hash it is serialized to XML; if it is a string it is sent verbatim. Sets `Content-Type: application/xml`.",
+          "message": "본문을 XML로 전송합니다. 본문이 해시인 경우 XML로 직렬화되고, 문자열인 경우 그대로 전송됩니다. `Content-Type: application/xml`을(를) 설정합니다."
+        },
+        "app.TGluZWFy.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.display_name": {
+          "source": "XML",
+          "message": "XML"
+        },
+        "app.TGluZWFy.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.short_desc": {
+          "source": "Send body as XML",
+          "message": "본문을 XML로 전송"
+        },
+        "app.TGluZWFy.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.desc": {
+          "source": "Send the body as YAML. If the body is a hash it is serialized to YAML; if it is a string it is sent verbatim. Sets `Content-Type: application/x-yaml`.",
+          "message": "본문을 YAML로 전송합니다. 본문이 해시인 경우 YAML로 직렬화되고, 문자열인 경우 그대로 전송됩니다. `Content-Type: application/x-yaml`을(를) 설정합니다."
+        },
+        "app.TGluZWFy.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.display_name": {
+          "source": "YAML",
+          "message": "YAML"
+        },
+        "app.TGluZWFy.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.short_desc": {
+          "source": "Send body as YAML",
+          "message": "본문을 YAML로 전송"
+        },
+        "app.TGluZWFy.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.desc": {
+          "source": "Selects the body serialization mode and the corresponding `Content-Type` header. Changing this field reshapes the `body` editor - selecting JSON exposes a JSON editor, selecting Multipart Form exposes a file picker, and so on.",
+          "message": "본문 직렬화 모드 및 해당되는 `Content-Type` 헤더를 선택합니다. 이 필드를 변경하면 `body` 에디터의 형태가 변경됩니다. JSON을 선택하면 JSON 에디터가 표시되고, 멀티파트 폼을 선택하면 파일 선택기가 표시되는 방식입니다."
+        },
+        "app.TGluZWFy.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.display_name": {
+          "source": "Body Type",
+          "message": "본문 유형"
+        },
+        "app.TGluZWFy.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.short_desc": {
+          "source": "How the body is serialized and what Content-Type is sent",
+          "message": "본문이 직렬화되는 방식 및 전송되는 Content-Type"
+        },
+        "app.TGluZWFy.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.desc": {
+          "source": "If `True`, non-2xx HTTP responses return as the normal response hash (with the actual status code) instead of raising `REST-RESPONSE-ERROR`. Useful for handling 4xx/5xx as data - e.g. checking whether a resource exists. Overrides the connection's `error_passthru` setting for this call only.",
+          "message": "`True`인 경우, 2xx가 아닌 HTTP 응답은 `REST-RESPONSE-ERROR`을(를) 발생시키는 대신 (실제 상태 코드와 함께) 일반 응답 해시로 반환됩니다. 리소스 존재 여부 확인 등 4xx/5xx를 데이터로 처리할 때 유용합니다. 이 호출에 대해서만 연결의 `error_passthru` 설정을 재정의합니다."
+        },
+        "app.TGluZWFy.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.display_name": {
+          "source": "Return Errors as Data",
+          "message": "오류를 데이터로 반환"
+        },
+        "app.TGluZWFy.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.short_desc": {
+          "source": "Return non-2xx responses normally instead of throwing",
+          "message": "예외를 발생시키는 대신 2xx가 아닌 응답을 정상적으로 반환"
+        },
+        "app.TGluZWFy.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.desc": {
+          "source": "Optional list of HTTP status codes treated as success. If set and the response status is not in this list, the action throws `REST-STATUS-ERROR`. When unset, the REST client's default behavior applies (typically: 2xx is success, non-2xx throws).",
+          "message": "성공으로 처리되는 HTTP 상태 코드의 선택적 목록입니다. 설정되어 있고 응답 상태가 이 목록에 없는 경우 작업이 `REST-STATUS-ERROR` 예외를 발생시킵니다. 설정되지 않은 경우 REST 클라이언트의 기본 동작이 적용됩니다(일반적으로 2xx는 성공, 2xx 이외는 예외 발생)."
+        },
+        "app.TGluZWFy.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.display_name": {
+          "source": "Expected Status Codes",
+          "message": "예상되는 상태 코드"
+        },
+        "app.TGluZWFy.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.short_desc": {
+          "source": "Response status codes treated as success",
+          "message": "성공으로 처리되는 응답 상태 코드"
+        },
+        "app.TGluZWFy.action.bWFrZS1hcGktY2FsbA.option.aGRy.desc": {
+          "source": "Hash of custom headers added to the request. These override any default headers set by `body_type` (e.g. supplying `Content-Type` here wins over the body-type default).",
+          "message": "요청에 추가되는 사용자 지정 헤더의 해시입니다. 이는 `body_type`에 의해 설정된 기본 헤더보다 우선합니다(예: 여기에 `Content-Type`을(를) 제공하면 본문 유형 기본값보다 우선 적용됨)."
+        },
+        "app.TGluZWFy.action.bWFrZS1hcGktY2FsbA.option.aGRy.display_name": {
+          "source": "Custom Headers",
+          "message": "사용자 지정 헤더"
+        },
+        "app.TGluZWFy.action.bWFrZS1hcGktY2FsbA.option.aGRy.short_desc": {
+          "source": "Extra request headers",
+          "message": "추가 요청 헤더"
+        },
+        "app.TGluZWFy.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.desc": {
+          "source": "If `True`, the response hash includes a `debug` sub-hash containing the request method/URL/headers (with sensitive values redacted), request and response sizes, and round-trip duration. Useful when investigating slow or failing calls. Off by default to keep responses lean.",
+          "message": "`True`인 경우 응답 해시에 요청 메서드/URL/헤더(민감한 값은 가려짐), 요청 및 응답 크기, 왕복 시간이 포함된 `debug` 하위 해시가 포함됩니다. 느리거나 실패한 호출을 조사할 때 유용합니다. 응답을 가볍게 유지하기 위해 기본적으로 비활성화되어 있습니다."
+        },
+        "app.TGluZWFy.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.display_name": {
+          "source": "Include Debug Info",
+          "message": "디버그 정보 포함"
+        },
+        "app.TGluZWFy.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.short_desc": {
+          "source": "Include request/timing/size debug info in the response",
+          "message": "응답에 요청/타이밍/크기 디버그 정보 포함"
+        },
+        "app.TGluZWFy.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.desc": {
+          "source": "HTTP `OPTIONS`",
+          "message": "HTTP `OPTIONS`"
+        },
+        "app.TGluZWFy.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.display_name": {
+          "source": "OPTIONS",
+          "message": "OPTIONS"
+        },
+        "app.TGluZWFy.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.short_desc": {
+          "source": "HTTP OPTIONS",
+          "message": "HTTP OPTIONS"
+        },
+        "app.TGluZWFy.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.desc": {
+          "source": "HTTP `DELETE`",
+          "message": "HTTP `DELETE`"
+        },
+        "app.TGluZWFy.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.display_name": {
+          "source": "DELETE",
+          "message": "DELETE"
+        },
+        "app.TGluZWFy.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.short_desc": {
+          "source": "HTTP DELETE",
+          "message": "HTTP DELETE"
+        },
+        "app.TGluZWFy.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.desc": {
+          "source": "HTTP `GET`",
+          "message": "HTTP `GET`"
+        },
+        "app.TGluZWFy.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.display_name": {
+          "source": "GET",
+          "message": "GET"
+        },
+        "app.TGluZWFy.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.short_desc": {
+          "source": "HTTP GET",
+          "message": "HTTP GET"
+        },
+        "app.TGluZWFy.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.desc": {
+          "source": "HTTP `HEAD`",
+          "message": "HTTP `HEAD`"
+        },
+        "app.TGluZWFy.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.display_name": {
+          "source": "HEAD",
+          "message": "HEAD"
+        },
+        "app.TGluZWFy.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.short_desc": {
+          "source": "HTTP HEAD",
+          "message": "HTTP HEAD"
+        },
+        "app.TGluZWFy.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.desc": {
+          "source": "HTTP `PATCH`",
+          "message": "HTTP `PATCH`"
+        },
+        "app.TGluZWFy.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.display_name": {
+          "source": "PATCH",
+          "message": "PATCH"
+        },
+        "app.TGluZWFy.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.short_desc": {
+          "source": "HTTP PATCH",
+          "message": "HTTP PATCH"
+        },
+        "app.TGluZWFy.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.desc": {
+          "source": "HTTP `POST`",
+          "message": "HTTP `POST`"
+        },
+        "app.TGluZWFy.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.display_name": {
+          "source": "POST",
+          "message": "POST"
+        },
+        "app.TGluZWFy.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.short_desc": {
+          "source": "HTTP POST",
+          "message": "HTTP POST"
+        },
+        "app.TGluZWFy.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.desc": {
+          "source": "HTTP `PUT`",
+          "message": "HTTP `PUT`"
+        },
+        "app.TGluZWFy.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.display_name": {
+          "source": "PUT",
+          "message": "PUT"
+        },
+        "app.TGluZWFy.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.short_desc": {
+          "source": "HTTP PUT",
+          "message": "HTTP PUT"
+        },
+        "app.TGluZWFy.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.desc": {
+          "source": "HTTP `TRACE`",
+          "message": "HTTP `TRACE`"
+        },
+        "app.TGluZWFy.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.display_name": {
+          "source": "TRACE",
+          "message": "TRACE"
+        },
+        "app.TGluZWFy.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.short_desc": {
+          "source": "HTTP TRACE",
+          "message": "HTTP TRACE"
+        },
+        "app.TGluZWFy.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "요청에 사용할 HTTP 메서드"
+        },
+        "app.TGluZWFy.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.display_name": {
+          "source": "HTTP Method",
+          "message": "HTTP 메서드"
+        },
+        "app.TGluZWFy.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.short_desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "요청에 사용할 HTTP 메서드"
+        },
+        "app.TGluZWFy.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain `{name}` placeholders that are replaced from `path_vars`. Example: `/users/{id}/comments`.",
+          "message": "연결의 API 기본 URL에 대한 상대 URI 경로입니다. `path_vars`에서 대체되는 `{name}` 자리 표시자가 포함될 수 있습니다. 예: `/users/{id}/comments`."
+        },
+        "app.TGluZWFy.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.display_name": {
+          "source": "URI Path",
+          "message": "URI 경로"
+        },
+        "app.TGluZWFy.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.short_desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain '{name}' placeholders that are replaced from 'path_vars'. Example: '/users/{id}/comments'",
+          "message": "연결의 API 기본 URL에 대한 상대 URI 경로입니다. 'path_vars'에서 대체되는 '{name}' 자리 표시자를 포함할 수 있습니다. 예: '/users/{id}/comments'"
+        },
+        "app.TGluZWFy.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.desc": {
+          "source": "Hash of values substituted into `{name}` placeholders in the URI path. Example: with `path = /users/{id}` and `path_vars = {id: 123}` the framework sends `/users/123`. Values are URL-encoded.",
+          "message": "URI 경로의 `{name}` 자리 표시자에 대체되는 값의 해시입니다. 예: `path = /users/{id}` 및 `path_vars = {id: 123}`이 있으면 프레임워크가 `/users/123`을(를) 전송합니다. 값은 URL 인코딩됩니다."
+        },
+        "app.TGluZWFy.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.display_name": {
+          "source": "Path Variables",
+          "message": "경로 변수"
+        },
+        "app.TGluZWFy.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.short_desc": {
+          "source": "Values for {name} placeholders in path",
+          "message": "경로 내 {name} 자리 표시자의 값"
+        },
+        "app.TGluZWFy.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.desc": {
+          "source": "Hash of query string parameters to append to the URI path. Values are URL-encoded; list values are joined with `,`.",
+          "message": "URI 경로에 추가할 쿼리 문자열 매개변수 해시입니다. 값은 URL 인코딩되며, 목록 값은 `,`(으)로 연결됩니다."
+        },
+        "app.TGluZWFy.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.display_name": {
+          "source": "Query Arguments",
+          "message": "쿼리 인수"
+        },
+        "app.TGluZWFy.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.short_desc": {
+          "source": "Query string parameters",
+          "message": "쿼리 문자열 매개변수"
+        },
+        "app.TGluZWFy.action.bWFrZS1hcGktY2FsbA.short_desc": {
+          "source": "Make a custom API call to Linear",
+          "message": "Linear에 사용자 정의 API 호출 수행"
+        },
+        "app.TGluZWFy.action.c2VhcmNoLWN5Y2xlcw.desc": {
+          "source": "Search for cycles with optional team filter",
+          "message": "선택적 팀 필터로 사이클 검색"
+        },
+        "app.TGluZWFy.action.c2VhcmNoLWN5Y2xlcw.display_name": {
+          "source": "Search Cycles",
+          "message": "사이클 검색"
+        },
+        "app.TGluZWFy.action.c2VhcmNoLWN5Y2xlcw.option.bGltaXQ.desc": {
+          "source": "Maximum number of results to return",
+          "message": "반환할 결과의 최대 개수"
+        },
+        "app.TGluZWFy.action.c2VhcmNoLWN5Y2xlcw.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "제한"
+        },
+        "app.TGluZWFy.action.c2VhcmNoLWN5Y2xlcw.option.bGltaXQ.short_desc": {
+          "source": "Maximum number of results",
+          "message": "최대 결과 수"
+        },
+        "app.TGluZWFy.action.c2VhcmNoLWN5Y2xlcw.option.dGVhbUlk.desc": {
+          "source": "Filter cycles by team",
+          "message": "팀별로 사이클 필터링"
+        },
+        "app.TGluZWFy.action.c2VhcmNoLWN5Y2xlcw.option.dGVhbUlk.display_name": {
+          "source": "Team",
+          "message": "팀"
+        },
+        "app.TGluZWFy.action.c2VhcmNoLWN5Y2xlcw.option.dGVhbUlk.short_desc": {
+          "source": "Filter by team",
+          "message": "팀별로 필터링"
+        },
+        "app.TGluZWFy.action.c2VhcmNoLWN5Y2xlcw.short_desc": {
+          "source": "Search for cycles in Linear",
+          "message": "Linear에서 사이클 검색"
+        },
+        "app.TGluZWFy.action.c2VhcmNoLWlzc3Vlcw.desc": {
+          "source": "Search for issues with optional filters for team, project, cycle, assignee, and state",
+          "message": "팀, 프로젝트, 사이클, 담당자 및 상태에 대한 선택적 필터로 이슈 검색"
+        },
+        "app.TGluZWFy.action.c2VhcmNoLWlzc3Vlcw.display_name": {
+          "source": "Search Issues",
+          "message": "이슈 검색"
+        },
+        "app.TGluZWFy.action.c2VhcmNoLWlzc3Vlcw.option.Y3ljbGVJZA.desc": {
+          "source": "Filter issues by cycle (sprint)",
+          "message": "사이클(스프린트)별로 이슈 필터링"
+        },
+        "app.TGluZWFy.action.c2VhcmNoLWlzc3Vlcw.option.Y3ljbGVJZA.display_name": {
+          "source": "Cycle",
+          "message": "사이클"
+        },
+        "app.TGluZWFy.action.c2VhcmNoLWlzc3Vlcw.option.Y3ljbGVJZA.short_desc": {
+          "source": "Filter by cycle",
+          "message": "사이클별로 필터링"
+        },
+        "app.TGluZWFy.action.c2VhcmNoLWlzc3Vlcw.option.YXNzaWduZWVJZA.desc": {
+          "source": "Filter issues by assignee",
+          "message": "담당자별로 이슈 필터링"
+        },
+        "app.TGluZWFy.action.c2VhcmNoLWlzc3Vlcw.option.YXNzaWduZWVJZA.display_name": {
+          "source": "Assignee",
+          "message": "담당자"
+        },
+        "app.TGluZWFy.action.c2VhcmNoLWlzc3Vlcw.option.YXNzaWduZWVJZA.short_desc": {
+          "source": "Filter by assignee",
+          "message": "담당자별 필터링"
+        },
+        "app.TGluZWFy.action.c2VhcmNoLWlzc3Vlcw.option.bGltaXQ.desc": {
+          "source": "Maximum number of results to return",
+          "message": "반환할 결과의 최대 개수"
+        },
+        "app.TGluZWFy.action.c2VhcmNoLWlzc3Vlcw.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "제한"
+        },
+        "app.TGluZWFy.action.c2VhcmNoLWlzc3Vlcw.option.bGltaXQ.short_desc": {
+          "source": "Maximum number of results",
+          "message": "최대 결과 수"
+        },
+        "app.TGluZWFy.action.c2VhcmNoLWlzc3Vlcw.option.c3RhdGVJZA.desc": {
+          "source": "Filter issues by workflow state",
+          "message": "워크플로 상태별로 이슈 필터링"
+        },
+        "app.TGluZWFy.action.c2VhcmNoLWlzc3Vlcw.option.c3RhdGVJZA.display_name": {
+          "source": "State",
+          "message": "주/도"
+        },
+        "app.TGluZWFy.action.c2VhcmNoLWlzc3Vlcw.option.c3RhdGVJZA.short_desc": {
+          "source": "Filter by workflow state",
+          "message": "워크플로 상태별로 필터링"
+        },
+        "app.TGluZWFy.action.c2VhcmNoLWlzc3Vlcw.option.cHJpb3JpdHk.allowed-value.aW50OjA.display_name": {
+          "source": "No Priority",
+          "message": "우선순위 없음"
+        },
+        "app.TGluZWFy.action.c2VhcmNoLWlzc3Vlcw.option.cHJpb3JpdHk.allowed-value.aW50OjE.display_name": {
+          "source": "Urgent",
+          "message": "긴급"
+        },
+        "app.TGluZWFy.action.c2VhcmNoLWlzc3Vlcw.option.cHJpb3JpdHk.allowed-value.aW50OjI.display_name": {
+          "source": "High",
+          "message": "높음"
+        },
+        "app.TGluZWFy.action.c2VhcmNoLWlzc3Vlcw.option.cHJpb3JpdHk.allowed-value.aW50OjM.display_name": {
+          "source": "Normal",
+          "message": "보통"
+        },
+        "app.TGluZWFy.action.c2VhcmNoLWlzc3Vlcw.option.cHJpb3JpdHk.allowed-value.aW50OjQ.display_name": {
+          "source": "Low",
+          "message": "낮음"
+        },
+        "app.TGluZWFy.action.c2VhcmNoLWlzc3Vlcw.option.cHJpb3JpdHk.desc": {
+          "source": "Filter issues by priority level",
+          "message": "우선순위 수준별로 이슈 필터링"
+        },
+        "app.TGluZWFy.action.c2VhcmNoLWlzc3Vlcw.option.cHJpb3JpdHk.display_name": {
+          "source": "Priority",
+          "message": "우선순위"
+        },
+        "app.TGluZWFy.action.c2VhcmNoLWlzc3Vlcw.option.cHJpb3JpdHk.short_desc": {
+          "source": "Filter by priority",
+          "message": "우선순위별 필터"
+        },
+        "app.TGluZWFy.action.c2VhcmNoLWlzc3Vlcw.option.cHJvamVjdElk.desc": {
+          "source": "Filter issues by project",
+          "message": "프로젝트별로 이슈 필터링"
+        },
+        "app.TGluZWFy.action.c2VhcmNoLWlzc3Vlcw.option.cHJvamVjdElk.display_name": {
+          "source": "Project",
+          "message": "프로젝트"
+        },
+        "app.TGluZWFy.action.c2VhcmNoLWlzc3Vlcw.option.cHJvamVjdElk.short_desc": {
+          "source": "Filter by project",
+          "message": "프로젝트별 필터링"
+        },
+        "app.TGluZWFy.action.c2VhcmNoLWlzc3Vlcw.option.dGVhbUlk.desc": {
+          "source": "Filter issues by team",
+          "message": "팀별로 이슈 필터링"
+        },
+        "app.TGluZWFy.action.c2VhcmNoLWlzc3Vlcw.option.dGVhbUlk.display_name": {
+          "source": "Team",
+          "message": "팀"
+        },
+        "app.TGluZWFy.action.c2VhcmNoLWlzc3Vlcw.option.dGVhbUlk.short_desc": {
+          "source": "Filter by team",
+          "message": "팀별로 필터링"
+        },
+        "app.TGluZWFy.action.c2VhcmNoLWlzc3Vlcw.short_desc": {
+          "source": "Search for issues in Linear",
+          "message": "Linear에서 이슈 검색"
+        },
+        "app.TGluZWFy.action.c2VhcmNoLWxhYmVscw.desc": {
+          "source": "Search for labels with optional team filter",
+          "message": "선택적 팀 필터로 라벨 검색"
+        },
+        "app.TGluZWFy.action.c2VhcmNoLWxhYmVscw.display_name": {
+          "source": "Search Labels",
+          "message": "라벨 검색"
+        },
+        "app.TGluZWFy.action.c2VhcmNoLWxhYmVscw.option.bGltaXQ.desc": {
+          "source": "Maximum number of results to return",
+          "message": "반환할 결과의 최대 개수"
+        },
+        "app.TGluZWFy.action.c2VhcmNoLWxhYmVscw.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "제한"
+        },
+        "app.TGluZWFy.action.c2VhcmNoLWxhYmVscw.option.bGltaXQ.short_desc": {
+          "source": "Maximum number of results",
+          "message": "최대 결과 수"
+        },
+        "app.TGluZWFy.action.c2VhcmNoLWxhYmVscw.option.dGVhbUlk.desc": {
+          "source": "Filter labels by team (`NOTHING` for workspace labels)",
+          "message": "팀별로 라벨 필터링(워크스페이스 라벨의 경우 `NOTHING`)"
+        },
+        "app.TGluZWFy.action.c2VhcmNoLWxhYmVscw.option.dGVhbUlk.display_name": {
+          "source": "Team",
+          "message": "팀"
+        },
+        "app.TGluZWFy.action.c2VhcmNoLWxhYmVscw.option.dGVhbUlk.short_desc": {
+          "source": "Filter by team",
+          "message": "팀별로 필터링"
+        },
+        "app.TGluZWFy.action.c2VhcmNoLWxhYmVscw.short_desc": {
+          "source": "Search for labels in Linear",
+          "message": "Linear에서 라벨 검색"
+        },
+        "app.TGluZWFy.action.c2VhcmNoLXByb2plY3Rz.desc": {
+          "source": "Search for projects with optional state filter",
+          "message": "선택적 상태 필터로 프로젝트 검색"
+        },
+        "app.TGluZWFy.action.c2VhcmNoLXByb2plY3Rz.display_name": {
+          "source": "Search Projects",
+          "message": "프로젝트 검색"
+        },
+        "app.TGluZWFy.action.c2VhcmNoLXByb2plY3Rz.option.bGltaXQ.desc": {
+          "source": "Maximum number of results to return",
+          "message": "반환할 결과의 최대 개수"
+        },
+        "app.TGluZWFy.action.c2VhcmNoLXByb2plY3Rz.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "제한"
+        },
+        "app.TGluZWFy.action.c2VhcmNoLXByb2plY3Rz.option.bGltaXQ.short_desc": {
+          "source": "Maximum number of results",
+          "message": "최대 결과 수"
+        },
+        "app.TGluZWFy.action.c2VhcmNoLXByb2plY3Rz.option.c3RhdGU.allowed-value.c3RyaW5nOmNhbmNlbGVk.desc": {
+          "source": "Canceled projects",
+          "message": "취소된 프로젝트"
+        },
+        "app.TGluZWFy.action.c2VhcmNoLXByb2plY3Rz.option.c3RhdGU.allowed-value.c3RyaW5nOmNhbmNlbGVk.display_name": {
+          "source": "Canceled",
+          "message": "취소됨"
+        },
+        "app.TGluZWFy.action.c2VhcmNoLXByb2plY3Rz.option.c3RhdGU.allowed-value.c3RyaW5nOmNvbXBsZXRlZA.desc": {
+          "source": "Completed projects",
+          "message": "완료된 프로젝트"
+        },
+        "app.TGluZWFy.action.c2VhcmNoLXByb2plY3Rz.option.c3RhdGU.allowed-value.c3RyaW5nOmNvbXBsZXRlZA.display_name": {
+          "source": "Completed",
+          "message": "완료됨"
+        },
+        "app.TGluZWFy.action.c2VhcmNoLXByb2plY3Rz.option.c3RhdGU.allowed-value.c3RyaW5nOnBhdXNlZA.desc": {
+          "source": "Paused projects",
+          "message": "일시 중지된 프로젝트"
+        },
+        "app.TGluZWFy.action.c2VhcmNoLXByb2plY3Rz.option.c3RhdGU.allowed-value.c3RyaW5nOnBhdXNlZA.display_name": {
+          "source": "Paused",
+          "message": "일시중지"
+        },
+        "app.TGluZWFy.action.c2VhcmNoLXByb2plY3Rz.option.c3RhdGU.allowed-value.c3RyaW5nOnBsYW5uZWQ.desc": {
+          "source": "Planned projects",
+          "message": "계획된 프로젝트"
+        },
+        "app.TGluZWFy.action.c2VhcmNoLXByb2plY3Rz.option.c3RhdGU.allowed-value.c3RyaW5nOnBsYW5uZWQ.display_name": {
+          "source": "Planned",
+          "message": "계획됨"
+        },
+        "app.TGluZWFy.action.c2VhcmNoLXByb2plY3Rz.option.c3RhdGU.allowed-value.c3RyaW5nOnN0YXJ0ZWQ.desc": {
+          "source": "Started projects",
+          "message": "시작된 프로젝트"
+        },
+        "app.TGluZWFy.action.c2VhcmNoLXByb2plY3Rz.option.c3RhdGU.allowed-value.c3RyaW5nOnN0YXJ0ZWQ.display_name": {
+          "source": "Started",
+          "message": "시작됨"
+        },
+        "app.TGluZWFy.action.c2VhcmNoLXByb2plY3Rz.option.c3RhdGU.desc": {
+          "source": "Filter projects by state",
+          "message": "상태별로 프로젝트 필터링"
+        },
+        "app.TGluZWFy.action.c2VhcmNoLXByb2plY3Rz.option.c3RhdGU.display_name": {
+          "source": "State",
+          "message": "주/도"
+        },
+        "app.TGluZWFy.action.c2VhcmNoLXByb2plY3Rz.option.c3RhdGU.short_desc": {
+          "source": "Filter by project state",
+          "message": "프로젝트 상태별로 필터링"
+        },
+        "app.TGluZWFy.action.c2VhcmNoLXByb2plY3Rz.short_desc": {
+          "source": "Search for projects in Linear",
+          "message": "Linear에서 프로젝트 검색"
+        },
+        "app.TGluZWFy.action.c2VhcmNoLXRlYW1z.desc": {
+          "source": "List all teams accessible to the authenticated user",
+          "message": "인증된 사용자가 접근할 수 있는 모든 팀 나열"
+        },
+        "app.TGluZWFy.action.c2VhcmNoLXRlYW1z.display_name": {
+          "source": "Search Teams",
+          "message": "팀 검색"
+        },
+        "app.TGluZWFy.action.c2VhcmNoLXRlYW1z.option.bGltaXQ.desc": {
+          "source": "Maximum number of results to return",
+          "message": "반환할 결과의 최대 개수"
+        },
+        "app.TGluZWFy.action.c2VhcmNoLXRlYW1z.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "제한"
+        },
+        "app.TGluZWFy.action.c2VhcmNoLXRlYW1z.option.bGltaXQ.short_desc": {
+          "source": "Maximum number of results",
+          "message": "최대 결과 수"
+        },
+        "app.TGluZWFy.action.c2VhcmNoLXRlYW1z.short_desc": {
+          "source": "List teams in Linear",
+          "message": "Linear의 팀 나열"
+        },
+        "app.TGluZWFy.action.dXBkYXRlLWlzc3Vl.desc": {
+          "source": "Update the properties of an existing Linear issue",
+          "message": "기존 Linear 이슈의 속성 업데이트"
+        },
+        "app.TGluZWFy.action.dXBkYXRlLWlzc3Vl.display_name": {
+          "source": "Update Issue",
+          "message": "이슈 업데이트"
+        },
+        "app.TGluZWFy.action.dXBkYXRlLWlzc3Vl.option.Y3ljbGVJZA.desc": {
+          "source": "The cycle (sprint) to move the issue to",
+          "message": "이슈를 이동할 사이클(스프린트)"
+        },
+        "app.TGluZWFy.action.dXBkYXRlLWlzc3Vl.option.Y3ljbGVJZA.display_name": {
+          "source": "Cycle",
+          "message": "사이클"
+        },
+        "app.TGluZWFy.action.dXBkYXRlLWlzc3Vl.option.Y3ljbGVJZA.short_desc": {
+          "source": "The cycle to move the issue to",
+          "message": "이슈를 이동할 사이클"
+        },
+        "app.TGluZWFy.action.dXBkYXRlLWlzc3Vl.option.YXNzaWduZWVJZA.desc": {
+          "source": "The new user to assign the issue to",
+          "message": "이슈를 할당할 새 사용자"
+        },
+        "app.TGluZWFy.action.dXBkYXRlLWlzc3Vl.option.YXNzaWduZWVJZA.display_name": {
+          "source": "Assignee",
+          "message": "담당자"
+        },
+        "app.TGluZWFy.action.dXBkYXRlLWlzc3Vl.option.YXNzaWduZWVJZA.short_desc": {
+          "source": "The new assignee",
+          "message": "새 담당자"
+        },
+        "app.TGluZWFy.action.dXBkYXRlLWlzc3Vl.option.ZGVzY3JpcHRpb24.desc": {
+          "source": "The new description of the issue (supports markdown)",
+          "message": "이슈의 새 설명(Markdown 지원)"
+        },
+        "app.TGluZWFy.action.dXBkYXRlLWlzc3Vl.option.ZGVzY3JpcHRpb24.display_name": {
+          "source": "Description",
+          "message": "설명"
+        },
+        "app.TGluZWFy.action.dXBkYXRlLWlzc3Vl.option.ZGVzY3JpcHRpb24.short_desc": {
+          "source": "The new issue description",
+          "message": "새 이슈 설명"
+        },
+        "app.TGluZWFy.action.dXBkYXRlLWlzc3Vl.option.ZXN0aW1hdGU.desc": {
+          "source": "The new estimated complexity/effort",
+          "message": "새로운 예상 복잡도/공수"
+        },
+        "app.TGluZWFy.action.dXBkYXRlLWlzc3Vl.option.ZXN0aW1hdGU.display_name": {
+          "source": "Estimate",
+          "message": "추정치"
+        },
+        "app.TGluZWFy.action.dXBkYXRlLWlzc3Vl.option.ZXN0aW1hdGU.short_desc": {
+          "source": "The new issue estimate",
+          "message": "새 이슈 추정치"
+        },
+        "app.TGluZWFy.action.dXBkYXRlLWlzc3Vl.option.aWQ.desc": {
+          "source": "The issue to update",
+          "message": "업데이트할 이슈"
+        },
+        "app.TGluZWFy.action.dXBkYXRlLWlzc3Vl.option.aWQ.display_name": {
+          "source": "Issue",
+          "message": "이슈"
+        },
+        "app.TGluZWFy.action.dXBkYXRlLWlzc3Vl.option.aWQ.short_desc": {
+          "source": "The issue to update",
+          "message": "업데이트할 이슈"
+        },
+        "app.TGluZWFy.action.dXBkYXRlLWlzc3Vl.option.bGFiZWxJZHM.desc": {
+          "source": "Labels to set on the issue (replaces existing labels)",
+          "message": "이슈에 설정할 라벨(기존 라벨 대체)"
+        },
+        "app.TGluZWFy.action.dXBkYXRlLWlzc3Vl.option.bGFiZWxJZHM.display_name": {
+          "source": "Labels",
+          "message": "라벨"
+        },
+        "app.TGluZWFy.action.dXBkYXRlLWlzc3Vl.option.bGFiZWxJZHM.short_desc": {
+          "source": "The labels to set",
+          "message": "설정할 라벨"
+        },
+        "app.TGluZWFy.action.dXBkYXRlLWlzc3Vl.option.c3RhdGVJZA.desc": {
+          "source": "The new workflow state for the issue",
+          "message": "이슈의 새 워크플로 상태"
+        },
+        "app.TGluZWFy.action.dXBkYXRlLWlzc3Vl.option.c3RhdGVJZA.display_name": {
+          "source": "State",
+          "message": "주/도"
+        },
+        "app.TGluZWFy.action.dXBkYXRlLWlzc3Vl.option.c3RhdGVJZA.short_desc": {
+          "source": "The new workflow state",
+          "message": "새 워크플로 상태"
+        },
+        "app.TGluZWFy.action.dXBkYXRlLWlzc3Vl.option.cGFyZW50SWQ.desc": {
+          "source": "The parent issue ID (to make this a sub-issue)",
+          "message": "상위 이슈 ID(하위 이슈로 만드는 경우)"
+        },
+        "app.TGluZWFy.action.dXBkYXRlLWlzc3Vl.option.cGFyZW50SWQ.display_name": {
+          "source": "Parent Issue",
+          "message": "상위 이슈"
+        },
+        "app.TGluZWFy.action.dXBkYXRlLWlzc3Vl.option.cGFyZW50SWQ.short_desc": {
+          "source": "The parent issue",
+          "message": "상위 이슈"
+        },
+        "app.TGluZWFy.action.dXBkYXRlLWlzc3Vl.option.cHJpb3JpdHk.allowed-value.aW50OjA.desc": {
+          "source": "No priority",
+          "message": "우선순위 없음"
+        },
+        "app.TGluZWFy.action.dXBkYXRlLWlzc3Vl.option.cHJpb3JpdHk.allowed-value.aW50OjA.display_name": {
+          "source": "No Priority",
+          "message": "우선순위 없음"
+        },
+        "app.TGluZWFy.action.dXBkYXRlLWlzc3Vl.option.cHJpb3JpdHk.allowed-value.aW50OjE.desc": {
+          "source": "Urgent priority",
+          "message": "긴급 우선순위"
+        },
+        "app.TGluZWFy.action.dXBkYXRlLWlzc3Vl.option.cHJpb3JpdHk.allowed-value.aW50OjE.display_name": {
+          "source": "Urgent",
+          "message": "긴급"
+        },
+        "app.TGluZWFy.action.dXBkYXRlLWlzc3Vl.option.cHJpb3JpdHk.allowed-value.aW50OjI.desc": {
+          "source": "High priority",
+          "message": "높은 우선순위"
+        },
+        "app.TGluZWFy.action.dXBkYXRlLWlzc3Vl.option.cHJpb3JpdHk.allowed-value.aW50OjI.display_name": {
+          "source": "High",
+          "message": "높음"
+        },
+        "app.TGluZWFy.action.dXBkYXRlLWlzc3Vl.option.cHJpb3JpdHk.allowed-value.aW50OjM.desc": {
+          "source": "Normal priority",
+          "message": "보통 우선순위"
+        },
+        "app.TGluZWFy.action.dXBkYXRlLWlzc3Vl.option.cHJpb3JpdHk.allowed-value.aW50OjM.display_name": {
+          "source": "Normal",
+          "message": "보통"
+        },
+        "app.TGluZWFy.action.dXBkYXRlLWlzc3Vl.option.cHJpb3JpdHk.allowed-value.aW50OjQ.desc": {
+          "source": "Low priority",
+          "message": "낮은 우선순위"
+        },
+        "app.TGluZWFy.action.dXBkYXRlLWlzc3Vl.option.cHJpb3JpdHk.allowed-value.aW50OjQ.display_name": {
+          "source": "Low",
+          "message": "낮음"
+        },
+        "app.TGluZWFy.action.dXBkYXRlLWlzc3Vl.option.cHJpb3JpdHk.desc": {
+          "source": "The new priority of the issue",
+          "message": "이슈의 새 우선순위"
+        },
+        "app.TGluZWFy.action.dXBkYXRlLWlzc3Vl.option.cHJpb3JpdHk.display_name": {
+          "source": "Priority",
+          "message": "우선순위"
+        },
+        "app.TGluZWFy.action.dXBkYXRlLWlzc3Vl.option.cHJpb3JpdHk.short_desc": {
+          "source": "The new issue priority",
+          "message": "새 이슈 우선순위"
+        },
+        "app.TGluZWFy.action.dXBkYXRlLWlzc3Vl.option.cHJvamVjdElk.desc": {
+          "source": "The project to move the issue to",
+          "message": "이슈를 이동할 프로젝트"
+        },
+        "app.TGluZWFy.action.dXBkYXRlLWlzc3Vl.option.cHJvamVjdElk.display_name": {
+          "source": "Project",
+          "message": "프로젝트"
+        },
+        "app.TGluZWFy.action.dXBkYXRlLWlzc3Vl.option.cHJvamVjdElk.short_desc": {
+          "source": "The project to move the issue to",
+          "message": "이슈를 이동할 프로젝트"
+        },
+        "app.TGluZWFy.action.dXBkYXRlLWlzc3Vl.option.dGl0bGU.desc": {
+          "source": "The new title of the issue",
+          "message": "이슈의 새 제목"
+        },
+        "app.TGluZWFy.action.dXBkYXRlLWlzc3Vl.option.dGl0bGU.display_name": {
+          "source": "Title",
+          "message": "제목"
+        },
+        "app.TGluZWFy.action.dXBkYXRlLWlzc3Vl.option.dGl0bGU.short_desc": {
+          "source": "The new issue title",
+          "message": "새 이슈 제목"
+        },
+        "app.TGluZWFy.action.dXBkYXRlLWlzc3Vl.short_desc": {
+          "source": "Update an existing Linear issue",
+          "message": "기존 Linear 이슈 업데이트"
+        },
+        "app.TGluZWFy.desc": {
+          "source": "Linear is a modern issue tracking and project management tool for software teams. This integration enables creating, reading, updating, and archiving issues, projects, cycles, labels, and comments through Linear's GraphQL API.",
+          "message": "Linear는 소프트웨어 팀을 위한 최신 이슈 추적 및 프로젝트 관리 도구입니다. 이 연동을 통해 Linear의 GraphQL API로 이슈, 프로젝트, 주기, 레이블 및 댓글을 생성, 조회, 업데이트 및 보관할 수 있습니다."
+        },
+        "app.TGluZWFy.display_name": {
+          "source": "Linear",
+          "message": "Linear"
+        },
+        "app.TGluZWFy.short_desc": {
+          "source": "Linear issue tracking and project management",
+          "message": "Linear 이슈 추적 및 프로젝트 관리"
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,225 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "es": {
+      "messages": {
+        "app.SEw3djI.action.c2NoZW1h.desc": {
+          "source": "Load generated HL7 v2 schema metadata from a Qore value artifact. Use `path` for a specific artifact, or `version` with `schema_dir` when schemas are stored by version.",
+          "message": "Cargar metadatos de esquema HL7 v2 generados desde un artefacto de valor Qore. Use `path` para un artefacto específico, o `version` con `schema_dir` cuando los esquemas se almacenen por versión."
+        },
+        "app.SEw3djI.action.c2NoZW1h.display_name": {
+          "source": "Load HL7 v2 Schema",
+          "message": "Cargar esquema HL7 v2"
+        },
+        "app.SEw3djI.action.c2NoZW1h.option.c2NoZW1hX2Rpcg.desc": {
+          "source": "Root directory containing generated HL7 v2 schemas organized by version.",
+          "message": "Directorio raíz que contiene esquemas HL7 v2 generados organizados por versión."
+        },
+        "app.SEw3djI.action.c2NoZW1h.option.c2NoZW1hX2Rpcg.display_name": {
+          "source": "Schema Directory",
+          "message": "Directorio de esquemas"
+        },
+        "app.SEw3djI.action.c2NoZW1h.option.c2NoZW1hX2Rpcg.short_desc": {
+          "source": "Root directory containing generated schemas",
+          "message": "Directorio raíz que contiene esquemas generados"
+        },
+        "app.SEw3djI.action.c2NoZW1h.option.c3VtbWFyeV9vbmx5.desc": {
+          "source": "If `True`, return schema metadata and counts without the full schema hash.",
+          "message": "Si es `True`, devuelve los metadatos y recuentos del esquema sin el hash de esquema completo."
+        },
+        "app.SEw3djI.action.c2NoZW1h.option.c3VtbWFyeV9vbmx5.display_name": {
+          "source": "Summary Only",
+          "message": "Solo resumen"
+        },
+        "app.SEw3djI.action.c2NoZW1h.option.c3VtbWFyeV9vbmx5.short_desc": {
+          "source": "Return summary only",
+          "message": "Devolver solo el resumen"
+        },
+        "app.SEw3djI.action.c2NoZW1h.option.cGF0aA.desc": {
+          "source": "Path or FileLocationHandler-compatible location for a generated HL7 v2 schema artifact in Qore value format.",
+          "message": "Ruta o ubicación compatible con FileLocationHandler para un artefacto de esquema HL7 v2 generado en formato de valor Qore."
+        },
+        "app.SEw3djI.action.c2NoZW1h.option.cGF0aA.display_name": {
+          "source": "Schema Location",
+          "message": "Ubicación del esquema"
+        },
+        "app.SEw3djI.action.c2NoZW1h.option.cGF0aA.short_desc": {
+          "source": "Location of a generated HL7 v2 schema artifact",
+          "message": "Ubicación de un artefacto de esquema HL7 v2 generado"
+        },
+        "app.SEw3djI.action.c2NoZW1h.option.cmVsb2Fk.desc": {
+          "source": "If `True`, ignore the in-memory schema cache and reload the schema artifact.",
+          "message": "Si es `True`, ignora la caché de esquemas en memoria y vuelve a cargar el artefacto de esquema."
+        },
+        "app.SEw3djI.action.c2NoZW1h.option.cmVsb2Fk.display_name": {
+          "source": "Reload",
+          "message": "Recargar"
+        },
+        "app.SEw3djI.action.c2NoZW1h.option.cmVsb2Fk.short_desc": {
+          "source": "Ignore in-memory schema cache",
+          "message": "Ignorar caché de esquemas en memoria"
+        },
+        "app.SEw3djI.action.c2NoZW1h.option.dmVyc2lvbg.desc": {
+          "source": "HL7 v2 version to load from `schema_dir`. Use this with `schema_dir` when schemas are stored as `<schema_dir>/<version>/schema.qv`.",
+          "message": "Versión de HL7 v2 a cargar desde `schema_dir`. Úselo con `schema_dir` cuando los esquemas se almacenen como `<schema_dir>/<version>/schema.qv`."
+        },
+        "app.SEw3djI.action.c2NoZW1h.option.dmVyc2lvbg.display_name": {
+          "source": "Schema Version",
+          "message": "Versión del esquema"
+        },
+        "app.SEw3djI.action.c2NoZW1h.option.dmVyc2lvbg.short_desc": {
+          "source": "HL7 v2 version to load",
+          "message": "Versión de HL7 v2 a cargar"
+        },
+        "app.SEw3djI.action.c2NoZW1h.short_desc": {
+          "source": "Load generated HL7 v2 schema metadata",
+          "message": "Cargar metadatos de esquema HL7 v2 generados"
+        },
+        "app.SEw3djI.action.c2NoZW1hLXN1bW1hcnk.desc": {
+          "source": "Load only generated HL7 v2 schema metadata, counts, and segment tags.",
+          "message": "Cargar únicamente metadatos, recuentos y etiquetas de segmento de esquemas HL7 v2 generados."
+        },
+        "app.SEw3djI.action.c2NoZW1hLXN1bW1hcnk.display_name": {
+          "source": "HL7 v2 Schema Summary",
+          "message": "Resumen del esquema HL7 v2"
+        },
+        "app.SEw3djI.action.c2NoZW1hLXN1bW1hcnk.option.c2NoZW1hX2Rpcg.desc": {
+          "source": "Root directory containing generated HL7 v2 schemas organized by version.",
+          "message": "Directorio raíz que contiene esquemas HL7 v2 generados organizados por versión."
+        },
+        "app.SEw3djI.action.c2NoZW1hLXN1bW1hcnk.option.c2NoZW1hX2Rpcg.display_name": {
+          "source": "Schema Directory",
+          "message": "Directorio de esquemas"
+        },
+        "app.SEw3djI.action.c2NoZW1hLXN1bW1hcnk.option.c2NoZW1hX2Rpcg.short_desc": {
+          "source": "Root directory containing generated schemas",
+          "message": "Directorio raíz que contiene esquemas generados"
+        },
+        "app.SEw3djI.action.c2NoZW1hLXN1bW1hcnk.option.cGF0aA.desc": {
+          "source": "Path or FileLocationHandler-compatible location for a generated HL7 v2 schema artifact in Qore value format.",
+          "message": "Ruta o ubicación compatible con FileLocationHandler para un artefacto de esquema HL7 v2 generado en formato de valor Qore."
+        },
+        "app.SEw3djI.action.c2NoZW1hLXN1bW1hcnk.option.cGF0aA.display_name": {
+          "source": "Schema Location",
+          "message": "Ubicación del esquema"
+        },
+        "app.SEw3djI.action.c2NoZW1hLXN1bW1hcnk.option.cGF0aA.short_desc": {
+          "source": "Location of a generated HL7 v2 schema artifact",
+          "message": "Ubicación de un artefacto de esquema HL7 v2 generado"
+        },
+        "app.SEw3djI.action.c2NoZW1hLXN1bW1hcnk.option.cmVsb2Fk.desc": {
+          "source": "If `True`, ignore the in-memory schema cache and reload the schema artifact.",
+          "message": "Si es `True`, ignora la caché de esquemas en memoria y vuelve a cargar el artefacto de esquema."
+        },
+        "app.SEw3djI.action.c2NoZW1hLXN1bW1hcnk.option.cmVsb2Fk.display_name": {
+          "source": "Reload",
+          "message": "Recargar"
+        },
+        "app.SEw3djI.action.c2NoZW1hLXN1bW1hcnk.option.cmVsb2Fk.short_desc": {
+          "source": "Ignore in-memory schema cache",
+          "message": "Ignorar caché de esquemas en memoria"
+        },
+        "app.SEw3djI.action.c2NoZW1hLXN1bW1hcnk.option.dmVyc2lvbg.desc": {
+          "source": "HL7 v2 version to load from `schema_dir`. Use this with `schema_dir` when schemas are stored as `<schema_dir>/<version>/schema.qv`.",
+          "message": "Versión de HL7 v2 a cargar desde `schema_dir`. Úselo con `schema_dir` cuando los esquemas se almacenen como `<schema_dir>/<version>/schema.qv`."
+        },
+        "app.SEw3djI.action.c2NoZW1hLXN1bW1hcnk.option.dmVyc2lvbg.display_name": {
+          "source": "Schema Version",
+          "message": "Versión del esquema"
+        },
+        "app.SEw3djI.action.c2NoZW1hLXN1bW1hcnk.option.dmVyc2lvbg.short_desc": {
+          "source": "HL7 v2 version to load",
+          "message": "Versión de HL7 v2 a cargar"
+        },
+        "app.SEw3djI.action.c2NoZW1hLXN1bW1hcnk.short_desc": {
+          "source": "Load a generated HL7 v2 schema summary",
+          "message": "Cargar un resumen de esquema HL7 v2 generado"
+        },
+        "app.SEw3djI.action.cmVhZA.desc": {
+          "source": "Read HL7 v2 message data from a file and return one typed record per segment.",
+          "message": "Lee datos de mensajes HL7 v2 de un archivo y devuelve un registro tipado por segmento."
+        },
+        "app.SEw3djI.action.cmVhZA.display_name": {
+          "source": "Read HL7 v2 Message",
+          "message": "Leer mensaje HL7 v2"
+        },
+        "app.SEw3djI.action.cmVhZA.option.cGF0aA.desc": {
+          "source": "Path to a file containing one HL7 v2 message.",
+          "message": "Ruta a un archivo que contiene un mensaje HL7 v2."
+        },
+        "app.SEw3djI.action.cmVhZA.option.cGF0aA.display_name": {
+          "source": "File Path",
+          "message": "Ruta del archivo"
+        },
+        "app.SEw3djI.action.cmVhZA.option.cGF0aA.short_desc": {
+          "source": "Path to the HL7 v2 message file",
+          "message": "Ruta al archivo de mensaje HL7 v2"
+        },
+        "app.SEw3djI.action.cmVhZA.short_desc": {
+          "source": "Read HL7 v2 message data from a file",
+          "message": "Lee datos de mensajes HL7 v2 de un archivo"
+        },
+        "app.SEw3djI.action.cmVhZC1kYXRh.desc": {
+          "source": "Read HL7 v2 message data from an inline string and return one typed record per segment.",
+          "message": "Lee datos de mensajes HL7 v2 de una cadena en línea y devuelve un registro tipado por segmento."
+        },
+        "app.SEw3djI.action.cmVhZC1kYXRh.display_name": {
+          "source": "Read HL7 v2 Inline Data",
+          "message": "Leer datos en línea HL7 v2"
+        },
+        "app.SEw3djI.action.cmVhZC1kYXRh.option.ZGF0YQ.desc": {
+          "source": "Inline HL7 v2 message data. Use this option when the message is already in memory.",
+          "message": "Datos de mensaje HL7 v2 en línea. Utilice esta opción cuando el mensaje ya esté en memoria."
+        },
+        "app.SEw3djI.action.cmVhZC1kYXRh.option.ZGF0YQ.display_name": {
+          "source": "HL7 v2 Data",
+          "message": "Datos HL7 v2"
+        },
+        "app.SEw3djI.action.cmVhZC1kYXRh.option.ZGF0YQ.short_desc": {
+          "source": "HL7 v2 message data as a string",
+          "message": "Datos de mensaje HL7 v2 como cadena"
+        },
+        "app.SEw3djI.action.cmVhZC1kYXRh.short_desc": {
+          "source": "Read HL7 v2 message data from an inline string",
+          "message": "Lee datos de mensajes HL7 v2 de una cadena en línea"
+        },
+        "app.SEw3djI.action.d3JpdGU.desc": {
+          "source": "Write HL7 v2 message data to a file from parsed segments or simple segment records. The response includes the output `path`, serialized character count, and segment count.",
+          "message": "Escribe datos de mensajes HL7 v2 en un archivo a partir de segmentos analizados o registros de segmento simples. La respuesta incluye el `path` de salida, el recuento de caracteres serializados y el recuento de segmentos."
+        },
+        "app.SEw3djI.action.d3JpdGU.display_name": {
+          "source": "Write HL7 v2 Message",
+          "message": "Escribir mensaje HL7 v2"
+        },
+        "app.SEw3djI.action.d3JpdGU.option.cGF0aA.desc": {
+          "source": "Path to write the serialized HL7 v2 message.",
+          "message": "Ruta donde escribir el mensaje HL7 v2 serializado."
+        },
+        "app.SEw3djI.action.d3JpdGU.option.cGF0aA.display_name": {
+          "source": "File Path",
+          "message": "Ruta del archivo"
+        },
+        "app.SEw3djI.action.d3JpdGU.option.cGF0aA.short_desc": {
+          "source": "Path to the HL7 v2 output file",
+          "message": "Ruta al archivo de salida HL7 v2"
+        },
+        "app.SEw3djI.action.d3JpdGU.short_desc": {
+          "source": "Write HL7 v2 message data to a file",
+          "message": "Escribe datos de mensajes HL7 v2 en un archivo"
+        },
+        "app.SEw3djI.desc": {
+          "source": "Read and write [HL7 v2](https://www.hl7.org/implement/standards/product_brief.cfm?product_id=185) delimited healthcare messages for integration and transformation workflows.\n\n**Capabilities**:\n- Preserve message structure and custom `Z` segments without requiring a fixed schema\n- Read custom delimiters from `MSH` and handle HL7 escape sequences\n- Expose one parsed segment per record through the DataProvider API\n- Serialize parsed messages or simple segment records back to HL7 v2 text",
+          "message": "Lee y escribe mensajes sanitarios delimitados [HL7 v2](https://www.hl7.org/implement/standards/product_brief.cfm?product_id=185) para flujos de trabajo de integración y transformación.\n\n**Capacidades**:\n- Conservar la estructura del mensaje y los segmentos `Z` personalizados sin requerir un esquema fijo\n- Leer delimitadores personalizados de `MSH` y gestionar secuencias de escape HL7\n- Exponer un segmento analizado por registro a través de la API DataProvider\n- Serializar mensajes analizados o registros de segmento simples de vuelta a texto HL7 v2"
+        },
+        "app.SEw3djI.display_name": {
+          "source": "HL7 v2 Messages",
+          "message": "Mensajes HL7 v2"
+        },
+        "app.SEw3djI.short_desc": {
+          "source": "Read and write HL7 v2 delimited messages",
+          "message": "Lee y escribe mensajes delimitados HL7 v2"
+        }
+      }
+    }
+  }
+}

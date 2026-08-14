@@ -1,0 +1,1269 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "de": {
+      "messages": {
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.Y29tcG9zZQ.desc": {
+          "source": "Concatenates up to 32 objects into a single new object, entirely within Google Cloud Storage and without transferring any content through the caller.\n\nEvery source and the destination must be in the same bucket. The destination may be one of the sources, which is how content is appended to an existing object. Set `content_type` explicitly: Google Cloud Storage does not infer it from the sources.",
+          "message": "Fügt bis zu 32 Objekte vollständig innerhalb von Google Cloud Storage und ohne Übertragung von Inhalten über den Aufrufer zu einem einzigen neuen Objekt zusammen.\n\nJede Quelle und das Ziel müssen sich im selben Bucket befinden. Das Ziel kann eine der Quellen sein, wodurch Inhalte an ein vorhandenes Objekt angehängt werden. Legen Sie `content_type` explizit fest: Google Cloud Storage leitet diesen nicht aus den Quellen ab."
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.Y29tcG9zZQ.display_name": {
+          "source": "Compose Objects",
+          "message": "Objekte zusammensetzen"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.Y29tcG9zZQ.option.Y29udGVudF90eXBl.desc": {
+          "source": "The MIME type the composed object should have.  Google Cloud Storage does not infer it from the sources, so it should be set explicitly",
+          "message": "Der MIME-Typ, den das zusammengesetzte Objekt haben soll. Google Cloud Storage leitet diesen nicht aus den Quellen ab, daher sollte er explizit festgelegt werden"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.Y29tcG9zZQ.option.Y29udGVudF90eXBl.display_name": {
+          "source": "Content Type",
+          "message": "Inhaltstyp"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.Y29tcG9zZQ.option.Y29udGVudF90eXBl.short_desc": {
+          "source": "The MIME type for the destination",
+          "message": "Der MIME-Typ für das Ziel"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.Y29tcG9zZQ.option.YnVja2V0.desc": {
+          "source": "The name of the bucket; every source and the destination must be in the same bucket, which is a Google Cloud Storage restriction on compose",
+          "message": "Der Name des Buckets; jede Quelle und das Ziel müssen sich im selben Bucket befinden, was eine Google Cloud Storage-Einschränkung für Compose ist"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.Y29tcG9zZQ.option.YnVja2V0.display_name": {
+          "source": "Bucket",
+          "message": "Bucket"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.Y29tcG9zZQ.option.YnVja2V0.short_desc": {
+          "source": "The bucket holding the sources and the destination",
+          "message": "Der Bucket, der die Quellen und das Ziel enthält"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.Y29tcG9zZQ.option.ZGVzdGluYXRpb25fb2JqZWN0.desc": {
+          "source": "The name of the object the sources are concatenated into, used verbatim; it may be one of the sources, which is how content is appended",
+          "message": "Der Name des Objekts, in das die Quellen zusammengefügt werden, wortgetreu verwendet; es kann eine der Quellen sein, wodurch Inhalte angehängt werden"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.Y29tcG9zZQ.option.ZGVzdGluYXRpb25fb2JqZWN0.display_name": {
+          "source": "Destination Object Name",
+          "message": "Zielobjektname"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.Y29tcG9zZQ.option.ZGVzdGluYXRpb25fb2JqZWN0.short_desc": {
+          "source": "The object to write the concatenation to",
+          "message": "Das Objekt, in das die Zusammenfügung geschrieben werden soll"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.Y29tcG9zZQ.option.bWV0YWRhdGE.desc": {
+          "source": "User-defined metadata for the composed object as key/value pairs",
+          "message": "Benutzerdefinierte Metadaten für das zusammengesetzte Objekt als Schlüssel/Wert-Paare"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.Y29tcG9zZQ.option.bWV0YWRhdGE.display_name": {
+          "source": "Custom Metadata",
+          "message": "Benutzerdefinierte Metadaten"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.Y29tcG9zZQ.option.bWV0YWRhdGE.short_desc": {
+          "source": "User-defined metadata for the destination",
+          "message": "Benutzerdefinierte Metadaten für das Ziel"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.Y29tcG9zZQ.option.c291cmNlX29iamVjdHM.desc": {
+          "source": "The names of the objects to concatenate, in the order they should appear; between 1 and 32 names, used verbatim",
+          "message": "Die Namen der zusammenzufügenden Objekte in der Reihenfolge, in der sie erscheinen sollen; zwischen 1 und 32 Namen, wortgetreu verwendet"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.Y29tcG9zZQ.option.c291cmNlX29iamVjdHM.display_name": {
+          "source": "Source Object Names",
+          "message": "Quellobjektnamen"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.Y29tcG9zZQ.option.c291cmNlX29iamVjdHM.short_desc": {
+          "source": "The objects to concatenate, in order",
+          "message": "Die zusammenzufügenden Objekte in der Reihenfolge"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.Y29tcG9zZQ.short_desc": {
+          "source": "Concatenate objects into one object",
+          "message": "Objekte zu einem Objekt zusammenfügen"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.Y29weS1vYmplY3Q.desc": {
+          "source": "Copies an object to another name or bucket entirely within Google Cloud Storage, without transferring the content through the caller.\n\nHandles an object of any size and a copy between different locations, storage classes, or encryption keys. Copying an object onto itself with a new `destination_storage_class` is how an object's storage class is changed.",
+          "message": "Kopiert ein Objekt vollständig innerhalb von Google Cloud Storage unter einen anderen Namen oder in einen anderen Bucket, ohne den Inhalt über den Aufrufer zu übertragen.\n\nUnterstützt Objekte beliebiger Größe und das Kopieren zwischen verschiedenen Standorten, Speicherklassen oder Verschlüsselungsschlüsseln. Das Kopieren eines Objekts auf sich selbst mit einem neuen `destination_storage_class` ist die Methode, um die Speicherklasse eines Objekts zu ändern."
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.Y29weS1vYmplY3Q.display_name": {
+          "source": "Copy Object",
+          "message": "Objekt kopieren"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.Y29weS1vYmplY3Q.option.Y29udGVudF90eXBl.desc": {
+          "source": "The MIME type the copy should have; when omitted the source's is kept",
+          "message": "Der MIME-Typ, den die Kopie haben soll; wird er weggelassen, wird der des Quellobjekts beibehalten"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.Y29weS1vYmplY3Q.option.Y29udGVudF90eXBl.display_name": {
+          "source": "Content Type",
+          "message": "Inhaltstyp"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.Y29weS1vYmplY3Q.option.Y29udGVudF90eXBl.short_desc": {
+          "source": "The MIME type for the copy",
+          "message": "Der MIME-Typ für die Kopie"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.Y29weS1vYmplY3Q.option.ZGVzdGluYXRpb25fYnVja2V0.desc": {
+          "source": "The name of the bucket to copy the object into; may be the same as the source bucket",
+          "message": "Der Name des Buckets, in den das Objekt kopiert werden soll; kann mit dem Quell-Bucket identisch sein"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.Y29weS1vYmplY3Q.option.ZGVzdGluYXRpb25fYnVja2V0.display_name": {
+          "source": "Destination Bucket",
+          "message": "Ziel-Bucket"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.Y29weS1vYmplY3Q.option.ZGVzdGluYXRpb25fYnVja2V0.short_desc": {
+          "source": "The bucket to copy the object into",
+          "message": "Der Bucket, in den das Objekt kopiert werden soll"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.Y29weS1vYmplY3Q.option.ZGVzdGluYXRpb25fb2JqZWN0.desc": {
+          "source": "The name the copy should have, used verbatim",
+          "message": "Der Name, den die Kopie haben soll, wortgetreu verwendet"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.Y29weS1vYmplY3Q.option.ZGVzdGluYXRpb25fb2JqZWN0.display_name": {
+          "source": "Destination Object Name",
+          "message": "Zielobjektname"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.Y29weS1vYmplY3Q.option.ZGVzdGluYXRpb25fb2JqZWN0.short_desc": {
+          "source": "The name to copy the object to",
+          "message": "Der Name, unter den das Objekt kopiert werden soll"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.Y29weS1vYmplY3Q.option.ZGVzdGluYXRpb25fc3RvcmFnZV9jbGFzcw.desc": {
+          "source": "The storage class the copy should have: `STANDARD`, `NEARLINE`, `COLDLINE` or `ARCHIVE`.  When omitted the destination bucket's default is used.  Rewriting an object onto itself with a new storage class is how an object's class is changed",
+          "message": "Die Speicherklasse, die die Kopie haben soll: `STANDARD`, `NEARLINE`, `COLDLINE` oder `ARCHIVE`. Wird sie weggelassen, wird der Standardwert des Ziel-Buckets verwendet. Das erneute Schreiben eines Objekts auf sich selbst mit einer neuen Speicherklasse ist die Methode, um die Klasse eines Objekts zu ändern"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.Y29weS1vYmplY3Q.option.ZGVzdGluYXRpb25fc3RvcmFnZV9jbGFzcw.display_name": {
+          "source": "Destination Storage Class",
+          "message": "Ziel-Speicherklasse"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.Y29weS1vYmplY3Q.option.ZGVzdGluYXRpb25fc3RvcmFnZV9jbGFzcw.short_desc": {
+          "source": "The storage class for the copy",
+          "message": "Die Speicherklasse für die Kopie"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.Y29weS1vYmplY3Q.option.bWV0YWRhdGE.desc": {
+          "source": "User-defined metadata for the copy as key/value pairs; when omitted the source's metadata is kept",
+          "message": "Benutzerdefinierte Metadaten für die Kopie als Schlüssel/Wert-Paare; werden sie weggelassen, werden die Metadaten der Quelle beibehalten"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.Y29weS1vYmplY3Q.option.bWV0YWRhdGE.display_name": {
+          "source": "Custom Metadata",
+          "message": "Benutzerdefinierte Metadaten"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.Y29weS1vYmplY3Q.option.bWV0YWRhdGE.short_desc": {
+          "source": "User-defined metadata for the copy",
+          "message": "Benutzerdefinierte Metadaten für die Kopie"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.Y29weS1vYmplY3Q.option.c291cmNlX29iamVjdA.desc": {
+          "source": "The name of the object to copy, used verbatim",
+          "message": "Der Name des zu kopierenden Objekts, wortgetreu verwendet"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.Y29weS1vYmplY3Q.option.c291cmNlX29iamVjdA.display_name": {
+          "source": "Source Object Name",
+          "message": "Quellobjektname"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.Y29weS1vYmplY3Q.option.c291cmNlX29iamVjdA.short_desc": {
+          "source": "The object to copy",
+          "message": "Das zu kopierende Objekt"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.Y29weS1vYmplY3Q.option.c291cmNlX2J1Y2tldA.desc": {
+          "source": "The name of the bucket holding the object to copy",
+          "message": "Der Name des Buckets, der das zu kopierende Objekt enthält"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.Y29weS1vYmplY3Q.option.c291cmNlX2J1Y2tldA.display_name": {
+          "source": "Source Bucket",
+          "message": "Quell-Bucket"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.Y29weS1vYmplY3Q.option.c291cmNlX2J1Y2tldA.short_desc": {
+          "source": "The bucket holding the source object",
+          "message": "Der Bucket, der das Quellobjekt enthält"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.Y29weS1vYmplY3Q.option.c291cmNlX2dlbmVyYXRpb24.desc": {
+          "source": "The content generation of the source to copy; when omitted the live version is copied",
+          "message": "Die Inhaltsgeneration der zu kopierenden Quelle; wird sie weggelassen, wird die Live-Version kopiert"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.Y29weS1vYmplY3Q.option.c291cmNlX2dlbmVyYXRpb24.display_name": {
+          "source": "Source Generation",
+          "message": "Quellgeneration"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.Y29weS1vYmplY3Q.option.c291cmNlX2dlbmVyYXRpb24.short_desc": {
+          "source": "A specific source content generation to copy",
+          "message": "Eine bestimmte zu kopierende Quell-Inhaltsgeneration"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.Y29weS1vYmplY3Q.short_desc": {
+          "source": "Copy an object without downloading it",
+          "message": "Objekt ohne Herunterladen kopieren"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.Y3JlYXRlLXNpZ25lZC11cmw.desc": {
+          "source": "Creates a V4 signed URL granting access to a single object for a single HTTP method until it expires. Anyone holding the URL can use it with no credentials, which is how content is handed to a browser or to a third party with no Google account.\n\nSigning is performed by the IAM Service Account Credentials API, so it also works when the credential is Application Default Credentials or a workload identity and there is no private key on the host. The caller needs the `iam.serviceAccounts.signBlob` permission on the signing service account (the `roles/iam.serviceAccountTokenCreator` role) and that API must be enabled on the project.",
+          "message": "Erstellt eine signierte V4-URL, die bis zu ihrem Ablauf Zugriff auf ein einzelnes Objekt für eine einzelne HTTP-Methode gewährt. Jeder, der im Besitz der URL ist, kann sie ohne Anmeldeinformationen verwenden; auf diese Weise werden Inhalte an einen Browser oder an Dritte ohne Google-Konto übergeben.\n\nDie Signierung wird von der IAM Service Account Credentials API durchgeführt, daher funktioniert sie auch dann, wenn die Anmeldeinformation Application Default Credentials oder eine Workload Identity ist und kein privater Schlüssel auf dem Host vorhanden ist. Der Aufrufer benötigt die Berechtigung `iam.serviceAccounts.signBlob` für das signierende Dienstkonto (die Rolle `roles/iam.serviceAccountTokenCreator`) und diese API muss für das Projekt aktiviert sein."
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.Y3JlYXRlLXNpZ25lZC11cmw.display_name": {
+          "source": "Create Signed URL",
+          "message": "Signierte URL erstellen"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.Y3JlYXRlLXNpZ25lZC11cmw.option.YnVja2V0.desc": {
+          "source": "The name of the bucket the signed URL should address",
+          "message": "Der Name des Buckets, den die signierte URL adressieren soll"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.Y3JlYXRlLXNpZ25lZC11cmw.option.YnVja2V0.display_name": {
+          "source": "Bucket",
+          "message": "Bucket"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.Y3JlYXRlLXNpZ25lZC11cmw.option.YnVja2V0.short_desc": {
+          "source": "The bucket holding the object",
+          "message": "Der Bucket, der das Objekt enthält"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.Y3JlYXRlLXNpZ25lZC11cmw.option.ZXhwaXJlc19pbl9zZWNvbmRz.desc": {
+          "source": "The lifetime of the signed URL in seconds; Google Cloud Storage allows at most 604800 (7 days) for a V4 signature",
+          "message": "Die Lebensdauer der signierten URL in Sekunden; Google Cloud Storage erlaubt maximal 604800 (7 Tage) für eine V4-Signatur"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.Y3JlYXRlLXNpZ25lZC11cmw.option.ZXhwaXJlc19pbl9zZWNvbmRz.display_name": {
+          "source": "Expires In (Seconds)",
+          "message": "Gültig für (Sekunden)"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.Y3JlYXRlLXNpZ25lZC11cmw.option.ZXhwaXJlc19pbl9zZWNvbmRz.short_desc": {
+          "source": "How long the URL stays valid",
+          "message": "Gültigkeitsdauer der URL"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.Y3JlYXRlLXNpZ25lZC11cmw.option.b2JqZWN0.desc": {
+          "source": "The name of the object the signed URL should address, used verbatim",
+          "message": "Der Name des Objekts, das die signierte URL adressieren soll, wortgetreu verwendet"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.Y3JlYXRlLXNpZ25lZC11cmw.option.b2JqZWN0.display_name": {
+          "source": "Object Name",
+          "message": "Objektname"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.Y3JlYXRlLXNpZ25lZC11cmw.option.b2JqZWN0.short_desc": {
+          "source": "The object's name",
+          "message": "Der Name des Objekts"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.Y3JlYXRlLXNpZ25lZC11cmw.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.desc": {
+          "source": "Grants deleting the object",
+          "message": "Gewährt das Löschen des Objekts"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.Y3JlYXRlLXNpZ25lZC11cmw.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.display_name": {
+          "source": "DELETE",
+          "message": "DELETE"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.Y3JlYXRlLXNpZ25lZC11cmw.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.short_desc": {
+          "source": "Grants deleting the object",
+          "message": "Gewährt das Löschen des Objekts"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.Y3JlYXRlLXNpZ25lZC11cmw.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.desc": {
+          "source": "Grants reading the object's content",
+          "message": "Gewährt das Lesen des Inhalts des Objekts"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.Y3JlYXRlLXNpZ25lZC11cmw.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.display_name": {
+          "source": "GET (download)",
+          "message": "GET (Download)"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.Y3JlYXRlLXNpZ25lZC11cmw.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.short_desc": {
+          "source": "Grants reading the object",
+          "message": "Gewährt das Lesen des Objekts"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.Y3JlYXRlLXNpZ25lZC11cmw.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.desc": {
+          "source": "Grants reading the object's response headers without its content",
+          "message": "Gewährt das Lesen der Antwort-Header des Objekts ohne dessen Inhalt"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.Y3JlYXRlLXNpZ25lZC11cmw.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.display_name": {
+          "source": "HEAD (metadata)",
+          "message": "HEAD (Metadaten)"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.Y3JlYXRlLXNpZ25lZC11cmw.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.short_desc": {
+          "source": "Grants reading the object's metadata",
+          "message": "Gewährt das Lesen der Metadaten des Objekts"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.Y3JlYXRlLXNpZ25lZC11cmw.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.desc": {
+          "source": "Grants writing the object's content",
+          "message": "Gewährt das Schreiben des Inhalts des Objekts"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.Y3JlYXRlLXNpZ25lZC11cmw.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.display_name": {
+          "source": "PUT (upload)",
+          "message": "PUT (Upload)"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.Y3JlYXRlLXNpZ25lZC11cmw.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.short_desc": {
+          "source": "Grants writing the object",
+          "message": "Gewährt das Schreiben des Objekts"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.Y3JlYXRlLXNpZ25lZC11cmw.option.bWV0aG9k.desc": {
+          "source": "The HTTP method the URL should be valid for.  A URL signed for `GET` grants read access only; sign for `PUT` to grant an upload",
+          "message": "Die HTTP-Methode, für die die URL gültig sein soll. Eine für `GET` signierte URL gewährt nur Lesezugriff; signieren Sie für `PUT`, um einen Upload zu gewähren"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.Y3JlYXRlLXNpZ25lZC11cmw.option.bWV0aG9k.display_name": {
+          "source": "HTTP Method",
+          "message": "HTTP-Methode"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.Y3JlYXRlLXNpZ25lZC11cmw.option.bWV0aG9k.short_desc": {
+          "source": "The HTTP method to sign for",
+          "message": "Die zu signierende HTTP-Methode"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.Y3JlYXRlLXNpZ25lZC11cmw.option.c2lnbmVyX2VtYWls.desc": {
+          "source": "The service account whose key should sign the URL.  When omitted the connection's `gcp_signer_email` is used, and failing that the `client_email` from the service-account key",
+          "message": "Das Dienstkonto, dessen Schlüssel die URL signieren soll. Wird es weggelassen, wird `gcp_signer_email` der Verbindung verwendet, andernfalls `client_email` aus dem Dienstkonto-Schlüssel"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.Y3JlYXRlLXNpZ25lZC11cmw.option.c2lnbmVyX2VtYWls.display_name": {
+          "source": "Signer Email",
+          "message": "Signer-E-Mail"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.Y3JlYXRlLXNpZ25lZC11cmw.option.c2lnbmVyX2VtYWls.short_desc": {
+          "source": "The service account to sign with",
+          "message": "Das Dienstkonto zum Signieren"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.Y3JlYXRlLXNpZ25lZC11cmw.short_desc": {
+          "source": "Create a time-limited URL granting access to one object",
+          "message": "Erstellen Sie eine zeitlich begrenzte URL, die Zugriff auf ein einzelnes Objekt gewährt"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.Z2V0LW9iamVjdC1tZXRhZGF0YQ.desc": {
+          "source": "Retrieves an object's metadata — size, content type, checksums, storage class, generation, and user-defined metadata — without transferring its content.",
+          "message": "Ruft die Metadaten eines Objekts ab – Größe, Inhaltstyp, Prüfsummen, Speicherklasse, Generation und benutzerdefinierte Metadaten – ohne dessen Inhalt zu übertragen."
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.Z2V0LW9iamVjdC1tZXRhZGF0YQ.display_name": {
+          "source": "Get Object Metadata",
+          "message": "Objekt-Metadaten abrufen"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.Z2V0LW9iamVjdC1tZXRhZGF0YQ.option.YnVja2V0.desc": {
+          "source": "The name of the bucket holding the object",
+          "message": "Der Name des Buckets, der das Objekt enthält"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.Z2V0LW9iamVjdC1tZXRhZGF0YQ.option.YnVja2V0.display_name": {
+          "source": "Bucket",
+          "message": "Bucket"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.Z2V0LW9iamVjdC1tZXRhZGF0YQ.option.YnVja2V0.short_desc": {
+          "source": "The bucket holding the object",
+          "message": "Der Bucket, der das Objekt enthält"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.Z2V0LW9iamVjdC1tZXRhZGF0YQ.option.Z2VuZXJhdGlvbg.desc": {
+          "source": "The content generation to retrieve; when omitted the live version is used",
+          "message": "Die abzurufende Inhaltsgeneration; wenn weggelassen, wird die Live-Version verwendet"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.Z2V0LW9iamVjdC1tZXRhZGF0YQ.option.Z2VuZXJhdGlvbg.display_name": {
+          "source": "Generation",
+          "message": "Generation"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.Z2V0LW9iamVjdC1tZXRhZGF0YQ.option.Z2VuZXJhdGlvbg.short_desc": {
+          "source": "A specific content generation to address",
+          "message": "Eine bestimmte zu adressierende Inhaltsgeneration"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.Z2V0LW9iamVjdC1tZXRhZGF0YQ.option.b2JqZWN0.desc": {
+          "source": "The name of the object.  Object names are a flat key space in which `/` is an ordinary character, so the value is used verbatim: it is not split, normalized, or resolved against anything",
+          "message": "Der Name des Objekts. Objektnamen sind ein flacher Schlüsselbereich, in dem `/` ein gewöhnliches Zeichen ist, daher wird der Wert unverändert verwendet: Er wird weder aufgeteilt, normalisiert noch aufgelöst"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.Z2V0LW9iamVjdC1tZXRhZGF0YQ.option.b2JqZWN0.display_name": {
+          "source": "Object Name",
+          "message": "Objektname"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.Z2V0LW9iamVjdC1tZXRhZGF0YQ.option.b2JqZWN0.short_desc": {
+          "source": "The object's name",
+          "message": "Der Name des Objekts"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.Z2V0LW9iamVjdC1tZXRhZGF0YQ.short_desc": {
+          "source": "Get an object's metadata without its content",
+          "message": "Metadaten eines Objekts ohne dessen Inhalt abrufen"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.Z2V0LWJ1Y2tldA.desc": {
+          "source": "Retrieves a bucket's metadata: its location, storage class, versioning and uniform bucket-level access settings, labels, and timestamps.",
+          "message": "Ruft die Metadaten eines Buckets ab: Speicherort, Speicherklasse, Versionierungs- und einheitliche Zugriffs-Einstellungen auf Bucket-Ebene, Labels und Zeitstempel."
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.Z2V0LWJ1Y2tldA.display_name": {
+          "source": "Get Bucket",
+          "message": "Bucket abrufen"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.Z2V0LWJ1Y2tldA.option.YnVja2V0.desc": {
+          "source": "The name of the bucket whose metadata should be retrieved",
+          "message": "Der Name des Buckets, dessen Metadaten abgerufen werden sollen"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.Z2V0LWJ1Y2tldA.option.YnVja2V0.display_name": {
+          "source": "Bucket",
+          "message": "Bucket"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.Z2V0LWJ1Y2tldA.option.YnVja2V0.short_desc": {
+          "source": "The bucket to retrieve",
+          "message": "Der abzurufende Bucket"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.Z2V0LWJ1Y2tldA.short_desc": {
+          "source": "Get a bucket's metadata",
+          "message": "Metadaten eines Buckets abrufen"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.ZG93bmxvYWQtb2JqZWN0.desc": {
+          "source": "Downloads an object's content and returns it as raw bytes in `content`, together with the content type, size, and the checksums Google Cloud Storage reports.\n\n`object` is used verbatim. Set `generation` to download a specific version of an object in a bucket with versioning enabled.",
+          "message": "Lädt den Inhalt eines Objekts herunter und gibt ihn als Rohdatenbytes in `content` zurück, zusammen mit dem Inhaltstyp, der Größe und den von Google Cloud Storage gemeldeten Prüfsummen.\n\n`object` wird unverändert verwendet. Legen Sie `generation` fest, um eine bestimmte Version eines Objekts in einem Bucket mit aktivierter Versionierung herunterzuladen."
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.ZG93bmxvYWQtb2JqZWN0.display_name": {
+          "source": "Download Object",
+          "message": "Objekt herunterladen"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.ZG93bmxvYWQtb2JqZWN0.option.YnVja2V0.desc": {
+          "source": "The name of the bucket holding the object",
+          "message": "Der Name des Buckets, der das Objekt enthält"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.ZG93bmxvYWQtb2JqZWN0.option.YnVja2V0.display_name": {
+          "source": "Bucket",
+          "message": "Bucket"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.ZG93bmxvYWQtb2JqZWN0.option.YnVja2V0.short_desc": {
+          "source": "The bucket holding the object",
+          "message": "Der Bucket, der das Objekt enthält"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.ZG93bmxvYWQtb2JqZWN0.option.Z2VuZXJhdGlvbg.desc": {
+          "source": "The content generation to download; when omitted the live version is used",
+          "message": "Die herunterzuladende Inhaltsgeneration; wenn weggelassen, wird die Live-Version verwendet"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.ZG93bmxvYWQtb2JqZWN0.option.Z2VuZXJhdGlvbg.display_name": {
+          "source": "Generation",
+          "message": "Generation"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.ZG93bmxvYWQtb2JqZWN0.option.Z2VuZXJhdGlvbg.short_desc": {
+          "source": "A specific content generation to download",
+          "message": "Eine bestimmte herunterzuladende Inhaltsgeneration"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.ZG93bmxvYWQtb2JqZWN0.option.b2JqZWN0.desc": {
+          "source": "The name of the object to download, used verbatim: `/` is an ordinary character in a Google Cloud Storage object name, so the value is not split or normalized",
+          "message": "Der Name des herunterzuladenden Objekts, unverändert verwendet: `/` ist ein normales Zeichen in einem Google Cloud Storage-Objektnamen, daher wird der Wert nicht geteilt oder normalisiert"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.ZG93bmxvYWQtb2JqZWN0.option.b2JqZWN0.display_name": {
+          "source": "Object Name",
+          "message": "Objektname"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.ZG93bmxvYWQtb2JqZWN0.option.b2JqZWN0.short_desc": {
+          "source": "The object's name",
+          "message": "Der Name des Objekts"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.ZG93bmxvYWQtb2JqZWN0.short_desc": {
+          "source": "Download an object's content",
+          "message": "Inhalt eines Objekts herunterladen"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.ZGVsZXRlLW9iamVjdA.desc": {
+          "source": "Deletes an object.\n\nIn a bucket with versioning enabled, deleting without a `generation` removes the live version and retains the earlier generations; naming a `generation` removes that version permanently.",
+          "message": "Löscht ein Objekt.\n\nIn einem Bucket mit aktivierter Versionierung entfernt das Löschen ohne `generation` die Live-Version und behält die früheren Generationen bei; durch Angabe einer `generation` wird diese Version dauerhaft entfernt."
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.ZGVsZXRlLW9iamVjdA.display_name": {
+          "source": "Delete Object",
+          "message": "Objekt löschen"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.ZGVsZXRlLW9iamVjdA.option.YnVja2V0.desc": {
+          "source": "The name of the bucket holding the object",
+          "message": "Der Name des Buckets, der das Objekt enthält"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.ZGVsZXRlLW9iamVjdA.option.YnVja2V0.display_name": {
+          "source": "Bucket",
+          "message": "Bucket"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.ZGVsZXRlLW9iamVjdA.option.YnVja2V0.short_desc": {
+          "source": "The bucket holding the object",
+          "message": "Der Bucket, der das Objekt enthält"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.ZGVsZXRlLW9iamVjdA.option.Z2VuZXJhdGlvbg.desc": {
+          "source": "The content generation to delete; when omitted the live version is deleted.  In a bucket with versioning enabled, deleting the live version leaves the earlier generations in place, and a specific generation must be named to remove it permanently",
+          "message": "Die zu löschende Inhaltsgeneration; wenn weggelassen, wird die Live-Version gelöscht. In einem Bucket mit aktivierter Versionierung belässt das Löschen der Live-Version die früheren Generationen an Ort und Stelle; eine bestimmte Generation muss angegeben werden, um sie dauerhaft zu entfernen"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.ZGVsZXRlLW9iamVjdA.option.Z2VuZXJhdGlvbg.display_name": {
+          "source": "Generation",
+          "message": "Generation"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.ZGVsZXRlLW9iamVjdA.option.Z2VuZXJhdGlvbg.short_desc": {
+          "source": "A specific content generation to delete",
+          "message": "Eine bestimmte zu löschende Inhaltsgeneration"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.ZGVsZXRlLW9iamVjdA.option.b2JqZWN0.desc": {
+          "source": "The name of the object to delete, used verbatim",
+          "message": "Der Name des zu löschenden Objekts, unverändert verwendet"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.ZGVsZXRlLW9iamVjdA.option.b2JqZWN0.display_name": {
+          "source": "Object Name",
+          "message": "Objektname"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.ZGVsZXRlLW9iamVjdA.option.b2JqZWN0.short_desc": {
+          "source": "The object's name",
+          "message": "Der Name des Objekts"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.ZGVsZXRlLW9iamVjdA.short_desc": {
+          "source": "Delete an object",
+          "message": "Objekt löschen"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bGlzdC1idWNrZXRz.desc": {
+          "source": "Lists the buckets in the connection's GCP project.\n\nA listing is capped at `1000` buckets; when a `next_page_token` is returned, pass it back in `page_token` to retrieve the following page.",
+          "message": "Listet die Buckets im GCP-Projekt der Verbindung auf.\n\nEine Auflistung ist auf `1000` Buckets begrenzt; wenn ein `next_page_token` zurückgegeben wird, übergeben Sie es in `page_token`, um die nachfolgende Seite abzurufen."
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bGlzdC1idWNrZXRz.display_name": {
+          "source": "List Buckets",
+          "message": "Buckets auflisten"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bGlzdC1idWNrZXRz.option.bWF4X3Jlc3VsdHM.desc": {
+          "source": "The maximum number of buckets to return in one page (max `1000`)",
+          "message": "Die maximale Anzahl von Buckets, die auf einer Seite zurückgegeben werden sollen (max. `1000`)"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bGlzdC1idWNrZXRz.option.bWF4X3Jlc3VsdHM.display_name": {
+          "source": "Max Results",
+          "message": "Max. Ergebnisse"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bGlzdC1idWNrZXRz.option.bWF4X3Jlc3VsdHM.short_desc": {
+          "source": "Maximum buckets to return per page",
+          "message": "Maximale Anzahl zurückzugebender Buckets pro Seite"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bGlzdC1idWNrZXRz.option.cGFnZV90b2tlbg.desc": {
+          "source": "The `next_page_token` from a previous call, to retrieve the following page",
+          "message": "Das `next_page_token` aus einem vorherigen Aufruf, um die nachfolgende Seite abzurufen"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bGlzdC1idWNrZXRz.option.cGFnZV90b2tlbg.display_name": {
+          "source": "Page Token",
+          "message": "Seiten-Token"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bGlzdC1idWNrZXRz.option.cGFnZV90b2tlbg.short_desc": {
+          "source": "Token identifying the page to return",
+          "message": "Token, das die zurückzugebende Seite identifiziert"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bGlzdC1idWNrZXRz.option.cHJlZml4.desc": {
+          "source": "List only buckets whose name begins with this string",
+          "message": "Nur Buckets auflisten, deren Name mit dieser Zeichenfolge beginnt"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bGlzdC1idWNrZXRz.option.cHJlZml4.display_name": {
+          "source": "Prefix",
+          "message": "Präfix"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bGlzdC1idWNrZXRz.option.cHJlZml4.short_desc": {
+          "source": "List only buckets whose name begins with this string",
+          "message": "Nur Buckets auflisten, deren Name mit dieser Zeichenfolge beginnt"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bGlzdC1idWNrZXRz.short_desc": {
+          "source": "List the buckets in the project",
+          "message": "Buckets im Projekt auflisten"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bGlzdC1vYmplY3Rz.desc": {
+          "source": "Lists the objects in a bucket.\n\nObject names are a flat key space, so `prefix` is how a subset is selected; it is matched literally. Set `delimiter` to `/` as well to list one level at a time, which makes a bucket browsable as though it had folders — the rolled-up names are returned in `prefixes` and are not objects.\n\nA listing is capped at `1000` objects; when a `next_page_token` is returned, pass it back in `page_token` to retrieve the following page.",
+          "message": "Listet die Objekte in einem Bucket auf.\n\nObjektnamen sind ein flacher Schlüsselbereich, daher wird eine Teilmenge über `prefix` ausgewählt; der Abgleich erfolgt buchstabengetreu. Setzen Sie `delimiter` ebenfalls auf `/`, um jeweils eine Ebene aufzulisten, wodurch ein Bucket durchsucht werden kann, als ob er Ordner hätte – die zusammengefassten Namen werden in `prefixes` zurückgegeben und sind keine Objekte.\n\nEine Auflistung ist auf `1000` Objekte begrenzt; wenn ein `next_page_token` zurückgegeben wird, übergeben Sie es in `page_token`, um die nachfolgende Seite abzurufen."
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bGlzdC1vYmplY3Rz.display_name": {
+          "source": "List Objects",
+          "message": "Objekte auflisten"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bGlzdC1vYmplY3Rz.option.YnVja2V0.desc": {
+          "source": "The name of the bucket whose objects should be listed",
+          "message": "Der Name des Buckets, dessen Objekte aufgelistet werden sollen"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bGlzdC1vYmplY3Rz.option.YnVja2V0.display_name": {
+          "source": "Bucket",
+          "message": "Bucket"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bGlzdC1vYmplY3Rz.option.YnVja2V0.short_desc": {
+          "source": "The bucket to list",
+          "message": "Der aufzulistende Bucket"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bGlzdC1vYmplY3Rz.option.ZGVsaW1pdGVy.desc": {
+          "source": "Objects whose name contains this string after `prefix` are omitted from `objects` and rolled up into `prefixes` instead.  Setting it to `/` together with `prefix` makes a bucket browsable one level at a time, as though it had folders — which it does not",
+          "message": "Objekte, deren Name diese Zeichenfolge nach `prefix` enthält, werden in `objects` weggelassen und stattdessen in `prefixes` zusammengefasst. Wenn Sie diesen Wert zusammen mit `prefix` auf `/` setzen, kann ein Bucket Ebene für Ebene durchsucht werden, als ob er Ordner hätte – was nicht der Fall ist"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bGlzdC1vYmplY3Rz.option.ZGVsaW1pdGVy.display_name": {
+          "source": "Delimiter",
+          "message": "Trennzeichen"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bGlzdC1vYmplY3Rz.option.ZGVsaW1pdGVy.short_desc": {
+          "source": "Roll up names containing this delimiter into common prefixes",
+          "message": "Namen, die dieses Trennzeichen enthalten, zu gemeinsamen Präfixen zusammenfassen"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bGlzdC1vYmplY3Rz.option.ZW5kX29mZnNldA.desc": {
+          "source": "List only objects whose name is lexicographically less than this value",
+          "message": "Nur Objekte auflisten, deren Name lexikografisch kleiner als dieser Wert ist"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bGlzdC1vYmplY3Rz.option.ZW5kX29mZnNldA.display_name": {
+          "source": "End Offset",
+          "message": "End-Offset"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bGlzdC1vYmplY3Rz.option.ZW5kX29mZnNldA.short_desc": {
+          "source": "List only objects before this name",
+          "message": "Nur Objekte vor diesem Namen auflisten"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bGlzdC1vYmplY3Rz.option.aW5jbHVkZV90cmFpbGluZ19kZWxpbWl0ZXI.desc": {
+          "source": "When set, objects whose name ends with `delimiter` are returned in `objects` as well as being rolled up into `prefixes`; this is how the zero-byte folder placeholder objects written by some tools become visible",
+          "message": "Wenn festgelegt, werden Objekte, deren Name mit `delimiter` endet, sowohl in `objects` zurückgegeben als auch in `prefixes` zusammengefasst; auf diese Weise werden die von einigen Tools geschriebenen 0-Byte-Ordnerplatzhalter-Objekte sichtbar"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bGlzdC1vYmplY3Rz.option.aW5jbHVkZV90cmFpbGluZ19kZWxpbWl0ZXI.display_name": {
+          "source": "Include Trailing Delimiter",
+          "message": "Nachgestelltes Trennzeichen einschließen"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bGlzdC1vYmplY3Rz.option.aW5jbHVkZV90cmFpbGluZ19kZWxpbWl0ZXI.short_desc": {
+          "source": "Also return objects whose name ends with the delimiter",
+          "message": "Auch Objekte zurückgeben, deren Name mit dem Trennzeichen endet"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bGlzdC1vYmplY3Rz.option.bWF4X3Jlc3VsdHM.desc": {
+          "source": "The maximum number of objects to return in one page (max `1000`)",
+          "message": "Die maximale Anzahl von Objekten, die auf einer Seite zurückgegeben werden sollen (max. `1000`)"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bGlzdC1vYmplY3Rz.option.bWF4X3Jlc3VsdHM.display_name": {
+          "source": "Max Results",
+          "message": "Max. Ergebnisse"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bGlzdC1vYmplY3Rz.option.bWF4X3Jlc3VsdHM.short_desc": {
+          "source": "Maximum objects to return per page",
+          "message": "Maximale Anzahl zurückzugebender Objekte pro Seite"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bGlzdC1vYmplY3Rz.option.c3RhcnRfb2Zmc2V0.desc": {
+          "source": "List only objects whose name is lexicographically greater than or equal to this value",
+          "message": "Nur Objekte auflisten, deren Name lexikografisch größer oder gleich diesem Wert ist"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bGlzdC1vYmplY3Rz.option.c3RhcnRfb2Zmc2V0.display_name": {
+          "source": "Start Offset",
+          "message": "Start-Offset"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bGlzdC1vYmplY3Rz.option.c3RhcnRfb2Zmc2V0.short_desc": {
+          "source": "List only objects at or after this name",
+          "message": "Nur Objekte ab diesem oder nach diesem Namen auflisten"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bGlzdC1vYmplY3Rz.option.cGFnZV90b2tlbg.desc": {
+          "source": "The `next_page_token` from a previous call, to retrieve the following page",
+          "message": "Das `next_page_token` aus einem vorherigen Aufruf, um die nachfolgende Seite abzurufen"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bGlzdC1vYmplY3Rz.option.cGFnZV90b2tlbg.display_name": {
+          "source": "Page Token",
+          "message": "Seiten-Token"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bGlzdC1vYmplY3Rz.option.cGFnZV90b2tlbg.short_desc": {
+          "source": "Token identifying the page to return",
+          "message": "Token, das die zurückzugebende Seite identifiziert"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bGlzdC1vYmplY3Rz.option.cHJlZml4.desc": {
+          "source": "List only objects whose name begins with this string.  Because object names are a flat key space, a prefix is how a subset is selected; it is matched literally and byte for byte",
+          "message": "Nur Objekte auflisten, deren Name mit dieser Zeichenfolge beginnt. Da Objektnamen ein flacher Schlüsselbereich sind, wird eine Teilmenge über ein Präfix ausgewählt; der Abgleich erfolgt buchstabengetreu und Byte für Byte"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bGlzdC1vYmplY3Rz.option.cHJlZml4.display_name": {
+          "source": "Prefix",
+          "message": "Präfix"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bGlzdC1vYmplY3Rz.option.cHJlZml4.short_desc": {
+          "source": "List only objects whose name begins with this string",
+          "message": "Nur Objekte auflisten, deren Name mit dieser Zeichenfolge beginnt"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bGlzdC1vYmplY3Rz.option.dmVyc2lvbnM.desc": {
+          "source": "Include noncurrent generations of objects, which exist only in a bucket with versioning enabled; each generation is returned as a separate entry",
+          "message": "Nicht aktuelle Generationen von Objekten einschließen, die nur in einem Bucket mit aktivierter Versionierung existieren; jede Generation wird als separater Eintrag zurückgegeben"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bGlzdC1vYmplY3Rz.option.dmVyc2lvbnM.display_name": {
+          "source": "Include Versions",
+          "message": "Versionen einschließen"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bGlzdC1vYmplY3Rz.option.dmVyc2lvbnM.short_desc": {
+          "source": "Include noncurrent object generations",
+          "message": "Nicht aktuelle Objekt-Generationen einschließen"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bGlzdC1vYmplY3Rz.short_desc": {
+          "source": "List the objects in a bucket",
+          "message": "Die Objekte in einem Bucket auflisten"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bWFrZS1hcGktY2FsbA.desc": {
+          "source": "Make a custom HTTP / REST API call to **Google Cloud Storage** using the configured connection's authentication.\n\nSpecify the HTTP method, the URI path (relative to the connection's API base URL), optional query parameters, headers, and request body. The response is returned as a hash containing the status code, response headers, and response body.\n\nUse this action for endpoints that are not yet exposed as first-class actions on this app.",
+          "message": "Führen Sie einen benutzerdefinierten HTTP- / REST-API-Aufruf an **Google Cloud Storage** unter Verwendung der Authentifizierung der konfigurierten Verbindung aus.\n\nGeben Sie die HTTP-Methode, den URI-Pfad (relativ zur Basis-API-URL der Verbindung), optionale Abfrageparameter, Header und den Anfragetext an. Die Antwort wird als Hash zurückgegeben, der den Statuscode, die Antwortheader und den Antworttext enthält.\n\nVerwenden Sie diese Aktion für Endpunkte, die in dieser App noch nicht als erstklassige Aktionen bereitgestellt werden."
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bWFrZS1hcGktY2FsbA.display_name": {
+          "source": "Make an API call",
+          "message": "API-Aufruf ausführen"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.desc": {
+          "source": "The request body. The effective type depends on `body_type`: JSON/form/YAML expect a hash, XML/text expect a string, multipart expects a file structure, binary expects raw bytes.",
+          "message": "Der Anfragen-Body. Der effektive Typ hängt von `body_type` ab: JSON/form/YAML erwarten einen Hash, XML/Text erwarten einen String, Multipart erwartet eine Dateistruktur, Binary erwartet Rohbytes."
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.display_name": {
+          "source": "Body",
+          "message": "Body"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.short_desc": {
+          "source": "The request body",
+          "message": "Der Anfragen-Body"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.desc": {
+          "source": "Upload a file using `multipart/form-data`. The body must be a @ref DataProvider::FileDataType \"FileDataType\" structure (filename + content + mime_type). The framework builds the multipart envelope and sets the boundary header.",
+          "message": "Laden Sie eine Datei mit `multipart/form-data` hoch. Der Body muss eine @ref DataProvider::FileDataType \"FileDataType\"-Struktur sein (filename + content + mime_type). Das Framework erstellt die Multipart-Hülle und setzt den Boundary-Header."
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.display_name": {
+          "source": "Multipart Form",
+          "message": "Multipart-Formular"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.short_desc": {
+          "source": "Upload a file using multipart/form-data",
+          "message": "Eine Datei mit multipart/form-data hochladen"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.desc": {
+          "source": "Pass the body to the REST client unchanged; the client decides serialization based on its configured `data` option and the value type",
+          "message": "Übergeben Sie den Body unverändert an den REST-Client; der Client entscheidet über die Serialisierung basierend auf seiner konfigurierten `data`-Option und dem Werttyp"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.display_name": {
+          "source": "Auto",
+          "message": "Auto"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.short_desc": {
+          "source": "Pass-through; use connection serialization and let the REST client decide",
+          "message": "Durchreichen; Verbindungsserialisierung verwenden und den REST-Client entscheiden lassen"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.desc": {
+          "source": "Send the body as raw bytes. The body must be a binary value. Sets `Content-Type: application/octet-stream` unless overridden by `hdr`.",
+          "message": "Senden Sie den Body als Rohbytes. Der Body muss ein Binärwert sein. Setzt `Content-Type: application/octet-stream`, sofern nicht durch `hdr` überschrieben."
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.display_name": {
+          "source": "Raw Binary",
+          "message": "Rohbinärdaten"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.short_desc": {
+          "source": "Send body as raw bytes",
+          "message": "Body als Rohbytes senden"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.desc": {
+          "source": "Serialize a hash of form fields as `application/x-www-form-urlencoded`. The body must be a hash whose values are scalars (strings/numbers/booleans).",
+          "message": "Serialisieren Sie einen Hash von Formularfeldern als `application/x-www-form-urlencoded`. Der Body muss ein Hash sein, dessen Werte Skalare sind (Strings/Zahlen/Booleans)."
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.display_name": {
+          "source": "Form (URL-encoded)",
+          "message": "Formular (URL-kodiert)"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.short_desc": {
+          "source": "Serialize body as application/x-www-form-urlencoded form fields",
+          "message": "Body als application/x-www-form-urlencoded-Formularfelder serialisieren"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.desc": {
+          "source": "Serialize the body as JSON; sets `Content-Type: application/json`. The body should be a hash, list, or scalar value.",
+          "message": "Serialisieren Sie den Body als JSON; setzt `Content-Type: application/json`. Der Body sollte ein Hash, eine Liste oder ein Skalarwert sein."
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.display_name": {
+          "source": "JSON",
+          "message": "JSON"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.short_desc": {
+          "source": "Serialize body as JSON",
+          "message": "Body als JSON serialisieren"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.desc": {
+          "source": "Send the body as plain text. The body must be a string. Sets `Content-Type: text/plain`.",
+          "message": "Senden Sie den Body als Klartext. Der Body muss ein String sein. Setzt `Content-Type: text/plain`."
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.display_name": {
+          "source": "Plain Text",
+          "message": "Klartext"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.short_desc": {
+          "source": "Send body as text/plain",
+          "message": "Body als text/plain senden"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.desc": {
+          "source": "Send the body as XML. If the body is a hash it is serialized to XML; if it is a string it is sent verbatim. Sets `Content-Type: application/xml`.",
+          "message": "Senden Sie den Body als XML. Wenn der Body ein Hash ist, wird er zu XML serialisiert; wenn er ein String ist, wird er wörtlich gesendet. Setzt `Content-Type: application/xml`."
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.display_name": {
+          "source": "XML",
+          "message": "XML"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.short_desc": {
+          "source": "Send body as XML",
+          "message": "Body als XML senden"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.desc": {
+          "source": "Send the body as YAML. If the body is a hash it is serialized to YAML; if it is a string it is sent verbatim. Sets `Content-Type: application/x-yaml`.",
+          "message": "Senden Sie den Body als YAML. Wenn der Body ein Hash ist, wird er zu YAML serialisiert; wenn er ein String ist, wird er wörtlich gesendet. Setzt `Content-Type: application/x-yaml`."
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.display_name": {
+          "source": "YAML",
+          "message": "YAML"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.short_desc": {
+          "source": "Send body as YAML",
+          "message": "Body als YAML senden"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.desc": {
+          "source": "Selects the body serialization mode and the corresponding `Content-Type` header. Changing this field reshapes the `body` editor - selecting JSON exposes a JSON editor, selecting Multipart Form exposes a file picker, and so on.",
+          "message": "Wählt den Body-Serialisierungsmodus und den entsprechenden Header `Content-Type` aus. Das Ändern dieses Feldes passt den Editor `body` an – die Auswahl von JSON zeigt einen JSON-Editor an, die Auswahl von Multipart Form zeigt eine Dateiauswahl an usw."
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.display_name": {
+          "source": "Body Type",
+          "message": "Body-Typ"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.short_desc": {
+          "source": "How the body is serialized and what Content-Type is sent",
+          "message": "Wie der Body serialisiert wird und welcher Content-Type gesendet wird"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.desc": {
+          "source": "If `True`, non-2xx HTTP responses return as the normal response hash (with the actual status code) instead of raising `REST-RESPONSE-ERROR`. Useful for handling 4xx/5xx as data - e.g. checking whether a resource exists. Overrides the connection's `error_passthru` setting for this call only.",
+          "message": "Wenn `True`, werden Nicht-2xx-HTTP-Antworten als normaler Antwort-Hash (mit dem tatsächlichen Statuscode) zurückgegeben, anstatt `REST-RESPONSE-ERROR` auszulösen. Nützlich für die Behandlung von 4xx/5xx als Daten – z. B. zum Überprüfen, ob eine Ressource existiert. Überschreibt die Einstellung `error_passthru` der Verbindung nur für diesen Aufruf."
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.display_name": {
+          "source": "Return Errors as Data",
+          "message": "Fehler als Daten zurückgeben"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.short_desc": {
+          "source": "Return non-2xx responses normally instead of throwing",
+          "message": "Nicht-2xx-Antworten normal zurückgeben, anstatt eine Exception auszulösen"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.desc": {
+          "source": "Optional list of HTTP status codes treated as success. If set and the response status is not in this list, the action throws `REST-STATUS-ERROR`. When unset, the REST client's default behavior applies (typically: 2xx is success, non-2xx throws).",
+          "message": "Optionale Liste von HTTP-Statuscodes, die als Erfolg behandelt werden. Wenn festgelegt und der Antwortstatus nicht in dieser Liste enthalten ist, löst die Aktion `REST-STATUS-ERROR` aus. Wenn nicht festgelegt, gilt das Standardverhalten des REST-Clients (typischerweise: 2xx ist Erfolg, Nicht-2xx löst eine Exception aus)."
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.display_name": {
+          "source": "Expected Status Codes",
+          "message": "Erwartete Statuscodes"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.short_desc": {
+          "source": "Response status codes treated as success",
+          "message": "Antwort-Statuscodes, die als Erfolg behandelt werden"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bWFrZS1hcGktY2FsbA.option.aGRy.desc": {
+          "source": "Hash of custom headers added to the request. These override any default headers set by `body_type` (e.g. supplying `Content-Type` here wins over the body-type default).",
+          "message": "Hash benutzerdefinierter Header, die der Anfrage hinzugefügt werden. Diese überschreiben alle von `body_type` festgelegten Standard-Header (z. B. überschreibt die Angabe von `Content-Type` hier den Standard für den Body-Typ)."
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bWFrZS1hcGktY2FsbA.option.aGRy.display_name": {
+          "source": "Custom Headers",
+          "message": "Benutzerdefinierte Header"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bWFrZS1hcGktY2FsbA.option.aGRy.short_desc": {
+          "source": "Extra request headers",
+          "message": "Zusätzliche Anfrage-Header"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.desc": {
+          "source": "If `True`, the response hash includes a `debug` sub-hash containing the request method/URL/headers (with sensitive values redacted), request and response sizes, and round-trip duration. Useful when investigating slow or failing calls. Off by default to keep responses lean.",
+          "message": "Wenn `True`, enthält der Antwort-Hash einen Sub-Hash `debug`, der die Anfragemethode/URL/Header (mit unkenntlich gemachten sensiblen Werten), Anfrage- und Antwortgrößen sowie die Verarbeitungsdauer enthält. Nützlich bei der Untersuchung langsamer oder fehlschlagender Aufrufe. Standardmäßig deaktiviert, um Antworten schlank zu halten."
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.display_name": {
+          "source": "Include Debug Info",
+          "message": "Debug-Informationen einschließen"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.short_desc": {
+          "source": "Include request/timing/size debug info in the response",
+          "message": "Debug-Informationen zu Anfrage/Laufzeit/Größe in die Antwort einschließen"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.desc": {
+          "source": "HTTP `OPTIONS`",
+          "message": "HTTP `OPTIONS`"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.display_name": {
+          "source": "OPTIONS",
+          "message": "OPTIONS"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.short_desc": {
+          "source": "HTTP OPTIONS",
+          "message": "HTTP OPTIONS"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.desc": {
+          "source": "HTTP `DELETE`",
+          "message": "HTTP `DELETE`"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.display_name": {
+          "source": "DELETE",
+          "message": "DELETE"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.short_desc": {
+          "source": "HTTP DELETE",
+          "message": "HTTP DELETE"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.desc": {
+          "source": "HTTP `GET`",
+          "message": "HTTP `GET`"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.display_name": {
+          "source": "GET",
+          "message": "GET"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.short_desc": {
+          "source": "HTTP GET",
+          "message": "HTTP GET"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.desc": {
+          "source": "HTTP `HEAD`",
+          "message": "HTTP `HEAD`"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.display_name": {
+          "source": "HEAD",
+          "message": "HEAD"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.short_desc": {
+          "source": "HTTP HEAD",
+          "message": "HTTP HEAD"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.desc": {
+          "source": "HTTP `PATCH`",
+          "message": "HTTP `PATCH`"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.display_name": {
+          "source": "PATCH",
+          "message": "PATCH"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.short_desc": {
+          "source": "HTTP PATCH",
+          "message": "HTTP PATCH"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.desc": {
+          "source": "HTTP `POST`",
+          "message": "HTTP `POST`"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.display_name": {
+          "source": "POST",
+          "message": "POST"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.short_desc": {
+          "source": "HTTP POST",
+          "message": "HTTP POST"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.desc": {
+          "source": "HTTP `PUT`",
+          "message": "HTTP `PUT`"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.display_name": {
+          "source": "PUT",
+          "message": "PUT"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.short_desc": {
+          "source": "HTTP PUT",
+          "message": "HTTP PUT"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.desc": {
+          "source": "HTTP `TRACE`",
+          "message": "HTTP `TRACE`"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.display_name": {
+          "source": "TRACE",
+          "message": "TRACE"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.short_desc": {
+          "source": "HTTP TRACE",
+          "message": "HTTP TRACE"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "Die für die Anfrage zu verwendende HTTP-Methode"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.display_name": {
+          "source": "HTTP Method",
+          "message": "HTTP-Methode"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.short_desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "Die für die Anfrage zu verwendende HTTP-Methode"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain `{name}` placeholders that are replaced from `path_vars`. Example: `/users/{id}/comments`.",
+          "message": "Der URI-Pfad relativ zur API-Basis-URL der Verbindung. Kann `{name}`-Platzhalter enthalten, die aus `path_vars` ersetzt werden. Beispiel: `/users/{id}/comments`."
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.display_name": {
+          "source": "URI Path",
+          "message": "URI-Pfad"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.short_desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain '{name}' placeholders that are replaced from 'path_vars'. Example: '/users/{id}/comments'",
+          "message": "Der URI-Pfad relativ zur API-Basis-URL der Verbindung. Kann '{name}'-Platzhalter enthalten, die aus 'path_vars' ersetzt werden. Beispiel: '/users/{id}/comments'"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.desc": {
+          "source": "Hash of values substituted into `{name}` placeholders in the URI path. Example: with `path = /users/{id}` and `path_vars = {id: 123}` the framework sends `/users/123`. Values are URL-encoded.",
+          "message": "Hash von Werten, die in `{name}`-Platzhalter im URI-Pfad eingesetzt werden. Beispiel: Bei `path = /users/{id}` und `path_vars = {id: 123}` sendet das Framework `/users/123`. Werte werden URL-codiert."
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.display_name": {
+          "source": "Path Variables",
+          "message": "Pfadvariablen"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.short_desc": {
+          "source": "Values for {name} placeholders in path",
+          "message": "Werte für {name}-Platzhalter im Pfad"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.desc": {
+          "source": "Hash of query string parameters to append to the URI path. Values are URL-encoded; list values are joined with `,`.",
+          "message": "Hash von Abfragezeichenfolgen-Parametern, die an den URI-Pfad angehängt werden sollen. Werte werden URL-codiert; Listenwerte werden mit `,` zusammengefügt."
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.display_name": {
+          "source": "Query Arguments",
+          "message": "Abfrageargumente"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.short_desc": {
+          "source": "Query string parameters",
+          "message": "Abfragezeichenfolgen-Parameter"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.bWFrZS1hcGktY2FsbA.short_desc": {
+          "source": "Make a custom API call to Google Cloud Storage",
+          "message": "Benutzerdefinierten API-Aufruf an Google Cloud Storage durchführen"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.dXBkYXRlLW9iamVjdC1tZXRhZGF0YQ.desc": {
+          "source": "Updates an object's metadata in place, without re-uploading its content: the content type, the cache and content headers served with it, a custom timestamp, and user-defined metadata.\n\nThe update is a merge, so only the fields supplied are changed; set a `metadata` key to `null` to remove that key.",
+          "message": "Aktualisiert die Metadaten eines Objekts direkt, ohne dessen Inhalt erneut hochzuladen: den Inhaltstyp, die damit bereitgestellten Cache- und Inhalts-Header, einen benutzerdefinierten Zeitstempel und benutzerdefinierte Metadaten.\n\nDie Aktualisierung ist eine Zusammenführung (Merge), sodass nur die angegebenen Felder geändert werden; setzen Sie einen `metadata`-Schlüssel auf `null`, um diesen Schlüssel zu entfernen."
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.dXBkYXRlLW9iamVjdC1tZXRhZGF0YQ.display_name": {
+          "source": "Update Object Metadata",
+          "message": "Objekt-Metadaten aktualisieren"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.dXBkYXRlLW9iamVjdC1tZXRhZGF0YQ.option.Y29udGVudF90eXBl.desc": {
+          "source": "The MIME type served with the object's content",
+          "message": "Der mit dem Inhalt des Objekts bereitgestellte MIME-Typ"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.dXBkYXRlLW9iamVjdC1tZXRhZGF0YQ.option.Y29udGVudF90eXBl.display_name": {
+          "source": "Content Type",
+          "message": "Inhaltstyp"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.dXBkYXRlLW9iamVjdC1tZXRhZGF0YQ.option.Y29udGVudF90eXBl.short_desc": {
+          "source": "The MIME type to set",
+          "message": "Der festzulegende MIME-Typ"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.dXBkYXRlLW9iamVjdC1tZXRhZGF0YQ.option.Y29udGVudF9kaXNwb3NpdGlvbg.desc": {
+          "source": "The `Content-Disposition` header served with the object's content",
+          "message": "Der mit dem Inhalt des Objekts bereitgestellte `Content-Disposition`-Header"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.dXBkYXRlLW9iamVjdC1tZXRhZGF0YQ.option.Y29udGVudF9kaXNwb3NpdGlvbg.display_name": {
+          "source": "Content Disposition",
+          "message": "Content-Disposition"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.dXBkYXRlLW9iamVjdC1tZXRhZGF0YQ.option.Y29udGVudF9kaXNwb3NpdGlvbg.short_desc": {
+          "source": "The Content-Disposition header to set",
+          "message": "Der festzulegende Content-Disposition-Header"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.dXBkYXRlLW9iamVjdC1tZXRhZGF0YQ.option.Y29udGVudF9lbmNvZGluZw.desc": {
+          "source": "The `Content-Encoding` header served with the object's content (e.g. `gzip`)",
+          "message": "Der mit dem Inhalt des Objekts bereitgestellte `Content-Encoding`-Header (z. B. `gzip`)"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.dXBkYXRlLW9iamVjdC1tZXRhZGF0YQ.option.Y29udGVudF9lbmNvZGluZw.display_name": {
+          "source": "Content Encoding",
+          "message": "Content-Encoding"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.dXBkYXRlLW9iamVjdC1tZXRhZGF0YQ.option.Y29udGVudF9lbmNvZGluZw.short_desc": {
+          "source": "The Content-Encoding header to set",
+          "message": "Der festzulegende Content-Encoding-Header"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.dXBkYXRlLW9iamVjdC1tZXRhZGF0YQ.option.Y29udGVudF9sYW5ndWFnZQ.desc": {
+          "source": "The `Content-Language` header served with the object's content",
+          "message": "Der mit dem Inhalt des Objekts bereitgestellte `Content-Language`-Header"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.dXBkYXRlLW9iamVjdC1tZXRhZGF0YQ.option.Y29udGVudF9sYW5ndWFnZQ.display_name": {
+          "source": "Content Language",
+          "message": "Content-Language"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.dXBkYXRlLW9iamVjdC1tZXRhZGF0YQ.option.Y29udGVudF9sYW5ndWFnZQ.short_desc": {
+          "source": "The Content-Language header to set",
+          "message": "Der festzulegende Content-Language-Header"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.dXBkYXRlLW9iamVjdC1tZXRhZGF0YQ.option.Y2FjaGVfY29udHJvbA.desc": {
+          "source": "The `Cache-Control` header served with the object's content",
+          "message": "Der mit dem Inhalt des Objekts bereitgestellte `Cache-Control`-Header"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.dXBkYXRlLW9iamVjdC1tZXRhZGF0YQ.option.Y2FjaGVfY29udHJvbA.display_name": {
+          "source": "Cache Control",
+          "message": "Cache-Control"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.dXBkYXRlLW9iamVjdC1tZXRhZGF0YQ.option.Y2FjaGVfY29udHJvbA.short_desc": {
+          "source": "The Cache-Control header to set",
+          "message": "Der festzulegende Cache-Control-Header"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.dXBkYXRlLW9iamVjdC1tZXRhZGF0YQ.option.Y3VzdG9tX3RpbWU.desc": {
+          "source": "A user-specified date and time on the object, usable in lifecycle rules",
+          "message": "Ein vom Benutzer angegebenes Datum und eine Uhrzeit für das Objekt, verwendbar in Lebenszyklusregeln"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.dXBkYXRlLW9iamVjdC1tZXRhZGF0YQ.option.Y3VzdG9tX3RpbWU.display_name": {
+          "source": "Custom Time",
+          "message": "Benutzerdefinierte Zeit"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.dXBkYXRlLW9iamVjdC1tZXRhZGF0YQ.option.Y3VzdG9tX3RpbWU.short_desc": {
+          "source": "The user-specified timestamp to set",
+          "message": "Der festzulegende benutzerdefinierte Zeitstempel"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.dXBkYXRlLW9iamVjdC1tZXRhZGF0YQ.option.YnVja2V0.desc": {
+          "source": "The name of the bucket holding the object",
+          "message": "Der Name des Buckets, der das Objekt enthält"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.dXBkYXRlLW9iamVjdC1tZXRhZGF0YQ.option.YnVja2V0.display_name": {
+          "source": "Bucket",
+          "message": "Bucket"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.dXBkYXRlLW9iamVjdC1tZXRhZGF0YQ.option.YnVja2V0.short_desc": {
+          "source": "The bucket holding the object",
+          "message": "Der Bucket, der das Objekt enthält"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.dXBkYXRlLW9iamVjdC1tZXRhZGF0YQ.option.Z2VuZXJhdGlvbg.desc": {
+          "source": "The content generation whose metadata should be updated; when omitted the live version is used",
+          "message": "Die Inhaltsgeneration, deren Metadaten aktualisiert werden sollen; wenn weggelassen, wird die Live-Version verwendet"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.dXBkYXRlLW9iamVjdC1tZXRhZGF0YQ.option.Z2VuZXJhdGlvbg.display_name": {
+          "source": "Generation",
+          "message": "Generation"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.dXBkYXRlLW9iamVjdC1tZXRhZGF0YQ.option.Z2VuZXJhdGlvbg.short_desc": {
+          "source": "A specific content generation to address",
+          "message": "Eine bestimmte zu adressierende Inhaltsgeneration"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.dXBkYXRlLW9iamVjdC1tZXRhZGF0YQ.option.b2JqZWN0.desc": {
+          "source": "The name of the object, used verbatim",
+          "message": "Der Name des Objekts, unverändert verwendet"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.dXBkYXRlLW9iamVjdC1tZXRhZGF0YQ.option.b2JqZWN0.display_name": {
+          "source": "Object Name",
+          "message": "Objektname"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.dXBkYXRlLW9iamVjdC1tZXRhZGF0YQ.option.b2JqZWN0.short_desc": {
+          "source": "The object's name",
+          "message": "Der Name des Objekts"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.dXBkYXRlLW9iamVjdC1tZXRhZGF0YQ.option.bWV0YWRhdGE.desc": {
+          "source": "User-defined metadata as key/value pairs.  A `PATCH` merges these with the existing metadata; set a key to `null` to remove it",
+          "message": "Benutzerdefinierte Metadaten als Schlüssel/Wert-Paare. Ein `PATCH` führt diese mit den vorhandenen Metadaten zusammen; setzen Sie einen Schlüssel auf `null`, um ihn zu entfernen"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.dXBkYXRlLW9iamVjdC1tZXRhZGF0YQ.option.bWV0YWRhdGE.display_name": {
+          "source": "Custom Metadata",
+          "message": "Benutzerdefinierte Metadaten"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.dXBkYXRlLW9iamVjdC1tZXRhZGF0YQ.option.bWV0YWRhdGE.short_desc": {
+          "source": "User-defined metadata to set",
+          "message": "Festzulegende benutzerdefinierte Metadaten"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.dXBkYXRlLW9iamVjdC1tZXRhZGF0YQ.short_desc": {
+          "source": "Update an object's metadata without rewriting it",
+          "message": "Metadaten eines Objekts aktualisieren, ohne es neu zu schreiben"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.dXBsb2FkLW9iamVjdA.desc": {
+          "source": "Uploads content to a bucket as an object of any size.\n\nLarge content, and any upload that also sets metadata, is sent as a resumable upload in chunks that Google Cloud Storage commits as they arrive, so a large transfer does not have to restart from the beginning if a chunk fails. Small content is sent in a single request.\n\n`object` is used verbatim, so `reports/2026/q1.csv` is one key rather than a path. Set `if_generation_match` to `0` to create the object only if it does not already exist, rather than overwriting it.",
+          "message": "Lädt Inhalt als Objekt beliebiger Größe in einen Bucket hoch.\n\nGroße Inhalte sowie alle Uploads, die auch Metadaten festlegen, werden als fortsetzbarer Upload in Blöcken gesendet, die Google Cloud Storage bei ihrer Ankunft committet, sodass eine große Übertragung bei einem Fehler in einem Block nicht von vorne beginnen muss. Kleine Inhalte werden in einer einzelnen Anfrage gesendet.\n\n`object` wird unverändert verwendet, sodass `reports/2026/q1.csv` ein einzelner Schlüssel und kein Pfad ist. Setzen Sie `if_generation_match` auf `0`, um das Objekt nur dann zu erstellen, wenn es noch nicht existiert, anstatt es zu überschreiben."
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.dXBsb2FkLW9iamVjdA.display_name": {
+          "source": "Upload Object",
+          "message": "Objekt hochladen"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.dXBsb2FkLW9iamVjdA.option.Y29udGVudF90eXBl.desc": {
+          "source": "The MIME type to store the object with.  When omitted the file's MIME type is used; if that is unset or `auto`, it is derived from the object name, falling back to `application/octet-stream`",
+          "message": "Der MIME-Typ, mit dem das Objekt gespeichert werden soll. Wenn weggelassen, wird der MIME-Typ der Datei verwendet; falls dieser nicht gesetzt oder `auto` ist, wird er aus dem Objektnamen abgeleitet, mit Rückgriff auf `application/octet-stream`"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.dXBsb2FkLW9iamVjdA.option.Y29udGVudF90eXBl.display_name": {
+          "source": "Content Type",
+          "message": "Inhaltstyp"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.dXBsb2FkLW9iamVjdA.option.Y29udGVudF90eXBl.short_desc": {
+          "source": "The MIME type to store",
+          "message": "Der zu speichernde MIME-Typ"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.dXBsb2FkLW9iamVjdA.option.Y29udGVudF9kaXNwb3NpdGlvbg.desc": {
+          "source": "The `Content-Disposition` header to serve the object's content with",
+          "message": "Der `Content-Disposition`-Header, mit dem der Inhalt des Objekts bereitgestellt werden soll"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.dXBsb2FkLW9iamVjdA.option.Y29udGVudF9kaXNwb3NpdGlvbg.display_name": {
+          "source": "Content Disposition",
+          "message": "Content-Disposition"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.dXBsb2FkLW9iamVjdA.option.Y29udGVudF9kaXNwb3NpdGlvbg.short_desc": {
+          "source": "The Content-Disposition header to store",
+          "message": "Der zu speichernde Content-Disposition-Header"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.dXBsb2FkLW9iamVjdA.option.Y29udGVudF9lbmNvZGluZw.desc": {
+          "source": "The `Content-Encoding` header to serve the object's content with (e.g. `gzip`).  This declares how the bytes being uploaded are already encoded; it does not compress them",
+          "message": "Der `Content-Encoding`-Header, mit dem der Inhalt des Objekts bereitgestellt werden soll (z. B. `gzip`). Dies deklariert, wie die hochgeladenen Bytes bereits codiert sind; es komprimiert sie nicht"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.dXBsb2FkLW9iamVjdA.option.Y29udGVudF9lbmNvZGluZw.display_name": {
+          "source": "Content Encoding",
+          "message": "Content-Encoding"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.dXBsb2FkLW9iamVjdA.option.Y29udGVudF9lbmNvZGluZw.short_desc": {
+          "source": "The Content-Encoding header to store",
+          "message": "Der zu speichernde Content-Encoding-Header"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.dXBsb2FkLW9iamVjdA.option.Y29udGVudF9sYW5ndWFnZQ.desc": {
+          "source": "The `Content-Language` header to serve the object's content with",
+          "message": "Der `Content-Language`-Header, mit dem der Inhalt des Objekts bereitgestellt werden soll"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.dXBsb2FkLW9iamVjdA.option.Y29udGVudF9sYW5ndWFnZQ.display_name": {
+          "source": "Content Language",
+          "message": "Content-Language"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.dXBsb2FkLW9iamVjdA.option.Y29udGVudF9sYW5ndWFnZQ.short_desc": {
+          "source": "The Content-Language header to store",
+          "message": "Der zu speichernde Content-Language-Header"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.dXBsb2FkLW9iamVjdA.option.Y2FjaGVfY29udHJvbA.desc": {
+          "source": "The `Cache-Control` header to serve the object's content with",
+          "message": "Der `Cache-Control`-Header, mit dem der Inhalt des Objekts bereitgestellt werden soll"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.dXBsb2FkLW9iamVjdA.option.Y2FjaGVfY29udHJvbA.display_name": {
+          "source": "Cache Control",
+          "message": "Cache-Control"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.dXBsb2FkLW9iamVjdA.option.Y2FjaGVfY29udHJvbA.short_desc": {
+          "source": "The Cache-Control header to store",
+          "message": "Der zu speichernde Cache-Control-Header"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.dXBsb2FkLW9iamVjdA.option.Y3VzdG9tX3RpbWU.desc": {
+          "source": "A user-specified date and time on the object, usable in lifecycle rules",
+          "message": "Ein vom Benutzer angegebenes Datum und eine Uhrzeit für das Objekt, verwendbar in Lebenszyklusregeln"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.dXBsb2FkLW9iamVjdA.option.Y3VzdG9tX3RpbWU.display_name": {
+          "source": "Custom Time",
+          "message": "Benutzerdefinierte Zeit"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.dXBsb2FkLW9iamVjdA.option.Y3VzdG9tX3RpbWU.short_desc": {
+          "source": "The user-specified timestamp to store",
+          "message": "Der zu speichernde benutzerdefinierte Zeitstempel"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.dXBsb2FkLW9iamVjdA.option.YnVja2V0.desc": {
+          "source": "The name of the bucket to upload the object into",
+          "message": "Der Name des Buckets, in den das Objekt hochgeladen werden soll"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.dXBsb2FkLW9iamVjdA.option.YnVja2V0.display_name": {
+          "source": "Bucket",
+          "message": "Bucket"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.dXBsb2FkLW9iamVjdA.option.YnVja2V0.short_desc": {
+          "source": "The bucket to upload into",
+          "message": "Der Bucket, in den hochgeladen werden soll"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.dXBsb2FkLW9iamVjdA.option.ZmlsZQ.desc": {
+          "source": "The content to upload, including the file name, the content, and the MIME type",
+          "message": "Der hochzuladende Inhalt, einschließlich Dateiname, Inhalt und MIME-Typ"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.dXBsb2FkLW9iamVjdA.option.ZmlsZQ.display_name": {
+          "source": "File",
+          "message": "Datei"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.dXBsb2FkLW9iamVjdA.option.ZmlsZQ.short_desc": {
+          "source": "The content to upload",
+          "message": "Der hochzuladende Inhalt"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.dXBsb2FkLW9iamVjdA.option.aWZfZ2VuZXJhdGlvbl9tYXRjaA.desc": {
+          "source": "Only perform the write if the object's current generation matches this value; pass `0` to write only if the object does not exist yet, which makes the upload a safe create rather than an overwrite",
+          "message": "Den Schreibvorgang nur durchführen, wenn die aktuelle Generation des Objekts diesem Wert entspricht; übergeben Sie `0`, um nur dann zu schreiben, wenn das Objekt noch nicht existiert, was den Upload zu einer sicheren Erstellung anstelle eines Überschreibens macht"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.dXBsb2FkLW9iamVjdA.option.aWZfZ2VuZXJhdGlvbl9tYXRjaA.display_name": {
+          "source": "If Generation Match",
+          "message": "Wenn Generation übereinstimmt"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.dXBsb2FkLW9iamVjdA.option.aWZfZ2VuZXJhdGlvbl9tYXRjaA.short_desc": {
+          "source": "Only write if the live generation matches",
+          "message": "Nur schreiben, wenn die Live-Generation übereinstimmt"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.dXBsb2FkLW9iamVjdA.option.b2JqZWN0.desc": {
+          "source": "The name to store the object under, used verbatim: `/` is an ordinary character in a Google Cloud Storage object name, so `reports/2026/q1.csv` is a single key and not a path.  When omitted the file's name is used",
+          "message": "Der Name, unter dem das Objekt gespeichert werden soll, unverändert verwendet: `/` ist ein normales Zeichen in einem Objektnamen von Google Cloud Storage, daher ist `reports/2026/q1.csv` ein einzelner Schlüssel und kein Pfad. Wenn weggelassen, wird der Dateiname verwendet"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.dXBsb2FkLW9iamVjdA.option.b2JqZWN0.display_name": {
+          "source": "Object Name",
+          "message": "Objektname"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.dXBsb2FkLW9iamVjdA.option.b2JqZWN0.short_desc": {
+          "source": "The object name to write",
+          "message": "Der zu schreibende Objektname"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.dXBsb2FkLW9iamVjdA.option.bWV0YWRhdGE.desc": {
+          "source": "User-defined metadata to store on the object as key/value pairs",
+          "message": "Benutzerdefinierte Metadaten, die auf dem Objekt als Schlüssel/Wert-Paare gespeichert werden sollen"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.dXBsb2FkLW9iamVjdA.option.bWV0YWRhdGE.display_name": {
+          "source": "Custom Metadata",
+          "message": "Benutzerdefinierte Metadaten"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.dXBsb2FkLW9iamVjdA.option.bWV0YWRhdGE.short_desc": {
+          "source": "User-defined metadata to store",
+          "message": "Zu speichernde benutzerdefinierte Metadaten"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.dXBsb2FkLW9iamVjdA.option.c3RvcmFnZV9jbGFzcw.desc": {
+          "source": "The storage class for the new object: `STANDARD`, `NEARLINE`, `COLDLINE` or `ARCHIVE`.  When omitted the bucket's default is used",
+          "message": "Die Speicherklasse für das neue Objekt: `STANDARD`, `NEARLINE`, `COLDLINE` oder `ARCHIVE`. Wenn weggelassen, wird der Standardwert des Buckets verwendet"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.dXBsb2FkLW9iamVjdA.option.c3RvcmFnZV9jbGFzcw.display_name": {
+          "source": "Storage Class",
+          "message": "Speicherklasse"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.dXBsb2FkLW9iamVjdA.option.c3RvcmFnZV9jbGFzcw.short_desc": {
+          "source": "The storage class to store the object with",
+          "message": "Die Speicherklasse, mit der das Objekt gespeichert werden soll"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.action.dXBsb2FkLW9iamVjdA.short_desc": {
+          "source": "Upload content to a bucket",
+          "message": "Inhalt in einen Bucket hochladen"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.desc": {
+          "source": "Provides access to [Google Cloud Storage](https://cloud.google.com/storage) — Google's object storage service — through its [JSON API](https://cloud.google.com/storage/docs/json_api).\n\n**Common use cases**:\n- **Object storage**: upload, download, copy, and delete objects, with resumable uploads for large content\n- **Bucket browsing**: list buckets and list objects by prefix, optionally rolled up into synthetic folders with a delimiter\n- **Metadata management**: read and update content type, cache headers, and user-defined metadata\n- **Sharing**: generate time-limited signed URLs that grant access to a single object with no credentials\n- **Concatenation**: compose up to 32 objects into one without downloading them\n\nThis application is also a file-location target, so a `conn://` location can read and write objects through a Google Cloud Storage connection, and it can supply the `gs://` inputs and outputs that the Vertex AI and Google Document AI applications take.\n\n**Object names are a flat key space**: `/` is an ordinary character in an object name and not a path separator, so names are used verbatim and are never split or normalized. `dir/`, `a//b` and `/leading` are all valid, distinct object names.\n\nAuthentication uses a GCP service account or Application Default Credentials.\n\nGoogle Cloud and Google Cloud Storage are trademarks of Google LLC",
+          "message": "Bietet Zugriff auf [Google Cloud Storage](https://cloud.google.com/storage) – Googles Objektspeicherdienst – über dessen [JSON API](https://cloud.google.com/storage/docs/json_api).\n\n**Typische Anwendungsfälle**:\n- **Objektspeicher**: Hochladen, Herunterladen, Kopieren und Löschen von Objekten mit fortsetzbaren Uploads für große Inhalte\n- **Bucket-Browsing**: Auflisten von Buckets und Objekten nach Präfix, optional zusammengefasst in synthetische Ordner mit einem Trennzeichen\n- **Metadatenverwaltung**: Lesen und Aktualisieren von Inhaltstyp, Cache-Headern und benutzerdefinierten Metadaten\n- **Freigabe**: Generieren von zeitlich begrenzten signierten URLs, die Zugriff auf ein einzelnes Objekt ohne Anmeldedaten gewähren\n- **Verkettung**: Bis zu 32 Objekte zu einem zusammenfügen, ohne sie herunterzuladen\n\nDiese Anwendung ist auch ein Dateispeicherort-Ziel, sodass ein `conn://`-Speicherort Objekte über eine Google Cloud Storage-Verbindung lesen und schreiben kann und die `gs://`-Ein- und Ausgaben bereitstellen kann, die die Anwendungen Vertex AI und Google Document AI akzeptieren.\n\n**Objektnamen sind ein flacher Schlüsselraum**: `/` ist ein normales Zeichen in einem Objektnamen und kein Pfadtrennzeichen, daher werden Namen unverändert verwendet und niemals aufgeteilt oder normalisiert. `dir/`, `a//b` und `/leading` sind allesamt gültige, eindeutige Objektnamen.\n\nDie Authentifizierung verwendet ein GCP-Dienstkonto oder Application Default Credentials.\n\nGoogle Cloud und Google Cloud Storage sind Marken von Google LLC"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.display_name": {
+          "source": "Google Cloud Storage",
+          "message": "Google Cloud Storage"
+        },
+        "app.R29vZ2xlQ2xvdWRTdG9yYWdl.short_desc": {
+          "source": "Google Cloud Storage object storage",
+          "message": "Google Cloud Storage-Objektspeicher"
+        }
+      }
+    }
+  }
+}

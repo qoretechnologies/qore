@@ -1,0 +1,1565 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "ja": {
+      "messages": {
+        "app.TGVtbGlzdA.action.Y3JlYXRlLWNhbXBhaWdu.desc": {
+          "source": "Create a new Lemlist campaign with the specified name.",
+          "message": "指定した名前で新しいLemlistキャンペーンを作成します。"
+        },
+        "app.TGVtbGlzdA.action.Y3JlYXRlLWNhbXBhaWdu.display_name": {
+          "source": "Create Campaign",
+          "message": "キャンペーンを作成"
+        },
+        "app.TGVtbGlzdA.action.Y3JlYXRlLWNhbXBhaWdu.option.bmFtZQ.desc": {
+          "source": "The name of the campaign to create",
+          "message": "作成するキャンペーンの名前"
+        },
+        "app.TGVtbGlzdA.action.Y3JlYXRlLWNhbXBhaWdu.option.bmFtZQ.display_name": {
+          "source": "Campaign Name",
+          "message": "キャンペーン名"
+        },
+        "app.TGVtbGlzdA.action.Y3JlYXRlLWNhbXBhaWdu.option.bmFtZQ.short_desc": {
+          "source": "Name for the new campaign",
+          "message": "新しいキャンペーンの名前"
+        },
+        "app.TGVtbGlzdA.action.Y3JlYXRlLWNhbXBhaWdu.short_desc": {
+          "source": "Create a new campaign",
+          "message": "新しいキャンペーンを作成"
+        },
+        "app.TGVtbGlzdA.action.Y3JlYXRlLWNvbnRhY3Q.desc": {
+          "source": "Create a new contact in Lemlist.",
+          "message": "Lemlistに新しい連絡先を作成します。"
+        },
+        "app.TGVtbGlzdA.action.Y3JlYXRlLWNvbnRhY3Q.display_name": {
+          "source": "Create Contact",
+          "message": "コンタクトを作成"
+        },
+        "app.TGVtbGlzdA.action.Y3JlYXRlLWNvbnRhY3Q.option.Y29tcGFueU5hbWU.desc": {
+          "source": "The name of the company the contact works for",
+          "message": "コンタクトの勤務先会社名"
+        },
+        "app.TGVtbGlzdA.action.Y3JlYXRlLWNvbnRhY3Q.option.Y29tcGFueU5hbWU.display_name": {
+          "source": "Company Name",
+          "message": "会社名"
+        },
+        "app.TGVtbGlzdA.action.Y3JlYXRlLWNvbnRhY3Q.option.Y29tcGFueU5hbWU.short_desc": {
+          "source": "Contact company name",
+          "message": "連絡先の会社名"
+        },
+        "app.TGVtbGlzdA.action.Y3JlYXRlLWNvbnRhY3Q.option.ZW1haWw.desc": {
+          "source": "The email address of the contact (used as the unique identifier)",
+          "message": "連絡先のメールアドレス（一意識別子として使用）"
+        },
+        "app.TGVtbGlzdA.action.Y3JlYXRlLWNvbnRhY3Q.option.ZW1haWw.display_name": {
+          "source": "Email",
+          "message": "メール"
+        },
+        "app.TGVtbGlzdA.action.Y3JlYXRlLWNvbnRhY3Q.option.ZW1haWw.short_desc": {
+          "source": "Contact email address",
+          "message": "連絡先のメールアドレス"
+        },
+        "app.TGVtbGlzdA.action.Y3JlYXRlLWNvbnRhY3Q.option.Zmlyc3ROYW1l.desc": {
+          "source": "The first name of the contact",
+          "message": "コンタクトの名"
+        },
+        "app.TGVtbGlzdA.action.Y3JlYXRlLWNvbnRhY3Q.option.Zmlyc3ROYW1l.display_name": {
+          "source": "First Name",
+          "message": "名"
+        },
+        "app.TGVtbGlzdA.action.Y3JlYXRlLWNvbnRhY3Q.option.Zmlyc3ROYW1l.short_desc": {
+          "source": "Contact first name",
+          "message": "連絡先の名"
+        },
+        "app.TGVtbGlzdA.action.Y3JlYXRlLWNvbnRhY3Q.option.bGFzdE5hbWU.desc": {
+          "source": "The last name of the contact",
+          "message": "コンタクトの姓"
+        },
+        "app.TGVtbGlzdA.action.Y3JlYXRlLWNvbnRhY3Q.option.bGFzdE5hbWU.display_name": {
+          "source": "Last Name",
+          "message": "姓"
+        },
+        "app.TGVtbGlzdA.action.Y3JlYXRlLWNvbnRhY3Q.option.bGFzdE5hbWU.short_desc": {
+          "source": "Contact last name",
+          "message": "連絡先の姓"
+        },
+        "app.TGVtbGlzdA.action.Y3JlYXRlLWNvbnRhY3Q.option.bGlua2VkaW5Vcmw.desc": {
+          "source": "The LinkedIn profile URL of the contact",
+          "message": "連絡先のLinkedInプロフィールのURL"
+        },
+        "app.TGVtbGlzdA.action.Y3JlYXRlLWNvbnRhY3Q.option.bGlua2VkaW5Vcmw.display_name": {
+          "source": "LinkedIn URL",
+          "message": "LinkedIn URL"
+        },
+        "app.TGVtbGlzdA.action.Y3JlYXRlLWNvbnRhY3Q.option.bGlua2VkaW5Vcmw.short_desc": {
+          "source": "Contact LinkedIn profile URL",
+          "message": "連絡先のLinkedInプロファイルURL"
+        },
+        "app.TGVtbGlzdA.action.Y3JlYXRlLWNvbnRhY3Q.option.cGhvbmU.desc": {
+          "source": "The phone number of the contact",
+          "message": "連絡先の電話番号"
+        },
+        "app.TGVtbGlzdA.action.Y3JlYXRlLWNvbnRhY3Q.option.cGhvbmU.display_name": {
+          "source": "Phone",
+          "message": "電話番号"
+        },
+        "app.TGVtbGlzdA.action.Y3JlYXRlLWNvbnRhY3Q.option.cGhvbmU.short_desc": {
+          "source": "Contact phone number",
+          "message": "連絡先の電話番号"
+        },
+        "app.TGVtbGlzdA.action.Y3JlYXRlLWNvbnRhY3Q.option.d2Vic2l0ZQ.desc": {
+          "source": "The website URL associated with the contact",
+          "message": "連絡先に関連付けられたWebサイトのURL"
+        },
+        "app.TGVtbGlzdA.action.Y3JlYXRlLWNvbnRhY3Q.option.d2Vic2l0ZQ.display_name": {
+          "source": "Website",
+          "message": "ウェブサイト"
+        },
+        "app.TGVtbGlzdA.action.Y3JlYXRlLWNvbnRhY3Q.option.d2Vic2l0ZQ.short_desc": {
+          "source": "Contact or company website",
+          "message": "連絡先または会社のWebサイト"
+        },
+        "app.TGVtbGlzdA.action.Y3JlYXRlLWNvbnRhY3Q.short_desc": {
+          "source": "Create a new contact",
+          "message": "新しいコンタクトを作成"
+        },
+        "app.TGVtbGlzdA.action.Y3JlYXRlLWxlYWQ.desc": {
+          "source": "Add a new lead to a Lemlist campaign. The lead will be enrolled in the campaign's outreach sequence.",
+          "message": "Lemlistキャンペーンに新しいリードを追加します。リードはキャンペーンのアウトリーチシーケンスに登録されます。"
+        },
+        "app.TGVtbGlzdA.action.Y3JlYXRlLWxlYWQ.display_name": {
+          "source": "Add Lead to Campaign",
+          "message": "キャンペーンにリードを追加"
+        },
+        "app.TGVtbGlzdA.action.Y3JlYXRlLWxlYWQ.option.Y29tcGFueU5hbWU.desc": {
+          "source": "The name of the company the lead works for",
+          "message": "リードが所属する会社の名前"
+        },
+        "app.TGVtbGlzdA.action.Y3JlYXRlLWxlYWQ.option.Y29tcGFueU5hbWU.display_name": {
+          "source": "Company Name",
+          "message": "会社名"
+        },
+        "app.TGVtbGlzdA.action.Y3JlYXRlLWxlYWQ.option.Y29tcGFueU5hbWU.short_desc": {
+          "source": "Lead company name",
+          "message": "リードの会社名"
+        },
+        "app.TGVtbGlzdA.action.Y3JlYXRlLWxlYWQ.option.Y2FtcGFpZ25JZA.desc": {
+          "source": "The identifier of the campaign to add this lead to",
+          "message": "このリードを追加するキャンペーンの識別子"
+        },
+        "app.TGVtbGlzdA.action.Y3JlYXRlLWxlYWQ.option.Y2FtcGFpZ25JZA.display_name": {
+          "source": "Campaign ID",
+          "message": "キャンペーンID"
+        },
+        "app.TGVtbGlzdA.action.Y3JlYXRlLWxlYWQ.option.Y2FtcGFpZ25JZA.short_desc": {
+          "source": "Campaign to add the lead to",
+          "message": "リードを追加するキャンペーン"
+        },
+        "app.TGVtbGlzdA.action.Y3JlYXRlLWxlYWQ.option.ZW1haWw.desc": {
+          "source": "The email address of the lead (used as the unique identifier)",
+          "message": "リードのメールアドレス（一意識別子として使用されます）"
+        },
+        "app.TGVtbGlzdA.action.Y3JlYXRlLWxlYWQ.option.ZW1haWw.display_name": {
+          "source": "Email",
+          "message": "メール"
+        },
+        "app.TGVtbGlzdA.action.Y3JlYXRlLWxlYWQ.option.ZW1haWw.short_desc": {
+          "source": "Lead email address",
+          "message": "リードのメールアドレス"
+        },
+        "app.TGVtbGlzdA.action.Y3JlYXRlLWxlYWQ.option.Zmlyc3ROYW1l.desc": {
+          "source": "The first name of the lead",
+          "message": "リードの名"
+        },
+        "app.TGVtbGlzdA.action.Y3JlYXRlLWxlYWQ.option.Zmlyc3ROYW1l.display_name": {
+          "source": "First Name",
+          "message": "名"
+        },
+        "app.TGVtbGlzdA.action.Y3JlYXRlLWxlYWQ.option.Zmlyc3ROYW1l.short_desc": {
+          "source": "Lead first name",
+          "message": "リードの名"
+        },
+        "app.TGVtbGlzdA.action.Y3JlYXRlLWxlYWQ.option.bGFzdE5hbWU.desc": {
+          "source": "The last name of the lead",
+          "message": "リードの姓"
+        },
+        "app.TGVtbGlzdA.action.Y3JlYXRlLWxlYWQ.option.bGFzdE5hbWU.display_name": {
+          "source": "Last Name",
+          "message": "姓"
+        },
+        "app.TGVtbGlzdA.action.Y3JlYXRlLWxlYWQ.option.bGFzdE5hbWU.short_desc": {
+          "source": "Lead last name",
+          "message": "リードの姓"
+        },
+        "app.TGVtbGlzdA.action.Y3JlYXRlLWxlYWQ.option.bGlua2VkaW5Vcmw.desc": {
+          "source": "The LinkedIn profile URL of the lead",
+          "message": "リードのLinkedInプロファイルURL"
+        },
+        "app.TGVtbGlzdA.action.Y3JlYXRlLWxlYWQ.option.bGlua2VkaW5Vcmw.display_name": {
+          "source": "LinkedIn URL",
+          "message": "LinkedIn URL"
+        },
+        "app.TGVtbGlzdA.action.Y3JlYXRlLWxlYWQ.option.bGlua2VkaW5Vcmw.short_desc": {
+          "source": "Lead LinkedIn profile URL",
+          "message": "リードのLinkedInプロファイルURL"
+        },
+        "app.TGVtbGlzdA.action.Y3JlYXRlLWxlYWQ.option.cGhvbmU.desc": {
+          "source": "The phone number of the lead",
+          "message": "リードの電話番号"
+        },
+        "app.TGVtbGlzdA.action.Y3JlYXRlLWxlYWQ.option.cGhvbmU.display_name": {
+          "source": "Phone",
+          "message": "電話番号"
+        },
+        "app.TGVtbGlzdA.action.Y3JlYXRlLWxlYWQ.option.cGhvbmU.short_desc": {
+          "source": "Lead phone number",
+          "message": "リードの電話番号"
+        },
+        "app.TGVtbGlzdA.action.Y3JlYXRlLWxlYWQ.option.d2Vic2l0ZQ.desc": {
+          "source": "The website URL associated with the lead",
+          "message": "リードに関連付けられたWebサイトのURL"
+        },
+        "app.TGVtbGlzdA.action.Y3JlYXRlLWxlYWQ.option.d2Vic2l0ZQ.display_name": {
+          "source": "Website",
+          "message": "ウェブサイト"
+        },
+        "app.TGVtbGlzdA.action.Y3JlYXRlLWxlYWQ.option.d2Vic2l0ZQ.short_desc": {
+          "source": "Lead or company website",
+          "message": "リードまたは会社のWebサイト"
+        },
+        "app.TGVtbGlzdA.action.Y3JlYXRlLWxlYWQ.short_desc": {
+          "source": "Add a lead to a campaign",
+          "message": "キャンペーンにリードを追加"
+        },
+        "app.TGVtbGlzdA.action.Y3JlYXRlLXRhc2s.desc": {
+          "source": "Create a new manual task in Lemlist for a lead (e.g., email, LinkedIn message, call).",
+          "message": "Lemlistでリードに対する新しい手動タスク（メール、LinkedInメッセージ、電話など）を作成します。"
+        },
+        "app.TGVtbGlzdA.action.Y3JlYXRlLXRhc2s.display_name": {
+          "source": "Create Task",
+          "message": "タスクを作成"
+        },
+        "app.TGVtbGlzdA.action.Y3JlYXRlLXRhc2s.option.Y2FtcGFpZ25JZA.desc": {
+          "source": "The identifier of the campaign this task belongs to",
+          "message": "このタスクが属するキャンペーンの識別子"
+        },
+        "app.TGVtbGlzdA.action.Y3JlYXRlLXRhc2s.option.Y2FtcGFpZ25JZA.display_name": {
+          "source": "Campaign ID",
+          "message": "キャンペーンID"
+        },
+        "app.TGVtbGlzdA.action.Y3JlYXRlLXRhc2s.option.Y2FtcGFpZ25JZA.short_desc": {
+          "source": "Campaign to associate the task with",
+          "message": "タスクを関連付けるキャンペーン"
+        },
+        "app.TGVtbGlzdA.action.Y3JlYXRlLXRhc2s.option.YXNzaWduZWRUbw.desc": {
+          "source": "The email or identifier of the user to assign this task to",
+          "message": "このタスクを割り当てるユーザーのメールアドレスまたは識別子"
+        },
+        "app.TGVtbGlzdA.action.Y3JlYXRlLXRhc2s.option.YXNzaWduZWRUbw.display_name": {
+          "source": "Assigned To",
+          "message": "担当者"
+        },
+        "app.TGVtbGlzdA.action.Y3JlYXRlLXRhc2s.option.YXNzaWduZWRUbw.short_desc": {
+          "source": "User to assign the task to",
+          "message": "タスクを割り当てるユーザー"
+        },
+        "app.TGVtbGlzdA.action.Y3JlYXRlLXRhc2s.option.ZHVlRGF0ZQ.desc": {
+          "source": "Date and time when this task is due",
+          "message": "このタスクの期限日時"
+        },
+        "app.TGVtbGlzdA.action.Y3JlYXRlLXRhc2s.option.ZHVlRGF0ZQ.display_name": {
+          "source": "Due Date",
+          "message": "期日"
+        },
+        "app.TGVtbGlzdA.action.Y3JlYXRlLXRhc2s.option.ZHVlRGF0ZQ.short_desc": {
+          "source": "Task due date",
+          "message": "タスクの期限"
+        },
+        "app.TGVtbGlzdA.action.Y3JlYXRlLXRhc2s.option.bGVhZElk.desc": {
+          "source": "The identifier of the lead this task is for",
+          "message": "このタスクの対象となるリードの識別子"
+        },
+        "app.TGVtbGlzdA.action.Y3JlYXRlLXRhc2s.option.bGVhZElk.display_name": {
+          "source": "Lead ID",
+          "message": "リードID"
+        },
+        "app.TGVtbGlzdA.action.Y3JlYXRlLXRhc2s.option.bGVhZElk.short_desc": {
+          "source": "Lead to assign the task to",
+          "message": "タスクを割り当てるリード"
+        },
+        "app.TGVtbGlzdA.action.Y3JlYXRlLXRhc2s.option.dHlwZQ.allowed-value.c3RyaW5nOm1hbnVhbEVtYWls.desc": {
+          "source": "Manual email",
+          "message": "手動メール"
+        },
+        "app.TGVtbGlzdA.action.Y3JlYXRlLXRhc2s.option.dHlwZQ.allowed-value.c3RyaW5nOmFwaQ.desc": {
+          "source": "API task",
+          "message": "APIタスク"
+        },
+        "app.TGVtbGlzdA.action.Y3JlYXRlLXRhc2s.option.dHlwZQ.allowed-value.c3RyaW5nOmNhbGw.desc": {
+          "source": "Phone call",
+          "message": "電話"
+        },
+        "app.TGVtbGlzdA.action.Y3JlYXRlLXRhc2s.option.dHlwZQ.allowed-value.c3RyaW5nOmxpbmtlZGluSW52aXRl.desc": {
+          "source": "LinkedIn invite",
+          "message": "LinkedIn招待"
+        },
+        "app.TGVtbGlzdA.action.Y3JlYXRlLXRhc2s.option.dHlwZQ.allowed-value.c3RyaW5nOmxpbmtlZGluTWVzc2FnZQ.desc": {
+          "source": "LinkedIn message",
+          "message": "LinkedInメッセージ"
+        },
+        "app.TGVtbGlzdA.action.Y3JlYXRlLXRhc2s.option.dHlwZQ.desc": {
+          "source": "The type of manual task to create",
+          "message": "作成する手動タスクのタイプ"
+        },
+        "app.TGVtbGlzdA.action.Y3JlYXRlLXRhc2s.option.dHlwZQ.display_name": {
+          "source": "Task Type",
+          "message": "タスクタイプ"
+        },
+        "app.TGVtbGlzdA.action.Y3JlYXRlLXRhc2s.option.dHlwZQ.short_desc": {
+          "source": "Type of task to create",
+          "message": "作成するタスクのタイプ"
+        },
+        "app.TGVtbGlzdA.action.Y3JlYXRlLXRhc2s.short_desc": {
+          "source": "Create a manual task",
+          "message": "手動タスクを作成"
+        },
+        "app.TGVtbGlzdA.action.Z2V0LWNhbXBhaWdu.desc": {
+          "source": "Retrieve a single Lemlist campaign by its unique identifier.",
+          "message": "一意の識別子によって単一のLemlistキャンペーンを取得します。"
+        },
+        "app.TGVtbGlzdA.action.Z2V0LWNhbXBhaWdu.display_name": {
+          "source": "Get Campaign",
+          "message": "キャンペーンの取得"
+        },
+        "app.TGVtbGlzdA.action.Z2V0LWNhbXBhaWdu.option.Y2FtcGFpZ25JZA.desc": {
+          "source": "The unique identifier of the campaign to retrieve",
+          "message": "取得するキャンペーンの一意識別子"
+        },
+        "app.TGVtbGlzdA.action.Z2V0LWNhbXBhaWdu.option.Y2FtcGFpZ25JZA.display_name": {
+          "source": "Campaign ID",
+          "message": "キャンペーンID"
+        },
+        "app.TGVtbGlzdA.action.Z2V0LWNhbXBhaWdu.option.Y2FtcGFpZ25JZA.short_desc": {
+          "source": "ID of the campaign to retrieve",
+          "message": "取得するキャンペーンのID"
+        },
+        "app.TGVtbGlzdA.action.Z2V0LWNhbXBhaWdu.short_desc": {
+          "source": "Get a single campaign by ID",
+          "message": "IDで単一のキャンペーンを取得"
+        },
+        "app.TGVtbGlzdA.action.Z2V0LWNvbnRhY3Q.desc": {
+          "source": "Retrieve a single Lemlist contact by their email address.",
+          "message": "メールアドレスによって単一のLemlist連絡先を取得します。"
+        },
+        "app.TGVtbGlzdA.action.Z2V0LWNvbnRhY3Q.display_name": {
+          "source": "Get Contact",
+          "message": "連絡先の取得"
+        },
+        "app.TGVtbGlzdA.action.Z2V0LWNvbnRhY3Q.option.ZW1haWw.desc": {
+          "source": "The email address of the contact to retrieve",
+          "message": "取得する連絡先のメールアドレス"
+        },
+        "app.TGVtbGlzdA.action.Z2V0LWNvbnRhY3Q.option.ZW1haWw.display_name": {
+          "source": "Email",
+          "message": "メール"
+        },
+        "app.TGVtbGlzdA.action.Z2V0LWNvbnRhY3Q.option.ZW1haWw.short_desc": {
+          "source": "Email address of the contact",
+          "message": "連絡先のメールアドレス"
+        },
+        "app.TGVtbGlzdA.action.Z2V0LWNvbnRhY3Q.short_desc": {
+          "source": "Get a contact by email",
+          "message": "メールアドレスで連絡先を取得"
+        },
+        "app.TGVtbGlzdA.action.Z2V0LWxlYWQ.desc": {
+          "source": "Retrieve a single Lemlist lead by email address from a specific campaign.",
+          "message": "特定のキャンペーンからメールアドレスによって単一のLemlistリードを取得します。"
+        },
+        "app.TGVtbGlzdA.action.Z2V0LWxlYWQ.display_name": {
+          "source": "Get Lead",
+          "message": "リードを取得"
+        },
+        "app.TGVtbGlzdA.action.Z2V0LWxlYWQ.option.Y2FtcGFpZ25JZA.desc": {
+          "source": "The identifier of the campaign the lead belongs to",
+          "message": "リードが属するキャンペーンの識別子"
+        },
+        "app.TGVtbGlzdA.action.Z2V0LWxlYWQ.option.Y2FtcGFpZ25JZA.display_name": {
+          "source": "Campaign ID",
+          "message": "キャンペーンID"
+        },
+        "app.TGVtbGlzdA.action.Z2V0LWxlYWQ.option.Y2FtcGFpZ25JZA.short_desc": {
+          "source": "Campaign containing the lead",
+          "message": "リードが含まれるキャンペーン"
+        },
+        "app.TGVtbGlzdA.action.Z2V0LWxlYWQ.option.ZW1haWw.desc": {
+          "source": "The email address of the lead to retrieve",
+          "message": "取得するリードのメールアドレス"
+        },
+        "app.TGVtbGlzdA.action.Z2V0LWxlYWQ.option.ZW1haWw.display_name": {
+          "source": "Email",
+          "message": "メール"
+        },
+        "app.TGVtbGlzdA.action.Z2V0LWxlYWQ.option.ZW1haWw.short_desc": {
+          "source": "Lead email address",
+          "message": "リードのメールアドレス"
+        },
+        "app.TGVtbGlzdA.action.Z2V0LWxlYWQ.short_desc": {
+          "source": "Get a single lead from a campaign",
+          "message": "キャンペーンから単一のリードを取得"
+        },
+        "app.TGVtbGlzdA.action.Z2V0LXRhc2s.desc": {
+          "source": "Retrieve a single Lemlist manual task by its unique identifier.",
+          "message": "一意の識別子によって単一のLemlist手動タスクを取得します。"
+        },
+        "app.TGVtbGlzdA.action.Z2V0LXRhc2s.display_name": {
+          "source": "Get Task",
+          "message": "タスクの取得"
+        },
+        "app.TGVtbGlzdA.action.Z2V0LXRhc2s.option.dGFza0lk.desc": {
+          "source": "The unique identifier of the task to retrieve",
+          "message": "取得するタスクの一意の識別子"
+        },
+        "app.TGVtbGlzdA.action.Z2V0LXRhc2s.option.dGFza0lk.display_name": {
+          "source": "Task ID",
+          "message": "タスク ID"
+        },
+        "app.TGVtbGlzdA.action.Z2V0LXRhc2s.option.dGFza0lk.short_desc": {
+          "source": "ID of the task to retrieve",
+          "message": "取得するタスクのID"
+        },
+        "app.TGVtbGlzdA.action.Z2V0LXRhc2s.short_desc": {
+          "source": "Get a single task by ID",
+          "message": "IDで単一のタスクを取得"
+        },
+        "app.TGVtbGlzdA.action.ZGVsZXRlLWNvbnRhY3Q.desc": {
+          "source": "Delete a Lemlist contact by their email address.",
+          "message": "メールアドレスによってLemlist連絡先を削除します。"
+        },
+        "app.TGVtbGlzdA.action.ZGVsZXRlLWNvbnRhY3Q.display_name": {
+          "source": "Delete Contact",
+          "message": "連絡先を削除"
+        },
+        "app.TGVtbGlzdA.action.ZGVsZXRlLWNvbnRhY3Q.option.ZW1haWw.desc": {
+          "source": "The email address of the contact to delete",
+          "message": "削除する連絡先のメールアドレス"
+        },
+        "app.TGVtbGlzdA.action.ZGVsZXRlLWNvbnRhY3Q.option.ZW1haWw.display_name": {
+          "source": "Email",
+          "message": "メール"
+        },
+        "app.TGVtbGlzdA.action.ZGVsZXRlLWNvbnRhY3Q.option.ZW1haWw.short_desc": {
+          "source": "Contact email address to delete",
+          "message": "削除する連絡先のメールアドレス"
+        },
+        "app.TGVtbGlzdA.action.ZGVsZXRlLWNvbnRhY3Q.short_desc": {
+          "source": "Delete a contact",
+          "message": "連絡先の削除"
+        },
+        "app.TGVtbGlzdA.action.ZGVsZXRlLWxlYWQ.desc": {
+          "source": "Remove a lead from a Lemlist campaign. The lead will stop receiving outreach from that campaign.",
+          "message": "Lemlistキャンペーンからリードを削除します。リードはそのキャンペーンからのアウトリーチ受信を停止します。"
+        },
+        "app.TGVtbGlzdA.action.ZGVsZXRlLWxlYWQ.display_name": {
+          "source": "Remove Lead from Campaign",
+          "message": "キャンペーンからリードを削除"
+        },
+        "app.TGVtbGlzdA.action.ZGVsZXRlLWxlYWQ.option.Y2FtcGFpZ25JZA.desc": {
+          "source": "The identifier of the campaign to remove the lead from",
+          "message": "リードを削除するキャンペーンの識別子"
+        },
+        "app.TGVtbGlzdA.action.ZGVsZXRlLWxlYWQ.option.Y2FtcGFpZ25JZA.display_name": {
+          "source": "Campaign ID",
+          "message": "キャンペーンID"
+        },
+        "app.TGVtbGlzdA.action.ZGVsZXRlLWxlYWQ.option.Y2FtcGFpZ25JZA.short_desc": {
+          "source": "Campaign to remove the lead from",
+          "message": "リードを削除するキャンペーン"
+        },
+        "app.TGVtbGlzdA.action.ZGVsZXRlLWxlYWQ.option.ZW1haWw.desc": {
+          "source": "The email address of the lead to remove from the campaign",
+          "message": "キャンペーンから削除するリードのメールアドレス"
+        },
+        "app.TGVtbGlzdA.action.ZGVsZXRlLWxlYWQ.option.ZW1haWw.display_name": {
+          "source": "Email",
+          "message": "メール"
+        },
+        "app.TGVtbGlzdA.action.ZGVsZXRlLWxlYWQ.option.ZW1haWw.short_desc": {
+          "source": "Lead email address to delete",
+          "message": "削除するリードのメールアドレス"
+        },
+        "app.TGVtbGlzdA.action.ZGVsZXRlLWxlYWQ.short_desc": {
+          "source": "Remove a lead from a campaign",
+          "message": "キャンペーンからリードを削除"
+        },
+        "app.TGVtbGlzdA.action.ZGVsZXRlLXRhc2s.desc": {
+          "source": "Delete a Lemlist manual task by its unique identifier.",
+          "message": "一意の識別子によってLemlist手動タスクを削除します。"
+        },
+        "app.TGVtbGlzdA.action.ZGVsZXRlLXRhc2s.display_name": {
+          "source": "Delete Task",
+          "message": "タスクを削除"
+        },
+        "app.TGVtbGlzdA.action.ZGVsZXRlLXRhc2s.option.dGFza0lk.desc": {
+          "source": "The unique identifier of the task to delete",
+          "message": "削除するタスクの一意の識別子"
+        },
+        "app.TGVtbGlzdA.action.ZGVsZXRlLXRhc2s.option.dGFza0lk.display_name": {
+          "source": "Task ID",
+          "message": "タスク ID"
+        },
+        "app.TGVtbGlzdA.action.ZGVsZXRlLXRhc2s.option.dGFza0lk.short_desc": {
+          "source": "ID of the task to delete",
+          "message": "削除するタスクのID"
+        },
+        "app.TGVtbGlzdA.action.ZGVsZXRlLXRhc2s.short_desc": {
+          "source": "Delete a manual task",
+          "message": "手動タスクを削除"
+        },
+        "app.TGVtbGlzdA.action.ZW1haWwtY2xpY2tlZA.desc": {
+          "source": "Fires when a lead clicks a link in a Lemlist email. Provides campaign, lead, and sequence step details.",
+          "message": "リードがLemlistメール内のリンクをクリックしたときに発火します。キャンペーン、リード、シーケンスステップの詳細を提供します。"
+        },
+        "app.TGVtbGlzdA.action.ZW1haWwtY2xpY2tlZA.display_name": {
+          "source": "Email Link Clicked",
+          "message": "メールリンクがクリックされました"
+        },
+        "app.TGVtbGlzdA.action.ZW1haWwtY2xpY2tlZA.option.Y2FtcGFpZ25JZA.desc": {
+          "source": "Optionally filter events to a specific Lemlist campaign",
+          "message": "必要に応じてイベントを特定のLemlistキャンペーンでフィルタリングします"
+        },
+        "app.TGVtbGlzdA.action.ZW1haWwtY2xpY2tlZA.option.Y2FtcGFpZ25JZA.display_name": {
+          "source": "Campaign ID",
+          "message": "キャンペーンID"
+        },
+        "app.TGVtbGlzdA.action.ZW1haWwtY2xpY2tlZA.option.Y2FtcGFpZ25JZA.short_desc": {
+          "source": "Filter events to a specific campaign",
+          "message": "イベントを特定のキャンペーンでフィルタリング"
+        },
+        "app.TGVtbGlzdA.action.ZW1haWwtY2xpY2tlZA.short_desc": {
+          "source": "Trigger when a lead clicks a link",
+          "message": "リードがリンクをクリックしたときにトリガー"
+        },
+        "app.TGVtbGlzdA.action.ZW1haWwtYm91bmNlZA.desc": {
+          "source": "Fires when a Lemlist email bounces. Provides campaign and lead details for follow-up.",
+          "message": "Lemlistメールがバウンスしたときに発火します。フォローアップ用のキャンペーンおよびリードの詳細を提供します。"
+        },
+        "app.TGVtbGlzdA.action.ZW1haWwtYm91bmNlZA.display_name": {
+          "source": "Email Bounced",
+          "message": "メールのバウンス"
+        },
+        "app.TGVtbGlzdA.action.ZW1haWwtYm91bmNlZA.option.Y2FtcGFpZ25JZA.desc": {
+          "source": "Optionally filter events to a specific Lemlist campaign",
+          "message": "必要に応じてイベントを特定のLemlistキャンペーンでフィルタリングします"
+        },
+        "app.TGVtbGlzdA.action.ZW1haWwtYm91bmNlZA.option.Y2FtcGFpZ25JZA.display_name": {
+          "source": "Campaign ID",
+          "message": "キャンペーンID"
+        },
+        "app.TGVtbGlzdA.action.ZW1haWwtYm91bmNlZA.option.Y2FtcGFpZ25JZA.short_desc": {
+          "source": "Filter events to a specific campaign",
+          "message": "イベントを特定のキャンペーンでフィルタリング"
+        },
+        "app.TGVtbGlzdA.action.ZW1haWwtYm91bmNlZA.short_desc": {
+          "source": "Trigger when an email bounces",
+          "message": "メールがバウンスしたときにトリガー"
+        },
+        "app.TGVtbGlzdA.action.ZW1haWwtb3BlbmVk.desc": {
+          "source": "Fires when a lead opens a Lemlist email. Provides campaign, lead, and sequence step details.",
+          "message": "リードがLemlistメールを開封したときに発火します。キャンペーン、リード、シーケンスステップの詳細を提供します。"
+        },
+        "app.TGVtbGlzdA.action.ZW1haWwtb3BlbmVk.display_name": {
+          "source": "Email Opened",
+          "message": "メールが開封された時"
+        },
+        "app.TGVtbGlzdA.action.ZW1haWwtb3BlbmVk.option.Y2FtcGFpZ25JZA.desc": {
+          "source": "Optionally filter events to a specific Lemlist campaign",
+          "message": "必要に応じてイベントを特定のLemlistキャンペーンでフィルタリングします"
+        },
+        "app.TGVtbGlzdA.action.ZW1haWwtb3BlbmVk.option.Y2FtcGFpZ25JZA.display_name": {
+          "source": "Campaign ID",
+          "message": "キャンペーンID"
+        },
+        "app.TGVtbGlzdA.action.ZW1haWwtb3BlbmVk.option.Y2FtcGFpZ25JZA.short_desc": {
+          "source": "Filter events to a specific campaign",
+          "message": "イベントを特定のキャンペーンでフィルタリング"
+        },
+        "app.TGVtbGlzdA.action.ZW1haWwtb3BlbmVk.short_desc": {
+          "source": "Trigger when a lead opens an email",
+          "message": "リードがメールを開封したときにトリガー"
+        },
+        "app.TGVtbGlzdA.action.ZW1haWwtc2VudA.desc": {
+          "source": "Fires when a Lemlist email is sent to a lead. Provides campaign, lead, and sequence step details.",
+          "message": "Lemlist のメールがリードに送信されたときにトリガーされます。キャンペーン、リード、シーケンスステップの詳細を提供します。"
+        },
+        "app.TGVtbGlzdA.action.ZW1haWwtc2VudA.display_name": {
+          "source": "Email Sent",
+          "message": "メール送信完了"
+        },
+        "app.TGVtbGlzdA.action.ZW1haWwtc2VudA.option.Y2FtcGFpZ25JZA.desc": {
+          "source": "Optionally filter events to a specific Lemlist campaign",
+          "message": "必要に応じてイベントを特定のLemlistキャンペーンでフィルタリングします"
+        },
+        "app.TGVtbGlzdA.action.ZW1haWwtc2VudA.option.Y2FtcGFpZ25JZA.display_name": {
+          "source": "Campaign ID",
+          "message": "キャンペーンID"
+        },
+        "app.TGVtbGlzdA.action.ZW1haWwtc2VudA.option.Y2FtcGFpZ25JZA.short_desc": {
+          "source": "Filter events to a specific campaign",
+          "message": "イベントを特定のキャンペーンでフィルタリング"
+        },
+        "app.TGVtbGlzdA.action.ZW1haWwtc2VudA.short_desc": {
+          "source": "Trigger when an email is sent",
+          "message": "メールが送信されたときにトリガー"
+        },
+        "app.TGVtbGlzdA.action.ZW1haWwtcmVwbGllZA.desc": {
+          "source": "Fires when a lead replies to a Lemlist email. Provides campaign, lead, and sequence step details.",
+          "message": "リードが Lemlist のメールに返信したときにトリガーされます。キャンペーン、リード、シーケンスステップの詳細を提供します。"
+        },
+        "app.TGVtbGlzdA.action.ZW1haWwtcmVwbGllZA.display_name": {
+          "source": "Email Replied",
+          "message": "メール返信受信"
+        },
+        "app.TGVtbGlzdA.action.ZW1haWwtcmVwbGllZA.option.Y2FtcGFpZ25JZA.desc": {
+          "source": "Optionally filter events to a specific Lemlist campaign",
+          "message": "必要に応じてイベントを特定のLemlistキャンペーンでフィルタリングします"
+        },
+        "app.TGVtbGlzdA.action.ZW1haWwtcmVwbGllZA.option.Y2FtcGFpZ25JZA.display_name": {
+          "source": "Campaign ID",
+          "message": "キャンペーンID"
+        },
+        "app.TGVtbGlzdA.action.ZW1haWwtcmVwbGllZA.option.Y2FtcGFpZ25JZA.short_desc": {
+          "source": "Filter events to a specific campaign",
+          "message": "イベントを特定のキャンペーンでフィルタリング"
+        },
+        "app.TGVtbGlzdA.action.ZW1haWwtcmVwbGllZA.short_desc": {
+          "source": "Trigger when a lead replies to an email",
+          "message": "リードがメールに返信したときにトリガー"
+        },
+        "app.TGVtbGlzdA.action.bGVhZC1pbnRlcmVzdGVk.desc": {
+          "source": "Fires when a lead is marked as interested in Lemlist. This is a key engagement signal for sales follow-up.",
+          "message": "Lemlist でリードが興味ありとしてマークされたときにトリガーされます。営業フォローアップのための重要なエンゲージメントシグナルです。"
+        },
+        "app.TGVtbGlzdA.action.bGVhZC1pbnRlcmVzdGVk.display_name": {
+          "source": "Lead Marked Interested",
+          "message": "リードが興味ありとマークされたとき"
+        },
+        "app.TGVtbGlzdA.action.bGVhZC1pbnRlcmVzdGVk.option.Y2FtcGFpZ25JZA.desc": {
+          "source": "Optionally filter events to a specific Lemlist campaign",
+          "message": "必要に応じてイベントを特定のLemlistキャンペーンでフィルタリングします"
+        },
+        "app.TGVtbGlzdA.action.bGVhZC1pbnRlcmVzdGVk.option.Y2FtcGFpZ25JZA.display_name": {
+          "source": "Campaign ID",
+          "message": "キャンペーンID"
+        },
+        "app.TGVtbGlzdA.action.bGVhZC1pbnRlcmVzdGVk.option.Y2FtcGFpZ25JZA.short_desc": {
+          "source": "Filter events to a specific campaign",
+          "message": "イベントを特定のキャンペーンでフィルタリング"
+        },
+        "app.TGVtbGlzdA.action.bGVhZC1pbnRlcmVzdGVk.short_desc": {
+          "source": "Trigger when a lead is marked as interested",
+          "message": "リードが興味ありとしてマークされたときにトリガー"
+        },
+        "app.TGVtbGlzdA.action.bGVhZC1ub3QtaW50ZXJlc3RlZA.desc": {
+          "source": "Fires when a lead is marked as not interested in Lemlist. Use to suppress future outreach or update CRM records.",
+          "message": "Lemlist でリードが興味なしとしてマークされたときにトリガーされます。今後のアウトリーチの抑制や CRM レコードの更新に使用します。"
+        },
+        "app.TGVtbGlzdA.action.bGVhZC1ub3QtaW50ZXJlc3RlZA.display_name": {
+          "source": "Lead Marked Not Interested",
+          "message": "リードが興味なしとマークされたとき"
+        },
+        "app.TGVtbGlzdA.action.bGVhZC1ub3QtaW50ZXJlc3RlZA.option.Y2FtcGFpZ25JZA.desc": {
+          "source": "Optionally filter events to a specific Lemlist campaign",
+          "message": "必要に応じてイベントを特定のLemlistキャンペーンでフィルタリングします"
+        },
+        "app.TGVtbGlzdA.action.bGVhZC1ub3QtaW50ZXJlc3RlZA.option.Y2FtcGFpZ25JZA.display_name": {
+          "source": "Campaign ID",
+          "message": "キャンペーンID"
+        },
+        "app.TGVtbGlzdA.action.bGVhZC1ub3QtaW50ZXJlc3RlZA.option.Y2FtcGFpZ25JZA.short_desc": {
+          "source": "Filter events to a specific campaign",
+          "message": "イベントを特定のキャンペーンでフィルタリング"
+        },
+        "app.TGVtbGlzdA.action.bGVhZC1ub3QtaW50ZXJlc3RlZA.short_desc": {
+          "source": "Trigger when a lead is marked as not interested",
+          "message": "リードが興味なしとしてマークされたときにトリガー"
+        },
+        "app.TGVtbGlzdA.action.bGlzdC10YXNrcw.desc": {
+          "source": "Retrieve a list of Lemlist manual tasks.",
+          "message": "Lemlist の手動タスク一覧を取得します。"
+        },
+        "app.TGVtbGlzdA.action.bGlzdC10YXNrcw.display_name": {
+          "source": "List Tasks",
+          "message": "タスクの一覧表示"
+        },
+        "app.TGVtbGlzdA.action.bGlzdC10YXNrcw.option.bGltaXQ.desc": {
+          "source": "Maximum number of tasks to return (max 100)",
+          "message": "返されるタスクの最大数 (最大 100)"
+        },
+        "app.TGVtbGlzdA.action.bGlzdC10YXNrcw.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "上限"
+        },
+        "app.TGVtbGlzdA.action.bGlzdC10YXNrcw.option.bGltaXQ.short_desc": {
+          "source": "Maximum number of results",
+          "message": "結果の最大件数"
+        },
+        "app.TGVtbGlzdA.action.bGlzdC10YXNrcw.short_desc": {
+          "source": "List manual tasks",
+          "message": "手動タスクを一覧取得"
+        },
+        "app.TGVtbGlzdA.action.bGlzdC1hY3Rpdml0aWVz.desc": {
+          "source": "Retrieve a list of Lemlist activities with optional filtering by type, campaign, or lead.",
+          "message": "タイプ、キャンペーン、またはリードによるオプションのフィルタリングを使用して、Lemlist のアクティビティ一覧を取得します。"
+        },
+        "app.TGVtbGlzdA.action.bGlzdC1hY3Rpdml0aWVz.display_name": {
+          "source": "List Activities",
+          "message": "アクティビティを一覧表示"
+        },
+        "app.TGVtbGlzdA.action.bGlzdC1hY3Rpdml0aWVz.option.Y2FtcGFpZ25JZA.desc": {
+          "source": "Filter activities by campaign identifier",
+          "message": "キャンペーン識別子でアクティビティをフィルタリング"
+        },
+        "app.TGVtbGlzdA.action.bGlzdC1hY3Rpdml0aWVz.option.Y2FtcGFpZ25JZA.display_name": {
+          "source": "Campaign ID",
+          "message": "キャンペーンID"
+        },
+        "app.TGVtbGlzdA.action.bGlzdC1hY3Rpdml0aWVz.option.Y2FtcGFpZ25JZA.short_desc": {
+          "source": "Filter by campaign",
+          "message": "キャンペーンでフィルタリング"
+        },
+        "app.TGVtbGlzdA.action.bGlzdC1hY3Rpdml0aWVz.option.aXNGaXJzdA.desc": {
+          "source": "If `True`, only returns the first occurrence of each activity type per lead per campaign",
+          "message": "`True` の場合、キャンペーンごとのリードあたり各アクティビティタイプの最初の発生のみを返します"
+        },
+        "app.TGVtbGlzdA.action.bGlzdC1hY3Rpdml0aWVz.option.aXNGaXJzdA.display_name": {
+          "source": "First Occurrence Only",
+          "message": "初回発生のみ"
+        },
+        "app.TGVtbGlzdA.action.bGlzdC1hY3Rpdml0aWVz.option.aXNGaXJzdA.short_desc": {
+          "source": "Only return first occurrences",
+          "message": "初回の発生のみを返す"
+        },
+        "app.TGVtbGlzdA.action.bGlzdC1hY3Rpdml0aWVz.option.bGVhZElk.desc": {
+          "source": "Filter activities by lead identifier",
+          "message": "リード識別子でアクティビティをフィルタリング"
+        },
+        "app.TGVtbGlzdA.action.bGlzdC1hY3Rpdml0aWVz.option.bGVhZElk.display_name": {
+          "source": "Lead ID",
+          "message": "リードID"
+        },
+        "app.TGVtbGlzdA.action.bGlzdC1hY3Rpdml0aWVz.option.bGVhZElk.short_desc": {
+          "source": "Filter by lead",
+          "message": "リードでフィルタリング"
+        },
+        "app.TGVtbGlzdA.action.bGlzdC1hY3Rpdml0aWVz.option.dHlwZQ.allowed-value.c3RyaW5nOm5vdEludGVyZXN0ZWQ.desc": {
+          "source": "Lead not interested",
+          "message": "リードの興味なし"
+        },
+        "app.TGVtbGlzdA.action.bGlzdC1hY3Rpdml0aWVz.option.dHlwZQ.allowed-value.c3RyaW5nOmVtYWlsc09wZW5lZA.desc": {
+          "source": "Emails opened",
+          "message": "メール開封"
+        },
+        "app.TGVtbGlzdA.action.bGlzdC1hY3Rpdml0aWVz.option.dHlwZQ.allowed-value.c3RyaW5nOmVtYWlsc0JvdW5jZWQ.desc": {
+          "source": "Emails bounced",
+          "message": "メールバウンス"
+        },
+        "app.TGVtbGlzdA.action.bGlzdC1hY3Rpdml0aWVz.option.dHlwZQ.allowed-value.c3RyaW5nOmVtYWlsc0NsaWNrZWQ.desc": {
+          "source": "Emails clicked",
+          "message": "メールクリック"
+        },
+        "app.TGVtbGlzdA.action.bGlzdC1hY3Rpdml0aWVz.option.dHlwZQ.allowed-value.c3RyaW5nOmVtYWlsc1JlcGxpZWQ.desc": {
+          "source": "Emails replied",
+          "message": "メール返信"
+        },
+        "app.TGVtbGlzdA.action.bGlzdC1hY3Rpdml0aWVz.option.dHlwZQ.allowed-value.c3RyaW5nOmVtYWlsc1NlbnQ.desc": {
+          "source": "Emails sent",
+          "message": "メール送信"
+        },
+        "app.TGVtbGlzdA.action.bGlzdC1hY3Rpdml0aWVz.option.dHlwZQ.allowed-value.c3RyaW5nOmludGVyZXN0ZWQ.desc": {
+          "source": "Lead interested",
+          "message": "リードの興味あり"
+        },
+        "app.TGVtbGlzdA.action.bGlzdC1hY3Rpdml0aWVz.option.dHlwZQ.desc": {
+          "source": "Filter activities by their type",
+          "message": "タイプでアクティビティをフィルタリング"
+        },
+        "app.TGVtbGlzdA.action.bGlzdC1hY3Rpdml0aWVz.option.dHlwZQ.display_name": {
+          "source": "Activity Type",
+          "message": "アクティビティタイプ"
+        },
+        "app.TGVtbGlzdA.action.bGlzdC1hY3Rpdml0aWVz.option.dHlwZQ.short_desc": {
+          "source": "Filter by activity type",
+          "message": "アクティビティタイプでフィルタリング"
+        },
+        "app.TGVtbGlzdA.action.bGlzdC1hY3Rpdml0aWVz.short_desc": {
+          "source": "List email and engagement activities",
+          "message": "メールおよびエンゲージメントアクティビティを一覧取得"
+        },
+        "app.TGVtbGlzdA.action.bGlzdC1jYW1wYWlnbnM.desc": {
+          "source": "Retrieve a list of Lemlist campaigns with optional filtering by status.",
+          "message": "ステータスによるオプションのフィルタリングを使用して、Lemlist のキャンペーン一覧を取得します。"
+        },
+        "app.TGVtbGlzdA.action.bGlzdC1jYW1wYWlnbnM.display_name": {
+          "source": "List Campaigns",
+          "message": "キャンペーン一覧"
+        },
+        "app.TGVtbGlzdA.action.bGlzdC1jYW1wYWlnbnM.option.c3RhdHVz.allowed-value.c3RyaW5nOmFyY2hpdmVk.desc": {
+          "source": "Archived campaigns",
+          "message": "アーカイブ済みキャンペーン"
+        },
+        "app.TGVtbGlzdA.action.bGlzdC1jYW1wYWlnbnM.option.c3RhdHVz.allowed-value.c3RyaW5nOmRyYWZ0.desc": {
+          "source": "Draft campaigns",
+          "message": "下書きのキャンペーン"
+        },
+        "app.TGVtbGlzdA.action.bGlzdC1jYW1wYWlnbnM.option.c3RhdHVz.allowed-value.c3RyaW5nOmVuZGVk.desc": {
+          "source": "Ended campaigns",
+          "message": "終了したキャンペーン"
+        },
+        "app.TGVtbGlzdA.action.bGlzdC1jYW1wYWlnbnM.option.c3RhdHVz.allowed-value.c3RyaW5nOmVycm9ycw.desc": {
+          "source": "Campaigns with errors",
+          "message": "エラーのあるキャンペーン"
+        },
+        "app.TGVtbGlzdA.action.bGlzdC1jYW1wYWlnbnM.option.c3RhdHVz.allowed-value.c3RyaW5nOnBhdXNlZA.desc": {
+          "source": "Paused campaigns",
+          "message": "一時停止中のキャンペーン"
+        },
+        "app.TGVtbGlzdA.action.bGlzdC1jYW1wYWlnbnM.option.c3RhdHVz.allowed-value.c3RyaW5nOnJ1bm5pbmc.desc": {
+          "source": "Running campaigns",
+          "message": "実行中のキャンペーン"
+        },
+        "app.TGVtbGlzdA.action.bGlzdC1jYW1wYWlnbnM.option.c3RhdHVz.desc": {
+          "source": "Filter campaigns by their current status",
+          "message": "現在のステータスでキャンペーンをフィルタリング"
+        },
+        "app.TGVtbGlzdA.action.bGlzdC1jYW1wYWlnbnM.option.c3RhdHVz.display_name": {
+          "source": "Status",
+          "message": "ステータス"
+        },
+        "app.TGVtbGlzdA.action.bGlzdC1jYW1wYWlnbnM.option.c3RhdHVz.short_desc": {
+          "source": "Filter by campaign status",
+          "message": "キャンペーンのステータスでフィルター"
+        },
+        "app.TGVtbGlzdA.action.bGlzdC1jYW1wYWlnbnM.short_desc": {
+          "source": "List and search campaigns",
+          "message": "キャンペーンの一覧表示と検索"
+        },
+        "app.TGVtbGlzdA.action.bGlzdC1jb250YWN0cw.desc": {
+          "source": "Retrieve a list of Lemlist contacts. Optionally filter by email to get a specific contact.",
+          "message": "Lemlist の連絡先一覧を取得します。メールアドレスでフィルタリングして特定の連絡先を取得することもできます。"
+        },
+        "app.TGVtbGlzdA.action.bGlzdC1jb250YWN0cw.display_name": {
+          "source": "List Contacts",
+          "message": "連絡先一覧"
+        },
+        "app.TGVtbGlzdA.action.bGlzdC1jb250YWN0cw.option.ZW1haWw.desc": {
+          "source": "The email address of the contact to retrieve. The Lemlist v2 API requires a specific email address to look up contacts.",
+          "message": "取得する連絡先のメールアドレス。Lemlist v2 API では連絡先の検索に特定のメールアドレスが必要です。"
+        },
+        "app.TGVtbGlzdA.action.bGlzdC1jb250YWN0cw.option.ZW1haWw.display_name": {
+          "source": "Email",
+          "message": "メール"
+        },
+        "app.TGVtbGlzdA.action.bGlzdC1jb250YWN0cw.option.ZW1haWw.short_desc": {
+          "source": "Email address of the contact to retrieve",
+          "message": "取得する連絡先のメールアドレス"
+        },
+        "app.TGVtbGlzdA.action.bGlzdC1jb250YWN0cw.short_desc": {
+          "source": "List contacts",
+          "message": "連絡先を一覧取得"
+        },
+        "app.TGVtbGlzdA.action.bGlzdC1sZWFkcw.desc": {
+          "source": "Retrieve a list of leads enrolled in a specific Lemlist campaign.",
+          "message": "特定の Lemlist キャンペーンに登録されているリードの一覧を取得します。"
+        },
+        "app.TGVtbGlzdA.action.bGlzdC1sZWFkcw.display_name": {
+          "source": "List Leads",
+          "message": "リードを一覧表示"
+        },
+        "app.TGVtbGlzdA.action.bGlzdC1sZWFkcw.option.Y2FtcGFpZ25JZA.desc": {
+          "source": "The identifier of the campaign to retrieve leads from",
+          "message": "リードを取得するキャンペーンの識別子"
+        },
+        "app.TGVtbGlzdA.action.bGlzdC1sZWFkcw.option.Y2FtcGFpZ25JZA.display_name": {
+          "source": "Campaign ID",
+          "message": "キャンペーンID"
+        },
+        "app.TGVtbGlzdA.action.bGlzdC1sZWFkcw.option.Y2FtcGFpZ25JZA.short_desc": {
+          "source": "Campaign to list leads from",
+          "message": "リードを一覧取得するキャンペーン"
+        },
+        "app.TGVtbGlzdA.action.bGlzdC1sZWFkcw.short_desc": {
+          "source": "List leads in a campaign",
+          "message": "キャンペーン内のリードを一覧取得"
+        },
+        "app.TGVtbGlzdA.action.bWFrZS1hcGktY2FsbA.desc": {
+          "source": "Make a custom HTTP / REST API call to **Lemlist** using the configured connection's authentication.\n\nSpecify the HTTP method, the URI path (relative to the connection's API base URL), optional query parameters, headers, and request body. The response is returned as a hash containing the status code, response headers, and response body.\n\nUse this action for endpoints that are not yet exposed as first-class actions on this app.",
+          "message": "設定された接続の認証を使用して、**Lemlist** へのカスタム HTTP / REST API コールを実行します。\n\nHTTP メソッド、URI パス (接続の API ベース URL からの相対パス)、オプションのクエリパラメータ、ヘッダー、リクエスト本文を指定します。レスポンスはステータスコード、レスポンスヘッダー、レスポンス本文を含むハッシュとして返されます。\n\nこのアプリでファーストクラスのアクションとしてまだ公開されていないエンドポイントに対してこのアクションを使用します。"
+        },
+        "app.TGVtbGlzdA.action.bWFrZS1hcGktY2FsbA.display_name": {
+          "source": "Make an API call",
+          "message": "API コールを実行"
+        },
+        "app.TGVtbGlzdA.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.desc": {
+          "source": "The request body. The effective type depends on `body_type`: JSON/form/YAML expect a hash, XML/text expect a string, multipart expects a file structure, binary expects raw bytes.",
+          "message": "リクエストボディ。有効な型は`body_type`に依存します。JSON/form/YAMLはハッシュを期待し、XML/textは文字列を期待し、multipartはファイル構造を期待し、binaryは生バイトを期待します。"
+        },
+        "app.TGVtbGlzdA.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.display_name": {
+          "source": "Body",
+          "message": "ボディ"
+        },
+        "app.TGVtbGlzdA.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.short_desc": {
+          "source": "The request body",
+          "message": "リクエストボディ"
+        },
+        "app.TGVtbGlzdA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.desc": {
+          "source": "Upload a file using `multipart/form-data`. The body must be a @ref DataProvider::FileDataType \"FileDataType\" structure (filename + content + mime_type). The framework builds the multipart envelope and sets the boundary header.",
+          "message": "`multipart/form-data`を使用してファイルをアップロードします。ボディは@ref DataProvider::FileDataType \"FileDataType\"構造（filename + content + mime_type）である必要があります。フレームワークがmultipartエンベロープを構築し、boundaryヘッダーを設定します。"
+        },
+        "app.TGVtbGlzdA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.display_name": {
+          "source": "Multipart Form",
+          "message": "マルチパートフォーム"
+        },
+        "app.TGVtbGlzdA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.short_desc": {
+          "source": "Upload a file using multipart/form-data",
+          "message": "multipart/form-dataを使用してファイルをアップロード"
+        },
+        "app.TGVtbGlzdA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.desc": {
+          "source": "Pass the body to the REST client unchanged; the client decides serialization based on its configured `data` option and the value type",
+          "message": "ボディを変更せずにRESTクライアントに渡します。クライアントは設定された`data`オプションと値の型に基づいてシリアライズを決定します"
+        },
+        "app.TGVtbGlzdA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.display_name": {
+          "source": "Auto",
+          "message": "自動"
+        },
+        "app.TGVtbGlzdA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.short_desc": {
+          "source": "Pass-through; use connection serialization and let the REST client decide",
+          "message": "パススルー。接続のシリアライズを使用し、RESTクライアントに決定させます"
+        },
+        "app.TGVtbGlzdA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.desc": {
+          "source": "Send the body as raw bytes. The body must be a binary value. Sets `Content-Type: application/octet-stream` unless overridden by `hdr`.",
+          "message": "ボディを生バイトとして送信します。ボディはバイナリ値である必要があります。`hdr`によってオーバーライドされない限り、`Content-Type: application/octet-stream`を設定します。"
+        },
+        "app.TGVtbGlzdA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.display_name": {
+          "source": "Raw Binary",
+          "message": "生バイナリ"
+        },
+        "app.TGVtbGlzdA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.short_desc": {
+          "source": "Send body as raw bytes",
+          "message": "ボディを生バイトとして送信"
+        },
+        "app.TGVtbGlzdA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.desc": {
+          "source": "Serialize a hash of form fields as `application/x-www-form-urlencoded`. The body must be a hash whose values are scalars (strings/numbers/booleans).",
+          "message": "フォームフィールドのハッシュを`application/x-www-form-urlencoded`としてシリアライズします。ボディは値がスカラー（文字列/数値/ブール値）のハッシュである必要があります。"
+        },
+        "app.TGVtbGlzdA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.display_name": {
+          "source": "Form (URL-encoded)",
+          "message": "フォーム (URLエンコード)"
+        },
+        "app.TGVtbGlzdA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.short_desc": {
+          "source": "Serialize body as application/x-www-form-urlencoded form fields",
+          "message": "ボディをapplication/x-www-form-urlencodedフォームフィールドとしてシリアライズ"
+        },
+        "app.TGVtbGlzdA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.desc": {
+          "source": "Serialize the body as JSON; sets `Content-Type: application/json`. The body should be a hash, list, or scalar value.",
+          "message": "ボディをJSONとしてシリアライズします。`Content-Type: application/json`を設定します。ボディはハッシュ、リスト、またはスカラー値である必要があります。"
+        },
+        "app.TGVtbGlzdA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.display_name": {
+          "source": "JSON",
+          "message": "JSON"
+        },
+        "app.TGVtbGlzdA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.short_desc": {
+          "source": "Serialize body as JSON",
+          "message": "ボディをJSONとしてシリアライズ"
+        },
+        "app.TGVtbGlzdA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.desc": {
+          "source": "Send the body as plain text. The body must be a string. Sets `Content-Type: text/plain`.",
+          "message": "ボディをプレーンテキストとして送信します。ボディは文字列である必要があります。`Content-Type: text/plain`を設定します。"
+        },
+        "app.TGVtbGlzdA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.display_name": {
+          "source": "Plain Text",
+          "message": "プレーンテキスト"
+        },
+        "app.TGVtbGlzdA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.short_desc": {
+          "source": "Send body as text/plain",
+          "message": "ボディをtext/plainとして送信"
+        },
+        "app.TGVtbGlzdA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.desc": {
+          "source": "Send the body as XML. If the body is a hash it is serialized to XML; if it is a string it is sent verbatim. Sets `Content-Type: application/xml`.",
+          "message": "ボディをXMLとして送信します。ボディがハッシュの場合はXMLにシリアライズされ、文字列の場合はそのまま送信されます。`Content-Type: application/xml`を設定します。"
+        },
+        "app.TGVtbGlzdA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.display_name": {
+          "source": "XML",
+          "message": "XML"
+        },
+        "app.TGVtbGlzdA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.short_desc": {
+          "source": "Send body as XML",
+          "message": "ボディをXMLとして送信"
+        },
+        "app.TGVtbGlzdA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.desc": {
+          "source": "Send the body as YAML. If the body is a hash it is serialized to YAML; if it is a string it is sent verbatim. Sets `Content-Type: application/x-yaml`.",
+          "message": "ボディをYAMLとして送信します。ボディがハッシュの場合はYAMLにシリアライズされ、文字列の場合はそのまま送信されます。`Content-Type: application/x-yaml`を設定します。"
+        },
+        "app.TGVtbGlzdA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.display_name": {
+          "source": "YAML",
+          "message": "YAML"
+        },
+        "app.TGVtbGlzdA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.short_desc": {
+          "source": "Send body as YAML",
+          "message": "ボディをYAMLとして送信"
+        },
+        "app.TGVtbGlzdA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.desc": {
+          "source": "Selects the body serialization mode and the corresponding `Content-Type` header. Changing this field reshapes the `body` editor - selecting JSON exposes a JSON editor, selecting Multipart Form exposes a file picker, and so on.",
+          "message": "ボディのシリアライズモードと対応する`Content-Type`ヘッダーを選択します。このフィールドを変更すると`body`エディターの形状が変わります。JSONを選択するとJSONエディターが表示され、マルチパートフォームを選択するとファイルピッカーが表示される、などです。"
+        },
+        "app.TGVtbGlzdA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.display_name": {
+          "source": "Body Type",
+          "message": "ボディタイプ"
+        },
+        "app.TGVtbGlzdA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.short_desc": {
+          "source": "How the body is serialized and what Content-Type is sent",
+          "message": "ボディのシリアライズ方法および送信されるContent-Type"
+        },
+        "app.TGVtbGlzdA.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.desc": {
+          "source": "If `True`, non-2xx HTTP responses return as the normal response hash (with the actual status code) instead of raising `REST-RESPONSE-ERROR`. Useful for handling 4xx/5xx as data - e.g. checking whether a resource exists. Overrides the connection's `error_passthru` setting for this call only.",
+          "message": "`True`の場合、2xx以外のHTTPレスポンスは`REST-RESPONSE-ERROR`を発生させる代わりに（実際のステータスコードを含む）通常のレスポンスハッシュとして返されます。リソースが存在するかどうかの確認など、4xx/5xxをデータとして処理する場合に便利です。この呼び出しに限り、接続の`error_passthru`設定をオーバーライドします。"
+        },
+        "app.TGVtbGlzdA.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.display_name": {
+          "source": "Return Errors as Data",
+          "message": "エラーをデータとして返す"
+        },
+        "app.TGVtbGlzdA.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.short_desc": {
+          "source": "Return non-2xx responses normally instead of throwing",
+          "message": "例外をスローする代わりに2xx以外のレスポンスを通常通り返す"
+        },
+        "app.TGVtbGlzdA.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.desc": {
+          "source": "Optional list of HTTP status codes treated as success. If set and the response status is not in this list, the action throws `REST-STATUS-ERROR`. When unset, the REST client's default behavior applies (typically: 2xx is success, non-2xx throws).",
+          "message": "成功として扱われるHTTPステータスコードのオプションリスト。設定されていてレスポンスステータスがこのリストに含まれない場合、アクションは`REST-STATUS-ERROR`をスローします。未設定の場合、RESTクライアントのデフォルト動作が適用されます（通常：2xxは成功、2xx以外はスロー）。"
+        },
+        "app.TGVtbGlzdA.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.display_name": {
+          "source": "Expected Status Codes",
+          "message": "期待されるステータスコード"
+        },
+        "app.TGVtbGlzdA.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.short_desc": {
+          "source": "Response status codes treated as success",
+          "message": "成功として扱われるレスポンスステータスコード"
+        },
+        "app.TGVtbGlzdA.action.bWFrZS1hcGktY2FsbA.option.aGRy.desc": {
+          "source": "Hash of custom headers added to the request. These override any default headers set by `body_type` (e.g. supplying `Content-Type` here wins over the body-type default).",
+          "message": "リクエストに追加されるカスタムヘッダーのハッシュ。これらは`body_type`によって設定されたデフォルトヘッダーをオーバーライドします（例：ここで`Content-Type`を指定すると、ボディタイプのデフォルトより優先されます）。"
+        },
+        "app.TGVtbGlzdA.action.bWFrZS1hcGktY2FsbA.option.aGRy.display_name": {
+          "source": "Custom Headers",
+          "message": "カスタムヘッダー"
+        },
+        "app.TGVtbGlzdA.action.bWFrZS1hcGktY2FsbA.option.aGRy.short_desc": {
+          "source": "Extra request headers",
+          "message": "追加のリクエストヘッダー"
+        },
+        "app.TGVtbGlzdA.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.desc": {
+          "source": "If `True`, the response hash includes a `debug` sub-hash containing the request method/URL/headers (with sensitive values redacted), request and response sizes, and round-trip duration. Useful when investigating slow or failing calls. Off by default to keep responses lean.",
+          "message": "`True`の場合、レスポンスハッシュにはリクエストメソッド/URL/ヘッダー（機密値は伏字処理済み）、リクエストとレスポンスのサイズ、およびラウンドトリップ時間を含む`debug`サブハッシュが含まれます。遅い呼び出しや失敗した呼び出しを調査する際に便利です。レスポンスを軽量に保つため、デフォルトではオフになっています。"
+        },
+        "app.TGVtbGlzdA.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.display_name": {
+          "source": "Include Debug Info",
+          "message": "デバッグ情報を含める"
+        },
+        "app.TGVtbGlzdA.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.short_desc": {
+          "source": "Include request/timing/size debug info in the response",
+          "message": "レスポンスにリクエスト/タイミング/サイズのデバッグ情報を含める"
+        },
+        "app.TGVtbGlzdA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.desc": {
+          "source": "HTTP `OPTIONS`",
+          "message": "HTTP `OPTIONS`"
+        },
+        "app.TGVtbGlzdA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.display_name": {
+          "source": "OPTIONS",
+          "message": "OPTIONS"
+        },
+        "app.TGVtbGlzdA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.short_desc": {
+          "source": "HTTP OPTIONS",
+          "message": "HTTP OPTIONS"
+        },
+        "app.TGVtbGlzdA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.desc": {
+          "source": "HTTP `DELETE`",
+          "message": "HTTP `DELETE`"
+        },
+        "app.TGVtbGlzdA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.display_name": {
+          "source": "DELETE",
+          "message": "DELETE"
+        },
+        "app.TGVtbGlzdA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.short_desc": {
+          "source": "HTTP DELETE",
+          "message": "HTTP DELETE"
+        },
+        "app.TGVtbGlzdA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.desc": {
+          "source": "HTTP `GET`",
+          "message": "HTTP `GET`"
+        },
+        "app.TGVtbGlzdA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.display_name": {
+          "source": "GET",
+          "message": "GET"
+        },
+        "app.TGVtbGlzdA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.short_desc": {
+          "source": "HTTP GET",
+          "message": "HTTP GET"
+        },
+        "app.TGVtbGlzdA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.desc": {
+          "source": "HTTP `HEAD`",
+          "message": "HTTP `HEAD`"
+        },
+        "app.TGVtbGlzdA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.display_name": {
+          "source": "HEAD",
+          "message": "HEAD"
+        },
+        "app.TGVtbGlzdA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.short_desc": {
+          "source": "HTTP HEAD",
+          "message": "HTTP HEAD"
+        },
+        "app.TGVtbGlzdA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.desc": {
+          "source": "HTTP `PATCH`",
+          "message": "HTTP `PATCH`"
+        },
+        "app.TGVtbGlzdA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.display_name": {
+          "source": "PATCH",
+          "message": "PATCH"
+        },
+        "app.TGVtbGlzdA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.short_desc": {
+          "source": "HTTP PATCH",
+          "message": "HTTP PATCH"
+        },
+        "app.TGVtbGlzdA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.desc": {
+          "source": "HTTP `POST`",
+          "message": "HTTP `POST`"
+        },
+        "app.TGVtbGlzdA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.display_name": {
+          "source": "POST",
+          "message": "POST"
+        },
+        "app.TGVtbGlzdA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.short_desc": {
+          "source": "HTTP POST",
+          "message": "HTTP POST"
+        },
+        "app.TGVtbGlzdA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.desc": {
+          "source": "HTTP `PUT`",
+          "message": "HTTP `PUT`"
+        },
+        "app.TGVtbGlzdA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.display_name": {
+          "source": "PUT",
+          "message": "PUT"
+        },
+        "app.TGVtbGlzdA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.short_desc": {
+          "source": "HTTP PUT",
+          "message": "HTTP PUT"
+        },
+        "app.TGVtbGlzdA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.desc": {
+          "source": "HTTP `TRACE`",
+          "message": "HTTP `TRACE`"
+        },
+        "app.TGVtbGlzdA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.display_name": {
+          "source": "TRACE",
+          "message": "TRACE"
+        },
+        "app.TGVtbGlzdA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.short_desc": {
+          "source": "HTTP TRACE",
+          "message": "HTTP TRACE"
+        },
+        "app.TGVtbGlzdA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "リクエストに使用するHTTPメソッド"
+        },
+        "app.TGVtbGlzdA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.display_name": {
+          "source": "HTTP Method",
+          "message": "HTTPメソッド"
+        },
+        "app.TGVtbGlzdA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.short_desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "リクエストに使用するHTTPメソッド"
+        },
+        "app.TGVtbGlzdA.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain `{name}` placeholders that are replaced from `path_vars`. Example: `/users/{id}/comments`.",
+          "message": "接続のAPIベースURLに対する相対URIパス。`path_vars`から置換される`{name}`プレースホルダーを含めることができます。例: `/users/{id}/comments`。"
+        },
+        "app.TGVtbGlzdA.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.display_name": {
+          "source": "URI Path",
+          "message": "URIパス"
+        },
+        "app.TGVtbGlzdA.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.short_desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain '{name}' placeholders that are replaced from 'path_vars'. Example: '/users/{id}/comments'",
+          "message": "接続のAPIベースURLに対する相対URIパス。'path_vars' から置換される '{name}' プレースホルダーを含めることができます。例: '/users/{id}/comments'"
+        },
+        "app.TGVtbGlzdA.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.desc": {
+          "source": "Hash of values substituted into `{name}` placeholders in the URI path. Example: with `path = /users/{id}` and `path_vars = {id: 123}` the framework sends `/users/123`. Values are URL-encoded.",
+          "message": "URIパス内の `{name}` プレースホルダーに置換される値のハッシュ。例: `path = /users/{id}` と `path_vars = {id: 123}` を指定すると、フレームワークは `/users/123` を送信します。値はURLエンコードされます。"
+        },
+        "app.TGVtbGlzdA.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.display_name": {
+          "source": "Path Variables",
+          "message": "パス変数"
+        },
+        "app.TGVtbGlzdA.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.short_desc": {
+          "source": "Values for {name} placeholders in path",
+          "message": "パス内の {name} プレースホルダーの値"
+        },
+        "app.TGVtbGlzdA.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.desc": {
+          "source": "Hash of query string parameters to append to the URI path. Values are URL-encoded; list values are joined with `,`.",
+          "message": "URIパスに追加するクエリ文字列パラメータのハッシュ。値はURLエンコードされます。リスト値は `,` で結合されます。"
+        },
+        "app.TGVtbGlzdA.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.display_name": {
+          "source": "Query Arguments",
+          "message": "クエリ引数"
+        },
+        "app.TGVtbGlzdA.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.short_desc": {
+          "source": "Query string parameters",
+          "message": "クエリ文字列パラメータ"
+        },
+        "app.TGVtbGlzdA.action.bWFrZS1hcGktY2FsbA.short_desc": {
+          "source": "Make a custom API call to Lemlist",
+          "message": "Lemlist へのカスタム API コールを実行"
+        },
+        "app.TGVtbGlzdA.action.c3RhcnQtY2FtcGFpZ24.desc": {
+          "source": "Start or resume a paused Lemlist campaign to begin or continue sending emails.",
+          "message": "メールの送信を開始または続行するために、一時停止中の Lemlist キャンペーンを開始または再開します。"
+        },
+        "app.TGVtbGlzdA.action.c3RhcnQtY2FtcGFpZ24.display_name": {
+          "source": "Start Campaign",
+          "message": "キャンペーンを開始"
+        },
+        "app.TGVtbGlzdA.action.c3RhcnQtY2FtcGFpZ24.option.Y2FtcGFpZ25JZA.desc": {
+          "source": "The unique identifier of the campaign to start",
+          "message": "開始するキャンペーンの一意の識別子"
+        },
+        "app.TGVtbGlzdA.action.c3RhcnQtY2FtcGFpZ24.option.Y2FtcGFpZ25JZA.display_name": {
+          "source": "Campaign ID",
+          "message": "キャンペーンID"
+        },
+        "app.TGVtbGlzdA.action.c3RhcnQtY2FtcGFpZ24.option.Y2FtcGFpZ25JZA.short_desc": {
+          "source": "ID of the campaign to start",
+          "message": "開始するキャンペーンの ID"
+        },
+        "app.TGVtbGlzdA.action.c3RhcnQtY2FtcGFpZ24.short_desc": {
+          "source": "Start or resume a campaign",
+          "message": "キャンペーンを開始または再開"
+        },
+        "app.TGVtbGlzdA.action.cGF1c2UtY2FtcGFpZ24.desc": {
+          "source": "Pause an active Lemlist campaign to temporarily stop sending emails.",
+          "message": "メールの送信を一時的に停止するために、アクティブな Lemlist キャンペーンを一時停止します。"
+        },
+        "app.TGVtbGlzdA.action.cGF1c2UtY2FtcGFpZ24.display_name": {
+          "source": "Pause Campaign",
+          "message": "キャンペーンを一時停止"
+        },
+        "app.TGVtbGlzdA.action.cGF1c2UtY2FtcGFpZ24.option.Y2FtcGFpZ25JZA.desc": {
+          "source": "The unique identifier of the campaign to pause",
+          "message": "一時停止するキャンペーンの一意の識別子"
+        },
+        "app.TGVtbGlzdA.action.cGF1c2UtY2FtcGFpZ24.option.Y2FtcGFpZ25JZA.display_name": {
+          "source": "Campaign ID",
+          "message": "キャンペーンID"
+        },
+        "app.TGVtbGlzdA.action.cGF1c2UtY2FtcGFpZ24.option.Y2FtcGFpZ25JZA.short_desc": {
+          "source": "ID of the campaign to pause",
+          "message": "一時停止するキャンペーンの ID"
+        },
+        "app.TGVtbGlzdA.action.cGF1c2UtY2FtcGFpZ24.short_desc": {
+          "source": "Pause a running campaign",
+          "message": "実行中のキャンペーンを一時停止"
+        },
+        "app.TGVtbGlzdA.action.dXBkYXRlLWNvbnRhY3Q.desc": {
+          "source": "Update the properties of an existing Lemlist contact by email address.",
+          "message": "メールアドレスによって既存の Lemlist 連絡先のプロパティを更新します。"
+        },
+        "app.TGVtbGlzdA.action.dXBkYXRlLWNvbnRhY3Q.display_name": {
+          "source": "Update Contact",
+          "message": "連絡先を更新"
+        },
+        "app.TGVtbGlzdA.action.dXBkYXRlLWNvbnRhY3Q.option.Y29tcGFueU5hbWU.desc": {
+          "source": "Updated company name for the contact",
+          "message": "連絡先の更新後会社名"
+        },
+        "app.TGVtbGlzdA.action.dXBkYXRlLWNvbnRhY3Q.option.Y29tcGFueU5hbWU.display_name": {
+          "source": "Company Name",
+          "message": "会社名"
+        },
+        "app.TGVtbGlzdA.action.dXBkYXRlLWNvbnRhY3Q.option.Y29tcGFueU5hbWU.short_desc": {
+          "source": "Contact company name",
+          "message": "連絡先の会社名"
+        },
+        "app.TGVtbGlzdA.action.dXBkYXRlLWNvbnRhY3Q.option.ZW1haWw.desc": {
+          "source": "The email address of the contact to update (used as the unique identifier)",
+          "message": "更新する連絡先のメールアドレス (一意識別子として使用)"
+        },
+        "app.TGVtbGlzdA.action.dXBkYXRlLWNvbnRhY3Q.option.ZW1haWw.display_name": {
+          "source": "Email",
+          "message": "メール"
+        },
+        "app.TGVtbGlzdA.action.dXBkYXRlLWNvbnRhY3Q.option.ZW1haWw.short_desc": {
+          "source": "Contact email address to update",
+          "message": "更新する連絡先のメールアドレス"
+        },
+        "app.TGVtbGlzdA.action.dXBkYXRlLWNvbnRhY3Q.option.Zmlyc3ROYW1l.desc": {
+          "source": "Updated first name for the contact",
+          "message": "連絡先の更新後の名"
+        },
+        "app.TGVtbGlzdA.action.dXBkYXRlLWNvbnRhY3Q.option.Zmlyc3ROYW1l.display_name": {
+          "source": "First Name",
+          "message": "名"
+        },
+        "app.TGVtbGlzdA.action.dXBkYXRlLWNvbnRhY3Q.option.Zmlyc3ROYW1l.short_desc": {
+          "source": "Contact first name",
+          "message": "連絡先の名"
+        },
+        "app.TGVtbGlzdA.action.dXBkYXRlLWNvbnRhY3Q.option.bGFzdE5hbWU.desc": {
+          "source": "Updated last name for the contact",
+          "message": "連絡先の更新後の姓"
+        },
+        "app.TGVtbGlzdA.action.dXBkYXRlLWNvbnRhY3Q.option.bGFzdE5hbWU.display_name": {
+          "source": "Last Name",
+          "message": "姓"
+        },
+        "app.TGVtbGlzdA.action.dXBkYXRlLWNvbnRhY3Q.option.bGFzdE5hbWU.short_desc": {
+          "source": "Contact last name",
+          "message": "連絡先の姓"
+        },
+        "app.TGVtbGlzdA.action.dXBkYXRlLWNvbnRhY3Q.option.bGlua2VkaW5Vcmw.desc": {
+          "source": "Updated LinkedIn profile URL for the contact",
+          "message": "連絡先の更新後のLinkedInプロフィールURL"
+        },
+        "app.TGVtbGlzdA.action.dXBkYXRlLWNvbnRhY3Q.option.bGlua2VkaW5Vcmw.display_name": {
+          "source": "LinkedIn URL",
+          "message": "LinkedIn URL"
+        },
+        "app.TGVtbGlzdA.action.dXBkYXRlLWNvbnRhY3Q.option.bGlua2VkaW5Vcmw.short_desc": {
+          "source": "Contact LinkedIn profile URL",
+          "message": "連絡先のLinkedInプロファイルURL"
+        },
+        "app.TGVtbGlzdA.action.dXBkYXRlLWNvbnRhY3Q.option.cGhvbmU.desc": {
+          "source": "Updated phone number for the contact",
+          "message": "連絡先の更新後の電話番号"
+        },
+        "app.TGVtbGlzdA.action.dXBkYXRlLWNvbnRhY3Q.option.cGhvbmU.display_name": {
+          "source": "Phone",
+          "message": "電話番号"
+        },
+        "app.TGVtbGlzdA.action.dXBkYXRlLWNvbnRhY3Q.option.cGhvbmU.short_desc": {
+          "source": "Contact phone number",
+          "message": "連絡先の電話番号"
+        },
+        "app.TGVtbGlzdA.action.dXBkYXRlLWNvbnRhY3Q.option.d2Vic2l0ZQ.desc": {
+          "source": "Updated website URL for the contact",
+          "message": "連絡先の更新後のWebサイトURL"
+        },
+        "app.TGVtbGlzdA.action.dXBkYXRlLWNvbnRhY3Q.option.d2Vic2l0ZQ.display_name": {
+          "source": "Website",
+          "message": "ウェブサイト"
+        },
+        "app.TGVtbGlzdA.action.dXBkYXRlLWNvbnRhY3Q.option.d2Vic2l0ZQ.short_desc": {
+          "source": "Contact or company website",
+          "message": "連絡先または会社のWebサイト"
+        },
+        "app.TGVtbGlzdA.action.dXBkYXRlLWNvbnRhY3Q.short_desc": {
+          "source": "Update an existing contact",
+          "message": "既存の連絡先を更新"
+        },
+        "app.TGVtbGlzdA.action.dXBkYXRlLWxlYWQ.desc": {
+          "source": "Update the properties of an existing Lemlist lead by email address.",
+          "message": "メールアドレスで既存のLemlistリードのプロパティを更新します。"
+        },
+        "app.TGVtbGlzdA.action.dXBkYXRlLWxlYWQ.display_name": {
+          "source": "Update Lead",
+          "message": "リードを更新"
+        },
+        "app.TGVtbGlzdA.action.dXBkYXRlLWxlYWQ.option.Y29tcGFueU5hbWU.desc": {
+          "source": "Updated company name for the lead",
+          "message": "リードの更新後の会社名"
+        },
+        "app.TGVtbGlzdA.action.dXBkYXRlLWxlYWQ.option.Y29tcGFueU5hbWU.display_name": {
+          "source": "Company Name",
+          "message": "会社名"
+        },
+        "app.TGVtbGlzdA.action.dXBkYXRlLWxlYWQ.option.Y29tcGFueU5hbWU.short_desc": {
+          "source": "Lead company name",
+          "message": "リードの会社名"
+        },
+        "app.TGVtbGlzdA.action.dXBkYXRlLWxlYWQ.option.ZW1haWw.desc": {
+          "source": "The email address of the lead to update (used as identifier)",
+          "message": "更新するリードのメールアドレス（識別子として使用）"
+        },
+        "app.TGVtbGlzdA.action.dXBkYXRlLWxlYWQ.option.ZW1haWw.display_name": {
+          "source": "Email",
+          "message": "メール"
+        },
+        "app.TGVtbGlzdA.action.dXBkYXRlLWxlYWQ.option.ZW1haWw.short_desc": {
+          "source": "Lead email address to update",
+          "message": "更新するリードのメールアドレス"
+        },
+        "app.TGVtbGlzdA.action.dXBkYXRlLWxlYWQ.option.Zmlyc3ROYW1l.desc": {
+          "source": "Updated first name for the lead",
+          "message": "リードの更新後の名"
+        },
+        "app.TGVtbGlzdA.action.dXBkYXRlLWxlYWQ.option.Zmlyc3ROYW1l.display_name": {
+          "source": "First Name",
+          "message": "名"
+        },
+        "app.TGVtbGlzdA.action.dXBkYXRlLWxlYWQ.option.Zmlyc3ROYW1l.short_desc": {
+          "source": "Lead first name",
+          "message": "リードの名"
+        },
+        "app.TGVtbGlzdA.action.dXBkYXRlLWxlYWQ.option.aXNJbnRlcmVzdGVk.desc": {
+          "source": "Set to `True` to mark this lead as interested in your offer",
+          "message": "このリードをオファーに興味があるとマークするには `True` に設定します"
+        },
+        "app.TGVtbGlzdA.action.dXBkYXRlLWxlYWQ.option.aXNJbnRlcmVzdGVk.display_name": {
+          "source": "Is Interested",
+          "message": "興味あり"
+        },
+        "app.TGVtbGlzdA.action.dXBkYXRlLWxlYWQ.option.aXNJbnRlcmVzdGVk.short_desc": {
+          "source": "Mark the lead as interested or not",
+          "message": "リードに興味があるかどうかのフラグを設定"
+        },
+        "app.TGVtbGlzdA.action.dXBkYXRlLWxlYWQ.option.aXNQYXVzZWQ.desc": {
+          "source": "Set to `True` to pause outreach to this lead, `False` to resume",
+          "message": "このリードへのアウトリーチを一時停止するには `True` に、再開するには `False` に設定します"
+        },
+        "app.TGVtbGlzdA.action.dXBkYXRlLWxlYWQ.option.aXNQYXVzZWQ.display_name": {
+          "source": "Is Paused",
+          "message": "一時停止中"
+        },
+        "app.TGVtbGlzdA.action.dXBkYXRlLWxlYWQ.option.aXNQYXVzZWQ.short_desc": {
+          "source": "Pause or resume outreach to this lead",
+          "message": "このリードへのアウトリーチを一時停止または再開"
+        },
+        "app.TGVtbGlzdA.action.dXBkYXRlLWxlYWQ.option.bGFzdE5hbWU.desc": {
+          "source": "Updated last name for the lead",
+          "message": "リードの更新後の姓"
+        },
+        "app.TGVtbGlzdA.action.dXBkYXRlLWxlYWQ.option.bGFzdE5hbWU.display_name": {
+          "source": "Last Name",
+          "message": "姓"
+        },
+        "app.TGVtbGlzdA.action.dXBkYXRlLWxlYWQ.option.bGFzdE5hbWU.short_desc": {
+          "source": "Lead last name",
+          "message": "リードの姓"
+        },
+        "app.TGVtbGlzdA.action.dXBkYXRlLWxlYWQ.option.bGlua2VkaW5Vcmw.desc": {
+          "source": "Updated LinkedIn profile URL for the lead",
+          "message": "リードの更新後のLinkedInプロフィールURL"
+        },
+        "app.TGVtbGlzdA.action.dXBkYXRlLWxlYWQ.option.bGlua2VkaW5Vcmw.display_name": {
+          "source": "LinkedIn URL",
+          "message": "LinkedIn URL"
+        },
+        "app.TGVtbGlzdA.action.dXBkYXRlLWxlYWQ.option.bGlua2VkaW5Vcmw.short_desc": {
+          "source": "Lead LinkedIn profile URL",
+          "message": "リードのLinkedInプロファイルURL"
+        },
+        "app.TGVtbGlzdA.action.dXBkYXRlLWxlYWQ.option.cGhvbmU.desc": {
+          "source": "Updated phone number for the lead",
+          "message": "リードの更新後の電話番号"
+        },
+        "app.TGVtbGlzdA.action.dXBkYXRlLWxlYWQ.option.cGhvbmU.display_name": {
+          "source": "Phone",
+          "message": "電話番号"
+        },
+        "app.TGVtbGlzdA.action.dXBkYXRlLWxlYWQ.option.cGhvbmU.short_desc": {
+          "source": "Lead phone number",
+          "message": "リードの電話番号"
+        },
+        "app.TGVtbGlzdA.action.dXBkYXRlLWxlYWQ.option.d2Vic2l0ZQ.desc": {
+          "source": "Updated website URL for the lead",
+          "message": "リードの更新後のWebサイトURL"
+        },
+        "app.TGVtbGlzdA.action.dXBkYXRlLWxlYWQ.option.d2Vic2l0ZQ.display_name": {
+          "source": "Website",
+          "message": "ウェブサイト"
+        },
+        "app.TGVtbGlzdA.action.dXBkYXRlLWxlYWQ.option.d2Vic2l0ZQ.short_desc": {
+          "source": "Lead or company website",
+          "message": "リードまたは会社のWebサイト"
+        },
+        "app.TGVtbGlzdA.action.dXBkYXRlLWxlYWQ.short_desc": {
+          "source": "Update an existing lead",
+          "message": "既存のリードを更新します"
+        },
+        "app.TGVtbGlzdA.action.dXBkYXRlLXRhc2s.desc": {
+          "source": "Update a Lemlist manual task, such as marking it as done or changing the assignee.",
+          "message": "Lemlistの手動タスクを更新します（完了としてマークしたり担当者を変更したりするなど）。"
+        },
+        "app.TGVtbGlzdA.action.dXBkYXRlLXRhc2s.display_name": {
+          "source": "Update Task",
+          "message": "タスクの更新"
+        },
+        "app.TGVtbGlzdA.action.dXBkYXRlLXRhc2s.option.YXNzaWduZWRUbw.desc": {
+          "source": "Updated assignee for the task",
+          "message": "タスクの更新後の担当者"
+        },
+        "app.TGVtbGlzdA.action.dXBkYXRlLXRhc2s.option.YXNzaWduZWRUbw.display_name": {
+          "source": "Assigned To",
+          "message": "担当者"
+        },
+        "app.TGVtbGlzdA.action.dXBkYXRlLXRhc2s.option.YXNzaWduZWRUbw.short_desc": {
+          "source": "User to assign the task to",
+          "message": "タスクを割り当てるユーザー"
+        },
+        "app.TGVtbGlzdA.action.dXBkYXRlLXRhc2s.option.ZHVlRGF0ZQ.desc": {
+          "source": "Updated date and time when this task is due",
+          "message": "このタスクの更新後の期日日時"
+        },
+        "app.TGVtbGlzdA.action.dXBkYXRlLXRhc2s.option.ZHVlRGF0ZQ.display_name": {
+          "source": "Due Date",
+          "message": "期日"
+        },
+        "app.TGVtbGlzdA.action.dXBkYXRlLXRhc2s.option.ZHVlRGF0ZQ.short_desc": {
+          "source": "Updated task due date",
+          "message": "更新後のタスク期日"
+        },
+        "app.TGVtbGlzdA.action.dXBkYXRlLXRhc2s.option.c3RhdHVz.allowed-value.c3RyaW5nOmRvbmU.desc": {
+          "source": "Task completed",
+          "message": "タスク完了"
+        },
+        "app.TGVtbGlzdA.action.dXBkYXRlLXRhc2s.option.c3RhdHVz.allowed-value.c3RyaW5nOmlnbm9yZWQ.desc": {
+          "source": "Task ignored",
+          "message": "タスク無視"
+        },
+        "app.TGVtbGlzdA.action.dXBkYXRlLXRhc2s.option.c3RhdHVz.desc": {
+          "source": "The updated status of the task",
+          "message": "タスクの更新後のステータス"
+        },
+        "app.TGVtbGlzdA.action.dXBkYXRlLXRhc2s.option.c3RhdHVz.display_name": {
+          "source": "Status",
+          "message": "ステータス"
+        },
+        "app.TGVtbGlzdA.action.dXBkYXRlLXRhc2s.option.c3RhdHVz.short_desc": {
+          "source": "New task status",
+          "message": "新しいタスクステータス"
+        },
+        "app.TGVtbGlzdA.action.dXBkYXRlLXRhc2s.option.dGFza0lk.desc": {
+          "source": "The unique identifier of the task to update",
+          "message": "更新するタスクの一意識別子"
+        },
+        "app.TGVtbGlzdA.action.dXBkYXRlLXRhc2s.option.dGFza0lk.display_name": {
+          "source": "Task ID",
+          "message": "タスク ID"
+        },
+        "app.TGVtbGlzdA.action.dXBkYXRlLXRhc2s.option.dGFza0lk.short_desc": {
+          "source": "ID of the task to update",
+          "message": "更新するタスクのID"
+        },
+        "app.TGVtbGlzdA.action.dXBkYXRlLXRhc2s.short_desc": {
+          "source": "Update a task status",
+          "message": "タスクステータスを更新"
+        },
+        "app.TGVtbGlzdA.desc": {
+          "source": "Lemlist is a sales engagement platform enabling personalized outreach campaigns with email, LinkedIn, and multi-channel automation. This integration enables managing campaigns, leads, activities, tasks, and contacts, plus receiving real-time webhook notifications.\n\n**Features:**\n- Campaign management (create, pause, start)\n- Lead management (add, update, remove leads from campaigns)\n- Activity tracking (emails sent, opened, clicked, replied, bounced)\n- Task management (create and update manual tasks)\n- Contact management\n- Real-time webhooks for email and engagement events",
+          "message": "Lemlistは、メール、LinkedIn、マルチチャネルの自動化によるパーソナライズされたアウトリーチキャンペーンを可能にするセールスエンゲージメントプラットフォームです。この連携により、キャンペーン、リード、アクティビティ、タスク、連絡先の管理や、リアルタイムWebhook通知の受信が可能になります。\n\n**機能:**\n- キャンペーン管理（作成、一時停止、開始）\n- リード管理（キャンペーンへのリードの追加、更新、削除）\n- アクティビティ追跡（メール送信、開封、クリック、返信、バウンス）\n- タスク管理（手動タスクの作成および更新）\n- 連絡先管理\n- メールおよびエンゲージメントイベント用のリアルタイムWebhook"
+        },
+        "app.TGVtbGlzdA.display_name": {
+          "source": "Lemlist",
+          "message": "Lemlist"
+        },
+        "app.TGVtbGlzdA.short_desc": {
+          "source": "Lemlist sales outreach and email automation platform",
+          "message": "Lemlistセールスアウトリーチおよびメール自動化プラットフォーム"
+        }
+      }
+    }
+  }
+}

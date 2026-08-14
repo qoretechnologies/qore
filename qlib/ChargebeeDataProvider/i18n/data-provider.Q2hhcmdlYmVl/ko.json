@@ -1,0 +1,1337 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "ko": {
+      "messages": {
+        "app.Q2hhcmdlYmVl.action.Y29sbGVjdC1pbnZvaWNlLXBheW1lbnQ.desc": {
+          "source": "Collect payment for an outstanding invoice using the customer's payment method on file.",
+          "message": "고객의 등록된 결제 수단을 사용하여 미납 송장에 대한 결제를 수합합니다."
+        },
+        "app.Q2hhcmdlYmVl.action.Y29sbGVjdC1pbnZvaWNlLXBheW1lbnQ.display_name": {
+          "source": "Collect Invoice Payment",
+          "message": "송장 결제 수합"
+        },
+        "app.Q2hhcmdlYmVl.action.Y29sbGVjdC1pbnZvaWNlLXBheW1lbnQ.option.YW1vdW50.display_name": {
+          "source": "Amount",
+          "message": "금액"
+        },
+        "app.Q2hhcmdlYmVl.action.Y29sbGVjdC1pbnZvaWNlLXBheW1lbnQ.option.YW1vdW50.short_desc": {
+          "source": "Payment amount in cents",
+          "message": "센트 단위의 결제 금액"
+        },
+        "app.Q2hhcmdlYmVl.action.Y29sbGVjdC1pbnZvaWNlLXBheW1lbnQ.option.aWQ.display_name": {
+          "source": "Invoice ID",
+          "message": "인보이스 ID"
+        },
+        "app.Q2hhcmdlYmVl.action.Y29sbGVjdC1pbnZvaWNlLXBheW1lbnQ.option.aWQ.short_desc": {
+          "source": "The invoice to collect payment for",
+          "message": "결제를 수합할 송장"
+        },
+        "app.Q2hhcmdlYmVl.action.Y29sbGVjdC1pbnZvaWNlLXBheW1lbnQ.short_desc": {
+          "source": "Collect payment for an invoice",
+          "message": "송장에 대한 결제 수합"
+        },
+        "app.Q2hhcmdlYmVl.action.Y3JlYXRlLWN1c3RvbWVy.desc": {
+          "source": "Create a new customer in Chargebee with contact and billing information.",
+          "message": "Chargebee에서 연락처 및 청구 정보가 포함된 새 고객을 생성합니다."
+        },
+        "app.Q2hhcmdlYmVl.action.Y3JlYXRlLWN1c3RvbWVy.display_name": {
+          "source": "Create Customer",
+          "message": "고객 생성"
+        },
+        "app.Q2hhcmdlYmVl.action.Y3JlYXRlLWN1c3RvbWVy.option.ZW1haWw.display_name": {
+          "source": "Email",
+          "message": "이메일"
+        },
+        "app.Q2hhcmdlYmVl.action.Y3JlYXRlLWN1c3RvbWVy.option.ZW1haWw.short_desc": {
+          "source": "Customer email address",
+          "message": "고객 이메일 주소"
+        },
+        "app.Q2hhcmdlYmVl.action.Y3JlYXRlLWN1c3RvbWVy.option.Zmlyc3RfbmFtZQ.display_name": {
+          "source": "First Name",
+          "message": "이름"
+        },
+        "app.Q2hhcmdlYmVl.action.Y3JlYXRlLWN1c3RvbWVy.option.Zmlyc3RfbmFtZQ.short_desc": {
+          "source": "Customer first name",
+          "message": "고객 이름"
+        },
+        "app.Q2hhcmdlYmVl.action.Y3JlYXRlLWN1c3RvbWVy.option.bGFzdF9uYW1l.display_name": {
+          "source": "Last Name",
+          "message": "성"
+        },
+        "app.Q2hhcmdlYmVl.action.Y3JlYXRlLWN1c3RvbWVy.option.bGFzdF9uYW1l.short_desc": {
+          "source": "Customer last name",
+          "message": "고객 성"
+        },
+        "app.Q2hhcmdlYmVl.action.Y3JlYXRlLWN1c3RvbWVy.short_desc": {
+          "source": "Create a new customer",
+          "message": "새 고객 생성"
+        },
+        "app.Q2hhcmdlYmVl.action.Y3JlYXRlLWNvdXBvbg.desc": {
+          "source": "Create a new coupon in Chargebee for discounts on subscriptions or invoices.",
+          "message": "구독 또는 송장 할인을 위해 Chargebee에서 새 쿠폰을 생성합니다."
+        },
+        "app.Q2hhcmdlYmVl.action.Y3JlYXRlLWNvdXBvbg.display_name": {
+          "source": "Create Coupon",
+          "message": "쿠폰 생성"
+        },
+        "app.Q2hhcmdlYmVl.action.Y3JlYXRlLWNvdXBvbg.option.ZGlzY291bnRfdHlwZQ.allowed-value.c3RyaW5nOm9mZmVyX3F1YW50aXR5.desc": {
+          "source": "Offer Quantity",
+          "message": "제공 수량"
+        },
+        "app.Q2hhcmdlYmVl.action.Y3JlYXRlLWNvdXBvbg.option.ZGlzY291bnRfdHlwZQ.allowed-value.c3RyaW5nOmZpeGVkX2Ftb3VudA.desc": {
+          "source": "Fixed Amount",
+          "message": "고정 금액"
+        },
+        "app.Q2hhcmdlYmVl.action.Y3JlYXRlLWNvdXBvbg.option.ZGlzY291bnRfdHlwZQ.allowed-value.c3RyaW5nOnBlcmNlbnRhZ2U.desc": {
+          "source": "Percentage",
+          "message": "백분율"
+        },
+        "app.Q2hhcmdlYmVl.action.Y3JlYXRlLWNvdXBvbg.option.ZGlzY291bnRfdHlwZQ.display_name": {
+          "source": "Discount Type",
+          "message": "할인 유형"
+        },
+        "app.Q2hhcmdlYmVl.action.Y3JlYXRlLWNvdXBvbg.option.ZGlzY291bnRfdHlwZQ.short_desc": {
+          "source": "Type of discount",
+          "message": "할인 유형"
+        },
+        "app.Q2hhcmdlYmVl.action.Y3JlYXRlLWNvdXBvbg.option.ZHVyYXRpb25fdHlwZQ.allowed-value.c3RyaW5nOm9uZV90aW1l.desc": {
+          "source": "One Time",
+          "message": "1회"
+        },
+        "app.Q2hhcmdlYmVl.action.Y3JlYXRlLWNvdXBvbg.option.ZHVyYXRpb25fdHlwZQ.allowed-value.c3RyaW5nOmZvcmV2ZXI.desc": {
+          "source": "Forever",
+          "message": "영구"
+        },
+        "app.Q2hhcmdlYmVl.action.Y3JlYXRlLWNvdXBvbg.option.ZHVyYXRpb25fdHlwZQ.allowed-value.c3RyaW5nOmxpbWl0ZWRfcGVyaW9k.desc": {
+          "source": "Limited Period",
+          "message": "제한된 기간"
+        },
+        "app.Q2hhcmdlYmVl.action.Y3JlYXRlLWNvdXBvbg.option.ZHVyYXRpb25fdHlwZQ.display_name": {
+          "source": "Duration Type",
+          "message": "기간 유형"
+        },
+        "app.Q2hhcmdlYmVl.action.Y3JlYXRlLWNvdXBvbg.option.ZHVyYXRpb25fdHlwZQ.short_desc": {
+          "source": "How long the discount lasts",
+          "message": "할인 지속 기간"
+        },
+        "app.Q2hhcmdlYmVl.action.Y3JlYXRlLWNvdXBvbg.option.aWQ.display_name": {
+          "source": "Coupon ID",
+          "message": "쿠폰 ID"
+        },
+        "app.Q2hhcmdlYmVl.action.Y3JlYXRlLWNvdXBvbg.option.aWQ.short_desc": {
+          "source": "Unique coupon code/identifier",
+          "message": "고유한 쿠폰 코드/식별자"
+        },
+        "app.Q2hhcmdlYmVl.action.Y3JlYXRlLWNvdXBvbg.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "이름"
+        },
+        "app.Q2hhcmdlYmVl.action.Y3JlYXRlLWNvdXBvbg.option.bmFtZQ.short_desc": {
+          "source": "Coupon display name",
+          "message": "쿠폰 표시 이름"
+        },
+        "app.Q2hhcmdlYmVl.action.Y3JlYXRlLWNvdXBvbg.short_desc": {
+          "source": "Create a new coupon",
+          "message": "새 쿠폰 생성"
+        },
+        "app.Q2hhcmdlYmVl.action.Y3JlYXRlLWludm9pY2U.desc": {
+          "source": "Create a new invoice in Chargebee for a customer.",
+          "message": "Chargebee에서 고객을 위한 새 송장을 생성합니다."
+        },
+        "app.Q2hhcmdlYmVl.action.Y3JlYXRlLWludm9pY2U.display_name": {
+          "source": "Create Invoice",
+          "message": "인보이스 생성"
+        },
+        "app.Q2hhcmdlYmVl.action.Y3JlYXRlLWludm9pY2U.option.Y3VzdG9tZXJfaWQ.display_name": {
+          "source": "Customer",
+          "message": "고객"
+        },
+        "app.Q2hhcmdlYmVl.action.Y3JlYXRlLWludm9pY2U.option.Y3VzdG9tZXJfaWQ.short_desc": {
+          "source": "The customer for the invoice",
+          "message": "송장 대상 고객"
+        },
+        "app.Q2hhcmdlYmVl.action.Y3JlYXRlLWludm9pY2U.short_desc": {
+          "source": "Create a new invoice",
+          "message": "새 송장 생성"
+        },
+        "app.Q2hhcmdlYmVl.action.Y3JlYXRlLXN1YnNjcmlwdGlvbg.desc": {
+          "source": "Create a new subscription in Chargebee for a customer with a specified plan.",
+          "message": "Chargebee에서 지정된 플랜으로 고객을 위한 새 구독을 생성합니다."
+        },
+        "app.Q2hhcmdlYmVl.action.Y3JlYXRlLXN1YnNjcmlwdGlvbg.display_name": {
+          "source": "Create Subscription",
+          "message": "구독 생성"
+        },
+        "app.Q2hhcmdlYmVl.action.Y3JlYXRlLXN1YnNjcmlwdGlvbg.option.Y3VzdG9tZXJfaWQ.display_name": {
+          "source": "Customer",
+          "message": "고객"
+        },
+        "app.Q2hhcmdlYmVl.action.Y3JlYXRlLXN1YnNjcmlwdGlvbg.option.Y3VzdG9tZXJfaWQ.short_desc": {
+          "source": "The customer for the subscription",
+          "message": "구독 대상 고객"
+        },
+        "app.Q2hhcmdlYmVl.action.Y3JlYXRlLXN1YnNjcmlwdGlvbg.short_desc": {
+          "source": "Create a new subscription",
+          "message": "새 구독 생성"
+        },
+        "app.Q2hhcmdlYmVl.action.YWRkLXByb21vdGlvbmFsLWNyZWRpdA.desc": {
+          "source": "Add promotional credits to a customer's account in Chargebee.",
+          "message": "Chargebee의 고객 계정에 프로모션 크레딧을 추가합니다."
+        },
+        "app.Q2hhcmdlYmVl.action.YWRkLXByb21vdGlvbmFsLWNyZWRpdA.display_name": {
+          "source": "Add Promotional Credit",
+          "message": "프로모션 크레딧 추가"
+        },
+        "app.Q2hhcmdlYmVl.action.YWRkLXByb21vdGlvbmFsLWNyZWRpdA.option.Y3VycmVuY3lfY29kZQ.display_name": {
+          "source": "Currency Code",
+          "message": "통화 코드"
+        },
+        "app.Q2hhcmdlYmVl.action.YWRkLXByb21vdGlvbmFsLWNyZWRpdA.option.Y3VycmVuY3lfY29kZQ.short_desc": {
+          "source": "Currency for the credits",
+          "message": "크레딧 통화"
+        },
+        "app.Q2hhcmdlYmVl.action.YWRkLXByb21vdGlvbmFsLWNyZWRpdA.option.Y3VzdG9tZXJfaWQ.display_name": {
+          "source": "Customer",
+          "message": "고객"
+        },
+        "app.Q2hhcmdlYmVl.action.YWRkLXByb21vdGlvbmFsLWNyZWRpdA.option.Y3VzdG9tZXJfaWQ.short_desc": {
+          "source": "The customer to add credits to",
+          "message": "크레딧을 추가할 고객"
+        },
+        "app.Q2hhcmdlYmVl.action.YWRkLXByb21vdGlvbmFsLWNyZWRpdA.option.YW1vdW50.display_name": {
+          "source": "Amount",
+          "message": "금액"
+        },
+        "app.Q2hhcmdlYmVl.action.YWRkLXByb21vdGlvbmFsLWNyZWRpdA.option.YW1vdW50.short_desc": {
+          "source": "Credit amount in cents",
+          "message": "센트 단위의 크레딧 금액"
+        },
+        "app.Q2hhcmdlYmVl.action.YWRkLXByb21vdGlvbmFsLWNyZWRpdA.short_desc": {
+          "source": "Add promotional credits to a customer",
+          "message": "고객에게 프로모션 크레딧 추가"
+        },
+        "app.Q2hhcmdlYmVl.action.Z2V0LWN1c3RvbWVy.desc": {
+          "source": "Retrieve detailed information about a specific Chargebee customer.",
+          "message": "특정 Chargebee 고객에 대한 자세한 정보를 검색합니다."
+        },
+        "app.Q2hhcmdlYmVl.action.Z2V0LWN1c3RvbWVy.display_name": {
+          "source": "Get Customer",
+          "message": "고객 조회"
+        },
+        "app.Q2hhcmdlYmVl.action.Z2V0LWN1c3RvbWVy.option.aWQ.display_name": {
+          "source": "Customer ID",
+          "message": "고객 ID"
+        },
+        "app.Q2hhcmdlYmVl.action.Z2V0LWN1c3RvbWVy.option.aWQ.short_desc": {
+          "source": "The customer ID",
+          "message": "고객 ID"
+        },
+        "app.Q2hhcmdlYmVl.action.Z2V0LWN1c3RvbWVy.short_desc": {
+          "source": "Get a single customer by ID",
+          "message": "ID로 단일 고객 가져오기"
+        },
+        "app.Q2hhcmdlYmVl.action.Z2V0LWNvdXBvbg.desc": {
+          "source": "Retrieve detailed information about a specific Chargebee coupon.",
+          "message": "특정 Chargebee 쿠폰에 대한 자세한 정보를 검색합니다."
+        },
+        "app.Q2hhcmdlYmVl.action.Z2V0LWNvdXBvbg.display_name": {
+          "source": "Get Coupon",
+          "message": "쿠폰 가져오기"
+        },
+        "app.Q2hhcmdlYmVl.action.Z2V0LWNvdXBvbg.option.aWQ.display_name": {
+          "source": "Coupon ID",
+          "message": "쿠폰 ID"
+        },
+        "app.Q2hhcmdlYmVl.action.Z2V0LWNvdXBvbg.option.aWQ.short_desc": {
+          "source": "The coupon ID",
+          "message": "쿠폰 ID"
+        },
+        "app.Q2hhcmdlYmVl.action.Z2V0LWNvdXBvbg.short_desc": {
+          "source": "Get a single coupon by ID",
+          "message": "ID로 단일 쿠폰 가져오기"
+        },
+        "app.Q2hhcmdlYmVl.action.Z2V0LWludm9pY2U.desc": {
+          "source": "Retrieve detailed information about a specific Chargebee invoice.",
+          "message": "특정 Chargebee 송장에 대한 자세한 정보를 검색합니다."
+        },
+        "app.Q2hhcmdlYmVl.action.Z2V0LWludm9pY2U.display_name": {
+          "source": "Get Invoice",
+          "message": "인보이스 가져오기"
+        },
+        "app.Q2hhcmdlYmVl.action.Z2V0LWludm9pY2U.option.aWQ.display_name": {
+          "source": "Invoice ID",
+          "message": "인보이스 ID"
+        },
+        "app.Q2hhcmdlYmVl.action.Z2V0LWludm9pY2U.option.aWQ.short_desc": {
+          "source": "The invoice ID",
+          "message": "송장 ID"
+        },
+        "app.Q2hhcmdlYmVl.action.Z2V0LWludm9pY2U.short_desc": {
+          "source": "Get a single invoice by ID",
+          "message": "ID로 단일 송장 가져오기"
+        },
+        "app.Q2hhcmdlYmVl.action.Z2V0LWludm9pY2UtbGluaw.desc": {
+          "source": "Retrieve a download link for a Chargebee invoice PDF.",
+          "message": "Chargebee 송장 PDF의 다운로드 링크를 검색합니다."
+        },
+        "app.Q2hhcmdlYmVl.action.Z2V0LWludm9pY2UtbGluaw.display_name": {
+          "source": "Get Invoice Link",
+          "message": "송장 링크 가져오기"
+        },
+        "app.Q2hhcmdlYmVl.action.Z2V0LWludm9pY2UtbGluaw.option.aWQ.display_name": {
+          "source": "Invoice ID",
+          "message": "인보이스 ID"
+        },
+        "app.Q2hhcmdlYmVl.action.Z2V0LWludm9pY2UtbGluaw.option.aWQ.short_desc": {
+          "source": "The invoice to get the PDF link for",
+          "message": "PDF 링크를 가져올 송장"
+        },
+        "app.Q2hhcmdlYmVl.action.Z2V0LWludm9pY2UtbGluaw.short_desc": {
+          "source": "Get a download link for an invoice",
+          "message": "송장의 다운로드 링크 가져오기"
+        },
+        "app.Q2hhcmdlYmVl.action.Z2V0LXByb21vdGlvbmFsLWNyZWRpdA.desc": {
+          "source": "Retrieve detailed information about a specific Chargebee promotional credit.",
+          "message": "특정 Chargebee 프로모션 크레딧에 대한 자세한 정보를 검색합니다."
+        },
+        "app.Q2hhcmdlYmVl.action.Z2V0LXByb21vdGlvbmFsLWNyZWRpdA.display_name": {
+          "source": "Get Promotional Credit",
+          "message": "프로모션 크레딧 가져오기"
+        },
+        "app.Q2hhcmdlYmVl.action.Z2V0LXByb21vdGlvbmFsLWNyZWRpdA.option.aWQ.display_name": {
+          "source": "Promotional Credit ID",
+          "message": "프로모션 크레딧 ID"
+        },
+        "app.Q2hhcmdlYmVl.action.Z2V0LXByb21vdGlvbmFsLWNyZWRpdA.option.aWQ.short_desc": {
+          "source": "The promotional credit ID",
+          "message": "프로모션 크레딧 ID"
+        },
+        "app.Q2hhcmdlYmVl.action.Z2V0LXByb21vdGlvbmFsLWNyZWRpdA.short_desc": {
+          "source": "Get a single promotional credit by ID",
+          "message": "ID로 단일 프로모션 크레딧 가져오기"
+        },
+        "app.Q2hhcmdlYmVl.action.Z2V0LXN1YnNjcmlwdGlvbg.desc": {
+          "source": "Retrieve detailed information about a specific Chargebee subscription.",
+          "message": "특정 Chargebee 구독에 대한 상세 정보를 조회합니다."
+        },
+        "app.Q2hhcmdlYmVl.action.Z2V0LXN1YnNjcmlwdGlvbg.display_name": {
+          "source": "Get Subscription",
+          "message": "구독 가져오기"
+        },
+        "app.Q2hhcmdlYmVl.action.Z2V0LXN1YnNjcmlwdGlvbg.option.aWQ.display_name": {
+          "source": "Subscription ID",
+          "message": "구독 ID"
+        },
+        "app.Q2hhcmdlYmVl.action.Z2V0LXN1YnNjcmlwdGlvbg.option.aWQ.short_desc": {
+          "source": "The subscription ID",
+          "message": "구독 ID"
+        },
+        "app.Q2hhcmdlYmVl.action.Z2V0LXN1YnNjcmlwdGlvbg.short_desc": {
+          "source": "Get a single subscription by ID",
+          "message": "ID로 단일 구독 가져오기"
+        },
+        "app.Q2hhcmdlYmVl.action.Z2V0LXRyYW5zYWN0aW9u.desc": {
+          "source": "Retrieve detailed information about a specific Chargebee transaction.",
+          "message": "특정 Chargebee 트랜잭션에 대한 상세 정보를 조회합니다."
+        },
+        "app.Q2hhcmdlYmVl.action.Z2V0LXRyYW5zYWN0aW9u.display_name": {
+          "source": "Get Transaction",
+          "message": "트랜잭션 가져오기"
+        },
+        "app.Q2hhcmdlYmVl.action.Z2V0LXRyYW5zYWN0aW9u.option.aWQ.display_name": {
+          "source": "Transaction ID",
+          "message": "트랜잭션 ID"
+        },
+        "app.Q2hhcmdlYmVl.action.Z2V0LXRyYW5zYWN0aW9u.option.aWQ.short_desc": {
+          "source": "The transaction to retrieve",
+          "message": "조회할 트랜잭션"
+        },
+        "app.Q2hhcmdlYmVl.action.Z2V0LXRyYW5zYWN0aW9u.short_desc": {
+          "source": "Get a transaction by ID",
+          "message": "ID로 트랜잭션 가져오기"
+        },
+        "app.Q2hhcmdlYmVl.action.ZGVkdWN0LXByb21vdGlvbmFsLWNyZWRpdA.desc": {
+          "source": "Deduct promotional credits from a customer's account in Chargebee.",
+          "message": "Chargebee에서 고객 계정의 프로모션 크레딧을 차감합니다."
+        },
+        "app.Q2hhcmdlYmVl.action.ZGVkdWN0LXByb21vdGlvbmFsLWNyZWRpdA.display_name": {
+          "source": "Deduct Promotional Credit",
+          "message": "프로모션 크레딧 차감"
+        },
+        "app.Q2hhcmdlYmVl.action.ZGVkdWN0LXByb21vdGlvbmFsLWNyZWRpdA.option.Y3VycmVuY3lfY29kZQ.display_name": {
+          "source": "Currency Code",
+          "message": "통화 코드"
+        },
+        "app.Q2hhcmdlYmVl.action.ZGVkdWN0LXByb21vdGlvbmFsLWNyZWRpdA.option.Y3VycmVuY3lfY29kZQ.short_desc": {
+          "source": "Currency for the credits",
+          "message": "크레딧 통화"
+        },
+        "app.Q2hhcmdlYmVl.action.ZGVkdWN0LXByb21vdGlvbmFsLWNyZWRpdA.option.Y3VzdG9tZXJfaWQ.display_name": {
+          "source": "Customer",
+          "message": "고객"
+        },
+        "app.Q2hhcmdlYmVl.action.ZGVkdWN0LXByb21vdGlvbmFsLWNyZWRpdA.option.Y3VzdG9tZXJfaWQ.short_desc": {
+          "source": "The customer to deduct credits from",
+          "message": "크레딧을 차감할 고객"
+        },
+        "app.Q2hhcmdlYmVl.action.ZGVkdWN0LXByb21vdGlvbmFsLWNyZWRpdA.option.YW1vdW50.display_name": {
+          "source": "Amount",
+          "message": "금액"
+        },
+        "app.Q2hhcmdlYmVl.action.ZGVkdWN0LXByb21vdGlvbmFsLWNyZWRpdA.option.YW1vdW50.short_desc": {
+          "source": "Credit amount in cents",
+          "message": "센트 단위의 크레딧 금액"
+        },
+        "app.Q2hhcmdlYmVl.action.ZGVkdWN0LXByb21vdGlvbmFsLWNyZWRpdA.short_desc": {
+          "source": "Deduct promotional credits from a customer",
+          "message": "고객의 프로모션 크레딧 차감"
+        },
+        "app.Q2hhcmdlYmVl.action.ZGVsZXRlLWN1c3RvbWVy.desc": {
+          "source": "Delete a customer from Chargebee. This action cannot be undone.",
+          "message": "Chargebee에서 고객을 삭제합니다. 이 작업은 취소할 수 없습니다."
+        },
+        "app.Q2hhcmdlYmVl.action.ZGVsZXRlLWN1c3RvbWVy.display_name": {
+          "source": "Delete Customer",
+          "message": "고객 삭제"
+        },
+        "app.Q2hhcmdlYmVl.action.ZGVsZXRlLWN1c3RvbWVy.option.aWQ.display_name": {
+          "source": "Customer ID",
+          "message": "고객 ID"
+        },
+        "app.Q2hhcmdlYmVl.action.ZGVsZXRlLWN1c3RvbWVy.option.aWQ.short_desc": {
+          "source": "The customer to delete",
+          "message": "삭제할 고객"
+        },
+        "app.Q2hhcmdlYmVl.action.ZGVsZXRlLWN1c3RvbWVy.short_desc": {
+          "source": "Delete a customer",
+          "message": "고객 삭제"
+        },
+        "app.Q2hhcmdlYmVl.action.ZGVsZXRlLWNvdXBvbg.desc": {
+          "source": "Delete a coupon from Chargebee. This action cannot be undone.",
+          "message": "Chargebee에서 쿠폰을 삭제합니다. 이 작업은 취소할 수 없습니다."
+        },
+        "app.Q2hhcmdlYmVl.action.ZGVsZXRlLWNvdXBvbg.display_name": {
+          "source": "Delete Coupon",
+          "message": "쿠폰 삭제"
+        },
+        "app.Q2hhcmdlYmVl.action.ZGVsZXRlLWNvdXBvbg.option.aWQ.display_name": {
+          "source": "Coupon ID",
+          "message": "쿠폰 ID"
+        },
+        "app.Q2hhcmdlYmVl.action.ZGVsZXRlLWNvdXBvbg.option.aWQ.short_desc": {
+          "source": "The coupon to delete",
+          "message": "삭제할 쿠폰"
+        },
+        "app.Q2hhcmdlYmVl.action.ZGVsZXRlLWNvdXBvbg.short_desc": {
+          "source": "Delete a coupon",
+          "message": "쿠폰 삭제"
+        },
+        "app.Q2hhcmdlYmVl.action.ZGVsZXRlLWludm9pY2U.desc": {
+          "source": "Delete an invoice from Chargebee. This action cannot be undone.",
+          "message": "Chargebee에서 인보이스를 삭제합니다. 이 작업은 취소할 수 없습니다."
+        },
+        "app.Q2hhcmdlYmVl.action.ZGVsZXRlLWludm9pY2U.display_name": {
+          "source": "Delete Invoice",
+          "message": "인보이스 삭제"
+        },
+        "app.Q2hhcmdlYmVl.action.ZGVsZXRlLWludm9pY2U.option.aWQ.display_name": {
+          "source": "Invoice ID",
+          "message": "인보이스 ID"
+        },
+        "app.Q2hhcmdlYmVl.action.ZGVsZXRlLWludm9pY2U.option.aWQ.short_desc": {
+          "source": "The invoice to delete",
+          "message": "삭제할 인보이스"
+        },
+        "app.Q2hhcmdlYmVl.action.ZGVsZXRlLWludm9pY2U.short_desc": {
+          "source": "Delete an invoice",
+          "message": "인보이스 삭제"
+        },
+        "app.Q2hhcmdlYmVl.action.ZGVsZXRlLXN1YnNjcmlwdGlvbg.desc": {
+          "source": "Delete a subscription from Chargebee. This action cannot be undone.",
+          "message": "Chargebee에서 구독을 삭제합니다. 이 작업은 취소할 수 없습니다."
+        },
+        "app.Q2hhcmdlYmVl.action.ZGVsZXRlLXN1YnNjcmlwdGlvbg.display_name": {
+          "source": "Delete Subscription",
+          "message": "구독 삭제"
+        },
+        "app.Q2hhcmdlYmVl.action.ZGVsZXRlLXN1YnNjcmlwdGlvbg.option.aWQ.display_name": {
+          "source": "Subscription ID",
+          "message": "구독 ID"
+        },
+        "app.Q2hhcmdlYmVl.action.ZGVsZXRlLXN1YnNjcmlwdGlvbg.option.aWQ.short_desc": {
+          "source": "The subscription to delete",
+          "message": "삭제할 구독"
+        },
+        "app.Q2hhcmdlYmVl.action.ZGVsZXRlLXN1YnNjcmlwdGlvbg.short_desc": {
+          "source": "Delete a subscription",
+          "message": "구독 삭제"
+        },
+        "app.Q2hhcmdlYmVl.action.ZmluZC1jb3Vwb25z.desc": {
+          "source": "Retrieve a list of coupons from Chargebee.",
+          "message": "Chargebee에서 쿠폰 목록을 조회합니다."
+        },
+        "app.Q2hhcmdlYmVl.action.ZmluZC1jb3Vwb25z.display_name": {
+          "source": "Find Coupons",
+          "message": "쿠폰 찾기"
+        },
+        "app.Q2hhcmdlYmVl.action.ZmluZC1jb3Vwb25z.option.ZGlzY291bnRfdHlwZQ.allowed-value.c3RyaW5nOm9mZmVyX3F1YW50aXR5.desc": {
+          "source": "Offer Quantity",
+          "message": "제공 수량"
+        },
+        "app.Q2hhcmdlYmVl.action.ZmluZC1jb3Vwb25z.option.ZGlzY291bnRfdHlwZQ.allowed-value.c3RyaW5nOmZpeGVkX2Ftb3VudA.desc": {
+          "source": "Fixed Amount",
+          "message": "고정 금액"
+        },
+        "app.Q2hhcmdlYmVl.action.ZmluZC1jb3Vwb25z.option.ZGlzY291bnRfdHlwZQ.allowed-value.c3RyaW5nOnBlcmNlbnRhZ2U.desc": {
+          "source": "Percentage",
+          "message": "백분율"
+        },
+        "app.Q2hhcmdlYmVl.action.ZmluZC1jb3Vwb25z.option.ZGlzY291bnRfdHlwZQ.display_name": {
+          "source": "Discount Type",
+          "message": "할인 유형"
+        },
+        "app.Q2hhcmdlYmVl.action.ZmluZC1jb3Vwb25z.option.ZGlzY291bnRfdHlwZQ.short_desc": {
+          "source": "Filter by discount type",
+          "message": "할인 유형별로 필터링"
+        },
+        "app.Q2hhcmdlYmVl.action.ZmluZC1jb3Vwb25z.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "이름"
+        },
+        "app.Q2hhcmdlYmVl.action.ZmluZC1jb3Vwb25z.option.bmFtZQ.short_desc": {
+          "source": "Filter by coupon name",
+          "message": "쿠폰 이름별로 필터링"
+        },
+        "app.Q2hhcmdlYmVl.action.ZmluZC1jb3Vwb25z.option.c3RhdHVz.allowed-value.c3RyaW5nOmFjdGl2ZQ.desc": {
+          "source": "Active",
+          "message": "활성"
+        },
+        "app.Q2hhcmdlYmVl.action.ZmluZC1jb3Vwb25z.option.c3RhdHVz.allowed-value.c3RyaW5nOmFyY2hpdmVk.desc": {
+          "source": "Archived",
+          "message": "보관됨"
+        },
+        "app.Q2hhcmdlYmVl.action.ZmluZC1jb3Vwb25z.option.c3RhdHVz.allowed-value.c3RyaW5nOmRlbGV0ZWQ.desc": {
+          "source": "Deleted",
+          "message": "삭제됨"
+        },
+        "app.Q2hhcmdlYmVl.action.ZmluZC1jb3Vwb25z.option.c3RhdHVz.allowed-value.c3RyaW5nOmV4cGlyZWQ.desc": {
+          "source": "Expired",
+          "message": "만료됨"
+        },
+        "app.Q2hhcmdlYmVl.action.ZmluZC1jb3Vwb25z.option.c3RhdHVz.allowed-value.c3RyaW5nOmZ1dHVyZQ.desc": {
+          "source": "Future",
+          "message": "예정"
+        },
+        "app.Q2hhcmdlYmVl.action.ZmluZC1jb3Vwb25z.option.c3RhdHVz.display_name": {
+          "source": "Status",
+          "message": "상태"
+        },
+        "app.Q2hhcmdlYmVl.action.ZmluZC1jb3Vwb25z.option.c3RhdHVz.short_desc": {
+          "source": "Filter by coupon status",
+          "message": "쿠폰 상태별로 필터링"
+        },
+        "app.Q2hhcmdlYmVl.action.ZmluZC1jb3Vwb25z.short_desc": {
+          "source": "Find and search coupons",
+          "message": "쿠폰 찾기 및 검색"
+        },
+        "app.Q2hhcmdlYmVl.action.ZmluZC1jdXN0b21lcnM.desc": {
+          "source": "Retrieve a list of customers from Chargebee with optional filtering by status, email, first name, and last name.",
+          "message": "Chargebee에서 고객 목록을 조회합니다(상태, 이메일, 이름, 성별 필터링 옵션 포함)."
+        },
+        "app.Q2hhcmdlYmVl.action.ZmluZC1jdXN0b21lcnM.display_name": {
+          "source": "Find Customers",
+          "message": "고객 찾기"
+        },
+        "app.Q2hhcmdlYmVl.action.ZmluZC1jdXN0b21lcnM.option.ZW1haWw.desc": {
+          "source": "Filter customers by their email address",
+          "message": "이메일 주소별로 고객 필터링"
+        },
+        "app.Q2hhcmdlYmVl.action.ZmluZC1jdXN0b21lcnM.option.ZW1haWw.display_name": {
+          "source": "Email",
+          "message": "이메일"
+        },
+        "app.Q2hhcmdlYmVl.action.ZmluZC1jdXN0b21lcnM.option.ZW1haWw.short_desc": {
+          "source": "Filter by email",
+          "message": "이메일로 필터링"
+        },
+        "app.Q2hhcmdlYmVl.action.ZmluZC1jdXN0b21lcnM.option.Zmlyc3RfbmFtZQ.desc": {
+          "source": "Filter customers by their first name",
+          "message": "이름별로 고객 필터링"
+        },
+        "app.Q2hhcmdlYmVl.action.ZmluZC1jdXN0b21lcnM.option.Zmlyc3RfbmFtZQ.display_name": {
+          "source": "First Name",
+          "message": "이름"
+        },
+        "app.Q2hhcmdlYmVl.action.ZmluZC1jdXN0b21lcnM.option.Zmlyc3RfbmFtZQ.short_desc": {
+          "source": "Filter by first name",
+          "message": "이름(First Name)으로 필터링"
+        },
+        "app.Q2hhcmdlYmVl.action.ZmluZC1jdXN0b21lcnM.option.bGFzdF9uYW1l.desc": {
+          "source": "Filter customers by their last name",
+          "message": "성별로 고객 필터링"
+        },
+        "app.Q2hhcmdlYmVl.action.ZmluZC1jdXN0b21lcnM.option.bGFzdF9uYW1l.display_name": {
+          "source": "Last Name",
+          "message": "성"
+        },
+        "app.Q2hhcmdlYmVl.action.ZmluZC1jdXN0b21lcnM.option.bGFzdF9uYW1l.short_desc": {
+          "source": "Filter by last name",
+          "message": "성(Last Name)으로 필터링"
+        },
+        "app.Q2hhcmdlYmVl.action.ZmluZC1jdXN0b21lcnM.option.c3RhdHVz.allowed-value.c3RyaW5nOmFjdGl2ZQ.desc": {
+          "source": "Active",
+          "message": "활성"
+        },
+        "app.Q2hhcmdlYmVl.action.ZmluZC1jdXN0b21lcnM.option.c3RhdHVz.desc": {
+          "source": "Filter customers by their status",
+          "message": "상태별로 고객 필터링"
+        },
+        "app.Q2hhcmdlYmVl.action.ZmluZC1jdXN0b21lcnM.option.c3RhdHVz.display_name": {
+          "source": "Status",
+          "message": "상태"
+        },
+        "app.Q2hhcmdlYmVl.action.ZmluZC1jdXN0b21lcnM.option.c3RhdHVz.short_desc": {
+          "source": "Filter by customer status",
+          "message": "고객 상태별로 필터링"
+        },
+        "app.Q2hhcmdlYmVl.action.ZmluZC1jdXN0b21lcnM.short_desc": {
+          "source": "Find and search customers",
+          "message": "고객 찾기 및 검색"
+        },
+        "app.Q2hhcmdlYmVl.action.ZmluZC1pbnZvaWNlcw.desc": {
+          "source": "Retrieve a list of invoices from Chargebee with optional filtering by status.",
+          "message": "Chargebee에서 인보이스 목록을 조회합니다(상태별 필터링 옵션 포함)."
+        },
+        "app.Q2hhcmdlYmVl.action.ZmluZC1pbnZvaWNlcw.display_name": {
+          "source": "Find Invoices",
+          "message": "인보이스 찾기"
+        },
+        "app.Q2hhcmdlYmVl.action.ZmluZC1pbnZvaWNlcw.option.c3RhdHVz.allowed-value.c3RyaW5nOm5vdF9wYWlk.desc": {
+          "source": "Not Paid",
+          "message": "미결제"
+        },
+        "app.Q2hhcmdlYmVl.action.ZmluZC1pbnZvaWNlcw.option.c3RhdHVz.allowed-value.c3RyaW5nOnBhaWQ.desc": {
+          "source": "Paid",
+          "message": "결제 완료됨"
+        },
+        "app.Q2hhcmdlYmVl.action.ZmluZC1pbnZvaWNlcw.option.c3RhdHVz.allowed-value.c3RyaW5nOnBheW1lbnRfZHVl.desc": {
+          "source": "Payment Due",
+          "message": "결제 예정"
+        },
+        "app.Q2hhcmdlYmVl.action.ZmluZC1pbnZvaWNlcw.option.c3RhdHVz.allowed-value.c3RyaW5nOnBlbmRpbmc.desc": {
+          "source": "Pending",
+          "message": "대기 중"
+        },
+        "app.Q2hhcmdlYmVl.action.ZmluZC1pbnZvaWNlcw.option.c3RhdHVz.allowed-value.c3RyaW5nOnBvc3RlZA.desc": {
+          "source": "Posted",
+          "message": "전기됨"
+        },
+        "app.Q2hhcmdlYmVl.action.ZmluZC1pbnZvaWNlcw.option.c3RhdHVz.allowed-value.c3RyaW5nOnZvaWRlZA.desc": {
+          "source": "Voided",
+          "message": "무효화됨"
+        },
+        "app.Q2hhcmdlYmVl.action.ZmluZC1pbnZvaWNlcw.option.c3RhdHVz.desc": {
+          "source": "Filter invoices by their status",
+          "message": "상태별로 인보이스 필터링"
+        },
+        "app.Q2hhcmdlYmVl.action.ZmluZC1pbnZvaWNlcw.option.c3RhdHVz.display_name": {
+          "source": "Status",
+          "message": "상태"
+        },
+        "app.Q2hhcmdlYmVl.action.ZmluZC1pbnZvaWNlcw.option.c3RhdHVz.short_desc": {
+          "source": "Filter by invoice status",
+          "message": "인보이스 상태별로 필터링"
+        },
+        "app.Q2hhcmdlYmVl.action.ZmluZC1pbnZvaWNlcw.short_desc": {
+          "source": "Find and search invoices",
+          "message": "인보이스 찾기 및 검색"
+        },
+        "app.Q2hhcmdlYmVl.action.ZmluZC1wcm9tb3Rpb25hbC1jcmVkaXRz.desc": {
+          "source": "Retrieve a list of promotional credits from Chargebee.",
+          "message": "Chargebee에서 프로모션 크레딧 목록을 조회합니다."
+        },
+        "app.Q2hhcmdlYmVl.action.ZmluZC1wcm9tb3Rpb25hbC1jcmVkaXRz.display_name": {
+          "source": "Find Promotional Credits",
+          "message": "프로모션 크레딧 찾기"
+        },
+        "app.Q2hhcmdlYmVl.action.ZmluZC1wcm9tb3Rpb25hbC1jcmVkaXRz.option.Y3VzdG9tZXJfaWQ.display_name": {
+          "source": "Customer",
+          "message": "고객"
+        },
+        "app.Q2hhcmdlYmVl.action.ZmluZC1wcm9tb3Rpb25hbC1jcmVkaXRz.option.Y3VzdG9tZXJfaWQ.short_desc": {
+          "source": "Filter by customer",
+          "message": "고객별 필터링"
+        },
+        "app.Q2hhcmdlYmVl.action.ZmluZC1wcm9tb3Rpb25hbC1jcmVkaXRz.option.dHlwZQ.allowed-value.c3RyaW5nOmRlY3JlbWVudA.desc": {
+          "source": "Decrement",
+          "message": "감소"
+        },
+        "app.Q2hhcmdlYmVl.action.ZmluZC1wcm9tb3Rpb25hbC1jcmVkaXRz.option.dHlwZQ.allowed-value.c3RyaW5nOmluY3JlbWVudA.desc": {
+          "source": "Increment",
+          "message": "증가"
+        },
+        "app.Q2hhcmdlYmVl.action.ZmluZC1wcm9tb3Rpb25hbC1jcmVkaXRz.option.dHlwZQ.allowed-value.c3RyaW5nOnNldA.desc": {
+          "source": "Set",
+          "message": "설정"
+        },
+        "app.Q2hhcmdlYmVl.action.ZmluZC1wcm9tb3Rpb25hbC1jcmVkaXRz.option.dHlwZQ.display_name": {
+          "source": "Type",
+          "message": "유형"
+        },
+        "app.Q2hhcmdlYmVl.action.ZmluZC1wcm9tb3Rpb25hbC1jcmVkaXRz.option.dHlwZQ.short_desc": {
+          "source": "Filter by credit type",
+          "message": "크레딧 유형별로 필터링"
+        },
+        "app.Q2hhcmdlYmVl.action.ZmluZC1wcm9tb3Rpb25hbC1jcmVkaXRz.short_desc": {
+          "source": "Find and search promotional credits",
+          "message": "프로모션 크레딧 찾기 및 검색"
+        },
+        "app.Q2hhcmdlYmVl.action.ZmluZC1zdWJzY3JpcHRpb25z.desc": {
+          "source": "Retrieve a list of subscriptions from Chargebee with optional filtering by status and customer.",
+          "message": "Chargebee에서 구독 목록을 조회합니다(상태 및 고객별 필터링 옵션 포함)."
+        },
+        "app.Q2hhcmdlYmVl.action.ZmluZC1zdWJzY3JpcHRpb25z.display_name": {
+          "source": "Find Subscriptions",
+          "message": "구독 찾기"
+        },
+        "app.Q2hhcmdlYmVl.action.ZmluZC1zdWJzY3JpcHRpb25z.option.Y3VzdG9tZXJfaWQ.desc": {
+          "source": "Filter subscriptions by the customer they belong to",
+          "message": "해당 고객별로 구독 필터링"
+        },
+        "app.Q2hhcmdlYmVl.action.ZmluZC1zdWJzY3JpcHRpb25z.option.Y3VzdG9tZXJfaWQ.display_name": {
+          "source": "Customer",
+          "message": "고객"
+        },
+        "app.Q2hhcmdlYmVl.action.ZmluZC1zdWJzY3JpcHRpb25z.option.Y3VzdG9tZXJfaWQ.short_desc": {
+          "source": "Filter by customer",
+          "message": "고객별 필터링"
+        },
+        "app.Q2hhcmdlYmVl.action.ZmluZC1zdWJzY3JpcHRpb25z.option.c3RhdHVz.allowed-value.c3RyaW5nOm5vbl9yZW5ld2luZw.desc": {
+          "source": "Non-Renewing",
+          "message": "갱신 안 됨"
+        },
+        "app.Q2hhcmdlYmVl.action.ZmluZC1zdWJzY3JpcHRpb25z.option.c3RhdHVz.allowed-value.c3RyaW5nOmFjdGl2ZQ.desc": {
+          "source": "Active",
+          "message": "활성"
+        },
+        "app.Q2hhcmdlYmVl.action.ZmluZC1zdWJzY3JpcHRpb25z.option.c3RhdHVz.allowed-value.c3RyaW5nOmNhbmNlbGxlZA.desc": {
+          "source": "Cancelled",
+          "message": "취소됨"
+        },
+        "app.Q2hhcmdlYmVl.action.ZmluZC1zdWJzY3JpcHRpb25z.option.c3RhdHVz.allowed-value.c3RyaW5nOmZ1dHVyZQ.desc": {
+          "source": "Future",
+          "message": "예정"
+        },
+        "app.Q2hhcmdlYmVl.action.ZmluZC1zdWJzY3JpcHRpb25z.option.c3RhdHVz.allowed-value.c3RyaW5nOmluX3RyaWFs.desc": {
+          "source": "In Trial",
+          "message": "체험 중"
+        },
+        "app.Q2hhcmdlYmVl.action.ZmluZC1zdWJzY3JpcHRpb25z.option.c3RhdHVz.allowed-value.c3RyaW5nOnBhdXNlZA.desc": {
+          "source": "Paused",
+          "message": "일시중지"
+        },
+        "app.Q2hhcmdlYmVl.action.ZmluZC1zdWJzY3JpcHRpb25z.option.c3RhdHVz.allowed-value.c3RyaW5nOnRyYW5zZmVycmVk.desc": {
+          "source": "Transferred",
+          "message": "이전됨"
+        },
+        "app.Q2hhcmdlYmVl.action.ZmluZC1zdWJzY3JpcHRpb25z.option.c3RhdHVz.desc": {
+          "source": "Filter subscriptions by their status",
+          "message": "상태별로 구독 필터링"
+        },
+        "app.Q2hhcmdlYmVl.action.ZmluZC1zdWJzY3JpcHRpb25z.option.c3RhdHVz.display_name": {
+          "source": "Status",
+          "message": "상태"
+        },
+        "app.Q2hhcmdlYmVl.action.ZmluZC1zdWJzY3JpcHRpb25z.option.c3RhdHVz.short_desc": {
+          "source": "Filter by subscription status",
+          "message": "구독 상태별로 필터링"
+        },
+        "app.Q2hhcmdlYmVl.action.ZmluZC1zdWJzY3JpcHRpb25z.short_desc": {
+          "source": "Find and search subscriptions",
+          "message": "구독 찾기 및 검색"
+        },
+        "app.Q2hhcmdlYmVl.action.bWFrZS1hcGktY2FsbA.desc": {
+          "source": "Make a custom HTTP / REST API call to **Chargebee** using the configured connection's authentication.\n\nSpecify the HTTP method, the URI path (relative to the connection's API base URL), optional query parameters, headers, and request body. The response is returned as a hash containing the status code, response headers, and response body.\n\nUse this action for endpoints that are not yet exposed as first-class actions on this app.",
+          "message": "구성된 연결의 인증을 사용하여 **Chargebee**에 사용자 정의 HTTP / REST API 호출을 수행합니다.\n\nHTTP 메서드, URI 경로(연결의 API 기본 URL 기준 상대 경로), 선택적 쿼리 매개변수, 헤더 및 요청 본문을 지정합니다. 응답은 상태 코드, 응답 헤더 및 응답 본문이 포함된 해시로 반환됩니다.\n\n이 앱에서 기본 액션으로 아직 제공되지 않는 엔드포인트에 이 액션을 사용하세요."
+        },
+        "app.Q2hhcmdlYmVl.action.bWFrZS1hcGktY2FsbA.display_name": {
+          "source": "Make an API call",
+          "message": "API 호출 실행"
+        },
+        "app.Q2hhcmdlYmVl.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.desc": {
+          "source": "The request body. The effective type depends on `body_type`: JSON/form/YAML expect a hash, XML/text expect a string, multipart expects a file structure, binary expects raw bytes.",
+          "message": "요청 본문입니다. 유효한 유형은 `body_type`에 따라 달라집니다. JSON/form/YAML은 해시를, XML/text는 문자열을, multipart는 파일 구조를, binary는 원시 바이트를 요구합니다."
+        },
+        "app.Q2hhcmdlYmVl.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.display_name": {
+          "source": "Body",
+          "message": "본문"
+        },
+        "app.Q2hhcmdlYmVl.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.short_desc": {
+          "source": "The request body",
+          "message": "요청 본문"
+        },
+        "app.Q2hhcmdlYmVl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.desc": {
+          "source": "Upload a file using `multipart/form-data`. The body must be a @ref DataProvider::FileDataType \"FileDataType\" structure (filename + content + mime_type). The framework builds the multipart envelope and sets the boundary header.",
+          "message": "`multipart/form-data`을(를) 사용하여 파일을 업로드합니다. 본문은 @ref DataProvider::FileDataType \"FileDataType\" 구조(filename + content + mime_type)여야 합니다. 프레임워크가 multipart 봉투를 작성하고 boundary 헤더를 설정합니다."
+        },
+        "app.Q2hhcmdlYmVl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.display_name": {
+          "source": "Multipart Form",
+          "message": "멀티파트 폼"
+        },
+        "app.Q2hhcmdlYmVl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.short_desc": {
+          "source": "Upload a file using multipart/form-data",
+          "message": "multipart/form-data를 사용하여 파일 업로드"
+        },
+        "app.Q2hhcmdlYmVl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.desc": {
+          "source": "Pass the body to the REST client unchanged; the client decides serialization based on its configured `data` option and the value type",
+          "message": "본문을 변경하지 않고 REST 클라이언트에 전달합니다. 클라이언트는 구성된 `data` 옵션과 값 유형을 기반으로 직렬화를 결정합니다."
+        },
+        "app.Q2hhcmdlYmVl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.display_name": {
+          "source": "Auto",
+          "message": "자동"
+        },
+        "app.Q2hhcmdlYmVl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.short_desc": {
+          "source": "Pass-through; use connection serialization and let the REST client decide",
+          "message": "패스스루: 연결 직렬화를 사용하고 REST 클라이언트가 결정하도록 합니다."
+        },
+        "app.Q2hhcmdlYmVl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.desc": {
+          "source": "Send the body as raw bytes. The body must be a binary value. Sets `Content-Type: application/octet-stream` unless overridden by `hdr`.",
+          "message": "본문을 원시 바이트로 전송합니다. 본문은 바이너리 값이어야 합니다. `hdr`에 의해 재정의되지 않는 한 `Content-Type: application/octet-stream`을(를) 설정합니다."
+        },
+        "app.Q2hhcmdlYmVl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.display_name": {
+          "source": "Raw Binary",
+          "message": "원시 바이너리"
+        },
+        "app.Q2hhcmdlYmVl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.short_desc": {
+          "source": "Send body as raw bytes",
+          "message": "본문을 원시 바이트로 전송"
+        },
+        "app.Q2hhcmdlYmVl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.desc": {
+          "source": "Serialize a hash of form fields as `application/x-www-form-urlencoded`. The body must be a hash whose values are scalars (strings/numbers/booleans).",
+          "message": "폼 필드의 해시를 `application/x-www-form-urlencoded`(으)로 직렬화합니다. 본문은 값이 스칼라(문자열/숫자/불리언)인 해시여야 합니다."
+        },
+        "app.Q2hhcmdlYmVl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.display_name": {
+          "source": "Form (URL-encoded)",
+          "message": "폼 (URL 인코딩)"
+        },
+        "app.Q2hhcmdlYmVl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.short_desc": {
+          "source": "Serialize body as application/x-www-form-urlencoded form fields",
+          "message": "본문을 application/x-www-form-urlencoded 폼 필드로 직렬화"
+        },
+        "app.Q2hhcmdlYmVl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.desc": {
+          "source": "Serialize the body as JSON; sets `Content-Type: application/json`. The body should be a hash, list, or scalar value.",
+          "message": "본문을 JSON으로 직렬화하며, `Content-Type: application/json`을(를) 설정합니다. 본문은 해시, 리스트 또는 스칼라 값이어야 합니다."
+        },
+        "app.Q2hhcmdlYmVl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.display_name": {
+          "source": "JSON",
+          "message": "JSON"
+        },
+        "app.Q2hhcmdlYmVl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.short_desc": {
+          "source": "Serialize body as JSON",
+          "message": "본문을 JSON으로 직렬화"
+        },
+        "app.Q2hhcmdlYmVl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.desc": {
+          "source": "Send the body as plain text. The body must be a string. Sets `Content-Type: text/plain`.",
+          "message": "본문을 일반 텍스트로 전송합니다. 본문은 문자열이어야 합니다. `Content-Type: text/plain`을(를) 설정합니다."
+        },
+        "app.Q2hhcmdlYmVl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.display_name": {
+          "source": "Plain Text",
+          "message": "일반 텍스트"
+        },
+        "app.Q2hhcmdlYmVl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.short_desc": {
+          "source": "Send body as text/plain",
+          "message": "본문을 text/plain으로 전송"
+        },
+        "app.Q2hhcmdlYmVl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.desc": {
+          "source": "Send the body as XML. If the body is a hash it is serialized to XML; if it is a string it is sent verbatim. Sets `Content-Type: application/xml`.",
+          "message": "본문을 XML로 전송합니다. 본문이 해시인 경우 XML로 직렬화되고, 문자열인 경우 그대로 전송됩니다. `Content-Type: application/xml`을(를) 설정합니다."
+        },
+        "app.Q2hhcmdlYmVl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.display_name": {
+          "source": "XML",
+          "message": "XML"
+        },
+        "app.Q2hhcmdlYmVl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.short_desc": {
+          "source": "Send body as XML",
+          "message": "본문을 XML로 전송"
+        },
+        "app.Q2hhcmdlYmVl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.desc": {
+          "source": "Send the body as YAML. If the body is a hash it is serialized to YAML; if it is a string it is sent verbatim. Sets `Content-Type: application/x-yaml`.",
+          "message": "본문을 YAML로 전송합니다. 본문이 해시인 경우 YAML로 직렬화되고, 문자열인 경우 그대로 전송됩니다. `Content-Type: application/x-yaml`을(를) 설정합니다."
+        },
+        "app.Q2hhcmdlYmVl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.display_name": {
+          "source": "YAML",
+          "message": "YAML"
+        },
+        "app.Q2hhcmdlYmVl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.short_desc": {
+          "source": "Send body as YAML",
+          "message": "본문을 YAML로 전송"
+        },
+        "app.Q2hhcmdlYmVl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.desc": {
+          "source": "Selects the body serialization mode and the corresponding `Content-Type` header. Changing this field reshapes the `body` editor - selecting JSON exposes a JSON editor, selecting Multipart Form exposes a file picker, and so on.",
+          "message": "본문 직렬화 모드 및 해당되는 `Content-Type` 헤더를 선택합니다. 이 필드를 변경하면 `body` 에디터의 형태가 변경됩니다. JSON을 선택하면 JSON 에디터가 표시되고, 멀티파트 폼을 선택하면 파일 선택기가 표시되는 방식입니다."
+        },
+        "app.Q2hhcmdlYmVl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.display_name": {
+          "source": "Body Type",
+          "message": "본문 유형"
+        },
+        "app.Q2hhcmdlYmVl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.short_desc": {
+          "source": "How the body is serialized and what Content-Type is sent",
+          "message": "본문이 직렬화되는 방식 및 전송되는 Content-Type"
+        },
+        "app.Q2hhcmdlYmVl.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.desc": {
+          "source": "If `True`, non-2xx HTTP responses return as the normal response hash (with the actual status code) instead of raising `REST-RESPONSE-ERROR`. Useful for handling 4xx/5xx as data - e.g. checking whether a resource exists. Overrides the connection's `error_passthru` setting for this call only.",
+          "message": "`True`인 경우, 2xx가 아닌 HTTP 응답은 `REST-RESPONSE-ERROR`을(를) 발생시키는 대신 (실제 상태 코드와 함께) 일반 응답 해시로 반환됩니다. 리소스 존재 여부 확인 등 4xx/5xx를 데이터로 처리할 때 유용합니다. 이 호출에 대해서만 연결의 `error_passthru` 설정을 재정의합니다."
+        },
+        "app.Q2hhcmdlYmVl.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.display_name": {
+          "source": "Return Errors as Data",
+          "message": "오류를 데이터로 반환"
+        },
+        "app.Q2hhcmdlYmVl.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.short_desc": {
+          "source": "Return non-2xx responses normally instead of throwing",
+          "message": "예외를 발생시키는 대신 2xx가 아닌 응답을 정상적으로 반환"
+        },
+        "app.Q2hhcmdlYmVl.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.desc": {
+          "source": "Optional list of HTTP status codes treated as success. If set and the response status is not in this list, the action throws `REST-STATUS-ERROR`. When unset, the REST client's default behavior applies (typically: 2xx is success, non-2xx throws).",
+          "message": "성공으로 처리되는 HTTP 상태 코드의 선택적 목록입니다. 설정되어 있고 응답 상태가 이 목록에 없는 경우 작업이 `REST-STATUS-ERROR` 예외를 발생시킵니다. 설정되지 않은 경우 REST 클라이언트의 기본 동작이 적용됩니다(일반적으로 2xx는 성공, 2xx 이외는 예외 발생)."
+        },
+        "app.Q2hhcmdlYmVl.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.display_name": {
+          "source": "Expected Status Codes",
+          "message": "예상되는 상태 코드"
+        },
+        "app.Q2hhcmdlYmVl.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.short_desc": {
+          "source": "Response status codes treated as success",
+          "message": "성공으로 처리되는 응답 상태 코드"
+        },
+        "app.Q2hhcmdlYmVl.action.bWFrZS1hcGktY2FsbA.option.aGRy.desc": {
+          "source": "Hash of custom headers added to the request. These override any default headers set by `body_type` (e.g. supplying `Content-Type` here wins over the body-type default).",
+          "message": "요청에 추가되는 사용자 지정 헤더의 해시입니다. 이는 `body_type`에 의해 설정된 기본 헤더보다 우선합니다(예: 여기에 `Content-Type`을(를) 제공하면 본문 유형 기본값보다 우선 적용됨)."
+        },
+        "app.Q2hhcmdlYmVl.action.bWFrZS1hcGktY2FsbA.option.aGRy.display_name": {
+          "source": "Custom Headers",
+          "message": "사용자 지정 헤더"
+        },
+        "app.Q2hhcmdlYmVl.action.bWFrZS1hcGktY2FsbA.option.aGRy.short_desc": {
+          "source": "Extra request headers",
+          "message": "추가 요청 헤더"
+        },
+        "app.Q2hhcmdlYmVl.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.desc": {
+          "source": "If `True`, the response hash includes a `debug` sub-hash containing the request method/URL/headers (with sensitive values redacted), request and response sizes, and round-trip duration. Useful when investigating slow or failing calls. Off by default to keep responses lean.",
+          "message": "`True`인 경우 응답 해시에 요청 메서드/URL/헤더(민감한 값은 가려짐), 요청 및 응답 크기, 왕복 시간이 포함된 `debug` 하위 해시가 포함됩니다. 느리거나 실패한 호출을 조사할 때 유용합니다. 응답을 가볍게 유지하기 위해 기본적으로 비활성화되어 있습니다."
+        },
+        "app.Q2hhcmdlYmVl.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.display_name": {
+          "source": "Include Debug Info",
+          "message": "디버그 정보 포함"
+        },
+        "app.Q2hhcmdlYmVl.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.short_desc": {
+          "source": "Include request/timing/size debug info in the response",
+          "message": "응답에 요청/타이밍/크기 디버그 정보 포함"
+        },
+        "app.Q2hhcmdlYmVl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.desc": {
+          "source": "HTTP `OPTIONS`",
+          "message": "HTTP `OPTIONS`"
+        },
+        "app.Q2hhcmdlYmVl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.display_name": {
+          "source": "OPTIONS",
+          "message": "OPTIONS"
+        },
+        "app.Q2hhcmdlYmVl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.short_desc": {
+          "source": "HTTP OPTIONS",
+          "message": "HTTP OPTIONS"
+        },
+        "app.Q2hhcmdlYmVl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.desc": {
+          "source": "HTTP `DELETE`",
+          "message": "HTTP `DELETE`"
+        },
+        "app.Q2hhcmdlYmVl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.display_name": {
+          "source": "DELETE",
+          "message": "DELETE"
+        },
+        "app.Q2hhcmdlYmVl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.short_desc": {
+          "source": "HTTP DELETE",
+          "message": "HTTP DELETE"
+        },
+        "app.Q2hhcmdlYmVl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.desc": {
+          "source": "HTTP `GET`",
+          "message": "HTTP `GET`"
+        },
+        "app.Q2hhcmdlYmVl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.display_name": {
+          "source": "GET",
+          "message": "GET"
+        },
+        "app.Q2hhcmdlYmVl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.short_desc": {
+          "source": "HTTP GET",
+          "message": "HTTP GET"
+        },
+        "app.Q2hhcmdlYmVl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.desc": {
+          "source": "HTTP `HEAD`",
+          "message": "HTTP `HEAD`"
+        },
+        "app.Q2hhcmdlYmVl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.display_name": {
+          "source": "HEAD",
+          "message": "HEAD"
+        },
+        "app.Q2hhcmdlYmVl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.short_desc": {
+          "source": "HTTP HEAD",
+          "message": "HTTP HEAD"
+        },
+        "app.Q2hhcmdlYmVl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.desc": {
+          "source": "HTTP `PATCH`",
+          "message": "HTTP `PATCH`"
+        },
+        "app.Q2hhcmdlYmVl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.display_name": {
+          "source": "PATCH",
+          "message": "PATCH"
+        },
+        "app.Q2hhcmdlYmVl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.short_desc": {
+          "source": "HTTP PATCH",
+          "message": "HTTP PATCH"
+        },
+        "app.Q2hhcmdlYmVl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.desc": {
+          "source": "HTTP `POST`",
+          "message": "HTTP `POST`"
+        },
+        "app.Q2hhcmdlYmVl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.display_name": {
+          "source": "POST",
+          "message": "POST"
+        },
+        "app.Q2hhcmdlYmVl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.short_desc": {
+          "source": "HTTP POST",
+          "message": "HTTP POST"
+        },
+        "app.Q2hhcmdlYmVl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.desc": {
+          "source": "HTTP `PUT`",
+          "message": "HTTP `PUT`"
+        },
+        "app.Q2hhcmdlYmVl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.display_name": {
+          "source": "PUT",
+          "message": "PUT"
+        },
+        "app.Q2hhcmdlYmVl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.short_desc": {
+          "source": "HTTP PUT",
+          "message": "HTTP PUT"
+        },
+        "app.Q2hhcmdlYmVl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.desc": {
+          "source": "HTTP `TRACE`",
+          "message": "HTTP `TRACE`"
+        },
+        "app.Q2hhcmdlYmVl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.display_name": {
+          "source": "TRACE",
+          "message": "TRACE"
+        },
+        "app.Q2hhcmdlYmVl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.short_desc": {
+          "source": "HTTP TRACE",
+          "message": "HTTP TRACE"
+        },
+        "app.Q2hhcmdlYmVl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "요청에 사용할 HTTP 메서드"
+        },
+        "app.Q2hhcmdlYmVl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.display_name": {
+          "source": "HTTP Method",
+          "message": "HTTP 메서드"
+        },
+        "app.Q2hhcmdlYmVl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.short_desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "요청에 사용할 HTTP 메서드"
+        },
+        "app.Q2hhcmdlYmVl.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain `{name}` placeholders that are replaced from `path_vars`. Example: `/users/{id}/comments`.",
+          "message": "연결의 API 기본 URL에 대한 상대 URI 경로입니다. `path_vars`에서 대체되는 `{name}` 자리 표시자가 포함될 수 있습니다. 예: `/users/{id}/comments`."
+        },
+        "app.Q2hhcmdlYmVl.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.display_name": {
+          "source": "URI Path",
+          "message": "URI 경로"
+        },
+        "app.Q2hhcmdlYmVl.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.short_desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain '{name}' placeholders that are replaced from 'path_vars'. Example: '/users/{id}/comments'",
+          "message": "연결의 API 기본 URL에 대한 상대 URI 경로입니다. 'path_vars'에서 대체되는 '{name}' 자리 표시자를 포함할 수 있습니다. 예: '/users/{id}/comments'"
+        },
+        "app.Q2hhcmdlYmVl.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.desc": {
+          "source": "Hash of values substituted into `{name}` placeholders in the URI path. Example: with `path = /users/{id}` and `path_vars = {id: 123}` the framework sends `/users/123`. Values are URL-encoded.",
+          "message": "URI 경로의 `{name}` 자리 표시자에 대체되는 값의 해시입니다. 예: `path = /users/{id}` 및 `path_vars = {id: 123}`이 있으면 프레임워크가 `/users/123`을(를) 전송합니다. 값은 URL 인코딩됩니다."
+        },
+        "app.Q2hhcmdlYmVl.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.display_name": {
+          "source": "Path Variables",
+          "message": "경로 변수"
+        },
+        "app.Q2hhcmdlYmVl.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.short_desc": {
+          "source": "Values for {name} placeholders in path",
+          "message": "경로 내 {name} 자리 표시자의 값"
+        },
+        "app.Q2hhcmdlYmVl.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.desc": {
+          "source": "Hash of query string parameters to append to the URI path. Values are URL-encoded; list values are joined with `,`.",
+          "message": "URI 경로에 추가할 쿼리 문자열 매개변수 해시입니다. 값은 URL 인코딩되며, 목록 값은 `,`(으)로 연결됩니다."
+        },
+        "app.Q2hhcmdlYmVl.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.display_name": {
+          "source": "Query Arguments",
+          "message": "쿼리 인수"
+        },
+        "app.Q2hhcmdlYmVl.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.short_desc": {
+          "source": "Query string parameters",
+          "message": "쿼리 문자열 매개변수"
+        },
+        "app.Q2hhcmdlYmVl.action.bWFrZS1hcGktY2FsbA.short_desc": {
+          "source": "Make a custom API call to Chargebee",
+          "message": "Chargebee에 사용자 정의 API 호출 수행"
+        },
+        "app.Q2hhcmdlYmVl.action.c2V0LXByb21vdGlvbmFsLWNyZWRpdA.desc": {
+          "source": "Set the promotional credit balance for a customer's account in Chargebee.",
+          "message": "Chargebee에서 고객 계정의 프로모션 크레딧 잔액을 설정합니다."
+        },
+        "app.Q2hhcmdlYmVl.action.c2V0LXByb21vdGlvbmFsLWNyZWRpdA.display_name": {
+          "source": "Set Promotional Credit",
+          "message": "프로모션 크레딧 설정"
+        },
+        "app.Q2hhcmdlYmVl.action.c2V0LXByb21vdGlvbmFsLWNyZWRpdA.option.Y3VycmVuY3lfY29kZQ.display_name": {
+          "source": "Currency Code",
+          "message": "통화 코드"
+        },
+        "app.Q2hhcmdlYmVl.action.c2V0LXByb21vdGlvbmFsLWNyZWRpdA.option.Y3VycmVuY3lfY29kZQ.short_desc": {
+          "source": "Currency for the credits",
+          "message": "크레딧 통화"
+        },
+        "app.Q2hhcmdlYmVl.action.c2V0LXByb21vdGlvbmFsLWNyZWRpdA.option.Y3VzdG9tZXJfaWQ.display_name": {
+          "source": "Customer",
+          "message": "고객"
+        },
+        "app.Q2hhcmdlYmVl.action.c2V0LXByb21vdGlvbmFsLWNyZWRpdA.option.Y3VzdG9tZXJfaWQ.short_desc": {
+          "source": "The customer to set credits for",
+          "message": "크레딧을 설정할 고객"
+        },
+        "app.Q2hhcmdlYmVl.action.c2V0LXByb21vdGlvbmFsLWNyZWRpdA.option.YW1vdW50.display_name": {
+          "source": "Amount",
+          "message": "금액"
+        },
+        "app.Q2hhcmdlYmVl.action.c2V0LXByb21vdGlvbmFsLWNyZWRpdA.option.YW1vdW50.short_desc": {
+          "source": "Credit amount in cents",
+          "message": "센트 단위의 크레딧 금액"
+        },
+        "app.Q2hhcmdlYmVl.action.c2V0LXByb21vdGlvbmFsLWNyZWRpdA.short_desc": {
+          "source": "Set promotional credit balance for a customer",
+          "message": "고객의 프로모션 크레딧 잔액 설정"
+        },
+        "app.Q2hhcmdlYmVl.action.cmVjb3JkLWludm9pY2UtcGF5bWVudA.desc": {
+          "source": "Record an offline payment for an invoice in Chargebee.",
+          "message": "Chargebee에서 송장에 대한 오프라인 결제를 기록합니다."
+        },
+        "app.Q2hhcmdlYmVl.action.cmVjb3JkLWludm9pY2UtcGF5bWVudA.display_name": {
+          "source": "Record Invoice Payment",
+          "message": "송장 결제 기록"
+        },
+        "app.Q2hhcmdlYmVl.action.cmVjb3JkLWludm9pY2UtcGF5bWVudA.option.YW1vdW50.display_name": {
+          "source": "Amount",
+          "message": "금액"
+        },
+        "app.Q2hhcmdlYmVl.action.cmVjb3JkLWludm9pY2UtcGF5bWVudA.option.YW1vdW50.short_desc": {
+          "source": "Payment amount in cents",
+          "message": "센트 단위의 결제 금액"
+        },
+        "app.Q2hhcmdlYmVl.action.cmVjb3JkLWludm9pY2UtcGF5bWVudA.option.aWQ.display_name": {
+          "source": "Invoice ID",
+          "message": "인보이스 ID"
+        },
+        "app.Q2hhcmdlYmVl.action.cmVjb3JkLWludm9pY2UtcGF5bWVudA.option.aWQ.short_desc": {
+          "source": "The invoice to record payment for",
+          "message": "결제를 기록할 송장"
+        },
+        "app.Q2hhcmdlYmVl.action.cmVjb3JkLWludm9pY2UtcGF5bWVudA.short_desc": {
+          "source": "Record a payment for an invoice",
+          "message": "송장 결제 기록"
+        },
+        "app.Q2hhcmdlYmVl.action.cmVmdW5kLWludm9pY2U.desc": {
+          "source": "Process a refund for a paid invoice in Chargebee.",
+          "message": "Chargebee에서 결제된 송장에 대한 환불을 처리합니다."
+        },
+        "app.Q2hhcmdlYmVl.action.cmVmdW5kLWludm9pY2U.display_name": {
+          "source": "Refund Invoice",
+          "message": "송장 환불"
+        },
+        "app.Q2hhcmdlYmVl.action.cmVmdW5kLWludm9pY2U.option.aWQ.display_name": {
+          "source": "Invoice ID",
+          "message": "인보이스 ID"
+        },
+        "app.Q2hhcmdlYmVl.action.cmVmdW5kLWludm9pY2U.option.aWQ.short_desc": {
+          "source": "The invoice to refund",
+          "message": "환불할 송장"
+        },
+        "app.Q2hhcmdlYmVl.action.cmVmdW5kLWludm9pY2U.option.cmVmdW5kX2Ftb3VudA.display_name": {
+          "source": "Refund Amount",
+          "message": "환불 금액"
+        },
+        "app.Q2hhcmdlYmVl.action.cmVmdW5kLWludm9pY2U.option.cmVmdW5kX2Ftb3VudA.short_desc": {
+          "source": "Refund amount in cents",
+          "message": "센트 단위 환불 금액"
+        },
+        "app.Q2hhcmdlYmVl.action.cmVmdW5kLWludm9pY2U.short_desc": {
+          "source": "Refund an invoice",
+          "message": "송장 환불"
+        },
+        "app.Q2hhcmdlYmVl.action.d2F0Y2gtY3VzdG9tZXJz.desc": {
+          "source": "Fires when a new customer is created in Chargebee. Provides customer event details.",
+          "message": "Chargebee에서 새 고객이 생성될 때 실행됩니다. 고객 이벤트 세부정보를 제공합니다."
+        },
+        "app.Q2hhcmdlYmVl.action.d2F0Y2gtY3VzdG9tZXJz.display_name": {
+          "source": "Customer Created",
+          "message": "고객 생성됨"
+        },
+        "app.Q2hhcmdlYmVl.action.d2F0Y2gtY3VzdG9tZXJz.short_desc": {
+          "source": "Trigger when a customer is created",
+          "message": "고객이 생성될 때 트리거"
+        },
+        "app.Q2hhcmdlYmVl.action.d2F0Y2gtZXZlbnRz.desc": {
+          "source": "Fires on any event in Chargebee. Provides full event details for all event types.",
+          "message": "Chargebee의 모든 이벤트에서 실행됩니다. 모든 이벤트 유형에 대한 전체 이벤트 세부정보를 제공합니다."
+        },
+        "app.Q2hhcmdlYmVl.action.d2F0Y2gtZXZlbnRz.display_name": {
+          "source": "Any Event (Instant)",
+          "message": "모든 이벤트(즉시)"
+        },
+        "app.Q2hhcmdlYmVl.action.d2F0Y2gtZXZlbnRz.short_desc": {
+          "source": "Trigger on any Chargebee event",
+          "message": "모든 Chargebee 이벤트 발생 시 트리거"
+        },
+        "app.Q2hhcmdlYmVl.action.d2F0Y2gtaW52b2ljZXM.desc": {
+          "source": "Fires when a new invoice is generated in Chargebee. Provides invoice event details.",
+          "message": "Chargebee에서 새 송장이 생성될 때 실행됩니다. 송장 이벤트 세부정보를 제공합니다."
+        },
+        "app.Q2hhcmdlYmVl.action.d2F0Y2gtaW52b2ljZXM.display_name": {
+          "source": "Invoice Generated",
+          "message": "송장 생성됨"
+        },
+        "app.Q2hhcmdlYmVl.action.d2F0Y2gtaW52b2ljZXM.short_desc": {
+          "source": "Trigger when an invoice is generated",
+          "message": "송장이 생성될 때 트리거"
+        },
+        "app.Q2hhcmdlYmVl.action.d2F0Y2gtc3Vic2NyaXB0aW9ucw.desc": {
+          "source": "Fires when a new subscription is created in Chargebee. Provides subscription event details.",
+          "message": "Chargebee에서 새 구독이 생성될 때 실행됩니다. 구독 이벤트 세부정보를 제공합니다."
+        },
+        "app.Q2hhcmdlYmVl.action.d2F0Y2gtc3Vic2NyaXB0aW9ucw.display_name": {
+          "source": "Subscription Created",
+          "message": "구독 생성됨"
+        },
+        "app.Q2hhcmdlYmVl.action.d2F0Y2gtc3Vic2NyaXB0aW9ucw.short_desc": {
+          "source": "Trigger when a subscription is created",
+          "message": "구독이 생성될 때 트리거"
+        },
+        "app.Q2hhcmdlYmVl.action.dXBkYXRlLWN1c3RvbWVy.desc": {
+          "source": "Update an existing customer in Chargebee. You can modify contact details, billing information, and other customer attributes.",
+          "message": "Chargebee의 기존 고객을 업데이트합니다. 연락처 정보, 청구 정보 및 기타 고객 속성을 수정할 수 있습니다."
+        },
+        "app.Q2hhcmdlYmVl.action.dXBkYXRlLWN1c3RvbWVy.display_name": {
+          "source": "Update Customer",
+          "message": "고객 업데이트"
+        },
+        "app.Q2hhcmdlYmVl.action.dXBkYXRlLWN1c3RvbWVy.option.ZW1haWw.display_name": {
+          "source": "Email",
+          "message": "이메일"
+        },
+        "app.Q2hhcmdlYmVl.action.dXBkYXRlLWN1c3RvbWVy.option.ZW1haWw.short_desc": {
+          "source": "Customer email address",
+          "message": "고객 이메일 주소"
+        },
+        "app.Q2hhcmdlYmVl.action.dXBkYXRlLWN1c3RvbWVy.option.Zmlyc3RfbmFtZQ.display_name": {
+          "source": "First Name",
+          "message": "이름"
+        },
+        "app.Q2hhcmdlYmVl.action.dXBkYXRlLWN1c3RvbWVy.option.Zmlyc3RfbmFtZQ.short_desc": {
+          "source": "Customer first name",
+          "message": "고객 이름"
+        },
+        "app.Q2hhcmdlYmVl.action.dXBkYXRlLWN1c3RvbWVy.option.aWQ.display_name": {
+          "source": "Customer ID",
+          "message": "고객 ID"
+        },
+        "app.Q2hhcmdlYmVl.action.dXBkYXRlLWN1c3RvbWVy.option.aWQ.short_desc": {
+          "source": "The customer to update",
+          "message": "업데이트할 고객"
+        },
+        "app.Q2hhcmdlYmVl.action.dXBkYXRlLWN1c3RvbWVy.short_desc": {
+          "source": "Update an existing customer",
+          "message": "기존 고객 업데이트"
+        },
+        "app.Q2hhcmdlYmVl.action.dXBkYXRlLWNvdXBvbg.desc": {
+          "source": "Update an existing coupon in Chargebee.",
+          "message": "Chargebee의 기존 쿠폰을 업데이트합니다."
+        },
+        "app.Q2hhcmdlYmVl.action.dXBkYXRlLWNvdXBvbg.display_name": {
+          "source": "Update Coupon",
+          "message": "쿠폰 업데이트"
+        },
+        "app.Q2hhcmdlYmVl.action.dXBkYXRlLWNvdXBvbg.option.aWQ.display_name": {
+          "source": "Coupon ID",
+          "message": "쿠폰 ID"
+        },
+        "app.Q2hhcmdlYmVl.action.dXBkYXRlLWNvdXBvbg.option.aWQ.short_desc": {
+          "source": "The coupon to update",
+          "message": "업데이트할 쿠폰"
+        },
+        "app.Q2hhcmdlYmVl.action.dXBkYXRlLWNvdXBvbg.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "이름"
+        },
+        "app.Q2hhcmdlYmVl.action.dXBkYXRlLWNvdXBvbg.option.bmFtZQ.short_desc": {
+          "source": "Coupon display name",
+          "message": "쿠폰 표시 이름"
+        },
+        "app.Q2hhcmdlYmVl.action.dXBkYXRlLWNvdXBvbg.short_desc": {
+          "source": "Update an existing coupon",
+          "message": "기존 쿠폰 업데이트"
+        },
+        "app.Q2hhcmdlYmVl.action.dXBkYXRlLWludm9pY2U.desc": {
+          "source": "Update an existing invoice in Chargebee.",
+          "message": "Chargebee의 기존 송장을 업데이트합니다."
+        },
+        "app.Q2hhcmdlYmVl.action.dXBkYXRlLWludm9pY2U.display_name": {
+          "source": "Update Invoice",
+          "message": "인보이스 업데이트"
+        },
+        "app.Q2hhcmdlYmVl.action.dXBkYXRlLWludm9pY2U.option.aWQ.display_name": {
+          "source": "Invoice ID",
+          "message": "인보이스 ID"
+        },
+        "app.Q2hhcmdlYmVl.action.dXBkYXRlLWludm9pY2U.option.aWQ.short_desc": {
+          "source": "The invoice to update",
+          "message": "업데이트할 송장"
+        },
+        "app.Q2hhcmdlYmVl.action.dXBkYXRlLWludm9pY2U.short_desc": {
+          "source": "Update an existing invoice",
+          "message": "기존 송장 업데이트"
+        },
+        "app.Q2hhcmdlYmVl.action.dXBkYXRlLXN1YnNjcmlwdGlvbg.desc": {
+          "source": "Update an existing subscription in Chargebee. You can modify the plan, billing cycle, add-ons, and other subscription details.",
+          "message": "Chargebee의 기존 구독을 업데이트합니다. 플랜, 청구 주기, 애드온 및 기타 구독 세부정보를 수정할 수 있습니다."
+        },
+        "app.Q2hhcmdlYmVl.action.dXBkYXRlLXN1YnNjcmlwdGlvbg.display_name": {
+          "source": "Update Subscription",
+          "message": "구독 업데이트"
+        },
+        "app.Q2hhcmdlYmVl.action.dXBkYXRlLXN1YnNjcmlwdGlvbg.option.aWQ.display_name": {
+          "source": "Subscription ID",
+          "message": "구독 ID"
+        },
+        "app.Q2hhcmdlYmVl.action.dXBkYXRlLXN1YnNjcmlwdGlvbg.option.aWQ.short_desc": {
+          "source": "The subscription to update",
+          "message": "업데이트할 구독"
+        },
+        "app.Q2hhcmdlYmVl.action.dXBkYXRlLXN1YnNjcmlwdGlvbg.short_desc": {
+          "source": "Update an existing subscription",
+          "message": "기존 구독 업데이트"
+        },
+        "app.Q2hhcmdlYmVl.desc": {
+          "source": "Chargebee is a subscription billing and revenue management platform that helps businesses automate recurring billing, manage subscriptions, and handle invoicing. This integration enables managing customers, subscriptions, invoices, coupons, promotional credits, and receiving real-time event notifications via webhooks.\n\n**Features:**\n- Customer management (create, update, delete)\n- Subscription lifecycle management (create, update, cancel)\n- Invoice management (create, update, collect payments, refunds)\n- Coupon management (create, update, delete)\n- Promotional credit management (add, deduct, set)\n- Transaction retrieval\n- Real-time webhooks for customers, subscriptions, invoices, and events",
+          "message": "Chargebee는 기업이 정기 청구를 자동화하고 구독을 관리하며 송장을 처리할 수 있도록 지원하는 구독 청구 및 수익 관리 플랫폼입니다. 이 연동을 통해 고객, 구독, 송장, 쿠폰, 프로모션 크레딧을 관리하고 웹훅을 통해 실시간 이벤트 알림을 받을 수 있습니다.\n\n**기능:**\n- 고객 관리(생성, 업데이트, 삭제)\n- 구독 수명 주기 관리(생성, 업데이트, 취소)\n- 송장 관리(생성, 업데이트, 결제 수집, 환불)\n- 쿠폰 관리(생성, 업데이트, 삭제)\n- 프로모션 크레딧 관리(추가, 차감, 설정)\n- 거래 내역 조회\n- 고객, 구독, 송장 및 이벤트에 대한 실시간 웹훅"
+        },
+        "app.Q2hhcmdlYmVl.display_name": {
+          "source": "Chargebee",
+          "message": "Chargebee"
+        },
+        "app.Q2hhcmdlYmVl.short_desc": {
+          "source": "Chargebee subscription billing and revenue management platform",
+          "message": "Chargebee 구독 청구 및 수익 관리 플랫폼"
+        }
+      }
+    }
+  }
+}

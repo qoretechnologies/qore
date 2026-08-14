@@ -1,0 +1,2705 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "cs": {
+      "messages": {
+        "app.Q2xvc2U.action.Y29udGFjdC11cGRhdGVk.desc": {
+          "source": "Fires when a contact is updated in Close CRM. Uses polling of the Event Log API to detect changes.",
+          "message": "Aktivuje se při aktualizaci kontaktu v Close CRM. K detekci změn využívá dotazování Event Log API."
+        },
+        "app.Q2xvc2U.action.Y29udGFjdC11cGRhdGVk.display_name": {
+          "source": "Contact Updated",
+          "message": "Kontakt aktualizován"
+        },
+        "app.Q2xvc2U.action.Y29udGFjdC11cGRhdGVk.option.cG9sbF9pbnRlcnZhbA.desc": {
+          "source": "How often to check for new records (minimum 30 seconds)",
+          "message": "Jak často kontrolovat nové záznamy (minimálně 30 sekund)"
+        },
+        "app.Q2xvc2U.action.Y29udGFjdC11cGRhdGVk.option.cG9sbF9pbnRlcnZhbA.display_name": {
+          "source": "Poll Interval",
+          "message": "Interval sledování"
+        },
+        "app.Q2xvc2U.action.Y29udGFjdC11cGRhdGVk.option.cG9sbF9pbnRlcnZhbA.short_desc": {
+          "source": "Polling interval in seconds",
+          "message": "Interval dotazování v sekundách"
+        },
+        "app.Q2xvc2U.action.Y29udGFjdC11cGRhdGVk.short_desc": {
+          "source": "Fires when a contact is updated",
+          "message": "Aktivuje se při aktualizaci kontaktu"
+        },
+        "app.Q2xvc2U.action.Y29udGFjdC1jcmVhdGVk.desc": {
+          "source": "Fires when a new contact is created in Close CRM. Uses polling of the Event Log API to detect new records.",
+          "message": "Aktivuje se při vytvoření nového kontaktu v Close CRM. K detekci nových záznamů využívá dotazování Event Log API."
+        },
+        "app.Q2xvc2U.action.Y29udGFjdC1jcmVhdGVk.display_name": {
+          "source": "Contact Created",
+          "message": "Kontakt vytvořen"
+        },
+        "app.Q2xvc2U.action.Y29udGFjdC1jcmVhdGVk.option.cG9sbF9pbnRlcnZhbA.desc": {
+          "source": "How often to check for new records (minimum 30 seconds)",
+          "message": "Jak často kontrolovat nové záznamy (minimálně 30 sekund)"
+        },
+        "app.Q2xvc2U.action.Y29udGFjdC1jcmVhdGVk.option.cG9sbF9pbnRlcnZhbA.display_name": {
+          "source": "Poll Interval",
+          "message": "Interval sledování"
+        },
+        "app.Q2xvc2U.action.Y29udGFjdC1jcmVhdGVk.option.cG9sbF9pbnRlcnZhbA.short_desc": {
+          "source": "Polling interval in seconds",
+          "message": "Interval dotazování v sekundách"
+        },
+        "app.Q2xvc2U.action.Y29udGFjdC1jcmVhdGVk.short_desc": {
+          "source": "Fires when a contact is created",
+          "message": "Aktivuje se při vytvoření kontaktu"
+        },
+        "app.Q2xvc2U.action.Y29udGFjdC1kZWxldGVk.desc": {
+          "source": "Fires when a contact is deleted in Close CRM. Uses polling of the Event Log API to detect deletions.",
+          "message": "Aktivuje se při smazání kontaktu v Close CRM. K detekci smazání využívá dotazování Event Log API."
+        },
+        "app.Q2xvc2U.action.Y29udGFjdC1kZWxldGVk.display_name": {
+          "source": "Contact Deleted",
+          "message": "Kontakt smazán"
+        },
+        "app.Q2xvc2U.action.Y29udGFjdC1kZWxldGVk.option.cG9sbF9pbnRlcnZhbA.desc": {
+          "source": "How often to check for new records (minimum 30 seconds)",
+          "message": "Jak často kontrolovat nové záznamy (minimálně 30 sekund)"
+        },
+        "app.Q2xvc2U.action.Y29udGFjdC1kZWxldGVk.option.cG9sbF9pbnRlcnZhbA.display_name": {
+          "source": "Poll Interval",
+          "message": "Interval sledování"
+        },
+        "app.Q2xvc2U.action.Y29udGFjdC1kZWxldGVk.option.cG9sbF9pbnRlcnZhbA.short_desc": {
+          "source": "Polling interval in seconds",
+          "message": "Interval dotazování v sekundách"
+        },
+        "app.Q2xvc2U.action.Y29udGFjdC1kZWxldGVk.short_desc": {
+          "source": "Fires when a contact is deleted",
+          "message": "Aktivuje se při smazání kontaktu"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLW5vdGU.desc": {
+          "source": "Create a new note activity in Close CRM",
+          "message": "Vytvořit novou aktivitu poznámky v Close CRM"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLW5vdGU.display_name": {
+          "source": "Create a Note",
+          "message": "Vytvořit poznámku"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLW5vdGU.option.Y29udGFjdF9pZA.desc": {
+          "source": "The contact to associate with this note",
+          "message": "Kontakt, který má být přiřazen k této poznámce"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLW5vdGU.option.Y29udGFjdF9pZA.display_name": {
+          "source": "Contact ID",
+          "message": "ID kontaktu"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLW5vdGU.option.Y29udGFjdF9pZA.short_desc": {
+          "source": "The associated contact",
+          "message": "Přidružený kontakt"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLW5vdGU.option.bGVhZF9pZA.display_name": {
+          "source": "Lead ID",
+          "message": "ID leadu"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLW5vdGU.option.bGVhZF9pZA.short_desc": {
+          "source": "The lead to associate the note with",
+          "message": "Lead, ke kterému má být poznámka přiřazena"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLW5vdGU.option.bm90ZQ.desc": {
+          "source": "The plain text content of the note",
+          "message": "Prostý textový obsah poznámky"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLW5vdGU.option.bm90ZQ.display_name": {
+          "source": "Note",
+          "message": "Poznámka"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLW5vdGU.option.bm90ZQ.short_desc": {
+          "source": "Note text content",
+          "message": "Textový obsah poznámky"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLW5vdGU.option.bm90ZV9odG1s.desc": {
+          "source": "The HTML content of the note",
+          "message": "HTML obsah poznámky"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLW5vdGU.option.bm90ZV9odG1s.display_name": {
+          "source": "Note HTML",
+          "message": "HTML poznámky"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLW5vdGU.option.bm90ZV9odG1s.short_desc": {
+          "source": "Note HTML content",
+          "message": "HTML obsah poznámky"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLW5vdGU.option.cGlubmVk.desc": {
+          "source": "Set to `True` to pin this note to the top",
+          "message": "Nastavte na `True` pro připnutí této poznámky nahoru"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLW5vdGU.option.cGlubmVk.display_name": {
+          "source": "Pinned",
+          "message": "Připnuto"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLW5vdGU.option.cGlubmVk.short_desc": {
+          "source": "Pin the note",
+          "message": "Připnout poznámku"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLW5vdGU.short_desc": {
+          "source": "Create a new note",
+          "message": "Vytvořit novou poznámku"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLW9wcG9ydHVuaXR5.desc": {
+          "source": "Create a new opportunity in Close CRM",
+          "message": "Vytvořit novou příležitost v Close CRM"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLW9wcG9ydHVuaXR5.display_name": {
+          "source": "Create an Opportunity",
+          "message": "Vytvořit příležitost"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLW9wcG9ydHVuaXR5.option.Y29uZmlkZW5jZQ.desc": {
+          "source": "The confidence percentage of winning, from 0 to 100",
+          "message": "Procento pravděpodobnosti úspěchu od 0 do 100"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLW9wcG9ydHVuaXR5.option.Y29uZmlkZW5jZQ.display_name": {
+          "source": "Confidence",
+          "message": "Pravděpodobnost"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLW9wcG9ydHVuaXR5.option.Y29uZmlkZW5jZQ.short_desc": {
+          "source": "The confidence percentage",
+          "message": "Procento pravděpodobnosti"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLW9wcG9ydHVuaXR5.option.Y29udGFjdF9pZA.desc": {
+          "source": "The primary contact for this opportunity",
+          "message": "Primární kontakt pro tuto příležitost"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLW9wcG9ydHVuaXR5.option.Y29udGFjdF9pZA.display_name": {
+          "source": "Contact ID",
+          "message": "ID kontaktu"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLW9wcG9ydHVuaXR5.option.Y29udGFjdF9pZA.short_desc": {
+          "source": "The associated contact",
+          "message": "Přidružený kontakt"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLW9wcG9ydHVuaXR5.option.ZGF0ZV93b24.desc": {
+          "source": "The date won in YYYY-MM-DD format",
+          "message": "Datum získání ve formátu RRRR-MM-DD"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLW9wcG9ydHVuaXR5.option.ZGF0ZV93b24.display_name": {
+          "source": "Date Won",
+          "message": "Datum získání"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLW9wcG9ydHVuaXR5.option.ZGF0ZV93b24.short_desc": {
+          "source": "Date the opportunity was won",
+          "message": "Datum, kdy byla příležitost získána"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLW9wcG9ydHVuaXR5.option.ZGF0ZV9sb3N0.desc": {
+          "source": "The date lost in YYYY-MM-DD format",
+          "message": "Datum ztráty ve formátu RRRR-MM-DD"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLW9wcG9ydHVuaXR5.option.ZGF0ZV9sb3N0.display_name": {
+          "source": "Date Lost",
+          "message": "Datum ztráty"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLW9wcG9ydHVuaXR5.option.ZGF0ZV9sb3N0.short_desc": {
+          "source": "Date the opportunity was lost",
+          "message": "Datum, kdy byla příležitost ztracena"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLW9wcG9ydHVuaXR5.option.bGVhZF9pZA.display_name": {
+          "source": "Lead ID",
+          "message": "ID leadu"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLW9wcG9ydHVuaXR5.option.bGVhZF9pZA.short_desc": {
+          "source": "The lead to associate the opportunity with",
+          "message": "Lead, ke kterému má být příležitost přiřazena"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLW9wcG9ydHVuaXR5.option.bm90ZQ.desc": {
+          "source": "A text note with additional context about the opportunity",
+          "message": "Textová poznámka s dalším kontextem k příležitosti"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLW9wcG9ydHVuaXR5.option.bm90ZQ.display_name": {
+          "source": "Note",
+          "message": "Poznámka"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLW9wcG9ydHVuaXR5.option.bm90ZQ.short_desc": {
+          "source": "Notes about the opportunity",
+          "message": "Poznámky k příležitosti"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLW9wcG9ydHVuaXR5.option.c3RhdHVzX2lk.desc": {
+          "source": "The unique identifier of the opportunity status to assign",
+          "message": "Jedinečný identifikátor stavu příležitosti k přiřazení"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLW9wcG9ydHVuaXR5.option.c3RhdHVzX2lk.display_name": {
+          "source": "Status ID",
+          "message": "ID stavu"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLW9wcG9ydHVuaXR5.option.c3RhdHVzX2lk.short_desc": {
+          "source": "The opportunity status ID",
+          "message": "ID stavu příležitosti"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLW9wcG9ydHVuaXR5.option.dXNlcl9pZA.desc": {
+          "source": "The user to assign this opportunity to",
+          "message": "Uživatel, kterému má být tato příležitost přiřazena"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLW9wcG9ydHVuaXR5.option.dXNlcl9pZA.display_name": {
+          "source": "User ID",
+          "message": "ID uživatele"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLW9wcG9ydHVuaXR5.option.dXNlcl9pZA.short_desc": {
+          "source": "The assigned user",
+          "message": "Přiřazený uživatel"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLW9wcG9ydHVuaXR5.option.dmFsdWU.desc": {
+          "source": "The monetary value of the opportunity in cents (e.g., 10000 = $100.00)",
+          "message": "Peněžní hodnota příležitosti v centech (např. 10000 = $100.00)"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLW9wcG9ydHVuaXR5.option.dmFsdWU.display_name": {
+          "source": "Value",
+          "message": "Hodnota"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLW9wcG9ydHVuaXR5.option.dmFsdWU.short_desc": {
+          "source": "The opportunity value in cents",
+          "message": "Hodnota příležitosti v centech"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLW9wcG9ydHVuaXR5.option.dmFsdWVfY3VycmVuY3k.desc": {
+          "source": "ISO 4217 currency code (e.g., `USD`, `EUR`, `GBP`)",
+          "message": "Kód měny ISO 4217 (např. `USD`, `EUR`, `GBP`)"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLW9wcG9ydHVuaXR5.option.dmFsdWVfY3VycmVuY3k.display_name": {
+          "source": "Value Currency",
+          "message": "Měna hodnoty"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLW9wcG9ydHVuaXR5.option.dmFsdWVfY3VycmVuY3k.short_desc": {
+          "source": "The currency code",
+          "message": "Kód měny"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLW9wcG9ydHVuaXR5.option.dmFsdWVfcGVyaW9k.allowed-value.c3RyaW5nOm1vbnRobHk.desc": {
+          "source": "Monthly recurring",
+          "message": "Měsíčně opakované"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLW9wcG9ydHVuaXR5.option.dmFsdWVfcGVyaW9k.allowed-value.c3RyaW5nOm9uZV90aW1l.desc": {
+          "source": "One-time payment",
+          "message": "Jednorázová platba"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLW9wcG9ydHVuaXR5.option.dmFsdWVfcGVyaW9k.allowed-value.c3RyaW5nOmFubnVhbA.desc": {
+          "source": "Annual recurring",
+          "message": "Ročně opakované"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLW9wcG9ydHVuaXR5.option.dmFsdWVfcGVyaW9k.desc": {
+          "source": "The billing period for the opportunity value",
+          "message": "Fakturační období pro hodnotu příležitosti"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLW9wcG9ydHVuaXR5.option.dmFsdWVfcGVyaW9k.display_name": {
+          "source": "Value Period",
+          "message": "Období hodnoty"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLW9wcG9ydHVuaXR5.option.dmFsdWVfcGVyaW9k.short_desc": {
+          "source": "The value period",
+          "message": "Období hodnoty"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLW9wcG9ydHVuaXR5.short_desc": {
+          "source": "Create a new opportunity",
+          "message": "Vytvořit novou příležitost"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLWNhbGw.desc": {
+          "source": "Log a new call activity in Close CRM",
+          "message": "Zaznamenat novou aktivitu hovoru v Close CRM"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLWNhbGw.display_name": {
+          "source": "Create a Call",
+          "message": "Vytvořit hovor"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLWNhbGw.option.Y29udGFjdF9pZA.desc": {
+          "source": "The contact associated with this call",
+          "message": "Kontakt přiřazený k tomuto hovoru"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLWNhbGw.option.Y29udGFjdF9pZA.display_name": {
+          "source": "Contact ID",
+          "message": "ID kontaktu"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLWNhbGw.option.Y29udGFjdF9pZA.short_desc": {
+          "source": "The associated contact",
+          "message": "Přidružený kontakt"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLWNhbGw.option.ZGlyZWN0aW9u.allowed-value.c3RyaW5nOm91dGJvdW5k.desc": {
+          "source": "Outbound call",
+          "message": "Odchozí hovor"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLWNhbGw.option.ZGlyZWN0aW9u.allowed-value.c3RyaW5nOmluYm91bmQ.desc": {
+          "source": "Inbound call",
+          "message": "Příchozí hovor"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLWNhbGw.option.ZGlyZWN0aW9u.desc": {
+          "source": "Call direction",
+          "message": "Směr hovoru"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLWNhbGw.option.ZGlyZWN0aW9u.display_name": {
+          "source": "Direction",
+          "message": "Směr"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLWNhbGw.option.ZGlyZWN0aW9u.short_desc": {
+          "source": "Call direction",
+          "message": "Směr hovoru"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLWNhbGw.option.ZGlzcG9zaXRpb24.desc": {
+          "source": "The disposition or outcome of the call",
+          "message": "Výsledek nebo stav hovoru"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLWNhbGw.option.ZGlzcG9zaXRpb24.display_name": {
+          "source": "Disposition",
+          "message": "Výsledek"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLWNhbGw.option.ZGlzcG9zaXRpb24.short_desc": {
+          "source": "Call disposition",
+          "message": "Výsledek hovoru"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLWNhbGw.option.ZHVyYXRpb24.desc": {
+          "source": "Call duration in seconds",
+          "message": "Délka hovoru v sekundách"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLWNhbGw.option.ZHVyYXRpb24.display_name": {
+          "source": "Duration",
+          "message": "Doba trvání"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLWNhbGw.option.ZHVyYXRpb24.short_desc": {
+          "source": "Call duration in seconds",
+          "message": "Délka hovoru v sekundách"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLWNhbGw.option.bGVhZF9pZA.display_name": {
+          "source": "Lead ID",
+          "message": "ID leadu"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLWNhbGw.option.bGVhZF9pZA.short_desc": {
+          "source": "The lead to associate the call with",
+          "message": "Lead, ke kterému má být hovor přiřazen"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLWNhbGw.option.bm90ZQ.desc": {
+          "source": "A text note to associate with this call",
+          "message": "Textová poznámka, která má být přiřazena k tomuto hovoru"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLWNhbGw.option.bm90ZQ.display_name": {
+          "source": "Note",
+          "message": "Poznámka"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLWNhbGw.option.bm90ZQ.short_desc": {
+          "source": "Call note",
+          "message": "Poznámka k hovoru"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLWNhbGw.option.bm90ZV9odG1s.desc": {
+          "source": "An HTML-formatted note for this call",
+          "message": "Poznámka ve formátu HTML pro tento hovor"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLWNhbGw.option.bm90ZV9odG1s.display_name": {
+          "source": "Note HTML",
+          "message": "HTML poznámky"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLWNhbGw.option.bm90ZV9odG1s.short_desc": {
+          "source": "HTML note for the call",
+          "message": "HTML poznámka k hovoru"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLWNhbGw.option.c3RhdHVz.allowed-value.c3RyaW5nOmNhbmNlbGxlZA.desc": {
+          "source": "Call was cancelled",
+          "message": "Hovor byl zrušen"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLWNhbGw.option.c3RhdHVz.allowed-value.c3RyaW5nOmNvbXBsZXRlZA.desc": {
+          "source": "Call was completed",
+          "message": "Hovor byl dokončen"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLWNhbGw.option.c3RhdHVz.allowed-value.c3RyaW5nOmNyZWF0ZWQ.desc": {
+          "source": "Call was created/logged",
+          "message": "Hovor byl vytvořen/zaznamenán"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLWNhbGw.option.c3RhdHVz.desc": {
+          "source": "The status of the call",
+          "message": "Stav hovoru"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLWNhbGw.option.c3RhdHVz.display_name": {
+          "source": "Status",
+          "message": "Stav"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLWNhbGw.option.c3RhdHVz.short_desc": {
+          "source": "Call status",
+          "message": "Stav hovoru"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLWNhbGw.option.cGhvbmU.desc": {
+          "source": "The phone number associated with this call",
+          "message": "Telefonní číslo spojené s tímto hovorem"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLWNhbGw.option.cGhvbmU.display_name": {
+          "source": "Phone Number",
+          "message": "Telefonní číslo"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLWNhbGw.option.cGhvbmU.short_desc": {
+          "source": "The phone number",
+          "message": "Telefonní číslo"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLWNhbGw.option.dXNlcl9pZA.desc": {
+          "source": "The user who made or received this call",
+          "message": "Uživatel, který tento hovor uskutečnil nebo přijal"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLWNhbGw.option.dXNlcl9pZA.display_name": {
+          "source": "User ID",
+          "message": "ID uživatele"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLWNhbGw.option.dXNlcl9pZA.short_desc": {
+          "source": "The user who made the call",
+          "message": "Uživatel, který hovor uskutečnil"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLWNhbGw.short_desc": {
+          "source": "Log a new call",
+          "message": "Zaznamenat nový hovor"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLWNvbnRhY3Q.desc": {
+          "source": "Create a new contact in Close CRM",
+          "message": "Vytvořit nový kontakt v Close CRM"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLWNvbnRhY3Q.display_name": {
+          "source": "Create a Contact",
+          "message": "Vytvořit kontakt"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLWNvbnRhY3Q.option.ZW1haWxz.desc": {
+          "source": "A list of email address objects, each with `type` and `email` fields",
+          "message": "Seznam objektů e-mailových adres, každý s poli `type` a `email`"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLWNvbnRhY3Q.option.ZW1haWxz.display_name": {
+          "source": "Email Addresses",
+          "message": "E-mailové adresy"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLWNvbnRhY3Q.option.ZW1haWxz.short_desc": {
+          "source": "The contact email addresses",
+          "message": "E-mailové adresy kontaktu"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLWNvbnRhY3Q.option.bGVhZF9pZA.display_name": {
+          "source": "Lead ID",
+          "message": "ID leadu"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLWNvbnRhY3Q.option.bGVhZF9pZA.short_desc": {
+          "source": "The lead to associate the contact with",
+          "message": "Lead, ke kterému má být kontakt přiřazen"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLWNvbnRhY3Q.option.bmFtZQ.desc": {
+          "source": "The full name of the contact",
+          "message": "Celé jméno kontaktu"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLWNvbnRhY3Q.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "Název"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLWNvbnRhY3Q.option.bmFtZQ.short_desc": {
+          "source": "The contact name",
+          "message": "Jméno kontaktu"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLWNvbnRhY3Q.option.cGhvbmVz.desc": {
+          "source": "A list of phone number objects, each with `type` and `phone` fields",
+          "message": "Seznam objektů telefonních čísel, každý s poli `type` a `phone`"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLWNvbnRhY3Q.option.cGhvbmVz.display_name": {
+          "source": "Phone Numbers",
+          "message": "Telefonní čísla"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLWNvbnRhY3Q.option.cGhvbmVz.short_desc": {
+          "source": "The contact phone numbers",
+          "message": "Telefonní čísla kontaktu"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLWNvbnRhY3Q.option.dGl0bGU.desc": {
+          "source": "The job title of the contact",
+          "message": "Pracovní pozice kontaktu"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLWNvbnRhY3Q.option.dGl0bGU.display_name": {
+          "source": "Title",
+          "message": "Název"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLWNvbnRhY3Q.option.dGl0bGU.short_desc": {
+          "source": "The contact title",
+          "message": "Pozice kontaktu"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLWNvbnRhY3Q.option.dXJscw.desc": {
+          "source": "List of URL objects for the contact",
+          "message": "Seznam objektů URL pro kontakt"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLWNvbnRhY3Q.option.dXJscw.display_name": {
+          "source": "URLs",
+          "message": "URL adresy"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLWNvbnRhY3Q.option.dXJscw.short_desc": {
+          "source": "Contact URLs",
+          "message": "URL adresy kontaktu"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLWNvbnRhY3Q.short_desc": {
+          "source": "Create a new contact",
+          "message": "Vytvořit nový kontakt"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLWVtYWls.desc": {
+          "source": "Log a new email activity in Close CRM",
+          "message": "Zaznamenat novou e-mailovou aktivitu v Close CRM"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLWVtYWls.display_name": {
+          "source": "Create an Email",
+          "message": "Vytvořit e-mail"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLWVtYWls.option.Y29udGFjdF9pZA.desc": {
+          "source": "The contact to associate with this email",
+          "message": "Kontakt, ke kterému má být tento e-mail přiřazen"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLWVtYWls.option.Y29udGFjdF9pZA.display_name": {
+          "source": "Contact ID",
+          "message": "ID kontaktu"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLWVtYWls.option.Y29udGFjdF9pZA.short_desc": {
+          "source": "The associated contact",
+          "message": "Přidružený kontakt"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLWVtYWls.option.Y2M.desc": {
+          "source": "List of CC recipient email addresses",
+          "message": "Seznam e-mailových adres příjemců v kopii (CC)"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLWVtYWls.option.Y2M.display_name": {
+          "source": "CC",
+          "message": "Kopie (CC)"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLWVtYWls.option.Y2M.short_desc": {
+          "source": "CC recipients",
+          "message": "Příjemci kopie (CC)"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLWVtYWls.option.Ym9keV90ZXh0.desc": {
+          "source": "The plain text body of the email",
+          "message": "Tělo e-mailu jako prostý text"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLWVtYWls.option.Ym9keV90ZXh0.display_name": {
+          "source": "Body Text",
+          "message": "Text těla zprávy"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLWVtYWls.option.Ym9keV90ZXh0.short_desc": {
+          "source": "Email body as plain text",
+          "message": "Tělo e-mailu jako prostý text"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLWVtYWls.option.Ym9keV9odG1s.desc": {
+          "source": "The HTML body of the email",
+          "message": "Tělo e-mailu ve formátu HTML"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLWVtYWls.option.Ym9keV9odG1s.display_name": {
+          "source": "Body HTML",
+          "message": "Tělo zprávy v HTML"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLWVtYWls.option.Ym9keV9odG1s.short_desc": {
+          "source": "Email body as HTML",
+          "message": "Tělo e-mailu ve formátu HTML"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLWVtYWls.option.YmNj.desc": {
+          "source": "List of BCC recipient email addresses",
+          "message": "Seznam e-mailových adres příjemců ve skryté kopii (BCC)"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLWVtYWls.option.YmNj.display_name": {
+          "source": "BCC",
+          "message": "Skrytá kopie (BCC)"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLWVtYWls.option.YmNj.short_desc": {
+          "source": "BCC recipients",
+          "message": "Příjemci skryté kopie (BCC)"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLWVtYWls.option.ZGlyZWN0aW9u.allowed-value.c3RyaW5nOm91dGdvaW5n.desc": {
+          "source": "Outgoing email",
+          "message": "Odchozí e-mail"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLWVtYWls.option.ZGlyZWN0aW9u.allowed-value.c3RyaW5nOmluY29taW5n.desc": {
+          "source": "Incoming email",
+          "message": "Příchozí e-mail"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLWVtYWls.option.ZGlyZWN0aW9u.desc": {
+          "source": "The direction: `incoming` or `outgoing`",
+          "message": "Směr: `incoming` nebo `outgoing`"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLWVtYWls.option.ZGlyZWN0aW9u.display_name": {
+          "source": "Direction",
+          "message": "Směr"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLWVtYWls.option.ZGlyZWN0aW9u.short_desc": {
+          "source": "Email direction",
+          "message": "Směr e-mailu"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLWVtYWls.option.bGVhZF9pZA.display_name": {
+          "source": "Lead ID",
+          "message": "ID leadu"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLWVtYWls.option.bGVhZF9pZA.short_desc": {
+          "source": "The lead to associate the email with",
+          "message": "Lead, ke kterému má být e-mail přiřazen"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLWVtYWls.option.c2VuZGVy.desc": {
+          "source": "The sender email address",
+          "message": "E-mailová adresa odesílatele"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLWVtYWls.option.c2VuZGVy.display_name": {
+          "source": "Sender",
+          "message": "Odesílatel"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLWVtYWls.option.c2VuZGVy.short_desc": {
+          "source": "Sender email address",
+          "message": "E-mailová adresa odesílatele"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLWVtYWls.option.c3RhdHVz.allowed-value.c3RyaW5nOm91dGJveA.desc": {
+          "source": "Email in outbox",
+          "message": "E-mail k odeslání"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLWVtYWls.option.c3RhdHVz.allowed-value.c3RyaW5nOmRyYWZ0.desc": {
+          "source": "Draft email",
+          "message": "Koncept e-mailu"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLWVtYWls.option.c3RhdHVz.allowed-value.c3RyaW5nOnNlbnQ.desc": {
+          "source": "Sent email",
+          "message": "Odeslaný e-mail"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLWVtYWls.option.c3RhdHVz.desc": {
+          "source": "Email status",
+          "message": "Stav e-mailu"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLWVtYWls.option.c3RhdHVz.display_name": {
+          "source": "Status",
+          "message": "Stav"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLWVtYWls.option.c3RhdHVz.short_desc": {
+          "source": "Email status",
+          "message": "Stav e-mailu"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLWVtYWls.option.c3ViamVjdA.desc": {
+          "source": "The subject line of the email",
+          "message": "Předmět e-mailu"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLWVtYWls.option.c3ViamVjdA.display_name": {
+          "source": "Subject",
+          "message": "Předmět"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLWVtYWls.option.c3ViamVjdA.short_desc": {
+          "source": "Email subject",
+          "message": "Předmět e-mailu"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLWVtYWls.option.dG8.desc": {
+          "source": "A list of recipient email addresses",
+          "message": "Seznam e-mailových adres příjemců"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLWVtYWls.option.dG8.display_name": {
+          "source": "To",
+          "message": "Komu"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLWVtYWls.option.dG8.short_desc": {
+          "source": "To recipients",
+          "message": "Příjemci (Komu)"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLWVtYWls.short_desc": {
+          "source": "Log a new email",
+          "message": "Zaznamenat nový e-mail"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLWxlYWQ.desc": {
+          "source": "Create a new lead in Close CRM",
+          "message": "Vytvořit nový lead v Close CRM"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLWxlYWQ.display_name": {
+          "source": "Create a Lead",
+          "message": "Vytvořit lead"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLWxlYWQ.option.Y29udGFjdHM.desc": {
+          "source": "A list of contact objects to create and associate with this lead. Each contact can include `name`, `title`, `emails`, and `phones` fields",
+          "message": "Seznam objektů kontaktů, které mají být vytvořeny a přiřazeny k tomuto leadu. Každý kontakt může obsahovat pole `name`, `title`, `emails` a `phones`"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLWxlYWQ.option.Y29udGFjdHM.display_name": {
+          "source": "Contacts",
+          "message": "Kontakty"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLWxlYWQ.option.Y29udGFjdHM.short_desc": {
+          "source": "Nested contacts to create",
+          "message": "Vnořené kontakty k vytvoření"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLWxlYWQ.option.YWRkcmVzc2Vz.desc": {
+          "source": "List of address objects for the lead",
+          "message": "Seznam objektů adres pro lead"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLWxlYWQ.option.YWRkcmVzc2Vz.display_name": {
+          "source": "Addresses",
+          "message": "Adresy"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLWxlYWQ.option.YWRkcmVzc2Vz.short_desc": {
+          "source": "Lead addresses",
+          "message": "Adresy leadu"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLWxlYWQ.option.ZGVzY3JpcHRpb24.desc": {
+          "source": "A text description of the lead with additional context or notes",
+          "message": "Textový popis leadu s dalším kontextem nebo poznámkami"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLWxlYWQ.option.ZGVzY3JpcHRpb24.display_name": {
+          "source": "Description",
+          "message": "Popis"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLWxlYWQ.option.ZGVzY3JpcHRpb24.short_desc": {
+          "source": "The lead description",
+          "message": "Popis leadu"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLWxlYWQ.option.bmFtZQ.desc": {
+          "source": "The name of the lead (typically the company or organization name)",
+          "message": "Název leadu (obvykle název společnosti nebo organizace)"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLWxlYWQ.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "Název"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLWxlYWQ.option.bmFtZQ.short_desc": {
+          "source": "The lead name",
+          "message": "Název leadu"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLWxlYWQ.option.c3RhdHVzX2lk.desc": {
+          "source": "The unique identifier of the lead status to assign",
+          "message": "Jedinečný identifikátor stavu leadu, který se má přiřadit"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLWxlYWQ.option.c3RhdHVzX2lk.display_name": {
+          "source": "Status ID",
+          "message": "ID stavu"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLWxlYWQ.option.c3RhdHVzX2lk.short_desc": {
+          "source": "The lead status ID",
+          "message": "ID stavu leadu"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLWxlYWQ.option.dXJs.desc": {
+          "source": "The website URL associated with the lead",
+          "message": "URL webové stránky spojené s leadem"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLWxlYWQ.option.dXJs.display_name": {
+          "source": "URL",
+          "message": "URL"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLWxlYWQ.option.dXJs.short_desc": {
+          "source": "The lead URL",
+          "message": "URL leadu"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLWxlYWQ.short_desc": {
+          "source": "Create a new lead",
+          "message": "Vytvořit nový lead"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLXNtcw.desc": {
+          "source": "Send a new SMS activity in Close CRM",
+          "message": "Odeslat novou SMS aktivitu v Close CRM"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLXNtcw.display_name": {
+          "source": "Create an SMS",
+          "message": "Vytvořit SMS"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLXNtcw.option.bG9jYWxfcGhvbmU.desc": {
+          "source": "The local phone number to send the SMS from",
+          "message": "Místní telefonní číslo, ze kterého se má SMS odeslat"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLXNtcw.option.bG9jYWxfcGhvbmU.display_name": {
+          "source": "Local Phone",
+          "message": "Místní telefon"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLXNtcw.option.bG9jYWxfcGhvbmU.short_desc": {
+          "source": "Local phone number",
+          "message": "Místní telefonní číslo"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLXNtcw.option.bGVhZF9pZA.display_name": {
+          "source": "Lead ID",
+          "message": "ID leadu"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLXNtcw.option.bGVhZF9pZA.short_desc": {
+          "source": "The lead to associate the SMS with",
+          "message": "Lead, ke kterému se má SMS přiřadit"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLXNtcw.option.c3RhdHVz.allowed-value.c3RyaW5nOmRyYWZ0.desc": {
+          "source": "Draft SMS",
+          "message": "Koncept SMS"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLXNtcw.option.c3RhdHVz.allowed-value.c3RyaW5nOnNlbmRpbmc.desc": {
+          "source": "Sending SMS",
+          "message": "Odesílání SMS"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLXNtcw.option.c3RhdHVz.allowed-value.c3RyaW5nOnNlbnQ.desc": {
+          "source": "Sent SMS",
+          "message": "Odeslaná SMS"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLXNtcw.option.c3RhdHVz.desc": {
+          "source": "SMS status",
+          "message": "Stav SMS"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLXNtcw.option.c3RhdHVz.display_name": {
+          "source": "Status",
+          "message": "Stav"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLXNtcw.option.c3RhdHVz.short_desc": {
+          "source": "SMS status",
+          "message": "Stav SMS"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLXNtcw.option.cmVtb3RlX3Bob25l.desc": {
+          "source": "The remote phone number to send the SMS to",
+          "message": "Vzdálené telefonní číslo, na které se má SMS odeslat"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLXNtcw.option.cmVtb3RlX3Bob25l.display_name": {
+          "source": "Remote Phone",
+          "message": "Vzdálený telefon"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLXNtcw.option.cmVtb3RlX3Bob25l.short_desc": {
+          "source": "Remote phone number",
+          "message": "Vzdálené telefonní číslo"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLXNtcw.option.dGV4dA.desc": {
+          "source": "The text content of the SMS message",
+          "message": "Textový obsah zprávy SMS"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLXNtcw.option.dGV4dA.display_name": {
+          "source": "Text",
+          "message": "Text"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLXNtcw.option.dGV4dA.short_desc": {
+          "source": "SMS message text",
+          "message": "Text zprávy SMS"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLXNtcw.short_desc": {
+          "source": "Send a new SMS",
+          "message": "Odeslat novou SMS"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLXRhc2s.desc": {
+          "source": "Create a new task in Close CRM",
+          "message": "Vytvořit nový úkol v Close CRM"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLXRhc2s.display_name": {
+          "source": "Create a Task",
+          "message": "Vytvořit úkol"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLXRhc2s.option.X3R5cGU.allowed-value.c3RyaW5nOm91dGdvaW5nX2NhbGw.desc": {
+          "source": "Outgoing call task",
+          "message": "Úkol odchozího hovoru"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLXRhc2s.option.X3R5cGU.allowed-value.c3RyaW5nOmxlYWQ.desc": {
+          "source": "Lead task",
+          "message": "Úkol leadu"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLXRhc2s.option.X3R5cGU.desc": {
+          "source": "The type of the task to create",
+          "message": "Typ úkolu, který se má vytvořit"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLXRhc2s.option.X3R5cGU.display_name": {
+          "source": "Task Type",
+          "message": "Typ úkolu"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLXRhc2s.option.X3R5cGU.short_desc": {
+          "source": "The task type",
+          "message": "Typ úkolu"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLXRhc2s.option.YXNzaWduZWRfdG8.desc": {
+          "source": "The user ID to assign this task to",
+          "message": "ID uživatele, kterému se má tento úkol přiřadit"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLXRhc2s.option.YXNzaWduZWRfdG8.display_name": {
+          "source": "Assigned To",
+          "message": "Přiřazeno uživateli"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLXRhc2s.option.YXNzaWduZWRfdG8.short_desc": {
+          "source": "The user to assign the task to",
+          "message": "Uživatel, kterému se má úkol přiřadit"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLXRhc2s.option.ZGF0ZQ.desc": {
+          "source": "The due date of the task in YYYY-MM-DD format",
+          "message": "Datum splnění úkolu ve formátu RRRR-MM-DD"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLXRhc2s.option.ZGF0ZQ.display_name": {
+          "source": "Date",
+          "message": "Datum"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLXRhc2s.option.ZGF0ZQ.short_desc": {
+          "source": "The task due date",
+          "message": "Datum splnění úkolu"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLXRhc2s.option.bGVhZF9pZA.display_name": {
+          "source": "Lead ID",
+          "message": "ID leadu"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLXRhc2s.option.bGVhZF9pZA.short_desc": {
+          "source": "The lead to associate the task with",
+          "message": "Lead, ke kterému se má úkol přiřadit"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLXRhc2s.option.dGV4dA.desc": {
+          "source": "The text description or body of the task",
+          "message": "Textový popis nebo tělo úkolu"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLXRhc2s.option.dGV4dA.display_name": {
+          "source": "Text",
+          "message": "Text"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLXRhc2s.option.dGV4dA.short_desc": {
+          "source": "The task text",
+          "message": "Text úkolu"
+        },
+        "app.Q2xvc2U.action.Y3JlYXRlLXRhc2s.short_desc": {
+          "source": "Create a new task",
+          "message": "Vytvořit nový úkol"
+        },
+        "app.Q2xvc2U.action.Z2V0LW1lZXRpbmc.desc": {
+          "source": "Retrieve a single meeting activity by ID from Close CRM",
+          "message": "Získat aktivitu schůzky podle ID z Close CRM"
+        },
+        "app.Q2xvc2U.action.Z2V0LW1lZXRpbmc.display_name": {
+          "source": "Get a Meeting",
+          "message": "Získat schůzku"
+        },
+        "app.Q2xvc2U.action.Z2V0LW1lZXRpbmc.option.bWVldGluZ19pZA.display_name": {
+          "source": "Meeting ID",
+          "message": "ID schůzky"
+        },
+        "app.Q2xvc2U.action.Z2V0LW1lZXRpbmc.option.bWVldGluZ19pZA.short_desc": {
+          "source": "The meeting ID",
+          "message": "ID schůzky"
+        },
+        "app.Q2xvc2U.action.Z2V0LW1lZXRpbmc.short_desc": {
+          "source": "Get a single meeting by ID",
+          "message": "Získat schůzku podle ID"
+        },
+        "app.Q2xvc2U.action.Z2V0LW5vdGU.desc": {
+          "source": "Retrieve a single note activity by ID from Close CRM",
+          "message": "Získat aktivitu poznámky podle ID z Close CRM"
+        },
+        "app.Q2xvc2U.action.Z2V0LW5vdGU.display_name": {
+          "source": "Get a Note",
+          "message": "Získat poznámku"
+        },
+        "app.Q2xvc2U.action.Z2V0LW5vdGU.option.bm90ZV9pZA.display_name": {
+          "source": "Note ID",
+          "message": "ID poznámky"
+        },
+        "app.Q2xvc2U.action.Z2V0LW5vdGU.option.bm90ZV9pZA.short_desc": {
+          "source": "The note ID",
+          "message": "ID poznámky"
+        },
+        "app.Q2xvc2U.action.Z2V0LW5vdGU.short_desc": {
+          "source": "Get a single note by ID",
+          "message": "Získat poznámku podle ID"
+        },
+        "app.Q2xvc2U.action.Z2V0LW9wcG9ydHVuaXR5.desc": {
+          "source": "Retrieve a single opportunity by ID from Close CRM",
+          "message": "Získat příležitost podle ID z Close CRM"
+        },
+        "app.Q2xvc2U.action.Z2V0LW9wcG9ydHVuaXR5.display_name": {
+          "source": "Get an Opportunity",
+          "message": "Získat příležitost"
+        },
+        "app.Q2xvc2U.action.Z2V0LW9wcG9ydHVuaXR5.option.b3Bwb3J0dW5pdHlfaWQ.display_name": {
+          "source": "Opportunity ID",
+          "message": "ID příležitosti"
+        },
+        "app.Q2xvc2U.action.Z2V0LW9wcG9ydHVuaXR5.option.b3Bwb3J0dW5pdHlfaWQ.short_desc": {
+          "source": "The opportunity ID",
+          "message": "ID příležitosti"
+        },
+        "app.Q2xvc2U.action.Z2V0LW9wcG9ydHVuaXR5.short_desc": {
+          "source": "Get a single opportunity by ID",
+          "message": "Získat příležitost podle ID"
+        },
+        "app.Q2xvc2U.action.Z2V0LWNhbGw.desc": {
+          "source": "Retrieve a single call activity by ID from Close CRM",
+          "message": "Získat aktivitu hovoru podle ID z Close CRM"
+        },
+        "app.Q2xvc2U.action.Z2V0LWNhbGw.display_name": {
+          "source": "Get a Call",
+          "message": "Získat hovor"
+        },
+        "app.Q2xvc2U.action.Z2V0LWNhbGw.option.Y2FsbF9pZA.display_name": {
+          "source": "Call ID",
+          "message": "ID hovoru"
+        },
+        "app.Q2xvc2U.action.Z2V0LWNhbGw.option.Y2FsbF9pZA.short_desc": {
+          "source": "The call ID",
+          "message": "ID hovoru"
+        },
+        "app.Q2xvc2U.action.Z2V0LWNhbGw.short_desc": {
+          "source": "Get a single call by ID",
+          "message": "Získat hovor podle ID"
+        },
+        "app.Q2xvc2U.action.Z2V0LWNvbnRhY3Q.desc": {
+          "source": "Retrieve a single contact by ID from Close CRM",
+          "message": "Získat kontakt podle ID z Close CRM"
+        },
+        "app.Q2xvc2U.action.Z2V0LWNvbnRhY3Q.display_name": {
+          "source": "Get a Contact",
+          "message": "Získat kontakt"
+        },
+        "app.Q2xvc2U.action.Z2V0LWNvbnRhY3Q.option.Y29udGFjdF9pZA.display_name": {
+          "source": "Contact ID",
+          "message": "ID kontaktu"
+        },
+        "app.Q2xvc2U.action.Z2V0LWNvbnRhY3Q.option.Y29udGFjdF9pZA.short_desc": {
+          "source": "The contact ID",
+          "message": "ID kontaktu"
+        },
+        "app.Q2xvc2U.action.Z2V0LWNvbnRhY3Q.short_desc": {
+          "source": "Get a single contact by ID",
+          "message": "Získat jeden kontakt podle ID"
+        },
+        "app.Q2xvc2U.action.Z2V0LWVtYWls.desc": {
+          "source": "Retrieve a single email activity by ID from Close CRM",
+          "message": "Získat e-mailovou aktivitu podle ID z Close CRM"
+        },
+        "app.Q2xvc2U.action.Z2V0LWVtYWls.display_name": {
+          "source": "Get an Email",
+          "message": "Získat e-mail"
+        },
+        "app.Q2xvc2U.action.Z2V0LWVtYWls.option.ZW1haWxfaWQ.display_name": {
+          "source": "Email ID",
+          "message": "ID e-mailu"
+        },
+        "app.Q2xvc2U.action.Z2V0LWVtYWls.option.ZW1haWxfaWQ.short_desc": {
+          "source": "The email ID",
+          "message": "ID e-mailu"
+        },
+        "app.Q2xvc2U.action.Z2V0LWVtYWls.short_desc": {
+          "source": "Get a single email by ID",
+          "message": "Získat e-mail podle ID"
+        },
+        "app.Q2xvc2U.action.Z2V0LWxlYWQ.desc": {
+          "source": "Retrieve a single lead by ID from Close CRM",
+          "message": "Získat lead podle ID z Close CRM"
+        },
+        "app.Q2xvc2U.action.Z2V0LWxlYWQ.display_name": {
+          "source": "Get a Lead",
+          "message": "Získat lead"
+        },
+        "app.Q2xvc2U.action.Z2V0LWxlYWQ.option.bGVhZF9pZA.display_name": {
+          "source": "Lead ID",
+          "message": "ID leadu"
+        },
+        "app.Q2xvc2U.action.Z2V0LWxlYWQ.option.bGVhZF9pZA.short_desc": {
+          "source": "The lead ID",
+          "message": "ID leadu"
+        },
+        "app.Q2xvc2U.action.Z2V0LWxlYWQ.short_desc": {
+          "source": "Get a single lead by ID",
+          "message": "Získat lead podle ID"
+        },
+        "app.Q2xvc2U.action.Z2V0LXNtcw.desc": {
+          "source": "Retrieve a single SMS activity by ID from Close CRM",
+          "message": "Získat SMS aktivitu podle ID z Close CRM"
+        },
+        "app.Q2xvc2U.action.Z2V0LXNtcw.display_name": {
+          "source": "Get an SMS",
+          "message": "Získat SMS"
+        },
+        "app.Q2xvc2U.action.Z2V0LXNtcw.option.c21zX2lk.display_name": {
+          "source": "SMS ID",
+          "message": "ID SMS"
+        },
+        "app.Q2xvc2U.action.Z2V0LXNtcw.option.c21zX2lk.short_desc": {
+          "source": "The SMS ID",
+          "message": "ID SMS"
+        },
+        "app.Q2xvc2U.action.Z2V0LXNtcw.short_desc": {
+          "source": "Get a single SMS by ID",
+          "message": "Získat jednu SMS podle ID"
+        },
+        "app.Q2xvc2U.action.Z2V0LXRhc2s.desc": {
+          "source": "Retrieve a single task by ID from Close CRM",
+          "message": "Získat jeden úkol podle ID z Close CRM"
+        },
+        "app.Q2xvc2U.action.Z2V0LXRhc2s.display_name": {
+          "source": "Get a Task",
+          "message": "Získat úkol"
+        },
+        "app.Q2xvc2U.action.Z2V0LXRhc2s.option.dGFza19pZA.display_name": {
+          "source": "Task ID",
+          "message": "ID úlohy"
+        },
+        "app.Q2xvc2U.action.Z2V0LXRhc2s.option.dGFza19pZA.short_desc": {
+          "source": "The task ID",
+          "message": "ID úkolu"
+        },
+        "app.Q2xvc2U.action.Z2V0LXRhc2s.short_desc": {
+          "source": "Get a single task by ID",
+          "message": "Získat jeden úkol podle ID"
+        },
+        "app.Q2xvc2U.action.ZGVsZXRlLW5vdGU.desc": {
+          "source": "Delete a note activity from Close CRM",
+          "message": "Smazat aktivitu poznámky z Close CRM"
+        },
+        "app.Q2xvc2U.action.ZGVsZXRlLW5vdGU.display_name": {
+          "source": "Delete a Note",
+          "message": "Odstranit poznámku"
+        },
+        "app.Q2xvc2U.action.ZGVsZXRlLW5vdGU.option.bm90ZV9pZA.display_name": {
+          "source": "Note ID",
+          "message": "ID poznámky"
+        },
+        "app.Q2xvc2U.action.ZGVsZXRlLW5vdGU.option.bm90ZV9pZA.short_desc": {
+          "source": "The note to delete",
+          "message": "Poznámka ke smazání"
+        },
+        "app.Q2xvc2U.action.ZGVsZXRlLW5vdGU.short_desc": {
+          "source": "Delete a note",
+          "message": "Odstranit poznámku"
+        },
+        "app.Q2xvc2U.action.ZGVsZXRlLW9wcG9ydHVuaXR5.desc": {
+          "source": "Delete an opportunity from Close CRM",
+          "message": "Smazat obchodní příležitost z Close CRM"
+        },
+        "app.Q2xvc2U.action.ZGVsZXRlLW9wcG9ydHVuaXR5.display_name": {
+          "source": "Delete an Opportunity",
+          "message": "Smazat obchodní příležitost"
+        },
+        "app.Q2xvc2U.action.ZGVsZXRlLW9wcG9ydHVuaXR5.option.b3Bwb3J0dW5pdHlfaWQ.display_name": {
+          "source": "Opportunity ID",
+          "message": "ID příležitosti"
+        },
+        "app.Q2xvc2U.action.ZGVsZXRlLW9wcG9ydHVuaXR5.option.b3Bwb3J0dW5pdHlfaWQ.short_desc": {
+          "source": "The opportunity to delete",
+          "message": "Obchodní příležitost ke smazání"
+        },
+        "app.Q2xvc2U.action.ZGVsZXRlLW9wcG9ydHVuaXR5.short_desc": {
+          "source": "Delete an opportunity",
+          "message": "Smazat obchodní příležitost"
+        },
+        "app.Q2xvc2U.action.ZGVsZXRlLWNhbGw.desc": {
+          "source": "Delete a call activity from Close CRM",
+          "message": "Smazat aktivitu hovoru z Close CRM"
+        },
+        "app.Q2xvc2U.action.ZGVsZXRlLWNhbGw.display_name": {
+          "source": "Delete a Call",
+          "message": "Smazat hovor"
+        },
+        "app.Q2xvc2U.action.ZGVsZXRlLWNhbGw.option.Y2FsbF9pZA.display_name": {
+          "source": "Call ID",
+          "message": "ID hovoru"
+        },
+        "app.Q2xvc2U.action.ZGVsZXRlLWNhbGw.option.Y2FsbF9pZA.short_desc": {
+          "source": "The call to delete",
+          "message": "Hovor ke smazání"
+        },
+        "app.Q2xvc2U.action.ZGVsZXRlLWNhbGw.short_desc": {
+          "source": "Delete a call",
+          "message": "Smazat hovor"
+        },
+        "app.Q2xvc2U.action.ZGVsZXRlLWNvbnRhY3Q.desc": {
+          "source": "Delete a contact from Close CRM",
+          "message": "Smazat kontakt z Close CRM"
+        },
+        "app.Q2xvc2U.action.ZGVsZXRlLWNvbnRhY3Q.display_name": {
+          "source": "Delete a Contact",
+          "message": "Odstranit kontakt"
+        },
+        "app.Q2xvc2U.action.ZGVsZXRlLWNvbnRhY3Q.option.Y29udGFjdF9pZA.display_name": {
+          "source": "Contact ID",
+          "message": "ID kontaktu"
+        },
+        "app.Q2xvc2U.action.ZGVsZXRlLWNvbnRhY3Q.option.Y29udGFjdF9pZA.short_desc": {
+          "source": "The contact to delete",
+          "message": "Kontakt k odstranění"
+        },
+        "app.Q2xvc2U.action.ZGVsZXRlLWNvbnRhY3Q.short_desc": {
+          "source": "Delete a contact",
+          "message": "Odstranit kontakt"
+        },
+        "app.Q2xvc2U.action.ZGVsZXRlLWVtYWls.desc": {
+          "source": "Delete an email activity from Close CRM",
+          "message": "Smazat e-mailovou aktivitu z Close CRM"
+        },
+        "app.Q2xvc2U.action.ZGVsZXRlLWVtYWls.display_name": {
+          "source": "Delete an Email",
+          "message": "Smazat e-mail"
+        },
+        "app.Q2xvc2U.action.ZGVsZXRlLWVtYWls.option.ZW1haWxfaWQ.display_name": {
+          "source": "Email ID",
+          "message": "ID e-mailu"
+        },
+        "app.Q2xvc2U.action.ZGVsZXRlLWVtYWls.option.ZW1haWxfaWQ.short_desc": {
+          "source": "The email to delete",
+          "message": "E-mail ke smazání"
+        },
+        "app.Q2xvc2U.action.ZGVsZXRlLWVtYWls.short_desc": {
+          "source": "Delete an email",
+          "message": "Smazat e-mail"
+        },
+        "app.Q2xvc2U.action.ZGVsZXRlLWxlYWQ.desc": {
+          "source": "Delete a lead from Close CRM",
+          "message": "Smazat lead z Close CRM"
+        },
+        "app.Q2xvc2U.action.ZGVsZXRlLWxlYWQ.display_name": {
+          "source": "Delete a Lead",
+          "message": "Odstranit lead"
+        },
+        "app.Q2xvc2U.action.ZGVsZXRlLWxlYWQ.option.bGVhZF9pZA.display_name": {
+          "source": "Lead ID",
+          "message": "ID leadu"
+        },
+        "app.Q2xvc2U.action.ZGVsZXRlLWxlYWQ.option.bGVhZF9pZA.short_desc": {
+          "source": "The lead to delete",
+          "message": "Lead ke smazání"
+        },
+        "app.Q2xvc2U.action.ZGVsZXRlLWxlYWQ.short_desc": {
+          "source": "Delete a lead",
+          "message": "Odstranit lead"
+        },
+        "app.Q2xvc2U.action.ZGVsZXRlLXNtcw.desc": {
+          "source": "Delete an SMS activity from Close CRM",
+          "message": "Smazat SMS aktivitu z Close CRM"
+        },
+        "app.Q2xvc2U.action.ZGVsZXRlLXNtcw.display_name": {
+          "source": "Delete an SMS",
+          "message": "Smazat SMS"
+        },
+        "app.Q2xvc2U.action.ZGVsZXRlLXNtcw.option.c21zX2lk.display_name": {
+          "source": "SMS ID",
+          "message": "ID SMS"
+        },
+        "app.Q2xvc2U.action.ZGVsZXRlLXNtcw.option.c21zX2lk.short_desc": {
+          "source": "The SMS to delete",
+          "message": "SMS ke smazání"
+        },
+        "app.Q2xvc2U.action.ZGVsZXRlLXNtcw.short_desc": {
+          "source": "Delete an SMS",
+          "message": "Smazat SMS"
+        },
+        "app.Q2xvc2U.action.ZGVsZXRlLXRhc2s.desc": {
+          "source": "Delete a task from Close CRM",
+          "message": "Smazat úkol z Close CRM"
+        },
+        "app.Q2xvc2U.action.ZGVsZXRlLXRhc2s.display_name": {
+          "source": "Delete a Task",
+          "message": "Smazat úkol"
+        },
+        "app.Q2xvc2U.action.ZGVsZXRlLXRhc2s.option.dGFza19pZA.display_name": {
+          "source": "Task ID",
+          "message": "ID úlohy"
+        },
+        "app.Q2xvc2U.action.ZGVsZXRlLXRhc2s.option.dGFza19pZA.short_desc": {
+          "source": "The task to delete",
+          "message": "Úkol ke smazání"
+        },
+        "app.Q2xvc2U.action.ZGVsZXRlLXRhc2s.short_desc": {
+          "source": "Delete a task",
+          "message": "Smazat úkol"
+        },
+        "app.Q2xvc2U.action.ZmluZC10YXNrcw.desc": {
+          "source": "List tasks in Close CRM with optional filtering",
+          "message": "Vypsat úkoly v Close CRM s volitelným filtrováním"
+        },
+        "app.Q2xvc2U.action.ZmluZC10YXNrcw.display_name": {
+          "source": "List Tasks",
+          "message": "Seznam úloh"
+        },
+        "app.Q2xvc2U.action.ZmluZC10YXNrcw.option.X3R5cGU.allowed-value.c3RyaW5nOm91dGdvaW5nX2NhbGw.desc": {
+          "source": "Outgoing call task",
+          "message": "Úkol odchozího hovoru"
+        },
+        "app.Q2xvc2U.action.ZmluZC10YXNrcw.option.X3R5cGU.allowed-value.c3RyaW5nOmxlYWQ.desc": {
+          "source": "Lead task",
+          "message": "Úkol leadu"
+        },
+        "app.Q2xvc2U.action.ZmluZC10YXNrcw.option.X3R5cGU.desc": {
+          "source": "Filter tasks by type",
+          "message": "Filtrovat úkoly podle typu"
+        },
+        "app.Q2xvc2U.action.ZmluZC10YXNrcw.option.X3R5cGU.display_name": {
+          "source": "Task Type",
+          "message": "Typ úkolu"
+        },
+        "app.Q2xvc2U.action.ZmluZC10YXNrcw.option.X3R5cGU.short_desc": {
+          "source": "Task type filter",
+          "message": "Filtr typu úkolu"
+        },
+        "app.Q2xvc2U.action.ZmluZC10YXNrcw.option.YXNzaWduZWRfdG8.desc": {
+          "source": "Filter tasks by the user they are assigned to",
+          "message": "Filtrovat úkoly podle uživatele, kterému jsou přiřazeny"
+        },
+        "app.Q2xvc2U.action.ZmluZC10YXNrcw.option.YXNzaWduZWRfdG8.display_name": {
+          "source": "Assigned To",
+          "message": "Přiřazeno uživateli"
+        },
+        "app.Q2xvc2U.action.ZmluZC10YXNrcw.option.YXNzaWduZWRfdG8.short_desc": {
+          "source": "Filter by assigned user",
+          "message": "Filtrovat podle přiřazeného uživatele"
+        },
+        "app.Q2xvc2U.action.ZmluZC10YXNrcw.option.aXNfY29tcGxldGU.desc": {
+          "source": "Filter tasks by completion status",
+          "message": "Filtrovat úkoly podle stavu dokončení"
+        },
+        "app.Q2xvc2U.action.ZmluZC10YXNrcw.option.aXNfY29tcGxldGU.display_name": {
+          "source": "Is Complete",
+          "message": "Dokončeno"
+        },
+        "app.Q2xvc2U.action.ZmluZC10YXNrcw.option.aXNfY29tcGxldGU.short_desc": {
+          "source": "Filter by completion status",
+          "message": "Filtrovat podle stavu dokončení"
+        },
+        "app.Q2xvc2U.action.ZmluZC10YXNrcw.option.bGVhZF9pZA.desc": {
+          "source": "Filter tasks by the lead they are associated with",
+          "message": "Filtrovat úkoly podle přiřazeného leadu"
+        },
+        "app.Q2xvc2U.action.ZmluZC10YXNrcw.option.bGVhZF9pZA.display_name": {
+          "source": "Lead ID",
+          "message": "ID leadu"
+        },
+        "app.Q2xvc2U.action.ZmluZC10YXNrcw.option.bGVhZF9pZA.short_desc": {
+          "source": "Filter by lead ID",
+          "message": "Filtrovat podle ID leadu"
+        },
+        "app.Q2xvc2U.action.ZmluZC10YXNrcw.option.bGltaXQ.desc": {
+          "source": "Maximum number of results to return",
+          "message": "Maximální počet výsledků k vrácení"
+        },
+        "app.Q2xvc2U.action.ZmluZC10YXNrcw.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "Limit"
+        },
+        "app.Q2xvc2U.action.ZmluZC10YXNrcw.option.bGltaXQ.short_desc": {
+          "source": "Maximum results",
+          "message": "Maximální počet výsledků"
+        },
+        "app.Q2xvc2U.action.ZmluZC10YXNrcw.option.dGFza19pZA.display_name": {
+          "source": "Task ID",
+          "message": "ID úlohy"
+        },
+        "app.Q2xvc2U.action.ZmluZC10YXNrcw.option.dGFza19pZA.short_desc": {
+          "source": "Filter by task ID",
+          "message": "Filtrovat podle ID úkolu"
+        },
+        "app.Q2xvc2U.action.ZmluZC10YXNrcw.short_desc": {
+          "source": "List and search tasks",
+          "message": "Vypsat a vyhledávat úkoly"
+        },
+        "app.Q2xvc2U.action.ZmluZC1jYWxscw.desc": {
+          "source": "List call activities in Close CRM with optional filtering",
+          "message": "Vypsat aktivity hovorů v Close CRM s volitelným filtrováním"
+        },
+        "app.Q2xvc2U.action.ZmluZC1jYWxscw.display_name": {
+          "source": "List Calls",
+          "message": "Zobrazit seznam hovorů"
+        },
+        "app.Q2xvc2U.action.ZmluZC1jYWxscw.option.Y2FsbF9pZA.display_name": {
+          "source": "Call ID",
+          "message": "ID hovoru"
+        },
+        "app.Q2xvc2U.action.ZmluZC1jYWxscw.option.Y2FsbF9pZA.short_desc": {
+          "source": "Filter by call ID",
+          "message": "Filtrovat podle ID hovoru"
+        },
+        "app.Q2xvc2U.action.ZmluZC1jYWxscw.option.bGVhZF9pZA.desc": {
+          "source": "Filter calls by lead ID",
+          "message": "Filtrovat hovory podle ID leadu"
+        },
+        "app.Q2xvc2U.action.ZmluZC1jYWxscw.option.bGVhZF9pZA.display_name": {
+          "source": "Lead ID",
+          "message": "ID leadu"
+        },
+        "app.Q2xvc2U.action.ZmluZC1jYWxscw.option.bGVhZF9pZA.short_desc": {
+          "source": "Filter by lead ID",
+          "message": "Filtrovat podle ID leadu"
+        },
+        "app.Q2xvc2U.action.ZmluZC1jYWxscw.option.bGltaXQ.desc": {
+          "source": "Maximum number of results to return",
+          "message": "Maximální počet výsledků k vrácení"
+        },
+        "app.Q2xvc2U.action.ZmluZC1jYWxscw.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "Limit"
+        },
+        "app.Q2xvc2U.action.ZmluZC1jYWxscw.option.bGltaXQ.short_desc": {
+          "source": "Maximum results",
+          "message": "Maximální počet výsledků"
+        },
+        "app.Q2xvc2U.action.ZmluZC1jYWxscw.option.dXNlcl9pZA.desc": {
+          "source": "Filter calls by user ID",
+          "message": "Filtrovat hovory podle ID uživatele"
+        },
+        "app.Q2xvc2U.action.ZmluZC1jYWxscw.option.dXNlcl9pZA.display_name": {
+          "source": "User ID",
+          "message": "ID uživatele"
+        },
+        "app.Q2xvc2U.action.ZmluZC1jYWxscw.option.dXNlcl9pZA.short_desc": {
+          "source": "Filter by user ID",
+          "message": "Filtrovat podle ID uživatele"
+        },
+        "app.Q2xvc2U.action.ZmluZC1jYWxscw.short_desc": {
+          "source": "List and search calls",
+          "message": "Vypsat a vyhledávat hovory"
+        },
+        "app.Q2xvc2U.action.ZmluZC1jb250YWN0cw.desc": {
+          "source": "List contacts in Close CRM with optional filtering",
+          "message": "Vypsat kontakty v Close CRM s volitelným filtrováním"
+        },
+        "app.Q2xvc2U.action.ZmluZC1jb250YWN0cw.display_name": {
+          "source": "List Contacts",
+          "message": "Seznam kontaktů"
+        },
+        "app.Q2xvc2U.action.ZmluZC1jb250YWN0cw.option.Y29udGFjdF9pZA.display_name": {
+          "source": "Contact ID",
+          "message": "ID kontaktu"
+        },
+        "app.Q2xvc2U.action.ZmluZC1jb250YWN0cw.option.Y29udGFjdF9pZA.short_desc": {
+          "source": "Filter by contact ID",
+          "message": "Filtrovat podle ID kontaktu"
+        },
+        "app.Q2xvc2U.action.ZmluZC1jb250YWN0cw.option.bGVhZF9pZA.desc": {
+          "source": "Filter contacts by the lead they belong to",
+          "message": "Filtrovat kontakty podle leadu, ke kterému patří"
+        },
+        "app.Q2xvc2U.action.ZmluZC1jb250YWN0cw.option.bGVhZF9pZA.display_name": {
+          "source": "Lead ID",
+          "message": "ID leadu"
+        },
+        "app.Q2xvc2U.action.ZmluZC1jb250YWN0cw.option.bGVhZF9pZA.short_desc": {
+          "source": "Filter by lead ID",
+          "message": "Filtrovat podle ID leadu"
+        },
+        "app.Q2xvc2U.action.ZmluZC1jb250YWN0cw.option.bGltaXQ.desc": {
+          "source": "Maximum number of results to return",
+          "message": "Maximální počet výsledků k vrácení"
+        },
+        "app.Q2xvc2U.action.ZmluZC1jb250YWN0cw.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "Limit"
+        },
+        "app.Q2xvc2U.action.ZmluZC1jb250YWN0cw.option.bGltaXQ.short_desc": {
+          "source": "Maximum results",
+          "message": "Maximální počet výsledků"
+        },
+        "app.Q2xvc2U.action.ZmluZC1jb250YWN0cw.short_desc": {
+          "source": "List and search contacts",
+          "message": "Vypsat a vyhledávat kontakty"
+        },
+        "app.Q2xvc2U.action.ZmluZC1lbWFpbHM.desc": {
+          "source": "List email activities in Close CRM with optional filtering",
+          "message": "Vypsat e-mailové aktivity v Close CRM s volitelným filtrováním"
+        },
+        "app.Q2xvc2U.action.ZmluZC1lbWFpbHM.display_name": {
+          "source": "List Emails",
+          "message": "Vypsat e-maily"
+        },
+        "app.Q2xvc2U.action.ZmluZC1lbWFpbHM.option.ZW1haWxfaWQ.display_name": {
+          "source": "Email ID",
+          "message": "ID e-mailu"
+        },
+        "app.Q2xvc2U.action.ZmluZC1lbWFpbHM.option.ZW1haWxfaWQ.short_desc": {
+          "source": "Filter by email ID",
+          "message": "Filtrovat podle ID e-mailu"
+        },
+        "app.Q2xvc2U.action.ZmluZC1lbWFpbHM.option.bGVhZF9pZA.desc": {
+          "source": "Filter emails by lead ID",
+          "message": "Filtrovat e-maily podle ID leadu"
+        },
+        "app.Q2xvc2U.action.ZmluZC1lbWFpbHM.option.bGVhZF9pZA.display_name": {
+          "source": "Lead ID",
+          "message": "ID leadu"
+        },
+        "app.Q2xvc2U.action.ZmluZC1lbWFpbHM.option.bGVhZF9pZA.short_desc": {
+          "source": "Filter by lead ID",
+          "message": "Filtrovat podle ID leadu"
+        },
+        "app.Q2xvc2U.action.ZmluZC1lbWFpbHM.option.bGltaXQ.desc": {
+          "source": "Maximum number of results to return",
+          "message": "Maximální počet výsledků k vrácení"
+        },
+        "app.Q2xvc2U.action.ZmluZC1lbWFpbHM.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "Limit"
+        },
+        "app.Q2xvc2U.action.ZmluZC1lbWFpbHM.option.bGltaXQ.short_desc": {
+          "source": "Maximum results",
+          "message": "Maximální počet výsledků"
+        },
+        "app.Q2xvc2U.action.ZmluZC1lbWFpbHM.option.dXNlcl9pZA.desc": {
+          "source": "Filter emails by user ID",
+          "message": "Filtrovat e-maily podle ID uživatele"
+        },
+        "app.Q2xvc2U.action.ZmluZC1lbWFpbHM.option.dXNlcl9pZA.display_name": {
+          "source": "User ID",
+          "message": "ID uživatele"
+        },
+        "app.Q2xvc2U.action.ZmluZC1lbWFpbHM.option.dXNlcl9pZA.short_desc": {
+          "source": "Filter by user ID",
+          "message": "Filtrovat podle ID uživatele"
+        },
+        "app.Q2xvc2U.action.ZmluZC1lbWFpbHM.short_desc": {
+          "source": "List and search emails",
+          "message": "Vypsat a vyhledávat e-maily"
+        },
+        "app.Q2xvc2U.action.ZmluZC1sZWFkcw.desc": {
+          "source": "List leads in Close CRM with optional filtering",
+          "message": "Vypsat leady v Close CRM s volitelným filtrováním"
+        },
+        "app.Q2xvc2U.action.ZmluZC1sZWFkcw.display_name": {
+          "source": "List Leads",
+          "message": "Vypsat leady"
+        },
+        "app.Q2xvc2U.action.ZmluZC1sZWFkcw.option.bGVhZF9pZA.display_name": {
+          "source": "Lead ID",
+          "message": "ID leadu"
+        },
+        "app.Q2xvc2U.action.ZmluZC1sZWFkcw.option.bGVhZF9pZA.short_desc": {
+          "source": "Filter by lead ID",
+          "message": "Filtrovat podle ID leadu"
+        },
+        "app.Q2xvc2U.action.ZmluZC1sZWFkcw.option.bGltaXQ.desc": {
+          "source": "Maximum number of results to return",
+          "message": "Maximální počet výsledků k vrácení"
+        },
+        "app.Q2xvc2U.action.ZmluZC1sZWFkcw.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "Limit"
+        },
+        "app.Q2xvc2U.action.ZmluZC1sZWFkcw.option.bGltaXQ.short_desc": {
+          "source": "Maximum results",
+          "message": "Maximální počet výsledků"
+        },
+        "app.Q2xvc2U.action.ZmluZC1sZWFkcw.option.c3RhdHVzX2lk.desc": {
+          "source": "Filter leads by status ID",
+          "message": "Filtrovat leady podle ID stavu"
+        },
+        "app.Q2xvc2U.action.ZmluZC1sZWFkcw.option.c3RhdHVzX2lk.display_name": {
+          "source": "Status ID",
+          "message": "ID stavu"
+        },
+        "app.Q2xvc2U.action.ZmluZC1sZWFkcw.option.c3RhdHVzX2lk.short_desc": {
+          "source": "Filter by lead status",
+          "message": "Filtrovat podle stavu leadu"
+        },
+        "app.Q2xvc2U.action.ZmluZC1sZWFkcw.option.cXVlcnk.desc": {
+          "source": "Search query text to filter leads by name, email, phone, or other fields",
+          "message": "Text vyhledávacího dotazu pro filtrování leadů podle jména, e-mailu, telefonu nebo jiných polí"
+        },
+        "app.Q2xvc2U.action.ZmluZC1sZWFkcw.option.cXVlcnk.display_name": {
+          "source": "Query",
+          "message": "Dotaz"
+        },
+        "app.Q2xvc2U.action.ZmluZC1sZWFkcw.option.cXVlcnk.short_desc": {
+          "source": "Search query text",
+          "message": "Text vyhledávacího dotazu"
+        },
+        "app.Q2xvc2U.action.ZmluZC1sZWFkcw.short_desc": {
+          "source": "List and search leads",
+          "message": "Vypsat a vyhledávat leady"
+        },
+        "app.Q2xvc2U.action.ZmluZC1tZWV0aW5ncw.desc": {
+          "source": "List meeting activities in Close CRM with optional filtering",
+          "message": "Vypsat aktivity schůzek v Close CRM s volitelným filtrováním"
+        },
+        "app.Q2xvc2U.action.ZmluZC1tZWV0aW5ncw.display_name": {
+          "source": "List Meetings",
+          "message": "Vypsat schůzky"
+        },
+        "app.Q2xvc2U.action.ZmluZC1tZWV0aW5ncw.option.bGVhZF9pZA.desc": {
+          "source": "Filter meetings by lead ID",
+          "message": "Filtrovat schůzky podle ID leadu"
+        },
+        "app.Q2xvc2U.action.ZmluZC1tZWV0aW5ncw.option.bGVhZF9pZA.display_name": {
+          "source": "Lead ID",
+          "message": "ID leadu"
+        },
+        "app.Q2xvc2U.action.ZmluZC1tZWV0aW5ncw.option.bGVhZF9pZA.short_desc": {
+          "source": "Filter by lead ID",
+          "message": "Filtrovat podle ID leadu"
+        },
+        "app.Q2xvc2U.action.ZmluZC1tZWV0aW5ncw.option.bGltaXQ.desc": {
+          "source": "Maximum number of results to return",
+          "message": "Maximální počet výsledků k vrácení"
+        },
+        "app.Q2xvc2U.action.ZmluZC1tZWV0aW5ncw.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "Limit"
+        },
+        "app.Q2xvc2U.action.ZmluZC1tZWV0aW5ncw.option.bGltaXQ.short_desc": {
+          "source": "Maximum results",
+          "message": "Maximální počet výsledků"
+        },
+        "app.Q2xvc2U.action.ZmluZC1tZWV0aW5ncw.option.bWVldGluZ19pZA.display_name": {
+          "source": "Meeting ID",
+          "message": "ID schůzky"
+        },
+        "app.Q2xvc2U.action.ZmluZC1tZWV0aW5ncw.option.bWVldGluZ19pZA.short_desc": {
+          "source": "Filter by meeting ID",
+          "message": "Filtrovat podle ID schůzky"
+        },
+        "app.Q2xvc2U.action.ZmluZC1tZWV0aW5ncw.option.dXNlcl9pZA.desc": {
+          "source": "Filter meetings by user ID",
+          "message": "Filtrovat schůzky podle ID uživatele"
+        },
+        "app.Q2xvc2U.action.ZmluZC1tZWV0aW5ncw.option.dXNlcl9pZA.display_name": {
+          "source": "User ID",
+          "message": "ID uživatele"
+        },
+        "app.Q2xvc2U.action.ZmluZC1tZWV0aW5ncw.option.dXNlcl9pZA.short_desc": {
+          "source": "Filter by user ID",
+          "message": "Filtrovat podle ID uživatele"
+        },
+        "app.Q2xvc2U.action.ZmluZC1tZWV0aW5ncw.short_desc": {
+          "source": "List and search meetings",
+          "message": "Vypsat a vyhledávat schůzky"
+        },
+        "app.Q2xvc2U.action.ZmluZC1ub3Rlcw.desc": {
+          "source": "List note activities in Close CRM with optional filtering",
+          "message": "Vypsat aktivity poznámek v Close CRM s volitelným filtrováním"
+        },
+        "app.Q2xvc2U.action.ZmluZC1ub3Rlcw.display_name": {
+          "source": "List Notes",
+          "message": "Zobrazit poznámky"
+        },
+        "app.Q2xvc2U.action.ZmluZC1ub3Rlcw.option.bGVhZF9pZA.desc": {
+          "source": "Filter notes by lead ID",
+          "message": "Filtrovat poznámky podle ID leadu"
+        },
+        "app.Q2xvc2U.action.ZmluZC1ub3Rlcw.option.bGVhZF9pZA.display_name": {
+          "source": "Lead ID",
+          "message": "ID leadu"
+        },
+        "app.Q2xvc2U.action.ZmluZC1ub3Rlcw.option.bGVhZF9pZA.short_desc": {
+          "source": "Filter by lead ID",
+          "message": "Filtrovat podle ID leadu"
+        },
+        "app.Q2xvc2U.action.ZmluZC1ub3Rlcw.option.bGltaXQ.desc": {
+          "source": "Maximum number of results to return",
+          "message": "Maximální počet výsledků k vrácení"
+        },
+        "app.Q2xvc2U.action.ZmluZC1ub3Rlcw.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "Limit"
+        },
+        "app.Q2xvc2U.action.ZmluZC1ub3Rlcw.option.bGltaXQ.short_desc": {
+          "source": "Maximum results",
+          "message": "Maximální počet výsledků"
+        },
+        "app.Q2xvc2U.action.ZmluZC1ub3Rlcw.option.bm90ZV9pZA.display_name": {
+          "source": "Note ID",
+          "message": "ID poznámky"
+        },
+        "app.Q2xvc2U.action.ZmluZC1ub3Rlcw.option.bm90ZV9pZA.short_desc": {
+          "source": "Filter by note ID",
+          "message": "Filtrovat podle ID poznámky"
+        },
+        "app.Q2xvc2U.action.ZmluZC1ub3Rlcw.option.dXNlcl9pZA.desc": {
+          "source": "Filter notes by user ID",
+          "message": "Filtrovat poznámky podle ID uživatele"
+        },
+        "app.Q2xvc2U.action.ZmluZC1ub3Rlcw.option.dXNlcl9pZA.display_name": {
+          "source": "User ID",
+          "message": "ID uživatele"
+        },
+        "app.Q2xvc2U.action.ZmluZC1ub3Rlcw.option.dXNlcl9pZA.short_desc": {
+          "source": "Filter by user ID",
+          "message": "Filtrovat podle ID uživatele"
+        },
+        "app.Q2xvc2U.action.ZmluZC1ub3Rlcw.short_desc": {
+          "source": "List and search notes",
+          "message": "Zobrazit a vyhledat poznámky"
+        },
+        "app.Q2xvc2U.action.ZmluZC1vcHBvcnR1bml0aWVz.desc": {
+          "source": "List opportunities in Close CRM with optional filtering",
+          "message": "Zobrazit příležitosti v Close CRM s volitelným filtrováním"
+        },
+        "app.Q2xvc2U.action.ZmluZC1vcHBvcnR1bml0aWVz.display_name": {
+          "source": "List Opportunities",
+          "message": "Zobrazit příležitosti"
+        },
+        "app.Q2xvc2U.action.ZmluZC1vcHBvcnR1bml0aWVz.option.b3Bwb3J0dW5pdHlfaWQ.display_name": {
+          "source": "Opportunity ID",
+          "message": "ID příležitosti"
+        },
+        "app.Q2xvc2U.action.ZmluZC1vcHBvcnR1bml0aWVz.option.b3Bwb3J0dW5pdHlfaWQ.short_desc": {
+          "source": "Filter by opportunity ID",
+          "message": "Filtrovat podle ID příležitosti"
+        },
+        "app.Q2xvc2U.action.ZmluZC1vcHBvcnR1bml0aWVz.option.bGVhZF9pZA.desc": {
+          "source": "Filter opportunities by the lead they belong to",
+          "message": "Filtrovat příležitosti podle leadu, ke kterému patří"
+        },
+        "app.Q2xvc2U.action.ZmluZC1vcHBvcnR1bml0aWVz.option.bGVhZF9pZA.display_name": {
+          "source": "Lead ID",
+          "message": "ID leadu"
+        },
+        "app.Q2xvc2U.action.ZmluZC1vcHBvcnR1bml0aWVz.option.bGVhZF9pZA.short_desc": {
+          "source": "Filter by lead ID",
+          "message": "Filtrovat podle ID leadu"
+        },
+        "app.Q2xvc2U.action.ZmluZC1vcHBvcnR1bml0aWVz.option.bGltaXQ.desc": {
+          "source": "Maximum number of results to return",
+          "message": "Maximální počet výsledků k vrácení"
+        },
+        "app.Q2xvc2U.action.ZmluZC1vcHBvcnR1bml0aWVz.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "Limit"
+        },
+        "app.Q2xvc2U.action.ZmluZC1vcHBvcnR1bml0aWVz.option.bGltaXQ.short_desc": {
+          "source": "Maximum results",
+          "message": "Maximální počet výsledků"
+        },
+        "app.Q2xvc2U.action.ZmluZC1vcHBvcnR1bml0aWVz.option.c3RhdHVzX2lk.desc": {
+          "source": "Filter by status ID",
+          "message": "Filtrovat podle ID stavu"
+        },
+        "app.Q2xvc2U.action.ZmluZC1vcHBvcnR1bml0aWVz.option.c3RhdHVzX2lk.display_name": {
+          "source": "Status ID",
+          "message": "ID stavu"
+        },
+        "app.Q2xvc2U.action.ZmluZC1vcHBvcnR1bml0aWVz.option.c3RhdHVzX2lk.short_desc": {
+          "source": "Filter by status ID",
+          "message": "Filtrovat podle ID stavu"
+        },
+        "app.Q2xvc2U.action.ZmluZC1vcHBvcnR1bml0aWVz.option.c3RhdHVzX3R5cGU.allowed-value.c3RyaW5nOmFjdGl2ZQ.desc": {
+          "source": "Active opportunities",
+          "message": "Aktivní příležitosti"
+        },
+        "app.Q2xvc2U.action.ZmluZC1vcHBvcnR1bml0aWVz.option.c3RhdHVzX3R5cGU.allowed-value.c3RyaW5nOmxvc3Q.desc": {
+          "source": "Lost opportunities",
+          "message": "Ztracené příležitosti"
+        },
+        "app.Q2xvc2U.action.ZmluZC1vcHBvcnR1bml0aWVz.option.c3RhdHVzX3R5cGU.allowed-value.c3RyaW5nOndvbg.desc": {
+          "source": "Won opportunities",
+          "message": "Vyhrané příležitosti"
+        },
+        "app.Q2xvc2U.action.ZmluZC1vcHBvcnR1bml0aWVz.option.c3RhdHVzX3R5cGU.desc": {
+          "source": "Filter opportunities by status type",
+          "message": "Filtrovat příležitosti podle typu stavu"
+        },
+        "app.Q2xvc2U.action.ZmluZC1vcHBvcnR1bml0aWVz.option.c3RhdHVzX3R5cGU.display_name": {
+          "source": "Status Type",
+          "message": "Typ stavu"
+        },
+        "app.Q2xvc2U.action.ZmluZC1vcHBvcnR1bml0aWVz.option.c3RhdHVzX3R5cGU.short_desc": {
+          "source": "Filter by status type",
+          "message": "Filtrovat podle typu stavu"
+        },
+        "app.Q2xvc2U.action.ZmluZC1vcHBvcnR1bml0aWVz.option.cXVlcnk.desc": {
+          "source": "Text search query",
+          "message": "Textový vyhledávací dotaz"
+        },
+        "app.Q2xvc2U.action.ZmluZC1vcHBvcnR1bml0aWVz.option.cXVlcnk.display_name": {
+          "source": "Query",
+          "message": "Dotaz"
+        },
+        "app.Q2xvc2U.action.ZmluZC1vcHBvcnR1bml0aWVz.option.cXVlcnk.short_desc": {
+          "source": "Search query",
+          "message": "Vyhledávací dotaz"
+        },
+        "app.Q2xvc2U.action.ZmluZC1vcHBvcnR1bml0aWVz.option.dXNlcl9pZA.desc": {
+          "source": "Filter by assigned user ID",
+          "message": "Filtrovat podle ID přiřazeného uživatele"
+        },
+        "app.Q2xvc2U.action.ZmluZC1vcHBvcnR1bml0aWVz.option.dXNlcl9pZA.display_name": {
+          "source": "User ID",
+          "message": "ID uživatele"
+        },
+        "app.Q2xvc2U.action.ZmluZC1vcHBvcnR1bml0aWVz.option.dXNlcl9pZA.short_desc": {
+          "source": "Filter by assigned user",
+          "message": "Filtrovat podle přiřazeného uživatele"
+        },
+        "app.Q2xvc2U.action.ZmluZC1vcHBvcnR1bml0aWVz.short_desc": {
+          "source": "List and search opportunities",
+          "message": "Zobrazit a vyhledat příležitosti"
+        },
+        "app.Q2xvc2U.action.ZmluZC1zbXM.desc": {
+          "source": "List SMS activities in Close CRM with optional filtering",
+          "message": "Zobrazit SMS aktivity v Close CRM s volitelným filtrováním"
+        },
+        "app.Q2xvc2U.action.ZmluZC1zbXM.display_name": {
+          "source": "List SMS",
+          "message": "Zobrazit SMS"
+        },
+        "app.Q2xvc2U.action.ZmluZC1zbXM.option.bGVhZF9pZA.desc": {
+          "source": "Filter SMS activities by lead ID",
+          "message": "Filtrovat SMS aktivity podle ID leadu"
+        },
+        "app.Q2xvc2U.action.ZmluZC1zbXM.option.bGVhZF9pZA.display_name": {
+          "source": "Lead ID",
+          "message": "ID leadu"
+        },
+        "app.Q2xvc2U.action.ZmluZC1zbXM.option.bGVhZF9pZA.short_desc": {
+          "source": "Filter by lead ID",
+          "message": "Filtrovat podle ID leadu"
+        },
+        "app.Q2xvc2U.action.ZmluZC1zbXM.option.bGltaXQ.desc": {
+          "source": "Maximum number of results to return",
+          "message": "Maximální počet výsledků k vrácení"
+        },
+        "app.Q2xvc2U.action.ZmluZC1zbXM.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "Limit"
+        },
+        "app.Q2xvc2U.action.ZmluZC1zbXM.option.bGltaXQ.short_desc": {
+          "source": "Maximum results",
+          "message": "Maximální počet výsledků"
+        },
+        "app.Q2xvc2U.action.ZmluZC1zbXM.option.c21zX2lk.display_name": {
+          "source": "SMS ID",
+          "message": "ID SMS"
+        },
+        "app.Q2xvc2U.action.ZmluZC1zbXM.option.c21zX2lk.short_desc": {
+          "source": "Filter by SMS ID",
+          "message": "Filtrovat podle ID SMS"
+        },
+        "app.Q2xvc2U.action.ZmluZC1zbXM.option.dXNlcl9pZA.desc": {
+          "source": "Filter SMS activities by user ID",
+          "message": "Filtrovat SMS aktivity podle ID uživatele"
+        },
+        "app.Q2xvc2U.action.ZmluZC1zbXM.option.dXNlcl9pZA.display_name": {
+          "source": "User ID",
+          "message": "ID uživatele"
+        },
+        "app.Q2xvc2U.action.ZmluZC1zbXM.option.dXNlcl9pZA.short_desc": {
+          "source": "Filter by user ID",
+          "message": "Filtrovat podle ID uživatele"
+        },
+        "app.Q2xvc2U.action.ZmluZC1zbXM.short_desc": {
+          "source": "List and search SMS messages",
+          "message": "Zobrazit a vyhledat SMS zprávy"
+        },
+        "app.Q2xvc2U.action.b3Bwb3J0dW5pdHktY3JlYXRlZA.desc": {
+          "source": "Fires when a new opportunity is created in Close CRM. Uses polling of the Event Log API to detect new records.",
+          "message": "Spustí se při vytvoření nové příležitosti v Close CRM. K detekci nových záznamů využívá dotazování Event Log API."
+        },
+        "app.Q2xvc2U.action.b3Bwb3J0dW5pdHktY3JlYXRlZA.display_name": {
+          "source": "Opportunity Created",
+          "message": "Příležitost vytvořena"
+        },
+        "app.Q2xvc2U.action.b3Bwb3J0dW5pdHktY3JlYXRlZA.option.cG9sbF9pbnRlcnZhbA.desc": {
+          "source": "How often to check for new records (minimum 30 seconds)",
+          "message": "Jak často kontrolovat nové záznamy (minimálně 30 sekund)"
+        },
+        "app.Q2xvc2U.action.b3Bwb3J0dW5pdHktY3JlYXRlZA.option.cG9sbF9pbnRlcnZhbA.display_name": {
+          "source": "Poll Interval",
+          "message": "Interval sledování"
+        },
+        "app.Q2xvc2U.action.b3Bwb3J0dW5pdHktY3JlYXRlZA.option.cG9sbF9pbnRlcnZhbA.short_desc": {
+          "source": "Polling interval in seconds",
+          "message": "Interval dotazování v sekundách"
+        },
+        "app.Q2xvc2U.action.b3Bwb3J0dW5pdHktY3JlYXRlZA.short_desc": {
+          "source": "Fires when an opportunity is created",
+          "message": "Spustí se při vytvoření příležitosti"
+        },
+        "app.Q2xvc2U.action.b3Bwb3J0dW5pdHktZGVsZXRlZA.desc": {
+          "source": "Fires when an opportunity is deleted in Close CRM. Uses polling of the Event Log API to detect deletions.",
+          "message": "Spustí se při smazání příležitosti v Close CRM. K detekci smazání využívá dotazování Event Log API."
+        },
+        "app.Q2xvc2U.action.b3Bwb3J0dW5pdHktZGVsZXRlZA.display_name": {
+          "source": "Opportunity Deleted",
+          "message": "Příležitost smazána"
+        },
+        "app.Q2xvc2U.action.b3Bwb3J0dW5pdHktZGVsZXRlZA.option.cG9sbF9pbnRlcnZhbA.desc": {
+          "source": "How often to check for new records (minimum 30 seconds)",
+          "message": "Jak často kontrolovat nové záznamy (minimálně 30 sekund)"
+        },
+        "app.Q2xvc2U.action.b3Bwb3J0dW5pdHktZGVsZXRlZA.option.cG9sbF9pbnRlcnZhbA.display_name": {
+          "source": "Poll Interval",
+          "message": "Interval sledování"
+        },
+        "app.Q2xvc2U.action.b3Bwb3J0dW5pdHktZGVsZXRlZA.option.cG9sbF9pbnRlcnZhbA.short_desc": {
+          "source": "Polling interval in seconds",
+          "message": "Interval dotazování v sekundách"
+        },
+        "app.Q2xvc2U.action.b3Bwb3J0dW5pdHktZGVsZXRlZA.short_desc": {
+          "source": "Fires when an opportunity is deleted",
+          "message": "Spustí se při smazání příležitosti"
+        },
+        "app.Q2xvc2U.action.b3Bwb3J0dW5pdHktdXBkYXRlZA.desc": {
+          "source": "Fires when an opportunity is updated in Close CRM. Uses polling of the Event Log API to detect changes.",
+          "message": "Spustí se při aktualizaci příležitosti v Close CRM. K detekci změn využívá dotazování Event Log API."
+        },
+        "app.Q2xvc2U.action.b3Bwb3J0dW5pdHktdXBkYXRlZA.display_name": {
+          "source": "Opportunity Updated",
+          "message": "Příležitost aktualizována"
+        },
+        "app.Q2xvc2U.action.b3Bwb3J0dW5pdHktdXBkYXRlZA.option.cG9sbF9pbnRlcnZhbA.desc": {
+          "source": "How often to check for new records (minimum 30 seconds)",
+          "message": "Jak často kontrolovat nové záznamy (minimálně 30 sekund)"
+        },
+        "app.Q2xvc2U.action.b3Bwb3J0dW5pdHktdXBkYXRlZA.option.cG9sbF9pbnRlcnZhbA.display_name": {
+          "source": "Poll Interval",
+          "message": "Interval sledování"
+        },
+        "app.Q2xvc2U.action.b3Bwb3J0dW5pdHktdXBkYXRlZA.option.cG9sbF9pbnRlcnZhbA.short_desc": {
+          "source": "Polling interval in seconds",
+          "message": "Interval dotazování v sekundách"
+        },
+        "app.Q2xvc2U.action.b3Bwb3J0dW5pdHktdXBkYXRlZA.short_desc": {
+          "source": "Fires when an opportunity is updated",
+          "message": "Spustí se při aktualizaci příležitosti"
+        },
+        "app.Q2xvc2U.action.bGVhZC11cGRhdGVk.desc": {
+          "source": "Fires when a lead is updated in Close CRM. Uses polling of the Event Log API to detect changes.",
+          "message": "Spustí se při aktualizaci leadu v Close CRM. K detekci změn využívá dotazování Event Log API."
+        },
+        "app.Q2xvc2U.action.bGVhZC11cGRhdGVk.display_name": {
+          "source": "Lead Updated",
+          "message": "Lead aktualizován"
+        },
+        "app.Q2xvc2U.action.bGVhZC11cGRhdGVk.option.cG9sbF9pbnRlcnZhbA.desc": {
+          "source": "How often to check for new records (minimum 30 seconds)",
+          "message": "Jak často kontrolovat nové záznamy (minimálně 30 sekund)"
+        },
+        "app.Q2xvc2U.action.bGVhZC11cGRhdGVk.option.cG9sbF9pbnRlcnZhbA.display_name": {
+          "source": "Poll Interval",
+          "message": "Interval sledování"
+        },
+        "app.Q2xvc2U.action.bGVhZC11cGRhdGVk.option.cG9sbF9pbnRlcnZhbA.short_desc": {
+          "source": "Polling interval in seconds",
+          "message": "Interval dotazování v sekundách"
+        },
+        "app.Q2xvc2U.action.bGVhZC11cGRhdGVk.short_desc": {
+          "source": "Fires when a lead is updated",
+          "message": "Spustí se při aktualizaci leadu"
+        },
+        "app.Q2xvc2U.action.bGVhZC1jcmVhdGVk.desc": {
+          "source": "Fires when a new lead is created in Close CRM. Uses polling of the Event Log API to detect new records.",
+          "message": "Spustí se při vytvoření nového leadu v Close CRM. K detekci nových záznamů využívá dotazování Event Log API."
+        },
+        "app.Q2xvc2U.action.bGVhZC1jcmVhdGVk.display_name": {
+          "source": "Lead Created",
+          "message": "Lead vytvořen"
+        },
+        "app.Q2xvc2U.action.bGVhZC1jcmVhdGVk.option.cG9sbF9pbnRlcnZhbA.desc": {
+          "source": "How often to check for new records (minimum 30 seconds)",
+          "message": "Jak často kontrolovat nové záznamy (minimálně 30 sekund)"
+        },
+        "app.Q2xvc2U.action.bGVhZC1jcmVhdGVk.option.cG9sbF9pbnRlcnZhbA.display_name": {
+          "source": "Poll Interval",
+          "message": "Interval sledování"
+        },
+        "app.Q2xvc2U.action.bGVhZC1jcmVhdGVk.option.cG9sbF9pbnRlcnZhbA.short_desc": {
+          "source": "Polling interval in seconds",
+          "message": "Interval dotazování v sekundách"
+        },
+        "app.Q2xvc2U.action.bGVhZC1jcmVhdGVk.short_desc": {
+          "source": "Fires when a lead is created",
+          "message": "Spustí se při vytvoření leadu"
+        },
+        "app.Q2xvc2U.action.bGVhZC1kZWxldGVk.desc": {
+          "source": "Fires when a lead is deleted in Close CRM. Uses polling of the Event Log API to detect deletions.",
+          "message": "Spustí se při smazání leadu v Close CRM. K detekci smazání využívá dotazování Event Log API."
+        },
+        "app.Q2xvc2U.action.bGVhZC1kZWxldGVk.display_name": {
+          "source": "Lead Deleted",
+          "message": "Lead smazán"
+        },
+        "app.Q2xvc2U.action.bGVhZC1kZWxldGVk.option.cG9sbF9pbnRlcnZhbA.desc": {
+          "source": "How often to check for new records (minimum 30 seconds)",
+          "message": "Jak často kontrolovat nové záznamy (minimálně 30 sekund)"
+        },
+        "app.Q2xvc2U.action.bGVhZC1kZWxldGVk.option.cG9sbF9pbnRlcnZhbA.display_name": {
+          "source": "Poll Interval",
+          "message": "Interval sledování"
+        },
+        "app.Q2xvc2U.action.bGVhZC1kZWxldGVk.option.cG9sbF9pbnRlcnZhbA.short_desc": {
+          "source": "Polling interval in seconds",
+          "message": "Interval dotazování v sekundách"
+        },
+        "app.Q2xvc2U.action.bGVhZC1kZWxldGVk.short_desc": {
+          "source": "Fires when a lead is deleted",
+          "message": "Spustí se při smazání leadu"
+        },
+        "app.Q2xvc2U.action.bWFrZS1hcGktY2FsbA.desc": {
+          "source": "Make a custom HTTP / REST API call to **Close** using the configured connection's authentication.\n\nSpecify the HTTP method, the URI path (relative to the connection's API base URL), optional query parameters, headers, and request body. The response is returned as a hash containing the status code, response headers, and response body.\n\nUse this action for endpoints that are not yet exposed as first-class actions on this app.",
+          "message": "Proveďte vlastní volání HTTP / REST API do **Close** s využitím ověření nakonfigurovaného připojení.\n\nZadejte metodu HTTP, cestu URI (relativní k základní adrese URL rozhraní API připojení), volitelné parametry dotazu, záhlaví a tělo požadavku. Odpověď je vrácena jako hash obsahující stavový kód, záhlaví odpovědi a tělo odpovědi.\n\nTuto akci použijte pro koncové body, které v této aplikaci ještě nejsou dostupné jako standardní akce."
+        },
+        "app.Q2xvc2U.action.bWFrZS1hcGktY2FsbA.display_name": {
+          "source": "Make an API call",
+          "message": "Provést volání API"
+        },
+        "app.Q2xvc2U.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.desc": {
+          "source": "The request body. The effective type depends on `body_type`: JSON/form/YAML expect a hash, XML/text expect a string, multipart expects a file structure, binary expects raw bytes.",
+          "message": "Tělo požadavku. Efektivní typ závisí na `body_type`: JSON/form/YAML očekávají hash, XML/text očekávají řetězec, multipart očekává strukturu souboru, binary očekává surové bajty."
+        },
+        "app.Q2xvc2U.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.display_name": {
+          "source": "Body",
+          "message": "Tělo"
+        },
+        "app.Q2xvc2U.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.short_desc": {
+          "source": "The request body",
+          "message": "Tělo požadavku"
+        },
+        "app.Q2xvc2U.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.desc": {
+          "source": "Upload a file using `multipart/form-data`. The body must be a @ref DataProvider::FileDataType \"FileDataType\" structure (filename + content + mime_type). The framework builds the multipart envelope and sets the boundary header.",
+          "message": "Nahrát soubor pomocí `multipart/form-data`. Tělo musí být struktura @ref DataProvider::FileDataType \"FileDataType\" (filename + content + mime_type). Framework vytvoří obálku multipart a nastaví záhlaví boundary."
+        },
+        "app.Q2xvc2U.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.display_name": {
+          "source": "Multipart Form",
+          "message": "Multipart Form"
+        },
+        "app.Q2xvc2U.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.short_desc": {
+          "source": "Upload a file using multipart/form-data",
+          "message": "Nahrát soubor pomocí multipart/form-data"
+        },
+        "app.Q2xvc2U.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.desc": {
+          "source": "Pass the body to the REST client unchanged; the client decides serialization based on its configured `data` option and the value type",
+          "message": "Předat tělo klientovi REST beze změny; klient rozhodne o serializaci na základě své nakonfigurované možnosti `data` a typu hodnoty"
+        },
+        "app.Q2xvc2U.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.display_name": {
+          "source": "Auto",
+          "message": "Automaticky"
+        },
+        "app.Q2xvc2U.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.short_desc": {
+          "source": "Pass-through; use connection serialization and let the REST client decide",
+          "message": "Předání bez změn; použít serializaci připojení a nechat rozhodnutí na klientovi REST"
+        },
+        "app.Q2xvc2U.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.desc": {
+          "source": "Send the body as raw bytes. The body must be a binary value. Sets `Content-Type: application/octet-stream` unless overridden by `hdr`.",
+          "message": "Odeslat tělo jako surové bajty. Tělo musí být binární hodnota. Nastavuje `Content-Type: application/octet-stream`, pokud není přepsáno `hdr`."
+        },
+        "app.Q2xvc2U.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.display_name": {
+          "source": "Raw Binary",
+          "message": "Surová binární data"
+        },
+        "app.Q2xvc2U.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.short_desc": {
+          "source": "Send body as raw bytes",
+          "message": "Odeslat tělo jako surové bajty"
+        },
+        "app.Q2xvc2U.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.desc": {
+          "source": "Serialize a hash of form fields as `application/x-www-form-urlencoded`. The body must be a hash whose values are scalars (strings/numbers/booleans).",
+          "message": "Serializovat hash formulářových polí jako `application/x-www-form-urlencoded`. Tělo musí být hash, jehož hodnotami jsou skaláry (řetězce/čísla/booleovské hodnoty)."
+        },
+        "app.Q2xvc2U.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.display_name": {
+          "source": "Form (URL-encoded)",
+          "message": "Formulář (URL-encoded)"
+        },
+        "app.Q2xvc2U.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.short_desc": {
+          "source": "Serialize body as application/x-www-form-urlencoded form fields",
+          "message": "Serializovat tělo jako formulářová pole application/x-www-form-urlencoded"
+        },
+        "app.Q2xvc2U.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.desc": {
+          "source": "Serialize the body as JSON; sets `Content-Type: application/json`. The body should be a hash, list, or scalar value.",
+          "message": "Serializovat tělo jako JSON; nastavuje `Content-Type: application/json`. Tělo by mělo být hash, seznam nebo skalární hodnota."
+        },
+        "app.Q2xvc2U.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.display_name": {
+          "source": "JSON",
+          "message": "JSON"
+        },
+        "app.Q2xvc2U.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.short_desc": {
+          "source": "Serialize body as JSON",
+          "message": "Serializovat tělo jako JSON"
+        },
+        "app.Q2xvc2U.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.desc": {
+          "source": "Send the body as plain text. The body must be a string. Sets `Content-Type: text/plain`.",
+          "message": "Odeslat tělo jako prostý text. Tělo musí být řetězec. Nastavuje `Content-Type: text/plain`."
+        },
+        "app.Q2xvc2U.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.display_name": {
+          "source": "Plain Text",
+          "message": "Čistý text"
+        },
+        "app.Q2xvc2U.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.short_desc": {
+          "source": "Send body as text/plain",
+          "message": "Odeslat tělo jako text/plain"
+        },
+        "app.Q2xvc2U.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.desc": {
+          "source": "Send the body as XML. If the body is a hash it is serialized to XML; if it is a string it is sent verbatim. Sets `Content-Type: application/xml`.",
+          "message": "Odeslat tělo jako XML. Pokud je tělo hash, serializuje se do XML; pokud je to řetězec, odešle se doslovně. Nastavuje `Content-Type: application/xml`."
+        },
+        "app.Q2xvc2U.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.display_name": {
+          "source": "XML",
+          "message": "XML"
+        },
+        "app.Q2xvc2U.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.short_desc": {
+          "source": "Send body as XML",
+          "message": "Odeslat tělo jako XML"
+        },
+        "app.Q2xvc2U.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.desc": {
+          "source": "Send the body as YAML. If the body is a hash it is serialized to YAML; if it is a string it is sent verbatim. Sets `Content-Type: application/x-yaml`.",
+          "message": "Odeslat tělo jako YAML. Pokud je tělo hash, serializuje se do YAML; pokud je to řetězec, odešle se doslovně. Nastavuje `Content-Type: application/x-yaml`."
+        },
+        "app.Q2xvc2U.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.display_name": {
+          "source": "YAML",
+          "message": "YAML"
+        },
+        "app.Q2xvc2U.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.short_desc": {
+          "source": "Send body as YAML",
+          "message": "Odeslat tělo jako YAML"
+        },
+        "app.Q2xvc2U.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.desc": {
+          "source": "Selects the body serialization mode and the corresponding `Content-Type` header. Changing this field reshapes the `body` editor - selecting JSON exposes a JSON editor, selecting Multipart Form exposes a file picker, and so on.",
+          "message": "Vybírá režim serializace těla a odpovídající záhlaví `Content-Type`. Změna tohoto pole upraví editor `body` – výběrem JSON se zobrazí editor JSON, výběrem Multipart Form se zobrazí výběr souboru a podobně."
+        },
+        "app.Q2xvc2U.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.display_name": {
+          "source": "Body Type",
+          "message": "Typ těla"
+        },
+        "app.Q2xvc2U.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.short_desc": {
+          "source": "How the body is serialized and what Content-Type is sent",
+          "message": "Jak je tělo serializováno a jaký Content-Type je odeslán"
+        },
+        "app.Q2xvc2U.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.desc": {
+          "source": "If `True`, non-2xx HTTP responses return as the normal response hash (with the actual status code) instead of raising `REST-RESPONSE-ERROR`. Useful for handling 4xx/5xx as data - e.g. checking whether a resource exists. Overrides the connection's `error_passthru` setting for this call only.",
+          "message": "Pokud je `True`, odpovědi HTTP jiné než 2xx se vrátí jako běžný hash odpovědi (s reálným stavovým kódem) namísto vyvolání `REST-RESPONSE-ERROR`. Užitečné pro zpracování 4xx/5xx jako dat – např. kontrola, zda prostředek existuje. Přepisuje nastavení `error_passthru` připojení pouze pro toto volání."
+        },
+        "app.Q2xvc2U.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.display_name": {
+          "source": "Return Errors as Data",
+          "message": "Vracet chyby jako data"
+        },
+        "app.Q2xvc2U.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.short_desc": {
+          "source": "Return non-2xx responses normally instead of throwing",
+          "message": "Vracet odpovědi jiné než 2xx normálně namísto vyvolání výjimky"
+        },
+        "app.Q2xvc2U.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.desc": {
+          "source": "Optional list of HTTP status codes treated as success. If set and the response status is not in this list, the action throws `REST-STATUS-ERROR`. When unset, the REST client's default behavior applies (typically: 2xx is success, non-2xx throws).",
+          "message": "Volitelný seznam stavových kódů HTTP považovaných za úspěch. Je-li nastaven a stav odpovědi není v tomto seznamu, akce vyvolá `REST-STATUS-ERROR`. Pokud není nastaven, uplatní se výchozí chování klienta REST (obvykle: 2xx je úspěch, jiné než 2xx vyvolá výjimku)."
+        },
+        "app.Q2xvc2U.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.display_name": {
+          "source": "Expected Status Codes",
+          "message": "Očekávané stavové kódy"
+        },
+        "app.Q2xvc2U.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.short_desc": {
+          "source": "Response status codes treated as success",
+          "message": "Stavové kódy odpovědi považované za úspěch"
+        },
+        "app.Q2xvc2U.action.bWFrZS1hcGktY2FsbA.option.aGRy.desc": {
+          "source": "Hash of custom headers added to the request. These override any default headers set by `body_type` (e.g. supplying `Content-Type` here wins over the body-type default).",
+          "message": "Hash vlastních záhlaví přidaných k požadavku. Tyto přepisují jakákoli výchozí záhlaví nastavená `body_type` (např. zadání `Content-Type` zde má přednost před výchozím nastavením typu těla)."
+        },
+        "app.Q2xvc2U.action.bWFrZS1hcGktY2FsbA.option.aGRy.display_name": {
+          "source": "Custom Headers",
+          "message": "Vlastní záhlaví"
+        },
+        "app.Q2xvc2U.action.bWFrZS1hcGktY2FsbA.option.aGRy.short_desc": {
+          "source": "Extra request headers",
+          "message": "Dodatečná záhlaví požadavku"
+        },
+        "app.Q2xvc2U.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.desc": {
+          "source": "If `True`, the response hash includes a `debug` sub-hash containing the request method/URL/headers (with sensitive values redacted), request and response sizes, and round-trip duration. Useful when investigating slow or failing calls. Off by default to keep responses lean.",
+          "message": "Pokud je `True`, hash odpovědi obsahuje pod-hash `debug` obsahující metodu/URL/záhlaví požadavku (s cenzurovanými citlivými hodnotami), velikosti požadavku a odpovědi a dobu trvání. Užitečné při zkoumání pomalých nebo selhávajících volání. Ve výchozím nastavení vypnuto pro zachování kompaktních odpovědí."
+        },
+        "app.Q2xvc2U.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.display_name": {
+          "source": "Include Debug Info",
+          "message": "Zahrnout ladicí informace"
+        },
+        "app.Q2xvc2U.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.short_desc": {
+          "source": "Include request/timing/size debug info in the response",
+          "message": "Zahrnout do odpovědi ladicí informace o požadavku/časování/velikosti"
+        },
+        "app.Q2xvc2U.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.desc": {
+          "source": "HTTP `OPTIONS`",
+          "message": "HTTP `OPTIONS`"
+        },
+        "app.Q2xvc2U.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.display_name": {
+          "source": "OPTIONS",
+          "message": "OPTIONS"
+        },
+        "app.Q2xvc2U.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.short_desc": {
+          "source": "HTTP OPTIONS",
+          "message": "HTTP OPTIONS"
+        },
+        "app.Q2xvc2U.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.desc": {
+          "source": "HTTP `DELETE`",
+          "message": "HTTP `DELETE`"
+        },
+        "app.Q2xvc2U.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.display_name": {
+          "source": "DELETE",
+          "message": "DELETE"
+        },
+        "app.Q2xvc2U.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.short_desc": {
+          "source": "HTTP DELETE",
+          "message": "HTTP DELETE"
+        },
+        "app.Q2xvc2U.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.desc": {
+          "source": "HTTP `GET`",
+          "message": "HTTP `GET`"
+        },
+        "app.Q2xvc2U.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.display_name": {
+          "source": "GET",
+          "message": "GET"
+        },
+        "app.Q2xvc2U.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.short_desc": {
+          "source": "HTTP GET",
+          "message": "HTTP GET"
+        },
+        "app.Q2xvc2U.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.desc": {
+          "source": "HTTP `HEAD`",
+          "message": "HTTP `HEAD`"
+        },
+        "app.Q2xvc2U.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.display_name": {
+          "source": "HEAD",
+          "message": "HEAD"
+        },
+        "app.Q2xvc2U.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.short_desc": {
+          "source": "HTTP HEAD",
+          "message": "HTTP HEAD"
+        },
+        "app.Q2xvc2U.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.desc": {
+          "source": "HTTP `PATCH`",
+          "message": "HTTP `PATCH`"
+        },
+        "app.Q2xvc2U.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.display_name": {
+          "source": "PATCH",
+          "message": "PATCH"
+        },
+        "app.Q2xvc2U.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.short_desc": {
+          "source": "HTTP PATCH",
+          "message": "HTTP PATCH"
+        },
+        "app.Q2xvc2U.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.desc": {
+          "source": "HTTP `POST`",
+          "message": "HTTP `POST`"
+        },
+        "app.Q2xvc2U.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.display_name": {
+          "source": "POST",
+          "message": "POST"
+        },
+        "app.Q2xvc2U.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.short_desc": {
+          "source": "HTTP POST",
+          "message": "HTTP POST"
+        },
+        "app.Q2xvc2U.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.desc": {
+          "source": "HTTP `PUT`",
+          "message": "HTTP `PUT`"
+        },
+        "app.Q2xvc2U.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.display_name": {
+          "source": "PUT",
+          "message": "PUT"
+        },
+        "app.Q2xvc2U.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.short_desc": {
+          "source": "HTTP PUT",
+          "message": "HTTP PUT"
+        },
+        "app.Q2xvc2U.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.desc": {
+          "source": "HTTP `TRACE`",
+          "message": "HTTP `TRACE`"
+        },
+        "app.Q2xvc2U.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.display_name": {
+          "source": "TRACE",
+          "message": "TRACE"
+        },
+        "app.Q2xvc2U.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.short_desc": {
+          "source": "HTTP TRACE",
+          "message": "HTTP TRACE"
+        },
+        "app.Q2xvc2U.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "Metoda HTTP, která se má použít pro požadavek"
+        },
+        "app.Q2xvc2U.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.display_name": {
+          "source": "HTTP Method",
+          "message": "Metoda HTTP"
+        },
+        "app.Q2xvc2U.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.short_desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "Metoda HTTP, která se má použít pro požadavek"
+        },
+        "app.Q2xvc2U.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain `{name}` placeholders that are replaced from `path_vars`. Example: `/users/{id}/comments`.",
+          "message": "Cesta URI relativní k základní adrese URL API připojení. Může obsahovat zástupné symboly `{name}`, které jsou nahrazeny z `path_vars`. Příklad: `/users/{id}/comments`."
+        },
+        "app.Q2xvc2U.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.display_name": {
+          "source": "URI Path",
+          "message": "Cesta URI"
+        },
+        "app.Q2xvc2U.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.short_desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain '{name}' placeholders that are replaced from 'path_vars'. Example: '/users/{id}/comments'",
+          "message": "Cesta URI relativní vůči základní URL API připojení. Může obsahovat zástupné symboly '{name}', které jsou nahrazeny z 'path_vars'. Příklad: '/users/{id}/comments'"
+        },
+        "app.Q2xvc2U.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.desc": {
+          "source": "Hash of values substituted into `{name}` placeholders in the URI path. Example: with `path = /users/{id}` and `path_vars = {id: 123}` the framework sends `/users/123`. Values are URL-encoded.",
+          "message": "Haš hodnot nahrazených za zástupné symboly `{name}` v cestě URI. Příklad: s `path = /users/{id}` a `path_vars = {id: 123}` rozhraní odesílá `/users/123`. Hodnoty jsou kódovány v URL."
+        },
+        "app.Q2xvc2U.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.display_name": {
+          "source": "Path Variables",
+          "message": "Proměnné cesty"
+        },
+        "app.Q2xvc2U.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.short_desc": {
+          "source": "Values for {name} placeholders in path",
+          "message": "Hodnoty pro zástupné symboly {name} v cestě"
+        },
+        "app.Q2xvc2U.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.desc": {
+          "source": "Hash of query string parameters to append to the URI path. Values are URL-encoded; list values are joined with `,`.",
+          "message": "Haš parametrů dotazovacího řetězce, které se připojí k cestě URI. Hodnoty jsou kódovány v URL; hodnoty seznamu jsou spojeny pomocí `,`."
+        },
+        "app.Q2xvc2U.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.display_name": {
+          "source": "Query Arguments",
+          "message": "Argumenty dotazu"
+        },
+        "app.Q2xvc2U.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.short_desc": {
+          "source": "Query string parameters",
+          "message": "Parametry dotazovacího řetězce"
+        },
+        "app.Q2xvc2U.action.bWFrZS1hcGktY2FsbA.short_desc": {
+          "source": "Make a custom API call to Close",
+          "message": "Provést vlastní volání API do Close"
+        },
+        "app.Q2xvc2U.action.dXBkYXRlLW5vdGU.desc": {
+          "source": "Update an existing note activity in Close CRM",
+          "message": "Aktualizovat existující aktivitu poznámky v Close CRM"
+        },
+        "app.Q2xvc2U.action.dXBkYXRlLW5vdGU.display_name": {
+          "source": "Update a Note",
+          "message": "Aktualizovat poznámku"
+        },
+        "app.Q2xvc2U.action.dXBkYXRlLW5vdGU.option.bm90ZQ.desc": {
+          "source": "The new plain text content of the note",
+          "message": "Nový prostý textový obsah poznámky"
+        },
+        "app.Q2xvc2U.action.dXBkYXRlLW5vdGU.option.bm90ZQ.display_name": {
+          "source": "Note",
+          "message": "Poznámka"
+        },
+        "app.Q2xvc2U.action.dXBkYXRlLW5vdGU.option.bm90ZQ.short_desc": {
+          "source": "Note text content",
+          "message": "Textový obsah poznámky"
+        },
+        "app.Q2xvc2U.action.dXBkYXRlLW5vdGU.option.bm90ZV9odG1s.desc": {
+          "source": "The new HTML content of the note",
+          "message": "Nový HTML obsah poznámky"
+        },
+        "app.Q2xvc2U.action.dXBkYXRlLW5vdGU.option.bm90ZV9odG1s.display_name": {
+          "source": "Note HTML",
+          "message": "HTML poznámky"
+        },
+        "app.Q2xvc2U.action.dXBkYXRlLW5vdGU.option.bm90ZV9odG1s.short_desc": {
+          "source": "Note HTML content",
+          "message": "HTML obsah poznámky"
+        },
+        "app.Q2xvc2U.action.dXBkYXRlLW5vdGU.option.bm90ZV9pZA.display_name": {
+          "source": "Note ID",
+          "message": "ID poznámky"
+        },
+        "app.Q2xvc2U.action.dXBkYXRlLW5vdGU.option.bm90ZV9pZA.short_desc": {
+          "source": "The note to update",
+          "message": "Poznámka k aktualizaci"
+        },
+        "app.Q2xvc2U.action.dXBkYXRlLW5vdGU.short_desc": {
+          "source": "Update an existing note",
+          "message": "Aktualizovat existující poznámku"
+        },
+        "app.Q2xvc2U.action.dXBkYXRlLW9wcG9ydHVuaXR5.desc": {
+          "source": "Update an existing opportunity in Close CRM",
+          "message": "Aktualizovat existující příležitost v Close CRM"
+        },
+        "app.Q2xvc2U.action.dXBkYXRlLW9wcG9ydHVuaXR5.display_name": {
+          "source": "Update an Opportunity",
+          "message": "Aktualizovat příležitost"
+        },
+        "app.Q2xvc2U.action.dXBkYXRlLW9wcG9ydHVuaXR5.option.Y29uZmlkZW5jZQ.desc": {
+          "source": "The new confidence percentage, from 0 to 100",
+          "message": "Nová procentuální pravděpodobnost, od 0 do 100"
+        },
+        "app.Q2xvc2U.action.dXBkYXRlLW9wcG9ydHVuaXR5.option.Y29uZmlkZW5jZQ.display_name": {
+          "source": "Confidence",
+          "message": "Pravděpodobnost"
+        },
+        "app.Q2xvc2U.action.dXBkYXRlLW9wcG9ydHVuaXR5.option.Y29uZmlkZW5jZQ.short_desc": {
+          "source": "The confidence percentage",
+          "message": "Procento pravděpodobnosti"
+        },
+        "app.Q2xvc2U.action.dXBkYXRlLW9wcG9ydHVuaXR5.option.b3Bwb3J0dW5pdHlfaWQ.display_name": {
+          "source": "Opportunity ID",
+          "message": "ID příležitosti"
+        },
+        "app.Q2xvc2U.action.dXBkYXRlLW9wcG9ydHVuaXR5.option.b3Bwb3J0dW5pdHlfaWQ.short_desc": {
+          "source": "The opportunity to update",
+          "message": "Příležitost k aktualizaci"
+        },
+        "app.Q2xvc2U.action.dXBkYXRlLW9wcG9ydHVuaXR5.option.bm90ZQ.desc": {
+          "source": "The new text note for the opportunity",
+          "message": "Nová textová poznámka k příležitosti"
+        },
+        "app.Q2xvc2U.action.dXBkYXRlLW9wcG9ydHVuaXR5.option.bm90ZQ.display_name": {
+          "source": "Note",
+          "message": "Poznámka"
+        },
+        "app.Q2xvc2U.action.dXBkYXRlLW9wcG9ydHVuaXR5.option.bm90ZQ.short_desc": {
+          "source": "Notes about the opportunity",
+          "message": "Poznámky k příležitosti"
+        },
+        "app.Q2xvc2U.action.dXBkYXRlLW9wcG9ydHVuaXR5.option.c3RhdHVzX2lk.desc": {
+          "source": "The new status ID to assign",
+          "message": "Nové ID stavu k přiřazení"
+        },
+        "app.Q2xvc2U.action.dXBkYXRlLW9wcG9ydHVuaXR5.option.c3RhdHVzX2lk.display_name": {
+          "source": "Status ID",
+          "message": "ID stavu"
+        },
+        "app.Q2xvc2U.action.dXBkYXRlLW9wcG9ydHVuaXR5.option.c3RhdHVzX2lk.short_desc": {
+          "source": "The opportunity status ID",
+          "message": "ID stavu příležitosti"
+        },
+        "app.Q2xvc2U.action.dXBkYXRlLW9wcG9ydHVuaXR5.option.dmFsdWU.desc": {
+          "source": "The new monetary value in cents",
+          "message": "Nová peněžní hodnota v centech"
+        },
+        "app.Q2xvc2U.action.dXBkYXRlLW9wcG9ydHVuaXR5.option.dmFsdWU.display_name": {
+          "source": "Value",
+          "message": "Hodnota"
+        },
+        "app.Q2xvc2U.action.dXBkYXRlLW9wcG9ydHVuaXR5.option.dmFsdWU.short_desc": {
+          "source": "The opportunity value in cents",
+          "message": "Hodnota příležitosti v centech"
+        },
+        "app.Q2xvc2U.action.dXBkYXRlLW9wcG9ydHVuaXR5.option.dmFsdWVfcGVyaW9k.allowed-value.c3RyaW5nOm1vbnRobHk.desc": {
+          "source": "Monthly recurring",
+          "message": "Měsíčně opakované"
+        },
+        "app.Q2xvc2U.action.dXBkYXRlLW9wcG9ydHVuaXR5.option.dmFsdWVfcGVyaW9k.allowed-value.c3RyaW5nOm9uZV90aW1l.desc": {
+          "source": "One-time payment",
+          "message": "Jednorázová platba"
+        },
+        "app.Q2xvc2U.action.dXBkYXRlLW9wcG9ydHVuaXR5.option.dmFsdWVfcGVyaW9k.allowed-value.c3RyaW5nOmFubnVhbA.desc": {
+          "source": "Annual recurring",
+          "message": "Ročně opakované"
+        },
+        "app.Q2xvc2U.action.dXBkYXRlLW9wcG9ydHVuaXR5.option.dmFsdWVfcGVyaW9k.desc": {
+          "source": "The new billing period",
+          "message": "Nové fakturační období"
+        },
+        "app.Q2xvc2U.action.dXBkYXRlLW9wcG9ydHVuaXR5.option.dmFsdWVfcGVyaW9k.display_name": {
+          "source": "Value Period",
+          "message": "Období hodnoty"
+        },
+        "app.Q2xvc2U.action.dXBkYXRlLW9wcG9ydHVuaXR5.option.dmFsdWVfcGVyaW9k.short_desc": {
+          "source": "The value period",
+          "message": "Období hodnoty"
+        },
+        "app.Q2xvc2U.action.dXBkYXRlLW9wcG9ydHVuaXR5.short_desc": {
+          "source": "Update an existing opportunity",
+          "message": "Aktualizovat existující příležitost"
+        },
+        "app.Q2xvc2U.action.dXBkYXRlLWNhbGw.desc": {
+          "source": "Update an existing call activity in Close CRM",
+          "message": "Aktualizovat existující aktivitu hovoru v Close CRM"
+        },
+        "app.Q2xvc2U.action.dXBkYXRlLWNhbGw.display_name": {
+          "source": "Update a Call",
+          "message": "Aktualizovat hovor"
+        },
+        "app.Q2xvc2U.action.dXBkYXRlLWNhbGw.option.Y2FsbF9pZA.display_name": {
+          "source": "Call ID",
+          "message": "ID hovoru"
+        },
+        "app.Q2xvc2U.action.dXBkYXRlLWNhbGw.option.Y2FsbF9pZA.short_desc": {
+          "source": "The call to update",
+          "message": "Hovor k aktualizaci"
+        },
+        "app.Q2xvc2U.action.dXBkYXRlLWNhbGw.option.ZGlzcG9zaXRpb24.desc": {
+          "source": "The new disposition or outcome of the call",
+          "message": "Nové vyhodnocení nebo výsledek hovoru"
+        },
+        "app.Q2xvc2U.action.dXBkYXRlLWNhbGw.option.ZGlzcG9zaXRpb24.display_name": {
+          "source": "Disposition",
+          "message": "Výsledek"
+        },
+        "app.Q2xvc2U.action.dXBkYXRlLWNhbGw.option.ZGlzcG9zaXRpb24.short_desc": {
+          "source": "Call disposition",
+          "message": "Výsledek hovoru"
+        },
+        "app.Q2xvc2U.action.dXBkYXRlLWNhbGw.option.bm90ZQ.desc": {
+          "source": "The new text note for this call",
+          "message": "Nová textová poznámka k tomuto hovoru"
+        },
+        "app.Q2xvc2U.action.dXBkYXRlLWNhbGw.option.bm90ZQ.display_name": {
+          "source": "Note",
+          "message": "Poznámka"
+        },
+        "app.Q2xvc2U.action.dXBkYXRlLWNhbGw.option.bm90ZQ.short_desc": {
+          "source": "Call note",
+          "message": "Poznámka k hovoru"
+        },
+        "app.Q2xvc2U.action.dXBkYXRlLWNhbGw.short_desc": {
+          "source": "Update an existing call",
+          "message": "Aktualizovat existující hovor"
+        },
+        "app.Q2xvc2U.action.dXBkYXRlLWNvbnRhY3Q.desc": {
+          "source": "Update an existing contact in Close CRM",
+          "message": "Aktualizovat existující kontakt v Close CRM"
+        },
+        "app.Q2xvc2U.action.dXBkYXRlLWNvbnRhY3Q.display_name": {
+          "source": "Update a Contact",
+          "message": "Aktualizovat kontakt"
+        },
+        "app.Q2xvc2U.action.dXBkYXRlLWNvbnRhY3Q.option.Y29udGFjdF9pZA.display_name": {
+          "source": "Contact ID",
+          "message": "ID kontaktu"
+        },
+        "app.Q2xvc2U.action.dXBkYXRlLWNvbnRhY3Q.option.Y29udGFjdF9pZA.short_desc": {
+          "source": "The contact to update",
+          "message": "Kontakt k aktualizaci"
+        },
+        "app.Q2xvc2U.action.dXBkYXRlLWNvbnRhY3Q.option.ZW1haWxz.desc": {
+          "source": "The new list of email address objects",
+          "message": "Nový seznam objektů e-mailových adres"
+        },
+        "app.Q2xvc2U.action.dXBkYXRlLWNvbnRhY3Q.option.ZW1haWxz.display_name": {
+          "source": "Email Addresses",
+          "message": "E-mailové adresy"
+        },
+        "app.Q2xvc2U.action.dXBkYXRlLWNvbnRhY3Q.option.ZW1haWxz.short_desc": {
+          "source": "The contact email addresses",
+          "message": "E-mailové adresy kontaktu"
+        },
+        "app.Q2xvc2U.action.dXBkYXRlLWNvbnRhY3Q.option.bmFtZQ.desc": {
+          "source": "The new full name of the contact",
+          "message": "Nové celé jméno kontaktu"
+        },
+        "app.Q2xvc2U.action.dXBkYXRlLWNvbnRhY3Q.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "Název"
+        },
+        "app.Q2xvc2U.action.dXBkYXRlLWNvbnRhY3Q.option.bmFtZQ.short_desc": {
+          "source": "The contact name",
+          "message": "Jméno kontaktu"
+        },
+        "app.Q2xvc2U.action.dXBkYXRlLWNvbnRhY3Q.option.cGhvbmVz.desc": {
+          "source": "The new list of phone number objects",
+          "message": "Nový seznam objektů telefonních čísel"
+        },
+        "app.Q2xvc2U.action.dXBkYXRlLWNvbnRhY3Q.option.cGhvbmVz.display_name": {
+          "source": "Phone Numbers",
+          "message": "Telefonní čísla"
+        },
+        "app.Q2xvc2U.action.dXBkYXRlLWNvbnRhY3Q.option.cGhvbmVz.short_desc": {
+          "source": "The contact phone numbers",
+          "message": "Telefonní čísla kontaktu"
+        },
+        "app.Q2xvc2U.action.dXBkYXRlLWNvbnRhY3Q.option.dGl0bGU.desc": {
+          "source": "The new job title of the contact",
+          "message": "Nová pracovní pozice kontaktu"
+        },
+        "app.Q2xvc2U.action.dXBkYXRlLWNvbnRhY3Q.option.dGl0bGU.display_name": {
+          "source": "Title",
+          "message": "Název"
+        },
+        "app.Q2xvc2U.action.dXBkYXRlLWNvbnRhY3Q.option.dGl0bGU.short_desc": {
+          "source": "The contact title",
+          "message": "Pozice kontaktu"
+        },
+        "app.Q2xvc2U.action.dXBkYXRlLWNvbnRhY3Q.short_desc": {
+          "source": "Update an existing contact",
+          "message": "Aktualizovat stávající kontakt"
+        },
+        "app.Q2xvc2U.action.dXBkYXRlLWxlYWQ.desc": {
+          "source": "Update an existing lead in Close CRM",
+          "message": "Aktualizovat existující lead v Close CRM"
+        },
+        "app.Q2xvc2U.action.dXBkYXRlLWxlYWQ.display_name": {
+          "source": "Update a Lead",
+          "message": "Aktualizovat leada"
+        },
+        "app.Q2xvc2U.action.dXBkYXRlLWxlYWQ.option.ZGVzY3JpcHRpb24.desc": {
+          "source": "The new text description of the lead",
+          "message": "Nový textový popis leadu"
+        },
+        "app.Q2xvc2U.action.dXBkYXRlLWxlYWQ.option.ZGVzY3JpcHRpb24.display_name": {
+          "source": "Description",
+          "message": "Popis"
+        },
+        "app.Q2xvc2U.action.dXBkYXRlLWxlYWQ.option.ZGVzY3JpcHRpb24.short_desc": {
+          "source": "The lead description",
+          "message": "Popis leadu"
+        },
+        "app.Q2xvc2U.action.dXBkYXRlLWxlYWQ.option.bGVhZF9pZA.display_name": {
+          "source": "Lead ID",
+          "message": "ID leadu"
+        },
+        "app.Q2xvc2U.action.dXBkYXRlLWxlYWQ.option.bGVhZF9pZA.short_desc": {
+          "source": "The lead to update",
+          "message": "Lead k aktualizaci"
+        },
+        "app.Q2xvc2U.action.dXBkYXRlLWxlYWQ.option.bmFtZQ.desc": {
+          "source": "The new name of the lead",
+          "message": "Nový název leadu"
+        },
+        "app.Q2xvc2U.action.dXBkYXRlLWxlYWQ.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "Název"
+        },
+        "app.Q2xvc2U.action.dXBkYXRlLWxlYWQ.option.bmFtZQ.short_desc": {
+          "source": "The lead name",
+          "message": "Název leadu"
+        },
+        "app.Q2xvc2U.action.dXBkYXRlLWxlYWQ.option.c3RhdHVzX2lk.desc": {
+          "source": "The new status ID to assign to the lead",
+          "message": "Nové ID stavu pro přiřazení k leadu"
+        },
+        "app.Q2xvc2U.action.dXBkYXRlLWxlYWQ.option.c3RhdHVzX2lk.display_name": {
+          "source": "Status ID",
+          "message": "ID stavu"
+        },
+        "app.Q2xvc2U.action.dXBkYXRlLWxlYWQ.option.c3RhdHVzX2lk.short_desc": {
+          "source": "The lead status ID",
+          "message": "ID stavu leadu"
+        },
+        "app.Q2xvc2U.action.dXBkYXRlLWxlYWQ.option.dXJs.desc": {
+          "source": "The new website URL associated with the lead",
+          "message": "Nová URL adresa webu přidružená k leadu"
+        },
+        "app.Q2xvc2U.action.dXBkYXRlLWxlYWQ.option.dXJs.display_name": {
+          "source": "URL",
+          "message": "URL"
+        },
+        "app.Q2xvc2U.action.dXBkYXRlLWxlYWQ.option.dXJs.short_desc": {
+          "source": "The lead URL",
+          "message": "URL leadu"
+        },
+        "app.Q2xvc2U.action.dXBkYXRlLWxlYWQ.short_desc": {
+          "source": "Update an existing lead",
+          "message": "Aktualizovat existující lead"
+        },
+        "app.Q2xvc2U.action.dXBkYXRlLXRhc2s.desc": {
+          "source": "Update an existing task in Close CRM",
+          "message": "Aktualizovat existující úkol v Close CRM"
+        },
+        "app.Q2xvc2U.action.dXBkYXRlLXRhc2s.display_name": {
+          "source": "Update a Task",
+          "message": "Aktualizovat úkol"
+        },
+        "app.Q2xvc2U.action.dXBkYXRlLXRhc2s.option.YXNzaWduZWRfdG8.desc": {
+          "source": "The new user ID to assign this task to",
+          "message": "Nové ID uživatele, kterému má být tento úkol přiřazen"
+        },
+        "app.Q2xvc2U.action.dXBkYXRlLXRhc2s.option.YXNzaWduZWRfdG8.display_name": {
+          "source": "Assigned To",
+          "message": "Přiřazeno uživateli"
+        },
+        "app.Q2xvc2U.action.dXBkYXRlLXRhc2s.option.YXNzaWduZWRfdG8.short_desc": {
+          "source": "The user to assign the task to",
+          "message": "Uživatel, kterému se má úkol přiřadit"
+        },
+        "app.Q2xvc2U.action.dXBkYXRlLXRhc2s.option.ZGF0ZQ.desc": {
+          "source": "The new due date in YYYY-MM-DD format",
+          "message": "Nové datum splnění ve formátu RRRR-MM-DD"
+        },
+        "app.Q2xvc2U.action.dXBkYXRlLXRhc2s.option.ZGF0ZQ.display_name": {
+          "source": "Date",
+          "message": "Datum"
+        },
+        "app.Q2xvc2U.action.dXBkYXRlLXRhc2s.option.ZGF0ZQ.short_desc": {
+          "source": "The task due date",
+          "message": "Datum splnění úkolu"
+        },
+        "app.Q2xvc2U.action.dXBkYXRlLXRhc2s.option.aXNfY29tcGxldGU.desc": {
+          "source": "Set to `True` to mark the task as complete, or `False` for incomplete",
+          "message": "Nastavte na `True` pro označení úkolu jako dokončeného nebo `False` pro nedokončený"
+        },
+        "app.Q2xvc2U.action.dXBkYXRlLXRhc2s.option.aXNfY29tcGxldGU.display_name": {
+          "source": "Is Complete",
+          "message": "Dokončeno"
+        },
+        "app.Q2xvc2U.action.dXBkYXRlLXRhc2s.option.aXNfY29tcGxldGU.short_desc": {
+          "source": "Whether the task is complete",
+          "message": "Zda je úkol dokončen"
+        },
+        "app.Q2xvc2U.action.dXBkYXRlLXRhc2s.option.dGFza19pZA.display_name": {
+          "source": "Task ID",
+          "message": "ID úlohy"
+        },
+        "app.Q2xvc2U.action.dXBkYXRlLXRhc2s.option.dGFza19pZA.short_desc": {
+          "source": "The task to update",
+          "message": "Úkol k aktualizaci"
+        },
+        "app.Q2xvc2U.action.dXBkYXRlLXRhc2s.option.dGV4dA.desc": {
+          "source": "The new text description or body of the task",
+          "message": "Nový textový popis nebo tělo úkolu"
+        },
+        "app.Q2xvc2U.action.dXBkYXRlLXRhc2s.option.dGV4dA.display_name": {
+          "source": "Text",
+          "message": "Text"
+        },
+        "app.Q2xvc2U.action.dXBkYXRlLXRhc2s.option.dGV4dA.short_desc": {
+          "source": "The task text",
+          "message": "Text úkolu"
+        },
+        "app.Q2xvc2U.action.dXBkYXRlLXRhc2s.short_desc": {
+          "source": "Update an existing task",
+          "message": "Aktualizovat existující úkol"
+        },
+        "app.Q2xvc2U.desc": {
+          "source": "Close is a CRM platform built for sales teams, offering lead management, contact tracking, opportunities, tasks, and activity logging (calls, emails, notes, meetings, SMS).\n\nThis integration supports leads, contacts, opportunities, tasks, calls, emails, notes, meetings, SMS, and event triggers.",
+          "message": "Close je CRM platforma vytvořená pro prodejní týmy, která nabízí správu leadů, sledování kontaktů, obchodní příležitosti, úkoly a protokolování aktivit (hovory, e-maily, poznámky, schůzky, SMS).\n\nTato integrace podporuje leady, kontakty, obchodní příležitosti, úkoly, hovory, e-maily, poznámky, schůzky, SMS a spouštěče událostí."
+        },
+        "app.Q2xvc2U.display_name": {
+          "source": "Close",
+          "message": "Close"
+        },
+        "app.Q2xvc2U.short_desc": {
+          "source": "Close CRM for sales teams",
+          "message": "Close CRM pro prodejní týmy"
+        }
+      }
+    }
+  }
+}

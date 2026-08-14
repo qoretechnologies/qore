@@ -1,0 +1,21 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "uk": {
+      "messages": {
+        "app.SDI.desc": {
+          "source": "Create and manage connections to a H2 embedded Java SQL database",
+          "message": "Створення та керування підключеннями до вбудованої бази даних Java SQL H2"
+        },
+        "app.SDI.display_name": {
+          "source": "H2",
+          "message": "H2"
+        },
+        "app.SDI.short_desc": {
+          "source": "H2 embedded Java SQL database",
+          "message": "Вбудована база даних Java SQL H2"
+        }
+      }
+    }
+  }
+}

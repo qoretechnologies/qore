@@ -1,0 +1,3597 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "fr": {
+      "messages": {
+        "app.RWFzeVBvc3Q.action.Y2FuY2VsLXBpY2t1cA.desc": {
+          "source": "Cancel a scheduled pickup.",
+          "message": "Annuler un enlèvement programmé."
+        },
+        "app.RWFzeVBvc3Q.action.Y2FuY2VsLXBpY2t1cA.display_name": {
+          "source": "Cancel Pickup",
+          "message": "Annuler l'enlèvement"
+        },
+        "app.RWFzeVBvc3Q.action.Y2FuY2VsLXBpY2t1cA.option.cGlja3VwX2lk.desc": {
+          "source": "Pickup to cancel",
+          "message": "Enlèvement à annuler"
+        },
+        "app.RWFzeVBvc3Q.action.Y2FuY2VsLXBpY2t1cA.option.cGlja3VwX2lk.display_name": {
+          "source": "Pickup ID",
+          "message": "ID d'enlèvement"
+        },
+        "app.RWFzeVBvc3Q.action.Y2FuY2VsLXBpY2t1cA.option.cGlja3VwX2lk.short_desc": {
+          "source": "Pickup ID (pickup_xxx)",
+          "message": "ID d'enlèvement (pickup_xxx)"
+        },
+        "app.RWFzeVBvc3Q.action.Y2FuY2VsLXBpY2t1cA.short_desc": {
+          "source": "Cancel a pickup",
+          "message": "Annuler un enlèvement"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLW9yZGVy.desc": {
+          "source": "Create a new multi-shipment order.",
+          "message": "Créer une nouvelle commande multi-expéditions."
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLW9yZGVy.display_name": {
+          "source": "Create Order",
+          "message": "Créer une commande"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLW9yZGVy.option.Y2Fycmllcg.desc": {
+          "source": "Carrier name",
+          "message": "Nom du transporteur"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLW9yZGVy.option.Y2Fycmllcg.display_name": {
+          "source": "Carrier",
+          "message": "Transporteur"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLW9yZGVy.option.Y2Fycmllcg.short_desc": {
+          "source": "Carrier name",
+          "message": "Nom du transporteur"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLW9yZGVy.option.Y2Fycmllcl9hY2NvdW50cw.desc": {
+          "source": "Carrier account IDs to use for rating",
+          "message": "Identifiants de compte transporteur à utiliser pour la tarification"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLW9yZGVy.option.Y2Fycmllcl9hY2NvdW50cw.display_name": {
+          "source": "Carrier Accounts",
+          "message": "Comptes transporteur"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLW9yZGVy.option.Y2Fycmllcl9hY2NvdW50cw.short_desc": {
+          "source": "Carrier accounts",
+          "message": "Comptes transporteur"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLW9yZGVy.option.YnV5ZXJfYWRkcmVzcw.desc": {
+          "source": "Buyer address (when different from `to_address`)",
+          "message": "Adresse de l'acheteur (lorsqu'elle est différente de `to_address`)"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLW9yZGVy.option.YnV5ZXJfYWRkcmVzcw.display_name": {
+          "source": "Buyer Address",
+          "message": "Adresse de l'acheteur"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLW9yZGVy.option.YnV5ZXJfYWRkcmVzcw.short_desc": {
+          "source": "Buyer address",
+          "message": "Adresse de l'acheteur"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLW9yZGVy.option.ZnJvbV9hZGRyZXNz.desc": {
+          "source": "Origin address (or `{id: adr_xxx}`)",
+          "message": "Adresse d'origine (ou `{id: adr_xxx}`)"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLW9yZGVy.option.ZnJvbV9hZGRyZXNz.display_name": {
+          "source": "From Address",
+          "message": "Adresse de l'expéditeur"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLW9yZGVy.option.ZnJvbV9hZGRyZXNz.short_desc": {
+          "source": "Origin address",
+          "message": "Adresse d'origine"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLW9yZGVy.option.aXNfcmV0dXJu.desc": {
+          "source": "Set to `True` if this is a return order",
+          "message": "Définir sur `True` s'il s'agit d'une commande de retour"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLW9yZGVy.option.aXNfcmV0dXJu.display_name": {
+          "source": "Is Return",
+          "message": "Est un retour"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLW9yZGVy.option.aXNfcmV0dXJu.short_desc": {
+          "source": "Mark as return order",
+          "message": "Marquer comme commande de retour"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLW9yZGVy.option.c2VydmljZQ.desc": {
+          "source": "Carrier service code",
+          "message": "Code de service du transporteur"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLW9yZGVy.option.c2VydmljZQ.display_name": {
+          "source": "Service",
+          "message": "Service"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLW9yZGVy.option.c2VydmljZQ.short_desc": {
+          "source": "Carrier service",
+          "message": "Service du transporteur"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLW9yZGVy.option.c2hpcG1lbnRz.desc": {
+          "source": "List of shipments to include in the order (each contains a parcel, etc.)",
+          "message": "Liste des expéditions à inclure dans la commande (chacune contenant un colis, etc.)"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLW9yZGVy.option.c2hpcG1lbnRz.display_name": {
+          "source": "Shipments",
+          "message": "Expéditions"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLW9yZGVy.option.c2hpcG1lbnRz.short_desc": {
+          "source": "Shipments in the order",
+          "message": "Expéditions dans la commande"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLW9yZGVy.option.cmV0dXJuX2FkZHJlc3M.desc": {
+          "source": "Return address",
+          "message": "Adresse de retour"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLW9yZGVy.option.cmV0dXJuX2FkZHJlc3M.display_name": {
+          "source": "Return Address",
+          "message": "Adresse de retour"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLW9yZGVy.option.cmV0dXJuX2FkZHJlc3M.short_desc": {
+          "source": "Return address",
+          "message": "Adresse de retour"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLW9yZGVy.option.cmVmZXJlbmNl.desc": {
+          "source": "Caller-supplied reference",
+          "message": "Référence fournie par l'appelant"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLW9yZGVy.option.cmVmZXJlbmNl.display_name": {
+          "source": "Reference",
+          "message": "Référence"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLW9yZGVy.option.cmVmZXJlbmNl.short_desc": {
+          "source": "Caller-supplied reference",
+          "message": "Référence fournie par l'appelant"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLW9yZGVy.option.dG9fYWRkcmVzcw.desc": {
+          "source": "Destination address (or `{id: adr_xxx}`)",
+          "message": "Adresse de destination (ou `{id: adr_xxx}`)"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLW9yZGVy.option.dG9fYWRkcmVzcw.display_name": {
+          "source": "To Address",
+          "message": "Adresse de destination"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLW9yZGVy.option.dG9fYWRkcmVzcw.short_desc": {
+          "source": "Destination address",
+          "message": "Adresse de destination"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLW9yZGVy.short_desc": {
+          "source": "Create a multi-shipment order",
+          "message": "Créer une commande multi-expéditions"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWFkZHJlc3M.desc": {
+          "source": "Create a new address. Optionally request lenient or strict verification of the address.",
+          "message": "Créer une nouvelle adresse. Demander éventuellement une vérification souple ou stricte de l'adresse."
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWFkZHJlc3M.display_name": {
+          "source": "Create Address",
+          "message": "Créer une adresse"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWFkZHJlc3M.option.Y291bnRyeQ.desc": {
+          "source": "ISO 2-letter country code (e.g. `US`, `GB`). Defaults to `US`.",
+          "message": "Code pays ISO à 2 lettres (ex. `US`, `GB`). La valeur par défaut est `US`."
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWFkZHJlc3M.option.Y291bnRyeQ.display_name": {
+          "source": "Country",
+          "message": "Pays"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWFkZHJlc3M.option.Y291bnRyeQ.short_desc": {
+          "source": "ISO 2-letter country code",
+          "message": "Code pays ISO à 2 lettres"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWFkZHJlc3M.option.Y29tcGFueQ.desc": {
+          "source": "Company name",
+          "message": "Nom de l'entreprise"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWFkZHJlc3M.option.Y29tcGFueQ.display_name": {
+          "source": "Company",
+          "message": "Entreprise"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWFkZHJlc3M.option.Y29tcGFueQ.short_desc": {
+          "source": "Company name",
+          "message": "Nom de l'entreprise"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWFkZHJlc3M.option.Y2Fycmllcl9mYWNpbGl0eQ.desc": {
+          "source": "Optional carrier facility identifier",
+          "message": "Identifiant d'installation de transporteur facultatif"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWFkZHJlc3M.option.Y2Fycmllcl9mYWNpbGl0eQ.display_name": {
+          "source": "Carrier Facility",
+          "message": "Installation du transporteur"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWFkZHJlc3M.option.Y2Fycmllcl9mYWNpbGl0eQ.short_desc": {
+          "source": "Carrier facility name",
+          "message": "Nom de l'installation du transporteur"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWFkZHJlc3M.option.Y2l0eQ.desc": {
+          "source": "City name",
+          "message": "Nom de la ville"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWFkZHJlc3M.option.Y2l0eQ.display_name": {
+          "source": "City",
+          "message": "Ville"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWFkZHJlc3M.option.Y2l0eQ.short_desc": {
+          "source": "City",
+          "message": "Ville"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWFkZHJlc3M.option.ZW1haWw.desc": {
+          "source": "Email address",
+          "message": "Adresse e-mail"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWFkZHJlc3M.option.ZW1haWw.display_name": {
+          "source": "Email",
+          "message": "E-mail"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWFkZHJlc3M.option.ZW1haWw.short_desc": {
+          "source": "Email address",
+          "message": "Adresse e-mail"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWFkZHJlc3M.option.ZmVkZXJhbF90YXhfaWQ.desc": {
+          "source": "Federal tax identifier",
+          "message": "Numéro d'identification fiscale fédérale"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWFkZHJlc3M.option.ZmVkZXJhbF90YXhfaWQ.display_name": {
+          "source": "Federal Tax ID",
+          "message": "ID fiscal fédéral"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWFkZHJlc3M.option.ZmVkZXJhbF90YXhfaWQ.short_desc": {
+          "source": "Federal tax identifier",
+          "message": "Numéro d'identification fiscale fédérale"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWFkZHJlc3M.option.bmFtZQ.desc": {
+          "source": "Recipient name",
+          "message": "Nom du destinataire"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWFkZHJlc3M.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "Nom"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWFkZHJlc3M.option.bmFtZQ.short_desc": {
+          "source": "Recipient name",
+          "message": "Nom du destinataire"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWFkZHJlc3M.option.c3RhdGU.desc": {
+          "source": "State or province code (e.g. `CA`, `NY`)",
+          "message": "Code d'État ou de province (ex. `CA`, `NY`)"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWFkZHJlc3M.option.c3RhdGU.display_name": {
+          "source": "State",
+          "message": "État"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWFkZHJlc3M.option.c3RhdGU.short_desc": {
+          "source": "State or province code",
+          "message": "Code de l'État ou de la province"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWFkZHJlc3M.option.c3RhdGVfdGF4X2lk.desc": {
+          "source": "State tax identifier",
+          "message": "Numéro d'identification fiscale de l'État"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWFkZHJlc3M.option.c3RhdGVfdGF4X2lk.display_name": {
+          "source": "State Tax ID",
+          "message": "ID fiscal de l'État"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWFkZHJlc3M.option.c3RhdGVfdGF4X2lk.short_desc": {
+          "source": "State tax identifier",
+          "message": "Numéro d'identification fiscale de l'État"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWFkZHJlc3M.option.c3RyZWV0MQ.desc": {
+          "source": "First line of the street address",
+          "message": "Première ligne de l'adresse postale"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWFkZHJlc3M.option.c3RyZWV0MQ.display_name": {
+          "source": "Street 1",
+          "message": "Rue 1"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWFkZHJlc3M.option.c3RyZWV0MQ.short_desc": {
+          "source": "First line of the street address",
+          "message": "Première ligne de l'adresse postale"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWFkZHJlc3M.option.c3RyZWV0Mg.desc": {
+          "source": "Second line of the street address (apartment, suite, etc.)",
+          "message": "Deuxième ligne de l'adresse (appartement, suite, etc.)"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWFkZHJlc3M.option.c3RyZWV0Mg.display_name": {
+          "source": "Street 2",
+          "message": "Rue 2"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWFkZHJlc3M.option.c3RyZWV0Mg.short_desc": {
+          "source": "Second line of the street address",
+          "message": "Deuxième ligne de l'adresse postale"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWFkZHJlc3M.option.cGhvbmU.desc": {
+          "source": "Phone number",
+          "message": "Numéro de téléphone"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWFkZHJlc3M.option.cGhvbmU.display_name": {
+          "source": "Phone",
+          "message": "Téléphone"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWFkZHJlc3M.option.cGhvbmU.short_desc": {
+          "source": "Phone number",
+          "message": "Numéro de téléphone"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWFkZHJlc3M.option.cmVzaWRlbnRpYWw.desc": {
+          "source": "Set to `True` if the address is residential",
+          "message": "Définir sur `True` si l'adresse est résidentielle"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWFkZHJlc3M.option.cmVzaWRlbnRpYWw.display_name": {
+          "source": "Residential",
+          "message": "Résidentiel"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWFkZHJlc3M.option.cmVzaWRlbnRpYWw.short_desc": {
+          "source": "Whether the address is residential",
+          "message": "Indique si l'adresse est résidentielle"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWFkZHJlc3M.option.dmVyaWZ5.allowed-value.c3RyaW5nOmRlbGl2ZXJ5.desc": {
+          "source": "Delivery verification",
+          "message": "Vérification de livraison"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWFkZHJlc3M.option.dmVyaWZ5.allowed-value.c3RyaW5nOnppcDQ.desc": {
+          "source": "ZIP+4 verification (USPS)",
+          "message": "Vérification ZIP+4 (USPS)"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWFkZHJlc3M.option.dmVyaWZ5.desc": {
+          "source": "Verifications to perform; the API still creates the address even if verification fails. Allowed entries: `delivery`, `zip4`.",
+          "message": "Vérifications à effectuer ; l'API crée tout de même l'adresse même si la vérification échoue. Entrées autorisées : `delivery`, `zip4`."
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWFkZHJlc3M.option.dmVyaWZ5.display_name": {
+          "source": "Verify",
+          "message": "Vérifier"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWFkZHJlc3M.option.dmVyaWZ5.short_desc": {
+          "source": "Verifications to perform (lenient)",
+          "message": "Vérifications à effectuer (souples)"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWFkZHJlc3M.option.dmVyaWZ5X2NhcnJpZXI.allowed-value.c3RyaW5nOmZlZGV4.desc": {
+          "source": "FedEx",
+          "message": "FedEx"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWFkZHJlc3M.option.dmVyaWZ5X2NhcnJpZXI.allowed-value.c3RyaW5nOnVwcw.desc": {
+          "source": "UPS",
+          "message": "UPS"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWFkZHJlc3M.option.dmVyaWZ5X2NhcnJpZXI.desc": {
+          "source": "Optional carrier name for carrier-specific verification",
+          "message": "Nom de transporteur facultatif pour la vérification propre au transporteur"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWFkZHJlc3M.option.dmVyaWZ5X2NhcnJpZXI.display_name": {
+          "source": "Verify Carrier",
+          "message": "Vérifier le transporteur"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWFkZHJlc3M.option.dmVyaWZ5X2NhcnJpZXI.short_desc": {
+          "source": "Carrier-specific address verification",
+          "message": "Vérification d'adresse propre au transporteur"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWFkZHJlc3M.option.dmVyaWZ5X3N0cmljdA.allowed-value.c3RyaW5nOmRlbGl2ZXJ5.desc": {
+          "source": "Delivery verification",
+          "message": "Vérification de livraison"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWFkZHJlc3M.option.dmVyaWZ5X3N0cmljdA.allowed-value.c3RyaW5nOnppcDQ.desc": {
+          "source": "ZIP+4 verification (USPS)",
+          "message": "Vérification ZIP+4 (USPS)"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWFkZHJlc3M.option.dmVyaWZ5X3N0cmljdA.desc": {
+          "source": "Verifications to perform; the API rejects the request if any strict verification fails. Allowed entries: `delivery`, `zip4`.",
+          "message": "Vérifications à effectuer ; l'API rejette la requête en cas d'échec d'une vérification stricte. Entrées autorisées : `delivery`, `zip4`."
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWFkZHJlc3M.option.dmVyaWZ5X3N0cmljdA.display_name": {
+          "source": "Verify Strict",
+          "message": "Vérifier de manière stricte"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWFkZHJlc3M.option.dmVyaWZ5X3N0cmljdA.short_desc": {
+          "source": "Verifications to perform (strict)",
+          "message": "Vérifications à effectuer (strictes)"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWFkZHJlc3M.option.emlw.desc": {
+          "source": "ZIP / postal code",
+          "message": "Code postal / ZIP"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWFkZHJlc3M.option.emlw.display_name": {
+          "source": "ZIP / Postal Code",
+          "message": "Code postal / ZIP"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWFkZHJlc3M.option.emlw.short_desc": {
+          "source": "ZIP or postal code",
+          "message": "Code postal"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWFkZHJlc3M.short_desc": {
+          "source": "Create a new EasyPost address",
+          "message": "Créer une nouvelle adresse EasyPost"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWFuZC12ZXJpZnktYWRkcmVzcw.desc": {
+          "source": "Create a new address and verify it in a single API call.",
+          "message": "Créer une nouvelle adresse et la vérifier en un seul appel d'API."
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWFuZC12ZXJpZnktYWRkcmVzcw.display_name": {
+          "source": "Create and Verify Address",
+          "message": "Créer et vérifier une adresse"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWFuZC12ZXJpZnktYWRkcmVzcw.option.Y291bnRyeQ.desc": {
+          "source": "ISO 2-letter country code (e.g. `US`, `GB`). Defaults to `US`.",
+          "message": "Code pays ISO à 2 lettres (ex. `US`, `GB`). La valeur par défaut est `US`."
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWFuZC12ZXJpZnktYWRkcmVzcw.option.Y291bnRyeQ.display_name": {
+          "source": "Country",
+          "message": "Pays"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWFuZC12ZXJpZnktYWRkcmVzcw.option.Y291bnRyeQ.short_desc": {
+          "source": "ISO 2-letter country code",
+          "message": "Code pays ISO à 2 lettres"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWFuZC12ZXJpZnktYWRkcmVzcw.option.Y29tcGFueQ.desc": {
+          "source": "Company name",
+          "message": "Nom de l'entreprise"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWFuZC12ZXJpZnktYWRkcmVzcw.option.Y29tcGFueQ.display_name": {
+          "source": "Company",
+          "message": "Entreprise"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWFuZC12ZXJpZnktYWRkcmVzcw.option.Y29tcGFueQ.short_desc": {
+          "source": "Company name",
+          "message": "Nom de l'entreprise"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWFuZC12ZXJpZnktYWRkcmVzcw.option.Y2Fycmllcl9mYWNpbGl0eQ.desc": {
+          "source": "Optional carrier facility identifier",
+          "message": "Identifiant d'installation de transporteur facultatif"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWFuZC12ZXJpZnktYWRkcmVzcw.option.Y2Fycmllcl9mYWNpbGl0eQ.display_name": {
+          "source": "Carrier Facility",
+          "message": "Installation du transporteur"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWFuZC12ZXJpZnktYWRkcmVzcw.option.Y2Fycmllcl9mYWNpbGl0eQ.short_desc": {
+          "source": "Carrier facility name",
+          "message": "Nom de l'installation du transporteur"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWFuZC12ZXJpZnktYWRkcmVzcw.option.Y2l0eQ.desc": {
+          "source": "City name",
+          "message": "Nom de la ville"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWFuZC12ZXJpZnktYWRkcmVzcw.option.Y2l0eQ.display_name": {
+          "source": "City",
+          "message": "Ville"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWFuZC12ZXJpZnktYWRkcmVzcw.option.Y2l0eQ.short_desc": {
+          "source": "City",
+          "message": "Ville"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWFuZC12ZXJpZnktYWRkcmVzcw.option.ZW1haWw.desc": {
+          "source": "Email address",
+          "message": "Adresse e-mail"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWFuZC12ZXJpZnktYWRkcmVzcw.option.ZW1haWw.display_name": {
+          "source": "Email",
+          "message": "E-mail"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWFuZC12ZXJpZnktYWRkcmVzcw.option.ZW1haWw.short_desc": {
+          "source": "Email address",
+          "message": "Adresse e-mail"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWFuZC12ZXJpZnktYWRkcmVzcw.option.ZmVkZXJhbF90YXhfaWQ.desc": {
+          "source": "Federal tax identifier",
+          "message": "Numéro d'identification fiscale fédérale"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWFuZC12ZXJpZnktYWRkcmVzcw.option.ZmVkZXJhbF90YXhfaWQ.display_name": {
+          "source": "Federal Tax ID",
+          "message": "ID fiscal fédéral"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWFuZC12ZXJpZnktYWRkcmVzcw.option.ZmVkZXJhbF90YXhfaWQ.short_desc": {
+          "source": "Federal tax identifier",
+          "message": "Numéro d'identification fiscale fédérale"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWFuZC12ZXJpZnktYWRkcmVzcw.option.bmFtZQ.desc": {
+          "source": "Recipient name",
+          "message": "Nom du destinataire"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWFuZC12ZXJpZnktYWRkcmVzcw.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "Nom"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWFuZC12ZXJpZnktYWRkcmVzcw.option.bmFtZQ.short_desc": {
+          "source": "Recipient name",
+          "message": "Nom du destinataire"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWFuZC12ZXJpZnktYWRkcmVzcw.option.c3RhdGU.desc": {
+          "source": "State or province code (e.g. `CA`, `NY`)",
+          "message": "Code d'État ou de province (ex. `CA`, `NY`)"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWFuZC12ZXJpZnktYWRkcmVzcw.option.c3RhdGU.display_name": {
+          "source": "State",
+          "message": "État"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWFuZC12ZXJpZnktYWRkcmVzcw.option.c3RhdGU.short_desc": {
+          "source": "State or province code",
+          "message": "Code de l'État ou de la province"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWFuZC12ZXJpZnktYWRkcmVzcw.option.c3RhdGVfdGF4X2lk.desc": {
+          "source": "State tax identifier",
+          "message": "Numéro d'identification fiscale de l'État"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWFuZC12ZXJpZnktYWRkcmVzcw.option.c3RhdGVfdGF4X2lk.display_name": {
+          "source": "State Tax ID",
+          "message": "ID fiscal de l'État"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWFuZC12ZXJpZnktYWRkcmVzcw.option.c3RhdGVfdGF4X2lk.short_desc": {
+          "source": "State tax identifier",
+          "message": "Numéro d'identification fiscale de l'État"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWFuZC12ZXJpZnktYWRkcmVzcw.option.c3RyZWV0MQ.desc": {
+          "source": "First line of the street address",
+          "message": "Première ligne de l'adresse postale"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWFuZC12ZXJpZnktYWRkcmVzcw.option.c3RyZWV0MQ.display_name": {
+          "source": "Street 1",
+          "message": "Rue 1"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWFuZC12ZXJpZnktYWRkcmVzcw.option.c3RyZWV0MQ.short_desc": {
+          "source": "First line of the street address",
+          "message": "Première ligne de l'adresse postale"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWFuZC12ZXJpZnktYWRkcmVzcw.option.c3RyZWV0Mg.desc": {
+          "source": "Second line of the street address (apartment, suite, etc.)",
+          "message": "Deuxième ligne de l'adresse (appartement, suite, etc.)"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWFuZC12ZXJpZnktYWRkcmVzcw.option.c3RyZWV0Mg.display_name": {
+          "source": "Street 2",
+          "message": "Rue 2"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWFuZC12ZXJpZnktYWRkcmVzcw.option.c3RyZWV0Mg.short_desc": {
+          "source": "Second line of the street address",
+          "message": "Deuxième ligne de l'adresse postale"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWFuZC12ZXJpZnktYWRkcmVzcw.option.cGhvbmU.desc": {
+          "source": "Phone number",
+          "message": "Numéro de téléphone"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWFuZC12ZXJpZnktYWRkcmVzcw.option.cGhvbmU.display_name": {
+          "source": "Phone",
+          "message": "Téléphone"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWFuZC12ZXJpZnktYWRkcmVzcw.option.cGhvbmU.short_desc": {
+          "source": "Phone number",
+          "message": "Numéro de téléphone"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWFuZC12ZXJpZnktYWRkcmVzcw.option.cmVzaWRlbnRpYWw.desc": {
+          "source": "Set to `True` if the address is residential",
+          "message": "Définir sur `True` si l'adresse est résidentielle"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWFuZC12ZXJpZnktYWRkcmVzcw.option.cmVzaWRlbnRpYWw.display_name": {
+          "source": "Residential",
+          "message": "Résidentiel"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWFuZC12ZXJpZnktYWRkcmVzcw.option.cmVzaWRlbnRpYWw.short_desc": {
+          "source": "Whether the address is residential",
+          "message": "Indique si l'adresse est résidentielle"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWFuZC12ZXJpZnktYWRkcmVzcw.option.dmVyaWZ5.allowed-value.c3RyaW5nOmRlbGl2ZXJ5.desc": {
+          "source": "Delivery verification",
+          "message": "Vérification de livraison"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWFuZC12ZXJpZnktYWRkcmVzcw.option.dmVyaWZ5.allowed-value.c3RyaW5nOnppcDQ.desc": {
+          "source": "ZIP+4 verification (USPS)",
+          "message": "Vérification ZIP+4 (USPS)"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWFuZC12ZXJpZnktYWRkcmVzcw.option.dmVyaWZ5.desc": {
+          "source": "Verifications to perform; the API still creates the address even if verification fails. Allowed entries: `delivery`, `zip4`.",
+          "message": "Vérifications à effectuer ; l'API crée tout de même l'adresse même si la vérification échoue. Entrées autorisées : `delivery`, `zip4`."
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWFuZC12ZXJpZnktYWRkcmVzcw.option.dmVyaWZ5.display_name": {
+          "source": "Verify",
+          "message": "Vérifier"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWFuZC12ZXJpZnktYWRkcmVzcw.option.dmVyaWZ5.short_desc": {
+          "source": "Verifications to perform (lenient)",
+          "message": "Vérifications à effectuer (souples)"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWFuZC12ZXJpZnktYWRkcmVzcw.option.dmVyaWZ5X2NhcnJpZXI.allowed-value.c3RyaW5nOmZlZGV4.desc": {
+          "source": "FedEx",
+          "message": "FedEx"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWFuZC12ZXJpZnktYWRkcmVzcw.option.dmVyaWZ5X2NhcnJpZXI.allowed-value.c3RyaW5nOnVwcw.desc": {
+          "source": "UPS",
+          "message": "UPS"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWFuZC12ZXJpZnktYWRkcmVzcw.option.dmVyaWZ5X2NhcnJpZXI.desc": {
+          "source": "Optional carrier name for carrier-specific verification",
+          "message": "Nom de transporteur facultatif pour la vérification propre au transporteur"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWFuZC12ZXJpZnktYWRkcmVzcw.option.dmVyaWZ5X2NhcnJpZXI.display_name": {
+          "source": "Verify Carrier",
+          "message": "Vérifier le transporteur"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWFuZC12ZXJpZnktYWRkcmVzcw.option.dmVyaWZ5X2NhcnJpZXI.short_desc": {
+          "source": "Carrier-specific address verification",
+          "message": "Vérification d'adresse propre au transporteur"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWFuZC12ZXJpZnktYWRkcmVzcw.option.dmVyaWZ5X3N0cmljdA.allowed-value.c3RyaW5nOmRlbGl2ZXJ5.desc": {
+          "source": "Delivery verification",
+          "message": "Vérification de livraison"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWFuZC12ZXJpZnktYWRkcmVzcw.option.dmVyaWZ5X3N0cmljdA.allowed-value.c3RyaW5nOnppcDQ.desc": {
+          "source": "ZIP+4 verification (USPS)",
+          "message": "Vérification ZIP+4 (USPS)"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWFuZC12ZXJpZnktYWRkcmVzcw.option.dmVyaWZ5X3N0cmljdA.desc": {
+          "source": "Verifications to perform; the API rejects the request if any strict verification fails. Allowed entries: `delivery`, `zip4`.",
+          "message": "Vérifications à effectuer ; l'API rejette la requête en cas d'échec d'une vérification stricte. Entrées autorisées : `delivery`, `zip4`."
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWFuZC12ZXJpZnktYWRkcmVzcw.option.dmVyaWZ5X3N0cmljdA.display_name": {
+          "source": "Verify Strict",
+          "message": "Vérifier de manière stricte"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWFuZC12ZXJpZnktYWRkcmVzcw.option.dmVyaWZ5X3N0cmljdA.short_desc": {
+          "source": "Verifications to perform (strict)",
+          "message": "Vérifications à effectuer (strictes)"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWFuZC12ZXJpZnktYWRkcmVzcw.option.emlw.desc": {
+          "source": "ZIP / postal code",
+          "message": "Code postal / ZIP"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWFuZC12ZXJpZnktYWRkcmVzcw.option.emlw.display_name": {
+          "source": "ZIP / Postal Code",
+          "message": "Code postal / ZIP"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWFuZC12ZXJpZnktYWRkcmVzcw.option.emlw.short_desc": {
+          "source": "ZIP or postal code",
+          "message": "Code postal"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWFuZC12ZXJpZnktYWRkcmVzcw.short_desc": {
+          "source": "Create and verify an address in one call",
+          "message": "Créer et vérifier une adresse en un seul appel"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWJhdGNo.desc": {
+          "source": "Create a new batch of shipments.",
+          "message": "Créer un nouveau lot d'expéditions."
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWJhdGNo.display_name": {
+          "source": "Create Batch",
+          "message": "Créer un lot"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWJhdGNo.option.c2hpcG1lbnRz.desc": {
+          "source": "List of shipment references (each `{id: shp_xxx}`) to include in the new batch",
+          "message": "Liste de références d'expédition (chacune `{id: shp_xxx}`) à inclure dans le nouveau lot"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWJhdGNo.option.c2hpcG1lbnRz.display_name": {
+          "source": "Shipments",
+          "message": "Expéditions"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWJhdGNo.option.c2hpcG1lbnRz.short_desc": {
+          "source": "Shipments to include in the batch",
+          "message": "Expéditions à inclure dans le lot"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWJhdGNo.option.cmVmZXJlbmNl.desc": {
+          "source": "Caller-supplied reference",
+          "message": "Référence fournie par l'appelant"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWJhdGNo.option.cmVmZXJlbmNl.display_name": {
+          "source": "Reference",
+          "message": "Référence"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWJhdGNo.option.cmVmZXJlbmNl.short_desc": {
+          "source": "Caller-supplied reference",
+          "message": "Référence fournie par l'appelant"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWJhdGNo.short_desc": {
+          "source": "Create a batch",
+          "message": "Créer un lot"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWN1c3RvbXMtaW5mbw.desc": {
+          "source": "Create a customs info object for use with international shipments.",
+          "message": "Créer un objet d'informations douanières à utiliser avec les expéditions internationales."
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWN1c3RvbXMtaW5mbw.display_name": {
+          "source": "Create Customs Info",
+          "message": "Créer des informations douanières"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWN1c3RvbXMtaW5mbw.option.Y29udGVudHNfZXhwbGFuYXRpb24.desc": {
+          "source": "Free-text explanation of contents (required when `contents_type` is `other`)",
+          "message": "Explication du contenu en texte libre (obligatoire lorsque `contents_type` est `other`)"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWN1c3RvbXMtaW5mbw.option.Y29udGVudHNfZXhwbGFuYXRpb24.display_name": {
+          "source": "Contents Explanation",
+          "message": "Explication du contenu"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWN1c3RvbXMtaW5mbw.option.Y29udGVudHNfZXhwbGFuYXRpb24.short_desc": {
+          "source": "Required if contents_type is other",
+          "message": "Requis si contents_type est other"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWN1c3RvbXMtaW5mbw.option.Y29udGVudHNfdHlwZQ.allowed-value.c3RyaW5nOm1lcmNoYW5kaXNl.desc": {
+          "source": "Merchandise",
+          "message": "Marchandise"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWN1c3RvbXMtaW5mbw.option.Y29udGVudHNfdHlwZQ.allowed-value.c3RyaW5nOm90aGVy.desc": {
+          "source": "Other (requires `contents_explanation`)",
+          "message": "Autre (requiert `contents_explanation`)"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWN1c3RvbXMtaW5mbw.option.Y29udGVudHNfdHlwZQ.allowed-value.c3RyaW5nOmRhbmdlcm91c19nb29kcw.desc": {
+          "source": "Dangerous goods",
+          "message": "Marchandises dangereuses"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWN1c3RvbXMtaW5mbw.option.Y29udGVudHNfdHlwZQ.allowed-value.c3RyaW5nOmRvY3VtZW50cw.desc": {
+          "source": "Documents",
+          "message": "Documents"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWN1c3RvbXMtaW5mbw.option.Y29udGVudHNfdHlwZQ.allowed-value.c3RyaW5nOmdpZnQ.desc": {
+          "source": "Gift",
+          "message": "Cadeau"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWN1c3RvbXMtaW5mbw.option.Y29udGVudHNfdHlwZQ.allowed-value.c3RyaW5nOmh1bWFuaXRhcmlhbl9kb25hdGlvbg.desc": {
+          "source": "Humanitarian donation",
+          "message": "Don humanitaire"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWN1c3RvbXMtaW5mbw.option.Y29udGVudHNfdHlwZQ.allowed-value.c3RyaW5nOnJldHVybmVkX2dvb2Rz.desc": {
+          "source": "Returned goods",
+          "message": "Marchandises retournées"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWN1c3RvbXMtaW5mbw.option.Y29udGVudHNfdHlwZQ.allowed-value.c3RyaW5nOnNhbXBsZQ.desc": {
+          "source": "Sample",
+          "message": "Échantillon"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWN1c3RvbXMtaW5mbw.option.Y29udGVudHNfdHlwZQ.desc": {
+          "source": "Type of contents being shipped",
+          "message": "Type de contenu expédié"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWN1c3RvbXMtaW5mbw.option.Y29udGVudHNfdHlwZQ.display_name": {
+          "source": "Contents Type",
+          "message": "Type de contenu"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWN1c3RvbXMtaW5mbw.option.Y29udGVudHNfdHlwZQ.short_desc": {
+          "source": "Type of contents",
+          "message": "Type de contenu"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWN1c3RvbXMtaW5mbw.option.Y3VzdG9tc19jZXJ0aWZ5.desc": {
+          "source": "Set to `True` to certify the customs declarations",
+          "message": "Définir sur `True` pour certifier les déclarations en douane"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWN1c3RvbXMtaW5mbw.option.Y3VzdG9tc19jZXJ0aWZ5.display_name": {
+          "source": "Customs Certify",
+          "message": "Certification douanière"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWN1c3RvbXMtaW5mbw.option.Y3VzdG9tc19jZXJ0aWZ5.short_desc": {
+          "source": "Certify customs",
+          "message": "Certifier la douane"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWN1c3RvbXMtaW5mbw.option.Y3VzdG9tc19pdGVtcw.desc": {
+          "source": "List of customs items in the shipment",
+          "message": "Liste des articles de douane dans l'expédition"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWN1c3RvbXMtaW5mbw.option.Y3VzdG9tc19pdGVtcw.display_name": {
+          "source": "Customs Items",
+          "message": "Articles de douane"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWN1c3RvbXMtaW5mbw.option.Y3VzdG9tc19pdGVtcw.short_desc": {
+          "source": "List of items in the shipment",
+          "message": "Liste des articles dans l'expédition"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWN1c3RvbXMtaW5mbw.option.Y3VzdG9tc19zaWduZXI.desc": {
+          "source": "Name of the person certifying the customs declarations",
+          "message": "Nom de la personne certifiant les déclarations en douane"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWN1c3RvbXMtaW5mbw.option.Y3VzdG9tc19zaWduZXI.display_name": {
+          "source": "Customs Signer",
+          "message": "Signataire en douane"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWN1c3RvbXMtaW5mbw.option.Y3VzdG9tc19zaWduZXI.short_desc": {
+          "source": "Signer name",
+          "message": "Nom du signataire"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWN1c3RvbXMtaW5mbw.option.ZGVjbGFyYXRpb24.desc": {
+          "source": "Free-form customs declaration text",
+          "message": "Texte libre de déclaration en douane"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWN1c3RvbXMtaW5mbw.option.ZGVjbGFyYXRpb24.display_name": {
+          "source": "Declaration",
+          "message": "Déclaration"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWN1c3RvbXMtaW5mbw.option.ZGVjbGFyYXRpb24.short_desc": {
+          "source": "Free-form declaration text",
+          "message": "Texte de déclaration libre"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWN1c3RvbXMtaW5mbw.option.ZWVsX3BmYw.desc": {
+          "source": "Either an EEL code or a Proof of Filing Citation. Use `NOEEI 30.37(a)` for shipments under USD $2,500.",
+          "message": "Soit un code EEL, soit une référence de preuve de dépôt (PFC). Utilisez `NOEEI 30.37(a)` pour les envois inférieurs à 2 500 $ US."
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWN1c3RvbXMtaW5mbw.option.ZWVsX3BmYw.display_name": {
+          "source": "EEL/PFC",
+          "message": "EEL/PFC"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWN1c3RvbXMtaW5mbw.option.ZWVsX3BmYw.short_desc": {
+          "source": "EEL or PFC value",
+          "message": "Valeur EEL ou PFC"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWN1c3RvbXMtaW5mbw.option.bm9uX2RlbGl2ZXJ5X29wdGlvbg.allowed-value.c3RyaW5nOmFiYW5kb24.desc": {
+          "source": "Abandon",
+          "message": "Abandonner"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWN1c3RvbXMtaW5mbw.option.bm9uX2RlbGl2ZXJ5X29wdGlvbg.allowed-value.c3RyaW5nOnJldHVybg.desc": {
+          "source": "Return to sender",
+          "message": "Retour à l'expéditeur"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWN1c3RvbXMtaW5mbw.option.bm9uX2RlbGl2ZXJ5X29wdGlvbg.desc": {
+          "source": "Action to take if the shipment cannot be delivered. Defaults to `return` if not specified.",
+          "message": "Action à effectuer si l'envoi ne peut pas être livré. La valeur par défaut est `return` si non spécifiée."
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWN1c3RvbXMtaW5mbw.option.bm9uX2RlbGl2ZXJ5X29wdGlvbg.display_name": {
+          "source": "Non-Delivery Option",
+          "message": "Option de non-livraison"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWN1c3RvbXMtaW5mbw.option.bm9uX2RlbGl2ZXJ5X29wdGlvbg.short_desc": {
+          "source": "What to do if delivery fails",
+          "message": "Action en cas d'échec de la livraison"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWN1c3RvbXMtaW5mbw.option.cmVzdHJpY3Rpb25fY29tbWVudHM.desc": {
+          "source": "Comments on the restriction (required when `restriction_type` is not `none`)",
+          "message": "Commentaires sur la restriction (requis lorsque `restriction_type` n'est pas `none`)"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWN1c3RvbXMtaW5mbw.option.cmVzdHJpY3Rpb25fY29tbWVudHM.display_name": {
+          "source": "Restriction Comments",
+          "message": "Commentaires sur la restriction"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWN1c3RvbXMtaW5mbw.option.cmVzdHJpY3Rpb25fY29tbWVudHM.short_desc": {
+          "source": "Comments on the restriction",
+          "message": "Commentaires sur la restriction"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWN1c3RvbXMtaW5mbw.option.cmVzdHJpY3Rpb25fdHlwZQ.allowed-value.c3RyaW5nOm5vbmU.desc": {
+          "source": "None",
+          "message": "Aucun"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWN1c3RvbXMtaW5mbw.option.cmVzdHJpY3Rpb25fdHlwZQ.allowed-value.c3RyaW5nOm90aGVy.desc": {
+          "source": "Other",
+          "message": "Autre"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWN1c3RvbXMtaW5mbw.option.cmVzdHJpY3Rpb25fdHlwZQ.allowed-value.c3RyaW5nOnF1YXJhbnRpbmU.desc": {
+          "source": "Quarantine",
+          "message": "Quarantaine"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWN1c3RvbXMtaW5mbw.option.cmVzdHJpY3Rpb25fdHlwZQ.allowed-value.c3RyaW5nOnNhbml0YXJ5X3BoeXRvc2FuaXRhcnlfaW5zcGVjdGlvbg.desc": {
+          "source": "Sanitary / phytosanitary inspection",
+          "message": "Inspection sanitaire / phytosanitaire"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWN1c3RvbXMtaW5mbw.option.cmVzdHJpY3Rpb25fdHlwZQ.desc": {
+          "source": "Type of customs restriction",
+          "message": "Type de restriction douanière"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWN1c3RvbXMtaW5mbw.option.cmVzdHJpY3Rpb25fdHlwZQ.display_name": {
+          "source": "Restriction Type",
+          "message": "Type de restriction"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWN1c3RvbXMtaW5mbw.option.cmVzdHJpY3Rpb25fdHlwZQ.short_desc": {
+          "source": "Restriction category",
+          "message": "Catégorie de restriction"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWN1c3RvbXMtaW5mbw.short_desc": {
+          "source": "Create a customs info object",
+          "message": "Créer un objet d'informations douanières"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWN1c3RvbXMtaXRlbQ.desc": {
+          "source": "Create a customs item for use in customs info objects.",
+          "message": "Créer un article douanier à utiliser dans les objets d'informations douanières."
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWN1c3RvbXMtaXRlbQ.display_name": {
+          "source": "Create Customs Item",
+          "message": "Créer un article douanier"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWN1c3RvbXMtaXRlbQ.option.Y29kZQ.desc": {
+          "source": "Internal reference code",
+          "message": "Code de référence interne"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWN1c3RvbXMtaXRlbQ.option.Y29kZQ.display_name": {
+          "source": "Code",
+          "message": "Code"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWN1c3RvbXMtaXRlbQ.option.Y29kZQ.short_desc": {
+          "source": "Internal item code",
+          "message": "Code d'article interne"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWN1c3RvbXMtaXRlbQ.option.Y3VycmVuY3k.desc": {
+          "source": "ISO 4217 currency code",
+          "message": "Code devise ISO 4217"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWN1c3RvbXMtaXRlbQ.option.Y3VycmVuY3k.display_name": {
+          "source": "Currency",
+          "message": "Devise"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWN1c3RvbXMtaXRlbQ.option.Y3VycmVuY3k.short_desc": {
+          "source": "ISO currency code",
+          "message": "Code devise ISO"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWN1c3RvbXMtaXRlbQ.option.ZGVzY3JpcHRpb24.desc": {
+          "source": "Description of the item being shipped",
+          "message": "Description de l'article expédié"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWN1c3RvbXMtaXRlbQ.option.ZGVzY3JpcHRpb24.display_name": {
+          "source": "Description",
+          "message": "Description"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWN1c3RvbXMtaXRlbQ.option.ZGVzY3JpcHRpb24.short_desc": {
+          "source": "Item description",
+          "message": "Description de l'article"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWN1c3RvbXMtaXRlbQ.option.ZWNjbg.desc": {
+          "source": "Export Control Classification Number",
+          "message": "Export Control Classification Number"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWN1c3RvbXMtaXRlbQ.option.ZWNjbg.display_name": {
+          "source": "ECCN",
+          "message": "ECCN"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWN1c3RvbXMtaXRlbQ.option.ZWNjbg.short_desc": {
+          "source": "Export Control Classification Number",
+          "message": "Export Control Classification Number"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWN1c3RvbXMtaXRlbQ.option.aHNfdGFyaWZmX251bWJlcg.desc": {
+          "source": "Six-digit Harmonized System tariff number",
+          "message": "Numéro tarifaire du Système harmonisé à six chiffres"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWN1c3RvbXMtaXRlbQ.option.aHNfdGFyaWZmX251bWJlcg.display_name": {
+          "source": "HS Tariff Number",
+          "message": "Numéro tarifaire SH"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWN1c3RvbXMtaXRlbQ.option.aHNfdGFyaWZmX251bWJlcg.short_desc": {
+          "source": "HS tariff number",
+          "message": "Numéro tarifaire SH"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWN1c3RvbXMtaXRlbQ.option.b3JpZ2luX2NvdW50cnk.desc": {
+          "source": "ISO 2-letter country code of origin",
+          "message": "Code pays d'origine ISO à 2 lettres"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWN1c3RvbXMtaXRlbQ.option.b3JpZ2luX2NvdW50cnk.display_name": {
+          "source": "Origin Country",
+          "message": "Pays d'origine"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWN1c3RvbXMtaXRlbQ.option.b3JpZ2luX2NvdW50cnk.short_desc": {
+          "source": "ISO 2-letter origin country",
+          "message": "Pays d'origine ISO à 2 lettres"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWN1c3RvbXMtaXRlbQ.option.bWFudWZhY3R1cmVy.desc": {
+          "source": "Manufacturer of the item",
+          "message": "Fabricant de l'article"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWN1c3RvbXMtaXRlbQ.option.bWFudWZhY3R1cmVy.display_name": {
+          "source": "Manufacturer",
+          "message": "Fabricant"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWN1c3RvbXMtaXRlbQ.option.bWFudWZhY3R1cmVy.short_desc": {
+          "source": "Manufacturer name",
+          "message": "Nom du fabricant"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWN1c3RvbXMtaXRlbQ.option.cHJpbnRlZF9jb21tb2RpdHlfaWRlbnRpZmllcg.desc": {
+          "source": "Optional identifier printed on customs forms",
+          "message": "Identifiant optionnel imprimé sur les formulaires douaniers"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWN1c3RvbXMtaXRlbQ.option.cHJpbnRlZF9jb21tb2RpdHlfaWRlbnRpZmllcg.display_name": {
+          "source": "Printed Commodity Identifier",
+          "message": "Identifiant de marchandise imprimé"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWN1c3RvbXMtaXRlbQ.option.cHJpbnRlZF9jb21tb2RpdHlfaWRlbnRpZmllcg.short_desc": {
+          "source": "Identifier printed on label",
+          "message": "Identifiant imprimé sur l'étiquette"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWN1c3RvbXMtaXRlbQ.option.cXVhbnRpdHk.desc": {
+          "source": "Number of units being shipped",
+          "message": "Nombre d'unités expédiées"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWN1c3RvbXMtaXRlbQ.option.cXVhbnRpdHk.display_name": {
+          "source": "Quantity",
+          "message": "Quantité"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWN1c3RvbXMtaXRlbQ.option.cXVhbnRpdHk.short_desc": {
+          "source": "Number of units",
+          "message": "Nombre d'unités"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWN1c3RvbXMtaXRlbQ.option.d2VpZ2h0.desc": {
+          "source": "Total weight in ounces",
+          "message": "Poids total en onces"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWN1c3RvbXMtaXRlbQ.option.d2VpZ2h0.display_name": {
+          "source": "Weight",
+          "message": "Poids"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWN1c3RvbXMtaXRlbQ.option.d2VpZ2h0.short_desc": {
+          "source": "Weight in ounces",
+          "message": "Poids en onces"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWN1c3RvbXMtaXRlbQ.option.dmFsdWU.desc": {
+          "source": "Total value of all items as a string (e.g. `\"12.50\"`)",
+          "message": "Valeur totale de tous les articles sous forme de chaîne (ex. : `\"12.50\"`)"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWN1c3RvbXMtaXRlbQ.option.dmFsdWU.display_name": {
+          "source": "Value",
+          "message": "Valeur"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWN1c3RvbXMtaXRlbQ.option.dmFsdWU.short_desc": {
+          "source": "Total value as a string",
+          "message": "Valeur totale sous forme de chaîne"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWN1c3RvbXMtaXRlbQ.short_desc": {
+          "source": "Create a customs item",
+          "message": "Créer un article douanier"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWNhcnJpZXItYWNjb3VudA.desc": {
+          "source": "Create a new carrier account. Selecting a carrier type populates the `credentials` and `test_credentials` fields with that carrier's specific schema.",
+          "message": "Créer un nouveau compte de transporteur. La sélection d'un type de transporteur renseigne les champs `credentials` et `test_credentials` avec le schéma spécifique de ce transporteur."
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWNhcnJpZXItYWNjb3VudA.display_name": {
+          "source": "Create Carrier Account",
+          "message": "Créer un compte de transporteur"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWNhcnJpZXItYWNjb3VudA.option.Y3JlZGVudGlhbHM.desc": {
+          "source": "Carrier-specific credentials hash for production. Required for most carrier types (except `custom_workflow`). The shape varies per carrier - select a `type` to populate this field with the carrier's specific schema.\n\n**Example (UPS)**: `{\"account_number\": \"...\", \"user_id\": \"...\", \"password\": \"...\"}`",
+          "message": "Hachage des identifiants spécifiques au transporteur pour la production. Requis pour la plupart des types de transporteurs (sauf `custom_workflow`). La structure varie selon le transporteur - sélectionnez un `type` pour renseigner ce champ avec le schéma spécifique du transporteur.\n\n**Exemple (UPS)** : `{\"account_number\": \"...\", \"user_id\": \"...\", \"password\": \"...\"}`"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWNhcnJpZXItYWNjb3VudA.option.Y3JlZGVudGlhbHM.display_name": {
+          "source": "Credentials",
+          "message": "Identifiants"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWNhcnJpZXItYWNjb3VudA.option.Y3JlZGVudGlhbHM.short_desc": {
+          "source": "Production credentials hash",
+          "message": "Hachage des identifiants de production"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWNhcnJpZXItYWNjb3VudA.option.ZGVzY3JpcHRpb24.desc": {
+          "source": "Human-readable description for this account",
+          "message": "Description lisible par l'utilisateur pour ce compte"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWNhcnJpZXItYWNjb3VudA.option.ZGVzY3JpcHRpb24.display_name": {
+          "source": "Description",
+          "message": "Description"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWNhcnJpZXItYWNjb3VudA.option.ZGVzY3JpcHRpb24.short_desc": {
+          "source": "Account description",
+          "message": "Description du compte"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWNhcnJpZXItYWNjb3VudA.option.cmVmZXJlbmNl.desc": {
+          "source": "Caller-supplied reference",
+          "message": "Référence fournie par l'appelant"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWNhcnJpZXItYWNjb3VudA.option.cmVmZXJlbmNl.display_name": {
+          "source": "Reference",
+          "message": "Référence"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWNhcnJpZXItYWNjb3VudA.option.cmVmZXJlbmNl.short_desc": {
+          "source": "Caller-supplied reference",
+          "message": "Référence fournie par l'appelant"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWNhcnJpZXItYWNjb3VudA.option.dGVzdF9jcmVkZW50aWFscw.desc": {
+          "source": "Carrier-specific credentials hash for the test environment. Same shape as `credentials` - select a `type` to populate this field with the carrier's specific schema.",
+          "message": "Hachage des identifiants spécifiques au transporteur pour l'environnement de test. Même structure que `credentials` - sélectionnez un `type` pour remplir ce champ avec le schéma spécifique du transporteur."
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWNhcnJpZXItYWNjb3VudA.option.dGVzdF9jcmVkZW50aWFscw.display_name": {
+          "source": "Test Credentials",
+          "message": "Identifiants de test"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWNhcnJpZXItYWNjb3VudA.option.dGVzdF9jcmVkZW50aWFscw.short_desc": {
+          "source": "Test credentials hash",
+          "message": "Hachage des identifiants de test"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWNhcnJpZXItYWNjb3VudA.option.dHlwZQ.desc": {
+          "source": "Carrier account type (e.g. `UpsAccount`, `FedExAccount`, `DhlExpressAccount`). Selecting a carrier type updates the `credentials` and `test_credentials` fields to match that carrier's schema. See [carrier types](https://docs.easypost.com/docs/carrier-types) for the full list.",
+          "message": "Type de compte transporteur (par ex. `UpsAccount`, `FedExAccount`, `DhlExpressAccount`). La sélection d'un type de transporteur met à jour les champs `credentials` et `test_credentials` pour correspondre au schéma de ce transporteur. Consultez [types de transporteurs](https://docs.easypost.com/docs/carrier-types) pour la liste complète."
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWNhcnJpZXItYWNjb3VudA.option.dHlwZQ.display_name": {
+          "source": "Type",
+          "message": "Type"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWNhcnJpZXItYWNjb3VudA.option.dHlwZQ.short_desc": {
+          "source": "Carrier account type",
+          "message": "Type de compte transporteur"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWNhcnJpZXItYWNjb3VudA.short_desc": {
+          "source": "Create a carrier account",
+          "message": "Créer un compte transporteur"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWluc3VyYW5jZQ.desc": {
+          "source": "Create a standalone insurance record for a tracking code.",
+          "message": "Créer un enregistrement d'assurance autonome pour un code de suivi."
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWluc3VyYW5jZQ.display_name": {
+          "source": "Create Insurance",
+          "message": "Créer une assurance"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWluc3VyYW5jZQ.option.Y2Fycmllcg.desc": {
+          "source": "Carrier name (e.g. `USPS`, `UPS`, `FedEx`). EasyPost will auto-detect from `tracking_code` when omitted.",
+          "message": "Nom du transporteur (par ex. `USPS`, `UPS`, `FedEx`). EasyPost le détectera automatiquement à partir de `tracking_code` lorsqu'il est omis."
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWluc3VyYW5jZQ.option.Y2Fycmllcg.display_name": {
+          "source": "Carrier",
+          "message": "Transporteur"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWluc3VyYW5jZQ.option.Y2Fycmllcg.short_desc": {
+          "source": "Carrier name",
+          "message": "Nom du transporteur"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWluc3VyYW5jZQ.option.YW1vdW50.desc": {
+          "source": "Amount to insure as a string (e.g. `\"100.00\"`)",
+          "message": "Montant à assurer sous forme de chaîne (par ex. `\"100.00\"`)"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWluc3VyYW5jZQ.option.YW1vdW50.display_name": {
+          "source": "Amount",
+          "message": "Montant"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWluc3VyYW5jZQ.option.YW1vdW50.short_desc": {
+          "source": "Amount to insure (string)",
+          "message": "Montant à assurer (chaîne)"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWluc3VyYW5jZQ.option.ZnJvbV9hZGRyZXNz.desc": {
+          "source": "Origin address (or `{id: adr_xxx}`)",
+          "message": "Adresse d'origine (ou `{id: adr_xxx}`)"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWluc3VyYW5jZQ.option.ZnJvbV9hZGRyZXNz.display_name": {
+          "source": "From Address",
+          "message": "Adresse de l'expéditeur"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWluc3VyYW5jZQ.option.ZnJvbV9hZGRyZXNz.short_desc": {
+          "source": "Origin address",
+          "message": "Adresse d'origine"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWluc3VyYW5jZQ.option.cmVmZXJlbmNl.desc": {
+          "source": "Caller-supplied reference",
+          "message": "Référence fournie par l'appelant"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWluc3VyYW5jZQ.option.cmVmZXJlbmNl.display_name": {
+          "source": "Reference",
+          "message": "Référence"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWluc3VyYW5jZQ.option.cmVmZXJlbmNl.short_desc": {
+          "source": "Caller-supplied reference",
+          "message": "Référence fournie par l'appelant"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWluc3VyYW5jZQ.option.dG9fYWRkcmVzcw.desc": {
+          "source": "Destination address (or `{id: adr_xxx}`)",
+          "message": "Adresse de destination (ou `{id: adr_xxx}`)"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWluc3VyYW5jZQ.option.dG9fYWRkcmVzcw.display_name": {
+          "source": "To Address",
+          "message": "Adresse de destination"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWluc3VyYW5jZQ.option.dG9fYWRkcmVzcw.short_desc": {
+          "source": "Destination address",
+          "message": "Adresse de destination"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWluc3VyYW5jZQ.option.dHJhY2tpbmdfY29kZQ.desc": {
+          "source": "Carrier tracking code for the shipment being insured",
+          "message": "Code de suivi du transporteur pour l'envoi assuré"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWluc3VyYW5jZQ.option.dHJhY2tpbmdfY29kZQ.display_name": {
+          "source": "Tracking Code",
+          "message": "Code de suivi"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWluc3VyYW5jZQ.option.dHJhY2tpbmdfY29kZQ.short_desc": {
+          "source": "Carrier tracking code",
+          "message": "Code de suivi du transporteur"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLWluc3VyYW5jZQ.short_desc": {
+          "source": "Create a standalone insurance record",
+          "message": "Créer un enregistrement d'assurance autonome"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXBhcmNlbA.desc": {
+          "source": "Create a new EasyPost parcel by dimensions and weight, or with a `predefined_package`.",
+          "message": "Créer un nouveau colis EasyPost par dimensions et poids, ou avec un `predefined_package`."
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXBhcmNlbA.display_name": {
+          "source": "Create Parcel",
+          "message": "Créer un colis"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXBhcmNlbA.option.aGVpZ2h0.desc": {
+          "source": "Parcel height in inches",
+          "message": "Hauteur du colis en pouces"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXBhcmNlbA.option.aGVpZ2h0.display_name": {
+          "source": "Height",
+          "message": "Hauteur"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXBhcmNlbA.option.aGVpZ2h0.short_desc": {
+          "source": "Height in inches",
+          "message": "Hauteur en pouces"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXBhcmNlbA.option.bGVuZ3Ro.desc": {
+          "source": "Parcel length in inches",
+          "message": "Longueur du colis en pouces"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXBhcmNlbA.option.bGVuZ3Ro.display_name": {
+          "source": "Length",
+          "message": "Longueur"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXBhcmNlbA.option.bGVuZ3Ro.short_desc": {
+          "source": "Length in inches",
+          "message": "Longueur en pouces"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXBhcmNlbA.option.cHJlZGVmaW5lZF9wYWNrYWdl.allowed-value.c3RyaW5nOk1lZGl1bUV4cHJlc3NCb3g.desc": {
+          "source": "Medium Express Box",
+          "message": "Medium Express Box"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXBhcmNlbA.option.cHJlZGVmaW5lZF9wYWNrYWdl.allowed-value.c3RyaW5nOk1lZGl1bUZsYXRSYXRlQm94.desc": {
+          "source": "USPS Medium Flat Rate Box",
+          "message": "USPS Medium Flat Rate Box"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXBhcmNlbA.option.cHJlZGVmaW5lZF9wYWNrYWdl.allowed-value.c3RyaW5nOk1lZGl1bVBhY2thZ2U.desc": {
+          "source": "Medium Package",
+          "message": "Medium Package"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXBhcmNlbA.option.cHJlZGVmaW5lZF9wYWNrYWdl.allowed-value.c3RyaW5nOkNhcmQ.desc": {
+          "source": "Card",
+          "message": "Carte"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXBhcmNlbA.option.cHJlZGVmaW5lZF9wYWNrYWdl.allowed-value.c3RyaW5nOkRITEV4cHJlc3NFbnZlbG9wZQ.desc": {
+          "source": "DHL Express Envelope",
+          "message": "DHL Express Envelope"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXBhcmNlbA.option.cHJlZGVmaW5lZF9wYWNrYWdl.allowed-value.c3RyaW5nOkRITEZseWVy.desc": {
+          "source": "DHL Flyer",
+          "message": "DHL Flyer"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXBhcmNlbA.option.cHJlZGVmaW5lZF9wYWNrYWdl.allowed-value.c3RyaW5nOkRvY3VtZW50.desc": {
+          "source": "Document",
+          "message": "Document"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXBhcmNlbA.option.cHJlZGVmaW5lZF9wYWNrYWdl.allowed-value.c3RyaW5nOkRvbWVzdGlj.desc": {
+          "source": "Domestic",
+          "message": "National"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXBhcmNlbA.option.cHJlZGVmaW5lZF9wYWNrYWdl.allowed-value.c3RyaW5nOkV4cHJlc3NEb2N1bWVudA.desc": {
+          "source": "Express Document",
+          "message": "Express Document"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXBhcmNlbA.option.cHJlZGVmaW5lZF9wYWNrYWdl.allowed-value.c3RyaW5nOkZlZEV4MTBrZ0JveA.desc": {
+          "source": "FedEx 10kg Box",
+          "message": "FedEx 10kg Box"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXBhcmNlbA.option.cHJlZGVmaW5lZF9wYWNrYWdl.allowed-value.c3RyaW5nOkZlZEV4MjVrZ0JveA.desc": {
+          "source": "FedEx 25kg Box",
+          "message": "FedEx 25kg Box"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXBhcmNlbA.option.cHJlZGVmaW5lZF9wYWNrYWdl.allowed-value.c3RyaW5nOkZlZEV4Qm94.desc": {
+          "source": "FedEx Box",
+          "message": "FedEx Box"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXBhcmNlbA.option.cHJlZGVmaW5lZF9wYWNrYWdl.allowed-value.c3RyaW5nOkZlZEV4RW52ZWxvcGU.desc": {
+          "source": "FedEx Envelope",
+          "message": "FedEx Envelope"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXBhcmNlbA.option.cHJlZGVmaW5lZF9wYWNrYWdl.allowed-value.c3RyaW5nOkZlZEV4TGFyZ2VCb3g.desc": {
+          "source": "FedEx Large Box",
+          "message": "FedEx Large Box"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXBhcmNlbA.option.cHJlZGVmaW5lZF9wYWNrYWdl.allowed-value.c3RyaW5nOkZlZEV4TWVkaXVtQm94.desc": {
+          "source": "FedEx Medium Box",
+          "message": "FedEx Medium Box"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXBhcmNlbA.option.cHJlZGVmaW5lZF9wYWNrYWdl.allowed-value.c3RyaW5nOkZlZEV4U21hbGxCb3g.desc": {
+          "source": "FedEx Small Box",
+          "message": "FedEx Small Box"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXBhcmNlbA.option.cHJlZGVmaW5lZF9wYWNrYWdl.allowed-value.c3RyaW5nOkZlZEV4UGFr.desc": {
+          "source": "FedEx Pak",
+          "message": "FedEx Pak"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXBhcmNlbA.option.cHJlZGVmaW5lZF9wYWNrYWdl.allowed-value.c3RyaW5nOkZlZEV4VHViZQ.desc": {
+          "source": "FedEx Tube",
+          "message": "FedEx Tube"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXBhcmNlbA.option.cHJlZGVmaW5lZF9wYWNrYWdl.allowed-value.c3RyaW5nOkZsYXQ.desc": {
+          "source": "Flat",
+          "message": "Plat"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXBhcmNlbA.option.cHJlZGVmaW5lZF9wYWNrYWdl.allowed-value.c3RyaW5nOkZsYXRSYXRlRW52ZWxvcGU.desc": {
+          "source": "USPS Flat Rate Envelope",
+          "message": "USPS Flat Rate Envelope"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXBhcmNlbA.option.cHJlZGVmaW5lZF9wYWNrYWdl.allowed-value.c3RyaW5nOkp1bWJvRG9jdW1lbnQ.desc": {
+          "source": "Jumbo Document",
+          "message": "Jumbo Document"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXBhcmNlbA.option.cHJlZGVmaW5lZF9wYWNrYWdl.allowed-value.c3RyaW5nOkp1bWJvUGFyY2Vs.desc": {
+          "source": "Jumbo Parcel",
+          "message": "Jumbo Parcel"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXBhcmNlbA.option.cHJlZGVmaW5lZF9wYWNrYWdl.allowed-value.c3RyaW5nOkxhcmdlRXhwcmVzc0JveA.desc": {
+          "source": "Large Express Box",
+          "message": "Large Express Box"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXBhcmNlbA.option.cHJlZGVmaW5lZF9wYWNrYWdl.allowed-value.c3RyaW5nOkxhcmdlRmxhdFJhdGVCb3g.desc": {
+          "source": "USPS Large Flat Rate Box",
+          "message": "USPS Large Flat Rate Box"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXBhcmNlbA.option.cHJlZGVmaW5lZF9wYWNrYWdl.allowed-value.c3RyaW5nOkxhcmdlUGFja2FnZQ.desc": {
+          "source": "Large Package",
+          "message": "Large Package"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXBhcmNlbA.option.cHJlZGVmaW5lZF9wYWNrYWdl.allowed-value.c3RyaW5nOkxlZ2FsRmxhdFJhdGVFbnZlbG9wZQ.desc": {
+          "source": "USPS Legal Flat Rate Envelope",
+          "message": "USPS Legal Flat Rate Envelope"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXBhcmNlbA.option.cHJlZGVmaW5lZF9wYWNrYWdl.allowed-value.c3RyaW5nOkxldHRlcg.desc": {
+          "source": "Letter",
+          "message": "Lettre"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXBhcmNlbA.option.cHJlZGVmaW5lZF9wYWNrYWdl.allowed-value.c3RyaW5nOlBhZGRlZEZsYXRSYXRlRW52ZWxvcGU.desc": {
+          "source": "USPS Padded Flat Rate Envelope",
+          "message": "USPS Padded Flat Rate Envelope"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXBhcmNlbA.option.cHJlZGVmaW5lZF9wYWNrYWdl.allowed-value.c3RyaW5nOlBhaw.desc": {
+          "source": "Pak",
+          "message": "Pak"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXBhcmNlbA.option.cHJlZGVmaW5lZF9wYWNrYWdl.allowed-value.c3RyaW5nOlBhcmNlbA.desc": {
+          "source": "Generic Parcel",
+          "message": "Colis générique"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXBhcmNlbA.option.cHJlZGVmaW5lZF9wYWNrYWdl.allowed-value.c3RyaW5nOlJlZ2lvbmFsUmF0ZUJveEE.desc": {
+          "source": "USPS Regional Rate Box A",
+          "message": "USPS Regional Rate Box A"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXBhcmNlbA.option.cHJlZGVmaW5lZF9wYWNrYWdl.allowed-value.c3RyaW5nOlJlZ2lvbmFsUmF0ZUJveEI.desc": {
+          "source": "USPS Regional Rate Box B",
+          "message": "USPS Regional Rate Box B"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXBhcmNlbA.option.cHJlZGVmaW5lZF9wYWNrYWdl.allowed-value.c3RyaW5nOlNtYWxsRXhwcmVzc0JveA.desc": {
+          "source": "Small Express Box",
+          "message": "Small Express Box"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXBhcmNlbA.option.cHJlZGVmaW5lZF9wYWNrYWdl.allowed-value.c3RyaW5nOlNtYWxsRmxhdFJhdGVCb3g.desc": {
+          "source": "USPS Small Flat Rate Box",
+          "message": "USPS Small Flat Rate Box"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXBhcmNlbA.option.cHJlZGVmaW5lZF9wYWNrYWdl.allowed-value.c3RyaW5nOlNtYWxsUGFja2FnZQ.desc": {
+          "source": "Small Package",
+          "message": "Small Package"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXBhcmNlbA.option.cHJlZGVmaW5lZF9wYWNrYWdl.allowed-value.c3RyaW5nOlNvZnRQYWNr.desc": {
+          "source": "Soft Pack",
+          "message": "Soft Pack"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXBhcmNlbA.option.cHJlZGVmaW5lZF9wYWNrYWdl.allowed-value.c3RyaW5nOlR1YmU.desc": {
+          "source": "Tube",
+          "message": "Tube"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXBhcmNlbA.option.cHJlZGVmaW5lZF9wYWNrYWdl.allowed-value.c3RyaW5nOlVQU0V4cHJlc3NCb3g.desc": {
+          "source": "UPS Express Box",
+          "message": "UPS Express Box"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXBhcmNlbA.option.cHJlZGVmaW5lZF9wYWNrYWdl.allowed-value.c3RyaW5nOlVQU0xldHRlcg.desc": {
+          "source": "UPS Letter",
+          "message": "UPS Letter"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXBhcmNlbA.option.cHJlZGVmaW5lZF9wYWNrYWdl.desc": {
+          "source": "Carrier-specific predefined package identifier",
+          "message": "Identifiant de colis prédéfini spécifique au transporteur"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXBhcmNlbA.option.cHJlZGVmaW5lZF9wYWNrYWdl.display_name": {
+          "source": "Predefined Package",
+          "message": "Colis prédéfini"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXBhcmNlbA.option.cHJlZGVmaW5lZF9wYWNrYWdl.short_desc": {
+          "source": "Carrier-defined package code",
+          "message": "Code de colis défini par le transporteur"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXBhcmNlbA.option.d2VpZ2h0.desc": {
+          "source": "Parcel weight in ounces",
+          "message": "Poids du colis en onces"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXBhcmNlbA.option.d2VpZ2h0.display_name": {
+          "source": "Weight",
+          "message": "Poids"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXBhcmNlbA.option.d2VpZ2h0.short_desc": {
+          "source": "Weight in ounces",
+          "message": "Poids en onces"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXBhcmNlbA.option.d2lkdGg.desc": {
+          "source": "Parcel width in inches",
+          "message": "Largeur du colis en pouces"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXBhcmNlbA.option.d2lkdGg.display_name": {
+          "source": "Width",
+          "message": "Largeur"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXBhcmNlbA.option.d2lkdGg.short_desc": {
+          "source": "Width in inches",
+          "message": "Largeur en pouces"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXBhcmNlbA.short_desc": {
+          "source": "Create a new parcel",
+          "message": "Créer un nouveau colis"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXBpY2t1cA.desc": {
+          "source": "Schedule a new pickup for a shipment.",
+          "message": "Planifier un nouveau ramassage pour un envoi."
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXBpY2t1cA.display_name": {
+          "source": "Create Pickup",
+          "message": "Créer un ramassage"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXBpY2t1cA.option.Y2Fycmllcl9hY2NvdW50cw.desc": {
+          "source": "Carrier account IDs to use for rating the pickup",
+          "message": "Identifiants de compte de transporteur à utiliser pour l'évaluation tarifaire du ramassage"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXBpY2t1cA.option.Y2Fycmllcl9hY2NvdW50cw.display_name": {
+          "source": "Carrier Accounts",
+          "message": "Comptes transporteur"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXBpY2t1cA.option.Y2Fycmllcl9hY2NvdW50cw.short_desc": {
+          "source": "Carrier account IDs",
+          "message": "Identifiants de compte de transporteur"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXBpY2t1cA.option.YWRkcmVzcw.desc": {
+          "source": "Pickup address - full address or address reference",
+          "message": "Adresse de ramassage - adresse complète ou référence d'adresse"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXBpY2t1cA.option.YWRkcmVzcw.display_name": {
+          "source": "Pickup Address",
+          "message": "Adresse de ramassage"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXBpY2t1cA.option.YWRkcmVzcw.short_desc": {
+          "source": "Pickup address (or {id: adr_xxx})",
+          "message": "Adresse de ramassage (ou {id: adr_xxx})"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXBpY2t1cA.option.YmF0Y2g.desc": {
+          "source": "Fully-purchased batch to pick up - reference by `id`. Provide either `shipment` or `batch`, but not both.",
+          "message": "Lot entièrement acheté à ramasser - référence par `id`. Fournissez soit `shipment`, soit `batch`, mais pas les deux."
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXBpY2t1cA.option.YmF0Y2g.display_name": {
+          "source": "Batch",
+          "message": "Lot"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXBpY2t1cA.option.YmF0Y2g.short_desc": {
+          "source": "Batch to pick up ({id: batch_xxx})",
+          "message": "Lot à ramasser ({id: batch_xxx})"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXBpY2t1cA.option.aW5zdHJ1Y3Rpb25z.desc": {
+          "source": "Special pickup instructions for the carrier",
+          "message": "Instructions spéciales de ramassage pour le transporteur"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXBpY2t1cA.option.aW5zdHJ1Y3Rpb25z.display_name": {
+          "source": "Instructions",
+          "message": "Instructions"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXBpY2t1cA.option.aW5zdHJ1Y3Rpb25z.short_desc": {
+          "source": "Pickup instructions",
+          "message": "Instructions d'enlèvement"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXBpY2t1cA.option.aXNfYWNjb3VudF9hZGRyZXNz.desc": {
+          "source": "Set to `True` if the pickup address matches the EasyPost account address",
+          "message": "Définissez sur `True` si l'adresse de ramassage correspond à l'adresse du compte EasyPost"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXBpY2t1cA.option.aXNfYWNjb3VudF9hZGRyZXNz.display_name": {
+          "source": "Is Account Address",
+          "message": "Est l'adresse du compte"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXBpY2t1cA.option.aXNfYWNjb3VudF9hZGRyZXNz.short_desc": {
+          "source": "Pickup at the account address",
+          "message": "Ramassage à l'adresse du compte"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXBpY2t1cA.option.bWF4X2RhdGV0aW1l.desc": {
+          "source": "Latest acceptable pickup datetime (ISO 8601)",
+          "message": "Date et heure limites acceptables pour le ramassage (ISO 8601)"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXBpY2t1cA.option.bWF4X2RhdGV0aW1l.display_name": {
+          "source": "Max Datetime",
+          "message": "Date et heure maximales"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXBpY2t1cA.option.bWF4X2RhdGV0aW1l.short_desc": {
+          "source": "Latest pickup datetime",
+          "message": "Date et heure de ramassage les plus tardives"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXBpY2t1cA.option.bWluX2RhdGV0aW1l.desc": {
+          "source": "Earliest acceptable pickup datetime (ISO 8601)",
+          "message": "Date et heure les plus précoces acceptables pour le ramassage (ISO 8601)"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXBpY2t1cA.option.bWluX2RhdGV0aW1l.display_name": {
+          "source": "Min Datetime",
+          "message": "Date et heure minimales"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXBpY2t1cA.option.bWluX2RhdGV0aW1l.short_desc": {
+          "source": "Earliest pickup datetime",
+          "message": "Date et heure de ramassage les plus précoces"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXBpY2t1cA.option.c2hpcG1lbnQ.desc": {
+          "source": "Shipment to pick up - reference by `id`. Provide either `shipment` or `batch`, but not both.",
+          "message": "Envoi à ramasser - référence par `id`. Fournissez soit `shipment`, soit `batch`, mais pas les deux."
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXBpY2t1cA.option.c2hpcG1lbnQ.display_name": {
+          "source": "Shipment",
+          "message": "Envoi"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXBpY2t1cA.option.c2hpcG1lbnQ.short_desc": {
+          "source": "Shipment to pick up ({id: shp_xxx})",
+          "message": "Envoi à ramasser ({id: shp_xxx})"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXBpY2t1cA.option.cmVmZXJlbmNl.desc": {
+          "source": "Caller-supplied reference",
+          "message": "Référence fournie par l'appelant"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXBpY2t1cA.option.cmVmZXJlbmNl.display_name": {
+          "source": "Reference",
+          "message": "Référence"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXBpY2t1cA.option.cmVmZXJlbmNl.short_desc": {
+          "source": "Caller-supplied reference",
+          "message": "Référence fournie par l'appelant"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXBpY2t1cA.short_desc": {
+          "source": "Schedule a pickup",
+          "message": "Planifier un ramassage"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXJlZnVuZA.desc": {
+          "source": "Submit one or more refund requests by carrier and tracking code.",
+          "message": "Soumettre une ou plusieurs demandes de remboursement par transporteur et numéro de suivi."
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXJlZnVuZA.display_name": {
+          "source": "Create Refund",
+          "message": "Créer un remboursement"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXJlZnVuZA.option.Y2Fycmllcg.desc": {
+          "source": "Carrier name (e.g. `USPS`, `UPS`, `FedEx`) of the labels being refunded",
+          "message": "Nom du transporteur (par ex. `USPS`, `UPS`, `FedEx`) des étiquettes à rembourser"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXJlZnVuZA.option.Y2Fycmllcg.display_name": {
+          "source": "Carrier",
+          "message": "Transporteur"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXJlZnVuZA.option.Y2Fycmllcg.short_desc": {
+          "source": "Carrier name",
+          "message": "Nom du transporteur"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXJlZnVuZA.option.dHJhY2tpbmdfY29kZXM.desc": {
+          "source": "List of tracking codes to refund",
+          "message": "Liste des numéros de suivi à rembourser"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXJlZnVuZA.option.dHJhY2tpbmdfY29kZXM.display_name": {
+          "source": "Tracking Codes",
+          "message": "Numéros de suivi"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXJlZnVuZA.option.dHJhY2tpbmdfY29kZXM.short_desc": {
+          "source": "Tracking codes to refund",
+          "message": "Numéros de suivi à rembourser"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXJlZnVuZA.short_desc": {
+          "source": "Request a refund",
+          "message": "Demander un remboursement"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXNoaXBtZW50.desc": {
+          "source": "Create a new shipment. The response contains a list of available rates that can be used to purchase a label via `buy-shipment`.",
+          "message": "Créer un nouvel envoi. La réponse contient une liste de tarifs disponibles pouvant être utilisés pour acheter une étiquette via `buy-shipment`."
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXNoaXBtZW50.display_name": {
+          "source": "Create Shipment",
+          "message": "Créer une expédition"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXNoaXBtZW50.option.Y2Fycmllcg.desc": {
+          "source": "Carrier name (e.g. `USPS`, `UPS`, `FedEx`)",
+          "message": "Nom du transporteur (par ex. `USPS`, `UPS`, `FedEx`)"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXNoaXBtZW50.option.Y2Fycmllcg.display_name": {
+          "source": "Carrier",
+          "message": "Transporteur"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXNoaXBtZW50.option.Y2Fycmllcg.short_desc": {
+          "source": "Carrier name",
+          "message": "Nom du transporteur"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXNoaXBtZW50.option.Y2Fycmllcl9hY2NvdW50cw.desc": {
+          "source": "List of carrier account IDs to use for rating this shipment",
+          "message": "Liste des identifiants de compte de transporteur à utiliser pour l'évaluation tarifaire de cet envoi"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXNoaXBtZW50.option.Y2Fycmllcl9hY2NvdW50cw.display_name": {
+          "source": "Carrier Accounts",
+          "message": "Comptes transporteur"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXNoaXBtZW50.option.Y2Fycmllcl9hY2NvdW50cw.short_desc": {
+          "source": "Carrier accounts to use for rating",
+          "message": "Comptes de transporteur à utiliser pour l'évaluation tarifaire"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXNoaXBtZW50.option.Y3VzdG9tc19pbmZv.desc": {
+          "source": "Customs information for international shipments",
+          "message": "Informations douanières pour les envois internationaux"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXNoaXBtZW50.option.Y3VzdG9tc19pbmZv.display_name": {
+          "source": "Customs Info",
+          "message": "Infos douanières"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXNoaXBtZW50.option.Y3VzdG9tc19pbmZv.short_desc": {
+          "source": "Customs information for international shipments",
+          "message": "Informations douanières pour les envois internationaux"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXNoaXBtZW50.option.YnV5ZXJfYWRkcmVzcw.desc": {
+          "source": "Buyer address (when different from `to_address`)",
+          "message": "Adresse de l'acheteur (lorsqu'elle est différente de `to_address`)"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXNoaXBtZW50.option.YnV5ZXJfYWRkcmVzcw.display_name": {
+          "source": "Buyer Address",
+          "message": "Adresse de l'acheteur"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXNoaXBtZW50.option.YnV5ZXJfYWRkcmVzcw.short_desc": {
+          "source": "Buyer address",
+          "message": "Adresse de l'acheteur"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXNoaXBtZW50.option.ZnJvbV9hZGRyZXNz.desc": {
+          "source": "Origin address - either a full address object or a reference by `id`",
+          "message": "Adresse d'origine - objet d'adresse complet ou référence par `id`"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXNoaXBtZW50.option.ZnJvbV9hZGRyZXNz.display_name": {
+          "source": "From Address",
+          "message": "Adresse de l'expéditeur"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXNoaXBtZW50.option.ZnJvbV9hZGRyZXNz.short_desc": {
+          "source": "Origin address (or {id: adr_xxx})",
+          "message": "Adresse d'origine (ou {id: adr_xxx})"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXNoaXBtZW50.option.aW5zdXJhbmNl.desc": {
+          "source": "Insurance amount as a string (e.g. `\"100.00\"`). Used by the one-call buy flow.",
+          "message": "Montant de l'assurance sous forme de chaîne (par ex. `\"100.00\"`). Utilisé par le flux d'achat en un appel."
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXNoaXBtZW50.option.aW5zdXJhbmNl.display_name": {
+          "source": "Insurance",
+          "message": "Assurance"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXNoaXBtZW50.option.aW5zdXJhbmNl.short_desc": {
+          "source": "Insurance amount for one-call buy",
+          "message": "Montant de l'assurance pour l'achat en un appel"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXNoaXBtZW50.option.aXNfcmV0dXJu.desc": {
+          "source": "Set to `True` to mark this as a return shipment",
+          "message": "Définissez sur `True` pour marquer ceci comme un envoi de retour"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXNoaXBtZW50.option.aXNfcmV0dXJu.display_name": {
+          "source": "Is Return",
+          "message": "Est un retour"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXNoaXBtZW50.option.aXNfcmV0dXJu.short_desc": {
+          "source": "Mark as return shipment",
+          "message": "Marquer comme envoi de retour"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXNoaXBtZW50.option.b3B0aW9ucw.desc": {
+          "source": "Shipment options (e.g. `delivery_confirmation`, `label_format`)",
+          "message": "Options d'envoi (par ex. `delivery_confirmation`, `label_format`)"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXNoaXBtZW50.option.b3B0aW9ucw.display_name": {
+          "source": "Options",
+          "message": "Options"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXNoaXBtZW50.option.b3B0aW9ucw.short_desc": {
+          "source": "Shipment options",
+          "message": "Options d'envoi"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXNoaXBtZW50.option.c2VydmljZQ.desc": {
+          "source": "Carrier service code (e.g. `Priority`, `Ground`)",
+          "message": "Code de service du transporteur (par ex. `Priority`, `Ground`)"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXNoaXBtZW50.option.c2VydmljZQ.display_name": {
+          "source": "Service",
+          "message": "Service"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXNoaXBtZW50.option.c2VydmljZQ.short_desc": {
+          "source": "Carrier service",
+          "message": "Service du transporteur"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXNoaXBtZW50.option.cGFyY2Vs.desc": {
+          "source": "Parcel details - either a full parcel object or a reference by `id`",
+          "message": "Détails du colis - objet de colis complet ou référence par `id`"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXNoaXBtZW50.option.cGFyY2Vs.display_name": {
+          "source": "Parcel",
+          "message": "Colis"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXNoaXBtZW50.option.cGFyY2Vs.short_desc": {
+          "source": "Parcel details (or {id: prcl_xxx})",
+          "message": "Détails du colis (ou {id: prcl_xxx})"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXNoaXBtZW50.option.cmV0dXJuX2FkZHJlc3M.desc": {
+          "source": "Return address (used for return shipments)",
+          "message": "Adresse de retour (utilisée pour les envois de retour)"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXNoaXBtZW50.option.cmV0dXJuX2FkZHJlc3M.display_name": {
+          "source": "Return Address",
+          "message": "Adresse de retour"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXNoaXBtZW50.option.cmV0dXJuX2FkZHJlc3M.short_desc": {
+          "source": "Return address",
+          "message": "Adresse de retour"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXNoaXBtZW50.option.cmVmZXJlbmNl.desc": {
+          "source": "Caller-supplied reference",
+          "message": "Référence fournie par l'appelant"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXNoaXBtZW50.option.cmVmZXJlbmNl.display_name": {
+          "source": "Reference",
+          "message": "Référence"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXNoaXBtZW50.option.cmVmZXJlbmNl.short_desc": {
+          "source": "Caller-supplied reference",
+          "message": "Référence fournie par l'appelant"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXNoaXBtZW50.option.dG9fYWRkcmVzcw.desc": {
+          "source": "Destination address - either a full address object or a reference by `id`",
+          "message": "Adresse de destination - objet d'adresse complet ou référence par `id`"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXNoaXBtZW50.option.dG9fYWRkcmVzcw.display_name": {
+          "source": "To Address",
+          "message": "Adresse de destination"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXNoaXBtZW50.option.dG9fYWRkcmVzcw.short_desc": {
+          "source": "Destination address (or {id: adr_xxx})",
+          "message": "Adresse de destination (ou {id: adr_xxx})"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXNoaXBtZW50.option.dGF4X2lkZW50aWZpZXJz.desc": {
+          "source": "List of tax identifiers (e.g. VAT, EIN)",
+          "message": "Liste des identifiants fiscaux (par ex. TVA, EIN)"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXNoaXBtZW50.option.dGF4X2lkZW50aWZpZXJz.display_name": {
+          "source": "Tax Identifiers",
+          "message": "Identifiants fiscaux"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXNoaXBtZW50.option.dGF4X2lkZW50aWZpZXJz.short_desc": {
+          "source": "Tax identifiers for international shipments",
+          "message": "Identifiants fiscaux pour les envois internationaux"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXNoaXBtZW50.short_desc": {
+          "source": "Create a new shipment (returns rate options)",
+          "message": "Créer un nouvel envoi (renvoie les options tarifaires)"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXRyYWNrZXI.desc": {
+          "source": "Create a new tracker for a carrier tracking code.",
+          "message": "Créer un nouveau suivi pour un code de suivi de transporteur."
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXRyYWNrZXI.display_name": {
+          "source": "Create Tracker",
+          "message": "Créer un suivi"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXRyYWNrZXI.option.Y2Fycmllcg.desc": {
+          "source": "Carrier name (e.g. `USPS`, `FedEx`); EasyPost auto-detects when omitted",
+          "message": "Nom du transporteur (par ex. `USPS`, `FedEx`) ; EasyPost le détecte automatiquement s'il est omis"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXRyYWNrZXI.option.Y2Fycmllcg.display_name": {
+          "source": "Carrier",
+          "message": "Transporteur"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXRyYWNrZXI.option.Y2Fycmllcg.short_desc": {
+          "source": "Carrier name",
+          "message": "Nom du transporteur"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXRyYWNrZXI.option.dHJhY2tpbmdfY29kZQ.desc": {
+          "source": "Carrier tracking number to monitor",
+          "message": "Numéro de suivi du transporteur à surveiller"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXRyYWNrZXI.option.dHJhY2tpbmdfY29kZQ.display_name": {
+          "source": "Tracking Code",
+          "message": "Code de suivi"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXRyYWNrZXI.option.dHJhY2tpbmdfY29kZQ.short_desc": {
+          "source": "Carrier tracking code",
+          "message": "Code de suivi du transporteur"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXRyYWNrZXI.short_desc": {
+          "source": "Create a tracker",
+          "message": "Créer un suivi"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXdlYmhvb2s.desc": {
+          "source": "Create a new webhook subscription.",
+          "message": "Créer un nouvel abonnement webhook."
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXdlYmhvb2s.display_name": {
+          "source": "Create Webhook",
+          "message": "Créer un webhook"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXdlYmhvb2s.option.Y3VzdG9tX2hlYWRlcnM.desc": {
+          "source": "Custom HTTP headers to send with webhook callbacks",
+          "message": "En-têtes HTTP personnalisés à envoyer avec les rappels webhook"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXdlYmhvb2s.option.Y3VzdG9tX2hlYWRlcnM.display_name": {
+          "source": "Custom Headers",
+          "message": "En-têtes personnalisés"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXdlYmhvb2s.option.Y3VzdG9tX2hlYWRlcnM.short_desc": {
+          "source": "Custom HTTP headers",
+          "message": "En-têtes HTTP personnalisés"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXdlYmhvb2s.option.d2ViaG9va19zZWNyZXQ.desc": {
+          "source": "Optional shared secret used to sign webhook payloads (HMAC-SHA-256)",
+          "message": "Secret partagé facultatif utilisé pour signer les charges utiles webhook (HMAC-SHA-256)"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXdlYmhvb2s.option.d2ViaG9va19zZWNyZXQ.display_name": {
+          "source": "Webhook Secret",
+          "message": "Secret du webhook"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXdlYmhvb2s.option.d2ViaG9va19zZWNyZXQ.short_desc": {
+          "source": "Optional shared secret",
+          "message": "Secret partagé facultatif"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXdlYmhvb2s.option.dXJs.desc": {
+          "source": "URL to receive webhook callbacks",
+          "message": "URL devant recevoir les rappels webhook"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXdlYmhvb2s.option.dXJs.display_name": {
+          "source": "URL",
+          "message": "URL"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXdlYmhvb2s.option.dXJs.short_desc": {
+          "source": "Webhook target URL",
+          "message": "URL cible du webhook"
+        },
+        "app.RWFzeVBvc3Q.action.Y3JlYXRlLXdlYmhvb2s.short_desc": {
+          "source": "Create a webhook",
+          "message": "Créer un webhook"
+        },
+        "app.RWFzeVBvc3Q.action.YmF0Y2gtYWRkLXNoaXBtZW50cw.desc": {
+          "source": "Add shipments to an existing batch.",
+          "message": "Ajouter des expéditions à un lot existant."
+        },
+        "app.RWFzeVBvc3Q.action.YmF0Y2gtYWRkLXNoaXBtZW50cw.display_name": {
+          "source": "Add Shipments to Batch",
+          "message": "Ajouter des expéditions au lot"
+        },
+        "app.RWFzeVBvc3Q.action.YmF0Y2gtYWRkLXNoaXBtZW50cw.option.YmF0Y2hfaWQ.desc": {
+          "source": "Batch to add shipments to",
+          "message": "Lot auquel ajouter des expéditions"
+        },
+        "app.RWFzeVBvc3Q.action.YmF0Y2gtYWRkLXNoaXBtZW50cw.option.YmF0Y2hfaWQ.display_name": {
+          "source": "Batch ID",
+          "message": "ID de lot"
+        },
+        "app.RWFzeVBvc3Q.action.YmF0Y2gtYWRkLXNoaXBtZW50cw.option.YmF0Y2hfaWQ.short_desc": {
+          "source": "Batch ID (batch_xxx)",
+          "message": "ID de lot (batch_xxx)"
+        },
+        "app.RWFzeVBvc3Q.action.YmF0Y2gtYWRkLXNoaXBtZW50cw.option.c2hpcG1lbnRz.desc": {
+          "source": "List of shipment references to add to the batch (each `{id: shp_xxx}`)",
+          "message": "Liste des références d'expédition à ajouter au lot (chacune `{id: shp_xxx}`)"
+        },
+        "app.RWFzeVBvc3Q.action.YmF0Y2gtYWRkLXNoaXBtZW50cw.option.c2hpcG1lbnRz.display_name": {
+          "source": "Shipments",
+          "message": "Expéditions"
+        },
+        "app.RWFzeVBvc3Q.action.YmF0Y2gtYWRkLXNoaXBtZW50cw.option.c2hpcG1lbnRz.short_desc": {
+          "source": "Shipments to add (each {id: shp_xxx})",
+          "message": "Expéditions à ajouter (chacune {id: shp_xxx})"
+        },
+        "app.RWFzeVBvc3Q.action.YmF0Y2gtYWRkLXNoaXBtZW50cw.short_desc": {
+          "source": "Add shipments to a batch",
+          "message": "Ajouter des expéditions à un lot"
+        },
+        "app.RWFzeVBvc3Q.action.YmF0Y2gtYnV5.desc": {
+          "source": "Purchase labels for all shipments in a batch.",
+          "message": "Acheter des étiquettes pour toutes les expéditions d'un lot."
+        },
+        "app.RWFzeVBvc3Q.action.YmF0Y2gtYnV5.display_name": {
+          "source": "Buy Batch",
+          "message": "Acheter le lot"
+        },
+        "app.RWFzeVBvc3Q.action.YmF0Y2gtYnV5.option.YmF0Y2hfaWQ.desc": {
+          "source": "Batch to buy (purchase labels for all shipments)",
+          "message": "Lot à acheter (acheter les étiquettes pour toutes les expéditions)"
+        },
+        "app.RWFzeVBvc3Q.action.YmF0Y2gtYnV5.option.YmF0Y2hfaWQ.display_name": {
+          "source": "Batch ID",
+          "message": "ID de lot"
+        },
+        "app.RWFzeVBvc3Q.action.YmF0Y2gtYnV5.option.YmF0Y2hfaWQ.short_desc": {
+          "source": "Batch ID (batch_xxx)",
+          "message": "ID de lot (batch_xxx)"
+        },
+        "app.RWFzeVBvc3Q.action.YmF0Y2gtYnV5.short_desc": {
+          "source": "Buy a batch",
+          "message": "Acheter un lot"
+        },
+        "app.RWFzeVBvc3Q.action.YmF0Y2gtbGFiZWw.desc": {
+          "source": "Generate a single combined label file for all shipments in a batch.",
+          "message": "Générer un fichier d'étiquettes combiné unique pour toutes les expéditions d'un lot."
+        },
+        "app.RWFzeVBvc3Q.action.YmF0Y2gtbGFiZWw.display_name": {
+          "source": "Get Batch Label",
+          "message": "Obtenir l'étiquette de lot"
+        },
+        "app.RWFzeVBvc3Q.action.YmF0Y2gtbGFiZWw.option.YmF0Y2hfaWQ.desc": {
+          "source": "Batch to generate combined labels for",
+          "message": "Lot pour lequel générer des étiquettes combinées"
+        },
+        "app.RWFzeVBvc3Q.action.YmF0Y2gtbGFiZWw.option.YmF0Y2hfaWQ.display_name": {
+          "source": "Batch ID",
+          "message": "ID de lot"
+        },
+        "app.RWFzeVBvc3Q.action.YmF0Y2gtbGFiZWw.option.YmF0Y2hfaWQ.short_desc": {
+          "source": "Batch ID (batch_xxx)",
+          "message": "ID de lot (batch_xxx)"
+        },
+        "app.RWFzeVBvc3Q.action.YmF0Y2gtbGFiZWw.option.ZmlsZV9mb3JtYXQ.allowed-value.c3RyaW5nOkVQTDI.desc": {
+          "source": "Eltron EPL2",
+          "message": "Eltron EPL2"
+        },
+        "app.RWFzeVBvc3Q.action.YmF0Y2gtbGFiZWw.option.ZmlsZV9mb3JtYXQ.allowed-value.c3RyaW5nOlBERg.desc": {
+          "source": "PDF",
+          "message": "PDF"
+        },
+        "app.RWFzeVBvc3Q.action.YmF0Y2gtbGFiZWw.option.ZmlsZV9mb3JtYXQ.allowed-value.c3RyaW5nOlpQTA.desc": {
+          "source": "Zebra ZPL",
+          "message": "Zebra ZPL"
+        },
+        "app.RWFzeVBvc3Q.action.YmF0Y2gtbGFiZWw.option.ZmlsZV9mb3JtYXQ.desc": {
+          "source": "Output format for the combined label file",
+          "message": "Format de sortie pour le fichier d'étiquettes combiné"
+        },
+        "app.RWFzeVBvc3Q.action.YmF0Y2gtbGFiZWw.option.ZmlsZV9mb3JtYXQ.display_name": {
+          "source": "File Format",
+          "message": "Format de fichier"
+        },
+        "app.RWFzeVBvc3Q.action.YmF0Y2gtbGFiZWw.option.ZmlsZV9mb3JtYXQ.short_desc": {
+          "source": "Combined label file format",
+          "message": "Format du fichier d'étiquettes combiné"
+        },
+        "app.RWFzeVBvc3Q.action.YmF0Y2gtbGFiZWw.short_desc": {
+          "source": "Generate a combined batch label",
+          "message": "Générer une étiquette de lot combinée"
+        },
+        "app.RWFzeVBvc3Q.action.YmF0Y2gtc2Nhbi1mb3Jt.desc": {
+          "source": "Generate a scan form for all shipments in a batch.",
+          "message": "Générer un formulaire de numérisation pour toutes les expéditions d'un lot."
+        },
+        "app.RWFzeVBvc3Q.action.YmF0Y2gtc2Nhbi1mb3Jt.display_name": {
+          "source": "Generate Batch Scan Form",
+          "message": "Générer le formulaire de numérisation de lot"
+        },
+        "app.RWFzeVBvc3Q.action.YmF0Y2gtc2Nhbi1mb3Jt.option.YmF0Y2hfaWQ.desc": {
+          "source": "Batch to generate a scan form for",
+          "message": "Lot pour lequel générer un formulaire de numérisation"
+        },
+        "app.RWFzeVBvc3Q.action.YmF0Y2gtc2Nhbi1mb3Jt.option.YmF0Y2hfaWQ.display_name": {
+          "source": "Batch ID",
+          "message": "ID de lot"
+        },
+        "app.RWFzeVBvc3Q.action.YmF0Y2gtc2Nhbi1mb3Jt.option.YmF0Y2hfaWQ.short_desc": {
+          "source": "Batch ID (batch_xxx)",
+          "message": "ID de lot (batch_xxx)"
+        },
+        "app.RWFzeVBvc3Q.action.YmF0Y2gtc2Nhbi1mb3Jt.short_desc": {
+          "source": "Generate a scan form",
+          "message": "Générer un formulaire de numérisation"
+        },
+        "app.RWFzeVBvc3Q.action.YmF0Y2gtcmVtb3ZlLXNoaXBtZW50cw.desc": {
+          "source": "Remove shipments from an existing batch.",
+          "message": "Supprimer des expéditions d'un lot existant."
+        },
+        "app.RWFzeVBvc3Q.action.YmF0Y2gtcmVtb3ZlLXNoaXBtZW50cw.display_name": {
+          "source": "Remove Shipments from Batch",
+          "message": "Supprimer des expéditions du lot"
+        },
+        "app.RWFzeVBvc3Q.action.YmF0Y2gtcmVtb3ZlLXNoaXBtZW50cw.option.YmF0Y2hfaWQ.desc": {
+          "source": "Batch to remove shipments from",
+          "message": "Lot duquel supprimer des expéditions"
+        },
+        "app.RWFzeVBvc3Q.action.YmF0Y2gtcmVtb3ZlLXNoaXBtZW50cw.option.YmF0Y2hfaWQ.display_name": {
+          "source": "Batch ID",
+          "message": "ID de lot"
+        },
+        "app.RWFzeVBvc3Q.action.YmF0Y2gtcmVtb3ZlLXNoaXBtZW50cw.option.YmF0Y2hfaWQ.short_desc": {
+          "source": "Batch ID (batch_xxx)",
+          "message": "ID de lot (batch_xxx)"
+        },
+        "app.RWFzeVBvc3Q.action.YmF0Y2gtcmVtb3ZlLXNoaXBtZW50cw.option.c2hpcG1lbnRz.desc": {
+          "source": "List of shipment references to remove from the batch (each `{id: shp_xxx}`)",
+          "message": "Liste des références d'expédition à supprimer du lot (chacune `{id: shp_xxx}`)"
+        },
+        "app.RWFzeVBvc3Q.action.YmF0Y2gtcmVtb3ZlLXNoaXBtZW50cw.option.c2hpcG1lbnRz.display_name": {
+          "source": "Shipments",
+          "message": "Expéditions"
+        },
+        "app.RWFzeVBvc3Q.action.YmF0Y2gtcmVtb3ZlLXNoaXBtZW50cw.option.c2hpcG1lbnRz.short_desc": {
+          "source": "Shipments to remove (each {id: shp_xxx})",
+          "message": "Expéditions à supprimer (chacune {id: shp_xxx})"
+        },
+        "app.RWFzeVBvc3Q.action.YmF0Y2gtcmVtb3ZlLXNoaXBtZW50cw.short_desc": {
+          "source": "Remove shipments from a batch",
+          "message": "Supprimer des expéditions d'un lot"
+        },
+        "app.RWFzeVBvc3Q.action.YnV5LW9yZGVy.desc": {
+          "source": "Buy all shipments in an order with a single carrier and service.",
+          "message": "Acheter toutes les expéditions d'une commande avec un seul transporteur et service."
+        },
+        "app.RWFzeVBvc3Q.action.YnV5LW9yZGVy.display_name": {
+          "source": "Buy Order",
+          "message": "Acheter la commande"
+        },
+        "app.RWFzeVBvc3Q.action.YnV5LW9yZGVy.option.Y2Fycmllcg.desc": {
+          "source": "Carrier name (e.g. `FedEx`, `UPS`) — must match a `carrier` returned in the Order's `rates`",
+          "message": "Nom du transporteur (par ex. `FedEx`, `UPS`) — doit correspondre à un `carrier` renvoyé dans `rates` de la commande"
+        },
+        "app.RWFzeVBvc3Q.action.YnV5LW9yZGVy.option.Y2Fycmllcg.display_name": {
+          "source": "Carrier",
+          "message": "Transporteur"
+        },
+        "app.RWFzeVBvc3Q.action.YnV5LW9yZGVy.option.Y2Fycmllcg.short_desc": {
+          "source": "Carrier name",
+          "message": "Nom du transporteur"
+        },
+        "app.RWFzeVBvc3Q.action.YnV5LW9yZGVy.option.b3JkZXJfaWQ.desc": {
+          "source": "Order to buy",
+          "message": "Commande à acheter"
+        },
+        "app.RWFzeVBvc3Q.action.YnV5LW9yZGVy.option.b3JkZXJfaWQ.display_name": {
+          "source": "Order ID",
+          "message": "ID de commande"
+        },
+        "app.RWFzeVBvc3Q.action.YnV5LW9yZGVy.option.b3JkZXJfaWQ.short_desc": {
+          "source": "Order ID (order_xxx)",
+          "message": "ID de commande (order_xxx)"
+        },
+        "app.RWFzeVBvc3Q.action.YnV5LW9yZGVy.option.c2VydmljZQ.desc": {
+          "source": "Carrier service code",
+          "message": "Code de service du transporteur"
+        },
+        "app.RWFzeVBvc3Q.action.YnV5LW9yZGVy.option.c2VydmljZQ.display_name": {
+          "source": "Service",
+          "message": "Service"
+        },
+        "app.RWFzeVBvc3Q.action.YnV5LW9yZGVy.option.c2VydmljZQ.short_desc": {
+          "source": "Carrier service",
+          "message": "Service du transporteur"
+        },
+        "app.RWFzeVBvc3Q.action.YnV5LW9yZGVy.short_desc": {
+          "source": "Buy an order",
+          "message": "Acheter une commande"
+        },
+        "app.RWFzeVBvc3Q.action.YnV5LXBpY2t1cA.desc": {
+          "source": "Confirm/buy a previously scheduled pickup.",
+          "message": "Confirmer/acheter un ramassage préalablement programmé."
+        },
+        "app.RWFzeVBvc3Q.action.YnV5LXBpY2t1cA.display_name": {
+          "source": "Buy Pickup",
+          "message": "Acheter le ramassage"
+        },
+        "app.RWFzeVBvc3Q.action.YnV5LXBpY2t1cA.option.Y2Fycmllcg.desc": {
+          "source": "Carrier name (e.g. `UPS`, `FedEx`) — must match a `carrier` returned in the Pickup's `pickup_rates`",
+          "message": "Nom du transporteur (par ex. `UPS`, `FedEx`) — doit correspondre à un `carrier` renvoyé dans `pickup_rates` du ramassage"
+        },
+        "app.RWFzeVBvc3Q.action.YnV5LXBpY2t1cA.option.Y2Fycmllcg.display_name": {
+          "source": "Carrier",
+          "message": "Transporteur"
+        },
+        "app.RWFzeVBvc3Q.action.YnV5LXBpY2t1cA.option.Y2Fycmllcg.short_desc": {
+          "source": "Carrier name",
+          "message": "Nom du transporteur"
+        },
+        "app.RWFzeVBvc3Q.action.YnV5LXBpY2t1cA.option.c2VydmljZQ.desc": {
+          "source": "Pickup service code returned in `pickup_rates`",
+          "message": "Code de service de ramassage renvoyé dans `pickup_rates`"
+        },
+        "app.RWFzeVBvc3Q.action.YnV5LXBpY2t1cA.option.c2VydmljZQ.display_name": {
+          "source": "Service",
+          "message": "Service"
+        },
+        "app.RWFzeVBvc3Q.action.YnV5LXBpY2t1cA.option.c2VydmljZQ.short_desc": {
+          "source": "Pickup service code",
+          "message": "Code de service de ramassage"
+        },
+        "app.RWFzeVBvc3Q.action.YnV5LXBpY2t1cA.option.cGlja3VwX2lk.desc": {
+          "source": "Pickup to confirm/buy",
+          "message": "Ramassage à confirmer/acheter"
+        },
+        "app.RWFzeVBvc3Q.action.YnV5LXBpY2t1cA.option.cGlja3VwX2lk.display_name": {
+          "source": "Pickup ID",
+          "message": "ID d'enlèvement"
+        },
+        "app.RWFzeVBvc3Q.action.YnV5LXBpY2t1cA.option.cGlja3VwX2lk.short_desc": {
+          "source": "Pickup ID (pickup_xxx)",
+          "message": "ID d'enlèvement (pickup_xxx)"
+        },
+        "app.RWFzeVBvc3Q.action.YnV5LXBpY2t1cA.short_desc": {
+          "source": "Confirm a pickup",
+          "message": "Confirmer un ramassage"
+        },
+        "app.RWFzeVBvc3Q.action.YnV5LXNoaXBtZW50.desc": {
+          "source": "Purchase a shipping label by selecting one of the rates returned by `create-shipment`.",
+          "message": "Acheter une étiquette d'expédition en sélectionnant l'un des tarifs renvoyés par `create-shipment`."
+        },
+        "app.RWFzeVBvc3Q.action.YnV5LXNoaXBtZW50.display_name": {
+          "source": "Buy Shipment",
+          "message": "Acheter l'expédition"
+        },
+        "app.RWFzeVBvc3Q.action.YnV5LXNoaXBtZW50.option.Y2FyYm9uX29mZnNldA.desc": {
+          "source": "Set to `True` to apply EasyPost's carbon offset surcharge",
+          "message": "Définir sur `True` pour appliquer le supplément de compensation carbone d'EasyPost"
+        },
+        "app.RWFzeVBvc3Q.action.YnV5LXNoaXBtZW50.option.Y2FyYm9uX29mZnNldA.display_name": {
+          "source": "Carbon Offset",
+          "message": "Compensation carbone"
+        },
+        "app.RWFzeVBvc3Q.action.YnV5LXNoaXBtZW50.option.Y2FyYm9uX29mZnNldA.short_desc": {
+          "source": "Apply carbon offset",
+          "message": "Appliquer la compensation carbone"
+        },
+        "app.RWFzeVBvc3Q.action.YnV5LXNoaXBtZW50.option.ZW5kX3NoaXBwZXJfaWQ.desc": {
+          "source": "End shipper ID for the purchase",
+          "message": "ID de l'expéditeur final pour l'achat"
+        },
+        "app.RWFzeVBvc3Q.action.YnV5LXNoaXBtZW50.option.ZW5kX3NoaXBwZXJfaWQ.display_name": {
+          "source": "End Shipper ID",
+          "message": "ID de l'expéditeur final"
+        },
+        "app.RWFzeVBvc3Q.action.YnV5LXNoaXBtZW50.option.ZW5kX3NoaXBwZXJfaWQ.short_desc": {
+          "source": "End shipper ID (es_xxx)",
+          "message": "ID de l'expéditeur final (es_xxx)"
+        },
+        "app.RWFzeVBvc3Q.action.YnV5LXNoaXBtZW50.option.aW5zdXJhbmNl.desc": {
+          "source": "Insure the shipment for this amount (string, e.g. `\"100.00\"`)",
+          "message": "Assurer l'expédition pour ce montant (chaîne, par ex. `\"100.00\"`)"
+        },
+        "app.RWFzeVBvc3Q.action.YnV5LXNoaXBtZW50.option.aW5zdXJhbmNl.display_name": {
+          "source": "Insurance",
+          "message": "Assurance"
+        },
+        "app.RWFzeVBvc3Q.action.YnV5LXNoaXBtZW50.option.aW5zdXJhbmNl.short_desc": {
+          "source": "Insurance amount (string)",
+          "message": "Montant de l'assurance (chaîne)"
+        },
+        "app.RWFzeVBvc3Q.action.YnV5LXNoaXBtZW50.option.c2hpcG1lbnRfaWQ.desc": {
+          "source": "Shipment to purchase a label for",
+          "message": "Expédition pour laquelle acheter une étiquette"
+        },
+        "app.RWFzeVBvc3Q.action.YnV5LXNoaXBtZW50.option.c2hpcG1lbnRfaWQ.display_name": {
+          "source": "Shipment ID",
+          "message": "ID d'expédition"
+        },
+        "app.RWFzeVBvc3Q.action.YnV5LXNoaXBtZW50.option.c2hpcG1lbnRfaWQ.short_desc": {
+          "source": "Shipment ID (shp_xxx)",
+          "message": "ID d'expédition (shp_xxx)"
+        },
+        "app.RWFzeVBvc3Q.action.YnV5LXNoaXBtZW50.option.cmF0ZQ.desc": {
+          "source": "Rate to purchase - select one of the rates returned by `create-shipment`",
+          "message": "Tarif à acheter - sélectionnez l'un des tarifs renvoyés par `create-shipment`"
+        },
+        "app.RWFzeVBvc3Q.action.YnV5LXNoaXBtZW50.option.cmF0ZQ.display_name": {
+          "source": "Rate",
+          "message": "Tarif"
+        },
+        "app.RWFzeVBvc3Q.action.YnV5LXNoaXBtZW50.option.cmF0ZQ.short_desc": {
+          "source": "Selected rate ({id: rate_xxx})",
+          "message": "Tarif sélectionné ({id: rate_xxx})"
+        },
+        "app.RWFzeVBvc3Q.action.YnV5LXNoaXBtZW50.short_desc": {
+          "source": "Purchase a shipping label",
+          "message": "Acheter une étiquette d'expédition"
+        },
+        "app.RWFzeVBvc3Q.action.YnVsay1jcmVhdGUtdHJhY2tlcnM.desc": {
+          "source": "Create up to 100 trackers in a single request.",
+          "message": "Créez jusqu'à 100 trackers en une seule requête."
+        },
+        "app.RWFzeVBvc3Q.action.YnVsay1jcmVhdGUtdHJhY2tlcnM.display_name": {
+          "source": "Bulk Create Trackers",
+          "message": "Créer des trackers en masse"
+        },
+        "app.RWFzeVBvc3Q.action.YnVsay1jcmVhdGUtdHJhY2tlcnM.option.dHJhY2tlcnM.desc": {
+          "source": "List of tracker entries to create in a single batch",
+          "message": "Liste des entrées de tracker à créer dans un seul lot"
+        },
+        "app.RWFzeVBvc3Q.action.YnVsay1jcmVhdGUtdHJhY2tlcnM.option.dHJhY2tlcnM.display_name": {
+          "source": "Trackers",
+          "message": "Trackers"
+        },
+        "app.RWFzeVBvc3Q.action.YnVsay1jcmVhdGUtdHJhY2tlcnM.option.dHJhY2tlcnM.short_desc": {
+          "source": "List of tracker entries",
+          "message": "Liste des entrées de tracker"
+        },
+        "app.RWFzeVBvc3Q.action.YnVsay1jcmVhdGUtdHJhY2tlcnM.short_desc": {
+          "source": "Bulk-create trackers",
+          "message": "Créer des trackers en masse"
+        },
+        "app.RWFzeVBvc3Q.action.Z2V0LW9yZGVy.desc": {
+          "source": "Retrieve an EasyPost order by ID.",
+          "message": "Récupérer une commande EasyPost par son ID."
+        },
+        "app.RWFzeVBvc3Q.action.Z2V0LW9yZGVy.display_name": {
+          "source": "Get Order",
+          "message": "Obtenir la commande"
+        },
+        "app.RWFzeVBvc3Q.action.Z2V0LW9yZGVy.option.b3JkZXJfaWQ.desc": {
+          "source": "Order to retrieve",
+          "message": "Commande à récupérer"
+        },
+        "app.RWFzeVBvc3Q.action.Z2V0LW9yZGVy.option.b3JkZXJfaWQ.display_name": {
+          "source": "Order ID",
+          "message": "ID de commande"
+        },
+        "app.RWFzeVBvc3Q.action.Z2V0LW9yZGVy.option.b3JkZXJfaWQ.short_desc": {
+          "source": "Order ID (order_xxx)",
+          "message": "ID de commande (order_xxx)"
+        },
+        "app.RWFzeVBvc3Q.action.Z2V0LW9yZGVy.short_desc": {
+          "source": "Retrieve an order",
+          "message": "Récupérer une commande"
+        },
+        "app.RWFzeVBvc3Q.action.Z2V0LWFkZHJlc3M.desc": {
+          "source": "Retrieve an EasyPost address by ID.",
+          "message": "Récupérer une adresse EasyPost par son ID."
+        },
+        "app.RWFzeVBvc3Q.action.Z2V0LWFkZHJlc3M.display_name": {
+          "source": "Get Address",
+          "message": "Obtenir l'adresse"
+        },
+        "app.RWFzeVBvc3Q.action.Z2V0LWFkZHJlc3M.option.YWRkcmVzc19pZA.desc": {
+          "source": "Address to retrieve",
+          "message": "Adresse à récupérer"
+        },
+        "app.RWFzeVBvc3Q.action.Z2V0LWFkZHJlc3M.option.YWRkcmVzc19pZA.display_name": {
+          "source": "Address ID",
+          "message": "ID de l'adresse"
+        },
+        "app.RWFzeVBvc3Q.action.Z2V0LWFkZHJlc3M.option.YWRkcmVzc19pZA.short_desc": {
+          "source": "Address ID (adr_xxx)",
+          "message": "ID d'adresse (adr_xxx)"
+        },
+        "app.RWFzeVBvc3Q.action.Z2V0LWFkZHJlc3M.short_desc": {
+          "source": "Retrieve an address by ID",
+          "message": "Récupérer une adresse par son ID"
+        },
+        "app.RWFzeVBvc3Q.action.Z2V0LWJhdGNo.desc": {
+          "source": "Retrieve an EasyPost batch by ID.",
+          "message": "Récupérer un lot EasyPost par son ID."
+        },
+        "app.RWFzeVBvc3Q.action.Z2V0LWJhdGNo.display_name": {
+          "source": "Get Batch",
+          "message": "Obtenir le lot"
+        },
+        "app.RWFzeVBvc3Q.action.Z2V0LWJhdGNo.option.YmF0Y2hfaWQ.desc": {
+          "source": "Batch to retrieve",
+          "message": "Lot à récupérer"
+        },
+        "app.RWFzeVBvc3Q.action.Z2V0LWJhdGNo.option.YmF0Y2hfaWQ.display_name": {
+          "source": "Batch ID",
+          "message": "ID de lot"
+        },
+        "app.RWFzeVBvc3Q.action.Z2V0LWJhdGNo.option.YmF0Y2hfaWQ.short_desc": {
+          "source": "Batch ID (batch_xxx)",
+          "message": "ID de lot (batch_xxx)"
+        },
+        "app.RWFzeVBvc3Q.action.Z2V0LWJhdGNo.short_desc": {
+          "source": "Retrieve a batch by ID",
+          "message": "Récupérer un lot par son ID"
+        },
+        "app.RWFzeVBvc3Q.action.Z2V0LWN1c3RvbXMtaW5mbw.desc": {
+          "source": "Retrieve a customs info object by ID.",
+          "message": "Récupérer un objet d'informations douanières par son ID."
+        },
+        "app.RWFzeVBvc3Q.action.Z2V0LWN1c3RvbXMtaW5mbw.display_name": {
+          "source": "Get Customs Info",
+          "message": "Obtenir les informations douanières"
+        },
+        "app.RWFzeVBvc3Q.action.Z2V0LWN1c3RvbXMtaW5mbw.option.Y3VzdG9tc19pbmZvX2lk.desc": {
+          "source": "Customs info ID to retrieve",
+          "message": "ID des informations douanières à récupérer"
+        },
+        "app.RWFzeVBvc3Q.action.Z2V0LWN1c3RvbXMtaW5mbw.option.Y3VzdG9tc19pbmZvX2lk.display_name": {
+          "source": "Customs Info ID",
+          "message": "ID des informations douanières"
+        },
+        "app.RWFzeVBvc3Q.action.Z2V0LWN1c3RvbXMtaW5mbw.option.Y3VzdG9tc19pbmZvX2lk.short_desc": {
+          "source": "Customs info ID (cstinfo_xxx)",
+          "message": "ID des informations douanières (cstinfo_xxx)"
+        },
+        "app.RWFzeVBvc3Q.action.Z2V0LWN1c3RvbXMtaW5mbw.short_desc": {
+          "source": "Retrieve a customs info object",
+          "message": "Récupérer un objet d'informations douanières"
+        },
+        "app.RWFzeVBvc3Q.action.Z2V0LWN1c3RvbXMtaXRlbQ.desc": {
+          "source": "Retrieve a customs item by ID.",
+          "message": "Récupérer un article de douane par son ID."
+        },
+        "app.RWFzeVBvc3Q.action.Z2V0LWN1c3RvbXMtaXRlbQ.display_name": {
+          "source": "Get Customs Item",
+          "message": "Obtenir l'article de douane"
+        },
+        "app.RWFzeVBvc3Q.action.Z2V0LWN1c3RvbXMtaXRlbQ.option.Y3VzdG9tc19pdGVtX2lk.desc": {
+          "source": "Customs item to retrieve",
+          "message": "Article de douane à récupérer"
+        },
+        "app.RWFzeVBvc3Q.action.Z2V0LWN1c3RvbXMtaXRlbQ.option.Y3VzdG9tc19pdGVtX2lk.display_name": {
+          "source": "Customs Item ID",
+          "message": "ID de l'article de douane"
+        },
+        "app.RWFzeVBvc3Q.action.Z2V0LWN1c3RvbXMtaXRlbQ.option.Y3VzdG9tc19pdGVtX2lk.short_desc": {
+          "source": "Customs item ID (cstitem_xxx)",
+          "message": "ID de l'article de douane (cstitem_xxx)"
+        },
+        "app.RWFzeVBvc3Q.action.Z2V0LWN1c3RvbXMtaXRlbQ.short_desc": {
+          "source": "Retrieve a customs item",
+          "message": "Récupérer un article de douane"
+        },
+        "app.RWFzeVBvc3Q.action.Z2V0LWNhcnJpZXItYWNjb3VudA.desc": {
+          "source": "Retrieve a carrier account by ID.",
+          "message": "Récupérer un compte de transporteur par son ID."
+        },
+        "app.RWFzeVBvc3Q.action.Z2V0LWNhcnJpZXItYWNjb3VudA.display_name": {
+          "source": "Get Carrier Account",
+          "message": "Obtenir le compte de transporteur"
+        },
+        "app.RWFzeVBvc3Q.action.Z2V0LWNhcnJpZXItYWNjb3VudA.option.Y2Fycmllcl9hY2NvdW50X2lk.desc": {
+          "source": "Carrier account to retrieve",
+          "message": "Compte de transporteur à récupérer"
+        },
+        "app.RWFzeVBvc3Q.action.Z2V0LWNhcnJpZXItYWNjb3VudA.option.Y2Fycmllcl9hY2NvdW50X2lk.display_name": {
+          "source": "Carrier Account ID",
+          "message": "ID du compte de transporteur"
+        },
+        "app.RWFzeVBvc3Q.action.Z2V0LWNhcnJpZXItYWNjb3VudA.option.Y2Fycmllcl9hY2NvdW50X2lk.short_desc": {
+          "source": "Carrier account ID (ca_xxx)",
+          "message": "ID du compte de transporteur (ca_xxx)"
+        },
+        "app.RWFzeVBvc3Q.action.Z2V0LWNhcnJpZXItYWNjb3VudA.short_desc": {
+          "source": "Retrieve a carrier account",
+          "message": "Récupérer un compte de transporteur"
+        },
+        "app.RWFzeVBvc3Q.action.Z2V0LWV2ZW50.desc": {
+          "source": "Retrieve a webhook event by ID.",
+          "message": "Récupérer un événement de webhook par son ID."
+        },
+        "app.RWFzeVBvc3Q.action.Z2V0LWV2ZW50.display_name": {
+          "source": "Get Event",
+          "message": "Obtenir un événement"
+        },
+        "app.RWFzeVBvc3Q.action.Z2V0LWV2ZW50.option.ZXZlbnRfaWQ.desc": {
+          "source": "Event to retrieve",
+          "message": "Événement à récupérer"
+        },
+        "app.RWFzeVBvc3Q.action.Z2V0LWV2ZW50.option.ZXZlbnRfaWQ.display_name": {
+          "source": "Event ID",
+          "message": "ID d'événement"
+        },
+        "app.RWFzeVBvc3Q.action.Z2V0LWV2ZW50.option.ZXZlbnRfaWQ.short_desc": {
+          "source": "Event ID (evt_xxx)",
+          "message": "ID d'événement (evt_xxx)"
+        },
+        "app.RWFzeVBvc3Q.action.Z2V0LWV2ZW50.short_desc": {
+          "source": "Retrieve an event",
+          "message": "Récupérer un événement"
+        },
+        "app.RWFzeVBvc3Q.action.Z2V0LWV2ZW50LXBheWxvYWQ.desc": {
+          "source": "Retrieve a single webhook delivery payload.",
+          "message": "Récupérer une charge utile de livraison de webhook unique."
+        },
+        "app.RWFzeVBvc3Q.action.Z2V0LWV2ZW50LXBheWxvYWQ.display_name": {
+          "source": "Get Event Payload",
+          "message": "Obtenir la charge utile de l'événement"
+        },
+        "app.RWFzeVBvc3Q.action.Z2V0LWV2ZW50LXBheWxvYWQ.option.ZXZlbnRfaWQ.desc": {
+          "source": "Parent event ID",
+          "message": "ID de l'événement parent"
+        },
+        "app.RWFzeVBvc3Q.action.Z2V0LWV2ZW50LXBheWxvYWQ.option.ZXZlbnRfaWQ.display_name": {
+          "source": "Event ID",
+          "message": "ID d'événement"
+        },
+        "app.RWFzeVBvc3Q.action.Z2V0LWV2ZW50LXBheWxvYWQ.option.ZXZlbnRfaWQ.short_desc": {
+          "source": "Event ID (evt_xxx)",
+          "message": "ID d'événement (evt_xxx)"
+        },
+        "app.RWFzeVBvc3Q.action.Z2V0LWV2ZW50LXBheWxvYWQ.option.cGF5bG9hZF9pZA.desc": {
+          "source": "Payload to retrieve",
+          "message": "Charge utile à récupérer"
+        },
+        "app.RWFzeVBvc3Q.action.Z2V0LWV2ZW50LXBheWxvYWQ.option.cGF5bG9hZF9pZA.display_name": {
+          "source": "Payload ID",
+          "message": "ID de la charge utile"
+        },
+        "app.RWFzeVBvc3Q.action.Z2V0LWV2ZW50LXBheWxvYWQ.option.cGF5bG9hZF9pZA.short_desc": {
+          "source": "Payload ID (payload_xxx)",
+          "message": "ID de la charge utile (payload_xxx)"
+        },
+        "app.RWFzeVBvc3Q.action.Z2V0LWV2ZW50LXBheWxvYWQ.short_desc": {
+          "source": "Retrieve a single payload",
+          "message": "Récupérer une charge utile unique"
+        },
+        "app.RWFzeVBvc3Q.action.Z2V0LWluc3VyYW5jZQ.desc": {
+          "source": "Retrieve an EasyPost insurance record by ID.",
+          "message": "Récupérer un enregistrement d'assurance EasyPost par son ID."
+        },
+        "app.RWFzeVBvc3Q.action.Z2V0LWluc3VyYW5jZQ.display_name": {
+          "source": "Get Insurance",
+          "message": "Obtenir l'assurance"
+        },
+        "app.RWFzeVBvc3Q.action.Z2V0LWluc3VyYW5jZQ.option.aW5zdXJhbmNlX2lk.desc": {
+          "source": "Insurance record to retrieve",
+          "message": "Enregistrement d'assurance à récupérer"
+        },
+        "app.RWFzeVBvc3Q.action.Z2V0LWluc3VyYW5jZQ.option.aW5zdXJhbmNlX2lk.display_name": {
+          "source": "Insurance ID",
+          "message": "ID d'assurance"
+        },
+        "app.RWFzeVBvc3Q.action.Z2V0LWluc3VyYW5jZQ.option.aW5zdXJhbmNlX2lk.short_desc": {
+          "source": "Insurance ID (ins_xxx)",
+          "message": "ID d'assurance (ins_xxx)"
+        },
+        "app.RWFzeVBvc3Q.action.Z2V0LWluc3VyYW5jZQ.short_desc": {
+          "source": "Retrieve an insurance record by ID",
+          "message": "Récupérer un enregistrement d'assurance par son ID"
+        },
+        "app.RWFzeVBvc3Q.action.Z2V0LXBhcmNlbA.desc": {
+          "source": "Retrieve an EasyPost parcel by ID.",
+          "message": "Récupérer un colis EasyPost par son ID."
+        },
+        "app.RWFzeVBvc3Q.action.Z2V0LXBhcmNlbA.display_name": {
+          "source": "Get Parcel",
+          "message": "Obtenir le colis"
+        },
+        "app.RWFzeVBvc3Q.action.Z2V0LXBhcmNlbA.option.cGFyY2VsX2lk.desc": {
+          "source": "Existing EasyPost parcel ID to retrieve",
+          "message": "ID de colis EasyPost existant à récupérer"
+        },
+        "app.RWFzeVBvc3Q.action.Z2V0LXBhcmNlbA.option.cGFyY2VsX2lk.display_name": {
+          "source": "Parcel ID",
+          "message": "ID de colis"
+        },
+        "app.RWFzeVBvc3Q.action.Z2V0LXBhcmNlbA.option.cGFyY2VsX2lk.short_desc": {
+          "source": "Parcel ID (prcl_xxx)",
+          "message": "ID de colis (prcl_xxx)"
+        },
+        "app.RWFzeVBvc3Q.action.Z2V0LXBhcmNlbA.short_desc": {
+          "source": "Retrieve a parcel by ID",
+          "message": "Récupérer un colis par son ID"
+        },
+        "app.RWFzeVBvc3Q.action.Z2V0LXBpY2t1cA.desc": {
+          "source": "Retrieve an EasyPost pickup by ID.",
+          "message": "Récupérer un ramassage EasyPost par son ID."
+        },
+        "app.RWFzeVBvc3Q.action.Z2V0LXBpY2t1cA.display_name": {
+          "source": "Get Pickup",
+          "message": "Obtenir le ramassage"
+        },
+        "app.RWFzeVBvc3Q.action.Z2V0LXBpY2t1cA.option.cGlja3VwX2lk.desc": {
+          "source": "Pickup to retrieve",
+          "message": "Ramassage à récupérer"
+        },
+        "app.RWFzeVBvc3Q.action.Z2V0LXBpY2t1cA.option.cGlja3VwX2lk.display_name": {
+          "source": "Pickup ID",
+          "message": "ID d'enlèvement"
+        },
+        "app.RWFzeVBvc3Q.action.Z2V0LXBpY2t1cA.option.cGlja3VwX2lk.short_desc": {
+          "source": "Pickup ID (pickup_xxx)",
+          "message": "ID d'enlèvement (pickup_xxx)"
+        },
+        "app.RWFzeVBvc3Q.action.Z2V0LXBpY2t1cA.short_desc": {
+          "source": "Retrieve a pickup by ID",
+          "message": "Récupérer un ramassage par son ID"
+        },
+        "app.RWFzeVBvc3Q.action.Z2V0LXJlZnVuZA.desc": {
+          "source": "Retrieve an EasyPost refund by ID.",
+          "message": "Récupérer un remboursement EasyPost par son ID."
+        },
+        "app.RWFzeVBvc3Q.action.Z2V0LXJlZnVuZA.display_name": {
+          "source": "Get Refund",
+          "message": "Obtenir le remboursement"
+        },
+        "app.RWFzeVBvc3Q.action.Z2V0LXJlZnVuZA.option.cmVmdW5kX2lk.desc": {
+          "source": "Refund to retrieve",
+          "message": "Remboursement à récupérer"
+        },
+        "app.RWFzeVBvc3Q.action.Z2V0LXJlZnVuZA.option.cmVmdW5kX2lk.display_name": {
+          "source": "Refund ID",
+          "message": "ID de remboursement"
+        },
+        "app.RWFzeVBvc3Q.action.Z2V0LXJlZnVuZA.option.cmVmdW5kX2lk.short_desc": {
+          "source": "Refund ID (rfnd_xxx)",
+          "message": "ID de remboursement (rfnd_xxx)"
+        },
+        "app.RWFzeVBvc3Q.action.Z2V0LXJlZnVuZA.short_desc": {
+          "source": "Retrieve a refund by ID",
+          "message": "Récupérer un remboursement par son ID"
+        },
+        "app.RWFzeVBvc3Q.action.Z2V0LXNoaXBtZW50.desc": {
+          "source": "Retrieve an EasyPost shipment by ID.",
+          "message": "Récupérer une expédition EasyPost par son ID."
+        },
+        "app.RWFzeVBvc3Q.action.Z2V0LXNoaXBtZW50.display_name": {
+          "source": "Get Shipment",
+          "message": "Obtenir l'expédition"
+        },
+        "app.RWFzeVBvc3Q.action.Z2V0LXNoaXBtZW50.option.c2hpcG1lbnRfaWQ.desc": {
+          "source": "Shipment to retrieve",
+          "message": "Expédition à récupérer"
+        },
+        "app.RWFzeVBvc3Q.action.Z2V0LXNoaXBtZW50.option.c2hpcG1lbnRfaWQ.display_name": {
+          "source": "Shipment ID",
+          "message": "ID d'expédition"
+        },
+        "app.RWFzeVBvc3Q.action.Z2V0LXNoaXBtZW50.option.c2hpcG1lbnRfaWQ.short_desc": {
+          "source": "Shipment ID (shp_xxx)",
+          "message": "ID d'expédition (shp_xxx)"
+        },
+        "app.RWFzeVBvc3Q.action.Z2V0LXNoaXBtZW50.short_desc": {
+          "source": "Retrieve a shipment by ID",
+          "message": "Récupérer une expédition par son ID"
+        },
+        "app.RWFzeVBvc3Q.action.Z2V0LXNoaXBtZW50LWxhYmVs.desc": {
+          "source": "Retrieve a shipment label in a specific format (PDF, ZPL, EPL2, or PNG).",
+          "message": "Récupérer une étiquette d'expédition dans un format spécifique (PDF, ZPL, EPL2 ou PNG)."
+        },
+        "app.RWFzeVBvc3Q.action.Z2V0LXNoaXBtZW50LWxhYmVs.display_name": {
+          "source": "Get Shipment Label",
+          "message": "Obtenir l'étiquette d'expédition"
+        },
+        "app.RWFzeVBvc3Q.action.Z2V0LXNoaXBtZW50LWxhYmVs.option.ZmlsZV9mb3JtYXQ.allowed-value.c3RyaW5nOkVQTDI.desc": {
+          "source": "Eltron EPL2",
+          "message": "Eltron EPL2"
+        },
+        "app.RWFzeVBvc3Q.action.Z2V0LXNoaXBtZW50LWxhYmVs.option.ZmlsZV9mb3JtYXQ.allowed-value.c3RyaW5nOlBERg.desc": {
+          "source": "PDF",
+          "message": "PDF"
+        },
+        "app.RWFzeVBvc3Q.action.Z2V0LXNoaXBtZW50LWxhYmVs.option.ZmlsZV9mb3JtYXQ.allowed-value.c3RyaW5nOlBORw.desc": {
+          "source": "PNG image",
+          "message": "Image PNG"
+        },
+        "app.RWFzeVBvc3Q.action.Z2V0LXNoaXBtZW50LWxhYmVs.option.ZmlsZV9mb3JtYXQ.allowed-value.c3RyaW5nOlpQTA.desc": {
+          "source": "Zebra ZPL",
+          "message": "Zebra ZPL"
+        },
+        "app.RWFzeVBvc3Q.action.Z2V0LXNoaXBtZW50LWxhYmVs.option.ZmlsZV9mb3JtYXQ.desc": {
+          "source": "Format of the label file to retrieve",
+          "message": "Format du fichier d'étiquette à récupérer"
+        },
+        "app.RWFzeVBvc3Q.action.Z2V0LXNoaXBtZW50LWxhYmVs.option.ZmlsZV9mb3JtYXQ.display_name": {
+          "source": "File Format",
+          "message": "Format de fichier"
+        },
+        "app.RWFzeVBvc3Q.action.Z2V0LXNoaXBtZW50LWxhYmVs.option.ZmlsZV9mb3JtYXQ.short_desc": {
+          "source": "Label file format",
+          "message": "Format du fichier d'étiquette"
+        },
+        "app.RWFzeVBvc3Q.action.Z2V0LXNoaXBtZW50LWxhYmVs.option.c2hpcG1lbnRfaWQ.desc": {
+          "source": "Shipment to fetch the label for",
+          "message": "Expédition pour laquelle récupérer l'étiquette"
+        },
+        "app.RWFzeVBvc3Q.action.Z2V0LXNoaXBtZW50LWxhYmVs.option.c2hpcG1lbnRfaWQ.display_name": {
+          "source": "Shipment ID",
+          "message": "ID d'expédition"
+        },
+        "app.RWFzeVBvc3Q.action.Z2V0LXNoaXBtZW50LWxhYmVs.option.c2hpcG1lbnRfaWQ.short_desc": {
+          "source": "Shipment ID (shp_xxx)",
+          "message": "ID d'expédition (shp_xxx)"
+        },
+        "app.RWFzeVBvc3Q.action.Z2V0LXNoaXBtZW50LWxhYmVs.short_desc": {
+          "source": "Retrieve a shipment label",
+          "message": "Récupérer une étiquette d'expédition"
+        },
+        "app.RWFzeVBvc3Q.action.Z2V0LXNoaXBtZW50LXNtYXJ0cmF0ZXM.desc": {
+          "source": "Retrieve SmartRates for a shipment. Each rate includes a `time_in_transit` object with percentile-based estimated transit business days (`percentile_50` through `percentile_99`) for SLA-aware rate selection.",
+          "message": "Récupérer les SmartRates pour une expédition. Chaque tarif comprend un objet `time_in_transit` avec les jours ouvrables de transit estimés basés sur les centiles (`percentile_50` à `percentile_99`) pour une sélection de tarif respectant les SLA."
+        },
+        "app.RWFzeVBvc3Q.action.Z2V0LXNoaXBtZW50LXNtYXJ0cmF0ZXM.display_name": {
+          "source": "Get Shipment SmartRates",
+          "message": "Obtenir les SmartRates de l'expédition"
+        },
+        "app.RWFzeVBvc3Q.action.Z2V0LXNoaXBtZW50LXNtYXJ0cmF0ZXM.option.c2hpcG1lbnRfaWQ.desc": {
+          "source": "Shipment to retrieve SmartRates for",
+          "message": "Expédition pour laquelle récupérer les SmartRates"
+        },
+        "app.RWFzeVBvc3Q.action.Z2V0LXNoaXBtZW50LXNtYXJ0cmF0ZXM.option.c2hpcG1lbnRfaWQ.display_name": {
+          "source": "Shipment ID",
+          "message": "ID d'expédition"
+        },
+        "app.RWFzeVBvc3Q.action.Z2V0LXNoaXBtZW50LXNtYXJ0cmF0ZXM.option.c2hpcG1lbnRfaWQ.short_desc": {
+          "source": "Shipment ID (shp_xxx)",
+          "message": "ID d'expédition (shp_xxx)"
+        },
+        "app.RWFzeVBvc3Q.action.Z2V0LXNoaXBtZW50LXNtYXJ0cmF0ZXM.short_desc": {
+          "source": "Retrieve SmartRates for a shipment",
+          "message": "Récupérer les SmartRates pour une expédition"
+        },
+        "app.RWFzeVBvc3Q.action.Z2V0LXRyYWNrZXI.desc": {
+          "source": "Retrieve an EasyPost tracker by ID.",
+          "message": "Récupérer un suivi EasyPost par son ID."
+        },
+        "app.RWFzeVBvc3Q.action.Z2V0LXRyYWNrZXI.display_name": {
+          "source": "Get Tracker",
+          "message": "Obtenir le suivi"
+        },
+        "app.RWFzeVBvc3Q.action.Z2V0LXRyYWNrZXI.option.dHJhY2tlcl9pZA.desc": {
+          "source": "Tracker to retrieve",
+          "message": "Suivi à récupérer"
+        },
+        "app.RWFzeVBvc3Q.action.Z2V0LXRyYWNrZXI.option.dHJhY2tlcl9pZA.display_name": {
+          "source": "Tracker ID",
+          "message": "ID de suivi"
+        },
+        "app.RWFzeVBvc3Q.action.Z2V0LXRyYWNrZXI.option.dHJhY2tlcl9pZA.short_desc": {
+          "source": "Tracker ID (trk_xxx)",
+          "message": "ID de suivi (trk_xxx)"
+        },
+        "app.RWFzeVBvc3Q.action.Z2V0LXRyYWNrZXI.short_desc": {
+          "source": "Retrieve a tracker by ID",
+          "message": "Récupérer un suivi par son ID"
+        },
+        "app.RWFzeVBvc3Q.action.Z2V0LXdlYmhvb2s.desc": {
+          "source": "Retrieve a webhook by ID.",
+          "message": "Récupérer un webhook par son ID."
+        },
+        "app.RWFzeVBvc3Q.action.Z2V0LXdlYmhvb2s.display_name": {
+          "source": "Get Webhook",
+          "message": "Obtenir le webhook"
+        },
+        "app.RWFzeVBvc3Q.action.Z2V0LXdlYmhvb2s.option.d2ViaG9va19pZA.desc": {
+          "source": "Webhook to retrieve",
+          "message": "Webhook à récupérer"
+        },
+        "app.RWFzeVBvc3Q.action.Z2V0LXdlYmhvb2s.option.d2ViaG9va19pZA.display_name": {
+          "source": "Webhook ID",
+          "message": "ID de webhook"
+        },
+        "app.RWFzeVBvc3Q.action.Z2V0LXdlYmhvb2s.option.d2ViaG9va19pZA.short_desc": {
+          "source": "Webhook ID (hook_xxx)",
+          "message": "ID de webhook (hook_xxx)"
+        },
+        "app.RWFzeVBvc3Q.action.Z2V0LXdlYmhvb2s.short_desc": {
+          "source": "Retrieve a webhook",
+          "message": "Récupérer un webhook"
+        },
+        "app.RWFzeVBvc3Q.action.ZGVsZXRlLWNhcnJpZXItYWNjb3VudA.desc": {
+          "source": "Delete a carrier account.",
+          "message": "Supprimer un compte de transporteur."
+        },
+        "app.RWFzeVBvc3Q.action.ZGVsZXRlLWNhcnJpZXItYWNjb3VudA.display_name": {
+          "source": "Delete Carrier Account",
+          "message": "Supprimer le compte de transporteur"
+        },
+        "app.RWFzeVBvc3Q.action.ZGVsZXRlLWNhcnJpZXItYWNjb3VudA.option.Y2Fycmllcl9hY2NvdW50X2lk.desc": {
+          "source": "Carrier account to delete",
+          "message": "Compte de transporteur à supprimer"
+        },
+        "app.RWFzeVBvc3Q.action.ZGVsZXRlLWNhcnJpZXItYWNjb3VudA.option.Y2Fycmllcl9hY2NvdW50X2lk.display_name": {
+          "source": "Carrier Account ID",
+          "message": "ID du compte de transporteur"
+        },
+        "app.RWFzeVBvc3Q.action.ZGVsZXRlLWNhcnJpZXItYWNjb3VudA.option.Y2Fycmllcl9hY2NvdW50X2lk.short_desc": {
+          "source": "Carrier account ID (ca_xxx)",
+          "message": "ID du compte de transporteur (ca_xxx)"
+        },
+        "app.RWFzeVBvc3Q.action.ZGVsZXRlLWNhcnJpZXItYWNjb3VudA.short_desc": {
+          "source": "Delete a carrier account",
+          "message": "Supprimer un compte de transporteur"
+        },
+        "app.RWFzeVBvc3Q.action.ZGVsZXRlLXRyYWNrZXI.desc": {
+          "source": "Delete an EasyPost tracker by ID.",
+          "message": "Supprimer un suivi EasyPost par son ID."
+        },
+        "app.RWFzeVBvc3Q.action.ZGVsZXRlLXRyYWNrZXI.display_name": {
+          "source": "Delete Tracker",
+          "message": "Supprimer le suivi"
+        },
+        "app.RWFzeVBvc3Q.action.ZGVsZXRlLXRyYWNrZXI.option.dHJhY2tlcl9pZA.desc": {
+          "source": "Tracker to delete",
+          "message": "Suivi à supprimer"
+        },
+        "app.RWFzeVBvc3Q.action.ZGVsZXRlLXRyYWNrZXI.option.dHJhY2tlcl9pZA.display_name": {
+          "source": "Tracker ID",
+          "message": "ID de suivi"
+        },
+        "app.RWFzeVBvc3Q.action.ZGVsZXRlLXRyYWNrZXI.option.dHJhY2tlcl9pZA.short_desc": {
+          "source": "Tracker ID (trk_xxx)",
+          "message": "ID de suivi (trk_xxx)"
+        },
+        "app.RWFzeVBvc3Q.action.ZGVsZXRlLXRyYWNrZXI.short_desc": {
+          "source": "Delete a tracker by ID",
+          "message": "Supprimer un suivi par son ID"
+        },
+        "app.RWFzeVBvc3Q.action.ZGVsZXRlLXdlYmhvb2s.desc": {
+          "source": "Delete a webhook subscription.",
+          "message": "Supprimer un abonnement webhook."
+        },
+        "app.RWFzeVBvc3Q.action.ZGVsZXRlLXdlYmhvb2s.display_name": {
+          "source": "Delete Webhook",
+          "message": "Supprimer le webhook"
+        },
+        "app.RWFzeVBvc3Q.action.ZGVsZXRlLXdlYmhvb2s.option.d2ViaG9va19pZA.desc": {
+          "source": "Webhook to delete",
+          "message": "Webhook à supprimer"
+        },
+        "app.RWFzeVBvc3Q.action.ZGVsZXRlLXdlYmhvb2s.option.d2ViaG9va19pZA.display_name": {
+          "source": "Webhook ID",
+          "message": "ID de webhook"
+        },
+        "app.RWFzeVBvc3Q.action.ZGVsZXRlLXdlYmhvb2s.option.d2ViaG9va19pZA.short_desc": {
+          "source": "Webhook ID (hook_xxx)",
+          "message": "ID de webhook (hook_xxx)"
+        },
+        "app.RWFzeVBvc3Q.action.ZGVsZXRlLXdlYmhvb2s.short_desc": {
+          "source": "Delete a webhook",
+          "message": "Supprimer un webhook"
+        },
+        "app.RWFzeVBvc3Q.action.aW5zdXJlLXNoaXBtZW50.desc": {
+          "source": "Add insurance to an already-purchased shipment.",
+          "message": "Ajouter une assurance à une expédition déjà achetée."
+        },
+        "app.RWFzeVBvc3Q.action.aW5zdXJlLXNoaXBtZW50.display_name": {
+          "source": "Insure Shipment",
+          "message": "Assurer l'expédition"
+        },
+        "app.RWFzeVBvc3Q.action.aW5zdXJlLXNoaXBtZW50.option.YW1vdW50.desc": {
+          "source": "Amount to insure the shipment for, as a string (e.g. `\"100.00\"`)",
+          "message": "Montant pour lequel assurer l'expédition, sous forme de chaîne (par ex. `\"100.00\"`)"
+        },
+        "app.RWFzeVBvc3Q.action.aW5zdXJlLXNoaXBtZW50.option.YW1vdW50.display_name": {
+          "source": "Amount",
+          "message": "Montant"
+        },
+        "app.RWFzeVBvc3Q.action.aW5zdXJlLXNoaXBtZW50.option.YW1vdW50.short_desc": {
+          "source": "Amount to insure (string)",
+          "message": "Montant à assurer (chaîne)"
+        },
+        "app.RWFzeVBvc3Q.action.aW5zdXJlLXNoaXBtZW50.option.c2hpcG1lbnRfaWQ.desc": {
+          "source": "Shipment to insure",
+          "message": "Expédition à assurer"
+        },
+        "app.RWFzeVBvc3Q.action.aW5zdXJlLXNoaXBtZW50.option.c2hpcG1lbnRfaWQ.display_name": {
+          "source": "Shipment ID",
+          "message": "ID d'expédition"
+        },
+        "app.RWFzeVBvc3Q.action.aW5zdXJlLXNoaXBtZW50.option.c2hpcG1lbnRfaWQ.short_desc": {
+          "source": "Shipment ID (shp_xxx)",
+          "message": "ID d'expédition (shp_xxx)"
+        },
+        "app.RWFzeVBvc3Q.action.aW5zdXJlLXNoaXBtZW50.short_desc": {
+          "source": "Insure a shipment",
+          "message": "Assurer une expédition"
+        },
+        "app.RWFzeVBvc3Q.action.bGlzdC10cmFja2Vycw.desc": {
+          "source": "Retrieve a paginated list of trackers. Optionally filter by tracking code or carrier.",
+          "message": "Récupérer une liste paginée de suivis. Filtrer éventuellement par code de suivi ou transporteur."
+        },
+        "app.RWFzeVBvc3Q.action.bGlzdC10cmFja2Vycw.display_name": {
+          "source": "List Trackers",
+          "message": "Lister les suivis"
+        },
+        "app.RWFzeVBvc3Q.action.bGlzdC10cmFja2Vycw.short_desc": {
+          "source": "List trackers",
+          "message": "Lister les suivis"
+        },
+        "app.RWFzeVBvc3Q.action.bGlzdC13ZWJob29rcw.desc": {
+          "source": "Retrieve all configured webhooks.",
+          "message": "Récupérer tous les webhooks configurés."
+        },
+        "app.RWFzeVBvc3Q.action.bGlzdC13ZWJob29rcw.display_name": {
+          "source": "List Webhooks",
+          "message": "Lister les webhooks"
+        },
+        "app.RWFzeVBvc3Q.action.bGlzdC13ZWJob29rcw.short_desc": {
+          "source": "List webhooks",
+          "message": "Lister les webhooks"
+        },
+        "app.RWFzeVBvc3Q.action.bGlzdC1hZGRyZXNzZXM.desc": {
+          "source": "Retrieve a paginated list of addresses, or fetch a single address by ID.",
+          "message": "Récupérer une liste paginée d'adresses ou obtenir une adresse spécifique par ID."
+        },
+        "app.RWFzeVBvc3Q.action.bGlzdC1hZGRyZXNzZXM.display_name": {
+          "source": "List Addresses",
+          "message": "Lister les adresses"
+        },
+        "app.RWFzeVBvc3Q.action.bGlzdC1hZGRyZXNzZXM.short_desc": {
+          "source": "List EasyPost addresses",
+          "message": "Lister les adresses EasyPost"
+        },
+        "app.RWFzeVBvc3Q.action.bGlzdC1iYXRjaGVz.desc": {
+          "source": "Retrieve a paginated list of batches.",
+          "message": "Récupérer une liste paginée de lots."
+        },
+        "app.RWFzeVBvc3Q.action.bGlzdC1iYXRjaGVz.display_name": {
+          "source": "List Batches",
+          "message": "Lister les lots"
+        },
+        "app.RWFzeVBvc3Q.action.bGlzdC1iYXRjaGVz.short_desc": {
+          "source": "List batches",
+          "message": "Lister les lots"
+        },
+        "app.RWFzeVBvc3Q.action.bGlzdC1jYXJyaWVyLWFjY291bnRz.desc": {
+          "source": "Retrieve all carrier accounts configured on the EasyPost account.",
+          "message": "Récupérer tous les comptes de transporteur configurés sur le compte EasyPost."
+        },
+        "app.RWFzeVBvc3Q.action.bGlzdC1jYXJyaWVyLWFjY291bnRz.display_name": {
+          "source": "List Carrier Accounts",
+          "message": "Lister les comptes de transporteur"
+        },
+        "app.RWFzeVBvc3Q.action.bGlzdC1jYXJyaWVyLWFjY291bnRz.short_desc": {
+          "source": "List carrier accounts",
+          "message": "Lister les comptes de transporteur"
+        },
+        "app.RWFzeVBvc3Q.action.bGlzdC1ldmVudC1wYXlsb2Fkcw.desc": {
+          "source": "List webhook delivery payloads (attempts) for an event.",
+          "message": "Lister les charges utiles de remise de webhook (tentatives) pour un événement."
+        },
+        "app.RWFzeVBvc3Q.action.bGlzdC1ldmVudC1wYXlsb2Fkcw.display_name": {
+          "source": "List Event Payloads",
+          "message": "Lister les charges utiles d'événement"
+        },
+        "app.RWFzeVBvc3Q.action.bGlzdC1ldmVudC1wYXlsb2Fkcw.option.ZXZlbnRfaWQ.desc": {
+          "source": "Event to list payloads for",
+          "message": "Événement pour lequel lister les charges utiles"
+        },
+        "app.RWFzeVBvc3Q.action.bGlzdC1ldmVudC1wYXlsb2Fkcw.option.ZXZlbnRfaWQ.display_name": {
+          "source": "Event ID",
+          "message": "ID d'événement"
+        },
+        "app.RWFzeVBvc3Q.action.bGlzdC1ldmVudC1wYXlsb2Fkcw.option.ZXZlbnRfaWQ.short_desc": {
+          "source": "Event ID (evt_xxx)",
+          "message": "ID d'événement (evt_xxx)"
+        },
+        "app.RWFzeVBvc3Q.action.bGlzdC1ldmVudC1wYXlsb2Fkcw.short_desc": {
+          "source": "List event payloads",
+          "message": "Lister les charges utiles d'événement"
+        },
+        "app.RWFzeVBvc3Q.action.bGlzdC1ldmVudHM.desc": {
+          "source": "Retrieve a paginated list of webhook delivery events.",
+          "message": "Récupérer une liste paginée d'événements de remise de webhook."
+        },
+        "app.RWFzeVBvc3Q.action.bGlzdC1ldmVudHM.display_name": {
+          "source": "List Events",
+          "message": "Lister les événements"
+        },
+        "app.RWFzeVBvc3Q.action.bGlzdC1ldmVudHM.short_desc": {
+          "source": "List webhook events",
+          "message": "Lister les événements de webhook"
+        },
+        "app.RWFzeVBvc3Q.action.bGlzdC1pbnN1cmFuY2Vz.desc": {
+          "source": "Retrieve a paginated list of insurance records.",
+          "message": "Récupérer une liste paginée d'enregistrements d'assurance."
+        },
+        "app.RWFzeVBvc3Q.action.bGlzdC1pbnN1cmFuY2Vz.display_name": {
+          "source": "List Insurance Records",
+          "message": "Lister les enregistrements d'assurance"
+        },
+        "app.RWFzeVBvc3Q.action.bGlzdC1pbnN1cmFuY2Vz.short_desc": {
+          "source": "List insurance records",
+          "message": "Lister les enregistrements d'assurance"
+        },
+        "app.RWFzeVBvc3Q.action.bGlzdC1waWNrdXBz.desc": {
+          "source": "Retrieve a paginated list of pickups.",
+          "message": "Récupérer une liste paginée d'enlèvements."
+        },
+        "app.RWFzeVBvc3Q.action.bGlzdC1waWNrdXBz.display_name": {
+          "source": "List Pickups",
+          "message": "Lister les enlèvements"
+        },
+        "app.RWFzeVBvc3Q.action.bGlzdC1waWNrdXBz.short_desc": {
+          "source": "List pickups",
+          "message": "Lister les enlèvements"
+        },
+        "app.RWFzeVBvc3Q.action.bGlzdC1yZWZ1bmRz.desc": {
+          "source": "Retrieve a paginated list of refunds.",
+          "message": "Récupérer une liste paginée de remboursements."
+        },
+        "app.RWFzeVBvc3Q.action.bGlzdC1yZWZ1bmRz.display_name": {
+          "source": "List Refunds",
+          "message": "Lister les remboursements"
+        },
+        "app.RWFzeVBvc3Q.action.bGlzdC1yZWZ1bmRz.short_desc": {
+          "source": "List refunds",
+          "message": "Lister les remboursements"
+        },
+        "app.RWFzeVBvc3Q.action.bGlzdC1zaGlwbWVudHM.desc": {
+          "source": "Retrieve a paginated list of shipments. Optionally fetch by ID or filter by purchased status.",
+          "message": "Récupérer une liste paginée d'expéditions. Optionnellement, récupérer par ID ou filtrer par statut d'achat."
+        },
+        "app.RWFzeVBvc3Q.action.bGlzdC1zaGlwbWVudHM.display_name": {
+          "source": "List Shipments",
+          "message": "Lister les expéditions"
+        },
+        "app.RWFzeVBvc3Q.action.bGlzdC1zaGlwbWVudHM.short_desc": {
+          "source": "List shipments",
+          "message": "Lister les expéditions"
+        },
+        "app.RWFzeVBvc3Q.action.bWFrZS1hcGktY2FsbA.desc": {
+          "source": "Make a custom HTTP / REST API call to **EasyPost** using the configured connection's authentication.\n\nSpecify the HTTP method, the URI path (relative to the connection's API base URL), optional query parameters, headers, and request body. The response is returned as a hash containing the status code, response headers, and response body.\n\nUse this action for endpoints that are not yet exposed as first-class actions on this app.",
+          "message": "Effectuer un appel d'API HTTP / REST personnalisé vers **EasyPost** à l'aide de l'authentification de la connexion configurée.\n\nSpécifiez la méthode HTTP, le chemin de l'URI (relatif à l'URL de base de l'API de la connexion), les paramètres de requête optionnels, les en-têtes et le corps de la requête. La réponse est renvoyée sous la forme d'un hachage contenant le code de statut, les en-têtes de réponse et le corps de la réponse.\n\nUtilisez cette action pour les points de terminaison qui ne sont pas encore exposés en tant qu'actions de premier ordre sur cette application."
+        },
+        "app.RWFzeVBvc3Q.action.bWFrZS1hcGktY2FsbA.display_name": {
+          "source": "Make an API call",
+          "message": "Effectuer un appel API"
+        },
+        "app.RWFzeVBvc3Q.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.desc": {
+          "source": "The request body. The effective type depends on `body_type`: JSON/form/YAML expect a hash, XML/text expect a string, multipart expects a file structure, binary expects raw bytes.",
+          "message": "Le corps de la requête. Le type effectif dépend de `body_type` : JSON/form/YAML attendent un hash, XML/texte attendent une chaîne, multipart attend une structure de fichier, binaire attend des octets bruts."
+        },
+        "app.RWFzeVBvc3Q.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.display_name": {
+          "source": "Body",
+          "message": "Corps"
+        },
+        "app.RWFzeVBvc3Q.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.short_desc": {
+          "source": "The request body",
+          "message": "Le corps de la requête"
+        },
+        "app.RWFzeVBvc3Q.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.desc": {
+          "source": "Upload a file using `multipart/form-data`. The body must be a @ref DataProvider::FileDataType \"FileDataType\" structure (filename + content + mime_type). The framework builds the multipart envelope and sets the boundary header.",
+          "message": "Téléverser un fichier en utilisant `multipart/form-data`. Le corps doit être une structure @ref DataProvider::FileDataType \"FileDataType\" (filename + content + mime_type). Le framework construit l'enveloppe multipart et définit l'en-tête de limite (boundary)."
+        },
+        "app.RWFzeVBvc3Q.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.display_name": {
+          "source": "Multipart Form",
+          "message": "Formulaire multipart"
+        },
+        "app.RWFzeVBvc3Q.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.short_desc": {
+          "source": "Upload a file using multipart/form-data",
+          "message": "Téléverser un fichier en utilisant multipart/form-data"
+        },
+        "app.RWFzeVBvc3Q.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.desc": {
+          "source": "Pass the body to the REST client unchanged; the client decides serialization based on its configured `data` option and the value type",
+          "message": "Transmettre le corps au client REST sans modification ; le client décide de la sérialisation en fonction de son option `data` configurée et du type de valeur"
+        },
+        "app.RWFzeVBvc3Q.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.display_name": {
+          "source": "Auto",
+          "message": "Auto"
+        },
+        "app.RWFzeVBvc3Q.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.short_desc": {
+          "source": "Pass-through; use connection serialization and let the REST client decide",
+          "message": "Passe-plat ; utiliser la sérialisation de la connexion et laisser le client REST décider"
+        },
+        "app.RWFzeVBvc3Q.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.desc": {
+          "source": "Send the body as raw bytes. The body must be a binary value. Sets `Content-Type: application/octet-stream` unless overridden by `hdr`.",
+          "message": "Envoyer le corps sous forme d'octets bruts. Le corps doit être une valeur binaire. Définit `Content-Type: application/octet-stream` sauf s'il est remplacé par `hdr`."
+        },
+        "app.RWFzeVBvc3Q.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.display_name": {
+          "source": "Raw Binary",
+          "message": "Binaire brut"
+        },
+        "app.RWFzeVBvc3Q.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.short_desc": {
+          "source": "Send body as raw bytes",
+          "message": "Envoyer le corps sous forme d'octets bruts"
+        },
+        "app.RWFzeVBvc3Q.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.desc": {
+          "source": "Serialize a hash of form fields as `application/x-www-form-urlencoded`. The body must be a hash whose values are scalars (strings/numbers/booleans).",
+          "message": "Sérialiser un hash de champs de formulaire sous forme de `application/x-www-form-urlencoded`. Le corps doit être un hash dont les valeurs sont des scalaires (chaînes/nombres/booléens)."
+        },
+        "app.RWFzeVBvc3Q.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.display_name": {
+          "source": "Form (URL-encoded)",
+          "message": "Formulaire (encodé URL)"
+        },
+        "app.RWFzeVBvc3Q.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.short_desc": {
+          "source": "Serialize body as application/x-www-form-urlencoded form fields",
+          "message": "Sérialiser le corps sous forme de champs de formulaire application/x-www-form-urlencoded"
+        },
+        "app.RWFzeVBvc3Q.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.desc": {
+          "source": "Serialize the body as JSON; sets `Content-Type: application/json`. The body should be a hash, list, or scalar value.",
+          "message": "Sérialiser le corps en JSON ; définit `Content-Type: application/json`. Le corps doit être un hash, une liste ou une valeur scalaire."
+        },
+        "app.RWFzeVBvc3Q.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.display_name": {
+          "source": "JSON",
+          "message": "JSON"
+        },
+        "app.RWFzeVBvc3Q.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.short_desc": {
+          "source": "Serialize body as JSON",
+          "message": "Sérialiser le corps en JSON"
+        },
+        "app.RWFzeVBvc3Q.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.desc": {
+          "source": "Send the body as plain text. The body must be a string. Sets `Content-Type: text/plain`.",
+          "message": "Envoyer le corps en texte brut. Le corps doit être une chaîne. Définit `Content-Type: text/plain`."
+        },
+        "app.RWFzeVBvc3Q.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.display_name": {
+          "source": "Plain Text",
+          "message": "Texte brut"
+        },
+        "app.RWFzeVBvc3Q.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.short_desc": {
+          "source": "Send body as text/plain",
+          "message": "Envoyer le corps en text/plain"
+        },
+        "app.RWFzeVBvc3Q.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.desc": {
+          "source": "Send the body as XML. If the body is a hash it is serialized to XML; if it is a string it is sent verbatim. Sets `Content-Type: application/xml`.",
+          "message": "Envoyer le corps en XML. Si le corps est un hash, il est sérialisé en XML ; s'il s'agit d'une chaîne, il est envoyé tel quel. Définit `Content-Type: application/xml`."
+        },
+        "app.RWFzeVBvc3Q.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.display_name": {
+          "source": "XML",
+          "message": "XML"
+        },
+        "app.RWFzeVBvc3Q.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.short_desc": {
+          "source": "Send body as XML",
+          "message": "Envoyer le corps en XML"
+        },
+        "app.RWFzeVBvc3Q.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.desc": {
+          "source": "Send the body as YAML. If the body is a hash it is serialized to YAML; if it is a string it is sent verbatim. Sets `Content-Type: application/x-yaml`.",
+          "message": "Envoyer le corps en YAML. Si le corps est un hash, il est sérialisé en YAML ; s'il s'agit d'une chaîne, il est envoyé tel quel. Définit `Content-Type: application/x-yaml`."
+        },
+        "app.RWFzeVBvc3Q.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.display_name": {
+          "source": "YAML",
+          "message": "YAML"
+        },
+        "app.RWFzeVBvc3Q.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.short_desc": {
+          "source": "Send body as YAML",
+          "message": "Envoyer le corps en YAML"
+        },
+        "app.RWFzeVBvc3Q.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.desc": {
+          "source": "Selects the body serialization mode and the corresponding `Content-Type` header. Changing this field reshapes the `body` editor - selecting JSON exposes a JSON editor, selecting Multipart Form exposes a file picker, and so on.",
+          "message": "Sélectionne le mode de sérialisation du corps et l'en-tête `Content-Type` correspondant. La modification de ce champ remanie l'éditeur `body` - sélectionner JSON affiche un éditeur JSON, sélectionner Formulaire multipart affiche un sélecteur de fichier, et ainsi de suite."
+        },
+        "app.RWFzeVBvc3Q.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.display_name": {
+          "source": "Body Type",
+          "message": "Type de corps"
+        },
+        "app.RWFzeVBvc3Q.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.short_desc": {
+          "source": "How the body is serialized and what Content-Type is sent",
+          "message": "Comment le corps est sérialisé et quel Content-Type est envoyé"
+        },
+        "app.RWFzeVBvc3Q.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.desc": {
+          "source": "If `True`, non-2xx HTTP responses return as the normal response hash (with the actual status code) instead of raising `REST-RESPONSE-ERROR`. Useful for handling 4xx/5xx as data - e.g. checking whether a resource exists. Overrides the connection's `error_passthru` setting for this call only.",
+          "message": "Si `True`, les réponses HTTP non-2xx sont retournées sous la forme du hash de réponse normal (avec le code d'état réel) au lieu de lever `REST-RESPONSE-ERROR`. Utile pour traiter les codes 4xx/5xx comme des données - par ex. vérifier si une ressource existe. Remplace le paramètre `error_passthru` de la connexion pour cet appel uniquement."
+        },
+        "app.RWFzeVBvc3Q.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.display_name": {
+          "source": "Return Errors as Data",
+          "message": "Retourner les erreurs sous forme de données"
+        },
+        "app.RWFzeVBvc3Q.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.short_desc": {
+          "source": "Return non-2xx responses normally instead of throwing",
+          "message": "Retourner les réponses non-2xx normalement au lieu de lever une exception"
+        },
+        "app.RWFzeVBvc3Q.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.desc": {
+          "source": "Optional list of HTTP status codes treated as success. If set and the response status is not in this list, the action throws `REST-STATUS-ERROR`. When unset, the REST client's default behavior applies (typically: 2xx is success, non-2xx throws).",
+          "message": "Liste optionnelle de codes d'état HTTP traités comme des succès. Si elle est définie et que le statut de la réponse n'est pas dans cette liste, l'action lève `REST-STATUS-ERROR`. Lorsqu'elle n'est pas définie, le comportement par défaut du client REST s'applique (généralement : 2xx est un succès, non-2xx lève une exception)."
+        },
+        "app.RWFzeVBvc3Q.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.display_name": {
+          "source": "Expected Status Codes",
+          "message": "Codes d'état attendus"
+        },
+        "app.RWFzeVBvc3Q.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.short_desc": {
+          "source": "Response status codes treated as success",
+          "message": "Codes d'état de réponse traités comme un succès"
+        },
+        "app.RWFzeVBvc3Q.action.bWFrZS1hcGktY2FsbA.option.aGRy.desc": {
+          "source": "Hash of custom headers added to the request. These override any default headers set by `body_type` (e.g. supplying `Content-Type` here wins over the body-type default).",
+          "message": "Hash d'en-têtes personnalisés ajoutés à la requête. Ils remplacent tous les en-têtes par défaut définis par `body_type` (par ex. fournir `Content-Type` ici prévaut sur la valeur par défaut du type de corps)."
+        },
+        "app.RWFzeVBvc3Q.action.bWFrZS1hcGktY2FsbA.option.aGRy.display_name": {
+          "source": "Custom Headers",
+          "message": "En-têtes personnalisés"
+        },
+        "app.RWFzeVBvc3Q.action.bWFrZS1hcGktY2FsbA.option.aGRy.short_desc": {
+          "source": "Extra request headers",
+          "message": "En-têtes de requête supplémentaires"
+        },
+        "app.RWFzeVBvc3Q.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.desc": {
+          "source": "If `True`, the response hash includes a `debug` sub-hash containing the request method/URL/headers (with sensitive values redacted), request and response sizes, and round-trip duration. Useful when investigating slow or failing calls. Off by default to keep responses lean.",
+          "message": "Si `True`, le hash de réponse inclut un sous-hash `debug` contenant la méthode/URL/en-têtes de la requête (avec les valeurs sensibles masquées), les tailles de requête et de réponse, et la durée d'aller-retour. Utile lors de l'investigation d'appels lents ou en échec. Désactivé par défaut pour conserver des réponses légères."
+        },
+        "app.RWFzeVBvc3Q.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.display_name": {
+          "source": "Include Debug Info",
+          "message": "Inclure les informations de débogage"
+        },
+        "app.RWFzeVBvc3Q.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.short_desc": {
+          "source": "Include request/timing/size debug info in the response",
+          "message": "Inclure les informations de débogage de requête/temps/taille dans la réponse"
+        },
+        "app.RWFzeVBvc3Q.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.desc": {
+          "source": "HTTP `OPTIONS`",
+          "message": "HTTP `OPTIONS`"
+        },
+        "app.RWFzeVBvc3Q.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.display_name": {
+          "source": "OPTIONS",
+          "message": "OPTIONS"
+        },
+        "app.RWFzeVBvc3Q.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.short_desc": {
+          "source": "HTTP OPTIONS",
+          "message": "HTTP OPTIONS"
+        },
+        "app.RWFzeVBvc3Q.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.desc": {
+          "source": "HTTP `DELETE`",
+          "message": "HTTP `DELETE`"
+        },
+        "app.RWFzeVBvc3Q.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.display_name": {
+          "source": "DELETE",
+          "message": "DELETE"
+        },
+        "app.RWFzeVBvc3Q.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.short_desc": {
+          "source": "HTTP DELETE",
+          "message": "HTTP DELETE"
+        },
+        "app.RWFzeVBvc3Q.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.desc": {
+          "source": "HTTP `GET`",
+          "message": "HTTP `GET`"
+        },
+        "app.RWFzeVBvc3Q.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.display_name": {
+          "source": "GET",
+          "message": "GET"
+        },
+        "app.RWFzeVBvc3Q.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.short_desc": {
+          "source": "HTTP GET",
+          "message": "HTTP GET"
+        },
+        "app.RWFzeVBvc3Q.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.desc": {
+          "source": "HTTP `HEAD`",
+          "message": "HTTP `HEAD`"
+        },
+        "app.RWFzeVBvc3Q.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.display_name": {
+          "source": "HEAD",
+          "message": "HEAD"
+        },
+        "app.RWFzeVBvc3Q.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.short_desc": {
+          "source": "HTTP HEAD",
+          "message": "HTTP HEAD"
+        },
+        "app.RWFzeVBvc3Q.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.desc": {
+          "source": "HTTP `PATCH`",
+          "message": "HTTP `PATCH`"
+        },
+        "app.RWFzeVBvc3Q.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.display_name": {
+          "source": "PATCH",
+          "message": "PATCH"
+        },
+        "app.RWFzeVBvc3Q.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.short_desc": {
+          "source": "HTTP PATCH",
+          "message": "HTTP PATCH"
+        },
+        "app.RWFzeVBvc3Q.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.desc": {
+          "source": "HTTP `POST`",
+          "message": "HTTP `POST`"
+        },
+        "app.RWFzeVBvc3Q.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.display_name": {
+          "source": "POST",
+          "message": "POST"
+        },
+        "app.RWFzeVBvc3Q.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.short_desc": {
+          "source": "HTTP POST",
+          "message": "HTTP POST"
+        },
+        "app.RWFzeVBvc3Q.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.desc": {
+          "source": "HTTP `PUT`",
+          "message": "HTTP `PUT`"
+        },
+        "app.RWFzeVBvc3Q.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.display_name": {
+          "source": "PUT",
+          "message": "PUT"
+        },
+        "app.RWFzeVBvc3Q.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.short_desc": {
+          "source": "HTTP PUT",
+          "message": "HTTP PUT"
+        },
+        "app.RWFzeVBvc3Q.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.desc": {
+          "source": "HTTP `TRACE`",
+          "message": "HTTP `TRACE`"
+        },
+        "app.RWFzeVBvc3Q.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.display_name": {
+          "source": "TRACE",
+          "message": "TRACE"
+        },
+        "app.RWFzeVBvc3Q.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.short_desc": {
+          "source": "HTTP TRACE",
+          "message": "HTTP TRACE"
+        },
+        "app.RWFzeVBvc3Q.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "La méthode HTTP à utiliser pour la requête"
+        },
+        "app.RWFzeVBvc3Q.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.display_name": {
+          "source": "HTTP Method",
+          "message": "Méthode HTTP"
+        },
+        "app.RWFzeVBvc3Q.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.short_desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "La méthode HTTP à utiliser pour la requête"
+        },
+        "app.RWFzeVBvc3Q.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain `{name}` placeholders that are replaced from `path_vars`. Example: `/users/{id}/comments`.",
+          "message": "Le chemin URI relatif à l'URL de base de l'API de la connexion. Peut contenir des espaces réservés `{name}` remplacés à partir de `path_vars`. Exemple : `/users/{id}/comments`."
+        },
+        "app.RWFzeVBvc3Q.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.display_name": {
+          "source": "URI Path",
+          "message": "Chemin URI"
+        },
+        "app.RWFzeVBvc3Q.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.short_desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain '{name}' placeholders that are replaced from 'path_vars'. Example: '/users/{id}/comments'",
+          "message": "Le chemin URI relatif à l'URL de base de l'API de la connexion. Peut contenir des espaces réservés '{name}' qui sont remplacés à partir de 'path_vars'. Exemple : '/users/{id}/comments'"
+        },
+        "app.RWFzeVBvc3Q.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.desc": {
+          "source": "Hash of values substituted into `{name}` placeholders in the URI path. Example: with `path = /users/{id}` and `path_vars = {id: 123}` the framework sends `/users/123`. Values are URL-encoded.",
+          "message": "Hachage des valeurs substituées dans les espaces réservés `{name}` dans le chemin URI. Exemple : avec `path = /users/{id}` et `path_vars = {id: 123}`, le framework envoie `/users/123`. Les valeurs sont encodées en URL."
+        },
+        "app.RWFzeVBvc3Q.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.display_name": {
+          "source": "Path Variables",
+          "message": "Variables de chemin"
+        },
+        "app.RWFzeVBvc3Q.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.short_desc": {
+          "source": "Values for {name} placeholders in path",
+          "message": "Valeurs pour les espaces réservés {name} dans le chemin"
+        },
+        "app.RWFzeVBvc3Q.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.desc": {
+          "source": "Hash of query string parameters to append to the URI path. Values are URL-encoded; list values are joined with `,`.",
+          "message": "Hachage des paramètres de chaîne de requête à ajouter au chemin URI. Les valeurs sont encodées en URL ; les valeurs de liste sont jointes avec `,`."
+        },
+        "app.RWFzeVBvc3Q.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.display_name": {
+          "source": "Query Arguments",
+          "message": "Arguments de la requête"
+        },
+        "app.RWFzeVBvc3Q.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.short_desc": {
+          "source": "Query string parameters",
+          "message": "Paramètres de chaîne de requête"
+        },
+        "app.RWFzeVBvc3Q.action.bWFrZS1hcGktY2FsbA.short_desc": {
+          "source": "Make a custom API call to EasyPost",
+          "message": "Effectuer un appel d'API personnalisé vers EasyPost"
+        },
+        "app.RWFzeVBvc3Q.action.cmVmdW5kLWluc3VyYW5jZQ.desc": {
+          "source": "Submit a refund request for an insurance record.",
+          "message": "Soumettre une demande de remboursement pour un enregistrement d'assurance."
+        },
+        "app.RWFzeVBvc3Q.action.cmVmdW5kLWluc3VyYW5jZQ.display_name": {
+          "source": "Refund Insurance",
+          "message": "Rembourser une assurance"
+        },
+        "app.RWFzeVBvc3Q.action.cmVmdW5kLWluc3VyYW5jZQ.option.aW5zdXJhbmNlX2lk.desc": {
+          "source": "Insurance ID to refund",
+          "message": "ID de l'assurance à rembourser"
+        },
+        "app.RWFzeVBvc3Q.action.cmVmdW5kLWluc3VyYW5jZQ.option.aW5zdXJhbmNlX2lk.display_name": {
+          "source": "Insurance ID",
+          "message": "ID d'assurance"
+        },
+        "app.RWFzeVBvc3Q.action.cmVmdW5kLWluc3VyYW5jZQ.option.aW5zdXJhbmNlX2lk.short_desc": {
+          "source": "Insurance ID (ins_xxx)",
+          "message": "ID d'assurance (ins_xxx)"
+        },
+        "app.RWFzeVBvc3Q.action.cmVmdW5kLWluc3VyYW5jZQ.short_desc": {
+          "source": "Refund an insurance record",
+          "message": "Rembourser un enregistrement d'assurance"
+        },
+        "app.RWFzeVBvc3Q.action.cmVmdW5kLXNoaXBtZW50.desc": {
+          "source": "Submit a refund request for a previously purchased shipment.",
+          "message": "Soumettre une demande de remboursement pour une expédition précédemment achetée."
+        },
+        "app.RWFzeVBvc3Q.action.cmVmdW5kLXNoaXBtZW50.display_name": {
+          "source": "Refund Shipment",
+          "message": "Rembourser une expédition"
+        },
+        "app.RWFzeVBvc3Q.action.cmVmdW5kLXNoaXBtZW50.option.c2hpcG1lbnRfaWQ.desc": {
+          "source": "ID of a previously purchased shipment to refund",
+          "message": "ID d'une expédition précédemment achetée à rembourser"
+        },
+        "app.RWFzeVBvc3Q.action.cmVmdW5kLXNoaXBtZW50.option.c2hpcG1lbnRfaWQ.display_name": {
+          "source": "Shipment ID",
+          "message": "ID d'expédition"
+        },
+        "app.RWFzeVBvc3Q.action.cmVmdW5kLXNoaXBtZW50.option.c2hpcG1lbnRfaWQ.short_desc": {
+          "source": "Shipment ID to refund (shp_xxx)",
+          "message": "ID d'expédition à rembourser (shp_xxx)"
+        },
+        "app.RWFzeVBvc3Q.action.cmVmdW5kLXNoaXBtZW50.short_desc": {
+          "source": "Refund a purchased shipment",
+          "message": "Rembourser une expédition achetée"
+        },
+        "app.RWFzeVBvc3Q.action.cmVyYXRlLXNoaXBtZW50.desc": {
+          "source": "Re-fetch rate quotes for an existing shipment.",
+          "message": "Récupérer à nouveau les devis de tarifs pour une expédition existante."
+        },
+        "app.RWFzeVBvc3Q.action.cmVyYXRlLXNoaXBtZW50.display_name": {
+          "source": "Rerate Shipment",
+          "message": "Recalculer les tarifs d'une expédition"
+        },
+        "app.RWFzeVBvc3Q.action.cmVyYXRlLXNoaXBtZW50.option.c2hpcG1lbnRfaWQ.desc": {
+          "source": "Shipment to re-rate",
+          "message": "Expédition dont recalculer les tarifs"
+        },
+        "app.RWFzeVBvc3Q.action.cmVyYXRlLXNoaXBtZW50.option.c2hpcG1lbnRfaWQ.display_name": {
+          "source": "Shipment ID",
+          "message": "ID d'expédition"
+        },
+        "app.RWFzeVBvc3Q.action.cmVyYXRlLXNoaXBtZW50.option.c2hpcG1lbnRfaWQ.short_desc": {
+          "source": "Shipment ID to re-rate (shp_xxx)",
+          "message": "ID d'expédition dont recalculer les tarifs (shp_xxx)"
+        },
+        "app.RWFzeVBvc3Q.action.cmVyYXRlLXNoaXBtZW50.short_desc": {
+          "source": "Re-rate a shipment",
+          "message": "Recalculer les tarifs d'une expédition"
+        },
+        "app.RWFzeVBvc3Q.action.d2F0Y2gtYmF0Y2gtY3JlYXRlZA.desc": {
+          "source": "Fires when a new batch is created (`batch.created` webhook event).",
+          "message": "Se déclenche lorsqu'un nouveau lot est créé (événement de webhook `batch.created`)."
+        },
+        "app.RWFzeVBvc3Q.action.d2F0Y2gtYmF0Y2gtY3JlYXRlZA.display_name": {
+          "source": "On Batch Created",
+          "message": "Lorsqu'un lot est créé"
+        },
+        "app.RWFzeVBvc3Q.action.d2F0Y2gtYmF0Y2gtY3JlYXRlZA.short_desc": {
+          "source": "Trigger when a batch is created",
+          "message": "Déclencher lorsqu'un lot est créé"
+        },
+        "app.RWFzeVBvc3Q.action.d2F0Y2gtYmF0Y2gtdXBkYXRlZA.desc": {
+          "source": "Fires when a batch is updated (`batch.updated` webhook event).",
+          "message": "Se déclenche lorsqu'un lot est mis à jour (événement de webhook `batch.updated`)."
+        },
+        "app.RWFzeVBvc3Q.action.d2F0Y2gtYmF0Y2gtdXBkYXRlZA.display_name": {
+          "source": "On Batch Updated",
+          "message": "Lorsqu'un lot est mis à jour"
+        },
+        "app.RWFzeVBvc3Q.action.d2F0Y2gtYmF0Y2gtdXBkYXRlZA.short_desc": {
+          "source": "Trigger when a batch is updated",
+          "message": "Déclencher lorsqu'un lot est mis à jour"
+        },
+        "app.RWFzeVBvc3Q.action.d2F0Y2gtaW5zdXJhbmNlLWNhbmNlbGxlZA.desc": {
+          "source": "Fires when a standalone Insurance is cancelled or fails purchasing (`insurance.cancelled` webhook event).",
+          "message": "Se déclenche lorsqu'une assurance autonome est annulée ou que son achat échoue (événement de webhook `insurance.cancelled`)."
+        },
+        "app.RWFzeVBvc3Q.action.d2F0Y2gtaW5zdXJhbmNlLWNhbmNlbGxlZA.display_name": {
+          "source": "On Insurance Cancelled",
+          "message": "Lorsqu'une assurance est annulée"
+        },
+        "app.RWFzeVBvc3Q.action.d2F0Y2gtaW5zdXJhbmNlLWNhbmNlbGxlZA.short_desc": {
+          "source": "Trigger when insurance is cancelled or fails",
+          "message": "Déclencher lorsqu'une assurance est annulée ou échoue"
+        },
+        "app.RWFzeVBvc3Q.action.d2F0Y2gtaW5zdXJhbmNlLXB1cmNoYXNlZA.desc": {
+          "source": "Fires when insurance is purchased (`insurance.purchased` webhook event).",
+          "message": "Se déclenche lorsqu'une assurance est achetée (événement de webhook `insurance.purchased`)."
+        },
+        "app.RWFzeVBvc3Q.action.d2F0Y2gtaW5zdXJhbmNlLXB1cmNoYXNlZA.display_name": {
+          "source": "On Insurance Purchased",
+          "message": "Lorsqu'une assurance est achetée"
+        },
+        "app.RWFzeVBvc3Q.action.d2F0Y2gtaW5zdXJhbmNlLXB1cmNoYXNlZA.short_desc": {
+          "source": "Trigger when insurance is purchased",
+          "message": "Déclencher lorsqu'une assurance est achetée"
+        },
+        "app.RWFzeVBvc3Q.action.d2F0Y2gtc2Nhbi1mb3JtLWNyZWF0ZWQ.desc": {
+          "source": "Fires when initial creation of a ScanForm object is complete (`scan_form.created` webhook event).",
+          "message": "Se déclenche lorsque la création initiale d'un objet ScanForm est terminée (événement de webhook `scan_form.created`)."
+        },
+        "app.RWFzeVBvc3Q.action.d2F0Y2gtc2Nhbi1mb3JtLWNyZWF0ZWQ.display_name": {
+          "source": "On Scan Form Created",
+          "message": "Lorsqu'un formulaire de scan est créé"
+        },
+        "app.RWFzeVBvc3Q.action.d2F0Y2gtc2Nhbi1mb3JtLWNyZWF0ZWQ.short_desc": {
+          "source": "Trigger when a scan form is created",
+          "message": "Déclencher lorsqu'un formulaire de scan est créé"
+        },
+        "app.RWFzeVBvc3Q.action.d2F0Y2gtc2Nhbi1mb3JtLXVwZGF0ZWQ.desc": {
+          "source": "Fires when the status of a ScanForm object changes (`scan_form.updated` webhook event).",
+          "message": "Se déclenche lorsque le statut d'un objet ScanForm change (événement de webhook `scan_form.updated`)."
+        },
+        "app.RWFzeVBvc3Q.action.d2F0Y2gtc2Nhbi1mb3JtLXVwZGF0ZWQ.display_name": {
+          "source": "On Scan Form Updated",
+          "message": "Lorsqu'un formulaire de scan est mis à jour"
+        },
+        "app.RWFzeVBvc3Q.action.d2F0Y2gtc2Nhbi1mb3JtLXVwZGF0ZWQ.short_desc": {
+          "source": "Trigger when a scan form status changes",
+          "message": "Déclencher lorsque le statut d'un formulaire de scan change"
+        },
+        "app.RWFzeVBvc3Q.action.d2F0Y2gtc2hpcG1lbnQtaW52b2ljZS11cGRhdGVk.desc": {
+          "source": "Fires when a shipment invoice is adjusted and updated (`shipment.invoice.updated` webhook event).",
+          "message": "Se déclenche lorsqu'une facture d'expédition est ajustée et mise à jour (événement de webhook `shipment.invoice.updated`)."
+        },
+        "app.RWFzeVBvc3Q.action.d2F0Y2gtc2hpcG1lbnQtaW52b2ljZS11cGRhdGVk.display_name": {
+          "source": "On Shipment Invoice Updated",
+          "message": "Lorsqu'une facture d'expédition est mise à jour"
+        },
+        "app.RWFzeVBvc3Q.action.d2F0Y2gtc2hpcG1lbnQtaW52b2ljZS11cGRhdGVk.short_desc": {
+          "source": "Trigger when a shipment invoice is updated",
+          "message": "Déclencher lorsqu'une facture d'expédition est mise à jour"
+        },
+        "app.RWFzeVBvc3Q.action.d2F0Y2gtc2hpcG1lbnQtaW52b2ljZS1jcmVhdGVk.desc": {
+          "source": "Fires when a shipment invoice is created (`shipment.invoice.created` webhook event).",
+          "message": "Se déclenche lorsqu'une facture d'expédition est créée (événement de webhook `shipment.invoice.created`)."
+        },
+        "app.RWFzeVBvc3Q.action.d2F0Y2gtc2hpcG1lbnQtaW52b2ljZS1jcmVhdGVk.display_name": {
+          "source": "On Shipment Invoice Created",
+          "message": "Facture d'expédition créée"
+        },
+        "app.RWFzeVBvc3Q.action.d2F0Y2gtc2hpcG1lbnQtaW52b2ljZS1jcmVhdGVk.short_desc": {
+          "source": "Trigger when a shipment invoice is created",
+          "message": "Déclencher lorsqu'une facture d'expédition est créée"
+        },
+        "app.RWFzeVBvc3Q.action.d2F0Y2gtcGF5bWVudC1jb21wbGV0ZWQ.desc": {
+          "source": "Fires when a payment is completed (`payment.completed` webhook event).",
+          "message": "Se déclenche lorsqu'un paiement est effectué (événement de webhook `payment.completed`)."
+        },
+        "app.RWFzeVBvc3Q.action.d2F0Y2gtcGF5bWVudC1jb21wbGV0ZWQ.display_name": {
+          "source": "On Payment Completed",
+          "message": "Paiement effectué"
+        },
+        "app.RWFzeVBvc3Q.action.d2F0Y2gtcGF5bWVudC1jb21wbGV0ZWQ.short_desc": {
+          "source": "Trigger when a payment is completed",
+          "message": "Déclencher lorsqu'un paiement est effectué"
+        },
+        "app.RWFzeVBvc3Q.action.d2F0Y2gtcGF5bWVudC1jcmVhdGVk.desc": {
+          "source": "Fires when a bank account or credit card is successfully charged (`payment.created` webhook event).",
+          "message": "Se déclenche lorsqu'un compte bancaire ou une carte de crédit est débité avec succès (événement de webhook `payment.created`)."
+        },
+        "app.RWFzeVBvc3Q.action.d2F0Y2gtcGF5bWVudC1jcmVhdGVk.display_name": {
+          "source": "On Payment Created",
+          "message": "Paiement créé"
+        },
+        "app.RWFzeVBvc3Q.action.d2F0Y2gtcGF5bWVudC1jcmVhdGVk.short_desc": {
+          "source": "Trigger when a payment is charged",
+          "message": "Déclencher lorsqu'un paiement est débité"
+        },
+        "app.RWFzeVBvc3Q.action.d2F0Y2gtcGF5bWVudC1mYWlsZWQ.desc": {
+          "source": "Fires when a payment fails (`payment.failed` webhook event).",
+          "message": "Se déclenche lorsqu'un paiement échoue (événement de webhook `payment.failed`)."
+        },
+        "app.RWFzeVBvc3Q.action.d2F0Y2gtcGF5bWVudC1mYWlsZWQ.display_name": {
+          "source": "On Payment Failed",
+          "message": "Échec du paiement"
+        },
+        "app.RWFzeVBvc3Q.action.d2F0Y2gtcGF5bWVudC1mYWlsZWQ.short_desc": {
+          "source": "Trigger when a payment fails",
+          "message": "Déclencher lorsqu'un paiement échoue"
+        },
+        "app.RWFzeVBvc3Q.action.d2F0Y2gtcmVmdW5kLXN1Y2Nlc3NmdWw.desc": {
+          "source": "Fires when a refund is successful (`refund.successful` webhook event).",
+          "message": "Se déclenche lorsqu'un remboursement est réussi (événement de webhook `refund.successful`)."
+        },
+        "app.RWFzeVBvc3Q.action.d2F0Y2gtcmVmdW5kLXN1Y2Nlc3NmdWw.display_name": {
+          "source": "On Refund Successful",
+          "message": "Remboursement réussi"
+        },
+        "app.RWFzeVBvc3Q.action.d2F0Y2gtcmVmdW5kLXN1Y2Nlc3NmdWw.short_desc": {
+          "source": "Trigger when a refund succeeds",
+          "message": "Déclencher lorsqu'un remboursement réussit"
+        },
+        "app.RWFzeVBvc3Q.action.d2F0Y2gtdHJhY2tlci11cGRhdGVk.desc": {
+          "source": "Fires when a tracker status changes (`tracker.updated` webhook event).",
+          "message": "Se déclenche lorsque le statut d'un suivi change (événement de webhook `tracker.updated`)."
+        },
+        "app.RWFzeVBvc3Q.action.d2F0Y2gtdHJhY2tlci11cGRhdGVk.display_name": {
+          "source": "On Tracker Updated",
+          "message": "Suivi mis à jour"
+        },
+        "app.RWFzeVBvc3Q.action.d2F0Y2gtdHJhY2tlci11cGRhdGVk.short_desc": {
+          "source": "Trigger when a tracker is updated",
+          "message": "Déclencher lorsqu'un suivi est mis à jour"
+        },
+        "app.RWFzeVBvc3Q.action.d2F0Y2gtdHJhY2tlci1jcmVhdGVk.desc": {
+          "source": "Fires when a new tracker is created (`tracker.created` webhook event).",
+          "message": "Se déclenche lorsqu'un nouveau suivi est créé (événement de webhook `tracker.created`)."
+        },
+        "app.RWFzeVBvc3Q.action.d2F0Y2gtdHJhY2tlci1jcmVhdGVk.display_name": {
+          "source": "On Tracker Created",
+          "message": "Suivi créé"
+        },
+        "app.RWFzeVBvc3Q.action.d2F0Y2gtdHJhY2tlci1jcmVhdGVk.short_desc": {
+          "source": "Trigger when a tracker is created",
+          "message": "Déclencher lorsqu'un suivi est créé"
+        },
+        "app.RWFzeVBvc3Q.action.dXBkYXRlLWNhcnJpZXItYWNjb3VudA.desc": {
+          "source": "Update an existing carrier account. Selecting a carrier account populates the `credentials` and `test_credentials` fields with that carrier's specific schema.",
+          "message": "Met à jour un compte de transporteur existant. La sélection d'un compte de transporteur renseigne les champs `credentials` et `test_credentials` avec le schéma spécifique de ce transporteur."
+        },
+        "app.RWFzeVBvc3Q.action.dXBkYXRlLWNhcnJpZXItYWNjb3VudA.display_name": {
+          "source": "Update Carrier Account",
+          "message": "Mettre à jour le compte de transporteur"
+        },
+        "app.RWFzeVBvc3Q.action.dXBkYXRlLWNhcnJpZXItYWNjb3VudA.option.Y2Fycmllcl9hY2NvdW50X2lk.desc": {
+          "source": "Carrier account to update",
+          "message": "Compte de transporteur à mettre à jour"
+        },
+        "app.RWFzeVBvc3Q.action.dXBkYXRlLWNhcnJpZXItYWNjb3VudA.option.Y2Fycmllcl9hY2NvdW50X2lk.display_name": {
+          "source": "Carrier Account ID",
+          "message": "ID du compte de transporteur"
+        },
+        "app.RWFzeVBvc3Q.action.dXBkYXRlLWNhcnJpZXItYWNjb3VudA.option.Y2Fycmllcl9hY2NvdW50X2lk.short_desc": {
+          "source": "Carrier account ID (ca_xxx)",
+          "message": "ID du compte de transporteur (ca_xxx)"
+        },
+        "app.RWFzeVBvc3Q.action.dXBkYXRlLWNhcnJpZXItYWNjb3VudA.option.Y3JlZGVudGlhbHM.desc": {
+          "source": "New production credentials. Carrier-specific schema; see [carrier types](https://docs.easypost.com/docs/carrier-types).\n\n**Example (UPS)**: `{\"account_number\": \"...\", \"user_id\": \"...\"}`",
+          "message": "Nouveaux identifiants de production. Schéma spécifique au transporteur ; voir [carrier types](https://docs.easypost.com/docs/carrier-types).\n\n**Exemple (UPS)** : `{\"account_number\": \"...\", \"user_id\": \"...\"}`"
+        },
+        "app.RWFzeVBvc3Q.action.dXBkYXRlLWNhcnJpZXItYWNjb3VudA.option.Y3JlZGVudGlhbHM.display_name": {
+          "source": "Credentials",
+          "message": "Identifiants"
+        },
+        "app.RWFzeVBvc3Q.action.dXBkYXRlLWNhcnJpZXItYWNjb3VudA.option.Y3JlZGVudGlhbHM.short_desc": {
+          "source": "Production credentials hash",
+          "message": "Hachage des identifiants de production"
+        },
+        "app.RWFzeVBvc3Q.action.dXBkYXRlLWNhcnJpZXItYWNjb3VudA.option.ZGVzY3JpcHRpb24.desc": {
+          "source": "New account description",
+          "message": "Nouvelle description du compte"
+        },
+        "app.RWFzeVBvc3Q.action.dXBkYXRlLWNhcnJpZXItYWNjb3VudA.option.ZGVzY3JpcHRpb24.display_name": {
+          "source": "Description",
+          "message": "Description"
+        },
+        "app.RWFzeVBvc3Q.action.dXBkYXRlLWNhcnJpZXItYWNjb3VudA.option.ZGVzY3JpcHRpb24.short_desc": {
+          "source": "Account description",
+          "message": "Description du compte"
+        },
+        "app.RWFzeVBvc3Q.action.dXBkYXRlLWNhcnJpZXItYWNjb3VudA.option.cmVmZXJlbmNl.desc": {
+          "source": "Caller-supplied reference",
+          "message": "Référence fournie par l'appelant"
+        },
+        "app.RWFzeVBvc3Q.action.dXBkYXRlLWNhcnJpZXItYWNjb3VudA.option.cmVmZXJlbmNl.display_name": {
+          "source": "Reference",
+          "message": "Référence"
+        },
+        "app.RWFzeVBvc3Q.action.dXBkYXRlLWNhcnJpZXItYWNjb3VudA.option.cmVmZXJlbmNl.short_desc": {
+          "source": "Caller-supplied reference",
+          "message": "Référence fournie par l'appelant"
+        },
+        "app.RWFzeVBvc3Q.action.dXBkYXRlLWNhcnJpZXItYWNjb3VudA.option.dGVzdF9jcmVkZW50aWFscw.desc": {
+          "source": "New test credentials. Same schema as `credentials`.",
+          "message": "Nouveaux identifiants de test. Même schéma que `credentials`."
+        },
+        "app.RWFzeVBvc3Q.action.dXBkYXRlLWNhcnJpZXItYWNjb3VudA.option.dGVzdF9jcmVkZW50aWFscw.display_name": {
+          "source": "Test Credentials",
+          "message": "Identifiants de test"
+        },
+        "app.RWFzeVBvc3Q.action.dXBkYXRlLWNhcnJpZXItYWNjb3VudA.option.dGVzdF9jcmVkZW50aWFscw.short_desc": {
+          "source": "Test credentials hash",
+          "message": "Hachage des identifiants de test"
+        },
+        "app.RWFzeVBvc3Q.action.dXBkYXRlLWNhcnJpZXItYWNjb3VudA.short_desc": {
+          "source": "Update a carrier account",
+          "message": "Mettre à jour un compte de transporteur"
+        },
+        "app.RWFzeVBvc3Q.action.dXBkYXRlLXdlYmhvb2s.desc": {
+          "source": "Update an existing webhook.",
+          "message": "Met à jour un webhook existant."
+        },
+        "app.RWFzeVBvc3Q.action.dXBkYXRlLXdlYmhvb2s.display_name": {
+          "source": "Update Webhook",
+          "message": "Mettre à jour le webhook"
+        },
+        "app.RWFzeVBvc3Q.action.dXBkYXRlLXdlYmhvb2s.option.Y3VzdG9tX2hlYWRlcnM.desc": {
+          "source": "Custom HTTP headers to send with webhook callbacks",
+          "message": "En-têtes HTTP personnalisés à envoyer avec les rappels webhook"
+        },
+        "app.RWFzeVBvc3Q.action.dXBkYXRlLXdlYmhvb2s.option.Y3VzdG9tX2hlYWRlcnM.display_name": {
+          "source": "Custom Headers",
+          "message": "En-têtes personnalisés"
+        },
+        "app.RWFzeVBvc3Q.action.dXBkYXRlLXdlYmhvb2s.option.Y3VzdG9tX2hlYWRlcnM.short_desc": {
+          "source": "Custom HTTP headers",
+          "message": "En-têtes HTTP personnalisés"
+        },
+        "app.RWFzeVBvc3Q.action.dXBkYXRlLXdlYmhvb2s.option.d2ViaG9va19pZA.desc": {
+          "source": "Webhook to update",
+          "message": "Webhook à mettre à jour"
+        },
+        "app.RWFzeVBvc3Q.action.dXBkYXRlLXdlYmhvb2s.option.d2ViaG9va19pZA.display_name": {
+          "source": "Webhook ID",
+          "message": "ID de webhook"
+        },
+        "app.RWFzeVBvc3Q.action.dXBkYXRlLXdlYmhvb2s.option.d2ViaG9va19pZA.short_desc": {
+          "source": "Webhook ID (hook_xxx)",
+          "message": "ID de webhook (hook_xxx)"
+        },
+        "app.RWFzeVBvc3Q.action.dXBkYXRlLXdlYmhvb2s.option.d2ViaG9va19zZWNyZXQ.desc": {
+          "source": "Optional shared secret used to sign webhook payloads",
+          "message": "Secret partagé facultatif utilisé pour signer les charges utiles de webhook"
+        },
+        "app.RWFzeVBvc3Q.action.dXBkYXRlLXdlYmhvb2s.option.d2ViaG9va19zZWNyZXQ.display_name": {
+          "source": "Webhook Secret",
+          "message": "Secret du webhook"
+        },
+        "app.RWFzeVBvc3Q.action.dXBkYXRlLXdlYmhvb2s.option.d2ViaG9va19zZWNyZXQ.short_desc": {
+          "source": "Shared secret",
+          "message": "Secret partagé"
+        },
+        "app.RWFzeVBvc3Q.action.dXBkYXRlLXdlYmhvb2s.short_desc": {
+          "source": "Update a webhook",
+          "message": "Mettre à jour un webhook"
+        },
+        "app.RWFzeVBvc3Q.action.dmVyaWZ5LWFkZHJlc3M.desc": {
+          "source": "Run carrier-side address verification on an existing address.",
+          "message": "Exécuter la vérification d'adresse côté transporteur sur une adresse existante."
+        },
+        "app.RWFzeVBvc3Q.action.dmVyaWZ5LWFkZHJlc3M.display_name": {
+          "source": "Verify Address",
+          "message": "Vérifier l'adresse"
+        },
+        "app.RWFzeVBvc3Q.action.dmVyaWZ5LWFkZHJlc3M.option.YWRkcmVzc19pZA.desc": {
+          "source": "Existing EasyPost address ID to verify",
+          "message": "ID d'adresse EasyPost existant à vérifier"
+        },
+        "app.RWFzeVBvc3Q.action.dmVyaWZ5LWFkZHJlc3M.option.YWRkcmVzc19pZA.display_name": {
+          "source": "Address ID",
+          "message": "ID de l'adresse"
+        },
+        "app.RWFzeVBvc3Q.action.dmVyaWZ5LWFkZHJlc3M.option.YWRkcmVzc19pZA.short_desc": {
+          "source": "Address ID to verify (adr_xxx)",
+          "message": "ID d'adresse à vérifier (adr_xxx)"
+        },
+        "app.RWFzeVBvc3Q.action.dmVyaWZ5LWFkZHJlc3M.short_desc": {
+          "source": "Verify an existing address",
+          "message": "Vérifier une adresse existante"
+        },
+        "app.RWFzeVBvc3Q.desc": {
+          "source": "EasyPost is a unified shipping API that connects to dozens of carriers including USPS, UPS, FedEx, DHL, and more. This integration enables creating addresses, parcels, shipments, trackers, insurance records, pickups, and orders, as well as managing carrier accounts and subscribing to webhook events.\n\n**Features:**\n- Address creation, verification, and lookup\n- Shipment lifecycle (create, buy, refund, label, rerate, insure)\n- Tracker creation (single and bulk) and lookup\n- Insurance creation and refund\n- Pickup scheduling, buying, and cancellation\n- Multi-shipment orders\n- Customs information and customs items\n- Refunds and batches\n- Webhook and carrier-account management\n- Real-time webhook events for tracker, batch, insurance, refund, and payment updates",
+          "message": "EasyPost est une API d'expédition unifiée qui se connecte à des dizaines de transporteurs dont USPS, UPS, FedEx, DHL et plus encore. Cette intégration permet de créer des adresses, des colis, des expéditions, des suivis, des dossiers d'assurance, des ramassages et des commandes, ainsi que de gérer les comptes de transporteurs et de s'abonner aux événements de webhook.\n\n**Fonctionnalités :**\n- Création, vérification et recherche d'adresses\n- Cycle de vie de l'expédition (créer, acheter, rembourser, étiqueter, recalculer le tarif, assurer)\n- Création (unique et en masse) et recherche de suivis\n- Création et remboursement d'assurance\n- Programmation, achat et annulation d'enlèvements\n- Commandes multi-expéditions\n- Informations douanières et articles de douane\n- Remboursements et lots\n- Gestion des webhooks et des comptes de transporteurs\n- Événements de webhook en temps réel pour les mises à jour des suivis, des lots, des assurances, des remboursements et des paiements"
+        },
+        "app.RWFzeVBvc3Q.display_name": {
+          "source": "EasyPost",
+          "message": "EasyPost"
+        },
+        "app.RWFzeVBvc3Q.short_desc": {
+          "source": "EasyPost shipping and logistics platform",
+          "message": "Plateforme d'expédition et de logistique EasyPost"
+        }
+      }
+    }
+  }
+}

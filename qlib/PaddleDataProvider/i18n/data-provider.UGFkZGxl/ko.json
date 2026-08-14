@@ -1,0 +1,3089 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "ko": {
+      "messages": {
+        "app.UGFkZGxl.action.Y3JlYXRl.desc": {
+          "source": "Creates new records in the given table",
+          "message": "지정된 테이블에 새 레코드를 생성합니다"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRl.display_name": {
+          "source": "Create Records",
+          "message": "레코드 생성"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRl.option.dGFibGU.desc": {
+          "source": "The table to work with: `customers`, `products`, `prices`, `transactions` or `reports`",
+          "message": "작업할 테이블: `customers`, `products`, `prices`, `transactions` 또는 `reports`"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRl.option.dGFibGU.display_name": {
+          "source": "Table",
+          "message": "테이블"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRl.option.dGFibGU.short_desc": {
+          "source": "The name of the table to work with",
+          "message": "작업할 테이블의 이름"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRl.short_desc": {
+          "source": "Create new records in the given table",
+          "message": "지정된 테이블에 새 레코드 생성"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX2N1c3RvbWVy.desc": {
+          "source": "Creates a customer.\n\n`email` is the only required field and it must be unique in the account: creating a customer with an address that already exists fails with a conflict rather than returning the existing one. Look the address up with **List Customers** first if that is a possibility.\n\nUse `custom_data` to carry your own identifier for the customer, so the two systems can be reconciled later.",
+          "message": "고객을 생성합니다.\n\n`email`은 유일한 필수 필드이며 계정 내에서 고유해야 합니다. 이미 존재하는 주소로 고객을 생성하면 기존 고객을 반환하는 대신 충돌 오류가 발생합니다. 해당 가능성이 있는 경우 먼저 **List Customers**로 주소를 조회하세요.\n\n나중에 두 시스템을 대조할 수 있도록 `custom_data`을 사용하여 고객에 대한 고유 식별자를 전달하세요."
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX2N1c3RvbWVy.display_name": {
+          "source": "Create Customer",
+          "message": "고객 생성"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX2N1c3RvbWVy.option.Y3VzdG9tX2RhdGE.desc": {
+          "source": "Your own structured key-value data.",
+          "message": "자체 구조화된 키-값 데이터입니다."
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX2N1c3RvbWVy.option.Y3VzdG9tX2RhdGE.display_name": {
+          "source": "Custom Data",
+          "message": "사용자 정의 데이터"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX2N1c3RvbWVy.option.Y3VzdG9tX2RhdGE.short_desc": {
+          "source": "Your own structured key-value data",
+          "message": "자체 구조화된 키-값 데이터"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX2N1c3RvbWVy.option.ZW1haWw.desc": {
+          "source": "Email address for this customer.",
+          "message": "이 고객의 이메일 주소입니다."
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX2N1c3RvbWVy.option.ZW1haWw.display_name": {
+          "source": "Email",
+          "message": "이메일"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX2N1c3RvbWVy.option.ZW1haWw.short_desc": {
+          "source": "Email address for this customer",
+          "message": "이 고객의 이메일 주소"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX2N1c3RvbWVy.option.aW1wb3J0X21ldGE.desc": {
+          "source": "Import information for this entity. `null` if this entity is not imported.",
+          "message": "이 엔터티에 대한 가져오기 정보입니다. 이 엔터티를 가져오지 않은 경우 `null`입니다."
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX2N1c3RvbWVy.option.aW1wb3J0X21ldGE.display_name": {
+          "source": "Import Meta",
+          "message": "가져오기 메타데이터"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX2N1c3RvbWVy.option.aW1wb3J0X21ldGE.short_desc": {
+          "source": "Import information for this entity",
+          "message": "이 엔터티에 대한 가져오기 정보"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX2N1c3RvbWVy.option.aWQ.desc": {
+          "source": "Unique Paddle ID for this customer entity, prefixed with `ctm_`.",
+          "message": "`ctm_` 접두사가 붙은 이 고객 엔터티의 고유 Paddle ID입니다."
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX2N1c3RvbWVy.option.aWQ.display_name": {
+          "source": "Customer ID",
+          "message": "고객 ID"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX2N1c3RvbWVy.option.aWQ.short_desc": {
+          "source": "Import an existing customer under a known Paddle ID",
+          "message": "알려진 Paddle ID로 기존 고객 가져오기"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX2N1c3RvbWVy.option.bG9jYWxl.desc": {
+          "source": "Valid IETF BCP 47 short form locale tag. If omitted, defaults to `en`.",
+          "message": "유효한 IETF BCP 47 단축 형식 로캘 태그입니다. 생략 시 기본값은 `en`입니다."
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX2N1c3RvbWVy.option.bG9jYWxl.display_name": {
+          "source": "Locale",
+          "message": "로캘"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX2N1c3RvbWVy.option.bG9jYWxl.short_desc": {
+          "source": "Valid IETF BCP 47 short form locale tag",
+          "message": "유효한 IETF BCP 47 단축 형식 로캘 태그"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX2N1c3RvbWVy.option.bWFya2V0aW5nX2NvbnNlbnQ.desc": {
+          "source": "Whether this customer opted into marketing from you. `false` unless customers check the marketing consent box\nwhen using Paddle Checkout. Set automatically by Paddle.",
+          "message": "이 고객이 귀하의 마케팅 수신에 동의했는지 여부입니다. 고객이 Paddle Checkout을 사용할 때 마케팅 동의 확인란을\n선택하지 않는 한 `false`입니다. Paddle에 의해 자동으로 설정됩니다."
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX2N1c3RvbWVy.option.bWFya2V0aW5nX2NvbnNlbnQ.display_name": {
+          "source": "Marketing Consent",
+          "message": "마케팅 동의"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX2N1c3RvbWVy.option.bWFya2V0aW5nX2NvbnNlbnQ.short_desc": {
+          "source": "Whether this customer opted into marketing from you",
+          "message": "이 고객이 마케팅 수신에 동의했는지 여부"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX2N1c3RvbWVy.option.bmFtZQ.desc": {
+          "source": "Full name of this customer. Required when creating transactions where `collection_mode` is `manual` (invoices).",
+          "message": "이 고객의 전체 이름입니다. `collection_mode`이 `manual`(청구서)인 트랜잭션을 생성할 때 필수입니다."
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX2N1c3RvbWVy.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "이름"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX2N1c3RvbWVy.option.bmFtZQ.short_desc": {
+          "source": "Full name of this customer",
+          "message": "이 고객의 전체 이름"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX2N1c3RvbWVy.short_desc": {
+          "source": "Create a customer",
+          "message": "고객 생성"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3ByaWNl.desc": {
+          "source": "Creates a price against a product.\n\n`unit_price` is an amount in the **smallest unit of its currency** given as a string - `\"1000\"` is $10.00 in USD, but ¥1000 in JPY, which has no minor unit. Getting this wrong is a factor-of-100 error in what customers are charged.\n\nSet `billing_cycle` to make it a subscription price; leave it unset for a one-off charge. `unit_price_overrides` sets a different amount for specific countries, which is how local pricing is done.\n\nA price cannot be moved to another product afterwards.",
+          "message": "제품에 대한 가격을 생성합니다.\n\n`unit_price`은 문자열로 제공되는 **해당 통화의 최소 단위** 금액입니다. `\"1000\"`은 USD 기준 $10.00이지만, 보조 단위가 없는 JPY 기준으로는 ¥1000입니다. 이 값을 잘못 입력하면 고객 청구 금액에 100배의 오차가 발생합니다.\n\n구독 가격으로 설정하려면 `billing_cycle`를 지정하고, 일회성 요금인 경우 설정하지 마세요. `unit_price_overrides`은 특정 국가에 대해 다른 금액을 설정하며, 이는 현지 가격 책정 방식입니다.\n\n가격은 생성 후 다른 제품으로 이동할 수 없습니다."
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3ByaWNl.display_name": {
+          "source": "Create Price",
+          "message": "가격 생성"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3ByaWNl.option.Y3VzdG9tX2RhdGE.desc": {
+          "source": "Your own structured key-value data.",
+          "message": "자체 구조화된 키-값 데이터입니다."
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3ByaWNl.option.Y3VzdG9tX2RhdGE.display_name": {
+          "source": "Custom Data",
+          "message": "사용자 정의 데이터"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3ByaWNl.option.Y3VzdG9tX2RhdGE.short_desc": {
+          "source": "Your own structured key-value data",
+          "message": "자체 구조화된 키-값 데이터"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3ByaWNl.option.YmlsbGluZ19jeWNsZQ.desc": {
+          "source": "How often this price should be charged. `null` if price is non-recurring (one-time). If omitted, defaults to `null`.",
+          "message": "이 가격이 청구되는 빈도입니다. 가격이 반복되지 않는 경우(일회성) `null`입니다. 생략 시 기본값은 `null`입니다."
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3ByaWNl.option.YmlsbGluZ19jeWNsZQ.display_name": {
+          "source": "Billing Cycle",
+          "message": "청구 주기"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3ByaWNl.option.YmlsbGluZ19jeWNsZQ.short_desc": {
+          "source": "Set for a subscription price; leave unset for a one-off charge",
+          "message": "구독 가격의 경우 설정하고 일회성 요금의 경우 비워 둡니다"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3ByaWNl.option.ZGVzY3JpcHRpb24.desc": {
+          "source": "Internal description for this price, not shown to customers. Typically notes for your team.",
+          "message": "고객에게 표시되지 않는 이 가격에 대한 내부 설명입니다. 일반적으로 팀을 위한 메모입니다."
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3ByaWNl.option.ZGVzY3JpcHRpb24.display_name": {
+          "source": "Description",
+          "message": "설명"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3ByaWNl.option.ZGVzY3JpcHRpb24.short_desc": {
+          "source": "An internal description; not shown to customers",
+          "message": "내부 설명이며 고객에게 표시되지 않음"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3ByaWNl.option.aW1wb3J0X21ldGE.desc": {
+          "source": "Import information for this entity. `null` if this entity is not imported.",
+          "message": "이 엔터티에 대한 가져오기 정보입니다. 이 엔터티를 가져오지 않은 경우 `null`입니다."
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3ByaWNl.option.aW1wb3J0X21ldGE.display_name": {
+          "source": "Import Meta",
+          "message": "가져오기 메타데이터"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3ByaWNl.option.aW1wb3J0X21ldGE.short_desc": {
+          "source": "Import information for this entity",
+          "message": "이 엔터티에 대한 가져오기 정보"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3ByaWNl.option.aWQ.desc": {
+          "source": "Unique Paddle ID for this price, prefixed with `pri_`.",
+          "message": "`pri_` 접두사가 붙은 이 가격의 고유 Paddle ID입니다."
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3ByaWNl.option.aWQ.display_name": {
+          "source": "Price ID",
+          "message": "가격 ID"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3ByaWNl.option.aWQ.short_desc": {
+          "source": "Import an existing price under a known Paddle ID",
+          "message": "알려진 Paddle ID로 기존 가격 가져오기"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3ByaWNl.option.bmFtZQ.desc": {
+          "source": "Name of this price, shown to customers at checkout and on invoices. Typically describes how often the related product bills.",
+          "message": "결제 시 및 청구서에 고객에게 표시되는 이 가격의 이름입니다. 일반적으로 관련 제품의 청구 빈도를 설명합니다."
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3ByaWNl.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "이름"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3ByaWNl.option.bmFtZQ.short_desc": {
+          "source": "Name of this price, shown to customers at checkout and on invoices",
+          "message": "결제 시 및 청구서에 고객에게 표시되는 이 가격의 이름"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3ByaWNl.option.cHJvZHVjdF9pZA.desc": {
+          "source": "Paddle ID for the product that this price is for, prefixed with `pro_`.",
+          "message": "`pro_` 접두사가 붙은 이 가격이 속한 제품의 Paddle ID입니다."
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3ByaWNl.option.cHJvZHVjdF9pZA.display_name": {
+          "source": "Product",
+          "message": "제품"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3ByaWNl.option.cHJvZHVjdF9pZA.short_desc": {
+          "source": "The product this price belongs to",
+          "message": "이 가격이 속한 제품"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3ByaWNl.option.cXVhbnRpdHk.desc": {
+          "source": "Limits on how many times the related product can be purchased at this price. Useful for discount campaigns. If omitted, defaults to 1-100.",
+          "message": "관련 제품을 이 가격으로 구매할 수 있는 횟수에 대한 제한입니다. 할인 캠페인에 유용합니다. 생략 시 기본값은 1~100입니다."
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3ByaWNl.option.cXVhbnRpdHk.display_name": {
+          "source": "Quantity",
+          "message": "수량"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3ByaWNl.option.cXVhbnRpdHk.short_desc": {
+          "source": "Limits on how many times the related product can be purchased at this price",
+          "message": "관련 제품을 이 가격으로 구매할 수 있는 횟수 제한"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3ByaWNl.option.dGF4X21vZGU.allowed-value.c3RyaW5nOmFjY291bnRfc2V0dGluZw.display_name": {
+          "source": "account_setting",
+          "message": "account_setting"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3ByaWNl.option.dGF4X21vZGU.allowed-value.c3RyaW5nOmV4dGVybmFs.display_name": {
+          "source": "external",
+          "message": "external"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3ByaWNl.option.dGF4X21vZGU.allowed-value.c3RyaW5nOmludGVybmFs.display_name": {
+          "source": "internal",
+          "message": "internal"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3ByaWNl.option.dGF4X21vZGU.allowed-value.c3RyaW5nOmxvY2F0aW9u.display_name": {
+          "source": "location",
+          "message": "위치"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3ByaWNl.option.dGF4X21vZGU.desc": {
+          "source": "How tax is calculated for this price. If omitted, defaults to `account_setting`.",
+          "message": "이 가격에 대한 세금 계산 방식입니다. 생략 시 기본값은 `account_setting`입니다."
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3ByaWNl.option.dGF4X21vZGU.display_name": {
+          "source": "Tax Mode",
+          "message": "세금 모드"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3ByaWNl.option.dGF4X21vZGU.short_desc": {
+          "source": "How tax is calculated for this price",
+          "message": "이 가격에 세금이 계산되는 방식"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3ByaWNl.option.dHJpYWxfcGVyaW9k.desc": {
+          "source": "Trial period for the product related to this price. The billing cycle begins once the trial period is over.\n`null` for no trial period. Requires `billing_cycle`. If omitted, defaults to `null`.",
+          "message": "이 가격과 관련된 제품의 체험 기간입니다. 청구 주기는 체험 기간이 끝나면 시작됩니다.\n체험 기간이 없으면 `null`입니다. `billing_cycle`이(가) 필요합니다. 생략하면 기본값은 `null`입니다."
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3ByaWNl.option.dHJpYWxfcGVyaW9k.display_name": {
+          "source": "Trial Period",
+          "message": "체험 기간"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3ByaWNl.option.dHJpYWxfcGVyaW9k.short_desc": {
+          "source": "Trial period for the product related to this price",
+          "message": "이 가격과 관련된 제품의 체험 기간"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3ByaWNl.option.dHlwZQ.allowed-value.c3RyaW5nOmN1c3RvbQ.display_name": {
+          "source": "custom",
+          "message": "맞춤"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3ByaWNl.option.dHlwZQ.allowed-value.c3RyaW5nOnN0YW5kYXJk.display_name": {
+          "source": "standard",
+          "message": "표준"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3ByaWNl.option.dHlwZQ.desc": {
+          "source": "Type of item. Standard items are considered part of your catalog and are shown in the Paddle dashboard. If omitted, defaults to `standard`.",
+          "message": "항목 유형입니다. 표준 항목은 카탈로그의 일부로 간주되며 Paddle 대시보드에 표시됩니다. 생략하면 기본값은 `standard`입니다."
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3ByaWNl.option.dHlwZQ.display_name": {
+          "source": "Type",
+          "message": "유형"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3ByaWNl.option.dHlwZQ.short_desc": {
+          "source": "Type of item",
+          "message": "항목 유형"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3ByaWNl.option.dW5pdF9wcmljZQ.desc": {
+          "source": "Base price. This price applies to all customers, except for customers located in countries where you have `unit_price_overrides`.",
+          "message": "기본 가격입니다. 이 가격은 `unit_price_overrides`이(가) 설정된 국가에 위치한 고객을 제외한 모든 고객에게 적용됩니다."
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3ByaWNl.option.dW5pdF9wcmljZQ.display_name": {
+          "source": "Unit Price",
+          "message": "단가"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3ByaWNl.option.dW5pdF9wcmljZQ.short_desc": {
+          "source": "The amount, in the smallest unit of its currency",
+          "message": "통화의 최소 단위 기준 금액"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3ByaWNl.option.dW5pdF9wcmljZV9vdmVycmlkZXM.desc": {
+          "source": "List of unit price overrides. Use to override the base price with a custom price and currency for a country or group of countries.",
+          "message": "단가 재정의 목록입니다. 특정 국가 또는 국가 그룹에 대한 맞춤 가격 및 통화로 기본 가격을 재정의하는 데 사용합니다."
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3ByaWNl.option.dW5pdF9wcmljZV9vdmVycmlkZXM.display_name": {
+          "source": "Unit Price Overrides",
+          "message": "단가 재정의"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3ByaWNl.option.dW5pdF9wcmljZV9vdmVycmlkZXM.short_desc": {
+          "source": "List of unit price overrides",
+          "message": "단가 재정의 목록"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3ByaWNl.short_desc": {
+          "source": "Create a price for a catalog product",
+          "message": "카탈로그 제품의 가격 생성"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3Byb2R1Y3Q.desc": {
+          "source": "Creates a product in the catalog.\n\nA product is what you sell; it carries no price of its own. Create at least one price against it with **Create Price** before it can be billed.\n\n`tax_category` decides how Paddle charges sales tax and **cannot be changed afterwards**, so it has to be right at creation. Most software is `standard-digital-goods` or `saas`; using the wrong category means tax is calculated wrongly for every sale of the product.",
+          "message": "카탈로그에 제품을 생성합니다.\n\n제품은 판매할 대상이며, 자체적인 가격 정보를 포함하지 않습니다. 청구할 수 있으려면 먼저 **Create Price**를 사용하여 제품에 하나 이상의 가격을 생성해야 합니다.\n\n`tax_category`은(는) Paddle이 판매세를 청구하는 방식을 결정하며 **나중에 변경할 수 없으므로** 생성 시 올바르게 지정해야 합니다. 대부분의 소프트웨어는 `standard-digital-goods` 또는 `saas`에 해당하며, 잘못된 카테고리를 사용할 경우 제품의 모든 판매에 대해 세금이 잘못 계산됩니다."
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3Byb2R1Y3Q.display_name": {
+          "source": "Create Product",
+          "message": "제품 생성"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3Byb2R1Y3Q.option.Y3VzdG9tX2RhdGE.desc": {
+          "source": "Your own structured key-value data.",
+          "message": "자체 구조화된 키-값 데이터입니다."
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3Byb2R1Y3Q.option.Y3VzdG9tX2RhdGE.display_name": {
+          "source": "Custom Data",
+          "message": "사용자 정의 데이터"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3Byb2R1Y3Q.option.Y3VzdG9tX2RhdGE.short_desc": {
+          "source": "Your own structured key-value data",
+          "message": "자체 구조화된 키-값 데이터"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3Byb2R1Y3Q.option.ZGVzY3JpcHRpb24.desc": {
+          "source": "Short description for this product.",
+          "message": "이 제품에 대한 간단한 설명입니다."
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3Byb2R1Y3Q.option.ZGVzY3JpcHRpb24.display_name": {
+          "source": "Description",
+          "message": "설명"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3Byb2R1Y3Q.option.ZGVzY3JpcHRpb24.short_desc": {
+          "source": "Short description for this product",
+          "message": "이 제품에 대한 간단한 설명"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3Byb2R1Y3Q.option.aW1hZ2VfdXJs.desc": {
+          "source": "Image for this product. Included in the checkout and on some customer documents.",
+          "message": "이 제품의 이미지입니다. 체크아웃 및 일부 고객 문서에 포함됩니다."
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3Byb2R1Y3Q.option.aW1hZ2VfdXJs.display_name": {
+          "source": "Image Url",
+          "message": "이미지 URL"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3Byb2R1Y3Q.option.aW1hZ2VfdXJs.short_desc": {
+          "source": "Image for this product",
+          "message": "이 제품의 이미지"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3Byb2R1Y3Q.option.aW1wb3J0X21ldGE.desc": {
+          "source": "Import information for this entity. `null` if this entity is not imported.",
+          "message": "이 엔터티에 대한 가져오기 정보입니다. 이 엔터티를 가져오지 않은 경우 `null`입니다."
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3Byb2R1Y3Q.option.aW1wb3J0X21ldGE.display_name": {
+          "source": "Import Meta",
+          "message": "가져오기 메타데이터"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3Byb2R1Y3Q.option.aW1wb3J0X21ldGE.short_desc": {
+          "source": "Import information for this entity",
+          "message": "이 엔터티에 대한 가져오기 정보"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3Byb2R1Y3Q.option.aWQ.desc": {
+          "source": "Unique Paddle ID for this product, prefixed with `pro_`.",
+          "message": "`pro_` 접두사가 붙은 이 제품의 고유 Paddle ID입니다."
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3Byb2R1Y3Q.option.aWQ.display_name": {
+          "source": "Product ID",
+          "message": "제품 ID"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3Byb2R1Y3Q.option.aWQ.short_desc": {
+          "source": "Import an existing product under a known Paddle ID",
+          "message": "알려진 Paddle ID로 기존 제품 가져오기"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3Byb2R1Y3Q.option.bmFtZQ.desc": {
+          "source": "Name of this product.",
+          "message": "이 제품의 이름입니다."
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3Byb2R1Y3Q.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "이름"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3Byb2R1Y3Q.option.bmFtZQ.short_desc": {
+          "source": "Name of this product",
+          "message": "이 제품의 이름"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3Byb2R1Y3Q.option.dGF4X2NhdGVnb3J5.allowed-value.c3RyaW5nOmRpZ2l0YWwtZ29vZHM.display_name": {
+          "source": "digital-goods",
+          "message": "digital-goods"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3Byb2R1Y3Q.option.dGF4X2NhdGVnb3J5.allowed-value.c3RyaW5nOmVib29rcw.display_name": {
+          "source": "ebooks",
+          "message": "ebooks"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3Byb2R1Y3Q.option.dGF4X2NhdGVnb3J5.allowed-value.c3RyaW5nOmltcGxlbWVudGF0aW9uLXNlcnZpY2Vz.display_name": {
+          "source": "implementation-services",
+          "message": "implementation-services"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3Byb2R1Y3Q.option.dGF4X2NhdGVnb3J5.allowed-value.c3RyaW5nOnByb2Zlc3Npb25hbC1zZXJ2aWNlcw.display_name": {
+          "source": "professional-services",
+          "message": "professional-services"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3Byb2R1Y3Q.option.dGF4X2NhdGVnb3J5.allowed-value.c3RyaW5nOnN0YW5kYXJk.display_name": {
+          "source": "standard",
+          "message": "표준"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3Byb2R1Y3Q.option.dGF4X2NhdGVnb3J5.allowed-value.c3RyaW5nOnNhYXM.display_name": {
+          "source": "saas",
+          "message": "saas"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3Byb2R1Y3Q.option.dGF4X2NhdGVnb3J5.allowed-value.c3RyaW5nOnNvZnR3YXJlLXByb2dyYW1taW5nLXNlcnZpY2Vz.display_name": {
+          "source": "software-programming-services",
+          "message": "software-programming-services"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3Byb2R1Y3Q.option.dGF4X2NhdGVnb3J5.allowed-value.c3RyaW5nOnRyYWluaW5nLXNlcnZpY2Vz.display_name": {
+          "source": "training-services",
+          "message": "training-services"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3Byb2R1Y3Q.option.dGF4X2NhdGVnb3J5.allowed-value.c3RyaW5nOndlYnNpdGUtaG9zdGluZw.display_name": {
+          "source": "website-hosting",
+          "message": "website-hosting"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3Byb2R1Y3Q.option.dGF4X2NhdGVnb3J5.desc": {
+          "source": "Tax category for this product. Used for charging the correct rate of tax. Selected tax category must be enabled on your Paddle account.",
+          "message": "이 제품의 세금 카테고리입니다. 정확한 세율을 청구하는 데 사용됩니다. 선택한 세금 카테고리는 Paddle 계정에서 활성화되어 있어야 합니다."
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3Byb2R1Y3Q.option.dGF4X2NhdGVnb3J5.display_name": {
+          "source": "Tax Category",
+          "message": "세금 카테고리"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3Byb2R1Y3Q.option.dGF4X2NhdGVnb3J5.short_desc": {
+          "source": "How Paddle charges tax; cannot be changed later",
+          "message": "Paddle의 세금 청구 방식(나중에 변경할 수 없음)"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3Byb2R1Y3Q.option.dHlwZQ.allowed-value.c3RyaW5nOmN1c3RvbQ.display_name": {
+          "source": "custom",
+          "message": "맞춤"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3Byb2R1Y3Q.option.dHlwZQ.allowed-value.c3RyaW5nOnN0YW5kYXJk.display_name": {
+          "source": "standard",
+          "message": "표준"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3Byb2R1Y3Q.option.dHlwZQ.desc": {
+          "source": "Type of item. Standard items are considered part of your catalog and are shown in the Paddle dashboard. If omitted, defaults to `standard`.",
+          "message": "항목 유형입니다. 표준 항목은 카탈로그의 일부로 간주되며 Paddle 대시보드에 표시됩니다. 생략하면 기본값은 `standard`입니다."
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3Byb2R1Y3Q.option.dHlwZQ.display_name": {
+          "source": "Type",
+          "message": "유형"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3Byb2R1Y3Q.option.dHlwZQ.short_desc": {
+          "source": "Type of item",
+          "message": "항목 유형"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3Byb2R1Y3Q.short_desc": {
+          "source": "Create a catalog product",
+          "message": "카탈로그 제품 생성"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3JlcG9ydA.desc": {
+          "source": "Requests a report. Paddle generates it in the background, so this returns a report in the `pending` state rather than any data.\n\nThe body selects the report type and its filters, and the fields a report accepts depend on the type: `transactions`, `adjustments`, `products_prices`, `discounts`, `balance`, `payout_reconciliation` or `checkouts`. Because the shape differs per type, the body is supplied whole rather than as separate options.\n\n**With no `filters`, a report covers only the last 30 days of updates.** Pass an `updated_at` filter for any other window.\n\nPoll **Get Report** until `status` is `ready`, or subscribe to the `report.updated` event, then call **Get Report File** for the download URL.",
+          "message": "보고서를 요청합니다. Paddle이 백그라운드에서 보고서를 생성하므로 데이터 대신 `pending` 상태의 보고서가 반환됩니다.\n\n본문에서 보고서 유형과 해당 필터를 선택하며, 보고서가 허용하는 필드는 유형에 따라 다릅니다: `transactions`, `adjustments`, `products_prices`, `discounts`, `balance`, `payout_reconciliation` 또는 `checkouts`. 유형별로 구조가 다르기 때문에 본문은 별도의 옵션이 아닌 전체로 제공됩니다.\n\n**`filters`이(가) 없으면 보고서에는 최근 30일간의 업데이트만 포함됩니다.** 다른 기간을 지정하려면 `updated_at` 필터를 전달하세요.\n\n`status`이(가) `ready`이(가) 될 때까지 **Get Report**를 폴링하거나 `report.updated` 이벤트를 구독한 후 **Get Report File**을 호출하여 다운로드 URL을 받으세요."
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3JlcG9ydA.display_name": {
+          "source": "Create Report",
+          "message": "보고서 생성"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3JlcG9ydA.option.Ym9keQ.desc": {
+          "source": "REST request body argument: Represents a report entity.",
+          "message": "REST 요청 본문 인수: 보고서 엔티티를 나타냅니다."
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3JlcG9ydA.option.Ym9keQ.display_name": {
+          "source": "Report",
+          "message": "보고서"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3JlcG9ydA.option.Ym9keQ.short_desc": {
+          "source": "The report type and its filters",
+          "message": "보고서 유형 및 필터"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3JlcG9ydA.short_desc": {
+          "source": "Request a report; it is generated asynchronously",
+          "message": "보고서 요청(비동기로 생성됨)"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.desc": {
+          "source": "Creates a transaction: the record of what a customer is being charged for.\n\n`items` is required - each entry names a `price_id` and a `quantity`, or carries a one-off price inline. `status` decides what happens next: leave it unset for a `draft` that can still be edited, or set it to `billed` to issue it to the customer.\n\n**A transaction with no `customer_id` is a quote nobody can pay**; set it, along with `address_id` where tax depends on location, for anything the customer is meant to settle.\n\nSet `include` to `totals` to get the calculated amounts back in the same response, which is the cheapest way to see what a transaction actually comes to.",
+          "message": "고객에게 청구될 항목의 기록인 트랜잭션을 생성합니다.\n\n`items`은(는) 필수입니다. 각 항목은 `price_id` 및 `quantity`을(를) 지정하거나 인라인으로 일회성 가격을 포함합니다. `status`은(는) 이후 진행 방식을 결정합니다. 계속 편집할 수 있는 `draft` 상태로 두려면 설정하지 않고 비워두거나, 고객에게 발행하려면 `billed`(으)로 설정하세요.\n\n**`customer_id`이(가) 없는 트랜잭션은 아무도 결제할 수 없는 견적서입니다.** 고객이 결제해야 하는 모든 항목에 대해 위치에 따라 세금이 결정되는 `address_id`과(와) 함께 설정하세요.\n\n동일한 응답으로 계산된 금액을 반환받으려면 `include`을(를) `totals`(으)로 설정하세요. 이는 트랜잭션의 실제 합계를 확인하는 가장 효율적인 방법입니다."
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.display_name": {
+          "source": "Create Transaction",
+          "message": "거래 생성"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.Y29sbGVjdGlvbl9tb2Rl.allowed-value.c3RyaW5nOm1hbnVhbA.display_name": {
+          "source": "manual",
+          "message": "수동"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.Y29sbGVjdGlvbl9tb2Rl.allowed-value.c3RyaW5nOmF1dG9tYXRpYw.display_name": {
+          "source": "automatic",
+          "message": "자동"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.Y29sbGVjdGlvbl9tb2Rl.desc": {
+          "source": "How payment is collected for this transaction. `automatic` for checkout, `manual` for invoices. If omitted, defaults to `automatic`.",
+          "message": "이 트랜잭션의 대금 회수 방식입니다. 체크아웃의 경우 `automatic`, 인보이스의 경우 `manual`입니다. 생략하면 기본값은 `automatic`입니다."
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.Y29sbGVjdGlvbl9tb2Rl.display_name": {
+          "source": "Collection Mode",
+          "message": "수금 모드"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.Y29sbGVjdGlvbl9tb2Rl.short_desc": {
+          "source": "How payment is collected for this transaction",
+          "message": "이 트랜잭션의 대금 회수 방식"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.Y2hlY2tvdXQ.desc": {
+          "source": "Paddle Checkout details for this transaction. You may pass a URL when creating or updating an automatically-collected transaction, or when creating or updating a manually-collected transaction where `billing_details.enable_checkout` is `true`.",
+          "message": "이 트랜잭션의 Paddle Checkout 상세 정보입니다. 자동으로 수금되는 트랜잭션을 생성 또는 업데이트할 때나 `billing_details.enable_checkout`이(가) `true`인 수동 수금 트랜잭션을 생성 또는 업데이트할 때 URL을 전달할 수 있습니다."
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.Y2hlY2tvdXQ.display_name": {
+          "source": "Checkout",
+          "message": "체크아웃"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.Y2hlY2tvdXQ.short_desc": {
+          "source": "Paddle Checkout details for this transaction",
+          "message": "이 트랜잭션의 Paddle Checkout 상세 정보"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.Y3JlYXRlZF9hdA.desc": {
+          "source": "RFC 3339 datetime string of when this entity was created. Set automatically by Paddle.",
+          "message": "이 엔티티가 생성된 시점의 RFC 3339 날짜/시간 문자열입니다. Paddle에서 자동으로 설정합니다."
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.Y3JlYXRlZF9hdA.display_name": {
+          "source": "Created At",
+          "message": "생성 일시"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.Y3JlYXRlZF9hdA.short_desc": {
+          "source": "RFC 3339 datetime string of when this entity was created",
+          "message": "이 엔티티가 생성된 시점의 RFC 3339 날짜/시간 문자열"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.Y3VycmVuY3lfY29kZQ.desc": {
+          "source": "Supported three-letter ISO 4217 currency code. Must be `USD`, `EUR`, or `GBP` if `collection_mode` is `manual`.",
+          "message": "지원되는 3자리 ISO 4217 통화 코드입니다. `collection_mode`이(가) `manual`인 경우 `USD`, `EUR` 또는 `GBP`이어야 합니다."
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.Y3VycmVuY3lfY29kZQ.display_name": {
+          "source": "Currency Code",
+          "message": "통화 코드"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.Y3VycmVuY3lfY29kZQ.short_desc": {
+          "source": "Supported three-letter ISO 4217 currency code",
+          "message": "지원되는 3자리 ISO 4217 통화 코드"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.Y3VzdG9tX2RhdGE.desc": {
+          "source": "Your own structured key-value data.",
+          "message": "자체 구조화된 키-값 데이터입니다."
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.Y3VzdG9tX2RhdGE.display_name": {
+          "source": "Custom Data",
+          "message": "사용자 정의 데이터"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.Y3VzdG9tX2RhdGE.short_desc": {
+          "source": "Your own structured key-value data",
+          "message": "자체 구조화된 키-값 데이터"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.Y3VzdG9tZXJfaWQ.desc": {
+          "source": "Paddle ID of the customer that this transaction is for, prefixed with `ctm_`. If omitted, transaction status is `draft`.",
+          "message": "`ctm_` 접두사가 붙은 이 트랜잭션 대상 고객의 Paddle ID입니다. 생략하면 트랜잭션 상태는 `draft`이 됩니다."
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.Y3VzdG9tZXJfaWQ.display_name": {
+          "source": "Customer",
+          "message": "고객"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.Y3VzdG9tZXJfaWQ.short_desc": {
+          "source": "The customer being billed",
+          "message": "청구 대상 고객"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.YWRkcmVzc19pZA.desc": {
+          "source": "Paddle ID of the address that this transaction is for, prefixed with `add_`. Requires `customer_id`. If omitted, transaction status is `draft`.",
+          "message": "`add_` 접두사가 붙은 이 트랜잭션 대상 주소의 Paddle ID입니다. `customer_id`이(가) 필요합니다. 생략하면 트랜잭션 상태는 `draft`이 됩니다."
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.YWRkcmVzc19pZA.display_name": {
+          "source": "Address Id",
+          "message": "주소 ID"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.YWRkcmVzc19pZA.short_desc": {
+          "source": "Paddle ID of the address that this transaction is for, prefixed with 'add_'. Requires 'customer_id'. If omitted, transaction status is 'draft'",
+          "message": "'add_' 접두사가 붙은 이 트랜잭션 대상 주소의 Paddle ID입니다. 'customer_id'가 필요합니다. 생략하면 트랜잭션 상태는 'draft'가 됩니다."
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.YmlsbGVkX2F0.desc": {
+          "source": "RFC 3339 datetime string of when this transaction was marked as `billed`. `null` for transactions that aren't `billed` or `completed`. Set automatically by Paddle.",
+          "message": "이 트랜잭션이 `billed`(으)로 표시된 시점의 RFC 3339 날짜/시간 문자열입니다. `billed` 또는 `completed` 상태가 아닌 트랜잭션의 경우 `null`입니다. Paddle에서 자동으로 설정합니다."
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.YmlsbGVkX2F0.display_name": {
+          "source": "Billed At",
+          "message": "청구 일시"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.YmlsbGVkX2F0.short_desc": {
+          "source": "RFC 3339 datetime string of when this transaction was marked as 'billed'. 'null' for transactions that aren't 'billed' or 'completed'. Set automatically by Paddle",
+          "message": "이 트랜잭션이 'billed'로 표시된 시점의 RFC 3339 날짜/시간 문자열입니다. 'billed' 또는 'completed' 상태가 아닌 트랜잭션의 경우 'null'입니다. Paddle에서 자동으로 설정합니다."
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.YmlsbGluZ19kZXRhaWxz.desc": {
+          "source": "Details for invoicing. Required if `collection_mode` is `manual`.",
+          "message": "청구서 발행을 위한 상세 정보입니다. `collection_mode`이(가) `manual`인 경우 필수입니다."
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.YmlsbGluZ19kZXRhaWxz.display_name": {
+          "source": "Billing Details",
+          "message": "청구 상세 정보"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.YmlsbGluZ19kZXRhaWxz.short_desc": {
+          "source": "Details for invoicing",
+          "message": "청구서 세부 정보"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.YmlsbGluZ19wZXJpb2Q.desc": {
+          "source": "Time period that this transaction is for. Set automatically by Paddle for subscription renewals to describe the period that charges are for.",
+          "message": "이 트랜잭션이 적용되는 기간입니다. 구독 갱신의 경우 청구 대상 기간을 나타내기 위해 Paddle에서 자동으로 설정합니다."
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.YmlsbGluZ19wZXJpb2Q.display_name": {
+          "source": "Billing Period",
+          "message": "청구 기간"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.YmlsbGluZ19wZXJpb2Q.short_desc": {
+          "source": "Time period that this transaction is for",
+          "message": "이 트랜잭션이 적용되는 기간"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.YnVzaW5lc3NfaWQ.desc": {
+          "source": "Paddle ID of the business that this transaction is for, prefixed with `biz_`. Requires `customer_id`. ",
+          "message": "`biz_` 접두사가 붙은, 이 트랜잭션 대상 비즈니스의 Paddle ID입니다. `customer_id`이(가) 필요합니다. "
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.YnVzaW5lc3NfaWQ.display_name": {
+          "source": "Business Id",
+          "message": "비즈니스 ID"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.YnVzaW5lc3NfaWQ.short_desc": {
+          "source": "Paddle ID of the business that this transaction is for, prefixed with 'biz_'. Requires 'customer_id'",
+          "message": "'biz_' 접두사가 붙은, 이 트랜잭션 대상 비즈니스의 Paddle ID입니다. 'customer_id'가 필요합니다."
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.ZGV0YWlscw.desc": {
+          "source": "Calculated totals for a transaction, including proration, discounts, tax, and currency conversion. Considered the source of truth for totals on a transaction.",
+          "message": "일할 계산, 할인, 세금 및 통화 환산이 포함된 트랜잭션의 계산된 합계입니다. 트랜잭션 합계에 대한 신뢰할 수 있는 단일 출처로 간주됩니다."
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.ZGV0YWlscw.display_name": {
+          "source": "Details",
+          "message": "세부 정보"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.ZGV0YWlscw.short_desc": {
+          "source": "Calculated totals for a transaction, including proration, discounts, tax, and currency conversion",
+          "message": "일할 계산, 할인, 세금 및 통화 환산이 포함된 트랜잭션의 계산된 합계"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.ZGlzY291bnQ.desc": {
+          "source": "Apply a non-catalog discount to a transaction. Send one of `discount_id` or `discount`.",
+          "message": "트랜잭션에 카탈로그 외 할인을 적용합니다. `discount_id` 또는 `discount` 중 하나를 전송하세요."
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.ZGlzY291bnQ.display_name": {
+          "source": "Discount",
+          "message": "할인"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.ZGlzY291bnQ.short_desc": {
+          "source": "Apply a non-catalog discount to a transaction",
+          "message": "트랜잭션에 카탈로그 외 할인 적용"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.ZGlzY291bnRfaWQ.desc": {
+          "source": "Paddle ID of the discount to apply to this transaction, prefixed with `dsc_`.",
+          "message": "`dsc_` 접두사가 붙은, 이 트랜잭션에 적용할 할인의 Paddle ID입니다."
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.ZGlzY291bnRfaWQ.display_name": {
+          "source": "Discount Id",
+          "message": "할인 ID"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.ZGlzY291bnRfaWQ.short_desc": {
+          "source": "Paddle ID of the discount to apply to this transaction, prefixed with 'dsc_'",
+          "message": "'dsc_' 접두사가 붙은, 이 트랜잭션에 적용할 할인의 Paddle ID입니다."
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.aW52b2ljZV9pZA.desc": {
+          "source": "Paddle ID of the invoice that this transaction is related to, prefixed with `inv_`. Used for compatibility with the Paddle Invoice API, which is now deprecated. This field is scheduled to be removed in the next version of the Paddle API.",
+          "message": "`inv_` 접두사가 붙은, 이 트랜잭션과 관련된 인보이스의 Paddle ID입니다. 현재 지원 중단된 Paddle Invoice API와의 호환성을 위해 사용됩니다. 이 필드는 Paddle API의 다음 버전에서 제거될 예정입니다."
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.aW52b2ljZV9pZA.display_name": {
+          "source": "Invoice Id",
+          "message": "인보이스 ID"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.aW52b2ljZV9pZA.short_desc": {
+          "source": "Paddle ID of the invoice that this transaction is related to, prefixed with 'inv_'",
+          "message": "'inv_' 접두사가 붙은, 이 트랜잭션과 관련된 인보이스의 Paddle ID입니다."
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.aW52b2ljZV9udW1iZXI.desc": {
+          "source": "Invoice number for this transaction. Automatically generated by Paddle when you mark a transaction as `billed` where `collection_mode` is `manual`.",
+          "message": "이 트랜잭션의 인보이스 번호입니다. `collection_mode`이(가) `manual`인 트랜잭션을 `billed`(으)로 표시할 때 Paddle에서 자동으로 생성됩니다."
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.aW52b2ljZV9udW1iZXI.display_name": {
+          "source": "Invoice Number",
+          "message": "인보이스 번호"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.aW52b2ljZV9udW1iZXI.short_desc": {
+          "source": "Invoice number for this transaction",
+          "message": "이 트랜잭션의 인보이스 번호"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.aW5jbHVkZQ.desc": {
+          "source": "Include related entities in the response. Use a comma-separated list to specify multiple entities.",
+          "message": "응답에 관련 엔터티를 포함합니다. 여러 엔터티를 지정하려면 쉼표로 구분된 목록을 사용하세요."
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.aW5jbHVkZQ.display_name": {
+          "source": "Include",
+          "message": "포함"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.aW5jbHVkZQ.short_desc": {
+          "source": "Include related entities, ex: \"totals\", in the response",
+          "message": "응답에 관련 엔터티(예: \"totals\") 포함"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.aWQ.desc": {
+          "source": "Unique Paddle ID for this transaction entity, prefixed with `txn_`.",
+          "message": "`txn_` 접두사가 붙은, 이 트랜잭션 엔터티의 고유한 Paddle ID입니다."
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.aWQ.display_name": {
+          "source": "Id",
+          "message": "ID"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.aWQ.short_desc": {
+          "source": "Unique Paddle ID for this transaction entity, prefixed with 'txn_'",
+          "message": "'txn_' 접두사가 붙은, 이 트랜잭션 엔터티의 고유한 Paddle ID입니다."
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.aXRlbXM.desc": {
+          "source": "List of items to charge for. You can charge for items that you've added to your catalog by passing the Paddle ID of an existing price entity, or you can charge for non-catalog items by passing a price object.\n\nNon-catalog items can be for existing products, or you can pass a product object as part of your price to charge for a non-catalog product.",
+          "message": "청구할 항목 목록입니다. 기존 가격 엔터티의 Paddle ID를 전달하여 카탈로그에 추가한 항목에 대해 청구하거나, 가격 객체를 전달하여 카탈로그 외 항목에 대해 청구할 수 있습니다.\n\n카탈로그 외 항목은 기존 제품에 대한 것일 수도 있고, 비카탈로그 제품에 대해 청구하기 위해 가격의 일부로 제품 객체를 전달할 수도 있습니다."
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.aXRlbXM.display_name": {
+          "source": "Items",
+          "message": "항목"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.aXRlbXM.short_desc": {
+          "source": "What is being billed: a price and a quantity per line",
+          "message": "청구 대상: 라인당 가격 및 수량"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.b3JpZ2lu.allowed-value.c3RyaW5nOmFwaQ.display_name": {
+          "source": "api",
+          "message": "api"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.b3JpZ2lu.allowed-value.c3RyaW5nOnN1YnNjcmlwdGlvbl91cGRhdGU.display_name": {
+          "source": "subscription_update",
+          "message": "subscription_update"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.b3JpZ2lu.allowed-value.c3RyaW5nOnN1YnNjcmlwdGlvbl9jaGFyZ2U.display_name": {
+          "source": "subscription_charge",
+          "message": "subscription_charge"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.b3JpZ2lu.allowed-value.c3RyaW5nOnN1YnNjcmlwdGlvbl9wYXltZW50X21ldGhvZF9jaGFuZ2U.display_name": {
+          "source": "subscription_payment_method_change",
+          "message": "subscription_payment_method_change"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.b3JpZ2lu.allowed-value.c3RyaW5nOnN1YnNjcmlwdGlvbl9yZWN1cnJpbmc.display_name": {
+          "source": "subscription_recurring",
+          "message": "subscription_recurring"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.b3JpZ2lu.allowed-value.c3RyaW5nOndlYg.display_name": {
+          "source": "web",
+          "message": "web"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.b3JpZ2lu.desc": {
+          "source": "How the transaction came about - `api` for one created through the API, `web` for a Paddle.js checkout, or one of the `subscription_…` values for one Paddle raised itself for a renewal, charge or update.\n\nLeave this unset when creating a transaction: Paddle sets it.",
+          "message": "트랜잭션 발생 방식 - API를 통해 생성된 경우 `api`, Paddle.js 체크아웃인 경우 `web`, 갱신, 청구 또는 업데이트를 위해 Paddle이 자체적으로 생성한 경우 `subscription_…` 값 중 하나입니다.\n\n트랜잭션을 생성할 때는 이 값을 설정하지 마세요. Paddle이 설정합니다."
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.b3JpZ2lu.display_name": {
+          "source": "Origin",
+          "message": "출처"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.b3JpZ2lu.short_desc": {
+          "source": "How the transaction came about",
+          "message": "트랜잭션 발생 방식"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.c3RhdHVz.allowed-value.c3RyaW5nOmJpbGxlZA.display_name": {
+          "source": "billed",
+          "message": "billed"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.c3RhdHVz.allowed-value.c3RyaW5nOmNhbmNlbGVk.display_name": {
+          "source": "canceled",
+          "message": "canceled"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.c3RhdHVz.allowed-value.c3RyaW5nOmNvbXBsZXRlZA.display_name": {
+          "source": "completed",
+          "message": "completed"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.c3RhdHVz.allowed-value.c3RyaW5nOmRyYWZ0.display_name": {
+          "source": "draft",
+          "message": "초안"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.c3RhdHVz.allowed-value.c3RyaW5nOnBhaWQ.display_name": {
+          "source": "paid",
+          "message": "paid"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.c3RhdHVz.allowed-value.c3RyaW5nOnBhc3RfZHVl.display_name": {
+          "source": "past_due",
+          "message": "past_due"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.c3RhdHVz.allowed-value.c3RyaW5nOnJlYWR5.display_name": {
+          "source": "ready",
+          "message": "ready"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.c3RhdHVz.desc": {
+          "source": "Status of this transaction. You may set a transaction to `billed` when creating,\nor omit to let Paddle set the status. Transactions are created as `ready` if they have\nan `address_id`, `customer_id`, and `items`, otherwise they are created as `draft`.\n\nMarking as `billed` when creating is typically used when working with manually-collected\ntransactions as part of an invoicing workflow. Billed transactions cannot be updated, only canceled.",
+          "message": "이 트랜잭션의 상태입니다. 트랜잭션을 생성할 때 `billed`(으)로 설정하거나,\n생략하여 Paddle이 상태를 설정하도록 할 수 있습니다. 트랜잭션에\n`address_id`, `customer_id`, `items`이(가) 있는 경우 `ready`(으)로 생성되며, 그렇지 않으면 `draft`(으)로 생성됩니다.\n\n생성 시 `billed`(으)로 표시하는 것은 일반적으로 인보이스 워크플로의 일부로 수동 수금\n트랜잭션을 처리할 때 사용됩니다. 청구된 트랜잭션은 업데이트할 수 없으며 취소만 가능합니다."
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.c3RhdHVz.display_name": {
+          "source": "Status",
+          "message": "상태"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.c3RhdHVz.short_desc": {
+          "source": "Leave unset for a draft; \"billed\" issues it to the customer",
+          "message": "초안으로 두려면 설정하지 마세요. \"billed\"는 고객에게 발급합니다."
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.c3Vic2NyaXB0aW9uX2lk.desc": {
+          "source": "Paddle ID of the subscription that this transaction is for, prefixed with `sub_`.",
+          "message": "`sub_` 접두사가 붙은, 이 트랜잭션 대상 구독의 Paddle ID입니다."
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.c3Vic2NyaXB0aW9uX2lk.display_name": {
+          "source": "Subscription",
+          "message": "구독"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.c3Vic2NyaXB0aW9uX2lk.short_desc": {
+          "source": "Paddle ID of the subscription that this transaction is for, prefixed with 'sub_'",
+          "message": "'sub_' 접두사가 붙은, 이 트랜잭션 대상 구독의 Paddle ID입니다."
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.cGF5bWVudHM.desc": {
+          "source": "List of payment attempts for this transaction, including successful payments. Sorted by `created_at` in descending order, so most recent attempts are returned first.",
+          "message": "성공한 결제를 포함하여 이 트랜잭션에 대한 결제 시도 목록입니다. `created_at` 기준 내림차순으로 정렬되므로 가장 최근 시도가 먼저 반환됩니다."
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.cGF5bWVudHM.display_name": {
+          "source": "Payments",
+          "message": "결제"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.cGF5bWVudHM.short_desc": {
+          "source": "List of payment attempts for this transaction, including successful payments",
+          "message": "성공한 결제를 포함한 이 트랜잭션의 결제 시도 목록"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.dXBkYXRlZF9hdA.desc": {
+          "source": "RFC 3339 datetime string of when this entity was updated. Set automatically by Paddle.",
+          "message": "이 엔터티가 업데이트된 시점의 RFC 3339 날짜/시간 문자열입니다. Paddle에서 자동으로 설정합니다."
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.dXBkYXRlZF9hdA.display_name": {
+          "source": "Updated At",
+          "message": "수정 일시"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.dXBkYXRlZF9hdA.short_desc": {
+          "source": "RFC 3339 datetime string of when this entity was updated",
+          "message": "이 엔터티가 업데이트된 시점의 RFC 3339 날짜/시간 문자열"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.short_desc": {
+          "source": "Create a transaction, optionally billing it",
+          "message": "트랜잭션을 생성하고 선택적으로 청구합니다."
+        },
+        "app.UGFkZGxl.action.Y3VzdG9tZXItY3JlYXRlZA.desc": {
+          "source": "Fires when a customer is created, however it happened -- through the API, a checkout, or the Paddle dashboard.\n\nThis replaces polling the customer listing: a poll ordered by creation time cannot see a customer that was created and removed between two runs, and costs a request per interval whether or not anything happened.",
+          "message": "API, 체크아웃 또는 Paddle 대시보드 등 어떤 방식으로든 고객이 생성될 때 트리거됩니다.\n\n이는 고객 목록 폴링을 대체합니다. 생성 시간순으로 정렬된 폴링은 두 실행 사이에 생성되었다가 제거된 고객을 확인할 수 없으며, 이벤트 발생 여부와 관계없이 주기마다 요청 비용이 발생합니다."
+        },
+        "app.UGFkZGxl.action.Y3VzdG9tZXItY3JlYXRlZA.display_name": {
+          "source": "Customer Created",
+          "message": "고객 생성됨"
+        },
+        "app.UGFkZGxl.action.Y3VzdG9tZXItY3JlYXRlZA.short_desc": {
+          "source": "React to a customer being created",
+          "message": "고객 생성에 반응"
+        },
+        "app.UGFkZGxl.action.Y3VzdG9tZXItdXBkYXRlZA.desc": {
+          "source": "Fires when a customer changes, including when one is archived -- `status` becomes `archived` rather than the customer being deleted.\n\nPaddle sends the whole customer, not a diff, so compare against what you hold if you need to know which field moved.",
+          "message": "고객이 보관 처리될 때를 포함하여 고객 정보가 변경될 때 트리거됩니다. 고객이 삭제되는 대신 `status`이(가) `archived`(으)로 변경됩니다.\n\nPaddle은 변경 사항이 아닌 전체 고객 정보를 전송하므로 어떤 필드가 변경되었는지 확인해야 하는 경우 보유 중인 데이터와 비교하세요."
+        },
+        "app.UGFkZGxl.action.Y3VzdG9tZXItdXBkYXRlZA.display_name": {
+          "source": "Customer Updated",
+          "message": "고객 업데이트됨"
+        },
+        "app.UGFkZGxl.action.Y3VzdG9tZXItdXBkYXRlZA.short_desc": {
+          "source": "React to a customer's details changing",
+          "message": "고객 세부 정보 변경에 반응"
+        },
+        "app.UGFkZGxl.action.YXJjaGl2ZV9wcm9kdWN0.desc": {
+          "source": "Archives a product, so it can no longer be billed and stops appearing in listings.\n\nExisting subscriptions and transactions that reference the product are unaffected - archiving withdraws it from sale, it does not delete it. Paddle has no delete operation for a product.\n\n**The product's prices are not archived with it.** Archive each price separately if they should also be withdrawn.\n\nThis is **Update Product** with `status` fixed to `archived`; use that action to change anything else, or to un-archive by setting `status` back to `active`.",
+          "message": "제품을 보관 처리하여 더 이상 청구되지 않고 목록에 나타나지 않도록 합니다.\n\n해당 제품을 참조하는 기존 구독 및 트랜잭션은 영향을 받지 않습니다. 보관 처리는 판매를 중단하는 것일 뿐 삭제하는 것이 아닙니다. Paddle에는 제품 삭제 작업이 없습니다.\n\n**제품의 가격은 함께 보관 처리되지 않습니다.** 해당 가격도 철회해야 하는 경우 각 가격을 별도로 보관 처리하세요.\n\n이 작업은 `status`이(가) `archived`(으)로 고정된 **Update Product**입니다. 다른 항목을 변경하거나 `status`을(를) 다시 `active`(으)로 설정하여 보관 처리를 해제하려면 해당 작업을 사용하세요."
+        },
+        "app.UGFkZGxl.action.YXJjaGl2ZV9wcm9kdWN0.display_name": {
+          "source": "Archive Product",
+          "message": "제품 보관"
+        },
+        "app.UGFkZGxl.action.YXJjaGl2ZV9wcm9kdWN0.option.c3RhdHVz.allowed-value.c3RyaW5nOmFyY2hpdmVk.display_name": {
+          "source": "archived",
+          "message": "archived"
+        },
+        "app.UGFkZGxl.action.YXJjaGl2ZV9wcm9kdWN0.option.c3RhdHVz.desc": {
+          "source": "Fixed to `archived`: this action exists to retire a product. Use **Update Product** to set any other status.",
+          "message": "`archived`(으)로 고정됨: 이 작업은 제품을 사용 중단하기 위해 존재합니다. 다른 상태를 설정하려면 **Update Product**를 사용하세요."
+        },
+        "app.UGFkZGxl.action.YXJjaGl2ZV9wcm9kdWN0.option.c3RhdHVz.display_name": {
+          "source": "Status",
+          "message": "상태"
+        },
+        "app.UGFkZGxl.action.YXJjaGl2ZV9wcm9kdWN0.option.c3RhdHVz.short_desc": {
+          "source": "Always \"archived\" for this action",
+          "message": "이 작업의 경우 항상 \"archived\""
+        },
+        "app.UGFkZGxl.action.YXJjaGl2ZV9wcm9kdWN0.option.cHJvZHVjdF9pZA.desc": {
+          "source": "Paddle ID of the product entity to work with.",
+          "message": "작업할 제품 엔터티의 Paddle ID입니다."
+        },
+        "app.UGFkZGxl.action.YXJjaGl2ZV9wcm9kdWN0.option.cHJvZHVjdF9pZA.display_name": {
+          "source": "Product",
+          "message": "제품"
+        },
+        "app.UGFkZGxl.action.YXJjaGl2ZV9wcm9kdWN0.option.cHJvZHVjdF9pZA.short_desc": {
+          "source": "Paddle ID of the product entity to work with",
+          "message": "작업할 제품 엔터티의 Paddle ID"
+        },
+        "app.UGFkZGxl.action.YXJjaGl2ZV9wcm9kdWN0.short_desc": {
+          "source": "Retire a catalog product",
+          "message": "카탈로그 제품 사용 중단"
+        },
+        "app.UGFkZGxl.action.Z2V0X2N1c3RvbWVy.desc": {
+          "source": "Retrieves a customer by Paddle ID, including any `custom_data` stored against it.\n\nThis returns a customer whatever its status, so it is how an archived customer is read back - **List Customers** omits archived customers by default.",
+          "message": "고객에 저장된 `custom_data`을(를) 포함하여 Paddle ID로 고객을 조회합니다.\n\n상태에 관계없이 고객을 반환하므로 보관 처리된 고객을 다시 읽어올 때 사용됩니다. **List Customers**는 기본적으로 보관 처리된 고객을 생략합니다."
+        },
+        "app.UGFkZGxl.action.Z2V0X2N1c3RvbWVy.display_name": {
+          "source": "Get Customer",
+          "message": "고객 조회"
+        },
+        "app.UGFkZGxl.action.Z2V0X2N1c3RvbWVy.option.Y3VzdG9tZXJfaWQ.desc": {
+          "source": "Paddle ID of the customer entity to work with.: Unique Paddle ID for this customer entity, prefixed with `ctm_`.",
+          "message": "작업할 고객 엔터티의 Paddle ID.: `ctm_` 접두사가 붙은, 이 고객 엔터티의 고유한 Paddle ID입니다."
+        },
+        "app.UGFkZGxl.action.Z2V0X2N1c3RvbWVy.option.Y3VzdG9tZXJfaWQ.display_name": {
+          "source": "Customer",
+          "message": "고객"
+        },
+        "app.UGFkZGxl.action.Z2V0X2N1c3RvbWVy.option.Y3VzdG9tZXJfaWQ.short_desc": {
+          "source": "Paddle ID of the customer entity to work with",
+          "message": "작업할 고객 엔터티의 Paddle ID"
+        },
+        "app.UGFkZGxl.action.Z2V0X2N1c3RvbWVy.short_desc": {
+          "source": "Retrieve one customer",
+          "message": "고객 1명 조회"
+        },
+        "app.UGFkZGxl.action.Z2V0X2N1c3RvbWVyX2F1dGhfdG9rZW4.desc": {
+          "source": "Generates an authentication token for a customer, so that a checkout opened with Paddle.js knows who the buyer is without them signing in again.\n\n**The token is short-lived and grants access to that customer's data**, so generate it per checkout, server-side, and pass it straight to the browser rather than storing it.\n\nThis needs the `customer_auth_token.write` permission, which is separate from `customer.write`.",
+          "message": "고객용 인증 토큰을 생성하여 Paddle.js로 열린 체크아웃에서 구매자가 다시 로그인하지 않고도 누구인지 인식할 수 있도록 합니다.\n\n**이 토큰은 수명이 짧으며 해당 고객의 데이터에 대한 접근 권한을 부여**하므로, 저장하지 않고 체크아웃별로 서버 측에서 생성하여 브라우저로 직접 전달하세요.\n\n이 작업에는 `customer.write`과(와) 별개의 `customer_auth_token.write` 권한이 필요합니다."
+        },
+        "app.UGFkZGxl.action.Z2V0X2N1c3RvbWVyX2F1dGhfdG9rZW4.display_name": {
+          "source": "Get Customer Authentication Token",
+          "message": "고객 인증 토큰 가져오기"
+        },
+        "app.UGFkZGxl.action.Z2V0X2N1c3RvbWVyX2F1dGhfdG9rZW4.option.Y3VzdG9tZXJfaWQ.desc": {
+          "source": "Paddle ID of the customer entity to work with.: Unique Paddle ID for this customer entity, prefixed with `ctm_`.",
+          "message": "작업할 고객 엔터티의 Paddle ID.: `ctm_` 접두사가 붙은, 이 고객 엔터티의 고유한 Paddle ID입니다."
+        },
+        "app.UGFkZGxl.action.Z2V0X2N1c3RvbWVyX2F1dGhfdG9rZW4.option.Y3VzdG9tZXJfaWQ.display_name": {
+          "source": "Customer",
+          "message": "고객"
+        },
+        "app.UGFkZGxl.action.Z2V0X2N1c3RvbWVyX2F1dGhfdG9rZW4.option.Y3VzdG9tZXJfaWQ.short_desc": {
+          "source": "Paddle ID of the customer entity to work with",
+          "message": "작업할 고객 엔터티의 Paddle ID"
+        },
+        "app.UGFkZGxl.action.Z2V0X2N1c3RvbWVyX2F1dGhfdG9rZW4.short_desc": {
+          "source": "Generate a short-lived token identifying a customer to Paddle.js",
+          "message": "Paddle.js에 고객을 식별하는 단기 토큰 생성"
+        },
+        "app.UGFkZGxl.action.Z2V0X3ByaWNl.desc": {
+          "source": "Retrieves a price by Paddle ID, whatever its status.\n\nSet `include` to `product` to get the owning product in the same response.",
+          "message": "상태에 관계없이 Paddle ID로 가격을 조회합니다.\n\n동일한 응답에서 소유 제품을 함께 가져오려면 `include`을(를) `product`(으)로 설정하세요."
+        },
+        "app.UGFkZGxl.action.Z2V0X3ByaWNl.display_name": {
+          "source": "Get Price",
+          "message": "가격 가져오기"
+        },
+        "app.UGFkZGxl.action.Z2V0X3ByaWNl.option.aW5jbHVkZQ.desc": {
+          "source": "Include related entities in the response.",
+          "message": "응답에 관련 엔티티를 포함합니다."
+        },
+        "app.UGFkZGxl.action.Z2V0X3ByaWNl.option.aW5jbHVkZQ.display_name": {
+          "source": "Include",
+          "message": "포함"
+        },
+        "app.UGFkZGxl.action.Z2V0X3ByaWNl.option.aW5jbHVkZQ.short_desc": {
+          "source": "Include related entities in the response",
+          "message": "응답에 관련 엔티티 포함"
+        },
+        "app.UGFkZGxl.action.Z2V0X3ByaWNl.option.cHJpY2VfaWQ.desc": {
+          "source": "Paddle ID of the price entity to work with.",
+          "message": "작업할 가격 엔티티의 Paddle ID입니다."
+        },
+        "app.UGFkZGxl.action.Z2V0X3ByaWNl.option.cHJpY2VfaWQ.display_name": {
+          "source": "Price",
+          "message": "가격"
+        },
+        "app.UGFkZGxl.action.Z2V0X3ByaWNl.option.cHJpY2VfaWQ.short_desc": {
+          "source": "Paddle ID of the price entity to work with",
+          "message": "작업할 가격 엔티티의 Paddle ID"
+        },
+        "app.UGFkZGxl.action.Z2V0X3ByaWNl.short_desc": {
+          "source": "Retrieve one catalog price",
+          "message": "카탈로그 가격 1건 조회"
+        },
+        "app.UGFkZGxl.action.Z2V0X3Byb2R1Y3Q.desc": {
+          "source": "Retrieves a product by Paddle ID, whatever its status.\n\nSet `include` to `prices` to get the product's prices in the same response.",
+          "message": "상태에 관계없이 Paddle ID로 제품을 조회합니다.\n\n동일한 응답에서 제품의 가격들을 함께 가져오려면 `include`을(를) `prices`(으)로 설정하세요."
+        },
+        "app.UGFkZGxl.action.Z2V0X3Byb2R1Y3Q.display_name": {
+          "source": "Get Product",
+          "message": "제품 가져오기"
+        },
+        "app.UGFkZGxl.action.Z2V0X3Byb2R1Y3Q.option.aW5jbHVkZQ.desc": {
+          "source": "Include related entities in the response. Use a comma-separated list to specify multiple entities.",
+          "message": "응답에 관련 엔터티를 포함합니다. 여러 엔터티를 지정하려면 쉼표로 구분된 목록을 사용하세요."
+        },
+        "app.UGFkZGxl.action.Z2V0X3Byb2R1Y3Q.option.aW5jbHVkZQ.display_name": {
+          "source": "Include",
+          "message": "포함"
+        },
+        "app.UGFkZGxl.action.Z2V0X3Byb2R1Y3Q.option.aW5jbHVkZQ.short_desc": {
+          "source": "Include related entities in the response",
+          "message": "응답에 관련 엔티티 포함"
+        },
+        "app.UGFkZGxl.action.Z2V0X3Byb2R1Y3Q.option.cHJvZHVjdF9pZA.desc": {
+          "source": "Paddle ID of the product entity to work with.",
+          "message": "작업할 제품 엔터티의 Paddle ID입니다."
+        },
+        "app.UGFkZGxl.action.Z2V0X3Byb2R1Y3Q.option.cHJvZHVjdF9pZA.display_name": {
+          "source": "Product",
+          "message": "제품"
+        },
+        "app.UGFkZGxl.action.Z2V0X3Byb2R1Y3Q.option.cHJvZHVjdF9pZA.short_desc": {
+          "source": "Paddle ID of the product entity to work with",
+          "message": "작업할 제품 엔터티의 Paddle ID"
+        },
+        "app.UGFkZGxl.action.Z2V0X3Byb2R1Y3Q.short_desc": {
+          "source": "Retrieve one catalog product",
+          "message": "카탈로그 제품 1건 조회"
+        },
+        "app.UGFkZGxl.action.Z2V0X3JlcG9ydA.desc": {
+          "source": "Retrieves a report by Paddle ID.\n\n`status` is what matters: `pending` while Paddle is still generating it, `ready` when the file can be downloaded, `failed` if generation did not succeed, and `expired` once Paddle has removed it. `rows` is how many records it holds.\n\nThis is the action to poll after **Create Report**.",
+          "message": "Paddle ID로 보고서를 조회합니다.\n\n중요한 것은 `status`입니다. Paddle에서 아직 생성 중일 때는 `pending`, 파일을 다운로드할 수 있을 때는 `ready`, 생성이 실패했을 때는 `failed`, Paddle에서 삭제된 후에는 `expired` 상태가 됩니다. `rows`은(는) 포함된 레코드 수입니다.\n\n이 작업은 **Create Report** 후에 폴링할 액션입니다."
+        },
+        "app.UGFkZGxl.action.Z2V0X3JlcG9ydA.display_name": {
+          "source": "Get Report",
+          "message": "보고서 가져오기"
+        },
+        "app.UGFkZGxl.action.Z2V0X3JlcG9ydA.option.cmVwb3J0X2lk.desc": {
+          "source": "Paddle ID of the report entity.",
+          "message": "보고서 엔티티의 Paddle ID입니다."
+        },
+        "app.UGFkZGxl.action.Z2V0X3JlcG9ydA.option.cmVwb3J0X2lk.display_name": {
+          "source": "Report",
+          "message": "보고서"
+        },
+        "app.UGFkZGxl.action.Z2V0X3JlcG9ydA.option.cmVwb3J0X2lk.short_desc": {
+          "source": "Paddle ID of the report entity",
+          "message": "보고서 엔티티의 Paddle ID"
+        },
+        "app.UGFkZGxl.action.Z2V0X3JlcG9ydA.short_desc": {
+          "source": "Retrieve one report and its status",
+          "message": "보고서 1건 및 해당 상태 조회"
+        },
+        "app.UGFkZGxl.action.Z2V0X3JlcG9ydF9maWxl.desc": {
+          "source": "Returns a URL the report's CSV file can be downloaded from.\n\n**This is a URL, not the file**: fetch it separately. The URL is signed and short-lived - Paddle expires it within the hour - so generate it at the point of download rather than storing it.\n\nThe report must be `ready`; asking for the file of a report that is still `pending` fails.",
+          "message": "보고서의 CSV 파일을 다운로드할 수 있는 URL을 반환합니다.\n\n**이것은 파일이 아닌 URL입니다**: 별도로 다운로드해야 합니다. URL은 서명되어 있으며 수명이 짧아(Paddle에서 1시간 이내에 만료됨) 저장하지 말고 다운로드 시점에 생성하세요.\n\n보고서 상태가 `ready`이어야 합니다. 아직 `pending` 상태인 보고서의 파일을 요청하면 실패합니다."
+        },
+        "app.UGFkZGxl.action.Z2V0X3JlcG9ydF9maWxl.display_name": {
+          "source": "Get Report File",
+          "message": "보고서 파일 가져오기"
+        },
+        "app.UGFkZGxl.action.Z2V0X3JlcG9ydF9maWxl.option.cmVwb3J0X2lk.desc": {
+          "source": "Paddle ID of the report entity.",
+          "message": "보고서 엔티티의 Paddle ID입니다."
+        },
+        "app.UGFkZGxl.action.Z2V0X3JlcG9ydF9maWxl.option.cmVwb3J0X2lk.display_name": {
+          "source": "Report",
+          "message": "보고서"
+        },
+        "app.UGFkZGxl.action.Z2V0X3JlcG9ydF9maWxl.option.cmVwb3J0X2lk.short_desc": {
+          "source": "Paddle ID of the report entity",
+          "message": "보고서 엔티티의 Paddle ID"
+        },
+        "app.UGFkZGxl.action.Z2V0X3JlcG9ydF9maWxl.short_desc": {
+          "source": "Get a download URL for a report's CSV file",
+          "message": "보고서의 CSV 파일 다운로드 URL 가져오기"
+        },
+        "app.UGFkZGxl.action.Z2V0X3N1YnNjcmlwdGlvbg.desc": {
+          "source": "Retrieves a subscription by Paddle ID.\n\n`items` is what the customer is billed for, `current_billing_period` is the window they have paid for, and `scheduled_change` is a pause or cancellation already booked for a future date - a subscription can be `active` and still be due to end.\n\nSet `include` to `next_transaction` for what the next renewal will cost, or `recurring_transaction_details` for the recurring amount.",
+          "message": "Paddle ID로 구독을 조회합니다.\n\n`items`은(는) 고객에게 청구되는 항목이고, `current_billing_period`은(는) 결제된 기간이며, `scheduled_change`은(는) 미래 날짜로 이미 예약된 일시 정지 또는 취소입니다. 구독이 `active` 상태여도 종료 예정일 수 있습니다.\n\n다음 갱신 비용을 확인하려면 `include`을(를) `next_transaction`(으)로 설정하고, 정기 결제 금액을 확인하려면 `recurring_transaction_details`(으)로 설정하세요."
+        },
+        "app.UGFkZGxl.action.Z2V0X3N1YnNjcmlwdGlvbg.display_name": {
+          "source": "Get Subscription",
+          "message": "구독 가져오기"
+        },
+        "app.UGFkZGxl.action.Z2V0X3N1YnNjcmlwdGlvbg.option.aW5jbHVkZQ.desc": {
+          "source": "Include related entities in the response. Use a comma-separated list to specify multiple entities.",
+          "message": "응답에 관련 엔터티를 포함합니다. 여러 엔터티를 지정하려면 쉼표로 구분된 목록을 사용하세요."
+        },
+        "app.UGFkZGxl.action.Z2V0X3N1YnNjcmlwdGlvbg.option.aW5jbHVkZQ.display_name": {
+          "source": "Include",
+          "message": "포함"
+        },
+        "app.UGFkZGxl.action.Z2V0X3N1YnNjcmlwdGlvbg.option.aW5jbHVkZQ.short_desc": {
+          "source": "Include related entities in the response",
+          "message": "응답에 관련 엔티티 포함"
+        },
+        "app.UGFkZGxl.action.Z2V0X3N1YnNjcmlwdGlvbg.option.c3Vic2NyaXB0aW9uX2lk.desc": {
+          "source": "Paddle ID of the subscription entity to work with.",
+          "message": "작업할 구독 엔티티의 Paddle ID입니다."
+        },
+        "app.UGFkZGxl.action.Z2V0X3N1YnNjcmlwdGlvbg.option.c3Vic2NyaXB0aW9uX2lk.display_name": {
+          "source": "Subscription",
+          "message": "구독"
+        },
+        "app.UGFkZGxl.action.Z2V0X3N1YnNjcmlwdGlvbg.option.c3Vic2NyaXB0aW9uX2lk.short_desc": {
+          "source": "Paddle ID of the subscription entity to work with",
+          "message": "작업할 구독 엔티티의 Paddle ID"
+        },
+        "app.UGFkZGxl.action.Z2V0X3N1YnNjcmlwdGlvbg.short_desc": {
+          "source": "Retrieve one subscription",
+          "message": "구독 1건 조회"
+        },
+        "app.UGFkZGxl.action.Z2V0X3RyYW5zYWN0aW9u.desc": {
+          "source": "Retrieves a transaction by Paddle ID.\n\n`details.totals` breaks the amount down into subtotal, tax, discount and the balance still due; `payments` records each attempt to collect it, including failures. `status` is what says whether the money actually arrived.\n\nSet `include` to `customer` or `address` to resolve the related entities in the same response.",
+          "message": "Paddle ID로 거래를 조회합니다.\n\n`details.totals`은(는) 금액을 소계, 세금, 할인 및 미결제 잔액으로 세분화합니다. `payments`은(는) 실패를 포함하여 결제 수금 시도를 기록합니다. `status`은(는) 자금이 실제로 입금되었는지 여부를 나타냅니다.\n\n동일한 응답에서 관련 엔티티를 확인하려면 `include`을(를) `customer` 또는 `address`(으)로 설정하세요."
+        },
+        "app.UGFkZGxl.action.Z2V0X3RyYW5zYWN0aW9u.display_name": {
+          "source": "Get Transaction",
+          "message": "트랜잭션 가져오기"
+        },
+        "app.UGFkZGxl.action.Z2V0X3RyYW5zYWN0aW9u.option.aW5jbHVkZQ.desc": {
+          "source": "Include related entities in the response. Use a comma-separated list to specify multiple entities.",
+          "message": "응답에 관련 엔터티를 포함합니다. 여러 엔터티를 지정하려면 쉼표로 구분된 목록을 사용하세요."
+        },
+        "app.UGFkZGxl.action.Z2V0X3RyYW5zYWN0aW9u.option.aW5jbHVkZQ.display_name": {
+          "source": "Include",
+          "message": "포함"
+        },
+        "app.UGFkZGxl.action.Z2V0X3RyYW5zYWN0aW9u.option.aW5jbHVkZQ.short_desc": {
+          "source": "Include related entities in the response",
+          "message": "응답에 관련 엔티티 포함"
+        },
+        "app.UGFkZGxl.action.Z2V0X3RyYW5zYWN0aW9u.option.dHJhbnNhY3Rpb25faWQ.desc": {
+          "source": "Paddle ID of the transaction entity to work with.",
+          "message": "작업할 거래 엔티티의 Paddle ID입니다."
+        },
+        "app.UGFkZGxl.action.Z2V0X3RyYW5zYWN0aW9u.option.dHJhbnNhY3Rpb25faWQ.display_name": {
+          "source": "Transaction",
+          "message": "거래"
+        },
+        "app.UGFkZGxl.action.Z2V0X3RyYW5zYWN0aW9u.option.dHJhbnNhY3Rpb25faWQ.short_desc": {
+          "source": "Paddle ID of the transaction entity to work with",
+          "message": "작업할 거래 엔티티의 Paddle ID"
+        },
+        "app.UGFkZGxl.action.Z2V0X3RyYW5zYWN0aW9u.short_desc": {
+          "source": "Retrieve one transaction",
+          "message": "거래 1건 조회"
+        },
+        "app.UGFkZGxl.action.bGlzdF90cmFuc2FjdGlvbnM.desc": {
+          "source": "Lists transactions - the records that calculate and capture revenue.\n\nFilter by `status` to separate what has been paid (`completed`, `paid`) from what is outstanding (`billed`, `past_due`) or still a draft (`draft`, `ready`). `created_at`, `updated_at` and `billed_at` take an operator suffix, as in `updated_at[GT]=2026-01-01T00:00:00Z`, which is how an incremental sync picks up only what changed.\n\n`per_page` defaults to 30 here rather than 50, because a transaction is a large object.",
+          "message": "수익을 계산하고 캡처하는 레코드인 거래 목록을 조회합니다.\n\n`status`(으)로 필터링하여 결제 완료된 내역(`completed`, `paid`)과 미결제 내역(`billed`, `past_due`) 또는 임시 저장 내역(`draft`, `ready`)을 구분할 수 있습니다. `created_at`, `updated_at`, `billed_at`은(는) `updated_at[GT]=2026-01-01T00:00:00Z`과(와) 같이 연산자 접미사를 사용할 수 있으며, 이를 통해 증분 동기화에서 변경된 내용만 가져올 수 있습니다.\n\n거래는 큰 객체이므로 여기에서 `per_page`의 기본값은 50이 아닌 30입니다."
+        },
+        "app.UGFkZGxl.action.bGlzdF90cmFuc2FjdGlvbnM.display_name": {
+          "source": "List Transactions",
+          "message": "거래 목록 조회"
+        },
+        "app.UGFkZGxl.action.bGlzdF90cmFuc2FjdGlvbnM.option.Y29sbGVjdGlvbl9tb2Rl.allowed-value.c3RyaW5nOm1hbnVhbA.display_name": {
+          "source": "manual",
+          "message": "수동"
+        },
+        "app.UGFkZGxl.action.bGlzdF90cmFuc2FjdGlvbnM.option.Y29sbGVjdGlvbl9tb2Rl.allowed-value.c3RyaW5nOmF1dG9tYXRpYw.display_name": {
+          "source": "automatic",
+          "message": "자동"
+        },
+        "app.UGFkZGxl.action.bGlzdF90cmFuc2FjdGlvbnM.option.Y29sbGVjdGlvbl9tb2Rl.desc": {
+          "source": "Return entities that match the specified collection mode.: How payment is collected. `automatic` for checkout, `manual` for invoices.",
+          "message": "지정된 수금 모드와 일치하는 엔티티를 반환합니다. 결제 수금 방식: 체크아웃은 `automatic`, 인보이스는 `manual`."
+        },
+        "app.UGFkZGxl.action.bGlzdF90cmFuc2FjdGlvbnM.option.Y29sbGVjdGlvbl9tb2Rl.display_name": {
+          "source": "Collection Mode",
+          "message": "수금 모드"
+        },
+        "app.UGFkZGxl.action.bGlzdF90cmFuc2FjdGlvbnM.option.Y29sbGVjdGlvbl9tb2Rl.short_desc": {
+          "source": "Return entities that match the specified collection mode",
+          "message": "지정된 수금 모드와 일치하는 엔티티 반환"
+        },
+        "app.UGFkZGxl.action.bGlzdF90cmFuc2FjdGlvbnM.option.Y3JlYXRlZF9hdA.desc": {
+          "source": "Return entities created at a specific time. Pass an RFC 3339 datetime string, or use `[LT]` (less than), `[LTE]` (less than or equal to), `[GT]` (greater than), or `[GTE]` (greater than or equal to) operators. For example, `created_at=2023-04-18T17:03:26` or `created_at[LT]=2023-04-18T17:03:26`.",
+          "message": "특정 시간에 생성된 엔티티를 반환합니다. RFC 3339 날짜/시간 문자열을 전달하거나 `[LT]`(미만), `[LTE]`(이하), `[GT]`(초과) 또는 `[GTE]`(이상) 연산자를 사용하세요. 예: `created_at=2023-04-18T17:03:26` 또는 `created_at[LT]=2023-04-18T17:03:26`."
+        },
+        "app.UGFkZGxl.action.bGlzdF90cmFuc2FjdGlvbnM.option.Y3JlYXRlZF9hdA.display_name": {
+          "source": "Created At",
+          "message": "생성 일시"
+        },
+        "app.UGFkZGxl.action.bGlzdF90cmFuc2FjdGlvbnM.option.Y3JlYXRlZF9hdA.short_desc": {
+          "source": "Filter on creation time; takes an operator suffix",
+          "message": "생성 시간 기준 필터링. 연산자 접미사 지원"
+        },
+        "app.UGFkZGxl.action.bGlzdF90cmFuc2FjdGlvbnM.option.Y3VzdG9tZXJfaWQ.desc": {
+          "source": "Return entities related to the specified customer. Use a comma-separated list to specify multiple customer IDs.",
+          "message": "지정된 고객과 관련된 엔티티를 반환합니다. 여러 고객 ID를 지정하려면 쉼표로 구분된 목록을 사용하세요."
+        },
+        "app.UGFkZGxl.action.bGlzdF90cmFuc2FjdGlvbnM.option.Y3VzdG9tZXJfaWQ.display_name": {
+          "source": "Customer",
+          "message": "고객"
+        },
+        "app.UGFkZGxl.action.bGlzdF90cmFuc2FjdGlvbnM.option.Y3VzdG9tZXJfaWQ.short_desc": {
+          "source": "Return only transactions for these customers",
+          "message": "해당 고객의 거래만 반환"
+        },
+        "app.UGFkZGxl.action.bGlzdF90cmFuc2FjdGlvbnM.option.YWZ0ZXI.desc": {
+          "source": "The pagination cursor: return the records that come after this Paddle ID.\n\nTake it from the `after` query argument of the `meta.pagination.next` URL in the previous response. Paddle always returns that URL, even on the last page, so page on `meta.pagination.has_more` rather than on its presence.",
+          "message": "페이지 매김 커서: 이 Paddle ID 뒤에 오는 레코드를 반환합니다.\n\n이전 응답의 `meta.pagination.next` URL에 있는 `after` 쿼리 인자에서 가져옵니다. Paddle은 마지막 페이지에서도 항상 해당 URL을 반환하므로, URL 존재 여부가 아닌 `meta.pagination.has_more`을(를) 기준으로 페이지 매김을 처리하세요."
+        },
+        "app.UGFkZGxl.action.bGlzdF90cmFuc2FjdGlvbnM.option.YWZ0ZXI.display_name": {
+          "source": "After",
+          "message": "이후"
+        },
+        "app.UGFkZGxl.action.bGlzdF90cmFuc2FjdGlvbnM.option.YWZ0ZXI.short_desc": {
+          "source": "Return records after this Paddle ID",
+          "message": "이 Paddle ID 뒤의 레코드 반환"
+        },
+        "app.UGFkZGxl.action.bGlzdF90cmFuc2FjdGlvbnM.option.YmlsbGVkX2F0.desc": {
+          "source": "Return entities billed at a specific time. Pass an RFC 3339 datetime string, or use `[LT]` (less than), `[LTE]` (less than or equal to), `[GT]` (greater than), or `[GTE]` (greater than or equal to) operators. For example, `billed_at=2023-04-18T17:03:26` or `billed_at[LT]=2023-04-18T17:03:26`.",
+          "message": "특정 시간에 청구된 엔티티를 반환합니다. RFC 3339 날짜/시간 문자열을 전달하거나 `[LT]`(미만), `[LTE]`(이하), `[GT]`(초과) 또는 `[GTE]`(이상) 연산자를 사용하세요. 예: `billed_at=2023-04-18T17:03:26` 또는 `billed_at[LT]=2023-04-18T17:03:26`."
+        },
+        "app.UGFkZGxl.action.bGlzdF90cmFuc2FjdGlvbnM.option.YmlsbGVkX2F0.display_name": {
+          "source": "Billed At",
+          "message": "청구 일시"
+        },
+        "app.UGFkZGxl.action.bGlzdF90cmFuc2FjdGlvbnM.option.YmlsbGVkX2F0.short_desc": {
+          "source": "Filter on when the transaction was billed; takes an operator suffix",
+          "message": "거래 청구 시점 기준 필터링. 연산자 접미사 지원"
+        },
+        "app.UGFkZGxl.action.bGlzdF90cmFuc2FjdGlvbnM.option.aW52b2ljZV9udW1iZXI.desc": {
+          "source": "Return entities that match the invoice number. Use a comma-separated list to specify multiple invoice numbers.",
+          "message": "송장 번호와 일치하는 엔티티를 반환합니다. 여러 송장 번호를 지정하려면 쉼표로 구분된 목록을 사용하세요."
+        },
+        "app.UGFkZGxl.action.bGlzdF90cmFuc2FjdGlvbnM.option.aW52b2ljZV9udW1iZXI.display_name": {
+          "source": "Invoice Number",
+          "message": "인보이스 번호"
+        },
+        "app.UGFkZGxl.action.bGlzdF90cmFuc2FjdGlvbnM.option.aW52b2ljZV9udW1iZXI.short_desc": {
+          "source": "Return entities that match the invoice number",
+          "message": "송장 번호와 일치하는 엔티티 반환"
+        },
+        "app.UGFkZGxl.action.bGlzdF90cmFuc2FjdGlvbnM.option.aW5jbHVkZQ.desc": {
+          "source": "Include related entities in the response. Use a comma-separated list to specify multiple entities.",
+          "message": "응답에 관련 엔터티를 포함합니다. 여러 엔터티를 지정하려면 쉼표로 구분된 목록을 사용하세요."
+        },
+        "app.UGFkZGxl.action.bGlzdF90cmFuc2FjdGlvbnM.option.aW5jbHVkZQ.display_name": {
+          "source": "Include",
+          "message": "포함"
+        },
+        "app.UGFkZGxl.action.bGlzdF90cmFuc2FjdGlvbnM.option.aW5jbHVkZQ.short_desc": {
+          "source": "Include related entities in the response",
+          "message": "응답에 관련 엔티티 포함"
+        },
+        "app.UGFkZGxl.action.bGlzdF90cmFuc2FjdGlvbnM.option.aWQ.desc": {
+          "source": "Return only the IDs specified. Use a comma-separated list to get multiple entities.",
+          "message": "지정된 ID만 반환합니다. 여러 엔티티를 가져오려면 쉼표로 구분된 목록을 사용하세요."
+        },
+        "app.UGFkZGxl.action.bGlzdF90cmFuc2FjdGlvbnM.option.aWQ.display_name": {
+          "source": "Transaction",
+          "message": "거래"
+        },
+        "app.UGFkZGxl.action.bGlzdF90cmFuc2FjdGlvbnM.option.aWQ.short_desc": {
+          "source": "Return only these transactions",
+          "message": "해당 거래만 반환"
+        },
+        "app.UGFkZGxl.action.bGlzdF90cmFuc2FjdGlvbnM.option.b3JkZXJfYnk.desc": {
+          "source": "Order returned entities by the specified field and direction (`[ASC]` or `[DESC]`). For example, `?order_by=id[ASC]`.\n\nValid fields for ordering: `id`.",
+          "message": "지정된 필드 및 방향(`[ASC]` 또는 `[DESC]`)을 기준으로 반환된 엔티티를 정렬합니다. 예: `?order_by=id[ASC]`.\n\n정렬에 유효한 필드: `id`."
+        },
+        "app.UGFkZGxl.action.bGlzdF90cmFuc2FjdGlvbnM.option.b3JkZXJfYnk.display_name": {
+          "source": "Order By",
+          "message": "정렬 기준"
+        },
+        "app.UGFkZGxl.action.bGlzdF90cmFuc2FjdGlvbnM.option.b3JkZXJfYnk.short_desc": {
+          "source": "Order by a field and direction, ex: \"id[ASC]\"",
+          "message": "필드 및 방향으로 정렬 (예: \"id[ASC]\")"
+        },
+        "app.UGFkZGxl.action.bGlzdF90cmFuc2FjdGlvbnM.option.b3JpZ2lu.desc": {
+          "source": "Return entities related to the specified origin. Use a comma-separated list to specify multiple origins.",
+          "message": "지정된 출처와 관련된 엔티티를 반환합니다. 여러 출처를 지정하려면 쉼표로 구분된 목록을 사용하세요."
+        },
+        "app.UGFkZGxl.action.bGlzdF90cmFuc2FjdGlvbnM.option.b3JpZ2lu.display_name": {
+          "source": "Origin",
+          "message": "출처"
+        },
+        "app.UGFkZGxl.action.bGlzdF90cmFuc2FjdGlvbnM.option.b3JpZ2lu.short_desc": {
+          "source": "Return entities related to the specified origin",
+          "message": "지정된 출처와 관련된 엔티티 반환"
+        },
+        "app.UGFkZGxl.action.bGlzdF90cmFuc2FjdGlvbnM.option.c2tpcF9jb3VudA.desc": {
+          "source": "Set to `true` to skip the count query Paddle runs for a listing.\n\n`meta.pagination.estimated_total` then returns `-1` instead of a count. Worth setting when paging through a large collection, where the count costs time on every page and is not used.",
+          "message": "Paddle이 목록 조회를 위해 실행하는 개수(count) 쿼리를 건너뛰려면 `true`(으)로 설정하세요.\n\n설정 시 `meta.pagination.estimated_total`은(는) 개수 대신 `-1`을(를) 반환합니다. 개수 조회가 매 페이지마다 시간을 소모하고 사용되지 않는 대규모 컬렉션을 페이징할 때 설정할 가치가 있습니다."
+        },
+        "app.UGFkZGxl.action.bGlzdF90cmFuc2FjdGlvbnM.option.c2tpcF9jb3VudA.display_name": {
+          "source": "Skip Count",
+          "message": "개수 건너뛰기"
+        },
+        "app.UGFkZGxl.action.bGlzdF90cmFuc2FjdGlvbnM.option.c2tpcF9jb3VudA.short_desc": {
+          "source": "Skip the count query, making a large listing cheaper",
+          "message": "개수 쿼리를 건너뛰어 대규모 목록 조회의 비용 절감"
+        },
+        "app.UGFkZGxl.action.bGlzdF90cmFuc2FjdGlvbnM.option.c3RhdHVz.desc": {
+          "source": "Return entities that match the specified status. Use a comma-separated list to specify multiple status values.",
+          "message": "지정된 상태와 일치하는 엔티티를 반환합니다. 여러 상태 값을 지정하려면 쉼표로 구분된 목록을 사용하세요."
+        },
+        "app.UGFkZGxl.action.bGlzdF90cmFuc2FjdGlvbnM.option.c3RhdHVz.display_name": {
+          "source": "Status",
+          "message": "상태"
+        },
+        "app.UGFkZGxl.action.bGlzdF90cmFuc2FjdGlvbnM.option.c3RhdHVz.short_desc": {
+          "source": "Return only transactions with these statuses",
+          "message": "해당 상태의 거래만 반환"
+        },
+        "app.UGFkZGxl.action.bGlzdF90cmFuc2FjdGlvbnM.option.c3Vic2NyaXB0aW9uX2lk.desc": {
+          "source": "Return entities related to the specified subscription. Use a comma-separated list to specify multiple subscription IDs. Pass `null` to return entities that aren't related to any subscription.",
+          "message": "지정된 구독과 관련된 엔티티를 반환합니다. 여러 구독 ID를 지정하려면 쉼표로 구분된 목록을 사용하세요. 어떤 구독과도 관련되지 않은 엔티티를 반환하려면 `null`을(를) 전달하세요."
+        },
+        "app.UGFkZGxl.action.bGlzdF90cmFuc2FjdGlvbnM.option.c3Vic2NyaXB0aW9uX2lk.display_name": {
+          "source": "Subscription",
+          "message": "구독"
+        },
+        "app.UGFkZGxl.action.bGlzdF90cmFuc2FjdGlvbnM.option.c3Vic2NyaXB0aW9uX2lk.short_desc": {
+          "source": "Return only transactions for these subscriptions",
+          "message": "해당 구독의 거래만 반환"
+        },
+        "app.UGFkZGxl.action.bGlzdF90cmFuc2FjdGlvbnM.option.cGVyX3BhZ2U.desc": {
+          "source": "How many records to return in one request, up to Paddle's maximum of `200`. Asking for more returns the maximum rather than failing.\n\n`meta.pagination.per_page` in the response reports how many were actually returned, and `meta.pagination.has_more` says whether another page exists.",
+          "message": "한 번의 요청으로 반환할 레코드 수(Paddle의 최대값인 `200`까지). 더 많은 수를 요청하면 실패하는 대신 최대값을 반환합니다.\n\n응답의 `meta.pagination.per_page`은(는) 실제로 반환된 수를 보고하며, `meta.pagination.has_more`은(는) 다른 페이지가 존재하는지 여부를 나타냅니다."
+        },
+        "app.UGFkZGxl.action.bGlzdF90cmFuc2FjdGlvbnM.option.cGVyX3BhZ2U.display_name": {
+          "source": "Per Page",
+          "message": "페이지당 항목 수"
+        },
+        "app.UGFkZGxl.action.bGlzdF90cmFuc2FjdGlvbnM.option.cGVyX3BhZ2U.short_desc": {
+          "source": "How many records to return, up to 200",
+          "message": "반환할 레코드 수(최대 200개)"
+        },
+        "app.UGFkZGxl.action.bGlzdF90cmFuc2FjdGlvbnM.option.dXBkYXRlZF9hdA.desc": {
+          "source": "Return entities updated at a specific time. Pass an RFC 3339 datetime string, or use `[LT]` (less than), `[LTE]` (less than or equal to), `[GT]` (greater than), or `[GTE]` (greater than or equal to) operators. For example, `updated_at=2023-04-18T17:03:26` or `updated_at[LT]=2023-04-18T17:03:26`.",
+          "message": "특정 시간에 업데이트된 엔티티를 반환합니다. RFC 3339 날짜/시간 문자열을 전달하거나 `[LT]`(미만), `[LTE]`(이하), `[GT]`(초과) 또는 `[GTE]`(이상) 연산자를 사용하세요. 예: `updated_at=2023-04-18T17:03:26` 또는 `updated_at[LT]=2023-04-18T17:03:26`."
+        },
+        "app.UGFkZGxl.action.bGlzdF90cmFuc2FjdGlvbnM.option.dXBkYXRlZF9hdA.display_name": {
+          "source": "Updated At",
+          "message": "수정 일시"
+        },
+        "app.UGFkZGxl.action.bGlzdF90cmFuc2FjdGlvbnM.option.dXBkYXRlZF9hdA.short_desc": {
+          "source": "Filter on last-modified time; takes an operator suffix",
+          "message": "최종 수정 시간 기준 필터링. 연산자 접미사 지원"
+        },
+        "app.UGFkZGxl.action.bGlzdF90cmFuc2FjdGlvbnM.short_desc": {
+          "source": "List the transactions in this Paddle account",
+          "message": "이 Paddle 계정의 거래 목록 조회"
+        },
+        "app.UGFkZGxl.action.bGlzdF9jdXN0b21lcl9jcmVkaXRfYmFsYW5jZXM.desc": {
+          "source": "Lists the credit a customer holds, one entry per currency.\n\nEach entry splits the balance into `available` credit, credit `reserved` against an unpaid transaction, and the `used` total. Credit arises from a refund or an adjustment and is applied automatically to the customer's next transaction in the same currency.\n\nThis listing is not paginated: every currency the customer holds credit in is returned.",
+          "message": "고객이 보유한 크레딧을 통화당 하나의 항목으로 나열합니다.\n\n각 항목은 잔액을 `available` 크레딧, 미결제 거래에 대한 크레딧 `reserved`, 그리고 `used` 합계로 나눕니다. 크레딧은 환불이나 조정으로 인해 발생하며 동일한 통화로 진행되는 고객의 다음 거래에 자동으로 적용됩니다.\n\n이 목록은 페이지 매김되지 않으며 고객이 크레딧을 보유하고 있는 모든 통화가 반환됩니다."
+        },
+        "app.UGFkZGxl.action.bGlzdF9jdXN0b21lcl9jcmVkaXRfYmFsYW5jZXM.display_name": {
+          "source": "List Customer Credit Balances",
+          "message": "고객 크레딧 잔액 목록 조회"
+        },
+        "app.UGFkZGxl.action.bGlzdF9jdXN0b21lcl9jcmVkaXRfYmFsYW5jZXM.option.Y3VycmVuY3lfY29kZQ.desc": {
+          "source": "Return entities that match the currency code. Use a comma-separated list to specify multiple currency codes.",
+          "message": "통화 코드와 일치하는 엔티티를 반환합니다. 여러 통화 코드를 지정하려면 쉼표로 구분된 목록을 사용하세요."
+        },
+        "app.UGFkZGxl.action.bGlzdF9jdXN0b21lcl9jcmVkaXRfYmFsYW5jZXM.option.Y3VycmVuY3lfY29kZQ.display_name": {
+          "source": "Currency Code",
+          "message": "통화 코드"
+        },
+        "app.UGFkZGxl.action.bGlzdF9jdXN0b21lcl9jcmVkaXRfYmFsYW5jZXM.option.Y3VycmVuY3lfY29kZQ.short_desc": {
+          "source": "Return only balances in these currencies",
+          "message": "이 통화의 잔액만 반환"
+        },
+        "app.UGFkZGxl.action.bGlzdF9jdXN0b21lcl9jcmVkaXRfYmFsYW5jZXM.option.Y3VzdG9tZXJfaWQ.desc": {
+          "source": "Paddle ID of the customer entity to work with.: Unique Paddle ID for this customer entity, prefixed with `ctm_`.",
+          "message": "작업할 고객 엔터티의 Paddle ID.: `ctm_` 접두사가 붙은, 이 고객 엔터티의 고유한 Paddle ID입니다."
+        },
+        "app.UGFkZGxl.action.bGlzdF9jdXN0b21lcl9jcmVkaXRfYmFsYW5jZXM.option.Y3VzdG9tZXJfaWQ.display_name": {
+          "source": "Customer",
+          "message": "고객"
+        },
+        "app.UGFkZGxl.action.bGlzdF9jdXN0b21lcl9jcmVkaXRfYmFsYW5jZXM.option.Y3VzdG9tZXJfaWQ.short_desc": {
+          "source": "Paddle ID of the customer entity to work with",
+          "message": "작업할 고객 엔터티의 Paddle ID"
+        },
+        "app.UGFkZGxl.action.bGlzdF9jdXN0b21lcl9jcmVkaXRfYmFsYW5jZXM.short_desc": {
+          "source": "List a customer's credit balances, by currency",
+          "message": "통화별 고객 크레딧 잔액 목록 조회"
+        },
+        "app.UGFkZGxl.action.bGlzdF9jdXN0b21lcnM.desc": {
+          "source": "Lists customers, newest first by default.\n\nOnly `active` customers are returned unless `status` says otherwise, which is worth knowing when a lookup by email comes back empty: an archived customer is still there. Use `email` for an exact address and `search` for a partial match across `id`, `name` and `email`.\n\nThe response is Paddle's list envelope: the customers are in `data`, and `meta.pagination` carries the cursor for the next page.",
+          "message": "고객 목록을 기본적으로 최신순으로 조회합니다.\n\n`status`에 다른 설정이 없는 한 `active` 고객만 반환되며, 이는 이메일 조회가 비어 있을 때 유의할 점입니다. 보관된 고객은 여전히 존재하기 때문입니다. 정확한 주소는 `email`를 사용하고, `id`, `name`, `email`에 걸친 부분 일치는 `search`를 사용하세요.\n\n응답은 Paddle의 목록 봉투 형식입니다. 고객은 `data`에 포함되며, `meta.pagination`에는 다음 페이지를 위한 커서가 포함됩니다."
+        },
+        "app.UGFkZGxl.action.bGlzdF9jdXN0b21lcnM.display_name": {
+          "source": "List Customers",
+          "message": "고객 목록 조회"
+        },
+        "app.UGFkZGxl.action.bGlzdF9jdXN0b21lcnM.option.YWZ0ZXI.desc": {
+          "source": "The pagination cursor: return the records that come after this Paddle ID.\n\nTake it from the `after` query argument of the `meta.pagination.next` URL in the previous response. Paddle always returns that URL, even on the last page, so page on `meta.pagination.has_more` rather than on its presence.",
+          "message": "페이지 매김 커서: 이 Paddle ID 뒤에 오는 레코드를 반환합니다.\n\n이전 응답의 `meta.pagination.next` URL에 있는 `after` 쿼리 인자에서 가져옵니다. Paddle은 마지막 페이지에서도 항상 해당 URL을 반환하므로, URL 존재 여부가 아닌 `meta.pagination.has_more`을(를) 기준으로 페이지 매김을 처리하세요."
+        },
+        "app.UGFkZGxl.action.bGlzdF9jdXN0b21lcnM.option.YWZ0ZXI.display_name": {
+          "source": "After",
+          "message": "이후"
+        },
+        "app.UGFkZGxl.action.bGlzdF9jdXN0b21lcnM.option.YWZ0ZXI.short_desc": {
+          "source": "Return records after this Paddle ID",
+          "message": "이 Paddle ID 뒤의 레코드 반환"
+        },
+        "app.UGFkZGxl.action.bGlzdF9jdXN0b21lcnM.option.ZW1haWw.desc": {
+          "source": "Return entities that exactly match the specified email address. Use a comma-separated list to specify multiple email addresses. Recommended for precise matching of email addresses.",
+          "message": "지정된 이메일 주소와 정확히 일치하는 엔티티를 반환합니다. 여러 이메일 주소를 지정하려면 쉼표로 구분된 목록을 사용하세요. 이메일 주소의 정확한 매칭에 권장됩니다."
+        },
+        "app.UGFkZGxl.action.bGlzdF9jdXN0b21lcnM.option.ZW1haWw.display_name": {
+          "source": "Email",
+          "message": "이메일"
+        },
+        "app.UGFkZGxl.action.bGlzdF9jdXN0b21lcnM.option.ZW1haWw.short_desc": {
+          "source": "Return only customers with these exact email addresses",
+          "message": "정확히 이 이메일 주소를 가진 고객만 반환"
+        },
+        "app.UGFkZGxl.action.bGlzdF9jdXN0b21lcnM.option.aWQ.desc": {
+          "source": "Return only the IDs specified. Use a comma-separated list to get multiple entities.",
+          "message": "지정된 ID만 반환합니다. 여러 엔티티를 가져오려면 쉼표로 구분된 목록을 사용하세요."
+        },
+        "app.UGFkZGxl.action.bGlzdF9jdXN0b21lcnM.option.aWQ.display_name": {
+          "source": "Customer",
+          "message": "고객"
+        },
+        "app.UGFkZGxl.action.bGlzdF9jdXN0b21lcnM.option.aWQ.short_desc": {
+          "source": "Return only these customers",
+          "message": "이 고객만 반환"
+        },
+        "app.UGFkZGxl.action.bGlzdF9jdXN0b21lcnM.option.b3JkZXJfYnk.desc": {
+          "source": "Order returned entities by the specified field and direction (`[ASC]` or `[DESC]`). For example, `?order_by=id[ASC]`.\n\nValid fields for ordering: `id`.",
+          "message": "지정된 필드 및 방향(`[ASC]` 또는 `[DESC]`)을 기준으로 반환된 엔티티를 정렬합니다. 예: `?order_by=id[ASC]`.\n\n정렬에 유효한 필드: `id`."
+        },
+        "app.UGFkZGxl.action.bGlzdF9jdXN0b21lcnM.option.b3JkZXJfYnk.display_name": {
+          "source": "Order By",
+          "message": "정렬 기준"
+        },
+        "app.UGFkZGxl.action.bGlzdF9jdXN0b21lcnM.option.b3JkZXJfYnk.short_desc": {
+          "source": "Order by a field and direction, ex: \"id[ASC]\"",
+          "message": "필드 및 방향으로 정렬 (예: \"id[ASC]\")"
+        },
+        "app.UGFkZGxl.action.bGlzdF9jdXN0b21lcnM.option.c2VhcmNo.desc": {
+          "source": "Return entities that match a search query. Searches `id`, `name`, and `email` fields. Use the `email` query parameter for precise matching of email addresses.",
+          "message": "검색 쿼리와 일치하는 엔티티를 반환합니다. `id`, `name`, `email` 필드를 검색합니다. 이메일 주소의 정확한 매칭을 위해서는 `email` 쿼리 매개변수를 사용하세요."
+        },
+        "app.UGFkZGxl.action.bGlzdF9jdXN0b21lcnM.option.c2VhcmNo.display_name": {
+          "source": "Search",
+          "message": "검색"
+        },
+        "app.UGFkZGxl.action.bGlzdF9jdXN0b21lcnM.option.c2VhcmNo.short_desc": {
+          "source": "Match against id, name and email",
+          "message": "id, name 및 email과 일치"
+        },
+        "app.UGFkZGxl.action.bGlzdF9jdXN0b21lcnM.option.c2tpcF9jb3VudA.desc": {
+          "source": "Set to `true` to skip the count query Paddle runs for a listing.\n\n`meta.pagination.estimated_total` then returns `-1` instead of a count. Worth setting when paging through a large collection, where the count costs time on every page and is not used.",
+          "message": "Paddle이 목록 조회를 위해 실행하는 개수(count) 쿼리를 건너뛰려면 `true`(으)로 설정하세요.\n\n설정 시 `meta.pagination.estimated_total`은(는) 개수 대신 `-1`을(를) 반환합니다. 개수 조회가 매 페이지마다 시간을 소모하고 사용되지 않는 대규모 컬렉션을 페이징할 때 설정할 가치가 있습니다."
+        },
+        "app.UGFkZGxl.action.bGlzdF9jdXN0b21lcnM.option.c2tpcF9jb3VudA.display_name": {
+          "source": "Skip Count",
+          "message": "개수 건너뛰기"
+        },
+        "app.UGFkZGxl.action.bGlzdF9jdXN0b21lcnM.option.c2tpcF9jb3VudA.short_desc": {
+          "source": "Skip the count query, making a large listing cheaper",
+          "message": "개수 쿼리를 건너뛰어 대규모 목록 조회의 비용 절감"
+        },
+        "app.UGFkZGxl.action.bGlzdF9jdXN0b21lcnM.option.c3RhdHVz.desc": {
+          "source": "Return entities that match the specified status. Use a comma-separated list to specify multiple status values.",
+          "message": "지정된 상태와 일치하는 엔티티를 반환합니다. 여러 상태 값을 지정하려면 쉼표로 구분된 목록을 사용하세요."
+        },
+        "app.UGFkZGxl.action.bGlzdF9jdXN0b21lcnM.option.c3RhdHVz.display_name": {
+          "source": "Status",
+          "message": "상태"
+        },
+        "app.UGFkZGxl.action.bGlzdF9jdXN0b21lcnM.option.c3RhdHVz.short_desc": {
+          "source": "Return only customers with these statuses",
+          "message": "이 상태의 고객만 반환"
+        },
+        "app.UGFkZGxl.action.bGlzdF9jdXN0b21lcnM.option.cGVyX3BhZ2U.desc": {
+          "source": "How many records to return in one request, up to Paddle's maximum of `200`. Asking for more returns the maximum rather than failing.\n\n`meta.pagination.per_page` in the response reports how many were actually returned, and `meta.pagination.has_more` says whether another page exists.",
+          "message": "한 번의 요청으로 반환할 레코드 수(Paddle의 최대값인 `200`까지). 더 많은 수를 요청하면 실패하는 대신 최대값을 반환합니다.\n\n응답의 `meta.pagination.per_page`은(는) 실제로 반환된 수를 보고하며, `meta.pagination.has_more`은(는) 다른 페이지가 존재하는지 여부를 나타냅니다."
+        },
+        "app.UGFkZGxl.action.bGlzdF9jdXN0b21lcnM.option.cGVyX3BhZ2U.display_name": {
+          "source": "Per Page",
+          "message": "페이지당 항목 수"
+        },
+        "app.UGFkZGxl.action.bGlzdF9jdXN0b21lcnM.option.cGVyX3BhZ2U.short_desc": {
+          "source": "How many records to return, up to 200",
+          "message": "반환할 레코드 수(최대 200개)"
+        },
+        "app.UGFkZGxl.action.bGlzdF9jdXN0b21lcnM.short_desc": {
+          "source": "List the customers in this Paddle account",
+          "message": "이 Paddle 계정의 고객 목록 조회"
+        },
+        "app.UGFkZGxl.action.bGlzdF9wcm9kdWN0cw.desc": {
+          "source": "Lists catalog products.\n\nOnly `active` products are returned unless `status` says otherwise. Set `include` to `prices` to get each product's prices in the same request, which saves a call per product when building a pricing page.\n\nThe products are in `data`, and `meta.pagination` carries the cursor for the next page.",
+          "message": "카탈로그 제품 목록을 조회합니다.\n\n`status`에 다른 설정이 없는 한 `active` 제품만 반환됩니다. 동일한 요청에서 각 제품의 가격을 가져오려면 `include`를 `prices`(으)로 설정하세요. 요금 페이지를 구축할 때 제품당 호출을 줄일 수 있습니다.\n\n제품은 `data`에 포함되며, `meta.pagination`에는 다음 페이지를 위한 커서가 포함됩니다."
+        },
+        "app.UGFkZGxl.action.bGlzdF9wcm9kdWN0cw.display_name": {
+          "source": "List Products",
+          "message": "제품 목록"
+        },
+        "app.UGFkZGxl.action.bGlzdF9wcm9kdWN0cw.option.YWZ0ZXI.desc": {
+          "source": "The pagination cursor: return the records that come after this Paddle ID.\n\nTake it from the `after` query argument of the `meta.pagination.next` URL in the previous response. Paddle always returns that URL, even on the last page, so page on `meta.pagination.has_more` rather than on its presence.",
+          "message": "페이지 매김 커서: 이 Paddle ID 뒤에 오는 레코드를 반환합니다.\n\n이전 응답의 `meta.pagination.next` URL에 있는 `after` 쿼리 인자에서 가져옵니다. Paddle은 마지막 페이지에서도 항상 해당 URL을 반환하므로, URL 존재 여부가 아닌 `meta.pagination.has_more`을(를) 기준으로 페이지 매김을 처리하세요."
+        },
+        "app.UGFkZGxl.action.bGlzdF9wcm9kdWN0cw.option.YWZ0ZXI.display_name": {
+          "source": "After",
+          "message": "이후"
+        },
+        "app.UGFkZGxl.action.bGlzdF9wcm9kdWN0cw.option.YWZ0ZXI.short_desc": {
+          "source": "Return records after this Paddle ID",
+          "message": "이 Paddle ID 뒤의 레코드 반환"
+        },
+        "app.UGFkZGxl.action.bGlzdF9wcm9kdWN0cw.option.aW5jbHVkZQ.desc": {
+          "source": "Include related entities in the response. Use a comma-separated list to specify multiple entities.",
+          "message": "응답에 관련 엔터티를 포함합니다. 여러 엔터티를 지정하려면 쉼표로 구분된 목록을 사용하세요."
+        },
+        "app.UGFkZGxl.action.bGlzdF9wcm9kdWN0cw.option.aW5jbHVkZQ.display_name": {
+          "source": "Include",
+          "message": "포함"
+        },
+        "app.UGFkZGxl.action.bGlzdF9wcm9kdWN0cw.option.aW5jbHVkZQ.short_desc": {
+          "source": "Include related entities in the response",
+          "message": "응답에 관련 엔티티 포함"
+        },
+        "app.UGFkZGxl.action.bGlzdF9wcm9kdWN0cw.option.aWQ.desc": {
+          "source": "Return only the IDs specified. Use a comma-separated list to get multiple entities.",
+          "message": "지정된 ID만 반환합니다. 여러 엔티티를 가져오려면 쉼표로 구분된 목록을 사용하세요."
+        },
+        "app.UGFkZGxl.action.bGlzdF9wcm9kdWN0cw.option.aWQ.display_name": {
+          "source": "Product",
+          "message": "제품"
+        },
+        "app.UGFkZGxl.action.bGlzdF9wcm9kdWN0cw.option.aWQ.short_desc": {
+          "source": "Return only these products",
+          "message": "이 제품만 반환"
+        },
+        "app.UGFkZGxl.action.bGlzdF9wcm9kdWN0cw.option.b3JkZXJfYnk.desc": {
+          "source": "Order returned entities by the specified field and direction (`[ASC]` or `[DESC]`). For example, `?order_by=id[ASC]`.\n\nValid fields for ordering: `id`.",
+          "message": "지정된 필드 및 방향(`[ASC]` 또는 `[DESC]`)을 기준으로 반환된 엔티티를 정렬합니다. 예: `?order_by=id[ASC]`.\n\n정렬에 유효한 필드: `id`."
+        },
+        "app.UGFkZGxl.action.bGlzdF9wcm9kdWN0cw.option.b3JkZXJfYnk.display_name": {
+          "source": "Order By",
+          "message": "정렬 기준"
+        },
+        "app.UGFkZGxl.action.bGlzdF9wcm9kdWN0cw.option.b3JkZXJfYnk.short_desc": {
+          "source": "Order by a field and direction, ex: \"id[ASC]\"",
+          "message": "필드 및 방향으로 정렬 (예: \"id[ASC]\")"
+        },
+        "app.UGFkZGxl.action.bGlzdF9wcm9kdWN0cw.option.c2tpcF9jb3VudA.desc": {
+          "source": "Set to `true` to skip the count query Paddle runs for a listing.\n\n`meta.pagination.estimated_total` then returns `-1` instead of a count. Worth setting when paging through a large collection, where the count costs time on every page and is not used.",
+          "message": "Paddle이 목록 조회를 위해 실행하는 개수(count) 쿼리를 건너뛰려면 `true`(으)로 설정하세요.\n\n설정 시 `meta.pagination.estimated_total`은(는) 개수 대신 `-1`을(를) 반환합니다. 개수 조회가 매 페이지마다 시간을 소모하고 사용되지 않는 대규모 컬렉션을 페이징할 때 설정할 가치가 있습니다."
+        },
+        "app.UGFkZGxl.action.bGlzdF9wcm9kdWN0cw.option.c2tpcF9jb3VudA.display_name": {
+          "source": "Skip Count",
+          "message": "개수 건너뛰기"
+        },
+        "app.UGFkZGxl.action.bGlzdF9wcm9kdWN0cw.option.c2tpcF9jb3VudA.short_desc": {
+          "source": "Skip the count query, making a large listing cheaper",
+          "message": "개수 쿼리를 건너뛰어 대규모 목록 조회의 비용 절감"
+        },
+        "app.UGFkZGxl.action.bGlzdF9wcm9kdWN0cw.option.c3RhdHVz.desc": {
+          "source": "Return entities that match the specified status. Use a comma-separated list to specify multiple status values.",
+          "message": "지정된 상태와 일치하는 엔티티를 반환합니다. 여러 상태 값을 지정하려면 쉼표로 구분된 목록을 사용하세요."
+        },
+        "app.UGFkZGxl.action.bGlzdF9wcm9kdWN0cw.option.c3RhdHVz.display_name": {
+          "source": "Status",
+          "message": "상태"
+        },
+        "app.UGFkZGxl.action.bGlzdF9wcm9kdWN0cw.option.c3RhdHVz.short_desc": {
+          "source": "Return only products with these statuses",
+          "message": "이 상태의 제품만 반환"
+        },
+        "app.UGFkZGxl.action.bGlzdF9wcm9kdWN0cw.option.cGVyX3BhZ2U.desc": {
+          "source": "How many records to return in one request, up to Paddle's maximum of `200`. Asking for more returns the maximum rather than failing.\n\n`meta.pagination.per_page` in the response reports how many were actually returned, and `meta.pagination.has_more` says whether another page exists.",
+          "message": "한 번의 요청으로 반환할 레코드 수(Paddle의 최대값인 `200`까지). 더 많은 수를 요청하면 실패하는 대신 최대값을 반환합니다.\n\n응답의 `meta.pagination.per_page`은(는) 실제로 반환된 수를 보고하며, `meta.pagination.has_more`은(는) 다른 페이지가 존재하는지 여부를 나타냅니다."
+        },
+        "app.UGFkZGxl.action.bGlzdF9wcm9kdWN0cw.option.cGVyX3BhZ2U.display_name": {
+          "source": "Per Page",
+          "message": "페이지당 항목 수"
+        },
+        "app.UGFkZGxl.action.bGlzdF9wcm9kdWN0cw.option.cGVyX3BhZ2U.short_desc": {
+          "source": "How many records to return, up to 200",
+          "message": "반환할 레코드 수(최대 200개)"
+        },
+        "app.UGFkZGxl.action.bGlzdF9wcm9kdWN0cw.option.dGF4X2NhdGVnb3J5.desc": {
+          "source": "Return entities that match the specified tax category. Use a comma-separated list to specify multiple tax categories.",
+          "message": "지정된 세금 카테고리와 일치하는 엔티티를 반환합니다. 여러 세금 카테고리를 지정하려면 쉼표로 구분된 목록을 사용하세요."
+        },
+        "app.UGFkZGxl.action.bGlzdF9wcm9kdWN0cw.option.dGF4X2NhdGVnb3J5.display_name": {
+          "source": "Tax Category",
+          "message": "세금 카테고리"
+        },
+        "app.UGFkZGxl.action.bGlzdF9wcm9kdWN0cw.option.dGF4X2NhdGVnb3J5.short_desc": {
+          "source": "Return entities that match the specified tax category",
+          "message": "지정된 세금 카테고리와 일치하는 엔티티 반환"
+        },
+        "app.UGFkZGxl.action.bGlzdF9wcm9kdWN0cw.option.dHlwZQ.allowed-value.c3RyaW5nOmN1c3RvbQ.display_name": {
+          "source": "custom",
+          "message": "맞춤"
+        },
+        "app.UGFkZGxl.action.bGlzdF9wcm9kdWN0cw.option.dHlwZQ.allowed-value.c3RyaW5nOnN0YW5kYXJk.display_name": {
+          "source": "standard",
+          "message": "표준"
+        },
+        "app.UGFkZGxl.action.bGlzdF9wcm9kdWN0cw.option.dHlwZQ.desc": {
+          "source": "Return items that match the specified type.: Type of item. Standard items are considered part of your catalog and are shown in the Paddle dashboard.",
+          "message": "지정된 유형과 일치하는 항목을 반환합니다.: 항목 유형입니다. 표준 항목은 카탈로그의 일부로 간주되며 Paddle 대시보드에 표시됩니다."
+        },
+        "app.UGFkZGxl.action.bGlzdF9wcm9kdWN0cw.option.dHlwZQ.display_name": {
+          "source": "Type",
+          "message": "유형"
+        },
+        "app.UGFkZGxl.action.bGlzdF9wcm9kdWN0cw.option.dHlwZQ.short_desc": {
+          "source": "Return items that match the specified type",
+          "message": "지정된 유형과 일치하는 항목 반환"
+        },
+        "app.UGFkZGxl.action.bGlzdF9wcm9kdWN0cw.short_desc": {
+          "source": "List the products in the catalog",
+          "message": "카탈로그의 제품 목록 조회"
+        },
+        "app.UGFkZGxl.action.bGlzdF9wcmljZXM.desc": {
+          "source": "Lists catalog prices.\n\nOnly `active` prices are returned unless `status` says otherwise. Filter by `product_id` for one product's prices, or by `recurring` to separate subscription prices from one-off ones. Set `include` to `product` to get the owning product alongside each price.\n\nThe prices are in `data`, and `meta.pagination` carries the cursor for the next page.",
+          "message": "카탈로그 가격 목록을 조회합니다.\n\n`status`에 다른 설정이 없는 한 `active` 가격만 반환됩니다. 한 제품의 가격을 보려면 `product_id`(으)로 필터링하고, 일회성 가격과 구독 가격을 구분하려면 `recurring`(으)로 필터링하세요. 각 가격과 함께 소유 제품을 가져오려면 `include`를 `product`(으)로 설정하세요.\n\n가격은 `data`에 포함되며, `meta.pagination`에는 다음 페이지를 위한 커서가 포함됩니다."
+        },
+        "app.UGFkZGxl.action.bGlzdF9wcmljZXM.display_name": {
+          "source": "List Prices",
+          "message": "가격 목록 조회"
+        },
+        "app.UGFkZGxl.action.bGlzdF9wcmljZXM.option.YWZ0ZXI.desc": {
+          "source": "The pagination cursor: return the records that come after this Paddle ID.\n\nTake it from the `after` query argument of the `meta.pagination.next` URL in the previous response. Paddle always returns that URL, even on the last page, so page on `meta.pagination.has_more` rather than on its presence.",
+          "message": "페이지 매김 커서: 이 Paddle ID 뒤에 오는 레코드를 반환합니다.\n\n이전 응답의 `meta.pagination.next` URL에 있는 `after` 쿼리 인자에서 가져옵니다. Paddle은 마지막 페이지에서도 항상 해당 URL을 반환하므로, URL 존재 여부가 아닌 `meta.pagination.has_more`을(를) 기준으로 페이지 매김을 처리하세요."
+        },
+        "app.UGFkZGxl.action.bGlzdF9wcmljZXM.option.YWZ0ZXI.display_name": {
+          "source": "After",
+          "message": "이후"
+        },
+        "app.UGFkZGxl.action.bGlzdF9wcmljZXM.option.YWZ0ZXI.short_desc": {
+          "source": "Return records after this Paddle ID",
+          "message": "이 Paddle ID 뒤의 레코드 반환"
+        },
+        "app.UGFkZGxl.action.bGlzdF9wcmljZXM.option.YmlsbGluZ19jeWNsZS5mcmVxdWVuY3k.desc": {
+          "source": "Return entities where the price billing cycle frequency matches this value.",
+          "message": "가격 청구 주기 빈도가 이 값과 일치하는 엔티티를 반환합니다."
+        },
+        "app.UGFkZGxl.action.bGlzdF9wcmljZXM.option.YmlsbGluZ19jeWNsZS5mcmVxdWVuY3k.display_name": {
+          "source": "Billing Cycle Frequency",
+          "message": "청구 주기 빈도"
+        },
+        "app.UGFkZGxl.action.bGlzdF9wcmljZXM.option.YmlsbGluZ19jeWNsZS5mcmVxdWVuY3k.short_desc": {
+          "source": "Return entities where the price billing cycle frequency matches this value",
+          "message": "가격 청구 주기 빈도가 이 값과 일치하는 엔티티 반환"
+        },
+        "app.UGFkZGxl.action.bGlzdF9wcmljZXM.option.YmlsbGluZ19jeWNsZS5pbnRlcnZhbA.allowed-value.c3RyaW5nOm1vbnRo.display_name": {
+          "source": "month",
+          "message": "month"
+        },
+        "app.UGFkZGxl.action.bGlzdF9wcmljZXM.option.YmlsbGluZ19jeWNsZS5pbnRlcnZhbA.allowed-value.c3RyaW5nOmRheQ.display_name": {
+          "source": "day",
+          "message": "일"
+        },
+        "app.UGFkZGxl.action.bGlzdF9wcmljZXM.option.YmlsbGluZ19jeWNsZS5pbnRlcnZhbA.allowed-value.c3RyaW5nOndlZWs.display_name": {
+          "source": "week",
+          "message": "week"
+        },
+        "app.UGFkZGxl.action.bGlzdF9wcmljZXM.option.YmlsbGluZ19jeWNsZS5pbnRlcnZhbA.allowed-value.c3RyaW5nOnllYXI.display_name": {
+          "source": "year",
+          "message": "년"
+        },
+        "app.UGFkZGxl.action.bGlzdF9wcmljZXM.option.YmlsbGluZ19jeWNsZS5pbnRlcnZhbA.desc": {
+          "source": "Return entities where the price billing cycle interval matches this value.",
+          "message": "가격 청구 주기 간격이 이 값과 일치하는 엔티티를 반환합니다."
+        },
+        "app.UGFkZGxl.action.bGlzdF9wcmljZXM.option.YmlsbGluZ19jeWNsZS5pbnRlcnZhbA.display_name": {
+          "source": "Billing Cycle Interval",
+          "message": "청구 주기 간격"
+        },
+        "app.UGFkZGxl.action.bGlzdF9wcmljZXM.option.YmlsbGluZ19jeWNsZS5pbnRlcnZhbA.short_desc": {
+          "source": "Return entities where the price billing cycle interval matches this value",
+          "message": "가격 청구 주기 간격이 이 값과 일치하는 엔티티 반환"
+        },
+        "app.UGFkZGxl.action.bGlzdF9wcmljZXM.option.aW5jbHVkZQ.desc": {
+          "source": "Include related entities in the response.",
+          "message": "응답에 관련 엔티티를 포함합니다."
+        },
+        "app.UGFkZGxl.action.bGlzdF9wcmljZXM.option.aW5jbHVkZQ.display_name": {
+          "source": "Include",
+          "message": "포함"
+        },
+        "app.UGFkZGxl.action.bGlzdF9wcmljZXM.option.aW5jbHVkZQ.short_desc": {
+          "source": "Include related entities in the response",
+          "message": "응답에 관련 엔티티 포함"
+        },
+        "app.UGFkZGxl.action.bGlzdF9wcmljZXM.option.aWQ.desc": {
+          "source": "Return only the IDs specified. Use a comma-separated list to get multiple entities.",
+          "message": "지정된 ID만 반환합니다. 여러 엔티티를 가져오려면 쉼표로 구분된 목록을 사용하세요."
+        },
+        "app.UGFkZGxl.action.bGlzdF9wcmljZXM.option.aWQ.display_name": {
+          "source": "Price",
+          "message": "가격"
+        },
+        "app.UGFkZGxl.action.bGlzdF9wcmljZXM.option.aWQ.short_desc": {
+          "source": "Return only these prices",
+          "message": "이 가격만 반환"
+        },
+        "app.UGFkZGxl.action.bGlzdF9wcmljZXM.option.b3JkZXJfYnk.desc": {
+          "source": "Order returned entities by the specified field and direction (`[ASC]` or `[DESC]`). For example, `?order_by=id[ASC]`.\n\nValid fields for ordering: `id`.",
+          "message": "지정된 필드 및 방향(`[ASC]` 또는 `[DESC]`)을 기준으로 반환된 엔티티를 정렬합니다. 예: `?order_by=id[ASC]`.\n\n정렬에 유효한 필드: `id`."
+        },
+        "app.UGFkZGxl.action.bGlzdF9wcmljZXM.option.b3JkZXJfYnk.display_name": {
+          "source": "Order By",
+          "message": "정렬 기준"
+        },
+        "app.UGFkZGxl.action.bGlzdF9wcmljZXM.option.b3JkZXJfYnk.short_desc": {
+          "source": "Order by a field and direction, ex: \"id[ASC]\"",
+          "message": "필드 및 방향으로 정렬 (예: \"id[ASC]\")"
+        },
+        "app.UGFkZGxl.action.bGlzdF9wcmljZXM.option.c2tpcF9jb3VudA.desc": {
+          "source": "Set to `true` to skip the count query Paddle runs for a listing.\n\n`meta.pagination.estimated_total` then returns `-1` instead of a count. Worth setting when paging through a large collection, where the count costs time on every page and is not used.",
+          "message": "Paddle이 목록 조회를 위해 실행하는 개수(count) 쿼리를 건너뛰려면 `true`(으)로 설정하세요.\n\n설정 시 `meta.pagination.estimated_total`은(는) 개수 대신 `-1`을(를) 반환합니다. 개수 조회가 매 페이지마다 시간을 소모하고 사용되지 않는 대규모 컬렉션을 페이징할 때 설정할 가치가 있습니다."
+        },
+        "app.UGFkZGxl.action.bGlzdF9wcmljZXM.option.c2tpcF9jb3VudA.display_name": {
+          "source": "Skip Count",
+          "message": "개수 건너뛰기"
+        },
+        "app.UGFkZGxl.action.bGlzdF9wcmljZXM.option.c2tpcF9jb3VudA.short_desc": {
+          "source": "Skip the count query, making a large listing cheaper",
+          "message": "개수 쿼리를 건너뛰어 대규모 목록 조회의 비용 절감"
+        },
+        "app.UGFkZGxl.action.bGlzdF9wcmljZXM.option.c3RhdHVz.desc": {
+          "source": "Return entities that match the specified status. Use a comma-separated list to specify multiple status values.",
+          "message": "지정된 상태와 일치하는 엔티티를 반환합니다. 여러 상태 값을 지정하려면 쉼표로 구분된 목록을 사용하세요."
+        },
+        "app.UGFkZGxl.action.bGlzdF9wcmljZXM.option.c3RhdHVz.display_name": {
+          "source": "Status",
+          "message": "상태"
+        },
+        "app.UGFkZGxl.action.bGlzdF9wcmljZXM.option.c3RhdHVz.short_desc": {
+          "source": "Return only prices with these statuses",
+          "message": "이 상태의 가격만 반환"
+        },
+        "app.UGFkZGxl.action.bGlzdF9wcmljZXM.option.cGVyX3BhZ2U.desc": {
+          "source": "How many records to return in one request, up to Paddle's maximum of `200`. Asking for more returns the maximum rather than failing.\n\n`meta.pagination.per_page` in the response reports how many were actually returned, and `meta.pagination.has_more` says whether another page exists.",
+          "message": "한 번의 요청으로 반환할 레코드 수(Paddle의 최대값인 `200`까지). 더 많은 수를 요청하면 실패하는 대신 최대값을 반환합니다.\n\n응답의 `meta.pagination.per_page`은(는) 실제로 반환된 수를 보고하며, `meta.pagination.has_more`은(는) 다른 페이지가 존재하는지 여부를 나타냅니다."
+        },
+        "app.UGFkZGxl.action.bGlzdF9wcmljZXM.option.cGVyX3BhZ2U.display_name": {
+          "source": "Per Page",
+          "message": "페이지당 항목 수"
+        },
+        "app.UGFkZGxl.action.bGlzdF9wcmljZXM.option.cGVyX3BhZ2U.short_desc": {
+          "source": "How many records to return, up to 200",
+          "message": "반환할 레코드 수(최대 200개)"
+        },
+        "app.UGFkZGxl.action.bGlzdF9wcmljZXM.option.cHJvZHVjdF9pZA.desc": {
+          "source": "Return entities related to the specified product. Use a comma-separated list to specify multiple product IDs.",
+          "message": "지정된 제품과 관련된 엔티티를 반환합니다. 여러 제품 ID를 지정하려면 쉼표로 구분된 목록을 사용하세요."
+        },
+        "app.UGFkZGxl.action.bGlzdF9wcmljZXM.option.cHJvZHVjdF9pZA.display_name": {
+          "source": "Product",
+          "message": "제품"
+        },
+        "app.UGFkZGxl.action.bGlzdF9wcmljZXM.option.cHJvZHVjdF9pZA.short_desc": {
+          "source": "Return only prices for these products",
+          "message": "이 제품들의 가격만 반환"
+        },
+        "app.UGFkZGxl.action.bGlzdF9wcmljZXM.option.cmVjdXJyaW5n.desc": {
+          "source": "Determine whether returned entities are for recurring prices (`true`) or one-time prices (`false`).",
+          "message": "반환된 엔티티가 반복 가격(`true`)인지 일회성 가격(`false`)인지 결정합니다."
+        },
+        "app.UGFkZGxl.action.bGlzdF9wcmljZXM.option.cmVjdXJyaW5n.display_name": {
+          "source": "Recurring",
+          "message": "반복"
+        },
+        "app.UGFkZGxl.action.bGlzdF9wcmljZXM.option.cmVjdXJyaW5n.short_desc": {
+          "source": "True for subscription prices, false for one-off prices",
+          "message": "구독 가격은 true, 일회성 가격은 false"
+        },
+        "app.UGFkZGxl.action.bGlzdF9wcmljZXM.option.dHlwZQ.allowed-value.c3RyaW5nOmN1c3RvbQ.display_name": {
+          "source": "custom",
+          "message": "맞춤"
+        },
+        "app.UGFkZGxl.action.bGlzdF9wcmljZXM.option.dHlwZQ.allowed-value.c3RyaW5nOnN0YW5kYXJk.display_name": {
+          "source": "standard",
+          "message": "표준"
+        },
+        "app.UGFkZGxl.action.bGlzdF9wcmljZXM.option.dHlwZQ.desc": {
+          "source": "Return items that match the specified type.: Type of item. Standard items are considered part of your catalog and are shown in the Paddle dashboard.",
+          "message": "지정된 유형과 일치하는 항목을 반환합니다.: 항목 유형입니다. 표준 항목은 카탈로그의 일부로 간주되며 Paddle 대시보드에 표시됩니다."
+        },
+        "app.UGFkZGxl.action.bGlzdF9wcmljZXM.option.dHlwZQ.display_name": {
+          "source": "Type",
+          "message": "유형"
+        },
+        "app.UGFkZGxl.action.bGlzdF9wcmljZXM.option.dHlwZQ.short_desc": {
+          "source": "Return items that match the specified type",
+          "message": "지정된 유형과 일치하는 항목 반환"
+        },
+        "app.UGFkZGxl.action.bGlzdF9wcmljZXM.short_desc": {
+          "source": "List the prices in the catalog",
+          "message": "카탈로그의 가격 목록 조회"
+        },
+        "app.UGFkZGxl.action.bGlzdF9yZXBvcnRz.desc": {
+          "source": "Lists reports and the state each is in.\n\nA report is generated asynchronously: it starts `pending`, becomes `ready` when the file can be downloaded, and is `expired` once Paddle has removed it. Filter by `status` to find the ones worth downloading.\n\nReports are kept for a limited time, so a job that generates one should download it rather than assume it will still be there later.",
+          "message": "보고서 및 각 보고서의 상태 목록을 조회합니다.\n\n보고서는 비동기식으로 생성됩니다. 처음에는 `pending` 상태로 시작하여 파일을 다운로드할 수 있게 되면 `ready` 상태가 되고, Paddle에서 삭제되면 `expired` 상태가 됩니다. 다운로드할 가치가 있는 항목을 찾으려면 `status`(으)로 필터링하세요.\n\n보고서는 제한된 시간 동안만 보관되므로 보고서를 생성하는 작업은 나중에 그대로 남아 있을 것이라 가정하지 말고 바로 다운로드해야 합니다."
+        },
+        "app.UGFkZGxl.action.bGlzdF9yZXBvcnRz.display_name": {
+          "source": "List Reports",
+          "message": "보고서 목록 조회"
+        },
+        "app.UGFkZGxl.action.bGlzdF9yZXBvcnRz.option.YWZ0ZXI.desc": {
+          "source": "The pagination cursor: return the records that come after this Paddle ID.\n\nTake it from the `after` query argument of the `meta.pagination.next` URL in the previous response. Paddle always returns that URL, even on the last page, so page on `meta.pagination.has_more` rather than on its presence.",
+          "message": "페이지 매김 커서: 이 Paddle ID 뒤에 오는 레코드를 반환합니다.\n\n이전 응답의 `meta.pagination.next` URL에 있는 `after` 쿼리 인자에서 가져옵니다. Paddle은 마지막 페이지에서도 항상 해당 URL을 반환하므로, URL 존재 여부가 아닌 `meta.pagination.has_more`을(를) 기준으로 페이지 매김을 처리하세요."
+        },
+        "app.UGFkZGxl.action.bGlzdF9yZXBvcnRz.option.YWZ0ZXI.display_name": {
+          "source": "After",
+          "message": "이후"
+        },
+        "app.UGFkZGxl.action.bGlzdF9yZXBvcnRz.option.YWZ0ZXI.short_desc": {
+          "source": "Return records after this Paddle ID",
+          "message": "이 Paddle ID 뒤의 레코드 반환"
+        },
+        "app.UGFkZGxl.action.bGlzdF9yZXBvcnRz.option.b3JkZXJfYnk.desc": {
+          "source": "Order returned entities by the specified field and direction (`[ASC]` or `[DESC]`). For example, `?order_by=id[ASC]`.\n\nValid fields for ordering: `id`.",
+          "message": "지정된 필드 및 방향(`[ASC]` 또는 `[DESC]`)을 기준으로 반환된 엔티티를 정렬합니다. 예: `?order_by=id[ASC]`.\n\n정렬에 유효한 필드: `id`."
+        },
+        "app.UGFkZGxl.action.bGlzdF9yZXBvcnRz.option.b3JkZXJfYnk.display_name": {
+          "source": "Order By",
+          "message": "정렬 기준"
+        },
+        "app.UGFkZGxl.action.bGlzdF9yZXBvcnRz.option.b3JkZXJfYnk.short_desc": {
+          "source": "Order by a field and direction, ex: \"id[ASC]\"",
+          "message": "필드 및 방향으로 정렬 (예: \"id[ASC]\")"
+        },
+        "app.UGFkZGxl.action.bGlzdF9yZXBvcnRz.option.c2tpcF9jb3VudA.desc": {
+          "source": "Set to `true` to skip the count query Paddle runs for a listing.\n\n`meta.pagination.estimated_total` then returns `-1` instead of a count. Worth setting when paging through a large collection, where the count costs time on every page and is not used.",
+          "message": "Paddle이 목록 조회를 위해 실행하는 개수(count) 쿼리를 건너뛰려면 `true`(으)로 설정하세요.\n\n설정 시 `meta.pagination.estimated_total`은(는) 개수 대신 `-1`을(를) 반환합니다. 개수 조회가 매 페이지마다 시간을 소모하고 사용되지 않는 대규모 컬렉션을 페이징할 때 설정할 가치가 있습니다."
+        },
+        "app.UGFkZGxl.action.bGlzdF9yZXBvcnRz.option.c2tpcF9jb3VudA.display_name": {
+          "source": "Skip Count",
+          "message": "개수 건너뛰기"
+        },
+        "app.UGFkZGxl.action.bGlzdF9yZXBvcnRz.option.c2tpcF9jb3VudA.short_desc": {
+          "source": "Skip the count query, making a large listing cheaper",
+          "message": "개수 쿼리를 건너뛰어 대규모 목록 조회의 비용 절감"
+        },
+        "app.UGFkZGxl.action.bGlzdF9yZXBvcnRz.option.c3RhdHVz.desc": {
+          "source": "Return entities that match the specified status. Use a comma-separated list to specify multiple status values.",
+          "message": "지정된 상태와 일치하는 엔티티를 반환합니다. 여러 상태 값을 지정하려면 쉼표로 구분된 목록을 사용하세요."
+        },
+        "app.UGFkZGxl.action.bGlzdF9yZXBvcnRz.option.c3RhdHVz.display_name": {
+          "source": "Status",
+          "message": "상태"
+        },
+        "app.UGFkZGxl.action.bGlzdF9yZXBvcnRz.option.c3RhdHVz.short_desc": {
+          "source": "Return only reports with these statuses",
+          "message": "이 상태의 보고서만 반환"
+        },
+        "app.UGFkZGxl.action.bGlzdF9yZXBvcnRz.option.cGVyX3BhZ2U.desc": {
+          "source": "How many records to return in one request, up to Paddle's maximum of `200`. Asking for more returns the maximum rather than failing.\n\n`meta.pagination.per_page` in the response reports how many were actually returned, and `meta.pagination.has_more` says whether another page exists.",
+          "message": "한 번의 요청으로 반환할 레코드 수(Paddle의 최대값인 `200`까지). 더 많은 수를 요청하면 실패하는 대신 최대값을 반환합니다.\n\n응답의 `meta.pagination.per_page`은(는) 실제로 반환된 수를 보고하며, `meta.pagination.has_more`은(는) 다른 페이지가 존재하는지 여부를 나타냅니다."
+        },
+        "app.UGFkZGxl.action.bGlzdF9yZXBvcnRz.option.cGVyX3BhZ2U.display_name": {
+          "source": "Per Page",
+          "message": "페이지당 항목 수"
+        },
+        "app.UGFkZGxl.action.bGlzdF9yZXBvcnRz.option.cGVyX3BhZ2U.short_desc": {
+          "source": "How many records to return, up to 200",
+          "message": "반환할 레코드 수(최대 200개)"
+        },
+        "app.UGFkZGxl.action.bGlzdF9yZXBvcnRz.short_desc": {
+          "source": "List the reports requested from this account",
+          "message": "이 계정에서 요청된 보고서 목록 조회"
+        },
+        "app.UGFkZGxl.action.bGlzdF9zdWJzY3JpcHRpb25z.desc": {
+          "source": "Lists subscriptions.\n\nFilter by `customer_id` for one customer's subscriptions, by `status` for the state they are in - `active`, `trialing`, `past_due`, `paused` or `canceled` - or by `scheduled_change_action` to find the ones with a pause or cancellation already booked.\n\nThe subscriptions are in `data`, and `meta.pagination` carries the cursor for the next page.",
+          "message": "구독 목록을 조회합니다.\n\n특정 고객의 구독을 보려면 `customer_id`(으)로, 구독 상태(`active`, `trialing`, `past_due`, `paused` 또는 `canceled`)를 보려면 `status`(으)로, 일시 중지나 취소가 이미 예약된 항목을 찾으려면 `scheduled_change_action`(으)로 필터링하세요.\n\n구독은 `data`에 포함되며, `meta.pagination`에는 다음 페이지를 위한 커서가 포함됩니다."
+        },
+        "app.UGFkZGxl.action.bGlzdF9zdWJzY3JpcHRpb25z.display_name": {
+          "source": "List Subscriptions",
+          "message": "구독 목록 조회"
+        },
+        "app.UGFkZGxl.action.bGlzdF9zdWJzY3JpcHRpb25z.option.Y29sbGVjdGlvbl9tb2Rl.allowed-value.c3RyaW5nOm1hbnVhbA.display_name": {
+          "source": "manual",
+          "message": "수동"
+        },
+        "app.UGFkZGxl.action.bGlzdF9zdWJzY3JpcHRpb25z.option.Y29sbGVjdGlvbl9tb2Rl.allowed-value.c3RyaW5nOmF1dG9tYXRpYw.display_name": {
+          "source": "automatic",
+          "message": "자동"
+        },
+        "app.UGFkZGxl.action.bGlzdF9zdWJzY3JpcHRpb25z.option.Y29sbGVjdGlvbl9tb2Rl.desc": {
+          "source": "Return entities that match the specified collection mode.",
+          "message": "지정된 수금 모드와 일치하는 엔티티를 반환합니다."
+        },
+        "app.UGFkZGxl.action.bGlzdF9zdWJzY3JpcHRpb25z.option.Y29sbGVjdGlvbl9tb2Rl.display_name": {
+          "source": "Collection Mode",
+          "message": "수금 모드"
+        },
+        "app.UGFkZGxl.action.bGlzdF9zdWJzY3JpcHRpb25z.option.Y29sbGVjdGlvbl9tb2Rl.short_desc": {
+          "source": "Return entities that match the specified collection mode",
+          "message": "지정된 수금 모드와 일치하는 엔티티 반환"
+        },
+        "app.UGFkZGxl.action.bGlzdF9zdWJzY3JpcHRpb25z.option.Y3VzdG9tZXJfaWQ.desc": {
+          "source": "Return entities related to the specified customer. Use a comma-separated list to specify multiple customer IDs.",
+          "message": "지정된 고객과 관련된 엔티티를 반환합니다. 여러 고객 ID를 지정하려면 쉼표로 구분된 목록을 사용하세요."
+        },
+        "app.UGFkZGxl.action.bGlzdF9zdWJzY3JpcHRpb25z.option.Y3VzdG9tZXJfaWQ.display_name": {
+          "source": "Customer",
+          "message": "고객"
+        },
+        "app.UGFkZGxl.action.bGlzdF9zdWJzY3JpcHRpb25z.option.Y3VzdG9tZXJfaWQ.short_desc": {
+          "source": "Return only subscriptions for these customers",
+          "message": "이 고객의 구독만 반환"
+        },
+        "app.UGFkZGxl.action.bGlzdF9zdWJzY3JpcHRpb25z.option.YWRkcmVzc19pZA.desc": {
+          "source": "Return entities related to the specified address. Use a comma-separated list to specify multiple address IDs.",
+          "message": "지정된 주소와 관련된 엔티티를 반환합니다. 여러 주소 ID를 지정하려면 쉼표로 구분된 목록을 사용하세요."
+        },
+        "app.UGFkZGxl.action.bGlzdF9zdWJzY3JpcHRpb25z.option.YWRkcmVzc19pZA.display_name": {
+          "source": "Address Id",
+          "message": "주소 ID"
+        },
+        "app.UGFkZGxl.action.bGlzdF9zdWJzY3JpcHRpb25z.option.YWRkcmVzc19pZA.short_desc": {
+          "source": "Return entities related to the specified address",
+          "message": "지정된 주소와 관련된 엔티티 반환"
+        },
+        "app.UGFkZGxl.action.bGlzdF9zdWJzY3JpcHRpb25z.option.YWZ0ZXI.desc": {
+          "source": "The pagination cursor: return the records that come after this Paddle ID.\n\nTake it from the `after` query argument of the `meta.pagination.next` URL in the previous response. Paddle always returns that URL, even on the last page, so page on `meta.pagination.has_more` rather than on its presence.",
+          "message": "페이지 매김 커서: 이 Paddle ID 뒤에 오는 레코드를 반환합니다.\n\n이전 응답의 `meta.pagination.next` URL에 있는 `after` 쿼리 인자에서 가져옵니다. Paddle은 마지막 페이지에서도 항상 해당 URL을 반환하므로, URL 존재 여부가 아닌 `meta.pagination.has_more`을(를) 기준으로 페이지 매김을 처리하세요."
+        },
+        "app.UGFkZGxl.action.bGlzdF9zdWJzY3JpcHRpb25z.option.YWZ0ZXI.display_name": {
+          "source": "After",
+          "message": "이후"
+        },
+        "app.UGFkZGxl.action.bGlzdF9zdWJzY3JpcHRpb25z.option.YWZ0ZXI.short_desc": {
+          "source": "Return records after this Paddle ID",
+          "message": "이 Paddle ID 뒤의 레코드 반환"
+        },
+        "app.UGFkZGxl.action.bGlzdF9zdWJzY3JpcHRpb25z.option.aWQ.desc": {
+          "source": "Return only the IDs specified. Use a comma-separated list to get multiple entities.",
+          "message": "지정된 ID만 반환합니다. 여러 엔티티를 가져오려면 쉼표로 구분된 목록을 사용하세요."
+        },
+        "app.UGFkZGxl.action.bGlzdF9zdWJzY3JpcHRpb25z.option.aWQ.display_name": {
+          "source": "Subscription",
+          "message": "구독"
+        },
+        "app.UGFkZGxl.action.bGlzdF9zdWJzY3JpcHRpb25z.option.aWQ.short_desc": {
+          "source": "Return only these subscriptions",
+          "message": "이 구독만 반환"
+        },
+        "app.UGFkZGxl.action.bGlzdF9zdWJzY3JpcHRpb25z.option.b3JkZXJfYnk.desc": {
+          "source": "Order returned entities by the specified field and direction (`[ASC]` or `[DESC]`). For example, `?order_by=id[ASC]`.\n\nValid fields for ordering: `id`.",
+          "message": "지정된 필드 및 방향(`[ASC]` 또는 `[DESC]`)을 기준으로 반환된 엔티티를 정렬합니다. 예: `?order_by=id[ASC]`.\n\n정렬에 유효한 필드: `id`."
+        },
+        "app.UGFkZGxl.action.bGlzdF9zdWJzY3JpcHRpb25z.option.b3JkZXJfYnk.display_name": {
+          "source": "Order By",
+          "message": "정렬 기준"
+        },
+        "app.UGFkZGxl.action.bGlzdF9zdWJzY3JpcHRpb25z.option.b3JkZXJfYnk.short_desc": {
+          "source": "Order by a field and direction, ex: \"id[ASC]\"",
+          "message": "필드 및 방향으로 정렬 (예: \"id[ASC]\")"
+        },
+        "app.UGFkZGxl.action.bGlzdF9zdWJzY3JpcHRpb25z.option.bmV4dF9iaWxsZWRfYXQ.desc": {
+          "source": "Return entities next billed at a specific time. Pass `null` to return entities with no next billing date.\n",
+          "message": "특정 시간에 다음 청구가 예정된 엔티티를 반환합니다. 다음 청구 날짜가 없는 엔티티를 반환하려면 `null`을(를) 전달하세요.\n"
+        },
+        "app.UGFkZGxl.action.bGlzdF9zdWJzY3JpcHRpb25z.option.bmV4dF9iaWxsZWRfYXQ.display_name": {
+          "source": "Next Billed At",
+          "message": "다음 청구 일시"
+        },
+        "app.UGFkZGxl.action.bGlzdF9zdWJzY3JpcHRpb25z.option.bmV4dF9iaWxsZWRfYXQ.short_desc": {
+          "source": "Return entities next billed at a specific time",
+          "message": "특정 시간에 다음 청구가 예정된 엔티티 반환"
+        },
+        "app.UGFkZGxl.action.bGlzdF9zdWJzY3JpcHRpb25z.option.c2NoZWR1bGVkX2NoYW5nZV9hY3Rpb24.desc": {
+          "source": "Return subscriptions that have a scheduled change. Use a comma-separated list to specify multiple scheduled change actions.",
+          "message": "예정된 변경 사항이 있는 구독을 반환합니다. 여러 예정된 변경 작업을 지정하려면 쉼표로 구분된 목록을 사용하세요."
+        },
+        "app.UGFkZGxl.action.bGlzdF9zdWJzY3JpcHRpb25z.option.c2NoZWR1bGVkX2NoYW5nZV9hY3Rpb24.display_name": {
+          "source": "Scheduled Change Action",
+          "message": "예정된 변경 작업"
+        },
+        "app.UGFkZGxl.action.bGlzdF9zdWJzY3JpcHRpb25z.option.c2NoZWR1bGVkX2NoYW5nZV9hY3Rpb24.short_desc": {
+          "source": "Return subscriptions that have a scheduled change",
+          "message": "예정된 변경 사항이 있는 구독 반환"
+        },
+        "app.UGFkZGxl.action.bGlzdF9zdWJzY3JpcHRpb25z.option.c2tpcF9jb3VudA.desc": {
+          "source": "Set to `true` to skip the count query Paddle runs for a listing.\n\n`meta.pagination.estimated_total` then returns `-1` instead of a count. Worth setting when paging through a large collection, where the count costs time on every page and is not used.",
+          "message": "Paddle이 목록 조회를 위해 실행하는 개수(count) 쿼리를 건너뛰려면 `true`(으)로 설정하세요.\n\n설정 시 `meta.pagination.estimated_total`은(는) 개수 대신 `-1`을(를) 반환합니다. 개수 조회가 매 페이지마다 시간을 소모하고 사용되지 않는 대규모 컬렉션을 페이징할 때 설정할 가치가 있습니다."
+        },
+        "app.UGFkZGxl.action.bGlzdF9zdWJzY3JpcHRpb25z.option.c2tpcF9jb3VudA.display_name": {
+          "source": "Skip Count",
+          "message": "개수 건너뛰기"
+        },
+        "app.UGFkZGxl.action.bGlzdF9zdWJzY3JpcHRpb25z.option.c2tpcF9jb3VudA.short_desc": {
+          "source": "Skip the count query, making a large listing cheaper",
+          "message": "개수 쿼리를 건너뛰어 대규모 목록 조회의 비용 절감"
+        },
+        "app.UGFkZGxl.action.bGlzdF9zdWJzY3JpcHRpb25z.option.c3RhdHVz.desc": {
+          "source": "Return entities that match the specified status. Use a comma-separated list to specify multiple status values.",
+          "message": "지정된 상태와 일치하는 엔티티를 반환합니다. 여러 상태 값을 지정하려면 쉼표로 구분된 목록을 사용하세요."
+        },
+        "app.UGFkZGxl.action.bGlzdF9zdWJzY3JpcHRpb25z.option.c3RhdHVz.display_name": {
+          "source": "Status",
+          "message": "상태"
+        },
+        "app.UGFkZGxl.action.bGlzdF9zdWJzY3JpcHRpb25z.option.c3RhdHVz.short_desc": {
+          "source": "Return only subscriptions with these statuses",
+          "message": "이 상태의 구독만 반환"
+        },
+        "app.UGFkZGxl.action.bGlzdF9zdWJzY3JpcHRpb25z.option.cGVyX3BhZ2U.desc": {
+          "source": "How many records to return in one request, up to Paddle's maximum of `200`. Asking for more returns the maximum rather than failing.\n\n`meta.pagination.per_page` in the response reports how many were actually returned, and `meta.pagination.has_more` says whether another page exists.",
+          "message": "한 번의 요청으로 반환할 레코드 수(Paddle의 최대값인 `200`까지). 더 많은 수를 요청하면 실패하는 대신 최대값을 반환합니다.\n\n응답의 `meta.pagination.per_page`은(는) 실제로 반환된 수를 보고하며, `meta.pagination.has_more`은(는) 다른 페이지가 존재하는지 여부를 나타냅니다."
+        },
+        "app.UGFkZGxl.action.bGlzdF9zdWJzY3JpcHRpb25z.option.cGVyX3BhZ2U.display_name": {
+          "source": "Per Page",
+          "message": "페이지당 항목 수"
+        },
+        "app.UGFkZGxl.action.bGlzdF9zdWJzY3JpcHRpb25z.option.cGVyX3BhZ2U.short_desc": {
+          "source": "How many records to return, up to 200",
+          "message": "반환할 레코드 수(최대 200개)"
+        },
+        "app.UGFkZGxl.action.bGlzdF9zdWJzY3JpcHRpb25z.option.cHJpY2VfaWQ.desc": {
+          "source": "Return entities related to the specified price. Use a comma-separated list to specify multiple price IDs.",
+          "message": "지정된 가격과 관련된 엔티티를 반환합니다. 여러 가격 ID를 지정하려면 쉼표로 구분된 목록을 사용하세요."
+        },
+        "app.UGFkZGxl.action.bGlzdF9zdWJzY3JpcHRpb25z.option.cHJpY2VfaWQ.display_name": {
+          "source": "Price",
+          "message": "가격"
+        },
+        "app.UGFkZGxl.action.bGlzdF9zdWJzY3JpcHRpb25z.option.cHJpY2VfaWQ.short_desc": {
+          "source": "Return only subscriptions billing these prices",
+          "message": "이 가격으로 청구되는 구독만 반환"
+        },
+        "app.UGFkZGxl.action.bGlzdF9zdWJzY3JpcHRpb25z.short_desc": {
+          "source": "List the subscriptions in this Paddle account",
+          "message": "이 Paddle 계정의 구독 목록 조회"
+        },
+        "app.UGFkZGxl.action.bWFrZS1hcGktY2FsbA.desc": {
+          "source": "Make a custom HTTP / REST API call to **Paddle** using the configured connection's authentication.\n\nSpecify the HTTP method, the URI path (relative to the connection's API base URL), optional query parameters, headers, and request body. The response is returned as a hash containing the status code, response headers, and response body.\n\nUse this action for endpoints that are not yet exposed as first-class actions on this app.",
+          "message": "구성된 연결의 인증을 사용하여 **Paddle**에 커스텀 HTTP / REST API 호출을 수행합니다.\n\nHTTP 메서드, URI 경로(연결의 API 기본 URL 기준 상대 경로), 선택적 쿼리 매개변수, 헤더 및 요청 본문을 지정합니다. 응답은 상태 코드, 응답 헤더 및 응답 본문을 포함하는 해시로 반환됩니다.\n\n이 앱에서 아직 기본 액션으로 제공되지 않는 엔드포인트에 이 액션을 사용하세요."
+        },
+        "app.UGFkZGxl.action.bWFrZS1hcGktY2FsbA.display_name": {
+          "source": "Make an API call",
+          "message": "API 호출 실행"
+        },
+        "app.UGFkZGxl.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.desc": {
+          "source": "The request body. The effective type depends on `body_type`: JSON/form/YAML expect a hash, XML/text expect a string, multipart expects a file structure, binary expects raw bytes.",
+          "message": "요청 본문입니다. 유효한 유형은 `body_type`에 따라 달라집니다. JSON/form/YAML은 해시를, XML/text는 문자열을, multipart는 파일 구조를, binary는 원시 바이트를 요구합니다."
+        },
+        "app.UGFkZGxl.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.display_name": {
+          "source": "Body",
+          "message": "본문"
+        },
+        "app.UGFkZGxl.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.short_desc": {
+          "source": "The request body",
+          "message": "요청 본문"
+        },
+        "app.UGFkZGxl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.desc": {
+          "source": "Upload a file using `multipart/form-data`. The body must be a @ref DataProvider::FileDataType \"FileDataType\" structure (filename + content + mime_type). The framework builds the multipart envelope and sets the boundary header.",
+          "message": "`multipart/form-data`을(를) 사용하여 파일을 업로드합니다. 본문은 @ref DataProvider::FileDataType \"FileDataType\" 구조(filename + content + mime_type)여야 합니다. 프레임워크가 multipart 봉투를 작성하고 boundary 헤더를 설정합니다."
+        },
+        "app.UGFkZGxl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.display_name": {
+          "source": "Multipart Form",
+          "message": "멀티파트 폼"
+        },
+        "app.UGFkZGxl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.short_desc": {
+          "source": "Upload a file using multipart/form-data",
+          "message": "multipart/form-data를 사용하여 파일 업로드"
+        },
+        "app.UGFkZGxl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.desc": {
+          "source": "Pass the body to the REST client unchanged; the client decides serialization based on its configured `data` option and the value type",
+          "message": "본문을 변경하지 않고 REST 클라이언트에 전달합니다. 클라이언트는 구성된 `data` 옵션과 값 유형을 기반으로 직렬화를 결정합니다."
+        },
+        "app.UGFkZGxl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.display_name": {
+          "source": "Auto",
+          "message": "자동"
+        },
+        "app.UGFkZGxl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.short_desc": {
+          "source": "Pass-through; use connection serialization and let the REST client decide",
+          "message": "패스스루: 연결 직렬화를 사용하고 REST 클라이언트가 결정하도록 합니다."
+        },
+        "app.UGFkZGxl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.desc": {
+          "source": "Send the body as raw bytes. The body must be a binary value. Sets `Content-Type: application/octet-stream` unless overridden by `hdr`.",
+          "message": "본문을 원시 바이트로 전송합니다. 본문은 바이너리 값이어야 합니다. `hdr`에 의해 재정의되지 않는 한 `Content-Type: application/octet-stream`을(를) 설정합니다."
+        },
+        "app.UGFkZGxl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.display_name": {
+          "source": "Raw Binary",
+          "message": "원시 바이너리"
+        },
+        "app.UGFkZGxl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.short_desc": {
+          "source": "Send body as raw bytes",
+          "message": "본문을 원시 바이트로 전송"
+        },
+        "app.UGFkZGxl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.desc": {
+          "source": "Serialize a hash of form fields as `application/x-www-form-urlencoded`. The body must be a hash whose values are scalars (strings/numbers/booleans).",
+          "message": "폼 필드의 해시를 `application/x-www-form-urlencoded`(으)로 직렬화합니다. 본문은 값이 스칼라(문자열/숫자/불리언)인 해시여야 합니다."
+        },
+        "app.UGFkZGxl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.display_name": {
+          "source": "Form (URL-encoded)",
+          "message": "폼 (URL 인코딩)"
+        },
+        "app.UGFkZGxl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.short_desc": {
+          "source": "Serialize body as application/x-www-form-urlencoded form fields",
+          "message": "본문을 application/x-www-form-urlencoded 폼 필드로 직렬화"
+        },
+        "app.UGFkZGxl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.desc": {
+          "source": "Serialize the body as JSON; sets `Content-Type: application/json`. The body should be a hash, list, or scalar value.",
+          "message": "본문을 JSON으로 직렬화하며, `Content-Type: application/json`을(를) 설정합니다. 본문은 해시, 리스트 또는 스칼라 값이어야 합니다."
+        },
+        "app.UGFkZGxl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.display_name": {
+          "source": "JSON",
+          "message": "JSON"
+        },
+        "app.UGFkZGxl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.short_desc": {
+          "source": "Serialize body as JSON",
+          "message": "본문을 JSON으로 직렬화"
+        },
+        "app.UGFkZGxl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.desc": {
+          "source": "Send the body as plain text. The body must be a string. Sets `Content-Type: text/plain`.",
+          "message": "본문을 일반 텍스트로 전송합니다. 본문은 문자열이어야 합니다. `Content-Type: text/plain`을(를) 설정합니다."
+        },
+        "app.UGFkZGxl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.display_name": {
+          "source": "Plain Text",
+          "message": "일반 텍스트"
+        },
+        "app.UGFkZGxl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.short_desc": {
+          "source": "Send body as text/plain",
+          "message": "본문을 text/plain으로 전송"
+        },
+        "app.UGFkZGxl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.desc": {
+          "source": "Send the body as XML. If the body is a hash it is serialized to XML; if it is a string it is sent verbatim. Sets `Content-Type: application/xml`.",
+          "message": "본문을 XML로 전송합니다. 본문이 해시인 경우 XML로 직렬화되고, 문자열인 경우 그대로 전송됩니다. `Content-Type: application/xml`을(를) 설정합니다."
+        },
+        "app.UGFkZGxl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.display_name": {
+          "source": "XML",
+          "message": "XML"
+        },
+        "app.UGFkZGxl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.short_desc": {
+          "source": "Send body as XML",
+          "message": "본문을 XML로 전송"
+        },
+        "app.UGFkZGxl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.desc": {
+          "source": "Send the body as YAML. If the body is a hash it is serialized to YAML; if it is a string it is sent verbatim. Sets `Content-Type: application/x-yaml`.",
+          "message": "본문을 YAML로 전송합니다. 본문이 해시인 경우 YAML로 직렬화되고, 문자열인 경우 그대로 전송됩니다. `Content-Type: application/x-yaml`을(를) 설정합니다."
+        },
+        "app.UGFkZGxl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.display_name": {
+          "source": "YAML",
+          "message": "YAML"
+        },
+        "app.UGFkZGxl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.short_desc": {
+          "source": "Send body as YAML",
+          "message": "본문을 YAML로 전송"
+        },
+        "app.UGFkZGxl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.desc": {
+          "source": "Selects the body serialization mode and the corresponding `Content-Type` header. Changing this field reshapes the `body` editor - selecting JSON exposes a JSON editor, selecting Multipart Form exposes a file picker, and so on.",
+          "message": "본문 직렬화 모드 및 해당되는 `Content-Type` 헤더를 선택합니다. 이 필드를 변경하면 `body` 에디터의 형태가 변경됩니다. JSON을 선택하면 JSON 에디터가 표시되고, 멀티파트 폼을 선택하면 파일 선택기가 표시되는 방식입니다."
+        },
+        "app.UGFkZGxl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.display_name": {
+          "source": "Body Type",
+          "message": "본문 유형"
+        },
+        "app.UGFkZGxl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.short_desc": {
+          "source": "How the body is serialized and what Content-Type is sent",
+          "message": "본문이 직렬화되는 방식 및 전송되는 Content-Type"
+        },
+        "app.UGFkZGxl.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.desc": {
+          "source": "If `True`, non-2xx HTTP responses return as the normal response hash (with the actual status code) instead of raising `REST-RESPONSE-ERROR`. Useful for handling 4xx/5xx as data - e.g. checking whether a resource exists. Overrides the connection's `error_passthru` setting for this call only.",
+          "message": "`True`인 경우, 2xx가 아닌 HTTP 응답은 `REST-RESPONSE-ERROR`을(를) 발생시키는 대신 (실제 상태 코드와 함께) 일반 응답 해시로 반환됩니다. 리소스 존재 여부 확인 등 4xx/5xx를 데이터로 처리할 때 유용합니다. 이 호출에 대해서만 연결의 `error_passthru` 설정을 재정의합니다."
+        },
+        "app.UGFkZGxl.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.display_name": {
+          "source": "Return Errors as Data",
+          "message": "오류를 데이터로 반환"
+        },
+        "app.UGFkZGxl.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.short_desc": {
+          "source": "Return non-2xx responses normally instead of throwing",
+          "message": "예외를 발생시키는 대신 2xx가 아닌 응답을 정상적으로 반환"
+        },
+        "app.UGFkZGxl.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.desc": {
+          "source": "Optional list of HTTP status codes treated as success. If set and the response status is not in this list, the action throws `REST-STATUS-ERROR`. When unset, the REST client's default behavior applies (typically: 2xx is success, non-2xx throws).",
+          "message": "성공으로 처리되는 HTTP 상태 코드의 선택적 목록입니다. 설정되어 있고 응답 상태가 이 목록에 없는 경우 작업이 `REST-STATUS-ERROR` 예외를 발생시킵니다. 설정되지 않은 경우 REST 클라이언트의 기본 동작이 적용됩니다(일반적으로 2xx는 성공, 2xx 이외는 예외 발생)."
+        },
+        "app.UGFkZGxl.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.display_name": {
+          "source": "Expected Status Codes",
+          "message": "예상되는 상태 코드"
+        },
+        "app.UGFkZGxl.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.short_desc": {
+          "source": "Response status codes treated as success",
+          "message": "성공으로 처리되는 응답 상태 코드"
+        },
+        "app.UGFkZGxl.action.bWFrZS1hcGktY2FsbA.option.aGRy.desc": {
+          "source": "Hash of custom headers added to the request. These override any default headers set by `body_type` (e.g. supplying `Content-Type` here wins over the body-type default).",
+          "message": "요청에 추가되는 사용자 지정 헤더의 해시입니다. 이는 `body_type`에 의해 설정된 기본 헤더보다 우선합니다(예: 여기에 `Content-Type`을(를) 제공하면 본문 유형 기본값보다 우선 적용됨)."
+        },
+        "app.UGFkZGxl.action.bWFrZS1hcGktY2FsbA.option.aGRy.display_name": {
+          "source": "Custom Headers",
+          "message": "사용자 지정 헤더"
+        },
+        "app.UGFkZGxl.action.bWFrZS1hcGktY2FsbA.option.aGRy.short_desc": {
+          "source": "Extra request headers",
+          "message": "추가 요청 헤더"
+        },
+        "app.UGFkZGxl.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.desc": {
+          "source": "If `True`, the response hash includes a `debug` sub-hash containing the request method/URL/headers (with sensitive values redacted), request and response sizes, and round-trip duration. Useful when investigating slow or failing calls. Off by default to keep responses lean.",
+          "message": "`True`인 경우 응답 해시에 요청 메서드/URL/헤더(민감한 값은 가려짐), 요청 및 응답 크기, 왕복 시간이 포함된 `debug` 하위 해시가 포함됩니다. 느리거나 실패한 호출을 조사할 때 유용합니다. 응답을 가볍게 유지하기 위해 기본적으로 비활성화되어 있습니다."
+        },
+        "app.UGFkZGxl.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.display_name": {
+          "source": "Include Debug Info",
+          "message": "디버그 정보 포함"
+        },
+        "app.UGFkZGxl.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.short_desc": {
+          "source": "Include request/timing/size debug info in the response",
+          "message": "응답에 요청/타이밍/크기 디버그 정보 포함"
+        },
+        "app.UGFkZGxl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.desc": {
+          "source": "HTTP `OPTIONS`",
+          "message": "HTTP `OPTIONS`"
+        },
+        "app.UGFkZGxl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.display_name": {
+          "source": "OPTIONS",
+          "message": "OPTIONS"
+        },
+        "app.UGFkZGxl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.short_desc": {
+          "source": "HTTP OPTIONS",
+          "message": "HTTP OPTIONS"
+        },
+        "app.UGFkZGxl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.desc": {
+          "source": "HTTP `DELETE`",
+          "message": "HTTP `DELETE`"
+        },
+        "app.UGFkZGxl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.display_name": {
+          "source": "DELETE",
+          "message": "DELETE"
+        },
+        "app.UGFkZGxl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.short_desc": {
+          "source": "HTTP DELETE",
+          "message": "HTTP DELETE"
+        },
+        "app.UGFkZGxl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.desc": {
+          "source": "HTTP `GET`",
+          "message": "HTTP `GET`"
+        },
+        "app.UGFkZGxl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.display_name": {
+          "source": "GET",
+          "message": "GET"
+        },
+        "app.UGFkZGxl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.short_desc": {
+          "source": "HTTP GET",
+          "message": "HTTP GET"
+        },
+        "app.UGFkZGxl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.desc": {
+          "source": "HTTP `HEAD`",
+          "message": "HTTP `HEAD`"
+        },
+        "app.UGFkZGxl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.display_name": {
+          "source": "HEAD",
+          "message": "HEAD"
+        },
+        "app.UGFkZGxl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.short_desc": {
+          "source": "HTTP HEAD",
+          "message": "HTTP HEAD"
+        },
+        "app.UGFkZGxl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.desc": {
+          "source": "HTTP `PATCH`",
+          "message": "HTTP `PATCH`"
+        },
+        "app.UGFkZGxl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.display_name": {
+          "source": "PATCH",
+          "message": "PATCH"
+        },
+        "app.UGFkZGxl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.short_desc": {
+          "source": "HTTP PATCH",
+          "message": "HTTP PATCH"
+        },
+        "app.UGFkZGxl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.desc": {
+          "source": "HTTP `POST`",
+          "message": "HTTP `POST`"
+        },
+        "app.UGFkZGxl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.display_name": {
+          "source": "POST",
+          "message": "POST"
+        },
+        "app.UGFkZGxl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.short_desc": {
+          "source": "HTTP POST",
+          "message": "HTTP POST"
+        },
+        "app.UGFkZGxl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.desc": {
+          "source": "HTTP `PUT`",
+          "message": "HTTP `PUT`"
+        },
+        "app.UGFkZGxl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.display_name": {
+          "source": "PUT",
+          "message": "PUT"
+        },
+        "app.UGFkZGxl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.short_desc": {
+          "source": "HTTP PUT",
+          "message": "HTTP PUT"
+        },
+        "app.UGFkZGxl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.desc": {
+          "source": "HTTP `TRACE`",
+          "message": "HTTP `TRACE`"
+        },
+        "app.UGFkZGxl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.display_name": {
+          "source": "TRACE",
+          "message": "TRACE"
+        },
+        "app.UGFkZGxl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.short_desc": {
+          "source": "HTTP TRACE",
+          "message": "HTTP TRACE"
+        },
+        "app.UGFkZGxl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "요청에 사용할 HTTP 메서드"
+        },
+        "app.UGFkZGxl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.display_name": {
+          "source": "HTTP Method",
+          "message": "HTTP 메서드"
+        },
+        "app.UGFkZGxl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.short_desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "요청에 사용할 HTTP 메서드"
+        },
+        "app.UGFkZGxl.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain `{name}` placeholders that are replaced from `path_vars`. Example: `/users/{id}/comments`.",
+          "message": "연결의 API 기본 URL에 대한 상대 URI 경로입니다. `path_vars`에서 대체되는 `{name}` 자리 표시자가 포함될 수 있습니다. 예: `/users/{id}/comments`."
+        },
+        "app.UGFkZGxl.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.display_name": {
+          "source": "URI Path",
+          "message": "URI 경로"
+        },
+        "app.UGFkZGxl.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.short_desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain '{name}' placeholders that are replaced from 'path_vars'. Example: '/users/{id}/comments'",
+          "message": "연결의 API 기본 URL에 대한 상대 URI 경로입니다. 'path_vars'에서 대체되는 '{name}' 자리 표시자를 포함할 수 있습니다. 예: '/users/{id}/comments'"
+        },
+        "app.UGFkZGxl.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.desc": {
+          "source": "Hash of values substituted into `{name}` placeholders in the URI path. Example: with `path = /users/{id}` and `path_vars = {id: 123}` the framework sends `/users/123`. Values are URL-encoded.",
+          "message": "URI 경로의 `{name}` 자리 표시자에 대체되는 값의 해시입니다. 예: `path = /users/{id}` 및 `path_vars = {id: 123}`이 있으면 프레임워크가 `/users/123`을(를) 전송합니다. 값은 URL 인코딩됩니다."
+        },
+        "app.UGFkZGxl.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.display_name": {
+          "source": "Path Variables",
+          "message": "경로 변수"
+        },
+        "app.UGFkZGxl.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.short_desc": {
+          "source": "Values for {name} placeholders in path",
+          "message": "경로 내 {name} 자리 표시자의 값"
+        },
+        "app.UGFkZGxl.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.desc": {
+          "source": "Hash of query string parameters to append to the URI path. Values are URL-encoded; list values are joined with `,`.",
+          "message": "URI 경로에 추가할 쿼리 문자열 매개변수 해시입니다. 값은 URL 인코딩되며, 목록 값은 `,`(으)로 연결됩니다."
+        },
+        "app.UGFkZGxl.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.display_name": {
+          "source": "Query Arguments",
+          "message": "쿼리 인수"
+        },
+        "app.UGFkZGxl.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.short_desc": {
+          "source": "Query string parameters",
+          "message": "쿼리 문자열 매개변수"
+        },
+        "app.UGFkZGxl.action.bWFrZS1hcGktY2FsbA.short_desc": {
+          "source": "Make a custom API call to Paddle",
+          "message": "Paddle에 커스텀 API 호출 수행"
+        },
+        "app.UGFkZGxl.action.c2VhcmNo.desc": {
+          "source": "Returns every record in the given table matching the search criteria",
+          "message": "검색 기준과 일치하는 지정된 테이블의 모든 레코드를 반환합니다"
+        },
+        "app.UGFkZGxl.action.c2VhcmNo.display_name": {
+          "source": "Search Records",
+          "message": "레코드 검색"
+        },
+        "app.UGFkZGxl.action.c2VhcmNo.option.dGFibGU.desc": {
+          "source": "The table to work with: `customers`, `products`, `prices`, `transactions` or `reports`",
+          "message": "작업할 테이블: `customers`, `products`, `prices`, `transactions` 또는 `reports`"
+        },
+        "app.UGFkZGxl.action.c2VhcmNo.option.dGFibGU.display_name": {
+          "source": "Table",
+          "message": "테이블"
+        },
+        "app.UGFkZGxl.action.c2VhcmNo.option.dGFibGU.short_desc": {
+          "source": "The name of the table to work with",
+          "message": "작업할 테이블의 이름"
+        },
+        "app.UGFkZGxl.action.c2VhcmNo.short_desc": {
+          "source": "Search for matching records in the given table",
+          "message": "지정된 테이블에서 일치하는 레코드 검색"
+        },
+        "app.UGFkZGxl.action.c2VhcmNoLXNpbmdsZQ.desc": {
+          "source": "Returns the one record in the given table matching the search criteria; it is an error if more than one matches",
+          "message": "검색 기준과 일치하는 지정된 테이블의 단일 레코드를 반환합니다. 둘 이상이 일치하면 오류가 발생합니다"
+        },
+        "app.UGFkZGxl.action.c2VhcmNoLXNpbmdsZQ.display_name": {
+          "source": "Find a Single Record",
+          "message": "단일 레코드 찾기"
+        },
+        "app.UGFkZGxl.action.c2VhcmNoLXNpbmdsZQ.option.dGFibGU.desc": {
+          "source": "The table to work with: `customers`, `products`, `prices`, `transactions` or `reports`",
+          "message": "작업할 테이블: `customers`, `products`, `prices`, `transactions` 또는 `reports`"
+        },
+        "app.UGFkZGxl.action.c2VhcmNoLXNpbmdsZQ.option.dGFibGU.display_name": {
+          "source": "Table",
+          "message": "테이블"
+        },
+        "app.UGFkZGxl.action.c2VhcmNoLXNpbmdsZQ.option.dGFibGU.short_desc": {
+          "source": "The name of the table to work with",
+          "message": "작업할 테이블의 이름"
+        },
+        "app.UGFkZGxl.action.c2VhcmNoLXNpbmdsZQ.short_desc": {
+          "source": "Search for a single matching record in the given table",
+          "message": "지정된 테이블에서 일치하는 단일 레코드 검색"
+        },
+        "app.UGFkZGxl.action.c3Vic2NyaXB0aW9uLWFjdGl2YXRlZA.desc": {
+          "source": "Fires when a subscription first becomes `active` -- a trial ended and was paid for, or a scheduled start arrived.\n\nThis is the signal to provision a paid plan: it means Paddle has collected, where `subscription.created` only means the record exists.",
+          "message": "체험 기간이 끝나고 결제가 완료되었거나 예정된 시작 시점에 도달하여 구독이 처음으로 `active` 상태가 될 때 실행됩니다.\n\n이것은 유료 플랜을 프로비저닝하라는 신호입니다. `subscription.created`은(는) 레코드가 존재함을 의미할 뿐이지만, 이 신호는 Paddle이 수금을 완료했음을 의미합니다."
+        },
+        "app.UGFkZGxl.action.c3Vic2NyaXB0aW9uLWFjdGl2YXRlZA.display_name": {
+          "source": "Subscription Activated",
+          "message": "구독 활성화됨"
+        },
+        "app.UGFkZGxl.action.c3Vic2NyaXB0aW9uLWFjdGl2YXRlZA.short_desc": {
+          "source": "React to a subscription becoming active",
+          "message": "구독이 활성화될 때 반응"
+        },
+        "app.UGFkZGxl.action.c3Vic2NyaXB0aW9uLWNhbmNlbGVk.desc": {
+          "source": "Fires when a subscription actually ends and `status` becomes `canceled`.\n\n**This is the deprovisioning signal, not the cancellation request.** A cancellation booked for the end of the billing period appears first as a `scheduled_change` on `subscription.updated`, and the customer has paid up to that date; this event is when the date arrives.",
+          "message": "구독이 실제로 종료되어 `status`이(가) `canceled`(으)로 바뀔 때 실행됩니다.\n\n**이것은 취소 요청이 아닌 디프로비저닝 신호입니다.** 청구 기간 종료 시점으로 예약된 취소는 먼저 `subscription.updated`의 `scheduled_change`(으)로 표시되며 고객은 해당 날짜까지 결제를 마친 상태입니다. 이 이벤트는 해당 날짜가 되었을 때 발생합니다."
+        },
+        "app.UGFkZGxl.action.c3Vic2NyaXB0aW9uLWNhbmNlbGVk.display_name": {
+          "source": "Subscription Canceled",
+          "message": "구독 취소됨"
+        },
+        "app.UGFkZGxl.action.c3Vic2NyaXB0aW9uLWNhbmNlbGVk.short_desc": {
+          "source": "React to a subscription ending",
+          "message": "구독 종료 시 반응"
+        },
+        "app.UGFkZGxl.action.c3Vic2NyaXB0aW9uLWNyZWF0ZWQ.desc": {
+          "source": "Fires when a subscription is created.\n\n**Created is not the same as paid.** A new subscription is often `trialing`, and one created for a transaction that has not been collected yet is not earning anything; check `status` before provisioning. `subscription.activated` is the signal that billing has actually begun.\n\nThis replaces polling the subscription listing.",
+          "message": "구독이 생성될 때 실행됩니다.\n\n**생성된 것이 결제 완료를 의미하지는 않습니다.** 새 구독은 종종 `trialing` 상태이며, 아직 수금되지 않은 트랜잭션에 대해 생성된 구독은 수익을 발생시키지 않습니다. 프로비저닝 전에 `status`을(를) 확인하세요. `subscription.activated`은(는) 청구가 실제로 시작되었음을 알리는 신호입니다.\n\n구독 목록 폴링을 대체합니다."
+        },
+        "app.UGFkZGxl.action.c3Vic2NyaXB0aW9uLWNyZWF0ZWQ.display_name": {
+          "source": "Subscription Created",
+          "message": "구독 생성됨"
+        },
+        "app.UGFkZGxl.action.c3Vic2NyaXB0aW9uLWNyZWF0ZWQ.short_desc": {
+          "source": "React to a subscription being created",
+          "message": "구독 생성에 반응"
+        },
+        "app.UGFkZGxl.action.c3Vic2NyaXB0aW9uLXBhc3QtZHVl.desc": {
+          "source": "Fires when a renewal could not be collected and the subscription becomes `past_due`.\n\nPaddle retries on its dunning schedule, so this is not yet the end: the subscription recovers to `active` if a retry succeeds, or is canceled when the retries run out. Treat it as a warning to prompt the customer, not as a reason to cut off access.",
+          "message": "갱신 결제를 수금할 수 없어 구독이 `past_due` 상태가 될 때 실행됩니다.\n\nPaddle은 독촉(dunning) 일정에 따라 재시도하므로 아직 끝난 것이 아닙니다. 재시도가 성공하면 구독이 `active` 상태로 복구되고, 재시도 횟수를 모두 소진하면 취소됩니다. 이를 액세스를 차단하는 이유가 아니라 고객에게 안내하는 경고로 취급하세요."
+        },
+        "app.UGFkZGxl.action.c3Vic2NyaXB0aW9uLXBhc3QtZHVl.display_name": {
+          "source": "Subscription Past Due",
+          "message": "구독 연체됨"
+        },
+        "app.UGFkZGxl.action.c3Vic2NyaXB0aW9uLXBhc3QtZHVl.short_desc": {
+          "source": "React to a subscription's payment failing",
+          "message": "구독 결제 실패에 반응"
+        },
+        "app.UGFkZGxl.action.c3Vic2NyaXB0aW9uLXVwZGF0ZWQ.desc": {
+          "source": "Fires for any change to a subscription: a plan change, a quantity change, a renewal moving `next_billed_at`, or a pause or cancellation being **scheduled**.\n\n`scheduled_change` is the field that distinguishes those last cases -- a subscription can be `active` and still be booked to end. Paddle sends the whole subscription rather than a diff.",
+          "message": "요금제 변경, 수량 변경, 갱신 주기 이동(`next_billed_at`), 일시 중지 또는 취소 **예약** 등 구독에 발생하는 모든 변경 사항에 대해 실행됩니다.\n\n`scheduled_change`은(는) 이러한 마지막 경우들을 구분하는 필드입니다. 구독이 `active` 상태이면서도 종료가 예정되어 있을 수 있습니다. Paddle은 차이점(diff) 대신 전체 구독 객체를 전송합니다."
+        },
+        "app.UGFkZGxl.action.c3Vic2NyaXB0aW9uLXVwZGF0ZWQ.display_name": {
+          "source": "Subscription Updated",
+          "message": "구독 업데이트됨"
+        },
+        "app.UGFkZGxl.action.c3Vic2NyaXB0aW9uLXVwZGF0ZWQ.short_desc": {
+          "source": "React to a subscription changing",
+          "message": "구독 변경에 반응"
+        },
+        "app.UGFkZGxl.action.cHJpY2UtY3JlYXRlZA.desc": {
+          "source": "Fires when a price is created against a product.\n\n`unit_price.amount` is a string in the **smallest unit of its currency**, so `1000` is $10.00 in USD but 1000 yen in JPY. A `billing_cycle` makes it a subscription price; without one it is a one-off charge.",
+          "message": "제품에 대한 가격이 생성될 때 실행됩니다.\n\n`unit_price.amount`은(는) **해당 통화의 최소 단위**로 표시된 문자열이므로, `1000`은(는) USD에서는 $10.00이지만 JPY에서는 1000엔입니다. `billing_cycle`이(가) 있으면 구독 가격이 되며, 없으면 1회성 청구입니다."
+        },
+        "app.UGFkZGxl.action.cHJpY2UtY3JlYXRlZA.display_name": {
+          "source": "Price Created",
+          "message": "가격 생성됨"
+        },
+        "app.UGFkZGxl.action.cHJpY2UtY3JlYXRlZA.short_desc": {
+          "source": "React to a catalog price being created",
+          "message": "카탈로그 가격 생성에 반응"
+        },
+        "app.UGFkZGxl.action.cHJpY2UtdXBkYXRlZA.desc": {
+          "source": "Fires when a price changes, including when one is archived.\n\n**A change to `unit_price` affects new purchases only**; subscriptions already billing this price keep the amount they were created with until they are explicitly updated. A price change is therefore not a signal that anyone's bill changed.",
+          "message": "가격이 변경될 때(보관 처리 포함) 실행됩니다.\n\n**`unit_price`의 변경은 신규 구매에만 영향을 미칩니다.** 이 가격으로 이미 청구 중인 구독은 명시적으로 업데이트될 때까지 생성 당시의 금액을 유지합니다. 따라서 가격 변경이 누군가의 청구 금액이 변경되었음을 의미하지는 않습니다."
+        },
+        "app.UGFkZGxl.action.cHJpY2UtdXBkYXRlZA.display_name": {
+          "source": "Price Updated",
+          "message": "가격 업데이트됨"
+        },
+        "app.UGFkZGxl.action.cHJpY2UtdXBkYXRlZA.short_desc": {
+          "source": "React to a catalog price changing",
+          "message": "카탈로그 가격 변경에 반응"
+        },
+        "app.UGFkZGxl.action.cHJvZHVjdC11cGRhdGVk.desc": {
+          "source": "Fires when a product changes, including when one is archived -- `status` becomes `archived`, which withdraws it from sale without affecting existing subscriptions.\n\n**Archiving a product does not archive its prices**, so a price of an archived product can still be billed unless it is archived too.",
+          "message": "제품이 변경될 때(보관 처리 포함) 실행됩니다. `status`이(가) `archived`(으)로 변경되어 기존 구독에 영향을 주지 않고 판매를 중단합니다.\n\n**제품을 보관 처리해도 해당 가격은 보관되지 않으므로**, 함께 보관 처리되지 않는 한 보관된 제품의 가격으로 계속 청구될 수 있습니다."
+        },
+        "app.UGFkZGxl.action.cHJvZHVjdC11cGRhdGVk.display_name": {
+          "source": "Product Updated",
+          "message": "제품 업데이트됨"
+        },
+        "app.UGFkZGxl.action.cHJvZHVjdC11cGRhdGVk.short_desc": {
+          "source": "React to a catalog product changing",
+          "message": "카탈로그 제품 변경에 반응"
+        },
+        "app.UGFkZGxl.action.cHJvZHVjdC1jcmVhdGVk.desc": {
+          "source": "Fires when a product is added to the catalog.\n\nA product carries no price of its own, so a newly created product cannot be sold until a price exists for it; watch `price.created` for that.\n\nThis replaces polling the product listing.",
+          "message": "카탈로그에 제품이 추가될 때 실행됩니다.\n\n제품 자체에는 가격이 포함되어 있지 않으므로 가격이 생성될 때까지 새로 생성된 제품을 판매할 수 없습니다. 이를 확인하려면 `price.created`을(를) 확인하세요.\n\n제품 목록 폴링을 대체합니다."
+        },
+        "app.UGFkZGxl.action.cHJvZHVjdC1jcmVhdGVk.display_name": {
+          "source": "Product Created",
+          "message": "제품 생성됨"
+        },
+        "app.UGFkZGxl.action.cHJvZHVjdC1jcmVhdGVk.short_desc": {
+          "source": "React to a catalog product being created",
+          "message": "카탈로그 제품 생성에 반응"
+        },
+        "app.UGFkZGxl.action.cmVwb3J0LWNyZWF0ZWQ.desc": {
+          "source": "Fires when a report is requested. It arrives `pending`: Paddle generates the file in the background, so there is nothing to download yet.\n\nWait for `report.updated` with `status` of `ready` before asking for the file.\n\nThis replaces polling the report listing.",
+          "message": "리포트가 요청될 때 실행됩니다. `pending` 상태로 도착합니다. Paddle이 백그라운드에서 파일을 생성하므로 아직 다운로드할 파일이 없습니다.\n\n파일을 요청하기 전에 `status`의 값이 `ready`인 `report.updated`을(를) 기다리세요.\n\n리포트 목록 폴링을 대체합니다."
+        },
+        "app.UGFkZGxl.action.cmVwb3J0LWNyZWF0ZWQ.display_name": {
+          "source": "Report Created",
+          "message": "리포트 생성됨"
+        },
+        "app.UGFkZGxl.action.cmVwb3J0LWNyZWF0ZWQ.short_desc": {
+          "source": "React to a report being requested",
+          "message": "리포트 요청에 반응"
+        },
+        "app.UGFkZGxl.action.cmVwb3J0LXVwZGF0ZWQ.desc": {
+          "source": "Fires when a report's status changes: `ready` when the file can be downloaded, `failed` when generation did not succeed, `expired` once Paddle has removed it.\n\nThis is the signal to call **Get Report File** -- and to do it promptly, because a report is kept only for a limited time.",
+          "message": "리포트 상태가 변경될 때 실행됩니다. 파일을 다운로드할 수 있을 때 `ready`, 생성이 실패했을 때 `failed`, Paddle에서 제거되었을 때 `expired`이(가) 됩니다.\n\n이것은 **Get Report File**을 호출하라는 신호입니다. 리포트는 제한된 시간 동안만 보관되므로 즉시 호출하세요."
+        },
+        "app.UGFkZGxl.action.cmVwb3J0LXVwZGF0ZWQ.display_name": {
+          "source": "Report Updated",
+          "message": "리포트 업데이트됨"
+        },
+        "app.UGFkZGxl.action.cmVwb3J0LXVwZGF0ZWQ.short_desc": {
+          "source": "React to a report becoming ready",
+          "message": "리포트 준비 완료에 반응"
+        },
+        "app.UGFkZGxl.action.dHJhbnNhY3Rpb24tY29tcGxldGVk.desc": {
+          "source": "Fires when a transaction is `completed`: the money has been collected and the invoice is settled.\n\nThis is the event to fulfil an order on. `details.totals` breaks the amount down into subtotal, tax and the grand total, all as strings in the smallest unit of `currency_code`.",
+          "message": "트랜잭션이 `completed` 상태가 될 때 실행됩니다. 금액이 수금되었고 인보이스가 정산되었습니다.\n\n주문을 이행하는 기준이 되는 이벤트입니다. `details.totals`은(는) 금액을 소계, 세금, 총계로 분류하며 모두 `currency_code`의 최소 단위 문자열로 표시됩니다."
+        },
+        "app.UGFkZGxl.action.dHJhbnNhY3Rpb24tY29tcGxldGVk.display_name": {
+          "source": "Transaction Completed",
+          "message": "트랜잭션 완료됨"
+        },
+        "app.UGFkZGxl.action.dHJhbnNhY3Rpb24tY29tcGxldGVk.short_desc": {
+          "source": "React to a transaction being paid in full",
+          "message": "트랜잭션 전액 결제에 반응"
+        },
+        "app.UGFkZGxl.action.dHJhbnNhY3Rpb24tY3JlYXRlZA.desc": {
+          "source": "Fires when a transaction is created, including the draft Paddle raises for an upcoming renewal.\n\n**A created transaction has not been paid**; most are `draft` or `ready` at this point. Use `transaction.completed` for money actually collected.\n\nThis replaces polling the transaction listing.",
+          "message": "예정된 갱신을 위해 Paddle이 발행하는 임시(draft) 트랜잭션을 포함하여 트랜잭션이 생성될 때 실행됩니다.\n\n**생성된 트랜잭션은 아직 결제되지 않았습니다.** 이 시점에서는 대부분 `draft` 또는 `ready` 상태입니다. 실제로 수금된 금액에는 `transaction.completed`을(를) 사용하세요.\n\n트랜잭션 목록 폴링을 대체합니다."
+        },
+        "app.UGFkZGxl.action.dHJhbnNhY3Rpb24tY3JlYXRlZA.display_name": {
+          "source": "Transaction Created",
+          "message": "트랜잭션 생성됨"
+        },
+        "app.UGFkZGxl.action.dHJhbnNhY3Rpb24tY3JlYXRlZA.short_desc": {
+          "source": "React to a transaction being created",
+          "message": "트랜잭션 생성에 반응"
+        },
+        "app.UGFkZGxl.action.dHJhbnNhY3Rpb24tcGF5bWVudC1mYWlsZWQ.desc": {
+          "source": "Fires when an attempt to collect a transaction fails.\n\n`payments` carries the attempt and the reason it failed. Paddle retries automatically for a subscription renewal, so a single failure is not final; the subscription moving to `past_due` is the point at which the customer needs to act.",
+          "message": "트랜잭션 수금 시도가 실패할 때 실행됩니다.\n\n`payments`에는 시도 및 실패 이유가 포함됩니다. Paddle은 구독 갱신에 대해 자동으로 재시도하므로 한 번의 실패가 최종적인 것은 아닙니다. 구독이 `past_due`(으)로 이동하는 시점이 고객의 조치가 필요한 시점입니다."
+        },
+        "app.UGFkZGxl.action.dHJhbnNhY3Rpb24tcGF5bWVudC1mYWlsZWQ.display_name": {
+          "source": "Transaction Payment Failed",
+          "message": "트랜잭션 결제 실패"
+        },
+        "app.UGFkZGxl.action.dHJhbnNhY3Rpb24tcGF5bWVudC1mYWlsZWQ.short_desc": {
+          "source": "React to a payment attempt failing",
+          "message": "결제 시도 실패에 반응"
+        },
+        "app.UGFkZGxl.action.dXBkYXRl.desc": {
+          "source": "Updates every record in the given table matching the search criteria",
+          "message": "검색 기준과 일치하는 지정된 테이블의 모든 레코드를 업데이트합니다"
+        },
+        "app.UGFkZGxl.action.dXBkYXRl.display_name": {
+          "source": "Update Records",
+          "message": "레코드 업데이트"
+        },
+        "app.UGFkZGxl.action.dXBkYXRl.option.dGFibGU.desc": {
+          "source": "The table to work with: `customers`, `products`, `prices`, `transactions` or `reports`",
+          "message": "작업할 테이블: `customers`, `products`, `prices`, `transactions` 또는 `reports`"
+        },
+        "app.UGFkZGxl.action.dXBkYXRl.option.dGFibGU.display_name": {
+          "source": "Table",
+          "message": "테이블"
+        },
+        "app.UGFkZGxl.action.dXBkYXRl.option.dGFibGU.short_desc": {
+          "source": "The name of the table to work with",
+          "message": "작업할 테이블의 이름"
+        },
+        "app.UGFkZGxl.action.dXBkYXRl.short_desc": {
+          "source": "Update the records matching the search criteria",
+          "message": "검색 기준과 일치하는 레코드 업데이트"
+        },
+        "app.UGFkZGxl.action.dXBkYXRlX2N1c3RvbWVy.desc": {
+          "source": "Updates a customer. Only the fields supplied are changed; everything else is left as it is.\n\nSetting `status` to `archived` is how a customer is retired: an archived customer cannot be billed and stops appearing in listings, but its transactions and subscriptions are untouched.\n\n**`custom_data` is replaced, not merged.** Send the whole object, or previously stored keys are lost.",
+          "message": "고객을 업데이트합니다. 제공된 필드만 변경되고 나머지는 그대로 유지됩니다.\n\n`status`을(를) `archived`(으)로 설정하여 고객을 비활성화합니다. 보관된 고객에게는 청구할 수 없으며 목록에 표시되지 않지만, 트랜잭션 및 구독은 유지됩니다.\n\n**`custom_data`은(는) 병합되지 않고 완전히 대체됩니다.** 전체 객체를 전송하지 않으면 이전에 저장된 키가 손실됩니다."
+        },
+        "app.UGFkZGxl.action.dXBkYXRlX2N1c3RvbWVy.display_name": {
+          "source": "Update Customer",
+          "message": "고객 업데이트"
+        },
+        "app.UGFkZGxl.action.dXBkYXRlX2N1c3RvbWVy.option.Y3VzdG9tX2RhdGE.desc": {
+          "source": "Your own structured key-value data.",
+          "message": "자체 구조화된 키-값 데이터입니다."
+        },
+        "app.UGFkZGxl.action.dXBkYXRlX2N1c3RvbWVy.option.Y3VzdG9tX2RhdGE.display_name": {
+          "source": "Custom Data",
+          "message": "사용자 정의 데이터"
+        },
+        "app.UGFkZGxl.action.dXBkYXRlX2N1c3RvbWVy.option.Y3VzdG9tX2RhdGE.short_desc": {
+          "source": "Replaces the stored custom data in full",
+          "message": "저장된 커스텀 데이터를 완전히 대체합니다"
+        },
+        "app.UGFkZGxl.action.dXBkYXRlX2N1c3RvbWVy.option.Y3VzdG9tZXJfaWQ.desc": {
+          "source": "Paddle ID of the customer entity to work with.: Unique Paddle ID for this customer entity, prefixed with `ctm_`.",
+          "message": "작업할 고객 엔터티의 Paddle ID.: `ctm_` 접두사가 붙은, 이 고객 엔터티의 고유한 Paddle ID입니다."
+        },
+        "app.UGFkZGxl.action.dXBkYXRlX2N1c3RvbWVy.option.Y3VzdG9tZXJfaWQ.display_name": {
+          "source": "Customer",
+          "message": "고객"
+        },
+        "app.UGFkZGxl.action.dXBkYXRlX2N1c3RvbWVy.option.Y3VzdG9tZXJfaWQ.short_desc": {
+          "source": "Paddle ID of the customer entity to work with",
+          "message": "작업할 고객 엔터티의 Paddle ID"
+        },
+        "app.UGFkZGxl.action.dXBkYXRlX2N1c3RvbWVy.option.ZW1haWw.desc": {
+          "source": "Email address for this customer.",
+          "message": "이 고객의 이메일 주소입니다."
+        },
+        "app.UGFkZGxl.action.dXBkYXRlX2N1c3RvbWVy.option.ZW1haWw.display_name": {
+          "source": "Email",
+          "message": "이메일"
+        },
+        "app.UGFkZGxl.action.dXBkYXRlX2N1c3RvbWVy.option.ZW1haWw.short_desc": {
+          "source": "Email address for this customer",
+          "message": "이 고객의 이메일 주소"
+        },
+        "app.UGFkZGxl.action.dXBkYXRlX2N1c3RvbWVy.option.aW1wb3J0X21ldGE.desc": {
+          "source": "Import information for this entity. `null` if this entity is not imported.",
+          "message": "이 엔터티에 대한 가져오기 정보입니다. 이 엔터티를 가져오지 않은 경우 `null`입니다."
+        },
+        "app.UGFkZGxl.action.dXBkYXRlX2N1c3RvbWVy.option.aW1wb3J0X21ldGE.display_name": {
+          "source": "Import Meta",
+          "message": "가져오기 메타데이터"
+        },
+        "app.UGFkZGxl.action.dXBkYXRlX2N1c3RvbWVy.option.aW1wb3J0X21ldGE.short_desc": {
+          "source": "Import information for this entity",
+          "message": "이 엔터티에 대한 가져오기 정보"
+        },
+        "app.UGFkZGxl.action.dXBkYXRlX2N1c3RvbWVy.option.bG9jYWxl.desc": {
+          "source": "Valid IETF BCP 47 short form locale tag.",
+          "message": "유효한 IETF BCP 47 단축 형식 로캘 태그입니다."
+        },
+        "app.UGFkZGxl.action.dXBkYXRlX2N1c3RvbWVy.option.bG9jYWxl.display_name": {
+          "source": "Locale",
+          "message": "로캘"
+        },
+        "app.UGFkZGxl.action.dXBkYXRlX2N1c3RvbWVy.option.bG9jYWxl.short_desc": {
+          "source": "Valid IETF BCP 47 short form locale tag",
+          "message": "유효한 IETF BCP 47 단축 형식 로캘 태그"
+        },
+        "app.UGFkZGxl.action.dXBkYXRlX2N1c3RvbWVy.option.bWFya2V0aW5nX2NvbnNlbnQ.desc": {
+          "source": "Whether this customer opted into marketing from you. `false` unless customers check the marketing consent box\nwhen using Paddle Checkout. Set automatically by Paddle.",
+          "message": "이 고객이 귀하의 마케팅 수신에 동의했는지 여부입니다. 고객이 Paddle Checkout을 사용할 때 마케팅 동의 확인란을\n선택하지 않는 한 `false`입니다. Paddle에 의해 자동으로 설정됩니다."
+        },
+        "app.UGFkZGxl.action.dXBkYXRlX2N1c3RvbWVy.option.bWFya2V0aW5nX2NvbnNlbnQ.display_name": {
+          "source": "Marketing Consent",
+          "message": "마케팅 동의"
+        },
+        "app.UGFkZGxl.action.dXBkYXRlX2N1c3RvbWVy.option.bWFya2V0aW5nX2NvbnNlbnQ.short_desc": {
+          "source": "Whether this customer opted into marketing from you",
+          "message": "이 고객이 마케팅 수신에 동의했는지 여부"
+        },
+        "app.UGFkZGxl.action.dXBkYXRlX2N1c3RvbWVy.option.bmFtZQ.desc": {
+          "source": "Full name of this customer. Required when creating transactions where `collection_mode` is `manual` (invoices).",
+          "message": "이 고객의 전체 이름입니다. `collection_mode`이 `manual`(청구서)인 트랜잭션을 생성할 때 필수입니다."
+        },
+        "app.UGFkZGxl.action.dXBkYXRlX2N1c3RvbWVy.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "이름"
+        },
+        "app.UGFkZGxl.action.dXBkYXRlX2N1c3RvbWVy.option.bmFtZQ.short_desc": {
+          "source": "Full name of this customer",
+          "message": "이 고객의 전체 이름"
+        },
+        "app.UGFkZGxl.action.dXBkYXRlX2N1c3RvbWVy.option.c3RhdHVz.allowed-value.c3RyaW5nOmFjdGl2ZQ.display_name": {
+          "source": "active",
+          "message": "active"
+        },
+        "app.UGFkZGxl.action.dXBkYXRlX2N1c3RvbWVy.option.c3RhdHVz.allowed-value.c3RyaW5nOmFyY2hpdmVk.display_name": {
+          "source": "archived",
+          "message": "archived"
+        },
+        "app.UGFkZGxl.action.dXBkYXRlX2N1c3RvbWVy.option.c3RhdHVz.desc": {
+          "source": "Whether this entity can be used in Paddle.",
+          "message": "이 엔티티를 Paddle에서 사용할 수 있는지 여부입니다."
+        },
+        "app.UGFkZGxl.action.dXBkYXRlX2N1c3RvbWVy.option.c3RhdHVz.display_name": {
+          "source": "Status",
+          "message": "상태"
+        },
+        "app.UGFkZGxl.action.dXBkYXRlX2N1c3RvbWVy.option.c3RhdHVz.short_desc": {
+          "source": "Set to \"archived\" to retire the customer",
+          "message": "고객을 비활성화하려면 \"archived\"로 설정"
+        },
+        "app.UGFkZGxl.action.dXBkYXRlX2N1c3RvbWVy.short_desc": {
+          "source": "Update a customer",
+          "message": "고객 업데이트"
+        },
+        "app.UGFkZGxl.action.dXBkYXRlX3ByaWNl.desc": {
+          "source": "Updates a price. Only the fields supplied are changed.\n\n**Changing `unit_price` changes what new purchases cost; existing subscriptions keep the amount they were created with** until they are explicitly updated. Raising a published price is normally done by creating a new price and archiving the old one, so that the change is visible in the catalog.\n\nSet `status` to `archived` to withdraw the price from sale.",
+          "message": "가격을 업데이트합니다. 제공된 필드만 변경됩니다.\n\n**`unit_price`을(를) 변경하면 신규 구매 비용이 변경되며, 기존 구독은 명시적으로 업데이트될 때까지 생성 당시의 금액을 유지합니다.** 게시된 가격을 인상할 때는 일반적으로 새 가격을 생성하고 기존 가격을 보관 처리하여 카탈로그에 변경 사항이 표시되도록 합니다.\n\n가격을 판매에서 제외하려면 `status`을(를) `archived`(으)로 설정하세요."
+        },
+        "app.UGFkZGxl.action.dXBkYXRlX3ByaWNl.display_name": {
+          "source": "Update Price",
+          "message": "가격 업데이트"
+        },
+        "app.UGFkZGxl.action.dXBkYXRlX3ByaWNl.option.Y3VzdG9tX2RhdGE.desc": {
+          "source": "Your own structured key-value data.",
+          "message": "자체 구조화된 키-값 데이터입니다."
+        },
+        "app.UGFkZGxl.action.dXBkYXRlX3ByaWNl.option.Y3VzdG9tX2RhdGE.display_name": {
+          "source": "Custom Data",
+          "message": "사용자 정의 데이터"
+        },
+        "app.UGFkZGxl.action.dXBkYXRlX3ByaWNl.option.Y3VzdG9tX2RhdGE.short_desc": {
+          "source": "Replaces the stored custom data in full",
+          "message": "저장된 커스텀 데이터를 완전히 대체합니다"
+        },
+        "app.UGFkZGxl.action.dXBkYXRlX3ByaWNl.option.YmlsbGluZ19jeWNsZQ.desc": {
+          "source": "How often this price should be charged. `null` if price is non-recurring (one-time).",
+          "message": "이 가격이 청구되는 빈도입니다. 가격이 비반복(1회성)인 경우 `null`입니다."
+        },
+        "app.UGFkZGxl.action.dXBkYXRlX3ByaWNl.option.YmlsbGluZ19jeWNsZQ.display_name": {
+          "source": "Billing Cycle",
+          "message": "청구 주기"
+        },
+        "app.UGFkZGxl.action.dXBkYXRlX3ByaWNl.option.YmlsbGluZ19jeWNsZQ.short_desc": {
+          "source": "How often this price should be charged",
+          "message": "이 가격이 청구되는 빈도"
+        },
+        "app.UGFkZGxl.action.dXBkYXRlX3ByaWNl.option.ZGVzY3JpcHRpb24.desc": {
+          "source": "Internal description for this price, not shown to customers. Typically notes for your team.",
+          "message": "고객에게 표시되지 않는 이 가격에 대한 내부 설명입니다. 일반적으로 팀을 위한 메모입니다."
+        },
+        "app.UGFkZGxl.action.dXBkYXRlX3ByaWNl.option.ZGVzY3JpcHRpb24.display_name": {
+          "source": "Description",
+          "message": "설명"
+        },
+        "app.UGFkZGxl.action.dXBkYXRlX3ByaWNl.option.ZGVzY3JpcHRpb24.short_desc": {
+          "source": "Internal description for this price, not shown to customers",
+          "message": "이 가격에 대한 내부 설명(고객에게 표시되지 않음)"
+        },
+        "app.UGFkZGxl.action.dXBkYXRlX3ByaWNl.option.bmFtZQ.desc": {
+          "source": "Name of this price, shown to customers at checkout and on invoices. Typically describes how often the related product bills.",
+          "message": "결제 시 및 청구서에 고객에게 표시되는 이 가격의 이름입니다. 일반적으로 관련 제품의 청구 빈도를 설명합니다."
+        },
+        "app.UGFkZGxl.action.dXBkYXRlX3ByaWNl.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "이름"
+        },
+        "app.UGFkZGxl.action.dXBkYXRlX3ByaWNl.option.bmFtZQ.short_desc": {
+          "source": "Name of this price, shown to customers at checkout and on invoices",
+          "message": "결제 시 및 청구서에 고객에게 표시되는 이 가격의 이름"
+        },
+        "app.UGFkZGxl.action.dXBkYXRlX3ByaWNl.option.c3RhdHVz.allowed-value.c3RyaW5nOmFjdGl2ZQ.display_name": {
+          "source": "active",
+          "message": "active"
+        },
+        "app.UGFkZGxl.action.dXBkYXRlX3ByaWNl.option.c3RhdHVz.allowed-value.c3RyaW5nOmFyY2hpdmVk.display_name": {
+          "source": "archived",
+          "message": "archived"
+        },
+        "app.UGFkZGxl.action.dXBkYXRlX3ByaWNl.option.c3RhdHVz.desc": {
+          "source": "Whether this entity can be used in Paddle.",
+          "message": "이 엔티티를 Paddle에서 사용할 수 있는지 여부입니다."
+        },
+        "app.UGFkZGxl.action.dXBkYXRlX3ByaWNl.option.c3RhdHVz.display_name": {
+          "source": "Status",
+          "message": "상태"
+        },
+        "app.UGFkZGxl.action.dXBkYXRlX3ByaWNl.option.c3RhdHVz.short_desc": {
+          "source": "Set to \"archived\" to withdraw the price from sale",
+          "message": "가격 판매를 중단하려면 \"archived\"로 설정"
+        },
+        "app.UGFkZGxl.action.dXBkYXRlX3ByaWNl.option.cHJpY2VfaWQ.desc": {
+          "source": "Paddle ID of the price entity to work with.",
+          "message": "작업할 가격 엔티티의 Paddle ID입니다."
+        },
+        "app.UGFkZGxl.action.dXBkYXRlX3ByaWNl.option.cHJpY2VfaWQ.display_name": {
+          "source": "Price",
+          "message": "가격"
+        },
+        "app.UGFkZGxl.action.dXBkYXRlX3ByaWNl.option.cHJpY2VfaWQ.short_desc": {
+          "source": "Paddle ID of the price entity to work with",
+          "message": "작업할 가격 엔티티의 Paddle ID"
+        },
+        "app.UGFkZGxl.action.dXBkYXRlX3ByaWNl.option.cXVhbnRpdHk.desc": {
+          "source": "Limits on how many times the related product can be purchased at this price. Useful for discount campaigns.",
+          "message": "이 가격으로 관련 제품을 구매할 수 있는 횟수 제한입니다. 할인 캠페인에 유용합니다."
+        },
+        "app.UGFkZGxl.action.dXBkYXRlX3ByaWNl.option.cXVhbnRpdHk.display_name": {
+          "source": "Quantity",
+          "message": "수량"
+        },
+        "app.UGFkZGxl.action.dXBkYXRlX3ByaWNl.option.cXVhbnRpdHk.short_desc": {
+          "source": "Limits on how many times the related product can be purchased at this price",
+          "message": "관련 제품을 이 가격으로 구매할 수 있는 횟수 제한"
+        },
+        "app.UGFkZGxl.action.dXBkYXRlX3ByaWNl.option.dGF4X21vZGU.allowed-value.c3RyaW5nOmFjY291bnRfc2V0dGluZw.display_name": {
+          "source": "account_setting",
+          "message": "account_setting"
+        },
+        "app.UGFkZGxl.action.dXBkYXRlX3ByaWNl.option.dGF4X21vZGU.allowed-value.c3RyaW5nOmV4dGVybmFs.display_name": {
+          "source": "external",
+          "message": "external"
+        },
+        "app.UGFkZGxl.action.dXBkYXRlX3ByaWNl.option.dGF4X21vZGU.allowed-value.c3RyaW5nOmludGVybmFs.display_name": {
+          "source": "internal",
+          "message": "internal"
+        },
+        "app.UGFkZGxl.action.dXBkYXRlX3ByaWNl.option.dGF4X21vZGU.allowed-value.c3RyaW5nOmxvY2F0aW9u.display_name": {
+          "source": "location",
+          "message": "위치"
+        },
+        "app.UGFkZGxl.action.dXBkYXRlX3ByaWNl.option.dGF4X21vZGU.desc": {
+          "source": "How tax is calculated for this price.",
+          "message": "이 가격에 대한 세금 계산 방법입니다."
+        },
+        "app.UGFkZGxl.action.dXBkYXRlX3ByaWNl.option.dGF4X21vZGU.display_name": {
+          "source": "Tax Mode",
+          "message": "세금 모드"
+        },
+        "app.UGFkZGxl.action.dXBkYXRlX3ByaWNl.option.dGF4X21vZGU.short_desc": {
+          "source": "How tax is calculated for this price",
+          "message": "이 가격에 세금이 계산되는 방식"
+        },
+        "app.UGFkZGxl.action.dXBkYXRlX3ByaWNl.option.dHJpYWxfcGVyaW9k.desc": {
+          "source": "Trial period for the product related to this price. The billing cycle begins once the trial period is over. `null` for no trial period. Requires `billing_cycle`.",
+          "message": "이 가격과 관련된 제품의 체험 기간입니다. 청구 주기는 체험 기간이 끝나면 시작됩니다. 체험 기간이 없는 경우 `null`입니다. `billing_cycle`이(가) 필요합니다."
+        },
+        "app.UGFkZGxl.action.dXBkYXRlX3ByaWNl.option.dHJpYWxfcGVyaW9k.display_name": {
+          "source": "Trial Period",
+          "message": "체험 기간"
+        },
+        "app.UGFkZGxl.action.dXBkYXRlX3ByaWNl.option.dHJpYWxfcGVyaW9k.short_desc": {
+          "source": "Trial period for the product related to this price",
+          "message": "이 가격과 관련된 제품의 체험 기간"
+        },
+        "app.UGFkZGxl.action.dXBkYXRlX3ByaWNl.option.dHlwZQ.allowed-value.c3RyaW5nOmN1c3RvbQ.display_name": {
+          "source": "custom",
+          "message": "맞춤"
+        },
+        "app.UGFkZGxl.action.dXBkYXRlX3ByaWNl.option.dHlwZQ.allowed-value.c3RyaW5nOnN0YW5kYXJk.display_name": {
+          "source": "standard",
+          "message": "표준"
+        },
+        "app.UGFkZGxl.action.dXBkYXRlX3ByaWNl.option.dHlwZQ.desc": {
+          "source": "Type of item. Standard items are considered part of your catalog and are shown in the Paddle dashboard.",
+          "message": "항목 유형입니다. 표준 항목은 카탈로그의 일부로 간주되며 Paddle 대시보드에 표시됩니다."
+        },
+        "app.UGFkZGxl.action.dXBkYXRlX3ByaWNl.option.dHlwZQ.display_name": {
+          "source": "Type",
+          "message": "유형"
+        },
+        "app.UGFkZGxl.action.dXBkYXRlX3ByaWNl.option.dHlwZQ.short_desc": {
+          "source": "Type of item",
+          "message": "항목 유형"
+        },
+        "app.UGFkZGxl.action.dXBkYXRlX3ByaWNl.option.dW5pdF9wcmljZQ.desc": {
+          "source": "Base price. This price applies to all customers, except for customers located in countries where you have `unit_price_overrides`.",
+          "message": "기본 가격입니다. 이 가격은 `unit_price_overrides`이(가) 설정된 국가에 위치한 고객을 제외한 모든 고객에게 적용됩니다."
+        },
+        "app.UGFkZGxl.action.dXBkYXRlX3ByaWNl.option.dW5pdF9wcmljZQ.display_name": {
+          "source": "Unit Price",
+          "message": "단가"
+        },
+        "app.UGFkZGxl.action.dXBkYXRlX3ByaWNl.option.dW5pdF9wcmljZQ.short_desc": {
+          "source": "The amount, in the smallest unit of its currency",
+          "message": "통화의 최소 단위 기준 금액"
+        },
+        "app.UGFkZGxl.action.dXBkYXRlX3ByaWNl.option.dW5pdF9wcmljZV9vdmVycmlkZXM.desc": {
+          "source": "List of unit price overrides. Use to override the base price with a custom price and currency for a country or group of countries.",
+          "message": "단가 재정의 목록입니다. 특정 국가 또는 국가 그룹에 대한 맞춤 가격 및 통화로 기본 가격을 재정의하는 데 사용합니다."
+        },
+        "app.UGFkZGxl.action.dXBkYXRlX3ByaWNl.option.dW5pdF9wcmljZV9vdmVycmlkZXM.display_name": {
+          "source": "Unit Price Overrides",
+          "message": "단가 재정의"
+        },
+        "app.UGFkZGxl.action.dXBkYXRlX3ByaWNl.option.dW5pdF9wcmljZV9vdmVycmlkZXM.short_desc": {
+          "source": "List of unit price overrides",
+          "message": "단가 재정의 목록"
+        },
+        "app.UGFkZGxl.action.dXBkYXRlX3ByaWNl.short_desc": {
+          "source": "Update a catalog price",
+          "message": "카탈로그 가격 업데이트"
+        },
+        "app.UGFkZGxl.action.dXBkYXRlX3Byb2R1Y3Q.desc": {
+          "source": "Updates a product. Only the fields supplied are changed.\n\n`tax_category` is fixed at creation and cannot be changed here; a product in the wrong category has to be archived and replaced.\n\n**`custom_data` is replaced, not merged.** Send the whole object, or previously stored keys are lost.",
+          "message": "제품을 업데이트합니다. 제공된 필드만 변경됩니다.\n\n`tax_category`은(는) 생성 시 고정되며 여기서 변경할 수 없습니다. 잘못된 카테고리의 제품은 보관 처리하고 교체해야 합니다.\n\n**`custom_data`은(는) 병합되지 않고 완전히 대체됩니다.** 전체 객체를 전송하지 않으면 이전에 저장된 키가 손실됩니다."
+        },
+        "app.UGFkZGxl.action.dXBkYXRlX3Byb2R1Y3Q.display_name": {
+          "source": "Update Product",
+          "message": "제품 업데이트"
+        },
+        "app.UGFkZGxl.action.dXBkYXRlX3Byb2R1Y3Q.option.Y3VzdG9tX2RhdGE.desc": {
+          "source": "Your own structured key-value data.",
+          "message": "자체 구조화된 키-값 데이터입니다."
+        },
+        "app.UGFkZGxl.action.dXBkYXRlX3Byb2R1Y3Q.option.Y3VzdG9tX2RhdGE.display_name": {
+          "source": "Custom Data",
+          "message": "사용자 정의 데이터"
+        },
+        "app.UGFkZGxl.action.dXBkYXRlX3Byb2R1Y3Q.option.Y3VzdG9tX2RhdGE.short_desc": {
+          "source": "Replaces the stored custom data in full",
+          "message": "저장된 커스텀 데이터를 완전히 대체합니다"
+        },
+        "app.UGFkZGxl.action.dXBkYXRlX3Byb2R1Y3Q.option.ZGVzY3JpcHRpb24.desc": {
+          "source": "Short description for this product.",
+          "message": "이 제품에 대한 간단한 설명입니다."
+        },
+        "app.UGFkZGxl.action.dXBkYXRlX3Byb2R1Y3Q.option.ZGVzY3JpcHRpb24.display_name": {
+          "source": "Description",
+          "message": "설명"
+        },
+        "app.UGFkZGxl.action.dXBkYXRlX3Byb2R1Y3Q.option.ZGVzY3JpcHRpb24.short_desc": {
+          "source": "Short description for this product",
+          "message": "이 제품에 대한 간단한 설명"
+        },
+        "app.UGFkZGxl.action.dXBkYXRlX3Byb2R1Y3Q.option.aW1hZ2VfdXJs.desc": {
+          "source": "Image for this product. Included in the checkout and on some customer documents.",
+          "message": "이 제품의 이미지입니다. 체크아웃 및 일부 고객 문서에 포함됩니다."
+        },
+        "app.UGFkZGxl.action.dXBkYXRlX3Byb2R1Y3Q.option.aW1hZ2VfdXJs.display_name": {
+          "source": "Image Url",
+          "message": "이미지 URL"
+        },
+        "app.UGFkZGxl.action.dXBkYXRlX3Byb2R1Y3Q.option.aW1hZ2VfdXJs.short_desc": {
+          "source": "Image for this product",
+          "message": "이 제품의 이미지"
+        },
+        "app.UGFkZGxl.action.dXBkYXRlX3Byb2R1Y3Q.option.bmFtZQ.desc": {
+          "source": "Name of this product.",
+          "message": "이 제품의 이름입니다."
+        },
+        "app.UGFkZGxl.action.dXBkYXRlX3Byb2R1Y3Q.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "이름"
+        },
+        "app.UGFkZGxl.action.dXBkYXRlX3Byb2R1Y3Q.option.bmFtZQ.short_desc": {
+          "source": "Name of this product",
+          "message": "이 제품의 이름"
+        },
+        "app.UGFkZGxl.action.dXBkYXRlX3Byb2R1Y3Q.option.c3RhdHVz.allowed-value.c3RyaW5nOmFjdGl2ZQ.display_name": {
+          "source": "active",
+          "message": "active"
+        },
+        "app.UGFkZGxl.action.dXBkYXRlX3Byb2R1Y3Q.option.c3RhdHVz.allowed-value.c3RyaW5nOmFyY2hpdmVk.display_name": {
+          "source": "archived",
+          "message": "archived"
+        },
+        "app.UGFkZGxl.action.dXBkYXRlX3Byb2R1Y3Q.option.c3RhdHVz.desc": {
+          "source": "Whether this entity can be used in Paddle.",
+          "message": "이 엔티티를 Paddle에서 사용할 수 있는지 여부입니다."
+        },
+        "app.UGFkZGxl.action.dXBkYXRlX3Byb2R1Y3Q.option.c3RhdHVz.display_name": {
+          "source": "Status",
+          "message": "상태"
+        },
+        "app.UGFkZGxl.action.dXBkYXRlX3Byb2R1Y3Q.option.c3RhdHVz.short_desc": {
+          "source": "Set to \"archived\" to retire the product",
+          "message": "제품을 비활성화하려면 \"archived\"로 설정"
+        },
+        "app.UGFkZGxl.action.dXBkYXRlX3Byb2R1Y3Q.option.cHJvZHVjdF9pZA.desc": {
+          "source": "Paddle ID of the product entity to work with.",
+          "message": "작업할 제품 엔터티의 Paddle ID입니다."
+        },
+        "app.UGFkZGxl.action.dXBkYXRlX3Byb2R1Y3Q.option.cHJvZHVjdF9pZA.display_name": {
+          "source": "Product",
+          "message": "제품"
+        },
+        "app.UGFkZGxl.action.dXBkYXRlX3Byb2R1Y3Q.option.cHJvZHVjdF9pZA.short_desc": {
+          "source": "Paddle ID of the product entity to work with",
+          "message": "작업할 제품 엔터티의 Paddle ID"
+        },
+        "app.UGFkZGxl.action.dXBkYXRlX3Byb2R1Y3Q.option.dGF4X2NhdGVnb3J5.allowed-value.c3RyaW5nOmRpZ2l0YWwtZ29vZHM.display_name": {
+          "source": "digital-goods",
+          "message": "digital-goods"
+        },
+        "app.UGFkZGxl.action.dXBkYXRlX3Byb2R1Y3Q.option.dGF4X2NhdGVnb3J5.allowed-value.c3RyaW5nOmVib29rcw.display_name": {
+          "source": "ebooks",
+          "message": "ebooks"
+        },
+        "app.UGFkZGxl.action.dXBkYXRlX3Byb2R1Y3Q.option.dGF4X2NhdGVnb3J5.allowed-value.c3RyaW5nOmltcGxlbWVudGF0aW9uLXNlcnZpY2Vz.display_name": {
+          "source": "implementation-services",
+          "message": "implementation-services"
+        },
+        "app.UGFkZGxl.action.dXBkYXRlX3Byb2R1Y3Q.option.dGF4X2NhdGVnb3J5.allowed-value.c3RyaW5nOnByb2Zlc3Npb25hbC1zZXJ2aWNlcw.display_name": {
+          "source": "professional-services",
+          "message": "professional-services"
+        },
+        "app.UGFkZGxl.action.dXBkYXRlX3Byb2R1Y3Q.option.dGF4X2NhdGVnb3J5.allowed-value.c3RyaW5nOnN0YW5kYXJk.display_name": {
+          "source": "standard",
+          "message": "표준"
+        },
+        "app.UGFkZGxl.action.dXBkYXRlX3Byb2R1Y3Q.option.dGF4X2NhdGVnb3J5.allowed-value.c3RyaW5nOnNhYXM.display_name": {
+          "source": "saas",
+          "message": "saas"
+        },
+        "app.UGFkZGxl.action.dXBkYXRlX3Byb2R1Y3Q.option.dGF4X2NhdGVnb3J5.allowed-value.c3RyaW5nOnNvZnR3YXJlLXByb2dyYW1taW5nLXNlcnZpY2Vz.display_name": {
+          "source": "software-programming-services",
+          "message": "software-programming-services"
+        },
+        "app.UGFkZGxl.action.dXBkYXRlX3Byb2R1Y3Q.option.dGF4X2NhdGVnb3J5.allowed-value.c3RyaW5nOnRyYWluaW5nLXNlcnZpY2Vz.display_name": {
+          "source": "training-services",
+          "message": "training-services"
+        },
+        "app.UGFkZGxl.action.dXBkYXRlX3Byb2R1Y3Q.option.dGF4X2NhdGVnb3J5.allowed-value.c3RyaW5nOndlYnNpdGUtaG9zdGluZw.display_name": {
+          "source": "website-hosting",
+          "message": "website-hosting"
+        },
+        "app.UGFkZGxl.action.dXBkYXRlX3Byb2R1Y3Q.option.dGF4X2NhdGVnb3J5.desc": {
+          "source": "Tax category for this product. Used for charging the correct rate of tax. Selected tax category must be enabled on your Paddle account.",
+          "message": "이 제품의 세금 카테고리입니다. 정확한 세율을 청구하는 데 사용됩니다. 선택한 세금 카테고리는 Paddle 계정에서 활성화되어 있어야 합니다."
+        },
+        "app.UGFkZGxl.action.dXBkYXRlX3Byb2R1Y3Q.option.dGF4X2NhdGVnb3J5.display_name": {
+          "source": "Tax Category",
+          "message": "세금 카테고리"
+        },
+        "app.UGFkZGxl.action.dXBkYXRlX3Byb2R1Y3Q.option.dGF4X2NhdGVnb3J5.short_desc": {
+          "source": "Tax category for this product",
+          "message": "이 제품의 세금 카테고리"
+        },
+        "app.UGFkZGxl.action.dXBkYXRlX3Byb2R1Y3Q.option.dHlwZQ.allowed-value.c3RyaW5nOmN1c3RvbQ.display_name": {
+          "source": "custom",
+          "message": "맞춤"
+        },
+        "app.UGFkZGxl.action.dXBkYXRlX3Byb2R1Y3Q.option.dHlwZQ.allowed-value.c3RyaW5nOnN0YW5kYXJk.display_name": {
+          "source": "standard",
+          "message": "표준"
+        },
+        "app.UGFkZGxl.action.dXBkYXRlX3Byb2R1Y3Q.option.dHlwZQ.desc": {
+          "source": "Type of item. Standard items are considered part of your catalog and are shown in the Paddle dashboard.",
+          "message": "항목 유형입니다. 표준 항목은 카탈로그의 일부로 간주되며 Paddle 대시보드에 표시됩니다."
+        },
+        "app.UGFkZGxl.action.dXBkYXRlX3Byb2R1Y3Q.option.dHlwZQ.display_name": {
+          "source": "Type",
+          "message": "유형"
+        },
+        "app.UGFkZGxl.action.dXBkYXRlX3Byb2R1Y3Q.option.dHlwZQ.short_desc": {
+          "source": "Type of item",
+          "message": "항목 유형"
+        },
+        "app.UGFkZGxl.action.dXBkYXRlX3Byb2R1Y3Q.short_desc": {
+          "source": "Update a catalog product",
+          "message": "카탈로그 제품 업데이트"
+        },
+        "app.UGFkZGxl.desc": {
+          "source": "Provides access to [Paddle](https://www.paddle.com), the billing platform for software businesses.\n\nPaddle is a **merchant of record**: it sells on your behalf, which means it - not you - handles payment processing, sales tax registration and remittance, invoicing and chargebacks, and then pays out the balance.\n\n**Common use cases**:\n- **Catalog**: create and update the products you sell and the prices they are sold at, including per-country pricing\n- **Customers**: create and update customers, and read the credit they hold\n- **Billing**: raise transactions, bill them, and read what was actually collected\n- **Subscriptions**: read subscriptions and what they are billing for\n- **Reporting**: request a report and download the CSV Paddle generates\n\nAuthentication is a Paddle API key, granted an explicit set of permissions in the Paddle dashboard. **Sandbox and production are separate environments** with separate data and separate keys.\n\nPaddle is a trademark of Paddle.com Market Ltd.",
+          "message": "소프트웨어 비즈니스를 위한 청구 플랫폼인 [Paddle](https://www.paddle.com)에 대한 액세스를 제공합니다.\n\nPaddle은 **등록 판매자(Merchant of Record)**입니다. 귀하를 대신하여 판매를 수행하므로 결제 처리, 판매세 등록 및 납부, 인보이스 발행 및 지급거절 처리를 직접 담당한 후 잔액을 지급합니다.\n\n**주요 사용 사례**:\n- **카탈로그**: 국가별 가격 책정을 포함하여 판매하는 제품 및 판매 가격 생성 및 업데이트\n- **고객**: 고객 생성 및 업데이트, 보유 크레딧 조회\n- **청구**: 트랜잭션 생성, 청구 및 실제 수금 내역 조회\n- **구독**: 구독 및 청구 항목 조회\n- **보고**: 리포트 요청 및 Paddle이 생성한 CSV 다운로드\n\n인증에는 Paddle 대시보드에서 명시적 권한 집합이 부여된 Paddle API 키가 사용됩니다. **샌드박스와 프로덕션은 데이터와 키가 분리된 별도의 환경입니다**.\n\nPaddle은 Paddle.com Market Ltd.의 상표입니다."
+        },
+        "app.UGFkZGxl.display_name": {
+          "source": "Paddle",
+          "message": "Paddle"
+        },
+        "app.UGFkZGxl.short_desc": {
+          "source": "Sell software through Paddle and manage the billing around it",
+          "message": "Paddle을 통해 소프트웨어를 판매하고 관련 결제를 관리합니다"
+        }
+      }
+    }
+  }
+}

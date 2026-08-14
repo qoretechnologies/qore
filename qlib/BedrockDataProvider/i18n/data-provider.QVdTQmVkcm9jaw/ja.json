@@ -1,0 +1,541 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "ja": {
+      "messages": {
+        "app.QVdTQmVkcm9jaw.action.Y29udmVyc2U.desc": {
+          "source": "Generate a chat completion via the unified Bedrock Converse API. One request body shape works across every supported model family (Anthropic Claude, Meta Llama, Mistral, Cohere, AI21, Amazon Titan / Nova, DeepSeek). Supports text, image, and document content blocks, tool use, and Bedrock Guardrails.",
+          "message": "統合された Bedrock Converse API を介してチャット補完を生成します。1つのリクエストボディ形式で、サポートされているすべてのモデルファミリー（Anthropic Claude、Meta Llama、Mistral、Cohere、AI21、Amazon Titan / Nova、DeepSeek）に対応します。テキスト、画像、ドキュメントのコンテンツブロック、ツール利用（tool use）、Bedrock Guardrails をサポートしています。"
+        },
+        "app.QVdTQmVkcm9jaw.action.Y29udmVyc2U.display_name": {
+          "source": "Converse",
+          "message": "Converse"
+        },
+        "app.QVdTQmVkcm9jaw.action.Y29udmVyc2U.option.YWRkaXRpb25hbE1vZGVsUmVxdWVzdEZpZWxkcw.desc": {
+          "source": "Model-family-specific request fields not covered by the unified Converse schema (e.g. Anthropic's `anthropic_beta`)",
+          "message": "統合 Converse スキーマでカバーされていないモデルファミリー固有のリクエストフィールド（例: Anthropic の `anthropic_beta`）"
+        },
+        "app.QVdTQmVkcm9jaw.action.Y29udmVyc2U.option.YWRkaXRpb25hbE1vZGVsUmVxdWVzdEZpZWxkcw.display_name": {
+          "source": "Additional Model Request Fields",
+          "message": "追加モデルリクエストフィールド"
+        },
+        "app.QVdTQmVkcm9jaw.action.Y29udmVyc2U.option.YWRkaXRpb25hbE1vZGVsUmVxdWVzdEZpZWxkcw.short_desc": {
+          "source": "Model-family-specific request fields",
+          "message": "モデルファミリー固有のリクエストフィールド"
+        },
+        "app.QVdTQmVkcm9jaw.action.Y29udmVyc2U.option.Z3VhcmRyYWlsQ29uZmln.desc": {
+          "source": "Apply Bedrock Guardrails: `guardrailIdentifier` (`string`), `guardrailVersion` (`string`), `trace` (`enabled` / `disabled`)",
+          "message": "Bedrock Guardrails を適用: `guardrailIdentifier` (`string`)、`guardrailVersion` (`string`)、`trace` (`enabled` / `disabled`)"
+        },
+        "app.QVdTQmVkcm9jaw.action.Y29udmVyc2U.option.Z3VhcmRyYWlsQ29uZmln.display_name": {
+          "source": "Guardrail Config",
+          "message": "ガードレール設定"
+        },
+        "app.QVdTQmVkcm9jaw.action.Y29udmVyc2U.option.Z3VhcmRyYWlsQ29uZmln.short_desc": {
+          "source": "Bedrock Guardrails to apply",
+          "message": "適用する Bedrock Guardrails"
+        },
+        "app.QVdTQmVkcm9jaw.action.Y29udmVyc2U.option.aW5mZXJlbmNlQ29uZmln.desc": {
+          "source": "Generation parameters: `maxTokens` (`int`), `temperature` (`float`, 0..1), `topP` (`float`), `stopSequences` (`list<string>`)",
+          "message": "生成パラメータ: `maxTokens` (`int`)、`temperature` (`float`、0..1)、`topP` (`float`)、`stopSequences` (`list<string>`)"
+        },
+        "app.QVdTQmVkcm9jaw.action.Y29udmVyc2U.option.aW5mZXJlbmNlQ29uZmln.display_name": {
+          "source": "Inference Config",
+          "message": "推論設定"
+        },
+        "app.QVdTQmVkcm9jaw.action.Y29udmVyc2U.option.aW5mZXJlbmNlQ29uZmln.short_desc": {
+          "source": "Generation knobs",
+          "message": "生成パラメータ設定"
+        },
+        "app.QVdTQmVkcm9jaw.action.Y29udmVyc2U.option.bW9kZWxJZA.desc": {
+          "source": "The Bedrock foundation model ID. Examples: `anthropic.claude-3-5-sonnet-20240620-v1:0`, `amazon.nova-pro-v1:0`, `meta.llama3-1-70b-instruct-v1:0`, `mistral.mistral-large-2402-v1:0`",
+          "message": "Bedrock 基盤モデル ID。例: `anthropic.claude-3-5-sonnet-20240620-v1:0`、`amazon.nova-pro-v1:0`、`meta.llama3-1-70b-instruct-v1:0`、`mistral.mistral-large-2402-v1:0`"
+        },
+        "app.QVdTQmVkcm9jaw.action.Y29udmVyc2U.option.bW9kZWxJZA.display_name": {
+          "source": "Model ID",
+          "message": "モデルID"
+        },
+        "app.QVdTQmVkcm9jaw.action.Y29udmVyc2U.option.bW9kZWxJZA.short_desc": {
+          "source": "Bedrock model identifier",
+          "message": "Bedrock モデル識別子"
+        },
+        "app.QVdTQmVkcm9jaw.action.Y29udmVyc2U.option.bWVzc2FnZXM.desc": {
+          "source": "Conversation history; each message is a hash with `role` (`user` or `assistant`) and `content` (list of content blocks, each a hash like `{text: \"...\"}`, `{image: {...}}`, or `{toolUse: {...}}`)",
+          "message": "会話履歴。各メッセージは `role` (`user` または `assistant`) および `content` (`{text: \"...\"}`、`{image: {...}}`、または `{toolUse: {...}}` のようなハッシュのコンテンツブロックリスト) を持つハッシュです"
+        },
+        "app.QVdTQmVkcm9jaw.action.Y29udmVyc2U.option.bWVzc2FnZXM.display_name": {
+          "source": "Messages",
+          "message": "メッセージ"
+        },
+        "app.QVdTQmVkcm9jaw.action.Y29udmVyc2U.option.bWVzc2FnZXM.short_desc": {
+          "source": "Conversation messages in Bedrock Converse shape",
+          "message": "Bedrock Converse 形式の会話メッセージ"
+        },
+        "app.QVdTQmVkcm9jaw.action.Y29udmVyc2U.option.c3lzdGVt.desc": {
+          "source": "Optional system instruction blocks; each is a hash like `{text: \"...\"}`",
+          "message": "オプションのシステム指示ブロック。それぞれが `{text: \"...\"}` のようなハッシュです"
+        },
+        "app.QVdTQmVkcm9jaw.action.Y29udmVyc2U.option.c3lzdGVt.display_name": {
+          "source": "System Prompt",
+          "message": "システムプロンプト"
+        },
+        "app.QVdTQmVkcm9jaw.action.Y29udmVyc2U.option.c3lzdGVt.short_desc": {
+          "source": "Optional system prompt blocks",
+          "message": "オプションのシステムプロンプトブロック"
+        },
+        "app.QVdTQmVkcm9jaw.action.Y29udmVyc2U.option.dG9vbENvbmZpZw.desc": {
+          "source": "Tool configuration: `tools` is a list of `{toolSpec: {name, description, inputSchema: {json: <schema>}}}`; optional `toolChoice` (`{auto: {}}`, `{any: {}}`, or `{tool: {name: \"...\"}}`)",
+          "message": "ツール設定: `tools` は `{toolSpec: {name, description, inputSchema: {json: <schema>}}}` のリスト、オプションの `toolChoice` (`{auto: {}}`、`{any: {}}`、または `{tool: {name: \"...\"}}`)"
+        },
+        "app.QVdTQmVkcm9jaw.action.Y29udmVyc2U.option.dG9vbENvbmZpZw.display_name": {
+          "source": "Tool Config",
+          "message": "ツール設定"
+        },
+        "app.QVdTQmVkcm9jaw.action.Y29udmVyc2U.option.dG9vbENvbmZpZw.short_desc": {
+          "source": "Tool definitions for function calling",
+          "message": "関数呼び出し用のツール定義"
+        },
+        "app.QVdTQmVkcm9jaw.action.Y29udmVyc2U.short_desc": {
+          "source": "Generate a chat completion via the unified Converse API",
+          "message": "統合 Converse API を介してチャット補完を生成"
+        },
+        "app.QVdTQmVkcm9jaw.action.ZW1iZWQ.desc": {
+          "source": "Generate dense vector embeddings for text using a Bedrock embedding model (Amazon Titan Text Embeddings v2, or Cohere `embed-english-v3` / `embed-multilingual-v3`). The action auto-routes to the correct request body shape based on the model ID prefix.",
+          "message": "Bedrock 埋め込みモデル（Amazon Titan Text Embeddings v2、または Cohere `embed-english-v3` / `embed-multilingual-v3`）を使用してテキストの高密度ベクトル埋め込みを生成します。このアクションはモデル ID プレフィックスに基づいて適切なリクエストボディ形式に自動ルーティングします。"
+        },
+        "app.QVdTQmVkcm9jaw.action.ZW1iZWQ.display_name": {
+          "source": "Embed Text",
+          "message": "テキストを埋め込み"
+        },
+        "app.QVdTQmVkcm9jaw.action.ZW1iZWQ.option.ZGltZW5zaW9ucw.desc": {
+          "source": "Override the output embedding dimension; supported by Titan Text Embeddings v2 (e.g. 256, 512, 1024)",
+          "message": "出力埋め込みディメンションを上書きします。Titan Text Embeddings v2 でサポートされています (例: 256、512、1024)"
+        },
+        "app.QVdTQmVkcm9jaw.action.ZW1iZWQ.option.ZGltZW5zaW9ucw.display_name": {
+          "source": "Dimensions",
+          "message": "ディメンション"
+        },
+        "app.QVdTQmVkcm9jaw.action.ZW1iZWQ.option.ZGltZW5zaW9ucw.short_desc": {
+          "source": "Override embedding dimension (Titan v2 only)",
+          "message": "埋め込みディメンションを上書き (Titan v2 のみ)"
+        },
+        "app.QVdTQmVkcm9jaw.action.ZW1iZWQ.option.aW5wdXRUZXh0.desc": {
+          "source": "Text to embed when using a Titan model (single-string body)",
+          "message": "Titan モデルを使用する際に埋め込むテキスト (単一文字列ボディ)"
+        },
+        "app.QVdTQmVkcm9jaw.action.ZW1iZWQ.option.aW5wdXRUZXh0.display_name": {
+          "source": "Input Text",
+          "message": "入力テキスト"
+        },
+        "app.QVdTQmVkcm9jaw.action.ZW1iZWQ.option.aW5wdXRUZXh0.short_desc": {
+          "source": "Text to embed (Titan; single-string)",
+          "message": "埋め込むテキスト (Titan、単一文字列)"
+        },
+        "app.QVdTQmVkcm9jaw.action.ZW1iZWQ.option.aW5wdXRfdHlwZQ.allowed-value.c3RyaW5nOmNsYXNzaWZpY2F0aW9u.display_name": {
+          "source": "Classification",
+          "message": "分類"
+        },
+        "app.QVdTQmVkcm9jaw.action.ZW1iZWQ.option.aW5wdXRfdHlwZQ.allowed-value.c3RyaW5nOmNsdXN0ZXJpbmc.display_name": {
+          "source": "Clustering",
+          "message": "クラスタリング"
+        },
+        "app.QVdTQmVkcm9jaw.action.ZW1iZWQ.option.aW5wdXRfdHlwZQ.allowed-value.c3RyaW5nOnNlYXJjaF9kb2N1bWVudA.display_name": {
+          "source": "Search Document",
+          "message": "検索ドキュメント"
+        },
+        "app.QVdTQmVkcm9jaw.action.ZW1iZWQ.option.aW5wdXRfdHlwZQ.allowed-value.c3RyaW5nOnNlYXJjaF9xdWVyeQ.display_name": {
+          "source": "Search Query",
+          "message": "検索クエリ"
+        },
+        "app.QVdTQmVkcm9jaw.action.ZW1iZWQ.option.aW5wdXRfdHlwZQ.desc": {
+          "source": "Cohere embedding input-type hint",
+          "message": "Cohere 埋め込み入力タイプのヒント"
+        },
+        "app.QVdTQmVkcm9jaw.action.ZW1iZWQ.option.aW5wdXRfdHlwZQ.display_name": {
+          "source": "Cohere Input Type",
+          "message": "Cohere 入力タイプ"
+        },
+        "app.QVdTQmVkcm9jaw.action.ZW1iZWQ.option.aW5wdXRfdHlwZQ.short_desc": {
+          "source": "Cohere embedding input-type hint",
+          "message": "Cohere 埋め込み入力タイプのヒント"
+        },
+        "app.QVdTQmVkcm9jaw.action.ZW1iZWQ.option.bW9kZWxJZA.desc": {
+          "source": "The Bedrock embedding model ID. Examples: `amazon.titan-embed-text-v2:0` (Titan), `cohere.embed-english-v3`, `cohere.embed-multilingual-v3`",
+          "message": "Bedrock 埋め込みモデル ID。例: `amazon.titan-embed-text-v2:0` (Titan)、`cohere.embed-english-v3`、`cohere.embed-multilingual-v3`"
+        },
+        "app.QVdTQmVkcm9jaw.action.ZW1iZWQ.option.bW9kZWxJZA.display_name": {
+          "source": "Model ID",
+          "message": "モデルID"
+        },
+        "app.QVdTQmVkcm9jaw.action.ZW1iZWQ.option.bW9kZWxJZA.short_desc": {
+          "source": "Bedrock embedding model identifier",
+          "message": "Bedrock 埋め込みモデル識別子"
+        },
+        "app.QVdTQmVkcm9jaw.action.ZW1iZWQ.option.bm9ybWFsaXpl.desc": {
+          "source": "L2-normalize the resulting embedding (Titan v2 only)",
+          "message": "結果の埋め込みを L2 正規化 (Titan v2 のみ)"
+        },
+        "app.QVdTQmVkcm9jaw.action.ZW1iZWQ.option.bm9ybWFsaXpl.display_name": {
+          "source": "Normalize",
+          "message": "正規化"
+        },
+        "app.QVdTQmVkcm9jaw.action.ZW1iZWQ.option.bm9ybWFsaXpl.short_desc": {
+          "source": "L2-normalize the embedding (Titan v2 only)",
+          "message": "埋め込みを L2 正規化 (Titan v2 のみ)"
+        },
+        "app.QVdTQmVkcm9jaw.action.ZW1iZWQ.option.dGV4dHM.desc": {
+          "source": "Texts to embed when using a Cohere `embed-*` model (batch); the action automatically picks the right body shape per model family",
+          "message": "Cohere `embed-*` モデルを使用する際に埋め込むテキスト (バッチ)。アクションはモデルファミリーごとに適切なボディ形状を自動的に選択します"
+        },
+        "app.QVdTQmVkcm9jaw.action.ZW1iZWQ.option.dGV4dHM.display_name": {
+          "source": "Texts",
+          "message": "テキスト"
+        },
+        "app.QVdTQmVkcm9jaw.action.ZW1iZWQ.option.dGV4dHM.short_desc": {
+          "source": "Texts to embed (Cohere; batch)",
+          "message": "埋め込むテキスト (Cohere、バッチ)"
+        },
+        "app.QVdTQmVkcm9jaw.action.ZW1iZWQ.short_desc": {
+          "source": "Generate text embeddings via a Bedrock embedding model",
+          "message": "Bedrock 埋め込みモデル経由でテキスト埋め込みを生成"
+        },
+        "app.QVdTQmVkcm9jaw.action.bWFrZS1hcGktY2FsbA.desc": {
+          "source": "Make a custom HTTP / REST API call to **AWS Bedrock** using the configured connection's authentication.\n\nSpecify the HTTP method, the URI path (relative to the connection's API base URL), optional query parameters, headers, and request body. The response is returned as a hash containing the status code, response headers, and response body.\n\nUse this action for endpoints that are not yet exposed as first-class actions on this app.",
+          "message": "設定された接続の認証情報を使用して、**AWS Bedrock** へのカスタム HTTP / REST API コールを実行します。\n\nHTTP メソッド、URI パス (接続の API ベース URL からの相対パス)、任意のクエリパラメーター、ヘッダー、リクエスト本文を指定します。レスポンスは、ステータスコード、レスポンスヘッダー、レスポンス本文を含むハッシュとして返されます。\n\nこのアプリでファーストクラスのアクションとしてまだ公開されていないエンドポイントに対してこのアクションを使用します。"
+        },
+        "app.QVdTQmVkcm9jaw.action.bWFrZS1hcGktY2FsbA.display_name": {
+          "source": "Make an API call",
+          "message": "API コールを実行"
+        },
+        "app.QVdTQmVkcm9jaw.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.desc": {
+          "source": "The request body. The effective type depends on `body_type`: JSON/form/YAML expect a hash, XML/text expect a string, multipart expects a file structure, binary expects raw bytes.",
+          "message": "リクエストボディ。有効な型は`body_type`に依存します。JSON/form/YAMLはハッシュを期待し、XML/textは文字列を期待し、multipartはファイル構造を期待し、binaryは生バイトを期待します。"
+        },
+        "app.QVdTQmVkcm9jaw.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.display_name": {
+          "source": "Body",
+          "message": "ボディ"
+        },
+        "app.QVdTQmVkcm9jaw.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.short_desc": {
+          "source": "The request body",
+          "message": "リクエストボディ"
+        },
+        "app.QVdTQmVkcm9jaw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.desc": {
+          "source": "Upload a file using `multipart/form-data`. The body must be a @ref DataProvider::FileDataType \"FileDataType\" structure (filename + content + mime_type). The framework builds the multipart envelope and sets the boundary header.",
+          "message": "`multipart/form-data`を使用してファイルをアップロードします。ボディは@ref DataProvider::FileDataType \"FileDataType\"構造（filename + content + mime_type）である必要があります。フレームワークがmultipartエンベロープを構築し、boundaryヘッダーを設定します。"
+        },
+        "app.QVdTQmVkcm9jaw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.display_name": {
+          "source": "Multipart Form",
+          "message": "マルチパートフォーム"
+        },
+        "app.QVdTQmVkcm9jaw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.short_desc": {
+          "source": "Upload a file using multipart/form-data",
+          "message": "multipart/form-dataを使用してファイルをアップロード"
+        },
+        "app.QVdTQmVkcm9jaw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.desc": {
+          "source": "Pass the body to the REST client unchanged; the client decides serialization based on its configured `data` option and the value type",
+          "message": "ボディを変更せずにRESTクライアントに渡します。クライアントは設定された`data`オプションと値の型に基づいてシリアライズを決定します"
+        },
+        "app.QVdTQmVkcm9jaw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.display_name": {
+          "source": "Auto",
+          "message": "自動"
+        },
+        "app.QVdTQmVkcm9jaw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.short_desc": {
+          "source": "Pass-through; use connection serialization and let the REST client decide",
+          "message": "パススルー。接続のシリアライズを使用し、RESTクライアントに決定させます"
+        },
+        "app.QVdTQmVkcm9jaw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.desc": {
+          "source": "Send the body as raw bytes. The body must be a binary value. Sets `Content-Type: application/octet-stream` unless overridden by `hdr`.",
+          "message": "ボディを生バイトとして送信します。ボディはバイナリ値である必要があります。`hdr`によってオーバーライドされない限り、`Content-Type: application/octet-stream`を設定します。"
+        },
+        "app.QVdTQmVkcm9jaw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.display_name": {
+          "source": "Raw Binary",
+          "message": "生バイナリ"
+        },
+        "app.QVdTQmVkcm9jaw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.short_desc": {
+          "source": "Send body as raw bytes",
+          "message": "ボディを生バイトとして送信"
+        },
+        "app.QVdTQmVkcm9jaw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.desc": {
+          "source": "Serialize a hash of form fields as `application/x-www-form-urlencoded`. The body must be a hash whose values are scalars (strings/numbers/booleans).",
+          "message": "フォームフィールドのハッシュを`application/x-www-form-urlencoded`としてシリアライズします。ボディは値がスカラー（文字列/数値/ブール値）のハッシュである必要があります。"
+        },
+        "app.QVdTQmVkcm9jaw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.display_name": {
+          "source": "Form (URL-encoded)",
+          "message": "フォーム (URLエンコード)"
+        },
+        "app.QVdTQmVkcm9jaw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.short_desc": {
+          "source": "Serialize body as application/x-www-form-urlencoded form fields",
+          "message": "ボディをapplication/x-www-form-urlencodedフォームフィールドとしてシリアライズ"
+        },
+        "app.QVdTQmVkcm9jaw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.desc": {
+          "source": "Serialize the body as JSON; sets `Content-Type: application/json`. The body should be a hash, list, or scalar value.",
+          "message": "ボディをJSONとしてシリアライズします。`Content-Type: application/json`を設定します。ボディはハッシュ、リスト、またはスカラー値である必要があります。"
+        },
+        "app.QVdTQmVkcm9jaw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.display_name": {
+          "source": "JSON",
+          "message": "JSON"
+        },
+        "app.QVdTQmVkcm9jaw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.short_desc": {
+          "source": "Serialize body as JSON",
+          "message": "ボディをJSONとしてシリアライズ"
+        },
+        "app.QVdTQmVkcm9jaw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.desc": {
+          "source": "Send the body as plain text. The body must be a string. Sets `Content-Type: text/plain`.",
+          "message": "ボディをプレーンテキストとして送信します。ボディは文字列である必要があります。`Content-Type: text/plain`を設定します。"
+        },
+        "app.QVdTQmVkcm9jaw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.display_name": {
+          "source": "Plain Text",
+          "message": "プレーンテキスト"
+        },
+        "app.QVdTQmVkcm9jaw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.short_desc": {
+          "source": "Send body as text/plain",
+          "message": "ボディをtext/plainとして送信"
+        },
+        "app.QVdTQmVkcm9jaw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.desc": {
+          "source": "Send the body as XML. If the body is a hash it is serialized to XML; if it is a string it is sent verbatim. Sets `Content-Type: application/xml`.",
+          "message": "ボディをXMLとして送信します。ボディがハッシュの場合はXMLにシリアライズされ、文字列の場合はそのまま送信されます。`Content-Type: application/xml`を設定します。"
+        },
+        "app.QVdTQmVkcm9jaw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.display_name": {
+          "source": "XML",
+          "message": "XML"
+        },
+        "app.QVdTQmVkcm9jaw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.short_desc": {
+          "source": "Send body as XML",
+          "message": "ボディをXMLとして送信"
+        },
+        "app.QVdTQmVkcm9jaw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.desc": {
+          "source": "Send the body as YAML. If the body is a hash it is serialized to YAML; if it is a string it is sent verbatim. Sets `Content-Type: application/x-yaml`.",
+          "message": "ボディをYAMLとして送信します。ボディがハッシュの場合はYAMLにシリアライズされ、文字列の場合はそのまま送信されます。`Content-Type: application/x-yaml`を設定します。"
+        },
+        "app.QVdTQmVkcm9jaw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.display_name": {
+          "source": "YAML",
+          "message": "YAML"
+        },
+        "app.QVdTQmVkcm9jaw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.short_desc": {
+          "source": "Send body as YAML",
+          "message": "ボディをYAMLとして送信"
+        },
+        "app.QVdTQmVkcm9jaw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.desc": {
+          "source": "Selects the body serialization mode and the corresponding `Content-Type` header. Changing this field reshapes the `body` editor - selecting JSON exposes a JSON editor, selecting Multipart Form exposes a file picker, and so on.",
+          "message": "ボディのシリアライズモードと対応する`Content-Type`ヘッダーを選択します。このフィールドを変更すると`body`エディターの形状が変わります。JSONを選択するとJSONエディターが表示され、マルチパートフォームを選択するとファイルピッカーが表示される、などです。"
+        },
+        "app.QVdTQmVkcm9jaw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.display_name": {
+          "source": "Body Type",
+          "message": "ボディタイプ"
+        },
+        "app.QVdTQmVkcm9jaw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.short_desc": {
+          "source": "How the body is serialized and what Content-Type is sent",
+          "message": "ボディのシリアライズ方法および送信されるContent-Type"
+        },
+        "app.QVdTQmVkcm9jaw.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.desc": {
+          "source": "If `True`, non-2xx HTTP responses return as the normal response hash (with the actual status code) instead of raising `REST-RESPONSE-ERROR`. Useful for handling 4xx/5xx as data - e.g. checking whether a resource exists. Overrides the connection's `error_passthru` setting for this call only.",
+          "message": "`True`の場合、2xx以外のHTTPレスポンスは`REST-RESPONSE-ERROR`を発生させる代わりに（実際のステータスコードを含む）通常のレスポンスハッシュとして返されます。リソースが存在するかどうかの確認など、4xx/5xxをデータとして処理する場合に便利です。この呼び出しに限り、接続の`error_passthru`設定をオーバーライドします。"
+        },
+        "app.QVdTQmVkcm9jaw.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.display_name": {
+          "source": "Return Errors as Data",
+          "message": "エラーをデータとして返す"
+        },
+        "app.QVdTQmVkcm9jaw.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.short_desc": {
+          "source": "Return non-2xx responses normally instead of throwing",
+          "message": "例外をスローする代わりに2xx以外のレスポンスを通常通り返す"
+        },
+        "app.QVdTQmVkcm9jaw.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.desc": {
+          "source": "Optional list of HTTP status codes treated as success. If set and the response status is not in this list, the action throws `REST-STATUS-ERROR`. When unset, the REST client's default behavior applies (typically: 2xx is success, non-2xx throws).",
+          "message": "成功として扱われるHTTPステータスコードのオプションリスト。設定されていてレスポンスステータスがこのリストに含まれない場合、アクションは`REST-STATUS-ERROR`をスローします。未設定の場合、RESTクライアントのデフォルト動作が適用されます（通常：2xxは成功、2xx以外はスロー）。"
+        },
+        "app.QVdTQmVkcm9jaw.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.display_name": {
+          "source": "Expected Status Codes",
+          "message": "期待されるステータスコード"
+        },
+        "app.QVdTQmVkcm9jaw.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.short_desc": {
+          "source": "Response status codes treated as success",
+          "message": "成功として扱われるレスポンスステータスコード"
+        },
+        "app.QVdTQmVkcm9jaw.action.bWFrZS1hcGktY2FsbA.option.aGRy.desc": {
+          "source": "Hash of custom headers added to the request. These override any default headers set by `body_type` (e.g. supplying `Content-Type` here wins over the body-type default).",
+          "message": "リクエストに追加されるカスタムヘッダーのハッシュ。これらは`body_type`によって設定されたデフォルトヘッダーをオーバーライドします（例：ここで`Content-Type`を指定すると、ボディタイプのデフォルトより優先されます）。"
+        },
+        "app.QVdTQmVkcm9jaw.action.bWFrZS1hcGktY2FsbA.option.aGRy.display_name": {
+          "source": "Custom Headers",
+          "message": "カスタムヘッダー"
+        },
+        "app.QVdTQmVkcm9jaw.action.bWFrZS1hcGktY2FsbA.option.aGRy.short_desc": {
+          "source": "Extra request headers",
+          "message": "追加のリクエストヘッダー"
+        },
+        "app.QVdTQmVkcm9jaw.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.desc": {
+          "source": "If `True`, the response hash includes a `debug` sub-hash containing the request method/URL/headers (with sensitive values redacted), request and response sizes, and round-trip duration. Useful when investigating slow or failing calls. Off by default to keep responses lean.",
+          "message": "`True`の場合、レスポンスハッシュにはリクエストメソッド/URL/ヘッダー（機密値は伏字処理済み）、リクエストとレスポンスのサイズ、およびラウンドトリップ時間を含む`debug`サブハッシュが含まれます。遅い呼び出しや失敗した呼び出しを調査する際に便利です。レスポンスを軽量に保つため、デフォルトではオフになっています。"
+        },
+        "app.QVdTQmVkcm9jaw.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.display_name": {
+          "source": "Include Debug Info",
+          "message": "デバッグ情報を含める"
+        },
+        "app.QVdTQmVkcm9jaw.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.short_desc": {
+          "source": "Include request/timing/size debug info in the response",
+          "message": "レスポンスにリクエスト/タイミング/サイズのデバッグ情報を含める"
+        },
+        "app.QVdTQmVkcm9jaw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.desc": {
+          "source": "HTTP `OPTIONS`",
+          "message": "HTTP `OPTIONS`"
+        },
+        "app.QVdTQmVkcm9jaw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.display_name": {
+          "source": "OPTIONS",
+          "message": "OPTIONS"
+        },
+        "app.QVdTQmVkcm9jaw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.short_desc": {
+          "source": "HTTP OPTIONS",
+          "message": "HTTP OPTIONS"
+        },
+        "app.QVdTQmVkcm9jaw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.desc": {
+          "source": "HTTP `DELETE`",
+          "message": "HTTP `DELETE`"
+        },
+        "app.QVdTQmVkcm9jaw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.display_name": {
+          "source": "DELETE",
+          "message": "DELETE"
+        },
+        "app.QVdTQmVkcm9jaw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.short_desc": {
+          "source": "HTTP DELETE",
+          "message": "HTTP DELETE"
+        },
+        "app.QVdTQmVkcm9jaw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.desc": {
+          "source": "HTTP `GET`",
+          "message": "HTTP `GET`"
+        },
+        "app.QVdTQmVkcm9jaw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.display_name": {
+          "source": "GET",
+          "message": "GET"
+        },
+        "app.QVdTQmVkcm9jaw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.short_desc": {
+          "source": "HTTP GET",
+          "message": "HTTP GET"
+        },
+        "app.QVdTQmVkcm9jaw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.desc": {
+          "source": "HTTP `HEAD`",
+          "message": "HTTP `HEAD`"
+        },
+        "app.QVdTQmVkcm9jaw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.display_name": {
+          "source": "HEAD",
+          "message": "HEAD"
+        },
+        "app.QVdTQmVkcm9jaw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.short_desc": {
+          "source": "HTTP HEAD",
+          "message": "HTTP HEAD"
+        },
+        "app.QVdTQmVkcm9jaw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.desc": {
+          "source": "HTTP `PATCH`",
+          "message": "HTTP `PATCH`"
+        },
+        "app.QVdTQmVkcm9jaw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.display_name": {
+          "source": "PATCH",
+          "message": "PATCH"
+        },
+        "app.QVdTQmVkcm9jaw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.short_desc": {
+          "source": "HTTP PATCH",
+          "message": "HTTP PATCH"
+        },
+        "app.QVdTQmVkcm9jaw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.desc": {
+          "source": "HTTP `POST`",
+          "message": "HTTP `POST`"
+        },
+        "app.QVdTQmVkcm9jaw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.display_name": {
+          "source": "POST",
+          "message": "POST"
+        },
+        "app.QVdTQmVkcm9jaw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.short_desc": {
+          "source": "HTTP POST",
+          "message": "HTTP POST"
+        },
+        "app.QVdTQmVkcm9jaw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.desc": {
+          "source": "HTTP `PUT`",
+          "message": "HTTP `PUT`"
+        },
+        "app.QVdTQmVkcm9jaw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.display_name": {
+          "source": "PUT",
+          "message": "PUT"
+        },
+        "app.QVdTQmVkcm9jaw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.short_desc": {
+          "source": "HTTP PUT",
+          "message": "HTTP PUT"
+        },
+        "app.QVdTQmVkcm9jaw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.desc": {
+          "source": "HTTP `TRACE`",
+          "message": "HTTP `TRACE`"
+        },
+        "app.QVdTQmVkcm9jaw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.display_name": {
+          "source": "TRACE",
+          "message": "TRACE"
+        },
+        "app.QVdTQmVkcm9jaw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.short_desc": {
+          "source": "HTTP TRACE",
+          "message": "HTTP TRACE"
+        },
+        "app.QVdTQmVkcm9jaw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "リクエストに使用するHTTPメソッド"
+        },
+        "app.QVdTQmVkcm9jaw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.display_name": {
+          "source": "HTTP Method",
+          "message": "HTTPメソッド"
+        },
+        "app.QVdTQmVkcm9jaw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.short_desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "リクエストに使用するHTTPメソッド"
+        },
+        "app.QVdTQmVkcm9jaw.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain `{name}` placeholders that are replaced from `path_vars`. Example: `/users/{id}/comments`.",
+          "message": "接続のAPIベースURLに対する相対URIパス。`path_vars`から置換される`{name}`プレースホルダーを含めることができます。例: `/users/{id}/comments`。"
+        },
+        "app.QVdTQmVkcm9jaw.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.display_name": {
+          "source": "URI Path",
+          "message": "URIパス"
+        },
+        "app.QVdTQmVkcm9jaw.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.short_desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain '{name}' placeholders that are replaced from 'path_vars'. Example: '/users/{id}/comments'",
+          "message": "接続のAPIベースURLに対する相対URIパス。'path_vars' から置換される '{name}' プレースホルダーを含めることができます。例: '/users/{id}/comments'"
+        },
+        "app.QVdTQmVkcm9jaw.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.desc": {
+          "source": "Hash of values substituted into `{name}` placeholders in the URI path. Example: with `path = /users/{id}` and `path_vars = {id: 123}` the framework sends `/users/123`. Values are URL-encoded.",
+          "message": "URIパス内の `{name}` プレースホルダーに置換される値のハッシュ。例: `path = /users/{id}` と `path_vars = {id: 123}` を指定すると、フレームワークは `/users/123` を送信します。値はURLエンコードされます。"
+        },
+        "app.QVdTQmVkcm9jaw.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.display_name": {
+          "source": "Path Variables",
+          "message": "パス変数"
+        },
+        "app.QVdTQmVkcm9jaw.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.short_desc": {
+          "source": "Values for {name} placeholders in path",
+          "message": "パス内の {name} プレースホルダーの値"
+        },
+        "app.QVdTQmVkcm9jaw.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.desc": {
+          "source": "Hash of query string parameters to append to the URI path. Values are URL-encoded; list values are joined with `,`.",
+          "message": "URIパスに追加するクエリ文字列パラメータのハッシュ。値はURLエンコードされます。リスト値は `,` で結合されます。"
+        },
+        "app.QVdTQmVkcm9jaw.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.display_name": {
+          "source": "Query Arguments",
+          "message": "クエリ引数"
+        },
+        "app.QVdTQmVkcm9jaw.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.short_desc": {
+          "source": "Query string parameters",
+          "message": "クエリ文字列パラメータ"
+        },
+        "app.QVdTQmVkcm9jaw.action.bWFrZS1hcGktY2FsbA.short_desc": {
+          "source": "Make a custom API call to AWS Bedrock",
+          "message": "AWS Bedrock へのカスタム API コールを実行"
+        },
+        "app.QVdTQmVkcm9jaw.desc": {
+          "source": "**AWS Bedrock** provides serverless access to a curated catalog of foundation models through a single SigV4-signed REST API:\n\n- **Unified Converse API** — one body shape across the Anthropic (Claude), Meta (Llama), Mistral, Cohere, AI21 (Jamba), Amazon (Titan, Nova), and DeepSeek-on-Bedrock model families\n- **Embeddings** — Titan Text Embeddings v2 and Cohere embed-english / embed-multilingual models\n- **Multimodal input** — `image` and `document` content blocks natively in the Converse body\n- **Tool use** — function-calling via `toolConfig.tools` with the same shape across all supported model families\n- **Bedrock Guardrails** — apply PII redaction, denied topics, and content filters declaratively\n\nAuthentication uses the standard AWS credential chain: explicit keys → environment variables → ECS task role → IMDSv2 → STS AssumeRole — handled by the underlying `AwsRestClient`.\n\nProject: <https://aws.amazon.com/bedrock/>",
+          "message": "**AWS Bedrock** は、単一の SigV4 署名付き REST API を通じて、厳選された基盤モデルのカタログへのサーバーレスアクセスを提供します:\n\n- **統合 Converse API** — Anthropic (Claude)、Meta (Llama)、Mistral、Cohere、AI21 (Jamba)、Amazon (Titan、Nova)、DeepSeek-on-Bedrock モデルファミリー全体で単一のボディ形状\n- **埋め込み** — Titan Text Embeddings v2 および Cohere embed-english / embed-multilingual モデル\n- **マルチモーダル入力** — Converse ボディでネイティブに `image` および `document` コンテンツブロックをサポート\n- **ツール使用** — サポートされているすべてのモデルファミリー全体で同一の形状を持つ `toolConfig.tools` 経由の関数呼び出し\n- **Bedrock Guardrails** — PII のマスキング、拒否されたトピック、コンテンツフィルターを宣言的に適用\n\n認証は標準の AWS 認証情報チェーンを使用します: 明示的なキー → 環境変数 → ECS タスクロール → IMDSv2 → STS AssumeRole — 基礎となる `AwsRestClient` によって処理されます。\n\nプロジェクト: <https://aws.amazon.com/bedrock/>"
+        },
+        "app.QVdTQmVkcm9jaw.display_name": {
+          "source": "AWS Bedrock",
+          "message": "AWS Bedrock"
+        },
+        "app.QVdTQmVkcm9jaw.short_desc": {
+          "source": "Generative AI on AWS Bedrock",
+          "message": "AWS Bedrock 上の生成 AI"
+        }
+      }
+    }
+  }
+}

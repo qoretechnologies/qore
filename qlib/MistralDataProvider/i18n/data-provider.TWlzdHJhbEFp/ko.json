@@ -1,0 +1,633 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "ko": {
+      "messages": {
+        "app.TWlzdHJhbEFp.action.Y2hhdC1jb21wbGV0aW9u.desc": {
+          "source": "Sends a list of chat messages to a Mistral AI model via the OpenAI-compatible `/v1/chat/completions` endpoint.",
+          "message": "OpenAI와 호환되는 `/v1/chat/completions` 엔드포인트를 통해 Mistral AI 모델에 채팅 메시지 목록을 보냅니다."
+        },
+        "app.TWlzdHJhbEFp.action.Y2hhdC1jb21wbGV0aW9u.display_name": {
+          "source": "Chat Completion",
+          "message": "채팅 완성"
+        },
+        "app.TWlzdHJhbEFp.action.Y2hhdC1jb21wbGV0aW9u.option.bW9kZWw.desc": {
+          "source": "Mistral model identifier, e.g. `mistral-large-latest`, `mistral-small-latest`, `codestral-latest`, `mistral-nemo`.",
+          "message": "Mistral 모델 식별자 (예: `mistral-large-latest`, `mistral-small-latest`, `codestral-latest`, `mistral-nemo`)."
+        },
+        "app.TWlzdHJhbEFp.action.Y2hhdC1jb21wbGV0aW9u.option.bW9kZWw.display_name": {
+          "source": "Model",
+          "message": "모델"
+        },
+        "app.TWlzdHJhbEFp.action.Y2hhdC1jb21wbGV0aW9u.option.bW9kZWw.short_desc": {
+          "source": "Mistral model name",
+          "message": "Mistral 모델 이름"
+        },
+        "app.TWlzdHJhbEFp.action.Y2hhdC1jb21wbGV0aW9u.option.bWF4X3Rva2Vucw.desc": {
+          "source": "Maximum number of tokens to generate.",
+          "message": "생성할 최대 토큰 수입니다."
+        },
+        "app.TWlzdHJhbEFp.action.Y2hhdC1jb21wbGV0aW9u.option.bWF4X3Rva2Vucw.display_name": {
+          "source": "Max Tokens",
+          "message": "최대 토큰 수"
+        },
+        "app.TWlzdHJhbEFp.action.Y2hhdC1jb21wbGV0aW9u.option.bWF4X3Rva2Vucw.short_desc": {
+          "source": "Maximum tokens to emit",
+          "message": "출력할 최대 토큰 수"
+        },
+        "app.TWlzdHJhbEFp.action.Y2hhdC1jb21wbGV0aW9u.option.bWVzc2FnZXM.desc": {
+          "source": "The conversation history.",
+          "message": "대화 기록입니다."
+        },
+        "app.TWlzdHJhbEFp.action.Y2hhdC1jb21wbGV0aW9u.option.bWVzc2FnZXM.display_name": {
+          "source": "Messages",
+          "message": "메시지"
+        },
+        "app.TWlzdHJhbEFp.action.Y2hhdC1jb21wbGV0aW9u.option.bWVzc2FnZXM.short_desc": {
+          "source": "List of chat messages forming the conversation",
+          "message": "대화를 구성하는 채팅 메시지 목록"
+        },
+        "app.TWlzdHJhbEFp.action.Y2hhdC1jb21wbGV0aW9u.option.c2FmZV9wcm9tcHQ.desc": {
+          "source": "When `True`, Mistral injects its safety preamble.",
+          "message": "`True`인 경우 Mistral이 안전 서문을 삽입합니다."
+        },
+        "app.TWlzdHJhbEFp.action.Y2hhdC1jb21wbGV0aW9u.option.c2FmZV9wcm9tcHQ.display_name": {
+          "source": "Safe Prompt",
+          "message": "안전 프롬프트"
+        },
+        "app.TWlzdHJhbEFp.action.Y2hhdC1jb21wbGV0aW9u.option.c2FmZV9wcm9tcHQ.short_desc": {
+          "source": "Inject Mistral's safety preamble",
+          "message": "Mistral의 안전 서문 삽입"
+        },
+        "app.TWlzdHJhbEFp.action.Y2hhdC1jb21wbGV0aW9u.option.c3RyZWFt.desc": {
+          "source": "When `True`, the server streams partial completions as SSE.",
+          "message": "`True`인 경우 서버는 부분 완성 결과를 SSE로 스트리밍합니다."
+        },
+        "app.TWlzdHJhbEFp.action.Y2hhdC1jb21wbGV0aW9u.option.c3RyZWFt.display_name": {
+          "source": "Stream",
+          "message": "스트림"
+        },
+        "app.TWlzdHJhbEFp.action.Y2hhdC1jb21wbGV0aW9u.option.c3RyZWFt.short_desc": {
+          "source": "Stream partial completions as SSE",
+          "message": "부분 완성 결과를 SSE로 스트리밍"
+        },
+        "app.TWlzdHJhbEFp.action.Y2hhdC1jb21wbGV0aW9u.option.cmFuZG9tX3NlZWQ.desc": {
+          "source": "Integer seed for deterministic sampling.",
+          "message": "결정론적 샘플링을 위한 정수 시드입니다."
+        },
+        "app.TWlzdHJhbEFp.action.Y2hhdC1jb21wbGV0aW9u.option.cmFuZG9tX3NlZWQ.display_name": {
+          "source": "Random Seed",
+          "message": "랜덤 시드"
+        },
+        "app.TWlzdHJhbEFp.action.Y2hhdC1jb21wbGV0aW9u.option.cmFuZG9tX3NlZWQ.short_desc": {
+          "source": "Deterministic sampling seed",
+          "message": "결정론적 샘플링 시드"
+        },
+        "app.TWlzdHJhbEFp.action.Y2hhdC1jb21wbGV0aW9u.option.cmVzcG9uc2VfZm9ybWF0.desc": {
+          "source": "Hash that forces a structured response shape, e.g. `{type: \"json_object\"}`.",
+          "message": "구조화된 응답 형식을 강제하는 해시 (예: `{type: \"json_object\"}`)."
+        },
+        "app.TWlzdHJhbEFp.action.Y2hhdC1jb21wbGV0aW9u.option.cmVzcG9uc2VfZm9ybWF0.display_name": {
+          "source": "Response Format",
+          "message": "응답 형식"
+        },
+        "app.TWlzdHJhbEFp.action.Y2hhdC1jb21wbGV0aW9u.option.cmVzcG9uc2VfZm9ybWF0.short_desc": {
+          "source": "Force structured output (e.g. JSON)",
+          "message": "구조화된 출력 강제(예: JSON)"
+        },
+        "app.TWlzdHJhbEFp.action.Y2hhdC1jb21wbGV0aW9u.option.dG9vbF9jaG9pY2U.allowed-value.c3RyaW5nOm5vbmU.display_name": {
+          "source": "None - never call a tool",
+          "message": "None - never call a tool"
+        },
+        "app.TWlzdHJhbEFp.action.Y2hhdC1jb21wbGV0aW9u.option.dG9vbF9jaG9pY2U.allowed-value.c3RyaW5nOmF1dG8.display_name": {
+          "source": "Auto - model decides",
+          "message": "Auto - model decides"
+        },
+        "app.TWlzdHJhbEFp.action.Y2hhdC1jb21wbGV0aW9u.option.dG9vbF9jaG9pY2U.allowed-value.c3RyaW5nOmFueQ.display_name": {
+          "source": "Any - must call a tool",
+          "message": "임의(Any) - 도구를 반드시 호출해야 함"
+        },
+        "app.TWlzdHJhbEFp.action.Y2hhdC1jb21wbGV0aW9u.option.dG9vbF9jaG9pY2U.desc": {
+          "source": "Tool invocation mode: `none`, `auto`, or `any` (Mistral's equivalent of `required`).",
+          "message": "도구 호출 모드: `none`, `auto` 또는 `any`(Mistral에서 `required`에 해당)."
+        },
+        "app.TWlzdHJhbEFp.action.Y2hhdC1jb21wbGV0aW9u.option.dG9vbF9jaG9pY2U.display_name": {
+          "source": "Tool Choice",
+          "message": "도구 선택"
+        },
+        "app.TWlzdHJhbEFp.action.Y2hhdC1jb21wbGV0aW9u.option.dG9vbF9jaG9pY2U.short_desc": {
+          "source": "Tool invocation mode",
+          "message": "도구 호출 모드"
+        },
+        "app.TWlzdHJhbEFp.action.Y2hhdC1jb21wbGV0aW9u.option.dG9vbHM.desc": {
+          "source": "List of tool definitions.",
+          "message": "도구 정의 목록입니다."
+        },
+        "app.TWlzdHJhbEFp.action.Y2hhdC1jb21wbGV0aW9u.option.dG9vbHM.display_name": {
+          "source": "Tools",
+          "message": "도구"
+        },
+        "app.TWlzdHJhbEFp.action.Y2hhdC1jb21wbGV0aW9u.option.dG9vbHM.short_desc": {
+          "source": "OpenAI-style tool definitions the model may call",
+          "message": "모델이 호출할 수 있는 OpenAI 스타일 도구 정의"
+        },
+        "app.TWlzdHJhbEFp.action.Y2hhdC1jb21wbGV0aW9u.option.dG9wX3A.desc": {
+          "source": "Nucleus sampling cutoff (0-1).",
+          "message": "Nucleus 샘플링 임계값(0-1)입니다."
+        },
+        "app.TWlzdHJhbEFp.action.Y2hhdC1jb21wbGV0aW9u.option.dG9wX3A.display_name": {
+          "source": "Top-P",
+          "message": "Top-P"
+        },
+        "app.TWlzdHJhbEFp.action.Y2hhdC1jb21wbGV0aW9u.option.dG9wX3A.short_desc": {
+          "source": "Nucleus sampling cutoff",
+          "message": "Nucleus 샘플링 임계값"
+        },
+        "app.TWlzdHJhbEFp.action.Y2hhdC1jb21wbGV0aW9u.option.dGVtcGVyYXR1cmU.desc": {
+          "source": "Controls randomness.  Mistral recommends `0.3` as a default.",
+          "message": "무작위성을 제어합니다. Mistral은 기본값으로 `0.3`을(를) 권장합니다."
+        },
+        "app.TWlzdHJhbEFp.action.Y2hhdC1jb21wbGV0aW9u.option.dGVtcGVyYXR1cmU.display_name": {
+          "source": "Temperature",
+          "message": "온도"
+        },
+        "app.TWlzdHJhbEFp.action.Y2hhdC1jb21wbGV0aW9u.option.dGVtcGVyYXR1cmU.short_desc": {
+          "source": "Sampling temperature (0-1.5)",
+          "message": "샘플링 온도(0-1.5)"
+        },
+        "app.TWlzdHJhbEFp.action.Y2hhdC1jb21wbGV0aW9u.short_desc": {
+          "source": "Generate a chat completion from a Mistral AI model",
+          "message": "Mistral AI 모델에서 채팅 완성 생성"
+        },
+        "app.TWlzdHJhbEFp.action.Y3JlYXRlLWVtYmVkZGluZ3M.desc": {
+          "source": "Converts text inputs into embedding vectors via the OpenAI-compatible `/v1/embeddings` endpoint using `mistral-embed`.",
+          "message": "`mistral-embed`을(를) 사용하여 OpenAI 호환 `/v1/embeddings` 엔드포인트를 통해 텍스트 입력을 임베딩 벡터로 변환합니다."
+        },
+        "app.TWlzdHJhbEFp.action.Y3JlYXRlLWVtYmVkZGluZ3M.display_name": {
+          "source": "Create Embeddings",
+          "message": "임베딩 생성"
+        },
+        "app.TWlzdHJhbEFp.action.Y3JlYXRlLWVtYmVkZGluZ3M.option.ZW5jb2RpbmdfZm9ybWF0.desc": {
+          "source": "`float` (default) or `base64`.",
+          "message": "`float`(기본값) 또는 `base64`."
+        },
+        "app.TWlzdHJhbEFp.action.Y3JlYXRlLWVtYmVkZGluZ3M.option.ZW5jb2RpbmdfZm9ybWF0.display_name": {
+          "source": "Encoding Format",
+          "message": "인코딩 형식"
+        },
+        "app.TWlzdHJhbEFp.action.Y3JlYXRlLWVtYmVkZGluZ3M.option.ZW5jb2RpbmdfZm9ybWF0.short_desc": {
+          "source": "Wire format for vectors",
+          "message": "벡터의 전송 형식(Wire format)"
+        },
+        "app.TWlzdHJhbEFp.action.Y3JlYXRlLWVtYmVkZGluZ3M.option.aW5wdXQ.desc": {
+          "source": "Text input(s) to convert to embedding vectors.",
+          "message": "임베딩 벡터로 변환할 텍스트 입력입니다."
+        },
+        "app.TWlzdHJhbEFp.action.Y3JlYXRlLWVtYmVkZGluZ3M.option.aW5wdXQ.display_name": {
+          "source": "Input",
+          "message": "입력"
+        },
+        "app.TWlzdHJhbEFp.action.Y3JlYXRlLWVtYmVkZGluZ3M.option.aW5wdXQ.short_desc": {
+          "source": "Text(s) to embed",
+          "message": "임베딩할 텍스트"
+        },
+        "app.TWlzdHJhbEFp.action.Y3JlYXRlLWVtYmVkZGluZ3M.option.bW9kZWw.desc": {
+          "source": "Mistral embedding model identifier, currently `mistral-embed`.",
+          "message": "Mistral 임베딩 모델 식별자 (현재 `mistral-embed`)."
+        },
+        "app.TWlzdHJhbEFp.action.Y3JlYXRlLWVtYmVkZGluZ3M.option.bW9kZWw.display_name": {
+          "source": "Model",
+          "message": "모델"
+        },
+        "app.TWlzdHJhbEFp.action.Y3JlYXRlLWVtYmVkZGluZ3M.option.bW9kZWw.short_desc": {
+          "source": "Mistral embedding model",
+          "message": "Mistral 임베딩 모델"
+        },
+        "app.TWlzdHJhbEFp.action.Y3JlYXRlLWVtYmVkZGluZ3M.short_desc": {
+          "source": "Generate embedding vectors from a Mistral AI embedding model",
+          "message": "Mistral AI 임베딩 모델에서 임베딩 벡터 생성"
+        },
+        "app.TWlzdHJhbEFp.action.b2Ny.desc": {
+          "source": "Converts a PDF or image document into structured markdown using Mistral's `mistral-ocr-latest` model via `/v1/ocr`.  Returns per-page markdown, layout-preserved tables, and inline image references.\n\nSupply a document URL via `document.document_url` (preferred for large PDFs) or inline base64-encoded bytes via `document.image_url` (data: URI) for small inputs.\n\n**Note**: integration with the @ref qoreocrutilsintro \"QoreOcrUtils\" engine abstraction is planned for a follow-up release; this action is the direct REST surface in the meantime.",
+          "message": "`/v1/ocr`을(를) 통해 Mistral의 `mistral-ocr-latest` 모델을 사용하여 PDF 또는 이미지 문서를 구조화된 마크다운으로 변환합니다. 페이지별 마크다운, 레이아웃이 보존된 표 및 인라인 이미지 참조를 반환합니다.\n\n대용량 PDF의 경우 `document.document_url`을(를) 통해 문서 URL을 제공하거나, 소규모 입력의 경우 `document.image_url`(data: URI)을(를) 통해 인라인 base64 인코딩 바이트를 제공하세요.\n\n**참고**: @ref qoreocrutilsintro \"QoreOcrUtils\" 엔진 추상화와의 통합은 후속 릴리스에서 지원될 예정이며, 그전까지 이 액션은 직접적인 REST 인터페이스로 제공됩니다."
+        },
+        "app.TWlzdHJhbEFp.action.b2Ny.display_name": {
+          "source": "Document OCR",
+          "message": "문서 OCR"
+        },
+        "app.TWlzdHJhbEFp.action.b2Ny.option.ZG9jdW1lbnQ.desc": {
+          "source": "Hash describing the document.  One of:\n\n- `{type: \"document_url\", document_url: \"https://...\"}` — remote PDF URL (preferred for large documents)\n- `{type: \"image_url\", image_url: \"data:image/png;base64,...\"}` — inline base64-encoded image (small inputs only)",
+          "message": "문서를 설명하는 해시입니다. 다음 중 하나입니다:\n\n- `{type: \"document_url\", document_url: \"https://...\"}` — 원격 PDF URL (대용량 문서에 권장)\n- `{type: \"image_url\", image_url: \"data:image/png;base64,...\"}` — 인라인 base64 인코딩 이미지 (소규모 입력 전용)"
+        },
+        "app.TWlzdHJhbEFp.action.b2Ny.option.ZG9jdW1lbnQ.display_name": {
+          "source": "Document",
+          "message": "문서"
+        },
+        "app.TWlzdHJhbEFp.action.b2Ny.option.ZG9jdW1lbnQ.short_desc": {
+          "source": "Document to OCR (URL or base64 data URI)",
+          "message": "OCR을 수행할 문서(URL 또는 base64 데이터 URI)"
+        },
+        "app.TWlzdHJhbEFp.action.b2Ny.option.aW1hZ2VfbGltaXQ.desc": {
+          "source": "Cap on the number of images extracted from the document.",
+          "message": "문서에서 추출할 이미지 수의 최대 한도입니다."
+        },
+        "app.TWlzdHJhbEFp.action.b2Ny.option.aW1hZ2VfbGltaXQ.display_name": {
+          "source": "Image Limit",
+          "message": "이미지 제한"
+        },
+        "app.TWlzdHJhbEFp.action.b2Ny.option.aW1hZ2VfbGltaXQ.short_desc": {
+          "source": "Maximum number of images to extract",
+          "message": "추출할 최대 이미지 수"
+        },
+        "app.TWlzdHJhbEFp.action.b2Ny.option.aW1hZ2VfbWluX3NpemU.desc": {
+          "source": "Skip images smaller than this size in pixels.",
+          "message": "이 크기(픽셀)보다 작은 이미지는 건너뜁니다."
+        },
+        "app.TWlzdHJhbEFp.action.b2Ny.option.aW1hZ2VfbWluX3NpemU.display_name": {
+          "source": "Image Min Size",
+          "message": "이미지 최소 크기"
+        },
+        "app.TWlzdHJhbEFp.action.b2Ny.option.aW1hZ2VfbWluX3NpemU.short_desc": {
+          "source": "Minimum image size (pixels) to extract",
+          "message": "추출할 최소 이미지 크기(픽셀)"
+        },
+        "app.TWlzdHJhbEFp.action.b2Ny.option.aW5jbHVkZV9pbWFnZV9iYXNlNjQ.desc": {
+          "source": "When `True`, embedded images are returned as base64 in the response.  When `False` (default), images are referenced by URL.",
+          "message": "`True`인 경우 포함된 이미지가 응답에 base64로 반환됩니다. `False`(기본값)인 경우 이미지가 URL로 참조됩니다."
+        },
+        "app.TWlzdHJhbEFp.action.b2Ny.option.aW5jbHVkZV9pbWFnZV9iYXNlNjQ.display_name": {
+          "source": "Include Image Base64",
+          "message": "이미지 Base64 포함"
+        },
+        "app.TWlzdHJhbEFp.action.b2Ny.option.aW5jbHVkZV9pbWFnZV9iYXNlNjQ.short_desc": {
+          "source": "Embed images inline as base64 in the response",
+          "message": "응답에 이미지를 base64로 인라인 포함"
+        },
+        "app.TWlzdHJhbEFp.action.b2Ny.option.bW9kZWw.desc": {
+          "source": "Mistral OCR model identifier, e.g. `mistral-ocr-latest`.",
+          "message": "Mistral OCR 모델 식별자(예: `mistral-ocr-latest`)."
+        },
+        "app.TWlzdHJhbEFp.action.b2Ny.option.bW9kZWw.display_name": {
+          "source": "Model",
+          "message": "모델"
+        },
+        "app.TWlzdHJhbEFp.action.b2Ny.option.bW9kZWw.short_desc": {
+          "source": "Mistral OCR model",
+          "message": "Mistral OCR 모델"
+        },
+        "app.TWlzdHJhbEFp.action.b2Ny.option.cGFnZXM.desc": {
+          "source": "Optional list of 0-indexed page numbers to OCR.  Defaults to all pages.",
+          "message": "OCR을 수행할 0부터 시작하는 페이지 번호 목록(선택 사항)입니다. 기본값은 모든 페이지입니다."
+        },
+        "app.TWlzdHJhbEFp.action.b2Ny.option.cGFnZXM.display_name": {
+          "source": "Pages",
+          "message": "페이지"
+        },
+        "app.TWlzdHJhbEFp.action.b2Ny.option.cGFnZXM.short_desc": {
+          "source": "Specific pages to OCR (0-indexed list)",
+          "message": "OCR을 수행할 특정 페이지(0부터 시작하는 목록)"
+        },
+        "app.TWlzdHJhbEFp.action.b2Ny.short_desc": {
+          "source": "Extract structured markdown from PDF or image documents",
+          "message": "PDF 또는 이미지 문서에서 구조화된 마크다운 추출"
+        },
+        "app.TWlzdHJhbEFp.action.bWFrZS1hcGktY2FsbA.desc": {
+          "source": "Make a custom HTTP / REST API call to **Mistral AI** using the configured connection's authentication.\n\nSpecify the HTTP method, the URI path (relative to the connection's API base URL), optional query parameters, headers, and request body. The response is returned as a hash containing the status code, response headers, and response body.\n\nUse this action for endpoints that are not yet exposed as first-class actions on this app.",
+          "message": "구성된 연결의 인증을 사용하여 **Mistral AI**에 커스텀 HTTP / REST API 호출을 수행합니다.\n\nHTTP 메서드, URI 경로(연결의 API 기본 URL 기준 상대 경로), 선택적 쿼리 매개변수, 헤더 및 요청 본문을 지정합니다. 응답은 상태 코드, 응답 헤더 및 응답 본문을 포함하는 해시로 반환됩니다.\n\n이 앱에 일급 액션으로 아직 노출되지 않은 엔드포인트에 이 액션을 사용하세요."
+        },
+        "app.TWlzdHJhbEFp.action.bWFrZS1hcGktY2FsbA.display_name": {
+          "source": "Make an API call",
+          "message": "API 호출 실행"
+        },
+        "app.TWlzdHJhbEFp.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.desc": {
+          "source": "The request body. The effective type depends on `body_type`: JSON/form/YAML expect a hash, XML/text expect a string, multipart expects a file structure, binary expects raw bytes.",
+          "message": "요청 본문입니다. 유효한 유형은 `body_type`에 따라 달라집니다. JSON/form/YAML은 해시를, XML/text는 문자열을, multipart는 파일 구조를, binary는 원시 바이트를 요구합니다."
+        },
+        "app.TWlzdHJhbEFp.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.display_name": {
+          "source": "Body",
+          "message": "본문"
+        },
+        "app.TWlzdHJhbEFp.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.short_desc": {
+          "source": "The request body",
+          "message": "요청 본문"
+        },
+        "app.TWlzdHJhbEFp.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.desc": {
+          "source": "Upload a file using `multipart/form-data`. The body must be a @ref DataProvider::FileDataType \"FileDataType\" structure (filename + content + mime_type). The framework builds the multipart envelope and sets the boundary header.",
+          "message": "`multipart/form-data`을(를) 사용하여 파일을 업로드합니다. 본문은 @ref DataProvider::FileDataType \"FileDataType\" 구조(filename + content + mime_type)여야 합니다. 프레임워크가 multipart 봉투를 작성하고 boundary 헤더를 설정합니다."
+        },
+        "app.TWlzdHJhbEFp.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.display_name": {
+          "source": "Multipart Form",
+          "message": "멀티파트 폼"
+        },
+        "app.TWlzdHJhbEFp.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.short_desc": {
+          "source": "Upload a file using multipart/form-data",
+          "message": "multipart/form-data를 사용하여 파일 업로드"
+        },
+        "app.TWlzdHJhbEFp.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.desc": {
+          "source": "Pass the body to the REST client unchanged; the client decides serialization based on its configured `data` option and the value type",
+          "message": "본문을 변경하지 않고 REST 클라이언트에 전달합니다. 클라이언트는 구성된 `data` 옵션과 값 유형을 기반으로 직렬화를 결정합니다."
+        },
+        "app.TWlzdHJhbEFp.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.display_name": {
+          "source": "Auto",
+          "message": "자동"
+        },
+        "app.TWlzdHJhbEFp.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.short_desc": {
+          "source": "Pass-through; use connection serialization and let the REST client decide",
+          "message": "패스스루: 연결 직렬화를 사용하고 REST 클라이언트가 결정하도록 합니다."
+        },
+        "app.TWlzdHJhbEFp.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.desc": {
+          "source": "Send the body as raw bytes. The body must be a binary value. Sets `Content-Type: application/octet-stream` unless overridden by `hdr`.",
+          "message": "본문을 원시 바이트로 전송합니다. 본문은 바이너리 값이어야 합니다. `hdr`에 의해 재정의되지 않는 한 `Content-Type: application/octet-stream`을(를) 설정합니다."
+        },
+        "app.TWlzdHJhbEFp.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.display_name": {
+          "source": "Raw Binary",
+          "message": "원시 바이너리"
+        },
+        "app.TWlzdHJhbEFp.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.short_desc": {
+          "source": "Send body as raw bytes",
+          "message": "본문을 원시 바이트로 전송"
+        },
+        "app.TWlzdHJhbEFp.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.desc": {
+          "source": "Serialize a hash of form fields as `application/x-www-form-urlencoded`. The body must be a hash whose values are scalars (strings/numbers/booleans).",
+          "message": "폼 필드의 해시를 `application/x-www-form-urlencoded`(으)로 직렬화합니다. 본문은 값이 스칼라(문자열/숫자/불리언)인 해시여야 합니다."
+        },
+        "app.TWlzdHJhbEFp.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.display_name": {
+          "source": "Form (URL-encoded)",
+          "message": "폼 (URL 인코딩)"
+        },
+        "app.TWlzdHJhbEFp.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.short_desc": {
+          "source": "Serialize body as application/x-www-form-urlencoded form fields",
+          "message": "본문을 application/x-www-form-urlencoded 폼 필드로 직렬화"
+        },
+        "app.TWlzdHJhbEFp.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.desc": {
+          "source": "Serialize the body as JSON; sets `Content-Type: application/json`. The body should be a hash, list, or scalar value.",
+          "message": "본문을 JSON으로 직렬화하며, `Content-Type: application/json`을(를) 설정합니다. 본문은 해시, 리스트 또는 스칼라 값이어야 합니다."
+        },
+        "app.TWlzdHJhbEFp.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.display_name": {
+          "source": "JSON",
+          "message": "JSON"
+        },
+        "app.TWlzdHJhbEFp.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.short_desc": {
+          "source": "Serialize body as JSON",
+          "message": "본문을 JSON으로 직렬화"
+        },
+        "app.TWlzdHJhbEFp.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.desc": {
+          "source": "Send the body as plain text. The body must be a string. Sets `Content-Type: text/plain`.",
+          "message": "본문을 일반 텍스트로 전송합니다. 본문은 문자열이어야 합니다. `Content-Type: text/plain`을(를) 설정합니다."
+        },
+        "app.TWlzdHJhbEFp.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.display_name": {
+          "source": "Plain Text",
+          "message": "일반 텍스트"
+        },
+        "app.TWlzdHJhbEFp.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.short_desc": {
+          "source": "Send body as text/plain",
+          "message": "본문을 text/plain으로 전송"
+        },
+        "app.TWlzdHJhbEFp.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.desc": {
+          "source": "Send the body as XML. If the body is a hash it is serialized to XML; if it is a string it is sent verbatim. Sets `Content-Type: application/xml`.",
+          "message": "본문을 XML로 전송합니다. 본문이 해시인 경우 XML로 직렬화되고, 문자열인 경우 그대로 전송됩니다. `Content-Type: application/xml`을(를) 설정합니다."
+        },
+        "app.TWlzdHJhbEFp.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.display_name": {
+          "source": "XML",
+          "message": "XML"
+        },
+        "app.TWlzdHJhbEFp.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.short_desc": {
+          "source": "Send body as XML",
+          "message": "본문을 XML로 전송"
+        },
+        "app.TWlzdHJhbEFp.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.desc": {
+          "source": "Send the body as YAML. If the body is a hash it is serialized to YAML; if it is a string it is sent verbatim. Sets `Content-Type: application/x-yaml`.",
+          "message": "본문을 YAML로 전송합니다. 본문이 해시인 경우 YAML로 직렬화되고, 문자열인 경우 그대로 전송됩니다. `Content-Type: application/x-yaml`을(를) 설정합니다."
+        },
+        "app.TWlzdHJhbEFp.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.display_name": {
+          "source": "YAML",
+          "message": "YAML"
+        },
+        "app.TWlzdHJhbEFp.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.short_desc": {
+          "source": "Send body as YAML",
+          "message": "본문을 YAML로 전송"
+        },
+        "app.TWlzdHJhbEFp.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.desc": {
+          "source": "Selects the body serialization mode and the corresponding `Content-Type` header. Changing this field reshapes the `body` editor - selecting JSON exposes a JSON editor, selecting Multipart Form exposes a file picker, and so on.",
+          "message": "본문 직렬화 모드 및 해당되는 `Content-Type` 헤더를 선택합니다. 이 필드를 변경하면 `body` 에디터의 형태가 변경됩니다. JSON을 선택하면 JSON 에디터가 표시되고, 멀티파트 폼을 선택하면 파일 선택기가 표시되는 방식입니다."
+        },
+        "app.TWlzdHJhbEFp.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.display_name": {
+          "source": "Body Type",
+          "message": "본문 유형"
+        },
+        "app.TWlzdHJhbEFp.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.short_desc": {
+          "source": "How the body is serialized and what Content-Type is sent",
+          "message": "본문이 직렬화되는 방식 및 전송되는 Content-Type"
+        },
+        "app.TWlzdHJhbEFp.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.desc": {
+          "source": "If `True`, non-2xx HTTP responses return as the normal response hash (with the actual status code) instead of raising `REST-RESPONSE-ERROR`. Useful for handling 4xx/5xx as data - e.g. checking whether a resource exists. Overrides the connection's `error_passthru` setting for this call only.",
+          "message": "`True`인 경우, 2xx가 아닌 HTTP 응답은 `REST-RESPONSE-ERROR`을(를) 발생시키는 대신 (실제 상태 코드와 함께) 일반 응답 해시로 반환됩니다. 리소스 존재 여부 확인 등 4xx/5xx를 데이터로 처리할 때 유용합니다. 이 호출에 대해서만 연결의 `error_passthru` 설정을 재정의합니다."
+        },
+        "app.TWlzdHJhbEFp.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.display_name": {
+          "source": "Return Errors as Data",
+          "message": "오류를 데이터로 반환"
+        },
+        "app.TWlzdHJhbEFp.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.short_desc": {
+          "source": "Return non-2xx responses normally instead of throwing",
+          "message": "예외를 발생시키는 대신 2xx가 아닌 응답을 정상적으로 반환"
+        },
+        "app.TWlzdHJhbEFp.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.desc": {
+          "source": "Optional list of HTTP status codes treated as success. If set and the response status is not in this list, the action throws `REST-STATUS-ERROR`. When unset, the REST client's default behavior applies (typically: 2xx is success, non-2xx throws).",
+          "message": "성공으로 처리되는 HTTP 상태 코드의 선택적 목록입니다. 설정되어 있고 응답 상태가 이 목록에 없는 경우 작업이 `REST-STATUS-ERROR` 예외를 발생시킵니다. 설정되지 않은 경우 REST 클라이언트의 기본 동작이 적용됩니다(일반적으로 2xx는 성공, 2xx 이외는 예외 발생)."
+        },
+        "app.TWlzdHJhbEFp.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.display_name": {
+          "source": "Expected Status Codes",
+          "message": "예상되는 상태 코드"
+        },
+        "app.TWlzdHJhbEFp.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.short_desc": {
+          "source": "Response status codes treated as success",
+          "message": "성공으로 처리되는 응답 상태 코드"
+        },
+        "app.TWlzdHJhbEFp.action.bWFrZS1hcGktY2FsbA.option.aGRy.desc": {
+          "source": "Hash of custom headers added to the request. These override any default headers set by `body_type` (e.g. supplying `Content-Type` here wins over the body-type default).",
+          "message": "요청에 추가되는 사용자 지정 헤더의 해시입니다. 이는 `body_type`에 의해 설정된 기본 헤더보다 우선합니다(예: 여기에 `Content-Type`을(를) 제공하면 본문 유형 기본값보다 우선 적용됨)."
+        },
+        "app.TWlzdHJhbEFp.action.bWFrZS1hcGktY2FsbA.option.aGRy.display_name": {
+          "source": "Custom Headers",
+          "message": "사용자 지정 헤더"
+        },
+        "app.TWlzdHJhbEFp.action.bWFrZS1hcGktY2FsbA.option.aGRy.short_desc": {
+          "source": "Extra request headers",
+          "message": "추가 요청 헤더"
+        },
+        "app.TWlzdHJhbEFp.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.desc": {
+          "source": "If `True`, the response hash includes a `debug` sub-hash containing the request method/URL/headers (with sensitive values redacted), request and response sizes, and round-trip duration. Useful when investigating slow or failing calls. Off by default to keep responses lean.",
+          "message": "`True`인 경우 응답 해시에 요청 메서드/URL/헤더(민감한 값은 가려짐), 요청 및 응답 크기, 왕복 시간이 포함된 `debug` 하위 해시가 포함됩니다. 느리거나 실패한 호출을 조사할 때 유용합니다. 응답을 가볍게 유지하기 위해 기본적으로 비활성화되어 있습니다."
+        },
+        "app.TWlzdHJhbEFp.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.display_name": {
+          "source": "Include Debug Info",
+          "message": "디버그 정보 포함"
+        },
+        "app.TWlzdHJhbEFp.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.short_desc": {
+          "source": "Include request/timing/size debug info in the response",
+          "message": "응답에 요청/타이밍/크기 디버그 정보 포함"
+        },
+        "app.TWlzdHJhbEFp.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.desc": {
+          "source": "HTTP `OPTIONS`",
+          "message": "HTTP `OPTIONS`"
+        },
+        "app.TWlzdHJhbEFp.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.display_name": {
+          "source": "OPTIONS",
+          "message": "OPTIONS"
+        },
+        "app.TWlzdHJhbEFp.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.short_desc": {
+          "source": "HTTP OPTIONS",
+          "message": "HTTP OPTIONS"
+        },
+        "app.TWlzdHJhbEFp.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.desc": {
+          "source": "HTTP `DELETE`",
+          "message": "HTTP `DELETE`"
+        },
+        "app.TWlzdHJhbEFp.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.display_name": {
+          "source": "DELETE",
+          "message": "DELETE"
+        },
+        "app.TWlzdHJhbEFp.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.short_desc": {
+          "source": "HTTP DELETE",
+          "message": "HTTP DELETE"
+        },
+        "app.TWlzdHJhbEFp.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.desc": {
+          "source": "HTTP `GET`",
+          "message": "HTTP `GET`"
+        },
+        "app.TWlzdHJhbEFp.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.display_name": {
+          "source": "GET",
+          "message": "GET"
+        },
+        "app.TWlzdHJhbEFp.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.short_desc": {
+          "source": "HTTP GET",
+          "message": "HTTP GET"
+        },
+        "app.TWlzdHJhbEFp.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.desc": {
+          "source": "HTTP `HEAD`",
+          "message": "HTTP `HEAD`"
+        },
+        "app.TWlzdHJhbEFp.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.display_name": {
+          "source": "HEAD",
+          "message": "HEAD"
+        },
+        "app.TWlzdHJhbEFp.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.short_desc": {
+          "source": "HTTP HEAD",
+          "message": "HTTP HEAD"
+        },
+        "app.TWlzdHJhbEFp.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.desc": {
+          "source": "HTTP `PATCH`",
+          "message": "HTTP `PATCH`"
+        },
+        "app.TWlzdHJhbEFp.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.display_name": {
+          "source": "PATCH",
+          "message": "PATCH"
+        },
+        "app.TWlzdHJhbEFp.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.short_desc": {
+          "source": "HTTP PATCH",
+          "message": "HTTP PATCH"
+        },
+        "app.TWlzdHJhbEFp.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.desc": {
+          "source": "HTTP `POST`",
+          "message": "HTTP `POST`"
+        },
+        "app.TWlzdHJhbEFp.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.display_name": {
+          "source": "POST",
+          "message": "POST"
+        },
+        "app.TWlzdHJhbEFp.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.short_desc": {
+          "source": "HTTP POST",
+          "message": "HTTP POST"
+        },
+        "app.TWlzdHJhbEFp.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.desc": {
+          "source": "HTTP `PUT`",
+          "message": "HTTP `PUT`"
+        },
+        "app.TWlzdHJhbEFp.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.display_name": {
+          "source": "PUT",
+          "message": "PUT"
+        },
+        "app.TWlzdHJhbEFp.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.short_desc": {
+          "source": "HTTP PUT",
+          "message": "HTTP PUT"
+        },
+        "app.TWlzdHJhbEFp.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.desc": {
+          "source": "HTTP `TRACE`",
+          "message": "HTTP `TRACE`"
+        },
+        "app.TWlzdHJhbEFp.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.display_name": {
+          "source": "TRACE",
+          "message": "TRACE"
+        },
+        "app.TWlzdHJhbEFp.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.short_desc": {
+          "source": "HTTP TRACE",
+          "message": "HTTP TRACE"
+        },
+        "app.TWlzdHJhbEFp.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "요청에 사용할 HTTP 메서드"
+        },
+        "app.TWlzdHJhbEFp.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.display_name": {
+          "source": "HTTP Method",
+          "message": "HTTP 메서드"
+        },
+        "app.TWlzdHJhbEFp.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.short_desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "요청에 사용할 HTTP 메서드"
+        },
+        "app.TWlzdHJhbEFp.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain `{name}` placeholders that are replaced from `path_vars`. Example: `/users/{id}/comments`.",
+          "message": "연결의 API 기본 URL에 대한 상대 URI 경로입니다. `path_vars`에서 대체되는 `{name}` 자리 표시자가 포함될 수 있습니다. 예: `/users/{id}/comments`."
+        },
+        "app.TWlzdHJhbEFp.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.display_name": {
+          "source": "URI Path",
+          "message": "URI 경로"
+        },
+        "app.TWlzdHJhbEFp.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.short_desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain '{name}' placeholders that are replaced from 'path_vars'. Example: '/users/{id}/comments'",
+          "message": "연결의 API 기본 URL에 대한 상대 URI 경로입니다. 'path_vars'에서 대체되는 '{name}' 자리 표시자를 포함할 수 있습니다. 예: '/users/{id}/comments'"
+        },
+        "app.TWlzdHJhbEFp.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.desc": {
+          "source": "Hash of values substituted into `{name}` placeholders in the URI path. Example: with `path = /users/{id}` and `path_vars = {id: 123}` the framework sends `/users/123`. Values are URL-encoded.",
+          "message": "URI 경로의 `{name}` 자리 표시자에 대체되는 값의 해시입니다. 예: `path = /users/{id}` 및 `path_vars = {id: 123}`이 있으면 프레임워크가 `/users/123`을(를) 전송합니다. 값은 URL 인코딩됩니다."
+        },
+        "app.TWlzdHJhbEFp.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.display_name": {
+          "source": "Path Variables",
+          "message": "경로 변수"
+        },
+        "app.TWlzdHJhbEFp.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.short_desc": {
+          "source": "Values for {name} placeholders in path",
+          "message": "경로 내 {name} 자리 표시자의 값"
+        },
+        "app.TWlzdHJhbEFp.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.desc": {
+          "source": "Hash of query string parameters to append to the URI path. Values are URL-encoded; list values are joined with `,`.",
+          "message": "URI 경로에 추가할 쿼리 문자열 매개변수 해시입니다. 값은 URL 인코딩되며, 목록 값은 `,`(으)로 연결됩니다."
+        },
+        "app.TWlzdHJhbEFp.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.display_name": {
+          "source": "Query Arguments",
+          "message": "쿼리 인수"
+        },
+        "app.TWlzdHJhbEFp.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.short_desc": {
+          "source": "Query string parameters",
+          "message": "쿼리 문자열 매개변수"
+        },
+        "app.TWlzdHJhbEFp.action.bWFrZS1hcGktY2FsbA.short_desc": {
+          "source": "Make a custom API call to Mistral AI",
+          "message": "Mistral AI에 커스텀 API 호출 수행"
+        },
+        "app.TWlzdHJhbEFp.desc": {
+          "source": "Provides access to [Mistral AI](https://mistral.ai) — frontier and open-weight chat models, embeddings, and best-in-class document OCR.\n\n**Common use cases**:\n- **Frontier chat** with mistral-large-latest, mistral-small-latest\n- **Code-tuned chat** with codestral-latest\n- **RAG embeddings** with mistral-embed\n- **Document OCR** — extract structured markdown from PDFs and images using `mistral-ocr-latest`",
+          "message": "[Mistral AI](https://mistral.ai)에 대한 액세스를 제공합니다 — 프론티어 및 오픈 웨이트 대화 모델, 임베딩, 동급 최고의 문서 OCR.\n\n**일반적인 사용 사례**:\n- mistral-large-latest, mistral-small-latest를 사용한 **프론티어 대화**\n- codestral-latest를 사용한 **코드 특화 대화**\n- mistral-embed를 사용한 **RAG 임베딩**\n- **문서 OCR** — `mistral-ocr-latest`를 사용하여 PDF 및 이미지에서 구조화된 마크다운 추출"
+        },
+        "app.TWlzdHJhbEFp.display_name": {
+          "source": "Mistral AI",
+          "message": "Mistral AI"
+        },
+        "app.TWlzdHJhbEFp.short_desc": {
+          "source": "Mistral AI chat, embeddings, and document OCR",
+          "message": "Mistral AI 대화, 임베딩 및 문서 OCR"
+        }
+      }
+    }
+  }
+}

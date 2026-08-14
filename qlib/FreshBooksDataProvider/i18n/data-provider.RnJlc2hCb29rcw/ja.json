@@ -1,0 +1,2729 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "ja": {
+      "messages": {
+        "app.RnJlc2hCb29rcw.action.Y2xpZW50LWNyZWF0ZWQ.desc": {
+          "source": "Fires when a new client is created in FreshBooks. Uses polling to detect new records.",
+          "message": "FreshBooks で新しいクライアントが作成されたときにトリガーされます。ポーリングを使用して新しいレコードを検出します。"
+        },
+        "app.RnJlc2hCb29rcw.action.Y2xpZW50LWNyZWF0ZWQ.display_name": {
+          "source": "New Client",
+          "message": "新規クライアント"
+        },
+        "app.RnJlc2hCb29rcw.action.Y2xpZW50LWNyZWF0ZWQ.option.YWNjb3VudF9pZA.desc": {
+          "source": "The FreshBooks account ID for accounting API endpoints",
+          "message": "会計 API エンドポイント用の FreshBooks アカウント ID"
+        },
+        "app.RnJlc2hCb29rcw.action.Y2xpZW50LWNyZWF0ZWQ.option.YWNjb3VudF9pZA.display_name": {
+          "source": "Account ID",
+          "message": "アカウント ID"
+        },
+        "app.RnJlc2hCb29rcw.action.Y2xpZW50LWNyZWF0ZWQ.option.YWNjb3VudF9pZA.short_desc": {
+          "source": "FreshBooks account ID",
+          "message": "FreshBooks アカウント ID"
+        },
+        "app.RnJlc2hCb29rcw.action.Y2xpZW50LWNyZWF0ZWQ.option.cG9sbF9pbnRlcnZhbA.desc": {
+          "source": "How often to check for new records (minimum 30 seconds)",
+          "message": "新しいレコードを確認する頻度（最小30秒）"
+        },
+        "app.RnJlc2hCb29rcw.action.Y2xpZW50LWNyZWF0ZWQ.option.cG9sbF9pbnRlcnZhbA.display_name": {
+          "source": "Poll Interval",
+          "message": "ポーリング間隔"
+        },
+        "app.RnJlc2hCb29rcw.action.Y2xpZW50LWNyZWF0ZWQ.option.cG9sbF9pbnRlcnZhbA.short_desc": {
+          "source": "Polling interval in seconds",
+          "message": "ポーリング間隔（秒）"
+        },
+        "app.RnJlc2hCb29rcw.action.Y2xpZW50LWNyZWF0ZWQ.short_desc": {
+          "source": "Trigger when a new client is created",
+          "message": "新しいクライアントが作成されたときにトリガー"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLWNsaWVudA.desc": {
+          "source": "Create a new client in FreshBooks",
+          "message": "FreshBooks に新しいクライアントを作成します"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLWNsaWVudA.display_name": {
+          "source": "Create Client",
+          "message": "クライアントを作成"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLWNsaWVudA.option.YWNjb3VudF9pZA.desc": {
+          "source": "The FreshBooks account ID for accounting API endpoints",
+          "message": "会計 API エンドポイント用の FreshBooks アカウント ID"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLWNsaWVudA.option.YWNjb3VudF9pZA.display_name": {
+          "source": "Account ID",
+          "message": "アカウント ID"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLWNsaWVudA.option.YWNjb3VudF9pZA.short_desc": {
+          "source": "FreshBooks account ID",
+          "message": "FreshBooks アカウント ID"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLWNsaWVudA.option.ZW1haWw.desc": {
+          "source": "Email address of the client (at least one of fname, lname, email, organization is required)",
+          "message": "クライアントのメールアドレス（fname、lname、email、organization のうち少なくとも1つが必要です）"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLWNsaWVudA.option.ZW1haWw.display_name": {
+          "source": "Email",
+          "message": "メール"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLWNsaWVudA.option.ZW1haWw.short_desc": {
+          "source": "Client email",
+          "message": "クライアントのメールアドレス"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLWNsaWVudA.option.Zm5hbWU.desc": {
+          "source": "First name of the client",
+          "message": "クライアントの名"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLWNsaWVudA.option.Zm5hbWU.display_name": {
+          "source": "First Name",
+          "message": "名"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLWNsaWVudA.option.Zm5hbWU.short_desc": {
+          "source": "Client first name",
+          "message": "クライアントの名"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLWNsaWVudA.option.b3JnYW5pemF0aW9u.desc": {
+          "source": "Organization or company name",
+          "message": "組織または会社名"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLWNsaWVudA.option.b3JnYW5pemF0aW9u.display_name": {
+          "source": "Organization",
+          "message": "組織"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLWNsaWVudA.option.b3JnYW5pemF0aW9u.short_desc": {
+          "source": "Company name",
+          "message": "会社名"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLWNsaWVudA.option.bG5hbWU.desc": {
+          "source": "Last name of the client",
+          "message": "クライアントの姓"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLWNsaWVudA.option.bG5hbWU.display_name": {
+          "source": "Last Name",
+          "message": "姓"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLWNsaWVudA.option.bG5hbWU.short_desc": {
+          "source": "Client last name",
+          "message": "クライアントの姓"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLWNsaWVudA.option.bm90ZQ.display_name": {
+          "source": "Notes",
+          "message": "メモ"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLWNsaWVudA.option.bm90ZQ.short_desc": {
+          "source": "Notes about the client",
+          "message": "クライアントに関するメモ"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLWNsaWVudA.option.cF9jaXR5.display_name": {
+          "source": "City",
+          "message": "市区町村"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLWNsaWVudA.option.cF9jaXR5.short_desc": {
+          "source": "City",
+          "message": "市区町村"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLWNsaWVudA.option.cF9jb2Rl.display_name": {
+          "source": "Postal Code",
+          "message": "郵便番号"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLWNsaWVudA.option.cF9jb2Rl.short_desc": {
+          "source": "Postal/zip code",
+          "message": "郵便番号"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLWNsaWVudA.option.cF9jb3VudHJ5.display_name": {
+          "source": "Country",
+          "message": "国"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLWNsaWVudA.option.cF9jb3VudHJ5.short_desc": {
+          "source": "Country",
+          "message": "国"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLWNsaWVudA.option.cF9wcm92aW5jZQ.display_name": {
+          "source": "Province/State",
+          "message": "都道府県/州"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLWNsaWVudA.option.cF9wcm92aW5jZQ.short_desc": {
+          "source": "Province or state",
+          "message": "都道府県または州"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLWNsaWVudA.option.cF9zdHJlZXQ.display_name": {
+          "source": "Street",
+          "message": "町名・番地"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLWNsaWVudA.option.cF9zdHJlZXQ.short_desc": {
+          "source": "Street address",
+          "message": "町名・番地"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLWNsaWVudA.option.cGhvbmU.display_name": {
+          "source": "Phone",
+          "message": "電話番号"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLWNsaWVudA.option.cGhvbmU.short_desc": {
+          "source": "Business phone",
+          "message": "勤務先電話番号"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLWNsaWVudA.short_desc": {
+          "source": "Create a new client",
+          "message": "新しいクライアントを作成"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLWV4cGVuc2U.desc": {
+          "source": "Create a new expense in FreshBooks",
+          "message": "FreshBooks に新しい経費を作成します"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLWV4cGVuc2U.display_name": {
+          "source": "Create Expense",
+          "message": "経費を作成"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLWV4cGVuc2U.option.Y2F0ZWdvcnlpZA.desc": {
+          "source": "The expense category ID",
+          "message": "経費カテゴリ ID"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLWV4cGVuc2U.option.Y2F0ZWdvcnlpZA.display_name": {
+          "source": "Category",
+          "message": "カテゴリ"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLWV4cGVuc2U.option.Y2F0ZWdvcnlpZA.short_desc": {
+          "source": "Expense category",
+          "message": "経費カテゴリ"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLWV4cGVuc2U.option.YW1vdW50.desc": {
+          "source": "Amount object with `amount` (string) and `code` (currency) fields",
+          "message": "`amount`（文字列）および `code`（通貨）フィールドを含む金額オブジェクト"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLWV4cGVuc2U.option.YW1vdW50.display_name": {
+          "source": "Amount",
+          "message": "金額"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLWV4cGVuc2U.option.YW1vdW50.short_desc": {
+          "source": "Expense amount",
+          "message": "経費金額"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLWV4cGVuc2U.option.YWNjb3VudF9pZA.desc": {
+          "source": "The FreshBooks account ID for accounting API endpoints",
+          "message": "会計 API エンドポイント用の FreshBooks アカウント ID"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLWV4cGVuc2U.option.YWNjb3VudF9pZA.display_name": {
+          "source": "Account ID",
+          "message": "アカウント ID"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLWV4cGVuc2U.option.YWNjb3VudF9pZA.short_desc": {
+          "source": "FreshBooks account ID",
+          "message": "FreshBooks アカウント ID"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLWV4cGVuc2U.option.ZGF0ZQ.desc": {
+          "source": "Expense date in YYYY-MM-DD format",
+          "message": "YYYY-MM-DD 形式の経費日付"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLWV4cGVuc2U.option.ZGF0ZQ.display_name": {
+          "source": "Date",
+          "message": "日付"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLWV4cGVuc2U.option.ZGF0ZQ.short_desc": {
+          "source": "Expense date",
+          "message": "経費日付"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLWV4cGVuc2U.option.bm90ZXM.display_name": {
+          "source": "Notes",
+          "message": "メモ"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLWV4cGVuc2U.option.bm90ZXM.short_desc": {
+          "source": "Expense notes",
+          "message": "経費メモ"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLWV4cGVuc2U.option.c3RhZmZpZA.desc": {
+          "source": "The ID of the staff member associated with this expense",
+          "message": "この経費に関連付けられているスタッフメンバーの ID"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLWV4cGVuc2U.option.c3RhZmZpZA.display_name": {
+          "source": "Staff Member",
+          "message": "スタッフメンバー"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLWV4cGVuc2U.option.c3RhZmZpZA.short_desc": {
+          "source": "Staff member for this expense",
+          "message": "この経費のスタッフメンバー"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLWV4cGVuc2U.option.dGF4TmFtZTE.display_name": {
+          "source": "Tax Name",
+          "message": "税名"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLWV4cGVuc2U.option.dGF4TmFtZTE.short_desc": {
+          "source": "Tax name",
+          "message": "税名"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLWV4cGVuc2U.option.dGF4UGVyY2VudDE.display_name": {
+          "source": "Tax Percent",
+          "message": "税率"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLWV4cGVuc2U.option.dGF4UGVyY2VudDE.short_desc": {
+          "source": "Tax percentage",
+          "message": "税率パーセンテージ"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLWV4cGVuc2U.option.dmVuZG9y.desc": {
+          "source": "Name of the vendor",
+          "message": "仕入先/ベンダー名"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLWV4cGVuc2U.option.dmVuZG9y.display_name": {
+          "source": "Vendor",
+          "message": "ベンダー"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLWV4cGVuc2U.option.dmVuZG9y.short_desc": {
+          "source": "Vendor name",
+          "message": "ベンダー名"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLWV4cGVuc2U.short_desc": {
+          "source": "Create a new expense",
+          "message": "新しい経費を作成"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLWVzdGltYXRl.desc": {
+          "source": "Create a new estimate/quote in FreshBooks",
+          "message": "FreshBooks に新しい見積を作成します"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLWVzdGltYXRl.display_name": {
+          "source": "Create Estimate",
+          "message": "見積書の作成"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLWVzdGltYXRl.option.Y3JlYXRlX2RhdGU.desc": {
+          "source": "Estimate date in YYYY-MM-DD format",
+          "message": "YYYY-MM-DD 形式の見積日付"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLWVzdGltYXRl.option.Y3JlYXRlX2RhdGU.display_name": {
+          "source": "Date",
+          "message": "日付"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLWVzdGltYXRl.option.Y3JlYXRlX2RhdGU.short_desc": {
+          "source": "Estimate date",
+          "message": "見積日付"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLWVzdGltYXRl.option.Y3VycmVuY3lfY29kZQ.desc": {
+          "source": "Currency code (e.g. USD, CAD, EUR)",
+          "message": "通貨コード（例: USD、CAD、EUR）"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLWVzdGltYXRl.option.Y3VycmVuY3lfY29kZQ.display_name": {
+          "source": "Currency",
+          "message": "通貨"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLWVzdGltYXRl.option.Y3VycmVuY3lfY29kZQ.short_desc": {
+          "source": "Currency code",
+          "message": "通貨コード"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLWVzdGltYXRl.option.Y3VzdG9tZXJpZA.display_name": {
+          "source": "Customer",
+          "message": "顧客"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLWVzdGltYXRl.option.Y3VzdG9tZXJpZA.short_desc": {
+          "source": "The customer for the estimate",
+          "message": "見積書の顧客"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLWVzdGltYXRl.option.YWNjb3VudF9pZA.desc": {
+          "source": "The FreshBooks account ID for accounting API endpoints",
+          "message": "会計 API エンドポイント用の FreshBooks アカウント ID"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLWVzdGltYXRl.option.YWNjb3VudF9pZA.display_name": {
+          "source": "Account ID",
+          "message": "アカウント ID"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLWVzdGltYXRl.option.YWNjb3VudF9pZA.short_desc": {
+          "source": "FreshBooks account ID",
+          "message": "FreshBooks アカウント ID"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLWVzdGltYXRl.option.ZXN0aW1hdGVfbnVtYmVy.display_name": {
+          "source": "Estimate Number",
+          "message": "見積書番号"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLWVzdGltYXRl.option.ZXN0aW1hdGVfbnVtYmVy.short_desc": {
+          "source": "Unique estimate number",
+          "message": "一意の見積書番号"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLWVzdGltYXRl.option.bGluZXM.desc": {
+          "source": "List of line items with fields: description, quantity, unit_cost, taxName1, taxPercent1",
+          "message": "項目一覧（フィールド: description、quantity、unit_cost、taxName1、taxPercent1）"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLWVzdGltYXRl.option.bGluZXM.display_name": {
+          "source": "Line Items",
+          "message": "品目"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLWVzdGltYXRl.option.bGluZXM.short_desc": {
+          "source": "Estimate line items",
+          "message": "見積明細項目"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLWVzdGltYXRl.option.bm90ZXM.display_name": {
+          "source": "Notes",
+          "message": "メモ"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLWVzdGltYXRl.option.bm90ZXM.short_desc": {
+          "source": "Customer notes",
+          "message": "顧客メモ"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLWVzdGltYXRl.option.cG9fbnVtYmVy.display_name": {
+          "source": "PO Number",
+          "message": "注文番号 (PO)"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLWVzdGltYXRl.option.cG9fbnVtYmVy.short_desc": {
+          "source": "Purchase order number",
+          "message": "発注書番号"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLWVzdGltYXRl.option.dGVybXM.display_name": {
+          "source": "Terms",
+          "message": "支払条件"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLWVzdGltYXRl.option.dGVybXM.short_desc": {
+          "source": "Terms and conditions",
+          "message": "利用規約"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLWVzdGltYXRl.short_desc": {
+          "source": "Create a new estimate",
+          "message": "新しい見積書を作成"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLWl0ZW0.desc": {
+          "source": "Create a new product or service item in FreshBooks",
+          "message": "FreshBooksで新しい商品またはサービス項目を作成"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLWl0ZW0.display_name": {
+          "source": "Create Item",
+          "message": "品目の作成"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLWl0ZW0.option.YWNjb3VudF9pZA.desc": {
+          "source": "The FreshBooks account ID for accounting API endpoints",
+          "message": "会計 API エンドポイント用の FreshBooks アカウント ID"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLWl0ZW0.option.YWNjb3VudF9pZA.display_name": {
+          "source": "Account ID",
+          "message": "アカウント ID"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLWl0ZW0.option.YWNjb3VudF9pZA.short_desc": {
+          "source": "FreshBooks account ID",
+          "message": "FreshBooks アカウント ID"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLWl0ZW0.option.ZGVzY3JpcHRpb24.display_name": {
+          "source": "Description",
+          "message": "説明"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLWl0ZW0.option.ZGVzY3JpcHRpb24.short_desc": {
+          "source": "Item description",
+          "message": "品目の説明"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLWl0ZW0.option.aW52ZW50b3J5.display_name": {
+          "source": "Inventory",
+          "message": "在庫品目"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLWl0ZW0.option.aW52ZW50b3J5.short_desc": {
+          "source": "Inventory count",
+          "message": "在庫数"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLWl0ZW0.option.bmFtZQ.desc": {
+          "source": "The name of the item",
+          "message": "品目名"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLWl0ZW0.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "名前"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLWl0ZW0.option.bmFtZQ.short_desc": {
+          "source": "Item name",
+          "message": "品目名"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLWl0ZW0.option.c2t1.display_name": {
+          "source": "SKU",
+          "message": "SKU"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLWl0ZW0.option.c2t1.short_desc": {
+          "source": "Stock keeping unit",
+          "message": "在庫管理単位 (SKU)"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLWl0ZW0.option.cXR5.display_name": {
+          "source": "Quantity",
+          "message": "数量"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLWl0ZW0.option.cXR5.short_desc": {
+          "source": "Default quantity",
+          "message": "デフォルトの数量"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLWl0ZW0.option.dGF4MQ.display_name": {
+          "source": "Tax 1",
+          "message": "税1"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLWl0ZW0.option.dGF4MQ.short_desc": {
+          "source": "Default tax 1",
+          "message": "デフォルトの税1"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLWl0ZW0.option.dGF4Mg.display_name": {
+          "source": "Tax 2",
+          "message": "税2"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLWl0ZW0.option.dGF4Mg.short_desc": {
+          "source": "Default tax 2",
+          "message": "デフォルトの税2"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLWl0ZW0.option.dW5pdF9jb3N0.desc": {
+          "source": "Unit cost object with `amount` (string) and `code` (currency) fields",
+          "message": "`amount`（文字列）および`code`（通貨）フィールドを持つ単価オブジェクト"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLWl0ZW0.option.dW5pdF9jb3N0.display_name": {
+          "source": "Unit Cost",
+          "message": "単価"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLWl0ZW0.option.dW5pdF9jb3N0.short_desc": {
+          "source": "Cost per unit",
+          "message": "単位あたりのコスト"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLWl0ZW0.short_desc": {
+          "source": "Create a new item",
+          "message": "新しい品目を作成"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLWludm9pY2U.desc": {
+          "source": "Create a new invoice in FreshBooks for a customer",
+          "message": "顧客向けにFreshBooksで新しい請求書を作成"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLWludm9pY2U.display_name": {
+          "source": "Create Invoice",
+          "message": "請求書を作成"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLWludm9pY2U.option.Y3JlYXRlX2RhdGU.desc": {
+          "source": "Invoice date in YYYY-MM-DD format",
+          "message": "YYYY-MM-DD形式の請求日"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLWludm9pY2U.option.Y3JlYXRlX2RhdGU.display_name": {
+          "source": "Date",
+          "message": "日付"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLWludm9pY2U.option.Y3JlYXRlX2RhdGU.short_desc": {
+          "source": "Invoice date",
+          "message": "請求日"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLWludm9pY2U.option.Y3VycmVuY3lfY29kZQ.display_name": {
+          "source": "Currency",
+          "message": "通貨"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLWludm9pY2U.option.Y3VycmVuY3lfY29kZQ.short_desc": {
+          "source": "Currency code",
+          "message": "通貨コード"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLWludm9pY2U.option.Y3VzdG9tZXJpZA.display_name": {
+          "source": "Customer",
+          "message": "顧客"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLWludm9pY2U.option.Y3VzdG9tZXJpZA.short_desc": {
+          "source": "The customer for the invoice",
+          "message": "請求書の対象顧客"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLWludm9pY2U.option.YWNjb3VudF9pZA.desc": {
+          "source": "The FreshBooks account ID for accounting API endpoints",
+          "message": "会計 API エンドポイント用の FreshBooks アカウント ID"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLWludm9pY2U.option.YWNjb3VudF9pZA.display_name": {
+          "source": "Account ID",
+          "message": "アカウント ID"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLWludm9pY2U.option.YWNjb3VudF9pZA.short_desc": {
+          "source": "FreshBooks account ID",
+          "message": "FreshBooks アカウント ID"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLWludm9pY2U.option.ZGlzY291bnRfdmFsdWU.desc": {
+          "source": "Discount amount applied to the invoice",
+          "message": "請求書に適用される割引額"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLWludm9pY2U.option.ZGlzY291bnRfdmFsdWU.display_name": {
+          "source": "Discount",
+          "message": "割引"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLWludm9pY2U.option.ZGlzY291bnRfdmFsdWU.short_desc": {
+          "source": "Discount value",
+          "message": "割引値"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLWludm9pY2U.option.ZHVlX29mZnNldF9kYXlz.desc": {
+          "source": "Number of days from creation until the invoice is due",
+          "message": "作成日から請求書の支払期日までの日数"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLWludm9pY2U.option.ZHVlX29mZnNldF9kYXlz.display_name": {
+          "source": "Due in Days",
+          "message": "支払期日（日数）"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLWludm9pY2U.option.ZHVlX29mZnNldF9kYXlz.short_desc": {
+          "source": "Days until due",
+          "message": "期日までの日数"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLWludm9pY2U.option.aW52b2ljZV9udW1iZXI.desc": {
+          "source": "A unique invoice number (auto-generated if not provided)",
+          "message": "一意の請求書番号（指定がない場合は自動生成）"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLWludm9pY2U.option.aW52b2ljZV9udW1iZXI.display_name": {
+          "source": "Invoice Number",
+          "message": "請求書番号"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLWludm9pY2U.option.aW52b2ljZV9udW1iZXI.short_desc": {
+          "source": "Unique invoice number",
+          "message": "一意の請求書番号"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLWludm9pY2U.option.bGluZXM.desc": {
+          "source": "List of line items with fields: description, quantity, unit_cost, taxName1, taxPercent1",
+          "message": "項目一覧（フィールド: description、quantity、unit_cost、taxName1、taxPercent1）"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLWludm9pY2U.option.bGluZXM.display_name": {
+          "source": "Line Items",
+          "message": "品目"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLWludm9pY2U.option.bGluZXM.short_desc": {
+          "source": "Invoice line items",
+          "message": "請求明細項目"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLWludm9pY2U.option.bm90ZXM.display_name": {
+          "source": "Notes",
+          "message": "メモ"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLWludm9pY2U.option.bm90ZXM.short_desc": {
+          "source": "Customer notes",
+          "message": "顧客メモ"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLWludm9pY2U.option.cG9fbnVtYmVy.display_name": {
+          "source": "PO Number",
+          "message": "注文番号 (PO)"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLWludm9pY2U.option.cG9fbnVtYmVy.short_desc": {
+          "source": "Purchase order number",
+          "message": "発注書番号"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLWludm9pY2U.option.dGVybXM.display_name": {
+          "source": "Terms",
+          "message": "支払条件"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLWludm9pY2U.option.dGVybXM.short_desc": {
+          "source": "Terms and conditions",
+          "message": "利用規約"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLWludm9pY2U.short_desc": {
+          "source": "Create a new invoice",
+          "message": "新しい請求書を作成"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLXBheW1lbnQ.desc": {
+          "source": "Record a new payment against an invoice in FreshBooks",
+          "message": "FreshBooksで請求書に対する新しい支払いを記録"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLXBheW1lbnQ.display_name": {
+          "source": "Create Payment",
+          "message": "支払いの作成"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLXBheW1lbnQ.option.YW1vdW50.desc": {
+          "source": "Amount object with `amount` (string) and `code` (currency) fields",
+          "message": "`amount`（文字列）および `code`（通貨）フィールドを含む金額オブジェクト"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLXBheW1lbnQ.option.YW1vdW50.display_name": {
+          "source": "Amount",
+          "message": "金額"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLXBheW1lbnQ.option.YW1vdW50.short_desc": {
+          "source": "Payment amount",
+          "message": "支払金額"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLXBheW1lbnQ.option.YWNjb3VudF9pZA.desc": {
+          "source": "The FreshBooks account ID for accounting API endpoints",
+          "message": "会計 API エンドポイント用の FreshBooks アカウント ID"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLXBheW1lbnQ.option.YWNjb3VudF9pZA.display_name": {
+          "source": "Account ID",
+          "message": "アカウント ID"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLXBheW1lbnQ.option.YWNjb3VudF9pZA.short_desc": {
+          "source": "FreshBooks account ID",
+          "message": "FreshBooks アカウント ID"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLXBheW1lbnQ.option.ZGF0ZQ.desc": {
+          "source": "Payment date in YYYY-MM-DD format",
+          "message": "YYYY-MM-DD形式の支払日"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLXBheW1lbnQ.option.ZGF0ZQ.display_name": {
+          "source": "Date",
+          "message": "日付"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLXBheW1lbnQ.option.ZGF0ZQ.short_desc": {
+          "source": "Payment date",
+          "message": "支払日"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLXBheW1lbnQ.option.aW52b2ljZWlk.display_name": {
+          "source": "Invoice",
+          "message": "Invoice"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLXBheW1lbnQ.option.aW52b2ljZWlk.short_desc": {
+          "source": "The invoice for this payment",
+          "message": "この支払いの対象となる請求書"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLXBheW1lbnQ.option.bm90ZQ.display_name": {
+          "source": "Note",
+          "message": "ノート"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLXBheW1lbnQ.option.bm90ZQ.short_desc": {
+          "source": "Payment note",
+          "message": "支払メモ"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLXBheW1lbnQ.option.dHlwZQ.allowed-value.c3RyaW5nOk90aGVy.desc": {
+          "source": "Other payment type",
+          "message": "その他の支払いタイプ"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLXBheW1lbnQ.option.dHlwZQ.allowed-value.c3RyaW5nOkJhbmsgVHJhbnNmZXI.desc": {
+          "source": "Bank transfer payment",
+          "message": "銀行振込による支払い"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLXBheW1lbnQ.option.dHlwZQ.allowed-value.c3RyaW5nOkNhc2g.desc": {
+          "source": "Cash payment",
+          "message": "現金支払い"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLXBheW1lbnQ.option.dHlwZQ.allowed-value.c3RyaW5nOkNoZWNr.desc": {
+          "source": "Check payment",
+          "message": "小切手支払い"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLXBheW1lbnQ.option.dHlwZQ.allowed-value.c3RyaW5nOkNyZWRpdCBDYXJk.desc": {
+          "source": "Credit card payment",
+          "message": "クレジットカード支払い"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLXBheW1lbnQ.option.dHlwZQ.allowed-value.c3RyaW5nOlBheVBhbA.desc": {
+          "source": "PayPal payment",
+          "message": "PayPal支払い"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLXBheW1lbnQ.option.dHlwZQ.desc": {
+          "source": "The payment method type",
+          "message": "支払い方法タイプ"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLXBheW1lbnQ.option.dHlwZQ.display_name": {
+          "source": "Type",
+          "message": "タイプ"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLXBheW1lbnQ.option.dHlwZQ.short_desc": {
+          "source": "Payment type",
+          "message": "支払いタイプ"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLXBheW1lbnQ.short_desc": {
+          "source": "Record a new payment",
+          "message": "新しい支払いを記録"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLXNlcnZpY2U.desc": {
+          "source": "Create a new service in FreshBooks for time tracking",
+          "message": "時間追跡用にFreshBooksで新しいサービスを作成"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLXNlcnZpY2U.display_name": {
+          "source": "Create Service",
+          "message": "サービスを作成"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLXNlcnZpY2U.option.YmlsbGFibGU.desc": {
+          "source": "Whether this service is billable to clients",
+          "message": "このサービスがクライアントに請求可能かどうか"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLXNlcnZpY2U.option.YmlsbGFibGU.display_name": {
+          "source": "Billable",
+          "message": "請求可能"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLXNlcnZpY2U.option.YmlsbGFibGU.short_desc": {
+          "source": "Whether the service is billable",
+          "message": "サービスが請求可能かどうか"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLXNlcnZpY2U.option.YnVzaW5lc3NfaWQ.desc": {
+          "source": "The FreshBooks business ID for time tracking API endpoints",
+          "message": "時間追跡APIエンドポイント用のFreshBooksビジネスID"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLXNlcnZpY2U.option.YnVzaW5lc3NfaWQ.display_name": {
+          "source": "Business ID",
+          "message": "ビジネスID"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLXNlcnZpY2U.option.YnVzaW5lc3NfaWQ.short_desc": {
+          "source": "FreshBooks business ID",
+          "message": "FreshBooksビジネスID"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLXNlcnZpY2U.option.bmFtZQ.desc": {
+          "source": "The name of the service",
+          "message": "サービスの名前"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLXNlcnZpY2U.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "名前"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLXNlcnZpY2U.option.bmFtZQ.short_desc": {
+          "source": "Service name",
+          "message": "サービス名"
+        },
+        "app.RnJlc2hCb29rcw.action.Y3JlYXRlLXNlcnZpY2U.short_desc": {
+          "source": "Create a new service",
+          "message": "新しいサービスを作成"
+        },
+        "app.RnJlc2hCb29rcw.action.Z2V0LWNsaWVudA.desc": {
+          "source": "Retrieve a single client by ID from FreshBooks",
+          "message": "FreshBooksからIDで単一のクライアントを取得"
+        },
+        "app.RnJlc2hCb29rcw.action.Z2V0LWNsaWVudA.display_name": {
+          "source": "Get Client",
+          "message": "クライアントを取得"
+        },
+        "app.RnJlc2hCb29rcw.action.Z2V0LWNsaWVudA.option.YWNjb3VudF9pZA.desc": {
+          "source": "The FreshBooks account ID for accounting API endpoints",
+          "message": "会計 API エンドポイント用の FreshBooks アカウント ID"
+        },
+        "app.RnJlc2hCb29rcw.action.Z2V0LWNsaWVudA.option.YWNjb3VudF9pZA.display_name": {
+          "source": "Account ID",
+          "message": "アカウント ID"
+        },
+        "app.RnJlc2hCb29rcw.action.Z2V0LWNsaWVudA.option.YWNjb3VudF9pZA.short_desc": {
+          "source": "FreshBooks account ID",
+          "message": "FreshBooks アカウント ID"
+        },
+        "app.RnJlc2hCb29rcw.action.Z2V0LWNsaWVudA.option.aWQ.display_name": {
+          "source": "Client ID",
+          "message": "クライアント ID"
+        },
+        "app.RnJlc2hCb29rcw.action.Z2V0LWNsaWVudA.option.aWQ.short_desc": {
+          "source": "The client ID",
+          "message": "クライアントID"
+        },
+        "app.RnJlc2hCb29rcw.action.Z2V0LWNsaWVudA.short_desc": {
+          "source": "Get a single client by ID",
+          "message": "IDで単一のクライアントを取得"
+        },
+        "app.RnJlc2hCb29rcw.action.Z2V0LWV4cGVuc2U.desc": {
+          "source": "Retrieve a single expense by ID from FreshBooks",
+          "message": "FreshBooksからIDで単一の経費を取得"
+        },
+        "app.RnJlc2hCb29rcw.action.Z2V0LWV4cGVuc2U.display_name": {
+          "source": "Get Expense",
+          "message": "経費を取得"
+        },
+        "app.RnJlc2hCb29rcw.action.Z2V0LWV4cGVuc2U.option.YWNjb3VudF9pZA.desc": {
+          "source": "The FreshBooks account ID for accounting API endpoints",
+          "message": "会計 API エンドポイント用の FreshBooks アカウント ID"
+        },
+        "app.RnJlc2hCb29rcw.action.Z2V0LWV4cGVuc2U.option.YWNjb3VudF9pZA.display_name": {
+          "source": "Account ID",
+          "message": "アカウント ID"
+        },
+        "app.RnJlc2hCb29rcw.action.Z2V0LWV4cGVuc2U.option.YWNjb3VudF9pZA.short_desc": {
+          "source": "FreshBooks account ID",
+          "message": "FreshBooks アカウント ID"
+        },
+        "app.RnJlc2hCb29rcw.action.Z2V0LWV4cGVuc2U.option.aWQ.display_name": {
+          "source": "Expense ID",
+          "message": "経費ID"
+        },
+        "app.RnJlc2hCb29rcw.action.Z2V0LWV4cGVuc2U.option.aWQ.short_desc": {
+          "source": "The expense ID",
+          "message": "経費ID"
+        },
+        "app.RnJlc2hCb29rcw.action.Z2V0LWV4cGVuc2U.short_desc": {
+          "source": "Get a single expense by ID",
+          "message": "IDで単一の経費を取得します"
+        },
+        "app.RnJlc2hCb29rcw.action.Z2V0LWVzdGltYXRl.desc": {
+          "source": "Retrieve a single estimate by ID from FreshBooks",
+          "message": "FreshBooksからIDで単一の見積書を取得します"
+        },
+        "app.RnJlc2hCb29rcw.action.Z2V0LWVzdGltYXRl.display_name": {
+          "source": "Get Estimate",
+          "message": "概算見積を取得"
+        },
+        "app.RnJlc2hCb29rcw.action.Z2V0LWVzdGltYXRl.option.YWNjb3VudF9pZA.desc": {
+          "source": "The FreshBooks account ID for accounting API endpoints",
+          "message": "会計 API エンドポイント用の FreshBooks アカウント ID"
+        },
+        "app.RnJlc2hCb29rcw.action.Z2V0LWVzdGltYXRl.option.YWNjb3VudF9pZA.display_name": {
+          "source": "Account ID",
+          "message": "アカウント ID"
+        },
+        "app.RnJlc2hCb29rcw.action.Z2V0LWVzdGltYXRl.option.YWNjb3VudF9pZA.short_desc": {
+          "source": "FreshBooks account ID",
+          "message": "FreshBooks アカウント ID"
+        },
+        "app.RnJlc2hCb29rcw.action.Z2V0LWVzdGltYXRl.option.aWQ.display_name": {
+          "source": "Estimate ID",
+          "message": "見積書 ID"
+        },
+        "app.RnJlc2hCb29rcw.action.Z2V0LWVzdGltYXRl.option.aWQ.short_desc": {
+          "source": "The estimate ID",
+          "message": "見積書ID"
+        },
+        "app.RnJlc2hCb29rcw.action.Z2V0LWVzdGltYXRl.short_desc": {
+          "source": "Get a single estimate by ID",
+          "message": "IDで単一の見積書を取得します"
+        },
+        "app.RnJlc2hCb29rcw.action.Z2V0LWl0ZW0.desc": {
+          "source": "Retrieve a single item by ID from FreshBooks",
+          "message": "FreshBooksからIDで単一の品目を取得します"
+        },
+        "app.RnJlc2hCb29rcw.action.Z2V0LWl0ZW0.display_name": {
+          "source": "Get Item",
+          "message": "アイテムの取得"
+        },
+        "app.RnJlc2hCb29rcw.action.Z2V0LWl0ZW0.option.YWNjb3VudF9pZA.desc": {
+          "source": "The FreshBooks account ID for accounting API endpoints",
+          "message": "会計 API エンドポイント用の FreshBooks アカウント ID"
+        },
+        "app.RnJlc2hCb29rcw.action.Z2V0LWl0ZW0.option.YWNjb3VudF9pZA.display_name": {
+          "source": "Account ID",
+          "message": "アカウント ID"
+        },
+        "app.RnJlc2hCb29rcw.action.Z2V0LWl0ZW0.option.YWNjb3VudF9pZA.short_desc": {
+          "source": "FreshBooks account ID",
+          "message": "FreshBooks アカウント ID"
+        },
+        "app.RnJlc2hCb29rcw.action.Z2V0LWl0ZW0.option.aWQ.display_name": {
+          "source": "Item ID",
+          "message": "アイテムID"
+        },
+        "app.RnJlc2hCb29rcw.action.Z2V0LWl0ZW0.option.aWQ.short_desc": {
+          "source": "The item ID",
+          "message": "品目ID"
+        },
+        "app.RnJlc2hCb29rcw.action.Z2V0LWl0ZW0.short_desc": {
+          "source": "Get a single item by ID",
+          "message": "IDで単一の品目を取得します"
+        },
+        "app.RnJlc2hCb29rcw.action.Z2V0LWludm9pY2U.desc": {
+          "source": "Retrieve a single invoice by ID from FreshBooks",
+          "message": "FreshBooksからIDで単一の請求書を取得します"
+        },
+        "app.RnJlc2hCb29rcw.action.Z2V0LWludm9pY2U.display_name": {
+          "source": "Get Invoice",
+          "message": "請求書を取得"
+        },
+        "app.RnJlc2hCb29rcw.action.Z2V0LWludm9pY2U.option.YWNjb3VudF9pZA.desc": {
+          "source": "The FreshBooks account ID for accounting API endpoints",
+          "message": "会計 API エンドポイント用の FreshBooks アカウント ID"
+        },
+        "app.RnJlc2hCb29rcw.action.Z2V0LWludm9pY2U.option.YWNjb3VudF9pZA.display_name": {
+          "source": "Account ID",
+          "message": "アカウント ID"
+        },
+        "app.RnJlc2hCb29rcw.action.Z2V0LWludm9pY2U.option.YWNjb3VudF9pZA.short_desc": {
+          "source": "FreshBooks account ID",
+          "message": "FreshBooks アカウント ID"
+        },
+        "app.RnJlc2hCb29rcw.action.Z2V0LWludm9pY2U.option.aWQ.display_name": {
+          "source": "Invoice ID",
+          "message": "請求書ID"
+        },
+        "app.RnJlc2hCb29rcw.action.Z2V0LWludm9pY2U.option.aWQ.short_desc": {
+          "source": "The invoice ID",
+          "message": "請求書 ID"
+        },
+        "app.RnJlc2hCb29rcw.action.Z2V0LWludm9pY2U.short_desc": {
+          "source": "Get a single invoice by ID",
+          "message": "ID で単一の請求書を取得"
+        },
+        "app.RnJlc2hCb29rcw.action.Z2V0LXBheW1lbnQ.desc": {
+          "source": "Retrieve a single payment by ID from FreshBooks",
+          "message": "FreshBooksからIDで単一の支払いを取得します"
+        },
+        "app.RnJlc2hCb29rcw.action.Z2V0LXBheW1lbnQ.display_name": {
+          "source": "Get Payment",
+          "message": "支払いの取得"
+        },
+        "app.RnJlc2hCb29rcw.action.Z2V0LXBheW1lbnQ.option.YWNjb3VudF9pZA.desc": {
+          "source": "The FreshBooks account ID for accounting API endpoints",
+          "message": "会計 API エンドポイント用の FreshBooks アカウント ID"
+        },
+        "app.RnJlc2hCb29rcw.action.Z2V0LXBheW1lbnQ.option.YWNjb3VudF9pZA.display_name": {
+          "source": "Account ID",
+          "message": "アカウント ID"
+        },
+        "app.RnJlc2hCb29rcw.action.Z2V0LXBheW1lbnQ.option.YWNjb3VudF9pZA.short_desc": {
+          "source": "FreshBooks account ID",
+          "message": "FreshBooks アカウント ID"
+        },
+        "app.RnJlc2hCb29rcw.action.Z2V0LXBheW1lbnQ.option.aWQ.display_name": {
+          "source": "Payment ID",
+          "message": "支払いID"
+        },
+        "app.RnJlc2hCb29rcw.action.Z2V0LXBheW1lbnQ.option.aWQ.short_desc": {
+          "source": "The payment ID",
+          "message": "支払いID"
+        },
+        "app.RnJlc2hCb29rcw.action.Z2V0LXBheW1lbnQ.short_desc": {
+          "source": "Get a single payment by ID",
+          "message": "IDで単一の支払いを取得します"
+        },
+        "app.RnJlc2hCb29rcw.action.Z2V0LXNlcnZpY2U.desc": {
+          "source": "Retrieve a single service by ID from FreshBooks",
+          "message": "FreshBooksからIDで単一のサービスを取得します"
+        },
+        "app.RnJlc2hCb29rcw.action.Z2V0LXNlcnZpY2U.display_name": {
+          "source": "Get Service",
+          "message": "サービスを取得"
+        },
+        "app.RnJlc2hCb29rcw.action.Z2V0LXNlcnZpY2U.option.YnVzaW5lc3NfaWQ.desc": {
+          "source": "The FreshBooks business ID for time tracking API endpoints",
+          "message": "時間追跡APIエンドポイント用のFreshBooksビジネスID"
+        },
+        "app.RnJlc2hCb29rcw.action.Z2V0LXNlcnZpY2U.option.YnVzaW5lc3NfaWQ.display_name": {
+          "source": "Business ID",
+          "message": "ビジネスID"
+        },
+        "app.RnJlc2hCb29rcw.action.Z2V0LXNlcnZpY2U.option.YnVzaW5lc3NfaWQ.short_desc": {
+          "source": "FreshBooks business ID",
+          "message": "FreshBooksビジネスID"
+        },
+        "app.RnJlc2hCb29rcw.action.Z2V0LXNlcnZpY2U.option.aWQ.display_name": {
+          "source": "Service ID",
+          "message": "サービスID"
+        },
+        "app.RnJlc2hCb29rcw.action.Z2V0LXNlcnZpY2U.option.aWQ.short_desc": {
+          "source": "The service ID",
+          "message": "サービスID"
+        },
+        "app.RnJlc2hCb29rcw.action.Z2V0LXNlcnZpY2U.short_desc": {
+          "source": "Get a single service by ID",
+          "message": "IDで単一のサービスを取得します"
+        },
+        "app.RnJlc2hCb29rcw.action.ZGVsZXRlLWNsaWVudA.desc": {
+          "source": "Soft-delete a client in FreshBooks by setting vis_state to 1",
+          "message": "vis_stateを1に設定してFreshBooksのクライアントを論理削除します"
+        },
+        "app.RnJlc2hCb29rcw.action.ZGVsZXRlLWNsaWVudA.display_name": {
+          "source": "Delete Client",
+          "message": "クライアントを削除"
+        },
+        "app.RnJlc2hCb29rcw.action.ZGVsZXRlLWNsaWVudA.option.YWNjb3VudF9pZA.desc": {
+          "source": "The FreshBooks account ID for accounting API endpoints",
+          "message": "会計 API エンドポイント用の FreshBooks アカウント ID"
+        },
+        "app.RnJlc2hCb29rcw.action.ZGVsZXRlLWNsaWVudA.option.YWNjb3VudF9pZA.display_name": {
+          "source": "Account ID",
+          "message": "アカウント ID"
+        },
+        "app.RnJlc2hCb29rcw.action.ZGVsZXRlLWNsaWVudA.option.YWNjb3VudF9pZA.short_desc": {
+          "source": "FreshBooks account ID",
+          "message": "FreshBooks アカウント ID"
+        },
+        "app.RnJlc2hCb29rcw.action.ZGVsZXRlLWNsaWVudA.option.aWQ.display_name": {
+          "source": "Client ID",
+          "message": "クライアント ID"
+        },
+        "app.RnJlc2hCb29rcw.action.ZGVsZXRlLWNsaWVudA.option.aWQ.short_desc": {
+          "source": "The client to delete",
+          "message": "削除するクライアント"
+        },
+        "app.RnJlc2hCb29rcw.action.ZGVsZXRlLWNsaWVudA.short_desc": {
+          "source": "Delete a client",
+          "message": "クライアントを削除します"
+        },
+        "app.RnJlc2hCb29rcw.action.ZGVsZXRlLWV4cGVuc2U.desc": {
+          "source": "Soft-delete an expense in FreshBooks by setting vis_state to 1",
+          "message": "vis_stateを1に設定してFreshBooksの経費を論理削除します"
+        },
+        "app.RnJlc2hCb29rcw.action.ZGVsZXRlLWV4cGVuc2U.display_name": {
+          "source": "Delete Expense",
+          "message": "経費を削除"
+        },
+        "app.RnJlc2hCb29rcw.action.ZGVsZXRlLWV4cGVuc2U.option.YWNjb3VudF9pZA.desc": {
+          "source": "The FreshBooks account ID for accounting API endpoints",
+          "message": "会計 API エンドポイント用の FreshBooks アカウント ID"
+        },
+        "app.RnJlc2hCb29rcw.action.ZGVsZXRlLWV4cGVuc2U.option.YWNjb3VudF9pZA.display_name": {
+          "source": "Account ID",
+          "message": "アカウント ID"
+        },
+        "app.RnJlc2hCb29rcw.action.ZGVsZXRlLWV4cGVuc2U.option.YWNjb3VudF9pZA.short_desc": {
+          "source": "FreshBooks account ID",
+          "message": "FreshBooks アカウント ID"
+        },
+        "app.RnJlc2hCb29rcw.action.ZGVsZXRlLWV4cGVuc2U.option.aWQ.display_name": {
+          "source": "Expense ID",
+          "message": "経費ID"
+        },
+        "app.RnJlc2hCb29rcw.action.ZGVsZXRlLWV4cGVuc2U.option.aWQ.short_desc": {
+          "source": "The expense to delete",
+          "message": "削除する経費"
+        },
+        "app.RnJlc2hCb29rcw.action.ZGVsZXRlLWV4cGVuc2U.short_desc": {
+          "source": "Delete an expense",
+          "message": "経費を削除します"
+        },
+        "app.RnJlc2hCb29rcw.action.ZGVsZXRlLWVzdGltYXRl.desc": {
+          "source": "Soft-delete an estimate in FreshBooks by setting vis_state to 1",
+          "message": "vis_stateを1に設定してFreshBooksの見積書を論理削除します"
+        },
+        "app.RnJlc2hCb29rcw.action.ZGVsZXRlLWVzdGltYXRl.display_name": {
+          "source": "Delete Estimate",
+          "message": "見積の削除"
+        },
+        "app.RnJlc2hCb29rcw.action.ZGVsZXRlLWVzdGltYXRl.option.YWNjb3VudF9pZA.desc": {
+          "source": "The FreshBooks account ID for accounting API endpoints",
+          "message": "会計 API エンドポイント用の FreshBooks アカウント ID"
+        },
+        "app.RnJlc2hCb29rcw.action.ZGVsZXRlLWVzdGltYXRl.option.YWNjb3VudF9pZA.display_name": {
+          "source": "Account ID",
+          "message": "アカウント ID"
+        },
+        "app.RnJlc2hCb29rcw.action.ZGVsZXRlLWVzdGltYXRl.option.YWNjb3VudF9pZA.short_desc": {
+          "source": "FreshBooks account ID",
+          "message": "FreshBooks アカウント ID"
+        },
+        "app.RnJlc2hCb29rcw.action.ZGVsZXRlLWVzdGltYXRl.option.aWQ.display_name": {
+          "source": "Estimate ID",
+          "message": "見積書 ID"
+        },
+        "app.RnJlc2hCb29rcw.action.ZGVsZXRlLWVzdGltYXRl.option.aWQ.short_desc": {
+          "source": "The estimate to delete",
+          "message": "削除する見積書"
+        },
+        "app.RnJlc2hCb29rcw.action.ZGVsZXRlLWVzdGltYXRl.short_desc": {
+          "source": "Delete an estimate",
+          "message": "見積書を削除します"
+        },
+        "app.RnJlc2hCb29rcw.action.ZGVsZXRlLWl0ZW0.desc": {
+          "source": "Soft-delete an item in FreshBooks by setting vis_state to 1",
+          "message": "vis_stateを1に設定してFreshBooksの品目を論理削除します"
+        },
+        "app.RnJlc2hCb29rcw.action.ZGVsZXRlLWl0ZW0.display_name": {
+          "source": "Delete Item",
+          "message": "アイテムの削除"
+        },
+        "app.RnJlc2hCb29rcw.action.ZGVsZXRlLWl0ZW0.option.YWNjb3VudF9pZA.desc": {
+          "source": "The FreshBooks account ID for accounting API endpoints",
+          "message": "会計 API エンドポイント用の FreshBooks アカウント ID"
+        },
+        "app.RnJlc2hCb29rcw.action.ZGVsZXRlLWl0ZW0.option.YWNjb3VudF9pZA.display_name": {
+          "source": "Account ID",
+          "message": "アカウント ID"
+        },
+        "app.RnJlc2hCb29rcw.action.ZGVsZXRlLWl0ZW0.option.YWNjb3VudF9pZA.short_desc": {
+          "source": "FreshBooks account ID",
+          "message": "FreshBooks アカウント ID"
+        },
+        "app.RnJlc2hCb29rcw.action.ZGVsZXRlLWl0ZW0.option.aWQ.display_name": {
+          "source": "Item ID",
+          "message": "アイテムID"
+        },
+        "app.RnJlc2hCb29rcw.action.ZGVsZXRlLWl0ZW0.option.aWQ.short_desc": {
+          "source": "The item to delete",
+          "message": "削除するアイテム"
+        },
+        "app.RnJlc2hCb29rcw.action.ZGVsZXRlLWl0ZW0.short_desc": {
+          "source": "Delete an item",
+          "message": "品目を削除します"
+        },
+        "app.RnJlc2hCb29rcw.action.ZGVsZXRlLWludm9pY2U.desc": {
+          "source": "Soft-delete an invoice in FreshBooks by setting vis_state to 1",
+          "message": "vis_stateを1に設定してFreshBooksの請求書を論理削除します"
+        },
+        "app.RnJlc2hCb29rcw.action.ZGVsZXRlLWludm9pY2U.display_name": {
+          "source": "Delete Invoice",
+          "message": "請求書を削除"
+        },
+        "app.RnJlc2hCb29rcw.action.ZGVsZXRlLWludm9pY2U.option.YWNjb3VudF9pZA.desc": {
+          "source": "The FreshBooks account ID for accounting API endpoints",
+          "message": "会計 API エンドポイント用の FreshBooks アカウント ID"
+        },
+        "app.RnJlc2hCb29rcw.action.ZGVsZXRlLWludm9pY2U.option.YWNjb3VudF9pZA.display_name": {
+          "source": "Account ID",
+          "message": "アカウント ID"
+        },
+        "app.RnJlc2hCb29rcw.action.ZGVsZXRlLWludm9pY2U.option.YWNjb3VudF9pZA.short_desc": {
+          "source": "FreshBooks account ID",
+          "message": "FreshBooks アカウント ID"
+        },
+        "app.RnJlc2hCb29rcw.action.ZGVsZXRlLWludm9pY2U.option.aWQ.display_name": {
+          "source": "Invoice ID",
+          "message": "請求書ID"
+        },
+        "app.RnJlc2hCb29rcw.action.ZGVsZXRlLWludm9pY2U.option.aWQ.short_desc": {
+          "source": "The invoice to delete",
+          "message": "削除する請求書"
+        },
+        "app.RnJlc2hCb29rcw.action.ZGVsZXRlLWludm9pY2U.short_desc": {
+          "source": "Delete an invoice",
+          "message": "請求書を削除"
+        },
+        "app.RnJlc2hCb29rcw.action.ZGVsZXRlLXBheW1lbnQ.desc": {
+          "source": "Soft-delete a payment in FreshBooks by setting vis_state to 1",
+          "message": "vis_stateを1に設定してFreshBooksの支払いを論理削除します"
+        },
+        "app.RnJlc2hCb29rcw.action.ZGVsZXRlLXBheW1lbnQ.display_name": {
+          "source": "Delete Payment",
+          "message": "支払いを削除"
+        },
+        "app.RnJlc2hCb29rcw.action.ZGVsZXRlLXBheW1lbnQ.option.YWNjb3VudF9pZA.desc": {
+          "source": "The FreshBooks account ID for accounting API endpoints",
+          "message": "会計 API エンドポイント用の FreshBooks アカウント ID"
+        },
+        "app.RnJlc2hCb29rcw.action.ZGVsZXRlLXBheW1lbnQ.option.YWNjb3VudF9pZA.display_name": {
+          "source": "Account ID",
+          "message": "アカウント ID"
+        },
+        "app.RnJlc2hCb29rcw.action.ZGVsZXRlLXBheW1lbnQ.option.YWNjb3VudF9pZA.short_desc": {
+          "source": "FreshBooks account ID",
+          "message": "FreshBooks アカウント ID"
+        },
+        "app.RnJlc2hCb29rcw.action.ZGVsZXRlLXBheW1lbnQ.option.aWQ.display_name": {
+          "source": "Payment ID",
+          "message": "支払いID"
+        },
+        "app.RnJlc2hCb29rcw.action.ZGVsZXRlLXBheW1lbnQ.option.aWQ.short_desc": {
+          "source": "The payment to delete",
+          "message": "削除する支払い"
+        },
+        "app.RnJlc2hCb29rcw.action.ZGVsZXRlLXBheW1lbnQ.short_desc": {
+          "source": "Delete a payment",
+          "message": "支払いを削除します"
+        },
+        "app.RnJlc2hCb29rcw.action.ZGVsZXRlLXNlcnZpY2U.desc": {
+          "source": "Delete a service in FreshBooks",
+          "message": "FreshBooksのサービスを削除します"
+        },
+        "app.RnJlc2hCb29rcw.action.ZGVsZXRlLXNlcnZpY2U.display_name": {
+          "source": "Delete Service",
+          "message": "サービスを削除"
+        },
+        "app.RnJlc2hCb29rcw.action.ZGVsZXRlLXNlcnZpY2U.option.YnVzaW5lc3NfaWQ.desc": {
+          "source": "The FreshBooks business ID for time tracking API endpoints",
+          "message": "時間追跡APIエンドポイント用のFreshBooksビジネスID"
+        },
+        "app.RnJlc2hCb29rcw.action.ZGVsZXRlLXNlcnZpY2U.option.YnVzaW5lc3NfaWQ.display_name": {
+          "source": "Business ID",
+          "message": "ビジネスID"
+        },
+        "app.RnJlc2hCb29rcw.action.ZGVsZXRlLXNlcnZpY2U.option.YnVzaW5lc3NfaWQ.short_desc": {
+          "source": "FreshBooks business ID",
+          "message": "FreshBooksビジネスID"
+        },
+        "app.RnJlc2hCb29rcw.action.ZGVsZXRlLXNlcnZpY2U.option.aWQ.display_name": {
+          "source": "Service ID",
+          "message": "サービスID"
+        },
+        "app.RnJlc2hCb29rcw.action.ZGVsZXRlLXNlcnZpY2U.option.aWQ.short_desc": {
+          "source": "The service to delete",
+          "message": "削除するサービス"
+        },
+        "app.RnJlc2hCb29rcw.action.ZGVsZXRlLXNlcnZpY2U.short_desc": {
+          "source": "Delete a service",
+          "message": "サービスを削除します"
+        },
+        "app.RnJlc2hCb29rcw.action.ZXN0aW1hdGUtY3JlYXRlZA.desc": {
+          "source": "Fires when a new estimate is created in FreshBooks. Uses polling to detect new records.",
+          "message": "FreshBooksで新しい見積書が作成されたときにトリガーされます。ポーリングを使用して新しいレコードを検出します。"
+        },
+        "app.RnJlc2hCb29rcw.action.ZXN0aW1hdGUtY3JlYXRlZA.display_name": {
+          "source": "New Estimate",
+          "message": "新しい見積書"
+        },
+        "app.RnJlc2hCb29rcw.action.ZXN0aW1hdGUtY3JlYXRlZA.option.YWNjb3VudF9pZA.desc": {
+          "source": "The FreshBooks account ID for accounting API endpoints",
+          "message": "会計 API エンドポイント用の FreshBooks アカウント ID"
+        },
+        "app.RnJlc2hCb29rcw.action.ZXN0aW1hdGUtY3JlYXRlZA.option.YWNjb3VudF9pZA.display_name": {
+          "source": "Account ID",
+          "message": "アカウント ID"
+        },
+        "app.RnJlc2hCb29rcw.action.ZXN0aW1hdGUtY3JlYXRlZA.option.YWNjb3VudF9pZA.short_desc": {
+          "source": "FreshBooks account ID",
+          "message": "FreshBooks アカウント ID"
+        },
+        "app.RnJlc2hCb29rcw.action.ZXN0aW1hdGUtY3JlYXRlZA.option.cG9sbF9pbnRlcnZhbA.desc": {
+          "source": "How often to check for new records (minimum 30 seconds)",
+          "message": "新しいレコードを確認する頻度（最小30秒）"
+        },
+        "app.RnJlc2hCb29rcw.action.ZXN0aW1hdGUtY3JlYXRlZA.option.cG9sbF9pbnRlcnZhbA.display_name": {
+          "source": "Poll Interval",
+          "message": "ポーリング間隔"
+        },
+        "app.RnJlc2hCb29rcw.action.ZXN0aW1hdGUtY3JlYXRlZA.option.cG9sbF9pbnRlcnZhbA.short_desc": {
+          "source": "Polling interval in seconds",
+          "message": "ポーリング間隔（秒）"
+        },
+        "app.RnJlc2hCb29rcw.action.ZXN0aW1hdGUtY3JlYXRlZA.short_desc": {
+          "source": "Trigger when a new estimate is created",
+          "message": "新しい見積書が作成されたときにトリガー"
+        },
+        "app.RnJlc2hCb29rcw.action.ZXhwZW5zZS1jcmVhdGVk.desc": {
+          "source": "Fires when a new expense is recorded in FreshBooks. Uses polling to detect new records.",
+          "message": "FreshBooksで新しい経費が記録されたときにトリガーされます。ポーリングを使用して新しいレコードを検出します。"
+        },
+        "app.RnJlc2hCb29rcw.action.ZXhwZW5zZS1jcmVhdGVk.display_name": {
+          "source": "New Expense",
+          "message": "新しい経費"
+        },
+        "app.RnJlc2hCb29rcw.action.ZXhwZW5zZS1jcmVhdGVk.option.YWNjb3VudF9pZA.desc": {
+          "source": "The FreshBooks account ID for accounting API endpoints",
+          "message": "会計 API エンドポイント用の FreshBooks アカウント ID"
+        },
+        "app.RnJlc2hCb29rcw.action.ZXhwZW5zZS1jcmVhdGVk.option.YWNjb3VudF9pZA.display_name": {
+          "source": "Account ID",
+          "message": "アカウント ID"
+        },
+        "app.RnJlc2hCb29rcw.action.ZXhwZW5zZS1jcmVhdGVk.option.YWNjb3VudF9pZA.short_desc": {
+          "source": "FreshBooks account ID",
+          "message": "FreshBooks アカウント ID"
+        },
+        "app.RnJlc2hCb29rcw.action.ZXhwZW5zZS1jcmVhdGVk.option.cG9sbF9pbnRlcnZhbA.desc": {
+          "source": "How often to check for new records (minimum 30 seconds)",
+          "message": "新しいレコードを確認する頻度（最小30秒）"
+        },
+        "app.RnJlc2hCb29rcw.action.ZXhwZW5zZS1jcmVhdGVk.option.cG9sbF9pbnRlcnZhbA.display_name": {
+          "source": "Poll Interval",
+          "message": "ポーリング間隔"
+        },
+        "app.RnJlc2hCb29rcw.action.ZXhwZW5zZS1jcmVhdGVk.option.cG9sbF9pbnRlcnZhbA.short_desc": {
+          "source": "Polling interval in seconds",
+          "message": "ポーリング間隔（秒）"
+        },
+        "app.RnJlc2hCb29rcw.action.ZXhwZW5zZS1jcmVhdGVk.short_desc": {
+          "source": "Trigger when a new expense is created",
+          "message": "新しい経費が作成されたときにトリガー"
+        },
+        "app.RnJlc2hCb29rcw.action.aW52b2ljZS1jcmVhdGVk.desc": {
+          "source": "Fires when a new invoice is created in FreshBooks. Uses polling to detect new records.",
+          "message": "FreshBooksで新しい請求書が作成されたときにトリガーされます。ポーリングを使用して新しいレコードを検出します。"
+        },
+        "app.RnJlc2hCb29rcw.action.aW52b2ljZS1jcmVhdGVk.display_name": {
+          "source": "New Invoice",
+          "message": "新しい請求書"
+        },
+        "app.RnJlc2hCb29rcw.action.aW52b2ljZS1jcmVhdGVk.option.YWNjb3VudF9pZA.desc": {
+          "source": "The FreshBooks account ID for accounting API endpoints",
+          "message": "会計 API エンドポイント用の FreshBooks アカウント ID"
+        },
+        "app.RnJlc2hCb29rcw.action.aW52b2ljZS1jcmVhdGVk.option.YWNjb3VudF9pZA.display_name": {
+          "source": "Account ID",
+          "message": "アカウント ID"
+        },
+        "app.RnJlc2hCb29rcw.action.aW52b2ljZS1jcmVhdGVk.option.YWNjb3VudF9pZA.short_desc": {
+          "source": "FreshBooks account ID",
+          "message": "FreshBooks アカウント ID"
+        },
+        "app.RnJlc2hCb29rcw.action.aW52b2ljZS1jcmVhdGVk.option.cG9sbF9pbnRlcnZhbA.desc": {
+          "source": "How often to check for new records (minimum 30 seconds)",
+          "message": "新しいレコードを確認する頻度（最小30秒）"
+        },
+        "app.RnJlc2hCb29rcw.action.aW52b2ljZS1jcmVhdGVk.option.cG9sbF9pbnRlcnZhbA.display_name": {
+          "source": "Poll Interval",
+          "message": "ポーリング間隔"
+        },
+        "app.RnJlc2hCb29rcw.action.aW52b2ljZS1jcmVhdGVk.option.cG9sbF9pbnRlcnZhbA.short_desc": {
+          "source": "Polling interval in seconds",
+          "message": "ポーリング間隔（秒）"
+        },
+        "app.RnJlc2hCb29rcw.action.aW52b2ljZS1jcmVhdGVk.short_desc": {
+          "source": "Trigger when a new invoice is created",
+          "message": "新しい請求書が作成されたときにトリガー"
+        },
+        "app.RnJlc2hCb29rcw.action.bWFrZS1hcGktY2FsbA.desc": {
+          "source": "Make a custom HTTP / REST API call to **FreshBooks** using the configured connection's authentication.\n\nSpecify the HTTP method, the URI path (relative to the connection's API base URL), optional query parameters, headers, and request body. The response is returned as a hash containing the status code, response headers, and response body.\n\nUse this action for endpoints that are not yet exposed as first-class actions on this app.",
+          "message": "設定された接続の認証情報を使用して、**FreshBooks**に対するカスタムHTTP / REST API呼び出しを実行します。\n\nHTTPメソッド、URIパス（接続のAPIベースURLに対する相対パス）、任意のクエリパラメータ、ヘッダー、リクエスト本文を指定します。レスポンスはステータスコード、レスポンスヘッダー、レスポンス本文を含むハッシュとして返されます。\n\nこのアプリでファーストクラスのアクションとしてまだ公開されていないエンドポイントに対してこのアクションを使用します。"
+        },
+        "app.RnJlc2hCb29rcw.action.bWFrZS1hcGktY2FsbA.display_name": {
+          "source": "Make an API call",
+          "message": "API コールを実行"
+        },
+        "app.RnJlc2hCb29rcw.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.desc": {
+          "source": "The request body. The effective type depends on `body_type`: JSON/form/YAML expect a hash, XML/text expect a string, multipart expects a file structure, binary expects raw bytes.",
+          "message": "リクエストボディ。有効な型は`body_type`に依存します。JSON/form/YAMLはハッシュを期待し、XML/textは文字列を期待し、multipartはファイル構造を期待し、binaryは生バイトを期待します。"
+        },
+        "app.RnJlc2hCb29rcw.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.display_name": {
+          "source": "Body",
+          "message": "ボディ"
+        },
+        "app.RnJlc2hCb29rcw.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.short_desc": {
+          "source": "The request body",
+          "message": "リクエストボディ"
+        },
+        "app.RnJlc2hCb29rcw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.desc": {
+          "source": "Upload a file using `multipart/form-data`. The body must be a @ref DataProvider::FileDataType \"FileDataType\" structure (filename + content + mime_type). The framework builds the multipart envelope and sets the boundary header.",
+          "message": "`multipart/form-data`を使用してファイルをアップロードします。ボディは@ref DataProvider::FileDataType \"FileDataType\"構造（filename + content + mime_type）である必要があります。フレームワークがmultipartエンベロープを構築し、boundaryヘッダーを設定します。"
+        },
+        "app.RnJlc2hCb29rcw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.display_name": {
+          "source": "Multipart Form",
+          "message": "マルチパートフォーム"
+        },
+        "app.RnJlc2hCb29rcw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.short_desc": {
+          "source": "Upload a file using multipart/form-data",
+          "message": "multipart/form-dataを使用してファイルをアップロード"
+        },
+        "app.RnJlc2hCb29rcw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.desc": {
+          "source": "Pass the body to the REST client unchanged; the client decides serialization based on its configured `data` option and the value type",
+          "message": "ボディを変更せずにRESTクライアントに渡します。クライアントは設定された`data`オプションと値の型に基づいてシリアライズを決定します"
+        },
+        "app.RnJlc2hCb29rcw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.display_name": {
+          "source": "Auto",
+          "message": "自動"
+        },
+        "app.RnJlc2hCb29rcw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.short_desc": {
+          "source": "Pass-through; use connection serialization and let the REST client decide",
+          "message": "パススルー。接続のシリアライズを使用し、RESTクライアントに決定させます"
+        },
+        "app.RnJlc2hCb29rcw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.desc": {
+          "source": "Send the body as raw bytes. The body must be a binary value. Sets `Content-Type: application/octet-stream` unless overridden by `hdr`.",
+          "message": "ボディを生バイトとして送信します。ボディはバイナリ値である必要があります。`hdr`によってオーバーライドされない限り、`Content-Type: application/octet-stream`を設定します。"
+        },
+        "app.RnJlc2hCb29rcw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.display_name": {
+          "source": "Raw Binary",
+          "message": "生バイナリ"
+        },
+        "app.RnJlc2hCb29rcw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.short_desc": {
+          "source": "Send body as raw bytes",
+          "message": "ボディを生バイトとして送信"
+        },
+        "app.RnJlc2hCb29rcw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.desc": {
+          "source": "Serialize a hash of form fields as `application/x-www-form-urlencoded`. The body must be a hash whose values are scalars (strings/numbers/booleans).",
+          "message": "フォームフィールドのハッシュを`application/x-www-form-urlencoded`としてシリアライズします。ボディは値がスカラー（文字列/数値/ブール値）のハッシュである必要があります。"
+        },
+        "app.RnJlc2hCb29rcw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.display_name": {
+          "source": "Form (URL-encoded)",
+          "message": "フォーム (URLエンコード)"
+        },
+        "app.RnJlc2hCb29rcw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.short_desc": {
+          "source": "Serialize body as application/x-www-form-urlencoded form fields",
+          "message": "ボディをapplication/x-www-form-urlencodedフォームフィールドとしてシリアライズ"
+        },
+        "app.RnJlc2hCb29rcw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.desc": {
+          "source": "Serialize the body as JSON; sets `Content-Type: application/json`. The body should be a hash, list, or scalar value.",
+          "message": "ボディをJSONとしてシリアライズします。`Content-Type: application/json`を設定します。ボディはハッシュ、リスト、またはスカラー値である必要があります。"
+        },
+        "app.RnJlc2hCb29rcw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.display_name": {
+          "source": "JSON",
+          "message": "JSON"
+        },
+        "app.RnJlc2hCb29rcw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.short_desc": {
+          "source": "Serialize body as JSON",
+          "message": "ボディをJSONとしてシリアライズ"
+        },
+        "app.RnJlc2hCb29rcw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.desc": {
+          "source": "Send the body as plain text. The body must be a string. Sets `Content-Type: text/plain`.",
+          "message": "ボディをプレーンテキストとして送信します。ボディは文字列である必要があります。`Content-Type: text/plain`を設定します。"
+        },
+        "app.RnJlc2hCb29rcw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.display_name": {
+          "source": "Plain Text",
+          "message": "プレーンテキスト"
+        },
+        "app.RnJlc2hCb29rcw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.short_desc": {
+          "source": "Send body as text/plain",
+          "message": "ボディをtext/plainとして送信"
+        },
+        "app.RnJlc2hCb29rcw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.desc": {
+          "source": "Send the body as XML. If the body is a hash it is serialized to XML; if it is a string it is sent verbatim. Sets `Content-Type: application/xml`.",
+          "message": "ボディをXMLとして送信します。ボディがハッシュの場合はXMLにシリアライズされ、文字列の場合はそのまま送信されます。`Content-Type: application/xml`を設定します。"
+        },
+        "app.RnJlc2hCb29rcw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.display_name": {
+          "source": "XML",
+          "message": "XML"
+        },
+        "app.RnJlc2hCb29rcw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.short_desc": {
+          "source": "Send body as XML",
+          "message": "ボディをXMLとして送信"
+        },
+        "app.RnJlc2hCb29rcw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.desc": {
+          "source": "Send the body as YAML. If the body is a hash it is serialized to YAML; if it is a string it is sent verbatim. Sets `Content-Type: application/x-yaml`.",
+          "message": "ボディをYAMLとして送信します。ボディがハッシュの場合はYAMLにシリアライズされ、文字列の場合はそのまま送信されます。`Content-Type: application/x-yaml`を設定します。"
+        },
+        "app.RnJlc2hCb29rcw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.display_name": {
+          "source": "YAML",
+          "message": "YAML"
+        },
+        "app.RnJlc2hCb29rcw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.short_desc": {
+          "source": "Send body as YAML",
+          "message": "ボディをYAMLとして送信"
+        },
+        "app.RnJlc2hCb29rcw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.desc": {
+          "source": "Selects the body serialization mode and the corresponding `Content-Type` header. Changing this field reshapes the `body` editor - selecting JSON exposes a JSON editor, selecting Multipart Form exposes a file picker, and so on.",
+          "message": "ボディのシリアライズモードと対応する`Content-Type`ヘッダーを選択します。このフィールドを変更すると`body`エディターの形状が変わります。JSONを選択するとJSONエディターが表示され、マルチパートフォームを選択するとファイルピッカーが表示される、などです。"
+        },
+        "app.RnJlc2hCb29rcw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.display_name": {
+          "source": "Body Type",
+          "message": "ボディタイプ"
+        },
+        "app.RnJlc2hCb29rcw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.short_desc": {
+          "source": "How the body is serialized and what Content-Type is sent",
+          "message": "ボディのシリアライズ方法および送信されるContent-Type"
+        },
+        "app.RnJlc2hCb29rcw.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.desc": {
+          "source": "If `True`, non-2xx HTTP responses return as the normal response hash (with the actual status code) instead of raising `REST-RESPONSE-ERROR`. Useful for handling 4xx/5xx as data - e.g. checking whether a resource exists. Overrides the connection's `error_passthru` setting for this call only.",
+          "message": "`True`の場合、2xx以外のHTTPレスポンスは`REST-RESPONSE-ERROR`を発生させる代わりに（実際のステータスコードを含む）通常のレスポンスハッシュとして返されます。リソースが存在するかどうかの確認など、4xx/5xxをデータとして処理する場合に便利です。この呼び出しに限り、接続の`error_passthru`設定をオーバーライドします。"
+        },
+        "app.RnJlc2hCb29rcw.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.display_name": {
+          "source": "Return Errors as Data",
+          "message": "エラーをデータとして返す"
+        },
+        "app.RnJlc2hCb29rcw.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.short_desc": {
+          "source": "Return non-2xx responses normally instead of throwing",
+          "message": "例外をスローする代わりに2xx以外のレスポンスを通常通り返す"
+        },
+        "app.RnJlc2hCb29rcw.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.desc": {
+          "source": "Optional list of HTTP status codes treated as success. If set and the response status is not in this list, the action throws `REST-STATUS-ERROR`. When unset, the REST client's default behavior applies (typically: 2xx is success, non-2xx throws).",
+          "message": "成功として扱われるHTTPステータスコードのオプションリスト。設定されていてレスポンスステータスがこのリストに含まれない場合、アクションは`REST-STATUS-ERROR`をスローします。未設定の場合、RESTクライアントのデフォルト動作が適用されます（通常：2xxは成功、2xx以外はスロー）。"
+        },
+        "app.RnJlc2hCb29rcw.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.display_name": {
+          "source": "Expected Status Codes",
+          "message": "期待されるステータスコード"
+        },
+        "app.RnJlc2hCb29rcw.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.short_desc": {
+          "source": "Response status codes treated as success",
+          "message": "成功として扱われるレスポンスステータスコード"
+        },
+        "app.RnJlc2hCb29rcw.action.bWFrZS1hcGktY2FsbA.option.aGRy.desc": {
+          "source": "Hash of custom headers added to the request. These override any default headers set by `body_type` (e.g. supplying `Content-Type` here wins over the body-type default).",
+          "message": "リクエストに追加されるカスタムヘッダーのハッシュ。これらは`body_type`によって設定されたデフォルトヘッダーをオーバーライドします（例：ここで`Content-Type`を指定すると、ボディタイプのデフォルトより優先されます）。"
+        },
+        "app.RnJlc2hCb29rcw.action.bWFrZS1hcGktY2FsbA.option.aGRy.display_name": {
+          "source": "Custom Headers",
+          "message": "カスタムヘッダー"
+        },
+        "app.RnJlc2hCb29rcw.action.bWFrZS1hcGktY2FsbA.option.aGRy.short_desc": {
+          "source": "Extra request headers",
+          "message": "追加のリクエストヘッダー"
+        },
+        "app.RnJlc2hCb29rcw.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.desc": {
+          "source": "If `True`, the response hash includes a `debug` sub-hash containing the request method/URL/headers (with sensitive values redacted), request and response sizes, and round-trip duration. Useful when investigating slow or failing calls. Off by default to keep responses lean.",
+          "message": "`True`の場合、レスポンスハッシュにはリクエストメソッド/URL/ヘッダー（機密値は伏字処理済み）、リクエストとレスポンスのサイズ、およびラウンドトリップ時間を含む`debug`サブハッシュが含まれます。遅い呼び出しや失敗した呼び出しを調査する際に便利です。レスポンスを軽量に保つため、デフォルトではオフになっています。"
+        },
+        "app.RnJlc2hCb29rcw.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.display_name": {
+          "source": "Include Debug Info",
+          "message": "デバッグ情報を含める"
+        },
+        "app.RnJlc2hCb29rcw.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.short_desc": {
+          "source": "Include request/timing/size debug info in the response",
+          "message": "レスポンスにリクエスト/タイミング/サイズのデバッグ情報を含める"
+        },
+        "app.RnJlc2hCb29rcw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.desc": {
+          "source": "HTTP `OPTIONS`",
+          "message": "HTTP `OPTIONS`"
+        },
+        "app.RnJlc2hCb29rcw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.display_name": {
+          "source": "OPTIONS",
+          "message": "OPTIONS"
+        },
+        "app.RnJlc2hCb29rcw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.short_desc": {
+          "source": "HTTP OPTIONS",
+          "message": "HTTP OPTIONS"
+        },
+        "app.RnJlc2hCb29rcw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.desc": {
+          "source": "HTTP `DELETE`",
+          "message": "HTTP `DELETE`"
+        },
+        "app.RnJlc2hCb29rcw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.display_name": {
+          "source": "DELETE",
+          "message": "DELETE"
+        },
+        "app.RnJlc2hCb29rcw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.short_desc": {
+          "source": "HTTP DELETE",
+          "message": "HTTP DELETE"
+        },
+        "app.RnJlc2hCb29rcw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.desc": {
+          "source": "HTTP `GET`",
+          "message": "HTTP `GET`"
+        },
+        "app.RnJlc2hCb29rcw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.display_name": {
+          "source": "GET",
+          "message": "GET"
+        },
+        "app.RnJlc2hCb29rcw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.short_desc": {
+          "source": "HTTP GET",
+          "message": "HTTP GET"
+        },
+        "app.RnJlc2hCb29rcw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.desc": {
+          "source": "HTTP `HEAD`",
+          "message": "HTTP `HEAD`"
+        },
+        "app.RnJlc2hCb29rcw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.display_name": {
+          "source": "HEAD",
+          "message": "HEAD"
+        },
+        "app.RnJlc2hCb29rcw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.short_desc": {
+          "source": "HTTP HEAD",
+          "message": "HTTP HEAD"
+        },
+        "app.RnJlc2hCb29rcw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.desc": {
+          "source": "HTTP `PATCH`",
+          "message": "HTTP `PATCH`"
+        },
+        "app.RnJlc2hCb29rcw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.display_name": {
+          "source": "PATCH",
+          "message": "PATCH"
+        },
+        "app.RnJlc2hCb29rcw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.short_desc": {
+          "source": "HTTP PATCH",
+          "message": "HTTP PATCH"
+        },
+        "app.RnJlc2hCb29rcw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.desc": {
+          "source": "HTTP `POST`",
+          "message": "HTTP `POST`"
+        },
+        "app.RnJlc2hCb29rcw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.display_name": {
+          "source": "POST",
+          "message": "POST"
+        },
+        "app.RnJlc2hCb29rcw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.short_desc": {
+          "source": "HTTP POST",
+          "message": "HTTP POST"
+        },
+        "app.RnJlc2hCb29rcw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.desc": {
+          "source": "HTTP `PUT`",
+          "message": "HTTP `PUT`"
+        },
+        "app.RnJlc2hCb29rcw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.display_name": {
+          "source": "PUT",
+          "message": "PUT"
+        },
+        "app.RnJlc2hCb29rcw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.short_desc": {
+          "source": "HTTP PUT",
+          "message": "HTTP PUT"
+        },
+        "app.RnJlc2hCb29rcw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.desc": {
+          "source": "HTTP `TRACE`",
+          "message": "HTTP `TRACE`"
+        },
+        "app.RnJlc2hCb29rcw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.display_name": {
+          "source": "TRACE",
+          "message": "TRACE"
+        },
+        "app.RnJlc2hCb29rcw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.short_desc": {
+          "source": "HTTP TRACE",
+          "message": "HTTP TRACE"
+        },
+        "app.RnJlc2hCb29rcw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "リクエストに使用するHTTPメソッド"
+        },
+        "app.RnJlc2hCb29rcw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.display_name": {
+          "source": "HTTP Method",
+          "message": "HTTPメソッド"
+        },
+        "app.RnJlc2hCb29rcw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.short_desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "リクエストに使用するHTTPメソッド"
+        },
+        "app.RnJlc2hCb29rcw.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain `{name}` placeholders that are replaced from `path_vars`. Example: `/users/{id}/comments`.",
+          "message": "接続のAPIベースURLに対する相対URIパス。`path_vars`から置換される`{name}`プレースホルダーを含めることができます。例: `/users/{id}/comments`。"
+        },
+        "app.RnJlc2hCb29rcw.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.display_name": {
+          "source": "URI Path",
+          "message": "URIパス"
+        },
+        "app.RnJlc2hCb29rcw.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.short_desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain '{name}' placeholders that are replaced from 'path_vars'. Example: '/users/{id}/comments'",
+          "message": "接続のAPIベースURLに対する相対URIパス。'path_vars' から置換される '{name}' プレースホルダーを含めることができます。例: '/users/{id}/comments'"
+        },
+        "app.RnJlc2hCb29rcw.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.desc": {
+          "source": "Hash of values substituted into `{name}` placeholders in the URI path. Example: with `path = /users/{id}` and `path_vars = {id: 123}` the framework sends `/users/123`. Values are URL-encoded.",
+          "message": "URIパス内の `{name}` プレースホルダーに置換される値のハッシュ。例: `path = /users/{id}` と `path_vars = {id: 123}` を指定すると、フレームワークは `/users/123` を送信します。値はURLエンコードされます。"
+        },
+        "app.RnJlc2hCb29rcw.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.display_name": {
+          "source": "Path Variables",
+          "message": "パス変数"
+        },
+        "app.RnJlc2hCb29rcw.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.short_desc": {
+          "source": "Values for {name} placeholders in path",
+          "message": "パス内の {name} プレースホルダーの値"
+        },
+        "app.RnJlc2hCb29rcw.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.desc": {
+          "source": "Hash of query string parameters to append to the URI path. Values are URL-encoded; list values are joined with `,`.",
+          "message": "URIパスに追加するクエリ文字列パラメータのハッシュ。値はURLエンコードされます。リスト値は `,` で結合されます。"
+        },
+        "app.RnJlc2hCb29rcw.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.display_name": {
+          "source": "Query Arguments",
+          "message": "クエリ引数"
+        },
+        "app.RnJlc2hCb29rcw.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.short_desc": {
+          "source": "Query string parameters",
+          "message": "クエリ文字列パラメータ"
+        },
+        "app.RnJlc2hCb29rcw.action.bWFrZS1hcGktY2FsbA.short_desc": {
+          "source": "Make a custom API call to FreshBooks",
+          "message": "FreshBooksへのカスタムAPI呼び出しを実行します"
+        },
+        "app.RnJlc2hCb29rcw.action.c2VhcmNoLWNsaWVudHM.desc": {
+          "source": "Search for clients in FreshBooks with optional filtering",
+          "message": "オプションのフィルタリングを使用してFreshBooksでクライアントを検索します"
+        },
+        "app.RnJlc2hCb29rcw.action.c2VhcmNoLWNsaWVudHM.display_name": {
+          "source": "Search Clients",
+          "message": "クライアントを検索"
+        },
+        "app.RnJlc2hCb29rcw.action.c2VhcmNoLWNsaWVudHM.option.YWNjb3VudF9pZA.desc": {
+          "source": "The FreshBooks account ID for accounting API endpoints",
+          "message": "会計 API エンドポイント用の FreshBooks アカウント ID"
+        },
+        "app.RnJlc2hCb29rcw.action.c2VhcmNoLWNsaWVudHM.option.YWNjb3VudF9pZA.display_name": {
+          "source": "Account ID",
+          "message": "アカウント ID"
+        },
+        "app.RnJlc2hCb29rcw.action.c2VhcmNoLWNsaWVudHM.option.YWNjb3VudF9pZA.short_desc": {
+          "source": "FreshBooks account ID",
+          "message": "FreshBooks アカウント ID"
+        },
+        "app.RnJlc2hCb29rcw.action.c2VhcmNoLWNsaWVudHM.option.ZW1haWw.desc": {
+          "source": "Search for clients by email address",
+          "message": "メールアドレスでクライアントを検索します"
+        },
+        "app.RnJlc2hCb29rcw.action.c2VhcmNoLWNsaWVudHM.option.ZW1haWw.display_name": {
+          "source": "Email",
+          "message": "メール"
+        },
+        "app.RnJlc2hCb29rcw.action.c2VhcmNoLWNsaWVudHM.option.ZW1haWw.short_desc": {
+          "source": "Filter by email",
+          "message": "メールアドレスで絞り込み"
+        },
+        "app.RnJlc2hCb29rcw.action.c2VhcmNoLWNsaWVudHM.option.aWQ.display_name": {
+          "source": "Client ID",
+          "message": "クライアント ID"
+        },
+        "app.RnJlc2hCb29rcw.action.c2VhcmNoLWNsaWVudHM.option.aWQ.short_desc": {
+          "source": "Filter by client ID",
+          "message": "クライアントIDで絞り込み"
+        },
+        "app.RnJlc2hCb29rcw.action.c2VhcmNoLWNsaWVudHM.option.b3JnYW5pemF0aW9u.desc": {
+          "source": "Search for clients by organization name (partial match)",
+          "message": "組織名でクライアントを検索します（部分一致）"
+        },
+        "app.RnJlc2hCb29rcw.action.c2VhcmNoLWNsaWVudHM.option.b3JnYW5pemF0aW9u.display_name": {
+          "source": "Organization",
+          "message": "組織"
+        },
+        "app.RnJlc2hCb29rcw.action.c2VhcmNoLWNsaWVudHM.option.b3JnYW5pemF0aW9u.short_desc": {
+          "source": "Filter by organization name",
+          "message": "組織名で絞り込み"
+        },
+        "app.RnJlc2hCb29rcw.action.c2VhcmNoLWNsaWVudHM.option.bGltaXQ.desc": {
+          "source": "Maximum number of results to return (max 100)",
+          "message": "返される結果の最大件数（最大100）"
+        },
+        "app.RnJlc2hCb29rcw.action.c2VhcmNoLWNsaWVudHM.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "上限"
+        },
+        "app.RnJlc2hCb29rcw.action.c2VhcmNoLWNsaWVudHM.option.bGltaXQ.short_desc": {
+          "source": "Maximum results",
+          "message": "最大結果数"
+        },
+        "app.RnJlc2hCb29rcw.action.c2VhcmNoLWNsaWVudHM.short_desc": {
+          "source": "Search for clients",
+          "message": "クライアントを検索します"
+        },
+        "app.RnJlc2hCb29rcw.action.c2VhcmNoLWV4cGVuc2Vz.desc": {
+          "source": "Search for expenses in FreshBooks with optional filtering",
+          "message": "オプションのフィルタリングを使用してFreshBooksで経費を検索します"
+        },
+        "app.RnJlc2hCb29rcw.action.c2VhcmNoLWV4cGVuc2Vz.display_name": {
+          "source": "Search Expenses",
+          "message": "経費を検索"
+        },
+        "app.RnJlc2hCb29rcw.action.c2VhcmNoLWV4cGVuc2Vz.option.Y2F0ZWdvcnlpZA.display_name": {
+          "source": "Category",
+          "message": "カテゴリ"
+        },
+        "app.RnJlc2hCb29rcw.action.c2VhcmNoLWV4cGVuc2Vz.option.Y2F0ZWdvcnlpZA.short_desc": {
+          "source": "Filter by category",
+          "message": "カテゴリで絞り込み"
+        },
+        "app.RnJlc2hCb29rcw.action.c2VhcmNoLWV4cGVuc2Vz.option.YWNjb3VudF9pZA.desc": {
+          "source": "The FreshBooks account ID for accounting API endpoints",
+          "message": "会計 API エンドポイント用の FreshBooks アカウント ID"
+        },
+        "app.RnJlc2hCb29rcw.action.c2VhcmNoLWV4cGVuc2Vz.option.YWNjb3VudF9pZA.display_name": {
+          "source": "Account ID",
+          "message": "アカウント ID"
+        },
+        "app.RnJlc2hCb29rcw.action.c2VhcmNoLWV4cGVuc2Vz.option.YWNjb3VudF9pZA.short_desc": {
+          "source": "FreshBooks account ID",
+          "message": "FreshBooks アカウント ID"
+        },
+        "app.RnJlc2hCb29rcw.action.c2VhcmNoLWV4cGVuc2Vz.option.aWQ.display_name": {
+          "source": "Expense ID",
+          "message": "経費ID"
+        },
+        "app.RnJlc2hCb29rcw.action.c2VhcmNoLWV4cGVuc2Vz.option.aWQ.short_desc": {
+          "source": "Filter by expense ID",
+          "message": "経費IDで絞り込み"
+        },
+        "app.RnJlc2hCb29rcw.action.c2VhcmNoLWV4cGVuc2Vz.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "上限"
+        },
+        "app.RnJlc2hCb29rcw.action.c2VhcmNoLWV4cGVuc2Vz.option.bGltaXQ.short_desc": {
+          "source": "Maximum results",
+          "message": "最大結果数"
+        },
+        "app.RnJlc2hCb29rcw.action.c2VhcmNoLWV4cGVuc2Vz.option.dmVuZG9y.display_name": {
+          "source": "Vendor",
+          "message": "ベンダー"
+        },
+        "app.RnJlc2hCb29rcw.action.c2VhcmNoLWV4cGVuc2Vz.option.dmVuZG9y.short_desc": {
+          "source": "Filter by vendor name",
+          "message": "仕入先名で絞り込み"
+        },
+        "app.RnJlc2hCb29rcw.action.c2VhcmNoLWV4cGVuc2Vz.short_desc": {
+          "source": "Search for expenses",
+          "message": "経費を検索します"
+        },
+        "app.RnJlc2hCb29rcw.action.c2VhcmNoLWVzdGltYXRlcw.desc": {
+          "source": "Search for estimates in FreshBooks",
+          "message": "FreshBooksで見積書を検索します"
+        },
+        "app.RnJlc2hCb29rcw.action.c2VhcmNoLWVzdGltYXRlcw.display_name": {
+          "source": "Search Estimates",
+          "message": "見積書を検索"
+        },
+        "app.RnJlc2hCb29rcw.action.c2VhcmNoLWVzdGltYXRlcw.option.Y3VzdG9tZXJpZA.display_name": {
+          "source": "Customer",
+          "message": "顧客"
+        },
+        "app.RnJlc2hCb29rcw.action.c2VhcmNoLWVzdGltYXRlcw.option.Y3VzdG9tZXJpZA.short_desc": {
+          "source": "Filter by customer",
+          "message": "顧客で絞り込み"
+        },
+        "app.RnJlc2hCb29rcw.action.c2VhcmNoLWVzdGltYXRlcw.option.YWNjb3VudF9pZA.desc": {
+          "source": "The FreshBooks account ID for accounting API endpoints",
+          "message": "会計 API エンドポイント用の FreshBooks アカウント ID"
+        },
+        "app.RnJlc2hCb29rcw.action.c2VhcmNoLWVzdGltYXRlcw.option.YWNjb3VudF9pZA.display_name": {
+          "source": "Account ID",
+          "message": "アカウント ID"
+        },
+        "app.RnJlc2hCb29rcw.action.c2VhcmNoLWVzdGltYXRlcw.option.YWNjb3VudF9pZA.short_desc": {
+          "source": "FreshBooks account ID",
+          "message": "FreshBooks アカウント ID"
+        },
+        "app.RnJlc2hCb29rcw.action.c2VhcmNoLWVzdGltYXRlcw.option.aWQ.display_name": {
+          "source": "Estimate ID",
+          "message": "見積書 ID"
+        },
+        "app.RnJlc2hCb29rcw.action.c2VhcmNoLWVzdGltYXRlcw.option.aWQ.short_desc": {
+          "source": "Filter by estimate ID",
+          "message": "見積書IDで絞り込み"
+        },
+        "app.RnJlc2hCb29rcw.action.c2VhcmNoLWVzdGltYXRlcw.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "上限"
+        },
+        "app.RnJlc2hCb29rcw.action.c2VhcmNoLWVzdGltYXRlcw.option.bGltaXQ.short_desc": {
+          "source": "Maximum results",
+          "message": "最大結果数"
+        },
+        "app.RnJlc2hCb29rcw.action.c2VhcmNoLWVzdGltYXRlcw.option.c3RhdHVz.display_name": {
+          "source": "Status",
+          "message": "ステータス"
+        },
+        "app.RnJlc2hCb29rcw.action.c2VhcmNoLWVzdGltYXRlcw.option.c3RhdHVz.short_desc": {
+          "source": "Filter by status",
+          "message": "ステータスで絞り込み"
+        },
+        "app.RnJlc2hCb29rcw.action.c2VhcmNoLWVzdGltYXRlcw.short_desc": {
+          "source": "Search for estimates",
+          "message": "見積もりを検索"
+        },
+        "app.RnJlc2hCb29rcw.action.c2VhcmNoLWl0ZW1z.desc": {
+          "source": "Search for items in FreshBooks",
+          "message": "FreshBooks 内の品目を検索"
+        },
+        "app.RnJlc2hCb29rcw.action.c2VhcmNoLWl0ZW1z.display_name": {
+          "source": "Search Items",
+          "message": "品目を検索"
+        },
+        "app.RnJlc2hCb29rcw.action.c2VhcmNoLWl0ZW1z.option.YWNjb3VudF9pZA.desc": {
+          "source": "The FreshBooks account ID for accounting API endpoints",
+          "message": "会計 API エンドポイント用の FreshBooks アカウント ID"
+        },
+        "app.RnJlc2hCb29rcw.action.c2VhcmNoLWl0ZW1z.option.YWNjb3VudF9pZA.display_name": {
+          "source": "Account ID",
+          "message": "アカウント ID"
+        },
+        "app.RnJlc2hCb29rcw.action.c2VhcmNoLWl0ZW1z.option.YWNjb3VudF9pZA.short_desc": {
+          "source": "FreshBooks account ID",
+          "message": "FreshBooks アカウント ID"
+        },
+        "app.RnJlc2hCb29rcw.action.c2VhcmNoLWl0ZW1z.option.aWQ.display_name": {
+          "source": "Item ID",
+          "message": "アイテムID"
+        },
+        "app.RnJlc2hCb29rcw.action.c2VhcmNoLWl0ZW1z.option.aWQ.short_desc": {
+          "source": "Filter by item ID",
+          "message": "品目 ID で絞り込み"
+        },
+        "app.RnJlc2hCb29rcw.action.c2VhcmNoLWl0ZW1z.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "上限"
+        },
+        "app.RnJlc2hCb29rcw.action.c2VhcmNoLWl0ZW1z.option.bGltaXQ.short_desc": {
+          "source": "Maximum results",
+          "message": "最大結果数"
+        },
+        "app.RnJlc2hCb29rcw.action.c2VhcmNoLWl0ZW1z.short_desc": {
+          "source": "Search for items",
+          "message": "品目を検索"
+        },
+        "app.RnJlc2hCb29rcw.action.c2VhcmNoLWludm9pY2Vz.desc": {
+          "source": "Search for invoices in FreshBooks with optional filtering",
+          "message": "FreshBooks 内の請求書を任意のフィルターで検索"
+        },
+        "app.RnJlc2hCb29rcw.action.c2VhcmNoLWludm9pY2Vz.display_name": {
+          "source": "Search Invoices",
+          "message": "請求書を検索"
+        },
+        "app.RnJlc2hCb29rcw.action.c2VhcmNoLWludm9pY2Vz.option.Y3VzdG9tZXJpZA.display_name": {
+          "source": "Customer",
+          "message": "顧客"
+        },
+        "app.RnJlc2hCb29rcw.action.c2VhcmNoLWludm9pY2Vz.option.Y3VzdG9tZXJpZA.short_desc": {
+          "source": "Filter by customer",
+          "message": "顧客で絞り込み"
+        },
+        "app.RnJlc2hCb29rcw.action.c2VhcmNoLWludm9pY2Vz.option.YWNjb3VudF9pZA.desc": {
+          "source": "The FreshBooks account ID for accounting API endpoints",
+          "message": "会計 API エンドポイント用の FreshBooks アカウント ID"
+        },
+        "app.RnJlc2hCb29rcw.action.c2VhcmNoLWludm9pY2Vz.option.YWNjb3VudF9pZA.display_name": {
+          "source": "Account ID",
+          "message": "アカウント ID"
+        },
+        "app.RnJlc2hCb29rcw.action.c2VhcmNoLWludm9pY2Vz.option.YWNjb3VudF9pZA.short_desc": {
+          "source": "FreshBooks account ID",
+          "message": "FreshBooks アカウント ID"
+        },
+        "app.RnJlc2hCb29rcw.action.c2VhcmNoLWludm9pY2Vz.option.aWQ.display_name": {
+          "source": "Invoice ID",
+          "message": "請求書ID"
+        },
+        "app.RnJlc2hCb29rcw.action.c2VhcmNoLWludm9pY2Vz.option.aWQ.short_desc": {
+          "source": "Filter by invoice ID",
+          "message": "請求書IDでフィルター"
+        },
+        "app.RnJlc2hCb29rcw.action.c2VhcmNoLWludm9pY2Vz.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "上限"
+        },
+        "app.RnJlc2hCb29rcw.action.c2VhcmNoLWludm9pY2Vz.option.bGltaXQ.short_desc": {
+          "source": "Maximum results",
+          "message": "最大結果数"
+        },
+        "app.RnJlc2hCb29rcw.action.c2VhcmNoLWludm9pY2Vz.option.c3RhdHVz.display_name": {
+          "source": "Status",
+          "message": "ステータス"
+        },
+        "app.RnJlc2hCb29rcw.action.c2VhcmNoLWludm9pY2Vz.option.c3RhdHVz.short_desc": {
+          "source": "Filter by status",
+          "message": "ステータスで絞り込み"
+        },
+        "app.RnJlc2hCb29rcw.action.c2VhcmNoLWludm9pY2Vz.short_desc": {
+          "source": "Search for invoices",
+          "message": "請求書を検索"
+        },
+        "app.RnJlc2hCb29rcw.action.c2VhcmNoLXBheW1lbnRz.desc": {
+          "source": "Search for payments in FreshBooks with optional filtering",
+          "message": "FreshBooks 内の支払いを任意のフィルターで検索"
+        },
+        "app.RnJlc2hCb29rcw.action.c2VhcmNoLXBheW1lbnRz.display_name": {
+          "source": "Search Payments",
+          "message": "支払いを検索"
+        },
+        "app.RnJlc2hCb29rcw.action.c2VhcmNoLXBheW1lbnRz.option.YWNjb3VudF9pZA.desc": {
+          "source": "The FreshBooks account ID for accounting API endpoints",
+          "message": "会計 API エンドポイント用の FreshBooks アカウント ID"
+        },
+        "app.RnJlc2hCb29rcw.action.c2VhcmNoLXBheW1lbnRz.option.YWNjb3VudF9pZA.display_name": {
+          "source": "Account ID",
+          "message": "アカウント ID"
+        },
+        "app.RnJlc2hCb29rcw.action.c2VhcmNoLXBheW1lbnRz.option.YWNjb3VudF9pZA.short_desc": {
+          "source": "FreshBooks account ID",
+          "message": "FreshBooks アカウント ID"
+        },
+        "app.RnJlc2hCb29rcw.action.c2VhcmNoLXBheW1lbnRz.option.aW52b2ljZWlk.display_name": {
+          "source": "Invoice",
+          "message": "Invoice"
+        },
+        "app.RnJlc2hCb29rcw.action.c2VhcmNoLXBheW1lbnRz.option.aW52b2ljZWlk.short_desc": {
+          "source": "Filter by invoice",
+          "message": "請求書で絞り込み"
+        },
+        "app.RnJlc2hCb29rcw.action.c2VhcmNoLXBheW1lbnRz.option.aWQ.display_name": {
+          "source": "Payment ID",
+          "message": "支払いID"
+        },
+        "app.RnJlc2hCb29rcw.action.c2VhcmNoLXBheW1lbnRz.option.aWQ.short_desc": {
+          "source": "Filter by payment ID",
+          "message": "支払い ID で絞り込み"
+        },
+        "app.RnJlc2hCb29rcw.action.c2VhcmNoLXBheW1lbnRz.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "上限"
+        },
+        "app.RnJlc2hCb29rcw.action.c2VhcmNoLXBheW1lbnRz.option.bGltaXQ.short_desc": {
+          "source": "Maximum results",
+          "message": "最大結果数"
+        },
+        "app.RnJlc2hCb29rcw.action.c2VhcmNoLXBheW1lbnRz.short_desc": {
+          "source": "Search for payments",
+          "message": "支払いを検索"
+        },
+        "app.RnJlc2hCb29rcw.action.c2VhcmNoLXNlcnZpY2Vz.desc": {
+          "source": "Search for services in FreshBooks",
+          "message": "FreshBooks 内のサービスを検索"
+        },
+        "app.RnJlc2hCb29rcw.action.c2VhcmNoLXNlcnZpY2Vz.display_name": {
+          "source": "Search Services",
+          "message": "サービスを検索"
+        },
+        "app.RnJlc2hCb29rcw.action.c2VhcmNoLXNlcnZpY2Vz.option.YnVzaW5lc3NfaWQ.desc": {
+          "source": "The FreshBooks business ID for time tracking API endpoints",
+          "message": "時間追跡APIエンドポイント用のFreshBooksビジネスID"
+        },
+        "app.RnJlc2hCb29rcw.action.c2VhcmNoLXNlcnZpY2Vz.option.YnVzaW5lc3NfaWQ.display_name": {
+          "source": "Business ID",
+          "message": "ビジネスID"
+        },
+        "app.RnJlc2hCb29rcw.action.c2VhcmNoLXNlcnZpY2Vz.option.YnVzaW5lc3NfaWQ.short_desc": {
+          "source": "FreshBooks business ID",
+          "message": "FreshBooksビジネスID"
+        },
+        "app.RnJlc2hCb29rcw.action.c2VhcmNoLXNlcnZpY2Vz.option.aWQ.display_name": {
+          "source": "Service ID",
+          "message": "サービスID"
+        },
+        "app.RnJlc2hCb29rcw.action.c2VhcmNoLXNlcnZpY2Vz.option.aWQ.short_desc": {
+          "source": "Filter by service ID",
+          "message": "サービス ID で絞り込み"
+        },
+        "app.RnJlc2hCb29rcw.action.c2VhcmNoLXNlcnZpY2Vz.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "上限"
+        },
+        "app.RnJlc2hCb29rcw.action.c2VhcmNoLXNlcnZpY2Vz.option.bGltaXQ.short_desc": {
+          "source": "Maximum results",
+          "message": "最大結果数"
+        },
+        "app.RnJlc2hCb29rcw.action.c2VhcmNoLXNlcnZpY2Vz.short_desc": {
+          "source": "Search for services",
+          "message": "サービスを検索"
+        },
+        "app.RnJlc2hCb29rcw.action.cGF5bWVudC1jcmVhdGVk.desc": {
+          "source": "Fires when a new payment is recorded in FreshBooks. Uses polling to detect new records.",
+          "message": "FreshBooks で新しい支払いが記録されたときにトリガーされます。ポーリングを使用して新しいレコードを検出します。"
+        },
+        "app.RnJlc2hCb29rcw.action.cGF5bWVudC1jcmVhdGVk.display_name": {
+          "source": "New Payment",
+          "message": "新規支払い"
+        },
+        "app.RnJlc2hCb29rcw.action.cGF5bWVudC1jcmVhdGVk.option.YWNjb3VudF9pZA.desc": {
+          "source": "The FreshBooks account ID for accounting API endpoints",
+          "message": "会計 API エンドポイント用の FreshBooks アカウント ID"
+        },
+        "app.RnJlc2hCb29rcw.action.cGF5bWVudC1jcmVhdGVk.option.YWNjb3VudF9pZA.display_name": {
+          "source": "Account ID",
+          "message": "アカウント ID"
+        },
+        "app.RnJlc2hCb29rcw.action.cGF5bWVudC1jcmVhdGVk.option.YWNjb3VudF9pZA.short_desc": {
+          "source": "FreshBooks account ID",
+          "message": "FreshBooks アカウント ID"
+        },
+        "app.RnJlc2hCb29rcw.action.cGF5bWVudC1jcmVhdGVk.option.cG9sbF9pbnRlcnZhbA.desc": {
+          "source": "How often to check for new records (minimum 30 seconds)",
+          "message": "新しいレコードを確認する頻度（最小30秒）"
+        },
+        "app.RnJlc2hCb29rcw.action.cGF5bWVudC1jcmVhdGVk.option.cG9sbF9pbnRlcnZhbA.display_name": {
+          "source": "Poll Interval",
+          "message": "ポーリング間隔"
+        },
+        "app.RnJlc2hCb29rcw.action.cGF5bWVudC1jcmVhdGVk.option.cG9sbF9pbnRlcnZhbA.short_desc": {
+          "source": "Polling interval in seconds",
+          "message": "ポーリング間隔（秒）"
+        },
+        "app.RnJlc2hCb29rcw.action.cGF5bWVudC1jcmVhdGVk.short_desc": {
+          "source": "Trigger when a new payment is received",
+          "message": "新しい支払いを受領したときにトリガー"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLWNsaWVudA.desc": {
+          "source": "Update an existing client in FreshBooks",
+          "message": "FreshBooks 内の既存のクライアントを更新"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLWNsaWVudA.display_name": {
+          "source": "Update Client",
+          "message": "クライアントを更新"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLWNsaWVudA.option.YWNjb3VudF9pZA.desc": {
+          "source": "The FreshBooks account ID for accounting API endpoints",
+          "message": "会計 API エンドポイント用の FreshBooks アカウント ID"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLWNsaWVudA.option.YWNjb3VudF9pZA.display_name": {
+          "source": "Account ID",
+          "message": "アカウント ID"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLWNsaWVudA.option.YWNjb3VudF9pZA.short_desc": {
+          "source": "FreshBooks account ID",
+          "message": "FreshBooks アカウント ID"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLWNsaWVudA.option.ZW1haWw.display_name": {
+          "source": "Email",
+          "message": "メール"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLWNsaWVudA.option.ZW1haWw.short_desc": {
+          "source": "Client email",
+          "message": "クライアントのメールアドレス"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLWNsaWVudA.option.Zm5hbWU.display_name": {
+          "source": "First Name",
+          "message": "名"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLWNsaWVudA.option.Zm5hbWU.short_desc": {
+          "source": "Client first name",
+          "message": "クライアントの名"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLWNsaWVudA.option.aWQ.display_name": {
+          "source": "Client ID",
+          "message": "クライアント ID"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLWNsaWVudA.option.aWQ.short_desc": {
+          "source": "The client to update",
+          "message": "更新するクライアント"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLWNsaWVudA.option.b3JnYW5pemF0aW9u.display_name": {
+          "source": "Organization",
+          "message": "組織"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLWNsaWVudA.option.b3JnYW5pemF0aW9u.short_desc": {
+          "source": "Company name",
+          "message": "会社名"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLWNsaWVudA.option.bG5hbWU.display_name": {
+          "source": "Last Name",
+          "message": "姓"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLWNsaWVudA.option.bG5hbWU.short_desc": {
+          "source": "Client last name",
+          "message": "クライアントの姓"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLWNsaWVudA.option.bm90ZQ.display_name": {
+          "source": "Notes",
+          "message": "メモ"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLWNsaWVudA.option.bm90ZQ.short_desc": {
+          "source": "Notes about the client",
+          "message": "クライアントに関するメモ"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLWNsaWVudA.option.cF9jaXR5.display_name": {
+          "source": "City",
+          "message": "市区町村"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLWNsaWVudA.option.cF9jaXR5.short_desc": {
+          "source": "City",
+          "message": "市区町村"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLWNsaWVudA.option.cF9jb2Rl.display_name": {
+          "source": "Postal Code",
+          "message": "郵便番号"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLWNsaWVudA.option.cF9jb2Rl.short_desc": {
+          "source": "Postal/zip code",
+          "message": "郵便番号"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLWNsaWVudA.option.cF9jb3VudHJ5.display_name": {
+          "source": "Country",
+          "message": "国"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLWNsaWVudA.option.cF9jb3VudHJ5.short_desc": {
+          "source": "Country",
+          "message": "国"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLWNsaWVudA.option.cF9wcm92aW5jZQ.display_name": {
+          "source": "Province/State",
+          "message": "都道府県/州"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLWNsaWVudA.option.cF9wcm92aW5jZQ.short_desc": {
+          "source": "Province or state",
+          "message": "都道府県または州"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLWNsaWVudA.option.cF9zdHJlZXQ.display_name": {
+          "source": "Street",
+          "message": "町名・番地"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLWNsaWVudA.option.cF9zdHJlZXQ.short_desc": {
+          "source": "Street address",
+          "message": "町名・番地"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLWNsaWVudA.option.cGhvbmU.display_name": {
+          "source": "Phone",
+          "message": "電話番号"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLWNsaWVudA.option.cGhvbmU.short_desc": {
+          "source": "Business phone",
+          "message": "勤務先電話番号"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLWNsaWVudA.short_desc": {
+          "source": "Update an existing client",
+          "message": "既存のクライアントを更新"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLWV4cGVuc2U.desc": {
+          "source": "Update an existing expense in FreshBooks",
+          "message": "FreshBooks 内の既存の経費を更新"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLWV4cGVuc2U.display_name": {
+          "source": "Update Expense",
+          "message": "経費を更新"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLWV4cGVuc2U.option.Y2F0ZWdvcnlpZA.display_name": {
+          "source": "Category",
+          "message": "カテゴリ"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLWV4cGVuc2U.option.Y2F0ZWdvcnlpZA.short_desc": {
+          "source": "Expense category",
+          "message": "経費カテゴリ"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLWV4cGVuc2U.option.YW1vdW50.desc": {
+          "source": "Amount object with `amount` (string) and `code` (currency) fields",
+          "message": "`amount`（文字列）および `code`（通貨）フィールドを含む金額オブジェクト"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLWV4cGVuc2U.option.YW1vdW50.display_name": {
+          "source": "Amount",
+          "message": "金額"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLWV4cGVuc2U.option.YW1vdW50.short_desc": {
+          "source": "Expense amount",
+          "message": "経費金額"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLWV4cGVuc2U.option.YWNjb3VudF9pZA.desc": {
+          "source": "The FreshBooks account ID for accounting API endpoints",
+          "message": "会計 API エンドポイント用の FreshBooks アカウント ID"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLWV4cGVuc2U.option.YWNjb3VudF9pZA.display_name": {
+          "source": "Account ID",
+          "message": "アカウント ID"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLWV4cGVuc2U.option.YWNjb3VudF9pZA.short_desc": {
+          "source": "FreshBooks account ID",
+          "message": "FreshBooks アカウント ID"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLWV4cGVuc2U.option.ZGF0ZQ.desc": {
+          "source": "Expense date in YYYY-MM-DD format",
+          "message": "YYYY-MM-DD 形式の経費日付"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLWV4cGVuc2U.option.ZGF0ZQ.display_name": {
+          "source": "Date",
+          "message": "日付"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLWV4cGVuc2U.option.ZGF0ZQ.short_desc": {
+          "source": "Expense date",
+          "message": "経費日付"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLWV4cGVuc2U.option.aWQ.display_name": {
+          "source": "Expense ID",
+          "message": "経費ID"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLWV4cGVuc2U.option.aWQ.short_desc": {
+          "source": "The expense to update",
+          "message": "更新する経費"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLWV4cGVuc2U.option.bm90ZXM.display_name": {
+          "source": "Notes",
+          "message": "メモ"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLWV4cGVuc2U.option.bm90ZXM.short_desc": {
+          "source": "Expense notes",
+          "message": "経費メモ"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLWV4cGVuc2U.option.c3RhZmZpZA.desc": {
+          "source": "The ID of the staff member associated with this expense",
+          "message": "この経費に関連付けられているスタッフメンバーの ID"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLWV4cGVuc2U.option.c3RhZmZpZA.display_name": {
+          "source": "Staff Member",
+          "message": "スタッフメンバー"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLWV4cGVuc2U.option.c3RhZmZpZA.short_desc": {
+          "source": "Staff member for this expense",
+          "message": "この経費のスタッフメンバー"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLWV4cGVuc2U.option.dGF4TmFtZTE.display_name": {
+          "source": "Tax Name",
+          "message": "税名"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLWV4cGVuc2U.option.dGF4TmFtZTE.short_desc": {
+          "source": "Tax name",
+          "message": "税名"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLWV4cGVuc2U.option.dGF4UGVyY2VudDE.display_name": {
+          "source": "Tax Percent",
+          "message": "税率"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLWV4cGVuc2U.option.dGF4UGVyY2VudDE.short_desc": {
+          "source": "Tax percentage",
+          "message": "税率パーセンテージ"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLWV4cGVuc2U.option.dmVuZG9y.display_name": {
+          "source": "Vendor",
+          "message": "ベンダー"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLWV4cGVuc2U.option.dmVuZG9y.short_desc": {
+          "source": "Vendor name",
+          "message": "ベンダー名"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLWV4cGVuc2U.short_desc": {
+          "source": "Update an existing expense",
+          "message": "既存の経費を更新"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLWVzdGltYXRl.desc": {
+          "source": "Update an existing estimate in FreshBooks",
+          "message": "FreshBooks 内の既存の見積もりを更新"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLWVzdGltYXRl.display_name": {
+          "source": "Update Estimate",
+          "message": "見積もりを更新"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLWVzdGltYXRl.option.Y3JlYXRlX2RhdGU.desc": {
+          "source": "Estimate date in YYYY-MM-DD format",
+          "message": "YYYY-MM-DD 形式の見積日付"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLWVzdGltYXRl.option.Y3JlYXRlX2RhdGU.display_name": {
+          "source": "Date",
+          "message": "日付"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLWVzdGltYXRl.option.Y3JlYXRlX2RhdGU.short_desc": {
+          "source": "Estimate date",
+          "message": "見積日付"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLWVzdGltYXRl.option.Y3VycmVuY3lfY29kZQ.display_name": {
+          "source": "Currency",
+          "message": "通貨"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLWVzdGltYXRl.option.Y3VycmVuY3lfY29kZQ.short_desc": {
+          "source": "Currency code",
+          "message": "通貨コード"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLWVzdGltYXRl.option.Y3VzdG9tZXJpZA.display_name": {
+          "source": "Customer",
+          "message": "顧客"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLWVzdGltYXRl.option.Y3VzdG9tZXJpZA.short_desc": {
+          "source": "The customer for the estimate",
+          "message": "見積書の顧客"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLWVzdGltYXRl.option.YWNjb3VudF9pZA.desc": {
+          "source": "The FreshBooks account ID for accounting API endpoints",
+          "message": "会計 API エンドポイント用の FreshBooks アカウント ID"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLWVzdGltYXRl.option.YWNjb3VudF9pZA.display_name": {
+          "source": "Account ID",
+          "message": "アカウント ID"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLWVzdGltYXRl.option.YWNjb3VudF9pZA.short_desc": {
+          "source": "FreshBooks account ID",
+          "message": "FreshBooks アカウント ID"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLWVzdGltYXRl.option.ZXN0aW1hdGVfbnVtYmVy.display_name": {
+          "source": "Estimate Number",
+          "message": "見積書番号"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLWVzdGltYXRl.option.ZXN0aW1hdGVfbnVtYmVy.short_desc": {
+          "source": "The estimate number",
+          "message": "見積番号"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLWVzdGltYXRl.option.aWQ.display_name": {
+          "source": "Estimate ID",
+          "message": "見積書 ID"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLWVzdGltYXRl.option.aWQ.short_desc": {
+          "source": "The estimate to update",
+          "message": "更新する見積もり"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLWVzdGltYXRl.option.bm90ZXM.display_name": {
+          "source": "Notes",
+          "message": "メモ"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLWVzdGltYXRl.option.bm90ZXM.short_desc": {
+          "source": "Estimate notes",
+          "message": "見積もりの備考"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLWVzdGltYXRl.option.cG9fbnVtYmVy.display_name": {
+          "source": "PO Number",
+          "message": "注文番号 (PO)"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLWVzdGltYXRl.option.cG9fbnVtYmVy.short_desc": {
+          "source": "Purchase order number",
+          "message": "発注書番号"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLWVzdGltYXRl.option.dGVybXM.display_name": {
+          "source": "Terms",
+          "message": "支払条件"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLWVzdGltYXRl.option.dGVybXM.short_desc": {
+          "source": "Terms and conditions",
+          "message": "利用規約"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLWVzdGltYXRl.short_desc": {
+          "source": "Update an existing estimate",
+          "message": "既存の見積もりを更新"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLWl0ZW0.desc": {
+          "source": "Update an existing item in FreshBooks",
+          "message": "FreshBooks 内の既存の品目を更新"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLWl0ZW0.display_name": {
+          "source": "Update Item",
+          "message": "アイテムを更新"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLWl0ZW0.option.YWNjb3VudF9pZA.desc": {
+          "source": "The FreshBooks account ID for accounting API endpoints",
+          "message": "会計 API エンドポイント用の FreshBooks アカウント ID"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLWl0ZW0.option.YWNjb3VudF9pZA.display_name": {
+          "source": "Account ID",
+          "message": "アカウント ID"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLWl0ZW0.option.YWNjb3VudF9pZA.short_desc": {
+          "source": "FreshBooks account ID",
+          "message": "FreshBooks アカウント ID"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLWl0ZW0.option.ZGVzY3JpcHRpb24.display_name": {
+          "source": "Description",
+          "message": "説明"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLWl0ZW0.option.ZGVzY3JpcHRpb24.short_desc": {
+          "source": "Item description",
+          "message": "品目の説明"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLWl0ZW0.option.aW52ZW50b3J5.display_name": {
+          "source": "Inventory",
+          "message": "在庫品目"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLWl0ZW0.option.aW52ZW50b3J5.short_desc": {
+          "source": "Inventory count",
+          "message": "在庫数"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLWl0ZW0.option.aWQ.display_name": {
+          "source": "Item ID",
+          "message": "アイテムID"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLWl0ZW0.option.aWQ.short_desc": {
+          "source": "The item to update",
+          "message": "更新するアイテム"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLWl0ZW0.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "名前"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLWl0ZW0.option.bmFtZQ.short_desc": {
+          "source": "Item name",
+          "message": "品目名"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLWl0ZW0.option.c2t1.display_name": {
+          "source": "SKU",
+          "message": "SKU"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLWl0ZW0.option.c2t1.short_desc": {
+          "source": "Stock keeping unit",
+          "message": "在庫管理単位 (SKU)"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLWl0ZW0.option.cXR5.display_name": {
+          "source": "Quantity",
+          "message": "数量"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLWl0ZW0.option.cXR5.short_desc": {
+          "source": "Default quantity",
+          "message": "デフォルトの数量"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLWl0ZW0.option.dGF4MQ.display_name": {
+          "source": "Tax 1",
+          "message": "税1"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLWl0ZW0.option.dGF4MQ.short_desc": {
+          "source": "Default tax 1",
+          "message": "デフォルトの税1"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLWl0ZW0.option.dGF4Mg.display_name": {
+          "source": "Tax 2",
+          "message": "税2"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLWl0ZW0.option.dGF4Mg.short_desc": {
+          "source": "Default tax 2",
+          "message": "デフォルトの税2"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLWl0ZW0.option.dW5pdF9jb3N0.desc": {
+          "source": "Unit cost object with `amount` (string) and `code` (currency) fields",
+          "message": "`amount`（文字列）および`code`（通貨）フィールドを持つ単価オブジェクト"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLWl0ZW0.option.dW5pdF9jb3N0.display_name": {
+          "source": "Unit Cost",
+          "message": "単価"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLWl0ZW0.option.dW5pdF9jb3N0.short_desc": {
+          "source": "Cost per unit",
+          "message": "単位あたりのコスト"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLWl0ZW0.short_desc": {
+          "source": "Update an existing item",
+          "message": "既存の品目を更新"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLWludm9pY2U.desc": {
+          "source": "Update an existing invoice in FreshBooks",
+          "message": "FreshBooks 内の既存の請求書を更新"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLWludm9pY2U.display_name": {
+          "source": "Update Invoice",
+          "message": "請求書を更新"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLWludm9pY2U.option.Y3JlYXRlX2RhdGU.desc": {
+          "source": "Invoice date in YYYY-MM-DD format",
+          "message": "YYYY-MM-DD形式の請求日"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLWludm9pY2U.option.Y3JlYXRlX2RhdGU.display_name": {
+          "source": "Date",
+          "message": "日付"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLWludm9pY2U.option.Y3JlYXRlX2RhdGU.short_desc": {
+          "source": "Invoice date",
+          "message": "請求日"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLWludm9pY2U.option.Y3VycmVuY3lfY29kZQ.display_name": {
+          "source": "Currency",
+          "message": "通貨"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLWludm9pY2U.option.Y3VycmVuY3lfY29kZQ.short_desc": {
+          "source": "Currency code",
+          "message": "通貨コード"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLWludm9pY2U.option.Y3VzdG9tZXJpZA.display_name": {
+          "source": "Customer",
+          "message": "顧客"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLWludm9pY2U.option.Y3VzdG9tZXJpZA.short_desc": {
+          "source": "The customer for the invoice",
+          "message": "請求書の対象顧客"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLWludm9pY2U.option.YWNjb3VudF9pZA.desc": {
+          "source": "The FreshBooks account ID for accounting API endpoints",
+          "message": "会計 API エンドポイント用の FreshBooks アカウント ID"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLWludm9pY2U.option.YWNjb3VudF9pZA.display_name": {
+          "source": "Account ID",
+          "message": "アカウント ID"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLWludm9pY2U.option.YWNjb3VudF9pZA.short_desc": {
+          "source": "FreshBooks account ID",
+          "message": "FreshBooks アカウント ID"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLWludm9pY2U.option.ZGlzY291bnRfdmFsdWU.display_name": {
+          "source": "Discount",
+          "message": "割引"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLWludm9pY2U.option.ZGlzY291bnRfdmFsdWU.short_desc": {
+          "source": "Discount value",
+          "message": "割引値"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLWludm9pY2U.option.ZHVlX29mZnNldF9kYXlz.display_name": {
+          "source": "Due in Days",
+          "message": "支払期日（日数）"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLWludm9pY2U.option.ZHVlX29mZnNldF9kYXlz.short_desc": {
+          "source": "Days until due",
+          "message": "期日までの日数"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLWludm9pY2U.option.aW52b2ljZV9udW1iZXI.display_name": {
+          "source": "Invoice Number",
+          "message": "請求書番号"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLWludm9pY2U.option.aW52b2ljZV9udW1iZXI.short_desc": {
+          "source": "Unique invoice number",
+          "message": "一意の請求書番号"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLWludm9pY2U.option.aWQ.display_name": {
+          "source": "Invoice ID",
+          "message": "請求書ID"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLWludm9pY2U.option.aWQ.short_desc": {
+          "source": "The invoice to update",
+          "message": "更新する請求書"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLWludm9pY2U.option.bGluZXM.desc": {
+          "source": "List of line items (replaces existing lines - include ALL desired lines)",
+          "message": "明細項目のリスト（既存の明細行を置き換えます - 必要なすべての明細を含めてください）"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLWludm9pY2U.option.bGluZXM.display_name": {
+          "source": "Line Items",
+          "message": "品目"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLWludm9pY2U.option.bGluZXM.short_desc": {
+          "source": "Invoice line items",
+          "message": "請求明細項目"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLWludm9pY2U.option.bm90ZXM.display_name": {
+          "source": "Notes",
+          "message": "メモ"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLWludm9pY2U.option.bm90ZXM.short_desc": {
+          "source": "Customer notes",
+          "message": "顧客メモ"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLWludm9pY2U.option.cG9fbnVtYmVy.display_name": {
+          "source": "PO Number",
+          "message": "注文番号 (PO)"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLWludm9pY2U.option.cG9fbnVtYmVy.short_desc": {
+          "source": "Purchase order number",
+          "message": "発注書番号"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLWludm9pY2U.option.dGVybXM.display_name": {
+          "source": "Terms",
+          "message": "支払条件"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLWludm9pY2U.option.dGVybXM.short_desc": {
+          "source": "Terms and conditions",
+          "message": "利用規約"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLWludm9pY2U.short_desc": {
+          "source": "Update an existing invoice",
+          "message": "既存の請求書を更新"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLXBheW1lbnQ.desc": {
+          "source": "Update an existing payment in FreshBooks",
+          "message": "FreshBooks 内の既存の支払いを更新"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLXBheW1lbnQ.display_name": {
+          "source": "Update Payment",
+          "message": "支払いを更新"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLXBheW1lbnQ.option.YW1vdW50.desc": {
+          "source": "Amount object with `amount` (string) and `code` (currency) fields",
+          "message": "`amount`（文字列）および `code`（通貨）フィールドを含む金額オブジェクト"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLXBheW1lbnQ.option.YW1vdW50.display_name": {
+          "source": "Amount",
+          "message": "金額"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLXBheW1lbnQ.option.YW1vdW50.short_desc": {
+          "source": "Payment amount",
+          "message": "支払金額"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLXBheW1lbnQ.option.YWNjb3VudF9pZA.desc": {
+          "source": "The FreshBooks account ID for accounting API endpoints",
+          "message": "会計 API エンドポイント用の FreshBooks アカウント ID"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLXBheW1lbnQ.option.YWNjb3VudF9pZA.display_name": {
+          "source": "Account ID",
+          "message": "アカウント ID"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLXBheW1lbnQ.option.YWNjb3VudF9pZA.short_desc": {
+          "source": "FreshBooks account ID",
+          "message": "FreshBooks アカウント ID"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLXBheW1lbnQ.option.ZGF0ZQ.desc": {
+          "source": "Payment date in YYYY-MM-DD format",
+          "message": "YYYY-MM-DD形式の支払日"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLXBheW1lbnQ.option.ZGF0ZQ.display_name": {
+          "source": "Date",
+          "message": "日付"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLXBheW1lbnQ.option.ZGF0ZQ.short_desc": {
+          "source": "Payment date",
+          "message": "支払日"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLXBheW1lbnQ.option.aWQ.display_name": {
+          "source": "Payment ID",
+          "message": "支払いID"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLXBheW1lbnQ.option.aWQ.short_desc": {
+          "source": "The payment to update",
+          "message": "更新する支払い"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLXBheW1lbnQ.option.bm90ZQ.display_name": {
+          "source": "Note",
+          "message": "ノート"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLXBheW1lbnQ.option.bm90ZQ.short_desc": {
+          "source": "Payment note",
+          "message": "支払メモ"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLXBheW1lbnQ.option.dHlwZQ.allowed-value.c3RyaW5nOk90aGVy.desc": {
+          "source": "Other payment type",
+          "message": "その他の支払いタイプ"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLXBheW1lbnQ.option.dHlwZQ.allowed-value.c3RyaW5nOkJhbmsgVHJhbnNmZXI.desc": {
+          "source": "Bank transfer payment",
+          "message": "銀行振込による支払い"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLXBheW1lbnQ.option.dHlwZQ.allowed-value.c3RyaW5nOkNhc2g.desc": {
+          "source": "Cash payment",
+          "message": "現金支払い"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLXBheW1lbnQ.option.dHlwZQ.allowed-value.c3RyaW5nOkNoZWNr.desc": {
+          "source": "Check payment",
+          "message": "小切手支払い"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLXBheW1lbnQ.option.dHlwZQ.allowed-value.c3RyaW5nOkNyZWRpdCBDYXJk.desc": {
+          "source": "Credit card payment",
+          "message": "クレジットカード支払い"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLXBheW1lbnQ.option.dHlwZQ.allowed-value.c3RyaW5nOlBheVBhbA.desc": {
+          "source": "PayPal payment",
+          "message": "PayPal支払い"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLXBheW1lbnQ.option.dHlwZQ.desc": {
+          "source": "The payment method type",
+          "message": "支払い方法タイプ"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLXBheW1lbnQ.option.dHlwZQ.display_name": {
+          "source": "Type",
+          "message": "タイプ"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLXBheW1lbnQ.option.dHlwZQ.short_desc": {
+          "source": "Payment type",
+          "message": "支払いタイプ"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLXBheW1lbnQ.short_desc": {
+          "source": "Update an existing payment",
+          "message": "既存の支払いを更新します"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLXNlcnZpY2U.desc": {
+          "source": "Update an existing service in FreshBooks",
+          "message": "FreshBooks 内の既存のサービスを更新"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLXNlcnZpY2U.display_name": {
+          "source": "Update Service",
+          "message": "サービスを更新"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLXNlcnZpY2U.option.YmlsbGFibGU.display_name": {
+          "source": "Billable",
+          "message": "請求可能"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLXNlcnZpY2U.option.YmlsbGFibGU.short_desc": {
+          "source": "Whether the service is billable",
+          "message": "サービスが請求可能かどうか"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLXNlcnZpY2U.option.YnVzaW5lc3NfaWQ.desc": {
+          "source": "The FreshBooks business ID for time tracking API endpoints",
+          "message": "時間追跡APIエンドポイント用のFreshBooksビジネスID"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLXNlcnZpY2U.option.YnVzaW5lc3NfaWQ.display_name": {
+          "source": "Business ID",
+          "message": "ビジネスID"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLXNlcnZpY2U.option.YnVzaW5lc3NfaWQ.short_desc": {
+          "source": "FreshBooks business ID",
+          "message": "FreshBooksビジネスID"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLXNlcnZpY2U.option.aWQ.display_name": {
+          "source": "Service ID",
+          "message": "サービスID"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLXNlcnZpY2U.option.aWQ.short_desc": {
+          "source": "The service to update",
+          "message": "更新するサービス"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLXNlcnZpY2U.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "名前"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLXNlcnZpY2U.option.bmFtZQ.short_desc": {
+          "source": "Service name",
+          "message": "サービス名"
+        },
+        "app.RnJlc2hCb29rcw.action.dXBkYXRlLXNlcnZpY2U.short_desc": {
+          "source": "Update an existing service",
+          "message": "既存のサービスを更新"
+        },
+        "app.RnJlc2hCb29rcw.desc": {
+          "source": "FreshBooks is cloud-based accounting software designed for small businesses and freelancers.\n\nThis integration supports clients, invoices, expenses, estimates, items, and services.",
+          "message": "FreshBooks は中小企業やフリーランサー向けに設計されたクラウドベースの会計ソフトウェアです。\n\nこの連携は、クライアント、請求書、経費、見積もり、品目、サービスをサポートします。"
+        },
+        "app.RnJlc2hCb29rcw.display_name": {
+          "source": "FreshBooks",
+          "message": "FreshBooks"
+        },
+        "app.RnJlc2hCb29rcw.short_desc": {
+          "source": "FreshBooks cloud accounting software",
+          "message": "FreshBooks クラウド会計ソフトウェア"
+        }
+      }
+    }
+  }
+}

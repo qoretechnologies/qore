@@ -1,0 +1,21 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "sk": {
+      "messages": {
+        "app.QW1hem9uLVJlZHNoaWZ0.desc": {
+          "source": "Create and manage connections to a Amazon Redshift data warehouse",
+          "message": "Vytvárajte a spravujte pripojenia k dátovému skladu Amazon Redshift"
+        },
+        "app.QW1hem9uLVJlZHNoaWZ0.display_name": {
+          "source": "Amazon-Redshift",
+          "message": "Amazon-Redshift"
+        },
+        "app.QW1hem9uLVJlZHNoaWZ0.short_desc": {
+          "source": "Amazon Redshift data warehouse",
+          "message": "Dátový sklad Amazon Redshift"
+        }
+      }
+    }
+  }
+}

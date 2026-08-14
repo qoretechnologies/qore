@@ -281,7 +281,13 @@ int QoreEventLoop::remove(int fd, ExceptionSink* xsink) {
     // Note: On Linux 2.6.9+, the event parameter can be NULL for DEL
     if (epoll_ctl(event_fd, EPOLL_CTL_DEL, fd, nullptr) < 0) {
         // EBADF or ENOENT is ok - fd was already closed or not registered
-        if (errno != EBADF && errno != ENOENT) {
+        //
+        // EPERM is the same "the fd we registered is gone" case seen once more: the socket was
+        // closed and the kernel handed the same fd number to an object that epoll cannot poll (a
+        // regular file, a directory), for which EPOLL_CTL_DEL reports EPERM rather than ENOENT.
+        // Reporting it as an error leaves an exception pending in the I/O thread's sink, where it
+        // is misreported against the next operation that checks the sink
+        if (errno != EBADF && errno != ENOENT && errno != EPERM) {
             xsink->raiseErrnoException("EVENT-LOOP-ERROR", errno, "epoll_ctl(DEL) failed for fd %d", fd);
             return -1;
         }

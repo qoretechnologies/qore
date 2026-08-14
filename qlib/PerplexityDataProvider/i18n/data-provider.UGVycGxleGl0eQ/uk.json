@@ -1,0 +1,2169 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "uk": {
+      "messages": {
+        "app.UGVycGxleGl0eQ.action.bWFrZS1hcGktY2FsbA.desc": {
+          "source": "Make a custom HTTP / REST API call to **Perplexity AI** using the configured connection's authentication.\n\nSpecify the HTTP method, the URI path (relative to the connection's API base URL), optional query parameters, headers, and request body. The response is returned as a hash containing the status code, response headers, and response body.\n\nUse this action for endpoints that are not yet exposed as first-class actions on this app.",
+          "message": "Виконати спеціальний виклик HTTP / REST API до **Perplexity AI**, використовуючи автентифікацію налаштованого з'єднання.\n\nУкажіть HTTP-метод, шлях URI (відносно базового URL API з'єднання), необов'язкові параметри запиту, заголовки та тіло запиту. Відповідь повертається у вигляді хешу, що містить код стану, заголовки відповіді та тіло відповіді.\n\nВикористовуйте цю дію для кінцевих точок, які ще не представлені як першокласні дії в цьому застосунку."
+        },
+        "app.UGVycGxleGl0eQ.action.bWFrZS1hcGktY2FsbA.display_name": {
+          "source": "Make an API call",
+          "message": "Зробити виклик API"
+        },
+        "app.UGVycGxleGl0eQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.desc": {
+          "source": "The request body. The effective type depends on `body_type`: JSON/form/YAML expect a hash, XML/text expect a string, multipart expects a file structure, binary expects raw bytes.",
+          "message": "Тіло запиту. Ефективний тип залежить від `body_type`: JSON/form/YAML очікують хеш, XML/text очікують рядок, multipart очікує структуру файлу, binary очікує необроблені байти."
+        },
+        "app.UGVycGxleGl0eQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.display_name": {
+          "source": "Body",
+          "message": "Тіло"
+        },
+        "app.UGVycGxleGl0eQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.short_desc": {
+          "source": "The request body",
+          "message": "Тіло запиту"
+        },
+        "app.UGVycGxleGl0eQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.desc": {
+          "source": "Upload a file using `multipart/form-data`. The body must be a @ref DataProvider::FileDataType \"FileDataType\" structure (filename + content + mime_type). The framework builds the multipart envelope and sets the boundary header.",
+          "message": "Завантажити файл за допомогою `multipart/form-data`. Тіло має бути структурою @ref DataProvider::FileDataType \"FileDataType\" (filename + content + mime_type). Фреймворк створює конверт multipart і встановлює заголовок boundary."
+        },
+        "app.UGVycGxleGl0eQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.display_name": {
+          "source": "Multipart Form",
+          "message": "Форма Multipart"
+        },
+        "app.UGVycGxleGl0eQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.short_desc": {
+          "source": "Upload a file using multipart/form-data",
+          "message": "Завантажити файл за допомогою multipart/form-data"
+        },
+        "app.UGVycGxleGl0eQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.desc": {
+          "source": "Pass the body to the REST client unchanged; the client decides serialization based on its configured `data` option and the value type",
+          "message": "Передати тіло REST-клієнту без змін; клієнт визначає серіалізацію на основі налаштованого параметра `data` та типу значення"
+        },
+        "app.UGVycGxleGl0eQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.display_name": {
+          "source": "Auto",
+          "message": "Авто"
+        },
+        "app.UGVycGxleGl0eQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.short_desc": {
+          "source": "Pass-through; use connection serialization and let the REST client decide",
+          "message": "Пряма передача; використовувати серіалізацію з'єднання та дозволити REST-клієнту приймати рішення"
+        },
+        "app.UGVycGxleGl0eQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.desc": {
+          "source": "Send the body as raw bytes. The body must be a binary value. Sets `Content-Type: application/octet-stream` unless overridden by `hdr`.",
+          "message": "Надіслати тіло як необроблені байти. Тіло має бути бінарним значенням. Установлює `Content-Type: application/octet-stream`, якщо не перевизначено через `hdr`."
+        },
+        "app.UGVycGxleGl0eQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.display_name": {
+          "source": "Raw Binary",
+          "message": "Необроблені бінарні дані"
+        },
+        "app.UGVycGxleGl0eQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.short_desc": {
+          "source": "Send body as raw bytes",
+          "message": "Надіслати тіло як необроблені байти"
+        },
+        "app.UGVycGxleGl0eQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.desc": {
+          "source": "Serialize a hash of form fields as `application/x-www-form-urlencoded`. The body must be a hash whose values are scalars (strings/numbers/booleans).",
+          "message": "Серіалізувати хеш полів форми як `application/x-www-form-urlencoded`. Тіло має бути хешем, значеннями якого є скаляри (рядки/числа/булеві значення)."
+        },
+        "app.UGVycGxleGl0eQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.display_name": {
+          "source": "Form (URL-encoded)",
+          "message": "Форма (URL-encoded)"
+        },
+        "app.UGVycGxleGl0eQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.short_desc": {
+          "source": "Serialize body as application/x-www-form-urlencoded form fields",
+          "message": "Серіалізувати тіло як поля форми application/x-www-form-urlencoded"
+        },
+        "app.UGVycGxleGl0eQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.desc": {
+          "source": "Serialize the body as JSON; sets `Content-Type: application/json`. The body should be a hash, list, or scalar value.",
+          "message": "Серіалізувати тіло як JSON; встановлює `Content-Type: application/json`. Тіло має бути хешем, списком або скалярним значенням."
+        },
+        "app.UGVycGxleGl0eQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.display_name": {
+          "source": "JSON",
+          "message": "JSON"
+        },
+        "app.UGVycGxleGl0eQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.short_desc": {
+          "source": "Serialize body as JSON",
+          "message": "Серіалізувати тіло як JSON"
+        },
+        "app.UGVycGxleGl0eQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.desc": {
+          "source": "Send the body as plain text. The body must be a string. Sets `Content-Type: text/plain`.",
+          "message": "Надіслати тіло як простий текст. Тіло має бути рядком. Установлює `Content-Type: text/plain`."
+        },
+        "app.UGVycGxleGl0eQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.display_name": {
+          "source": "Plain Text",
+          "message": "Простий текст"
+        },
+        "app.UGVycGxleGl0eQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.short_desc": {
+          "source": "Send body as text/plain",
+          "message": "Надіслати тіло як text/plain"
+        },
+        "app.UGVycGxleGl0eQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.desc": {
+          "source": "Send the body as XML. If the body is a hash it is serialized to XML; if it is a string it is sent verbatim. Sets `Content-Type: application/xml`.",
+          "message": "Надіслати тіло як XML. Якщо тіло є хешем, воно серіалізується в XML; якщо це рядок, воно надсилається без змін. Установлює `Content-Type: application/xml`."
+        },
+        "app.UGVycGxleGl0eQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.display_name": {
+          "source": "XML",
+          "message": "XML"
+        },
+        "app.UGVycGxleGl0eQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.short_desc": {
+          "source": "Send body as XML",
+          "message": "Надіслати тіло як XML"
+        },
+        "app.UGVycGxleGl0eQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.desc": {
+          "source": "Send the body as YAML. If the body is a hash it is serialized to YAML; if it is a string it is sent verbatim. Sets `Content-Type: application/x-yaml`.",
+          "message": "Надіслати тіло як YAML. Якщо тіло є хешем, воно серіалізується в YAML; якщо це рядок, воно надсилається без змін. Установлює `Content-Type: application/x-yaml`."
+        },
+        "app.UGVycGxleGl0eQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.display_name": {
+          "source": "YAML",
+          "message": "YAML"
+        },
+        "app.UGVycGxleGl0eQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.short_desc": {
+          "source": "Send body as YAML",
+          "message": "Надіслати тіло як YAML"
+        },
+        "app.UGVycGxleGl0eQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.desc": {
+          "source": "Selects the body serialization mode and the corresponding `Content-Type` header. Changing this field reshapes the `body` editor - selecting JSON exposes a JSON editor, selecting Multipart Form exposes a file picker, and so on.",
+          "message": "Вибирає режим серіалізації тіла та відповідний заголовок `Content-Type`. Зміна цього поля змінює вигляд редактора `body` — вибір JSON відкриває редактор JSON, вибір Multipart Form відкриває вибір файлу тощо."
+        },
+        "app.UGVycGxleGl0eQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.display_name": {
+          "source": "Body Type",
+          "message": "Тип тіла"
+        },
+        "app.UGVycGxleGl0eQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.short_desc": {
+          "source": "How the body is serialized and what Content-Type is sent",
+          "message": "Як серіалізується тіло та який Content-Type надсилається"
+        },
+        "app.UGVycGxleGl0eQ.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.desc": {
+          "source": "If `True`, non-2xx HTTP responses return as the normal response hash (with the actual status code) instead of raising `REST-RESPONSE-ERROR`. Useful for handling 4xx/5xx as data - e.g. checking whether a resource exists. Overrides the connection's `error_passthru` setting for this call only.",
+          "message": "Якщо `True`, HTTP-відповіді з кодом, відмінним від 2xx, повертаються як звичайний хеш відповіді (з фактичним кодом стану) замість генерації `REST-RESPONSE-ERROR`. Корисно для обробки 4xx/5xx як даних — наприклад, перевірки існування ресурсу. Перевизначає налаштування `error_passthru` з'єднання лише для цього виклику."
+        },
+        "app.UGVycGxleGl0eQ.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.display_name": {
+          "source": "Return Errors as Data",
+          "message": "Повертати помилки як дані"
+        },
+        "app.UGVycGxleGl0eQ.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.short_desc": {
+          "source": "Return non-2xx responses normally instead of throwing",
+          "message": "Повертати відповіді з кодом, відмінним від 2xx, у звичайному режимі замість генерації помилки"
+        },
+        "app.UGVycGxleGl0eQ.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.desc": {
+          "source": "Optional list of HTTP status codes treated as success. If set and the response status is not in this list, the action throws `REST-STATUS-ERROR`. When unset, the REST client's default behavior applies (typically: 2xx is success, non-2xx throws).",
+          "message": "Необов'язковий список кодів стану HTTP, які вважаються успішними. Якщо задано і код стану відповіді відсутній у цьому списку, дія генерує `REST-STATUS-ERROR`. Якщо не задано, застосовується поведінка REST-клієнта за замовчуванням (зазвичай: 2xx — успіх, не-2xx генерує помилку)."
+        },
+        "app.UGVycGxleGl0eQ.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.display_name": {
+          "source": "Expected Status Codes",
+          "message": "Очікувані коди стану"
+        },
+        "app.UGVycGxleGl0eQ.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.short_desc": {
+          "source": "Response status codes treated as success",
+          "message": "Коди стану відповіді, які вважаються успішними"
+        },
+        "app.UGVycGxleGl0eQ.action.bWFrZS1hcGktY2FsbA.option.aGRy.desc": {
+          "source": "Hash of custom headers added to the request. These override any default headers set by `body_type` (e.g. supplying `Content-Type` here wins over the body-type default).",
+          "message": "Хеш користувацьких заголовків, доданих до запиту. Вони перевизначають будь-які заголовки за замовчуванням, встановлені `body_type` (наприклад, передання `Content-Type` тут має перевагу над замовчуваним значенням для типу тіла)."
+        },
+        "app.UGVycGxleGl0eQ.action.bWFrZS1hcGktY2FsbA.option.aGRy.display_name": {
+          "source": "Custom Headers",
+          "message": "Користувацькі заголовки"
+        },
+        "app.UGVycGxleGl0eQ.action.bWFrZS1hcGktY2FsbA.option.aGRy.short_desc": {
+          "source": "Extra request headers",
+          "message": "Додаткові заголовки запиту"
+        },
+        "app.UGVycGxleGl0eQ.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.desc": {
+          "source": "If `True`, the response hash includes a `debug` sub-hash containing the request method/URL/headers (with sensitive values redacted), request and response sizes, and round-trip duration. Useful when investigating slow or failing calls. Off by default to keep responses lean.",
+          "message": "Якщо `True`, хеш відповіді містить підхеш `debug`, що містить метод/URL/заголовки запиту (з відредагованими конфіденційними значеннями), розміри запиту та відповіді, а також тривалість виконання. Корисно під час дослідження повільних або невдалих викликів. Вимкнено за замовчуванням для зменшення обсягу відповідей."
+        },
+        "app.UGVycGxleGl0eQ.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.display_name": {
+          "source": "Include Debug Info",
+          "message": "Включати зневаджувальну інформацію"
+        },
+        "app.UGVycGxleGl0eQ.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.short_desc": {
+          "source": "Include request/timing/size debug info in the response",
+          "message": "Включати зневаджувальну інформацію про запит/час/розмір у відповідь"
+        },
+        "app.UGVycGxleGl0eQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.desc": {
+          "source": "HTTP `OPTIONS`",
+          "message": "HTTP `OPTIONS`"
+        },
+        "app.UGVycGxleGl0eQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.display_name": {
+          "source": "OPTIONS",
+          "message": "OPTIONS"
+        },
+        "app.UGVycGxleGl0eQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.short_desc": {
+          "source": "HTTP OPTIONS",
+          "message": "HTTP OPTIONS"
+        },
+        "app.UGVycGxleGl0eQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.desc": {
+          "source": "HTTP `DELETE`",
+          "message": "HTTP `DELETE`"
+        },
+        "app.UGVycGxleGl0eQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.display_name": {
+          "source": "DELETE",
+          "message": "DELETE"
+        },
+        "app.UGVycGxleGl0eQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.short_desc": {
+          "source": "HTTP DELETE",
+          "message": "HTTP DELETE"
+        },
+        "app.UGVycGxleGl0eQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.desc": {
+          "source": "HTTP `GET`",
+          "message": "HTTP `GET`"
+        },
+        "app.UGVycGxleGl0eQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.display_name": {
+          "source": "GET",
+          "message": "GET"
+        },
+        "app.UGVycGxleGl0eQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.short_desc": {
+          "source": "HTTP GET",
+          "message": "HTTP GET"
+        },
+        "app.UGVycGxleGl0eQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.desc": {
+          "source": "HTTP `HEAD`",
+          "message": "HTTP `HEAD`"
+        },
+        "app.UGVycGxleGl0eQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.display_name": {
+          "source": "HEAD",
+          "message": "HEAD"
+        },
+        "app.UGVycGxleGl0eQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.short_desc": {
+          "source": "HTTP HEAD",
+          "message": "HTTP HEAD"
+        },
+        "app.UGVycGxleGl0eQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.desc": {
+          "source": "HTTP `PATCH`",
+          "message": "HTTP `PATCH`"
+        },
+        "app.UGVycGxleGl0eQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.display_name": {
+          "source": "PATCH",
+          "message": "PATCH"
+        },
+        "app.UGVycGxleGl0eQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.short_desc": {
+          "source": "HTTP PATCH",
+          "message": "HTTP PATCH"
+        },
+        "app.UGVycGxleGl0eQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.desc": {
+          "source": "HTTP `POST`",
+          "message": "HTTP `POST`"
+        },
+        "app.UGVycGxleGl0eQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.display_name": {
+          "source": "POST",
+          "message": "POST"
+        },
+        "app.UGVycGxleGl0eQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.short_desc": {
+          "source": "HTTP POST",
+          "message": "HTTP POST"
+        },
+        "app.UGVycGxleGl0eQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.desc": {
+          "source": "HTTP `PUT`",
+          "message": "HTTP `PUT`"
+        },
+        "app.UGVycGxleGl0eQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.display_name": {
+          "source": "PUT",
+          "message": "PUT"
+        },
+        "app.UGVycGxleGl0eQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.short_desc": {
+          "source": "HTTP PUT",
+          "message": "HTTP PUT"
+        },
+        "app.UGVycGxleGl0eQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.desc": {
+          "source": "HTTP `TRACE`",
+          "message": "HTTP `TRACE`"
+        },
+        "app.UGVycGxleGl0eQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.display_name": {
+          "source": "TRACE",
+          "message": "TRACE"
+        },
+        "app.UGVycGxleGl0eQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.short_desc": {
+          "source": "HTTP TRACE",
+          "message": "HTTP TRACE"
+        },
+        "app.UGVycGxleGl0eQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "Метод HTTP для використання в запиті"
+        },
+        "app.UGVycGxleGl0eQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.display_name": {
+          "source": "HTTP Method",
+          "message": "Метод HTTP"
+        },
+        "app.UGVycGxleGl0eQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.short_desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "Метод HTTP для використання в запиті"
+        },
+        "app.UGVycGxleGl0eQ.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain `{name}` placeholders that are replaced from `path_vars`. Example: `/users/{id}/comments`.",
+          "message": "Шлях URI відносно базового URL API з'єднання. Може містити заповнювачі `{name}`, які замінюються з `path_vars`. Приклад: `/users/{id}/comments`."
+        },
+        "app.UGVycGxleGl0eQ.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.display_name": {
+          "source": "URI Path",
+          "message": "Шлях URI"
+        },
+        "app.UGVycGxleGl0eQ.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.short_desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain '{name}' placeholders that are replaced from 'path_vars'. Example: '/users/{id}/comments'",
+          "message": "Шлях URI відносно базового URL API підключення. Може містити заповнювачі '{name}', які замінюються з 'path_vars'. Приклад: '/users/{id}/comments'"
+        },
+        "app.UGVycGxleGl0eQ.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.desc": {
+          "source": "Hash of values substituted into `{name}` placeholders in the URI path. Example: with `path = /users/{id}` and `path_vars = {id: 123}` the framework sends `/users/123`. Values are URL-encoded.",
+          "message": "Хеш значень, що підставляються замість заповнювачів `{name}` у шляху URI. Приклад: із `path = /users/{id}` та `path_vars = {id: 123}` фреймворк надсилає `/users/123`. Значення кодуються у форматі URL."
+        },
+        "app.UGVycGxleGl0eQ.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.display_name": {
+          "source": "Path Variables",
+          "message": "Змінні шляху"
+        },
+        "app.UGVycGxleGl0eQ.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.short_desc": {
+          "source": "Values for {name} placeholders in path",
+          "message": "Значення для заповнювачів {name} у шляху"
+        },
+        "app.UGVycGxleGl0eQ.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.desc": {
+          "source": "Hash of query string parameters to append to the URI path. Values are URL-encoded; list values are joined with `,`.",
+          "message": "Хеш параметрів рядка запиту для додавання до шляху URI. Значення кодуються у форматі URL; значення списку об'єднуються за допомогою `,`."
+        },
+        "app.UGVycGxleGl0eQ.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.display_name": {
+          "source": "Query Arguments",
+          "message": "Аргументи запиту"
+        },
+        "app.UGVycGxleGl0eQ.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.short_desc": {
+          "source": "Query string parameters",
+          "message": "Параметри рядка запиту"
+        },
+        "app.UGVycGxleGl0eQ.action.bWFrZS1hcGktY2FsbA.short_desc": {
+          "source": "Make a custom API call to Perplexity AI",
+          "message": "Виконати спеціальний виклик API до Perplexity AI"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.desc": {
+          "source": "Chat with a Perplexity AI model by sending multiple messages at once and getting web-grounded responses with citations",
+          "message": "Спілкуйтеся з моделлю Perplexity AI, надсилаючи кілька повідомлень одночасно та отримуючи обґрунтовані вебом відповіді з цитуваннями"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.display_name": {
+          "source": "Multi Chat",
+          "message": "Мультичат"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.ZGlzYWJsZV9zZWFyY2g.desc": {
+          "source": "If set to `True`, the model will not search the web and will only use its training data to generate a response",
+          "message": "Якщо встановлено `True`, модель не здійснюватиме пошук у вебі та використовуватиме лише свої навчальні дані для генерації відповіді"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.ZGlzYWJsZV9zZWFyY2g.display_name": {
+          "source": "Disable Search?",
+          "message": "Вимкнути пошук?"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.ZGlzYWJsZV9zZWFyY2g.short_desc": {
+          "source": "Restrict response to training data only",
+          "message": "Обмежити відповідь лише навчальними даними"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.ZW5hYmxlX3NlYXJjaF9jbGFzc2lmaWVy.desc": {
+          "source": "If set to `True`, uses a classifier to determine whether a web search is needed for the query before performing one",
+          "message": "Якщо встановлено `True`, використовує класифікатор для визначення необхідності вебпошуку для запиту перед його виконанням"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.ZW5hYmxlX3NlYXJjaF9jbGFzc2lmaWVy.display_name": {
+          "source": "Enable Search Classifier?",
+          "message": "Увімкнути класифікатор пошуку?"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.ZW5hYmxlX3NlYXJjaF9jbGFzc2lmaWVy.short_desc": {
+          "source": "Use a classifier to determine if search is needed",
+          "message": "Використовувати класифікатор для визначення необхідності пошуку"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.aW1hZ2VfZG9tYWluX2ZpbHRlcg.desc": {
+          "source": "A list of domains to limit image search results to. Only applies when `return_images` is set to `True`",
+          "message": "Список доменів для обмеження результатів пошуку зображень. Застосовується, лише коли `return_images` має значення `True`"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.aW1hZ2VfZG9tYWluX2ZpbHRlcg.display_name": {
+          "source": "Image Domain Filter",
+          "message": "Фільтр доменів зображень"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.aW1hZ2VfZG9tYWluX2ZpbHRlcg.short_desc": {
+          "source": "Limit image sources to specific domains",
+          "message": "Обмежити джерела зображень певними доменами"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.aW1hZ2VfZm9ybWF0X2ZpbHRlcg.desc": {
+          "source": "A list of image formats to include in image results (e.g., `png`, `jpg`). Only applies when `return_images` is set to `True`",
+          "message": "Список форматів зображень для включення до результатів зображень (наприклад, `png`, `jpg`). Застосовується, лише коли `return_images` має значення `True`"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.aW1hZ2VfZm9ybWF0X2ZpbHRlcg.display_name": {
+          "source": "Image Format Filter",
+          "message": "Фільтр форматів зображень"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.aW1hZ2VfZm9ybWF0X2ZpbHRlcg.short_desc": {
+          "source": "Filter image results by format",
+          "message": "Фільтрувати результати зображень за форматом"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.bGFuZ3VhZ2VfcHJlZmVyZW5jZQ.desc": {
+          "source": "An ISO 639-1 language code specifying the preferred language for the response",
+          "message": "Мовний код ISO 639-1, який визначає бажану мову для відповіді"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.bGFuZ3VhZ2VfcHJlZmVyZW5jZQ.display_name": {
+          "source": "Language Preference",
+          "message": "Бажана мова"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.bGFuZ3VhZ2VfcHJlZmVyZW5jZQ.short_desc": {
+          "source": "ISO 639-1 language code for the response",
+          "message": "Мовний код ISO 639-1 для відповіді"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.bGFzdF91cGRhdGVkX2FmdGVyX2ZpbHRlcg.desc": {
+          "source": "Only include sources that were last updated after this date. Format: `MM/DD/YYYY`",
+          "message": "Включати лише джерела, які востаннє оновлювалися після цієї дати. Формат: `MM/DD/YYYY`"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.bGFzdF91cGRhdGVkX2FmdGVyX2ZpbHRlcg.display_name": {
+          "source": "Last Updated After",
+          "message": "Останнє оновлення після"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.bGFzdF91cGRhdGVkX2FmdGVyX2ZpbHRlcg.short_desc": {
+          "source": "Only include sources updated after this date",
+          "message": "Включати лише джерела, оновлені після цієї дати"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.bGFzdF91cGRhdGVkX2JlZm9yZV9maWx0ZXI.desc": {
+          "source": "Only include sources that were last updated before this date. Format: `MM/DD/YYYY`",
+          "message": "Включати лише джерела, які востаннє оновлювалися до цієї дати. Формат: `MM/DD/YYYY`"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.bGFzdF91cGRhdGVkX2JlZm9yZV9maWx0ZXI.display_name": {
+          "source": "Last Updated Before",
+          "message": "Останнє оновлення до"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.bGFzdF91cGRhdGVkX2JlZm9yZV9maWx0ZXI.short_desc": {
+          "source": "Only include sources updated before this date",
+          "message": "Включати лише джерела, оновлені до цієї дати"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.bW9kZWw.allowed-value.c3RyaW5nOnNvbmFy.desc": {
+          "source": "Lightweight, cost-effective search model based on Llama 3.3 70B",
+          "message": "Легка, економічно ефективна пошукова модель на базі Llama 3.3 70B"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.bW9kZWw.allowed-value.c3RyaW5nOnNvbmFy.display_name": {
+          "source": "Sonar",
+          "message": "Sonar"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.bW9kZWw.allowed-value.c3RyaW5nOnNvbmFy.short_desc": {
+          "source": "Lightweight, cost-effective search model",
+          "message": "Легка, економічно ефективна пошукова модель"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.bW9kZWw.allowed-value.c3RyaW5nOnNvbmFyLWRlZXAtcmVzZWFyY2g.desc": {
+          "source": "Expert-level research with autonomous source evaluation and report generation",
+          "message": "Дослідження експертного рівня з автономною оцінкою джерел і створенням звітів"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.bW9kZWw.allowed-value.c3RyaW5nOnNvbmFyLWRlZXAtcmVzZWFyY2g.display_name": {
+          "source": "Sonar Deep Research",
+          "message": "Sonar Deep Research"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.bW9kZWw.allowed-value.c3RyaW5nOnNvbmFyLWRlZXAtcmVzZWFyY2g.short_desc": {
+          "source": "Expert-level autonomous research",
+          "message": "Автономні дослідження експертного рівня"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.bW9kZWw.allowed-value.c3RyaW5nOnNvbmFyLXBybw.desc": {
+          "source": "Advanced search with deeper retrieval and double citations",
+          "message": "Розширений пошук із глибшим вилученням та подвійним цитуванням"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.bW9kZWw.allowed-value.c3RyaW5nOnNvbmFyLXBybw.display_name": {
+          "source": "Sonar Pro",
+          "message": "Sonar Pro"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.bW9kZWw.allowed-value.c3RyaW5nOnNvbmFyLXBybw.short_desc": {
+          "source": "Advanced search with deeper retrieval",
+          "message": "Розширений пошук із глибшим вилученням"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.bW9kZWw.allowed-value.c3RyaW5nOnNvbmFyLXJlYXNvbmluZy1wcm8.desc": {
+          "source": "Chain of Thought reasoning model based on DeepSeek-R1 with multi-query search",
+          "message": "Модель міркування Chain of Thought на базі DeepSeek-R1 з багатозапитним пошуком"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.bW9kZWw.allowed-value.c3RyaW5nOnNvbmFyLXJlYXNvbmluZy1wcm8.display_name": {
+          "source": "Sonar Reasoning Pro",
+          "message": "Sonar Reasoning Pro"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.bW9kZWw.allowed-value.c3RyaW5nOnNvbmFyLXJlYXNvbmluZy1wcm8.short_desc": {
+          "source": "Chain of Thought reasoning model",
+          "message": "Модель міркування Chain of Thought"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.bW9kZWw.desc": {
+          "source": "Model to use for the chat completion",
+          "message": "Модель для використання під час автодоповнення чату"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.bW9kZWw.display_name": {
+          "source": "Model ID",
+          "message": "ID моделі"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.bW9kZWw.short_desc": {
+          "source": "Model to use for the chat completion",
+          "message": "Модель для використання під час автодоповнення чату"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.bWF4X3Rva2Vucw.desc": {
+          "source": "The maximum number of tokens that can be generated in the chat completion. Up to 128,000 tokens supported",
+          "message": "Максимальна кількість токенів, яка може бути згенерована під час автодоповнення чату. Підтримується до 128 000 токенів"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.bWF4X3Rva2Vucw.display_name": {
+          "source": "Max Tokens",
+          "message": "Максимум токенів"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.bWF4X3Rva2Vucw.short_desc": {
+          "source": "The maximum number of tokens to generate",
+          "message": "Максимальна кількість токенів для генерації"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.bWVzc2FnZXM.desc": {
+          "source": "A list of messages comprising the conversation so far",
+          "message": "Список повідомлень, що складають розмову на цей момент"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.bWVzc2FnZXM.display_name": {
+          "source": "Messages",
+          "message": "Повідомлення"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.bWVzc2FnZXM.short_desc": {
+          "source": "A list of messages comprising the conversation so far",
+          "message": "Список повідомлень, що складають розмову на цей момент"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.c2VhcmNoX21vZGU.allowed-value.c3RyaW5nOmFjYWRlbWlj.desc": {
+          "source": "Search academic and research papers",
+          "message": "Пошук академічних і наукових робіт"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.c2VhcmNoX21vZGU.allowed-value.c3RyaW5nOmFjYWRlbWlj.display_name": {
+          "source": "Academic",
+          "message": "Академічний"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.c2VhcmNoX21vZGU.allowed-value.c3RyaW5nOmFjYWRlbWlj.short_desc": {
+          "source": "Academic and research papers",
+          "message": "Академічні та наукові роботи"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.c2VhcmNoX21vZGU.allowed-value.c3RyaW5nOnNlYw.desc": {
+          "source": "Search US SEC regulatory filings",
+          "message": "Пошук у регуляторних звітах SEC США"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.c2VhcmNoX21vZGU.allowed-value.c3RyaW5nOnNlYw.display_name": {
+          "source": "SEC",
+          "message": "SEC"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.c2VhcmNoX21vZGU.allowed-value.c3RyaW5nOnNlYw.short_desc": {
+          "source": "SEC filings",
+          "message": "Звітність SEC"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.c2VhcmNoX21vZGU.allowed-value.c3RyaW5nOndlYg.desc": {
+          "source": "General web search for grounding",
+          "message": "Загальний вебпошук для обґрунтування"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.c2VhcmNoX21vZGU.allowed-value.c3RyaW5nOndlYg.display_name": {
+          "source": "Web",
+          "message": "Веб"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.c2VhcmNoX21vZGU.allowed-value.c3RyaW5nOndlYg.short_desc": {
+          "source": "General web search",
+          "message": "Загальний вебпошук"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.c2VhcmNoX21vZGU.desc": {
+          "source": "The type of search to perform for grounding the response",
+          "message": "Тип пошуку, що виконується для обґрунтування відповіді"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.c2VhcmNoX21vZGU.display_name": {
+          "source": "Search Mode",
+          "message": "Режим пошуку"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.c2VhcmNoX21vZGU.short_desc": {
+          "source": "The type of search to perform",
+          "message": "Тип пошуку для виконання"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.c2VhcmNoX2FmdGVyX2RhdGVfZmlsdGVy.desc": {
+          "source": "Only include sources published after this date. Format: `MM/DD/YYYY`",
+          "message": "Включати лише джерела, опубліковані після цієї дати. Формат: `MM/DD/YYYY`"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.c2VhcmNoX2FmdGVyX2RhdGVfZmlsdGVy.display_name": {
+          "source": "Search After Date",
+          "message": "Шукати після дати"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.c2VhcmNoX2FmdGVyX2RhdGVfZmlsdGVy.short_desc": {
+          "source": "Only include sources published after this date",
+          "message": "Включати лише джерела, опубліковані після цієї дати"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.c2VhcmNoX2JlZm9yZV9kYXRlX2ZpbHRlcg.desc": {
+          "source": "Only include sources published before this date. Format: `MM/DD/YYYY`",
+          "message": "Включати лише джерела, опубліковані до цієї дати. Формат: `MM/DD/YYYY`"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.c2VhcmNoX2JlZm9yZV9kYXRlX2ZpbHRlcg.display_name": {
+          "source": "Search Before Date",
+          "message": "Шукати до дати"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.c2VhcmNoX2JlZm9yZV9kYXRlX2ZpbHRlcg.short_desc": {
+          "source": "Only include sources published before this date",
+          "message": "Включати лише джерела, опубліковані до цієї дати"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.c2VhcmNoX2RvbWFpbl9maWx0ZXI.desc": {
+          "source": "A list of domains to include or exclude from search results. Prefix with `-` to exclude. Maximum of 20 domains",
+          "message": "Список доменів для включення або виключення з результатів пошуку. Додайте префікс `-`, щоб виключити. Не більше 20 доменів"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.c2VhcmNoX2RvbWFpbl9maWx0ZXI.display_name": {
+          "source": "Search Domain Filter",
+          "message": "Фільтр пошуку за доменами"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.c2VhcmNoX2RvbWFpbl9maWx0ZXI.short_desc": {
+          "source": "Domain allowlist or denylist for search (max 20)",
+          "message": "Список дозволених або заблокованих доменів для пошуку (макс. 20)"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.c2VhcmNoX2xhbmd1YWdlX2ZpbHRlcg.desc": {
+          "source": "A list of ISO 639-1 language codes to filter search results. Maximum of 10 languages",
+          "message": "Список мовних кодів ISO 639-1 для фільтрації результатів пошуку. Не більше 10 мов"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.c2VhcmNoX2xhbmd1YWdlX2ZpbHRlcg.display_name": {
+          "source": "Search Language Filter",
+          "message": "Фільтр пошуку за мовою"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.c2VhcmNoX2xhbmd1YWdlX2ZpbHRlcg.short_desc": {
+          "source": "ISO 639-1 language codes to filter search results (max 10)",
+          "message": "Коди мов ISO 639-1 для фільтрації результатів пошуку (макс. 10)"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.c2VhcmNoX3JlY2VuY3lfZmlsdGVy.allowed-value.c3RyaW5nOm1vbnRo.desc": {
+          "source": "Only include sources from the last month",
+          "message": "Включати лише джерела за останній місяць"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.c2VhcmNoX3JlY2VuY3lfZmlsdGVy.allowed-value.c3RyaW5nOm1vbnRo.display_name": {
+          "source": "Last Month",
+          "message": "Минулий місяць"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.c2VhcmNoX3JlY2VuY3lfZmlsdGVy.allowed-value.c3RyaW5nOm1vbnRo.short_desc": {
+          "source": "Sources from the last month",
+          "message": "Джерела за останній місяць"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.c2VhcmNoX3JlY2VuY3lfZmlsdGVy.allowed-value.c3RyaW5nOmRheQ.desc": {
+          "source": "Only include sources from the last day",
+          "message": "Включати лише джерела за останній день"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.c2VhcmNoX3JlY2VuY3lfZmlsdGVy.allowed-value.c3RyaW5nOmRheQ.display_name": {
+          "source": "Last Day",
+          "message": "Останній день"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.c2VhcmNoX3JlY2VuY3lfZmlsdGVy.allowed-value.c3RyaW5nOmRheQ.short_desc": {
+          "source": "Sources from the last day",
+          "message": "Джерела за останній день"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.c2VhcmNoX3JlY2VuY3lfZmlsdGVy.allowed-value.c3RyaW5nOmhvdXI.desc": {
+          "source": "Only include sources from the last hour",
+          "message": "Включати лише джерела за останню годину"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.c2VhcmNoX3JlY2VuY3lfZmlsdGVy.allowed-value.c3RyaW5nOmhvdXI.display_name": {
+          "source": "Last Hour",
+          "message": "Остання година"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.c2VhcmNoX3JlY2VuY3lfZmlsdGVy.allowed-value.c3RyaW5nOmhvdXI.short_desc": {
+          "source": "Sources from the last hour",
+          "message": "Джерела за останню годину"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.c2VhcmNoX3JlY2VuY3lfZmlsdGVy.allowed-value.c3RyaW5nOndlZWs.desc": {
+          "source": "Only include sources from the last week",
+          "message": "Включати лише джерела за останній тиждень"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.c2VhcmNoX3JlY2VuY3lfZmlsdGVy.allowed-value.c3RyaW5nOndlZWs.display_name": {
+          "source": "Last Week",
+          "message": "Останній тиждень"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.c2VhcmNoX3JlY2VuY3lfZmlsdGVy.allowed-value.c3RyaW5nOndlZWs.short_desc": {
+          "source": "Sources from the last week",
+          "message": "Джерела за останній тиждень"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.c2VhcmNoX3JlY2VuY3lfZmlsdGVy.allowed-value.c3RyaW5nOnllYXI.desc": {
+          "source": "Only include sources from the last year",
+          "message": "Включати лише джерела за останній рік"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.c2VhcmNoX3JlY2VuY3lfZmlsdGVy.allowed-value.c3RyaW5nOnllYXI.display_name": {
+          "source": "Last Year",
+          "message": "Останній рік"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.c2VhcmNoX3JlY2VuY3lfZmlsdGVy.allowed-value.c3RyaW5nOnllYXI.short_desc": {
+          "source": "Sources from the last year",
+          "message": "Джерела за останній рік"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.c2VhcmNoX3JlY2VuY3lfZmlsdGVy.desc": {
+          "source": "Filter search results to only include sources from a specific time period",
+          "message": "Фільтрувати результати пошуку, щоб включати лише джерела за певний період часу"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.c2VhcmNoX3JlY2VuY3lfZmlsdGVy.display_name": {
+          "source": "Search Recency Filter",
+          "message": "Фільтр пошуку за новизною"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.c2VhcmNoX3JlY2VuY3lfZmlsdGVy.short_desc": {
+          "source": "Filter search results by recency",
+          "message": "Фільтрувати результати пошуку за новизною"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.c3RvcA.desc": {
+          "source": "Up to 4 sequences where the API will stop generating further tokens",
+          "message": "До 4 послідовностей, на яких API зупинить генерацію подальших токенів"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.c3RvcA.display_name": {
+          "source": "Stop Sequences",
+          "message": "Послідовності зупинки"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.c3RvcA.short_desc": {
+          "source": "Sequences where the API will stop generating tokens",
+          "message": "Послідовності, на яких API припинить генерацію токенів"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.c3RyZWFt.desc": {
+          "source": "If set to `True`, partial message deltas will be sent as data-only server-sent events as they become available, with the stream terminated by a `data: [DONE]` message",
+          "message": "Якщо встановлено `True`, часткові зміни повідомлень надсилатимуться як події server-sent events лише з даними в міру їх появи, а потік завершуватиметься повідомленням `data: [DONE]`"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.c3RyZWFt.display_name": {
+          "source": "Stream?",
+          "message": "Потокова передача?"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.c3RyZWFt.short_desc": {
+          "source": "Enable streaming via Server-Sent Events",
+          "message": "Увімкнути потокове передавання через Server-Sent Events"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.c3RyZWFtX21vZGU.allowed-value.c3RyaW5nOmNvbmNpc2U.desc": {
+          "source": "Provides separate reasoning events during streaming",
+          "message": "Надає окремі події міркування під час потокового передавання"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.c3RyZWFtX21vZGU.allowed-value.c3RyaW5nOmNvbmNpc2U.display_name": {
+          "source": "Concise",
+          "message": "Стислий"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.c3RyZWFtX21vZGU.allowed-value.c3RyaW5nOmNvbmNpc2U.short_desc": {
+          "source": "Separate reasoning events",
+          "message": "Окремі події міркування"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.c3RyZWFtX21vZGU.allowed-value.c3RyaW5nOmZ1bGw.desc": {
+          "source": "Metadata inline with no separate reasoning events",
+          "message": "Метадані вбудовані без окремих подій міркування"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.c3RyZWFtX21vZGU.allowed-value.c3RyaW5nOmZ1bGw.display_name": {
+          "source": "Full",
+          "message": "Повний"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.c3RyZWFtX21vZGU.allowed-value.c3RyaW5nOmZ1bGw.short_desc": {
+          "source": "Metadata inline, no reasoning events",
+          "message": "Метадані вбудовані, без подій міркування"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.c3RyZWFtX21vZGU.desc": {
+          "source": "Controls the streaming format. `full` includes metadata inline with no separate reasoning events. `concise` provides separate reasoning events",
+          "message": "Керує форматом потокового передавання. `full` містить метадані всередині рядка без окремих подій міркування. `concise` надає окремі події міркування"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.c3RyZWFtX21vZGU.display_name": {
+          "source": "Stream Mode",
+          "message": "Режим потоку"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.c3RyZWFtX21vZGU.short_desc": {
+          "source": "Controls the streaming format",
+          "message": "Керує форматом потокового передавання"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.cmV0dXJuX2ltYWdlcw.desc": {
+          "source": "If set to `True`, image results from the web search will be included in the response",
+          "message": "Якщо встановлено значення `True`, результати зображень із вебпошуку будуть включені у відповідь"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.cmV0dXJuX2ltYWdlcw.display_name": {
+          "source": "Return Images?",
+          "message": "Повертати зображення?"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.cmV0dXJuX2ltYWdlcw.short_desc": {
+          "source": "Include image results from search",
+          "message": "Включати результати зображень із пошуку"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.cmV0dXJuX3JlbGF0ZWRfcXVlc3Rpb25z.desc": {
+          "source": "If set to `True`, the response will include suggested follow-up questions",
+          "message": "Якщо встановлено значення `True`, відповідь міститиме запропоновані додаткові запитання"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.cmV0dXJuX3JlbGF0ZWRfcXVlc3Rpb25z.display_name": {
+          "source": "Return Related Questions?",
+          "message": "Повертати пов’язані запитання?"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.cmV0dXJuX3JlbGF0ZWRfcXVlc3Rpb25z.short_desc": {
+          "source": "Generate follow-up question suggestions",
+          "message": "Генерувати пропозиції додаткових запитань"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.cmVhc29uaW5nX2VmZm9ydA.allowed-value.c3RyaW5nOm1lZGl1bQ.desc": {
+          "source": "Medium reasoning effort (default)",
+          "message": "Середній рівень зусиль міркування (за замовчуванням)"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.cmVhc29uaW5nX2VmZm9ydA.allowed-value.c3RyaW5nOm1lZGl1bQ.display_name": {
+          "source": "Medium",
+          "message": "Середній"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.cmVhc29uaW5nX2VmZm9ydA.allowed-value.c3RyaW5nOm1lZGl1bQ.short_desc": {
+          "source": "Medium reasoning effort",
+          "message": "Середній рівень міркування"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.cmVhc29uaW5nX2VmZm9ydA.allowed-value.c3RyaW5nOm1pbmltYWw.desc": {
+          "source": "Minimal reasoning effort for fast responses",
+          "message": "Мінімальний рівень зусиль міркування для швидких відповідей"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.cmVhc29uaW5nX2VmZm9ydA.allowed-value.c3RyaW5nOm1pbmltYWw.display_name": {
+          "source": "Minimal",
+          "message": "Мінімальний"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.cmVhc29uaW5nX2VmZm9ydA.allowed-value.c3RyaW5nOm1pbmltYWw.short_desc": {
+          "source": "Minimal reasoning effort",
+          "message": "Мінімальний рівень зусиль міркування"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.cmVhc29uaW5nX2VmZm9ydA.allowed-value.c3RyaW5nOmhpZ2g.desc": {
+          "source": "Maximum reasoning effort for thorough analysis",
+          "message": "Максимальний рівень зусиль міркування для ретельного аналізу"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.cmVhc29uaW5nX2VmZm9ydA.allowed-value.c3RyaW5nOmhpZ2g.display_name": {
+          "source": "High",
+          "message": "Високий"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.cmVhc29uaW5nX2VmZm9ydA.allowed-value.c3RyaW5nOmhpZ2g.short_desc": {
+          "source": "High reasoning effort",
+          "message": "Високий рівень міркування"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.cmVhc29uaW5nX2VmZm9ydA.allowed-value.c3RyaW5nOmxvdw.desc": {
+          "source": "Low reasoning effort",
+          "message": "Низький рівень міркування"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.cmVhc29uaW5nX2VmZm9ydA.allowed-value.c3RyaW5nOmxvdw.display_name": {
+          "source": "Low",
+          "message": "Низький"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.cmVhc29uaW5nX2VmZm9ydA.allowed-value.c3RyaW5nOmxvdw.short_desc": {
+          "source": "Low reasoning effort",
+          "message": "Низький рівень міркування"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.cmVhc29uaW5nX2VmZm9ydA.desc": {
+          "source": "Controls the depth of reasoning for `sonar-reasoning` and `sonar-reasoning-pro` models",
+          "message": "Керує глибиною міркування для моделей `sonar-reasoning` та `sonar-reasoning-pro`"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.cmVhc29uaW5nX2VmZm9ydA.display_name": {
+          "source": "Reasoning Effort",
+          "message": "Рівень міркування"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.cmVhc29uaW5nX2VmZm9ydA.short_desc": {
+          "source": "Control the reasoning effort for reasoning models",
+          "message": "Керуйте зусиллями міркування для моделей із міркуванням"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.cmVzcG9uc2VfZm9ybWF0.desc": {
+          "source": "An object specifying the format that the model must output. Set `type` to `json_schema` and provide a `json_schema` object to enable structured JSON output",
+          "message": "Об'єкт, що визначає формат, який має виводити модель. Встановіть для `type` значення `json_schema` і надайте об'єкт `json_schema`, щоб увімкнути структурований вивід JSON"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.cmVzcG9uc2VfZm9ybWF0.display_name": {
+          "source": "Response Format",
+          "message": "Формат відповіді"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.cmVzcG9uc2VfZm9ybWF0.short_desc": {
+          "source": "Specify the output format (e.g., JSON schema)",
+          "message": "Вкажіть формат виводу (наприклад, схему JSON)"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.d2ViX3NlYXJjaF9vcHRpb25z.desc": {
+          "source": "Advanced web search configuration options such as search context size",
+          "message": "Розширені параметри конфігурації вебпошуку, такі як розмір контексту пошуку"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.d2ViX3NlYXJjaF9vcHRpb25z.display_name": {
+          "source": "Web Search Options",
+          "message": "Параметри вебпошуку"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.d2ViX3NlYXJjaF9vcHRpb25z.short_desc": {
+          "source": "Advanced web search configuration",
+          "message": "Розширена конфігурація вебпошуку"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.dG9wX3A.desc": {
+          "source": "An alternative to sampling with temperature, called nucleus sampling, where the model considers the results of the tokens with `top_p` probability mass. So `0.1` means only the tokens comprising the top 10% probability mass are considered",
+          "message": "Альтернатива вибірці з температурою під назвою nucleus sampling, де модель розглядає результати токенів із масою ймовірності `top_p`. Отже, `0.1` означає, що розглядаються лише токени, які складають верхні 10% маси ймовірності"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.dG9wX3A.display_name": {
+          "source": "Top P",
+          "message": "Top P"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.dG9wX3A.short_desc": {
+          "source": "Nucleus sampling value",
+          "message": "Значення nucleus sampling"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.dGVtcGVyYXR1cmU.desc": {
+          "source": "What sampling temperature to use, between `0` and `2`. Higher values like `0.8` will make the output more random, while lower values like `0.2` will make it more focused and deterministic",
+          "message": "Яку температуру вибірки використовувати, від `0` до `2`. Більш високі значення, як-от `0.8`, зроблять вивід більш випадковим, тоді як менші значення, як-от `0.2`, зроблять його більш сфокусованим і детермінованим"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.dGVtcGVyYXR1cmU.display_name": {
+          "source": "Sampling Temperature",
+          "message": "Температура вибірки"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.dGVtcGVyYXR1cmU.short_desc": {
+          "source": "The sampling temperature to use, between 0 and 2",
+          "message": "Температура вибірки, яку слід використовувати, від 0 до 2"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.short_desc": {
+          "source": "Chat with a Perplexity AI model by sending multiple messages at once and getting web-grounded responses with citations",
+          "message": "Спілкуйтеся з моделлю Perplexity AI, надсилаючи кілька повідомлень одночасно та отримуючи обґрунтовані вебом відповіді з цитуваннями"
+        },
+        "app.UGVycGxleGl0eQ.action.c2VhcmNo.desc": {
+          "source": "Search the web using Perplexity's dedicated search API returning structured results with titles, URLs, and snippets",
+          "message": "Пошук в Інтернеті за допомогою спеціального Search API від Perplexity з поверненням структурованих результатів із заголовками, URL-адресами та фрагментами"
+        },
+        "app.UGVycGxleGl0eQ.action.c2VhcmNo.display_name": {
+          "source": "Web Search",
+          "message": "Вебпошук"
+        },
+        "app.UGVycGxleGl0eQ.action.c2VhcmNo.option.Y291bnRyeQ.desc": {
+          "source": "ISO country code to localize search results",
+          "message": "Код країни ISO для локалізації результатів пошуку"
+        },
+        "app.UGVycGxleGl0eQ.action.c2VhcmNo.option.Y291bnRyeQ.display_name": {
+          "source": "Country",
+          "message": "Країна"
+        },
+        "app.UGVycGxleGl0eQ.action.c2VhcmNo.option.Y291bnRyeQ.short_desc": {
+          "source": "ISO country code for search localization",
+          "message": "Код країни ISO для локалізації пошуку"
+        },
+        "app.UGVycGxleGl0eQ.action.c2VhcmNo.option.bWF4X3Jlc3VsdHM.desc": {
+          "source": "Maximum number of search results to return. Range: 1-20, default: 10",
+          "message": "Максимальна кількість результатів пошуку для повернення. Діапазон: 1-20, за замовчуванням: 10"
+        },
+        "app.UGVycGxleGl0eQ.action.c2VhcmNo.option.bWF4X3Jlc3VsdHM.display_name": {
+          "source": "Max Results",
+          "message": "Макс. результатів"
+        },
+        "app.UGVycGxleGl0eQ.action.c2VhcmNo.option.bWF4X3Jlc3VsdHM.short_desc": {
+          "source": "Maximum number of results to return (1-20)",
+          "message": "Максимальна кількість результатів для повернення (1-20)"
+        },
+        "app.UGVycGxleGl0eQ.action.c2VhcmNo.option.bWF4X3Rva2Vuc19wZXJfcGFnZQ.desc": {
+          "source": "Maximum tokens extracted from each page in results. Default: 4,096",
+          "message": "Максимальна кількість токенів, витягнутих із кожної сторінки в результатах. За замовчуванням: 4096"
+        },
+        "app.UGVycGxleGl0eQ.action.c2VhcmNo.option.bWF4X3Rva2Vuc19wZXJfcGFnZQ.display_name": {
+          "source": "Max Tokens Per Page",
+          "message": "Макс. кількість токенів на сторінку"
+        },
+        "app.UGVycGxleGl0eQ.action.c2VhcmNo.option.bWF4X3Rva2Vuc19wZXJfcGFnZQ.short_desc": {
+          "source": "Maximum tokens extracted per page",
+          "message": "Максимальна кількість токенів, витягнутих на сторінку"
+        },
+        "app.UGVycGxleGl0eQ.action.c2VhcmNo.option.bWF4X3Rva2Vucw.desc": {
+          "source": "Maximum tokens per search response. Default: 10,000, maximum: 1,000,000",
+          "message": "Максимальна кількість токенів на відповідь пошуку. За замовчуванням: 10 000, максимум: 1 000 000"
+        },
+        "app.UGVycGxleGl0eQ.action.c2VhcmNo.option.bWF4X3Rva2Vucw.display_name": {
+          "source": "Max Tokens",
+          "message": "Максимум токенів"
+        },
+        "app.UGVycGxleGl0eQ.action.c2VhcmNo.option.bWF4X3Rva2Vucw.short_desc": {
+          "source": "Maximum tokens per search response",
+          "message": "Максимальна кількість токенів на відповідь пошуку"
+        },
+        "app.UGVycGxleGl0eQ.action.c2VhcmNo.option.c2VhcmNoX2RvbWFpbl9maWx0ZXI.desc": {
+          "source": "A list of domains to include or exclude from search results. Prefix with `-` to exclude",
+          "message": "Список доменів для включення або виключення з результатів пошуку. Додайте префікс `-` для виключення"
+        },
+        "app.UGVycGxleGl0eQ.action.c2VhcmNo.option.c2VhcmNoX2RvbWFpbl9maWx0ZXI.display_name": {
+          "source": "Search Domain Filter",
+          "message": "Фільтр пошуку за доменами"
+        },
+        "app.UGVycGxleGl0eQ.action.c2VhcmNo.option.c2VhcmNoX2RvbWFpbl9maWx0ZXI.short_desc": {
+          "source": "Domain allowlist or denylist for search",
+          "message": "Список дозволених або заборонених доменів для пошуку"
+        },
+        "app.UGVycGxleGl0eQ.action.c2VhcmNo.option.c2VhcmNoX2xhbmd1YWdlX2ZpbHRlcg.desc": {
+          "source": "A list of ISO 639-1 language codes to filter search results",
+          "message": "Список мовних кодів ISO 639-1 для фільтрації результатів пошуку"
+        },
+        "app.UGVycGxleGl0eQ.action.c2VhcmNo.option.c2VhcmNoX2xhbmd1YWdlX2ZpbHRlcg.display_name": {
+          "source": "Search Language Filter",
+          "message": "Фільтр пошуку за мовою"
+        },
+        "app.UGVycGxleGl0eQ.action.c2VhcmNo.option.c2VhcmNoX2xhbmd1YWdlX2ZpbHRlcg.short_desc": {
+          "source": "ISO 639-1 language codes to filter results",
+          "message": "Мовні коди ISO 639-1 для фільтрації результатів"
+        },
+        "app.UGVycGxleGl0eQ.action.c2VhcmNo.option.c2VhcmNoX3JlY2VuY3lfZmlsdGVy.allowed-value.c3RyaW5nOm1vbnRo.desc": {
+          "source": "Only include sources from the last month",
+          "message": "Включати лише джерела за останній місяць"
+        },
+        "app.UGVycGxleGl0eQ.action.c2VhcmNo.option.c2VhcmNoX3JlY2VuY3lfZmlsdGVy.allowed-value.c3RyaW5nOm1vbnRo.display_name": {
+          "source": "Last Month",
+          "message": "Минулий місяць"
+        },
+        "app.UGVycGxleGl0eQ.action.c2VhcmNo.option.c2VhcmNoX3JlY2VuY3lfZmlsdGVy.allowed-value.c3RyaW5nOm1vbnRo.short_desc": {
+          "source": "Sources from the last month",
+          "message": "Джерела за останній місяць"
+        },
+        "app.UGVycGxleGl0eQ.action.c2VhcmNo.option.c2VhcmNoX3JlY2VuY3lfZmlsdGVy.allowed-value.c3RyaW5nOmRheQ.desc": {
+          "source": "Only include sources from the last day",
+          "message": "Включати лише джерела за останній день"
+        },
+        "app.UGVycGxleGl0eQ.action.c2VhcmNo.option.c2VhcmNoX3JlY2VuY3lfZmlsdGVy.allowed-value.c3RyaW5nOmRheQ.display_name": {
+          "source": "Last Day",
+          "message": "Останній день"
+        },
+        "app.UGVycGxleGl0eQ.action.c2VhcmNo.option.c2VhcmNoX3JlY2VuY3lfZmlsdGVy.allowed-value.c3RyaW5nOmRheQ.short_desc": {
+          "source": "Sources from the last day",
+          "message": "Джерела за останній день"
+        },
+        "app.UGVycGxleGl0eQ.action.c2VhcmNo.option.c2VhcmNoX3JlY2VuY3lfZmlsdGVy.allowed-value.c3RyaW5nOmhvdXI.desc": {
+          "source": "Only include sources from the last hour",
+          "message": "Включати лише джерела за останню годину"
+        },
+        "app.UGVycGxleGl0eQ.action.c2VhcmNo.option.c2VhcmNoX3JlY2VuY3lfZmlsdGVy.allowed-value.c3RyaW5nOmhvdXI.display_name": {
+          "source": "Last Hour",
+          "message": "Остання година"
+        },
+        "app.UGVycGxleGl0eQ.action.c2VhcmNo.option.c2VhcmNoX3JlY2VuY3lfZmlsdGVy.allowed-value.c3RyaW5nOmhvdXI.short_desc": {
+          "source": "Sources from the last hour",
+          "message": "Джерела за останню годину"
+        },
+        "app.UGVycGxleGl0eQ.action.c2VhcmNo.option.c2VhcmNoX3JlY2VuY3lfZmlsdGVy.allowed-value.c3RyaW5nOndlZWs.desc": {
+          "source": "Only include sources from the last week",
+          "message": "Включати лише джерела за останній тиждень"
+        },
+        "app.UGVycGxleGl0eQ.action.c2VhcmNo.option.c2VhcmNoX3JlY2VuY3lfZmlsdGVy.allowed-value.c3RyaW5nOndlZWs.display_name": {
+          "source": "Last Week",
+          "message": "Останній тиждень"
+        },
+        "app.UGVycGxleGl0eQ.action.c2VhcmNo.option.c2VhcmNoX3JlY2VuY3lfZmlsdGVy.allowed-value.c3RyaW5nOndlZWs.short_desc": {
+          "source": "Sources from the last week",
+          "message": "Джерела за останній тиждень"
+        },
+        "app.UGVycGxleGl0eQ.action.c2VhcmNo.option.c2VhcmNoX3JlY2VuY3lfZmlsdGVy.allowed-value.c3RyaW5nOnllYXI.desc": {
+          "source": "Only include sources from the last year",
+          "message": "Включати лише джерела за останній рік"
+        },
+        "app.UGVycGxleGl0eQ.action.c2VhcmNo.option.c2VhcmNoX3JlY2VuY3lfZmlsdGVy.allowed-value.c3RyaW5nOnllYXI.display_name": {
+          "source": "Last Year",
+          "message": "Останній рік"
+        },
+        "app.UGVycGxleGl0eQ.action.c2VhcmNo.option.c2VhcmNoX3JlY2VuY3lfZmlsdGVy.allowed-value.c3RyaW5nOnllYXI.short_desc": {
+          "source": "Sources from the last year",
+          "message": "Джерела за останній рік"
+        },
+        "app.UGVycGxleGl0eQ.action.c2VhcmNo.option.c2VhcmNoX3JlY2VuY3lfZmlsdGVy.desc": {
+          "source": "Filter search results to only include sources from a specific time period",
+          "message": "Фільтрувати результати пошуку, щоб включати лише джерела за певний період часу"
+        },
+        "app.UGVycGxleGl0eQ.action.c2VhcmNo.option.c2VhcmNoX3JlY2VuY3lfZmlsdGVy.display_name": {
+          "source": "Search Recency Filter",
+          "message": "Фільтр пошуку за новизною"
+        },
+        "app.UGVycGxleGl0eQ.action.c2VhcmNo.option.c2VhcmNoX3JlY2VuY3lfZmlsdGVy.short_desc": {
+          "source": "Filter search results by recency",
+          "message": "Фільтрувати результати пошуку за новизною"
+        },
+        "app.UGVycGxleGl0eQ.action.c2VhcmNo.option.cXVlcnk.desc": {
+          "source": "The search query string; automatically wrapped in an array for the API",
+          "message": "Рядок пошукового запиту; автоматично огортається в масив для API"
+        },
+        "app.UGVycGxleGl0eQ.action.c2VhcmNo.option.cXVlcnk.display_name": {
+          "source": "Query",
+          "message": "Запит"
+        },
+        "app.UGVycGxleGl0eQ.action.c2VhcmNo.option.cXVlcnk.short_desc": {
+          "source": "The search query",
+          "message": "Пошуковий запит"
+        },
+        "app.UGVycGxleGl0eQ.action.c2VhcmNo.short_desc": {
+          "source": "Search the web using Perplexity's dedicated search API",
+          "message": "Пошук в Інтернеті за допомогою спеціального Search API від Perplexity"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.desc": {
+          "source": "Chat with a Perplexity AI model by sending a single message and receiving a single web-grounded reply with citations",
+          "message": "Спілкуйтеся з моделлю Perplexity AI, надіславши одне повідомлення й отримавши одну відповідь з обґрунтуванням у вебджерелах і цитатами"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.display_name": {
+          "source": "Simple Chat",
+          "message": "Простий чат"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.Y29udGVudA.desc": {
+          "source": "The contents of the message",
+          "message": "Вміст повідомлення"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.Y29udGVudA.display_name": {
+          "source": "Content",
+          "message": "Вміст"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.Y29udGVudA.short_desc": {
+          "source": "The contents of the message",
+          "message": "Вміст повідомлення"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.ZGlzYWJsZV9zZWFyY2g.desc": {
+          "source": "If set to `True`, the model will not search the web and will only use its training data to generate a response",
+          "message": "Якщо встановлено `True`, модель не здійснюватиме пошук у вебі та використовуватиме лише свої навчальні дані для генерації відповіді"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.ZGlzYWJsZV9zZWFyY2g.display_name": {
+          "source": "Disable Search?",
+          "message": "Вимкнути пошук?"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.ZGlzYWJsZV9zZWFyY2g.short_desc": {
+          "source": "Restrict response to training data only",
+          "message": "Обмежити відповідь лише навчальними даними"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.ZW5hYmxlX3NlYXJjaF9jbGFzc2lmaWVy.desc": {
+          "source": "If set to `True`, uses a classifier to determine whether a web search is needed for the query before performing one",
+          "message": "Якщо встановлено `True`, використовує класифікатор для визначення необхідності вебпошуку для запиту перед його виконанням"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.ZW5hYmxlX3NlYXJjaF9jbGFzc2lmaWVy.display_name": {
+          "source": "Enable Search Classifier?",
+          "message": "Увімкнути класифікатор пошуку?"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.ZW5hYmxlX3NlYXJjaF9jbGFzc2lmaWVy.short_desc": {
+          "source": "Use a classifier to determine if search is needed",
+          "message": "Використовувати класифікатор для визначення необхідності пошуку"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.aW1hZ2VfZG9tYWluX2ZpbHRlcg.desc": {
+          "source": "A list of domains to limit image search results to. Only applies when `return_images` is set to `True`",
+          "message": "Список доменів для обмеження результатів пошуку зображень. Застосовується, лише коли `return_images` має значення `True`"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.aW1hZ2VfZG9tYWluX2ZpbHRlcg.display_name": {
+          "source": "Image Domain Filter",
+          "message": "Фільтр доменів зображень"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.aW1hZ2VfZG9tYWluX2ZpbHRlcg.short_desc": {
+          "source": "Limit image sources to specific domains",
+          "message": "Обмежити джерела зображень певними доменами"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.aW1hZ2VfZm9ybWF0X2ZpbHRlcg.desc": {
+          "source": "A list of image formats to include in image results (e.g., `png`, `jpg`). Only applies when `return_images` is set to `True`",
+          "message": "Список форматів зображень для включення до результатів зображень (наприклад, `png`, `jpg`). Застосовується, лише коли `return_images` має значення `True`"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.aW1hZ2VfZm9ybWF0X2ZpbHRlcg.display_name": {
+          "source": "Image Format Filter",
+          "message": "Фільтр форматів зображень"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.aW1hZ2VfZm9ybWF0X2ZpbHRlcg.short_desc": {
+          "source": "Filter image results by format",
+          "message": "Фільтрувати результати зображень за форматом"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.bGFuZ3VhZ2VfcHJlZmVyZW5jZQ.desc": {
+          "source": "An ISO 639-1 language code specifying the preferred language for the response",
+          "message": "Мовний код ISO 639-1, який визначає бажану мову для відповіді"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.bGFuZ3VhZ2VfcHJlZmVyZW5jZQ.display_name": {
+          "source": "Language Preference",
+          "message": "Бажана мова"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.bGFuZ3VhZ2VfcHJlZmVyZW5jZQ.short_desc": {
+          "source": "ISO 639-1 language code for the response",
+          "message": "Мовний код ISO 639-1 для відповіді"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.bGFzdF91cGRhdGVkX2FmdGVyX2ZpbHRlcg.desc": {
+          "source": "Only include sources that were last updated after this date. Format: `MM/DD/YYYY`",
+          "message": "Включати лише джерела, які востаннє оновлювалися після цієї дати. Формат: `MM/DD/YYYY`"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.bGFzdF91cGRhdGVkX2FmdGVyX2ZpbHRlcg.display_name": {
+          "source": "Last Updated After",
+          "message": "Останнє оновлення після"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.bGFzdF91cGRhdGVkX2FmdGVyX2ZpbHRlcg.short_desc": {
+          "source": "Only include sources updated after this date",
+          "message": "Включати лише джерела, оновлені після цієї дати"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.bGFzdF91cGRhdGVkX2JlZm9yZV9maWx0ZXI.desc": {
+          "source": "Only include sources that were last updated before this date. Format: `MM/DD/YYYY`",
+          "message": "Включати лише джерела, які востаннє оновлювалися до цієї дати. Формат: `MM/DD/YYYY`"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.bGFzdF91cGRhdGVkX2JlZm9yZV9maWx0ZXI.display_name": {
+          "source": "Last Updated Before",
+          "message": "Останнє оновлення до"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.bGFzdF91cGRhdGVkX2JlZm9yZV9maWx0ZXI.short_desc": {
+          "source": "Only include sources updated before this date",
+          "message": "Включати лише джерела, оновлені до цієї дати"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.bW9kZWw.allowed-value.c3RyaW5nOnNvbmFy.desc": {
+          "source": "Lightweight, cost-effective search model based on Llama 3.3 70B",
+          "message": "Легка, економічно ефективна пошукова модель на базі Llama 3.3 70B"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.bW9kZWw.allowed-value.c3RyaW5nOnNvbmFy.display_name": {
+          "source": "Sonar",
+          "message": "Sonar"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.bW9kZWw.allowed-value.c3RyaW5nOnNvbmFy.short_desc": {
+          "source": "Lightweight, cost-effective search model",
+          "message": "Легка, економічно ефективна пошукова модель"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.bW9kZWw.allowed-value.c3RyaW5nOnNvbmFyLWRlZXAtcmVzZWFyY2g.desc": {
+          "source": "Expert-level research with autonomous source evaluation and report generation",
+          "message": "Дослідження експертного рівня з автономною оцінкою джерел і створенням звітів"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.bW9kZWw.allowed-value.c3RyaW5nOnNvbmFyLWRlZXAtcmVzZWFyY2g.display_name": {
+          "source": "Sonar Deep Research",
+          "message": "Sonar Deep Research"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.bW9kZWw.allowed-value.c3RyaW5nOnNvbmFyLWRlZXAtcmVzZWFyY2g.short_desc": {
+          "source": "Expert-level autonomous research",
+          "message": "Автономні дослідження експертного рівня"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.bW9kZWw.allowed-value.c3RyaW5nOnNvbmFyLXBybw.desc": {
+          "source": "Advanced search with deeper retrieval and double citations",
+          "message": "Розширений пошук із глибшим вилученням та подвійним цитуванням"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.bW9kZWw.allowed-value.c3RyaW5nOnNvbmFyLXBybw.display_name": {
+          "source": "Sonar Pro",
+          "message": "Sonar Pro"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.bW9kZWw.allowed-value.c3RyaW5nOnNvbmFyLXBybw.short_desc": {
+          "source": "Advanced search with deeper retrieval",
+          "message": "Розширений пошук із глибшим вилученням"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.bW9kZWw.allowed-value.c3RyaW5nOnNvbmFyLXJlYXNvbmluZy1wcm8.desc": {
+          "source": "Chain of Thought reasoning model based on DeepSeek-R1 with multi-query search",
+          "message": "Модель міркування Chain of Thought на базі DeepSeek-R1 з багатозапитним пошуком"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.bW9kZWw.allowed-value.c3RyaW5nOnNvbmFyLXJlYXNvbmluZy1wcm8.display_name": {
+          "source": "Sonar Reasoning Pro",
+          "message": "Sonar Reasoning Pro"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.bW9kZWw.allowed-value.c3RyaW5nOnNvbmFyLXJlYXNvbmluZy1wcm8.short_desc": {
+          "source": "Chain of Thought reasoning model",
+          "message": "Модель міркування Chain of Thought"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.bW9kZWw.desc": {
+          "source": "Model to use for the chat completion",
+          "message": "Модель для використання під час автодоповнення чату"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.bW9kZWw.display_name": {
+          "source": "Model ID",
+          "message": "ID моделі"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.bW9kZWw.short_desc": {
+          "source": "Model to use for the chat completion",
+          "message": "Модель для використання під час автодоповнення чату"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.bWF4X3Rva2Vucw.desc": {
+          "source": "The maximum number of tokens that can be generated in the chat completion. Up to 128,000 tokens supported",
+          "message": "Максимальна кількість токенів, яка може бути згенерована під час автодоповнення чату. Підтримується до 128 000 токенів"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.bWF4X3Rva2Vucw.display_name": {
+          "source": "Max Tokens",
+          "message": "Максимум токенів"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.bWF4X3Rva2Vucw.short_desc": {
+          "source": "The maximum number of tokens to generate",
+          "message": "Максимальна кількість токенів для генерації"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.c2VhcmNoX21vZGU.allowed-value.c3RyaW5nOmFjYWRlbWlj.desc": {
+          "source": "Search academic and research papers",
+          "message": "Пошук академічних і наукових робіт"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.c2VhcmNoX21vZGU.allowed-value.c3RyaW5nOmFjYWRlbWlj.display_name": {
+          "source": "Academic",
+          "message": "Академічний"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.c2VhcmNoX21vZGU.allowed-value.c3RyaW5nOmFjYWRlbWlj.short_desc": {
+          "source": "Academic and research papers",
+          "message": "Академічні та наукові роботи"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.c2VhcmNoX21vZGU.allowed-value.c3RyaW5nOnNlYw.desc": {
+          "source": "Search US SEC regulatory filings",
+          "message": "Пошук у регуляторних звітах SEC США"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.c2VhcmNoX21vZGU.allowed-value.c3RyaW5nOnNlYw.display_name": {
+          "source": "SEC",
+          "message": "SEC"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.c2VhcmNoX21vZGU.allowed-value.c3RyaW5nOnNlYw.short_desc": {
+          "source": "SEC filings",
+          "message": "Звітність SEC"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.c2VhcmNoX21vZGU.allowed-value.c3RyaW5nOndlYg.desc": {
+          "source": "General web search for grounding",
+          "message": "Загальний вебпошук для обґрунтування"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.c2VhcmNoX21vZGU.allowed-value.c3RyaW5nOndlYg.display_name": {
+          "source": "Web",
+          "message": "Веб"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.c2VhcmNoX21vZGU.allowed-value.c3RyaW5nOndlYg.short_desc": {
+          "source": "General web search",
+          "message": "Загальний вебпошук"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.c2VhcmNoX21vZGU.desc": {
+          "source": "The type of search to perform for grounding the response",
+          "message": "Тип пошуку, що виконується для обґрунтування відповіді"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.c2VhcmNoX21vZGU.display_name": {
+          "source": "Search Mode",
+          "message": "Режим пошуку"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.c2VhcmNoX21vZGU.short_desc": {
+          "source": "The type of search to perform",
+          "message": "Тип пошуку для виконання"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.c2VhcmNoX2FmdGVyX2RhdGVfZmlsdGVy.desc": {
+          "source": "Only include sources published after this date. Format: `MM/DD/YYYY`",
+          "message": "Включати лише джерела, опубліковані після цієї дати. Формат: `MM/DD/YYYY`"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.c2VhcmNoX2FmdGVyX2RhdGVfZmlsdGVy.display_name": {
+          "source": "Search After Date",
+          "message": "Шукати після дати"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.c2VhcmNoX2FmdGVyX2RhdGVfZmlsdGVy.short_desc": {
+          "source": "Only include sources published after this date",
+          "message": "Включати лише джерела, опубліковані після цієї дати"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.c2VhcmNoX2JlZm9yZV9kYXRlX2ZpbHRlcg.desc": {
+          "source": "Only include sources published before this date. Format: `MM/DD/YYYY`",
+          "message": "Включати лише джерела, опубліковані до цієї дати. Формат: `MM/DD/YYYY`"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.c2VhcmNoX2JlZm9yZV9kYXRlX2ZpbHRlcg.display_name": {
+          "source": "Search Before Date",
+          "message": "Шукати до дати"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.c2VhcmNoX2JlZm9yZV9kYXRlX2ZpbHRlcg.short_desc": {
+          "source": "Only include sources published before this date",
+          "message": "Включати лише джерела, опубліковані до цієї дати"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.c2VhcmNoX2RvbWFpbl9maWx0ZXI.desc": {
+          "source": "A list of domains to include or exclude from search results. Prefix with `-` to exclude. Maximum of 20 domains",
+          "message": "Список доменів для включення або виключення з результатів пошуку. Додайте префікс `-`, щоб виключити. Не більше 20 доменів"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.c2VhcmNoX2RvbWFpbl9maWx0ZXI.display_name": {
+          "source": "Search Domain Filter",
+          "message": "Фільтр пошуку за доменами"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.c2VhcmNoX2RvbWFpbl9maWx0ZXI.short_desc": {
+          "source": "Domain allowlist or denylist for search (max 20)",
+          "message": "Список дозволених або заблокованих доменів для пошуку (макс. 20)"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.c2VhcmNoX2xhbmd1YWdlX2ZpbHRlcg.desc": {
+          "source": "A list of ISO 639-1 language codes to filter search results. Maximum of 10 languages",
+          "message": "Список мовних кодів ISO 639-1 для фільтрації результатів пошуку. Не більше 10 мов"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.c2VhcmNoX2xhbmd1YWdlX2ZpbHRlcg.display_name": {
+          "source": "Search Language Filter",
+          "message": "Фільтр пошуку за мовою"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.c2VhcmNoX2xhbmd1YWdlX2ZpbHRlcg.short_desc": {
+          "source": "ISO 639-1 language codes to filter search results (max 10)",
+          "message": "Коди мов ISO 639-1 для фільтрації результатів пошуку (макс. 10)"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.c2VhcmNoX3JlY2VuY3lfZmlsdGVy.allowed-value.c3RyaW5nOm1vbnRo.desc": {
+          "source": "Only include sources from the last month",
+          "message": "Включати лише джерела за останній місяць"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.c2VhcmNoX3JlY2VuY3lfZmlsdGVy.allowed-value.c3RyaW5nOm1vbnRo.display_name": {
+          "source": "Last Month",
+          "message": "Минулий місяць"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.c2VhcmNoX3JlY2VuY3lfZmlsdGVy.allowed-value.c3RyaW5nOm1vbnRo.short_desc": {
+          "source": "Sources from the last month",
+          "message": "Джерела за останній місяць"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.c2VhcmNoX3JlY2VuY3lfZmlsdGVy.allowed-value.c3RyaW5nOmRheQ.desc": {
+          "source": "Only include sources from the last day",
+          "message": "Включати лише джерела за останній день"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.c2VhcmNoX3JlY2VuY3lfZmlsdGVy.allowed-value.c3RyaW5nOmRheQ.display_name": {
+          "source": "Last Day",
+          "message": "Останній день"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.c2VhcmNoX3JlY2VuY3lfZmlsdGVy.allowed-value.c3RyaW5nOmRheQ.short_desc": {
+          "source": "Sources from the last day",
+          "message": "Джерела за останній день"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.c2VhcmNoX3JlY2VuY3lfZmlsdGVy.allowed-value.c3RyaW5nOmhvdXI.desc": {
+          "source": "Only include sources from the last hour",
+          "message": "Включати лише джерела за останню годину"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.c2VhcmNoX3JlY2VuY3lfZmlsdGVy.allowed-value.c3RyaW5nOmhvdXI.display_name": {
+          "source": "Last Hour",
+          "message": "Остання година"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.c2VhcmNoX3JlY2VuY3lfZmlsdGVy.allowed-value.c3RyaW5nOmhvdXI.short_desc": {
+          "source": "Sources from the last hour",
+          "message": "Джерела за останню годину"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.c2VhcmNoX3JlY2VuY3lfZmlsdGVy.allowed-value.c3RyaW5nOndlZWs.desc": {
+          "source": "Only include sources from the last week",
+          "message": "Включати лише джерела за останній тиждень"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.c2VhcmNoX3JlY2VuY3lfZmlsdGVy.allowed-value.c3RyaW5nOndlZWs.display_name": {
+          "source": "Last Week",
+          "message": "Останній тиждень"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.c2VhcmNoX3JlY2VuY3lfZmlsdGVy.allowed-value.c3RyaW5nOndlZWs.short_desc": {
+          "source": "Sources from the last week",
+          "message": "Джерела за останній тиждень"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.c2VhcmNoX3JlY2VuY3lfZmlsdGVy.allowed-value.c3RyaW5nOnllYXI.desc": {
+          "source": "Only include sources from the last year",
+          "message": "Включати лише джерела за останній рік"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.c2VhcmNoX3JlY2VuY3lfZmlsdGVy.allowed-value.c3RyaW5nOnllYXI.display_name": {
+          "source": "Last Year",
+          "message": "Останній рік"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.c2VhcmNoX3JlY2VuY3lfZmlsdGVy.allowed-value.c3RyaW5nOnllYXI.short_desc": {
+          "source": "Sources from the last year",
+          "message": "Джерела за останній рік"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.c2VhcmNoX3JlY2VuY3lfZmlsdGVy.desc": {
+          "source": "Filter search results to only include sources from a specific time period",
+          "message": "Фільтрувати результати пошуку, щоб включати лише джерела за певний період часу"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.c2VhcmNoX3JlY2VuY3lfZmlsdGVy.display_name": {
+          "source": "Search Recency Filter",
+          "message": "Фільтр пошуку за новизною"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.c2VhcmNoX3JlY2VuY3lfZmlsdGVy.short_desc": {
+          "source": "Filter search results by recency",
+          "message": "Фільтрувати результати пошуку за новизною"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.c3RvcA.desc": {
+          "source": "Up to 4 sequences where the API will stop generating further tokens",
+          "message": "До 4 послідовностей, на яких API зупинить генерацію подальших токенів"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.c3RvcA.display_name": {
+          "source": "Stop Sequences",
+          "message": "Послідовності зупинки"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.c3RvcA.short_desc": {
+          "source": "Sequences where the API will stop generating tokens",
+          "message": "Послідовності, на яких API припинить генерацію токенів"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.c3RyZWFt.desc": {
+          "source": "If set to `True`, partial message deltas will be sent as data-only server-sent events as they become available, with the stream terminated by a `data: [DONE]` message",
+          "message": "Якщо встановлено `True`, часткові зміни повідомлень надсилатимуться як події server-sent events лише з даними в міру їх появи, а потік завершуватиметься повідомленням `data: [DONE]`"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.c3RyZWFt.display_name": {
+          "source": "Stream?",
+          "message": "Потокова передача?"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.c3RyZWFt.short_desc": {
+          "source": "Enable streaming via Server-Sent Events",
+          "message": "Увімкнути потокове передавання через Server-Sent Events"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.c3RyZWFtX21vZGU.allowed-value.c3RyaW5nOmNvbmNpc2U.desc": {
+          "source": "Provides separate reasoning events during streaming",
+          "message": "Надає окремі події міркування під час потокового передавання"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.c3RyZWFtX21vZGU.allowed-value.c3RyaW5nOmNvbmNpc2U.display_name": {
+          "source": "Concise",
+          "message": "Стислий"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.c3RyZWFtX21vZGU.allowed-value.c3RyaW5nOmNvbmNpc2U.short_desc": {
+          "source": "Separate reasoning events",
+          "message": "Окремі події міркування"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.c3RyZWFtX21vZGU.allowed-value.c3RyaW5nOmZ1bGw.desc": {
+          "source": "Metadata inline with no separate reasoning events",
+          "message": "Метадані вбудовані без окремих подій міркування"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.c3RyZWFtX21vZGU.allowed-value.c3RyaW5nOmZ1bGw.display_name": {
+          "source": "Full",
+          "message": "Повний"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.c3RyZWFtX21vZGU.allowed-value.c3RyaW5nOmZ1bGw.short_desc": {
+          "source": "Metadata inline, no reasoning events",
+          "message": "Метадані вбудовані, без подій міркування"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.c3RyZWFtX21vZGU.desc": {
+          "source": "Controls the streaming format. `full` includes metadata inline with no separate reasoning events. `concise` provides separate reasoning events",
+          "message": "Керує форматом потокового передавання. `full` містить метадані всередині рядка без окремих подій міркування. `concise` надає окремі події міркування"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.c3RyZWFtX21vZGU.display_name": {
+          "source": "Stream Mode",
+          "message": "Режим потоку"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.c3RyZWFtX21vZGU.short_desc": {
+          "source": "Controls the streaming format",
+          "message": "Керує форматом потокового передавання"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.cm9sZQ.allowed-value.c3RyaW5nOmFzc2lzdGFudA.desc": {
+          "source": "The author of the message is an assistant",
+          "message": "Автор повідомлення — асистент"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.cm9sZQ.allowed-value.c3RyaW5nOmFzc2lzdGFudA.display_name": {
+          "source": "Assistant",
+          "message": "Асистент"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.cm9sZQ.allowed-value.c3RyaW5nOmFzc2lzdGFudA.short_desc": {
+          "source": "The author of the message is an assistant",
+          "message": "Автор повідомлення — асистент"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.cm9sZQ.allowed-value.c3RyaW5nOnN5c3RlbQ.desc": {
+          "source": "The author of the message is the system",
+          "message": "Автор повідомлення — система"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.cm9sZQ.allowed-value.c3RyaW5nOnN5c3RlbQ.display_name": {
+          "source": "System",
+          "message": "Система"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.cm9sZQ.allowed-value.c3RyaW5nOnN5c3RlbQ.short_desc": {
+          "source": "The author of the message is the system",
+          "message": "Автор повідомлення — система"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.cm9sZQ.allowed-value.c3RyaW5nOnVzZXI.desc": {
+          "source": "The author of the message is the user",
+          "message": "Автор повідомлення — користувач"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.cm9sZQ.allowed-value.c3RyaW5nOnVzZXI.display_name": {
+          "source": "User",
+          "message": "Користувач"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.cm9sZQ.allowed-value.c3RyaW5nOnVzZXI.short_desc": {
+          "source": "The author of the message is the user",
+          "message": "Автор повідомлення — користувач"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.cm9sZQ.desc": {
+          "source": "The role of the author of this message",
+          "message": "Роль автора цього повідомлення"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.cm9sZQ.display_name": {
+          "source": "Role",
+          "message": "Роль"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.cm9sZQ.short_desc": {
+          "source": "The role of the author of this message",
+          "message": "Роль автора цього повідомлення"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.cmV0dXJuX2ltYWdlcw.desc": {
+          "source": "If set to `True`, image results from the web search will be included in the response",
+          "message": "Якщо встановлено значення `True`, результати зображень із вебпошуку будуть включені у відповідь"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.cmV0dXJuX2ltYWdlcw.display_name": {
+          "source": "Return Images?",
+          "message": "Повертати зображення?"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.cmV0dXJuX2ltYWdlcw.short_desc": {
+          "source": "Include image results from search",
+          "message": "Включати результати зображень із пошуку"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.cmV0dXJuX3JlbGF0ZWRfcXVlc3Rpb25z.desc": {
+          "source": "If set to `True`, the response will include suggested follow-up questions",
+          "message": "Якщо встановлено значення `True`, відповідь міститиме запропоновані додаткові запитання"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.cmV0dXJuX3JlbGF0ZWRfcXVlc3Rpb25z.display_name": {
+          "source": "Return Related Questions?",
+          "message": "Повертати пов’язані запитання?"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.cmV0dXJuX3JlbGF0ZWRfcXVlc3Rpb25z.short_desc": {
+          "source": "Generate follow-up question suggestions",
+          "message": "Генерувати пропозиції додаткових запитань"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.cmVhc29uaW5nX2VmZm9ydA.allowed-value.c3RyaW5nOm1lZGl1bQ.desc": {
+          "source": "Medium reasoning effort (default)",
+          "message": "Середній рівень зусиль міркування (за замовчуванням)"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.cmVhc29uaW5nX2VmZm9ydA.allowed-value.c3RyaW5nOm1lZGl1bQ.display_name": {
+          "source": "Medium",
+          "message": "Середній"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.cmVhc29uaW5nX2VmZm9ydA.allowed-value.c3RyaW5nOm1lZGl1bQ.short_desc": {
+          "source": "Medium reasoning effort",
+          "message": "Середній рівень міркування"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.cmVhc29uaW5nX2VmZm9ydA.allowed-value.c3RyaW5nOm1pbmltYWw.desc": {
+          "source": "Minimal reasoning effort for fast responses",
+          "message": "Мінімальний рівень зусиль міркування для швидких відповідей"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.cmVhc29uaW5nX2VmZm9ydA.allowed-value.c3RyaW5nOm1pbmltYWw.display_name": {
+          "source": "Minimal",
+          "message": "Мінімальний"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.cmVhc29uaW5nX2VmZm9ydA.allowed-value.c3RyaW5nOm1pbmltYWw.short_desc": {
+          "source": "Minimal reasoning effort",
+          "message": "Мінімальний рівень зусиль міркування"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.cmVhc29uaW5nX2VmZm9ydA.allowed-value.c3RyaW5nOmhpZ2g.desc": {
+          "source": "Maximum reasoning effort for thorough analysis",
+          "message": "Максимальний рівень зусиль міркування для ретельного аналізу"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.cmVhc29uaW5nX2VmZm9ydA.allowed-value.c3RyaW5nOmhpZ2g.display_name": {
+          "source": "High",
+          "message": "Високий"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.cmVhc29uaW5nX2VmZm9ydA.allowed-value.c3RyaW5nOmhpZ2g.short_desc": {
+          "source": "High reasoning effort",
+          "message": "Високий рівень міркування"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.cmVhc29uaW5nX2VmZm9ydA.allowed-value.c3RyaW5nOmxvdw.desc": {
+          "source": "Low reasoning effort",
+          "message": "Низький рівень міркування"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.cmVhc29uaW5nX2VmZm9ydA.allowed-value.c3RyaW5nOmxvdw.display_name": {
+          "source": "Low",
+          "message": "Низький"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.cmVhc29uaW5nX2VmZm9ydA.allowed-value.c3RyaW5nOmxvdw.short_desc": {
+          "source": "Low reasoning effort",
+          "message": "Низький рівень міркування"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.cmVhc29uaW5nX2VmZm9ydA.desc": {
+          "source": "Controls the depth of reasoning for `sonar-reasoning` and `sonar-reasoning-pro` models",
+          "message": "Керує глибиною міркування для моделей `sonar-reasoning` та `sonar-reasoning-pro`"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.cmVhc29uaW5nX2VmZm9ydA.display_name": {
+          "source": "Reasoning Effort",
+          "message": "Рівень міркування"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.cmVhc29uaW5nX2VmZm9ydA.short_desc": {
+          "source": "Control the reasoning effort for reasoning models",
+          "message": "Керуйте зусиллями міркування для моделей із міркуванням"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.cmVzcG9uc2VfZm9ybWF0.desc": {
+          "source": "An object specifying the format that the model must output. Set `type` to `json_schema` and provide a `json_schema` object to enable structured JSON output",
+          "message": "Об'єкт, що визначає формат, який має виводити модель. Встановіть для `type` значення `json_schema` і надайте об'єкт `json_schema`, щоб увімкнути структурований вивід JSON"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.cmVzcG9uc2VfZm9ybWF0.display_name": {
+          "source": "Response Format",
+          "message": "Формат відповіді"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.cmVzcG9uc2VfZm9ybWF0.short_desc": {
+          "source": "Specify the output format (e.g., JSON schema)",
+          "message": "Вкажіть формат виводу (наприклад, схему JSON)"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.d2ViX3NlYXJjaF9vcHRpb25z.desc": {
+          "source": "Advanced web search configuration options such as search context size",
+          "message": "Розширені параметри конфігурації вебпошуку, такі як розмір контексту пошуку"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.d2ViX3NlYXJjaF9vcHRpb25z.display_name": {
+          "source": "Web Search Options",
+          "message": "Параметри вебпошуку"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.d2ViX3NlYXJjaF9vcHRpb25z.short_desc": {
+          "source": "Advanced web search configuration",
+          "message": "Розширена конфігурація вебпошуку"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.dG9wX3A.desc": {
+          "source": "An alternative to sampling with temperature, called nucleus sampling, where the model considers the results of the tokens with `top_p` probability mass. So `0.1` means only the tokens comprising the top 10% probability mass are considered",
+          "message": "Альтернатива вибірці з температурою під назвою nucleus sampling, де модель розглядає результати токенів із масою ймовірності `top_p`. Отже, `0.1` означає, що розглядаються лише токени, які складають верхні 10% маси ймовірності"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.dG9wX3A.display_name": {
+          "source": "Top P",
+          "message": "Top P"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.dG9wX3A.short_desc": {
+          "source": "Nucleus sampling value",
+          "message": "Значення nucleus sampling"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.dGVtcGVyYXR1cmU.desc": {
+          "source": "What sampling temperature to use, between `0` and `2`. Higher values like `0.8` will make the output more random, while lower values like `0.2` will make it more focused and deterministic",
+          "message": "Яку температуру вибірки використовувати, від `0` до `2`. Більш високі значення, як-от `0.8`, зроблять вивід більш випадковим, тоді як менші значення, як-от `0.2`, зроблять його більш сфокусованим і детермінованим"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.dGVtcGVyYXR1cmU.display_name": {
+          "source": "Sampling Temperature",
+          "message": "Температура вибірки"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.dGVtcGVyYXR1cmU.short_desc": {
+          "source": "The sampling temperature to use, between 0 and 2",
+          "message": "Температура вибірки, яку слід використовувати, від 0 до 2"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.short_desc": {
+          "source": "Chat with a Perplexity AI model by sending a single message and receiving a single web-grounded reply with citations",
+          "message": "Спілкуйтеся з моделлю Perplexity AI, надіславши одне повідомлення й отримавши одну відповідь з обґрунтуванням у вебджерелах і цитатами"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.desc": {
+          "source": "Stream a chat response from Perplexity AI via Server-Sent Events with real-time token delivery",
+          "message": "Отримання потокової відповіді чату від Perplexity AI через Server-Sent Events із передачею токенів у реальному часі"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.display_name": {
+          "source": "Stream Chat",
+          "message": "Потоковий чат"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.ZGlzYWJsZV9zZWFyY2g.desc": {
+          "source": "If set to `True`, the model will not search the web and will only use its training data to generate a response",
+          "message": "Якщо встановлено `True`, модель не здійснюватиме пошук у вебі та використовуватиме лише свої навчальні дані для генерації відповіді"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.ZGlzYWJsZV9zZWFyY2g.display_name": {
+          "source": "Disable Search?",
+          "message": "Вимкнути пошук?"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.ZGlzYWJsZV9zZWFyY2g.short_desc": {
+          "source": "Restrict response to training data only",
+          "message": "Обмежити відповідь лише навчальними даними"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.ZW5hYmxlX3NlYXJjaF9jbGFzc2lmaWVy.desc": {
+          "source": "If set to `True`, uses a classifier to determine whether a web search is needed for the query before performing one",
+          "message": "Якщо встановлено `True`, використовує класифікатор для визначення необхідності вебпошуку для запиту перед його виконанням"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.ZW5hYmxlX3NlYXJjaF9jbGFzc2lmaWVy.display_name": {
+          "source": "Enable Search Classifier?",
+          "message": "Увімкнути класифікатор пошуку?"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.ZW5hYmxlX3NlYXJjaF9jbGFzc2lmaWVy.short_desc": {
+          "source": "Use a classifier to determine if search is needed",
+          "message": "Використовувати класифікатор для визначення необхідності пошуку"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.aW1hZ2VfZG9tYWluX2ZpbHRlcg.desc": {
+          "source": "A list of domains to limit image search results to. Only applies when `return_images` is set to `True`",
+          "message": "Список доменів для обмеження результатів пошуку зображень. Застосовується, лише коли `return_images` має значення `True`"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.aW1hZ2VfZG9tYWluX2ZpbHRlcg.display_name": {
+          "source": "Image Domain Filter",
+          "message": "Фільтр доменів зображень"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.aW1hZ2VfZG9tYWluX2ZpbHRlcg.short_desc": {
+          "source": "Limit image sources to specific domains",
+          "message": "Обмежити джерела зображень певними доменами"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.aW1hZ2VfZm9ybWF0X2ZpbHRlcg.desc": {
+          "source": "A list of image formats to include in image results (e.g., `png`, `jpg`). Only applies when `return_images` is set to `True`",
+          "message": "Список форматів зображень для включення до результатів зображень (наприклад, `png`, `jpg`). Застосовується, лише коли `return_images` має значення `True`"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.aW1hZ2VfZm9ybWF0X2ZpbHRlcg.display_name": {
+          "source": "Image Format Filter",
+          "message": "Фільтр форматів зображень"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.aW1hZ2VfZm9ybWF0X2ZpbHRlcg.short_desc": {
+          "source": "Filter image results by format",
+          "message": "Фільтрувати результати зображень за форматом"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.bGFuZ3VhZ2VfcHJlZmVyZW5jZQ.desc": {
+          "source": "An ISO 639-1 language code specifying the preferred language for the response",
+          "message": "Мовний код ISO 639-1, який визначає бажану мову для відповіді"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.bGFuZ3VhZ2VfcHJlZmVyZW5jZQ.display_name": {
+          "source": "Language Preference",
+          "message": "Бажана мова"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.bGFuZ3VhZ2VfcHJlZmVyZW5jZQ.short_desc": {
+          "source": "ISO 639-1 language code for the response",
+          "message": "Мовний код ISO 639-1 для відповіді"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.bGFzdF91cGRhdGVkX2FmdGVyX2ZpbHRlcg.desc": {
+          "source": "Only include sources that were last updated after this date. Format: `MM/DD/YYYY`",
+          "message": "Включати лише джерела, які востаннє оновлювалися після цієї дати. Формат: `MM/DD/YYYY`"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.bGFzdF91cGRhdGVkX2FmdGVyX2ZpbHRlcg.display_name": {
+          "source": "Last Updated After",
+          "message": "Останнє оновлення після"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.bGFzdF91cGRhdGVkX2FmdGVyX2ZpbHRlcg.short_desc": {
+          "source": "Only include sources updated after this date",
+          "message": "Включати лише джерела, оновлені після цієї дати"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.bGFzdF91cGRhdGVkX2JlZm9yZV9maWx0ZXI.desc": {
+          "source": "Only include sources that were last updated before this date. Format: `MM/DD/YYYY`",
+          "message": "Включати лише джерела, які востаннє оновлювалися до цієї дати. Формат: `MM/DD/YYYY`"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.bGFzdF91cGRhdGVkX2JlZm9yZV9maWx0ZXI.display_name": {
+          "source": "Last Updated Before",
+          "message": "Останнє оновлення до"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.bGFzdF91cGRhdGVkX2JlZm9yZV9maWx0ZXI.short_desc": {
+          "source": "Only include sources updated before this date",
+          "message": "Включати лише джерела, оновлені до цієї дати"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.bW9kZWw.allowed-value.c3RyaW5nOnNvbmFy.desc": {
+          "source": "Lightweight, cost-effective search model based on Llama 3.3 70B",
+          "message": "Легка, економічно ефективна пошукова модель на базі Llama 3.3 70B"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.bW9kZWw.allowed-value.c3RyaW5nOnNvbmFy.display_name": {
+          "source": "Sonar",
+          "message": "Sonar"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.bW9kZWw.allowed-value.c3RyaW5nOnNvbmFy.short_desc": {
+          "source": "Lightweight, cost-effective search model",
+          "message": "Легка, економічно ефективна пошукова модель"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.bW9kZWw.allowed-value.c3RyaW5nOnNvbmFyLWRlZXAtcmVzZWFyY2g.desc": {
+          "source": "Expert-level research with autonomous source evaluation and report generation",
+          "message": "Дослідження експертного рівня з автономною оцінкою джерел і створенням звітів"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.bW9kZWw.allowed-value.c3RyaW5nOnNvbmFyLWRlZXAtcmVzZWFyY2g.display_name": {
+          "source": "Sonar Deep Research",
+          "message": "Sonar Deep Research"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.bW9kZWw.allowed-value.c3RyaW5nOnNvbmFyLWRlZXAtcmVzZWFyY2g.short_desc": {
+          "source": "Expert-level autonomous research",
+          "message": "Автономні дослідження експертного рівня"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.bW9kZWw.allowed-value.c3RyaW5nOnNvbmFyLXBybw.desc": {
+          "source": "Advanced search with deeper retrieval and double citations",
+          "message": "Розширений пошук із глибшим вилученням та подвійним цитуванням"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.bW9kZWw.allowed-value.c3RyaW5nOnNvbmFyLXBybw.display_name": {
+          "source": "Sonar Pro",
+          "message": "Sonar Pro"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.bW9kZWw.allowed-value.c3RyaW5nOnNvbmFyLXBybw.short_desc": {
+          "source": "Advanced search with deeper retrieval",
+          "message": "Розширений пошук із глибшим вилученням"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.bW9kZWw.allowed-value.c3RyaW5nOnNvbmFyLXJlYXNvbmluZy1wcm8.desc": {
+          "source": "Chain of Thought reasoning model based on DeepSeek-R1 with multi-query search",
+          "message": "Модель міркування Chain of Thought на базі DeepSeek-R1 з багатозапитним пошуком"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.bW9kZWw.allowed-value.c3RyaW5nOnNvbmFyLXJlYXNvbmluZy1wcm8.display_name": {
+          "source": "Sonar Reasoning Pro",
+          "message": "Sonar Reasoning Pro"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.bW9kZWw.allowed-value.c3RyaW5nOnNvbmFyLXJlYXNvbmluZy1wcm8.short_desc": {
+          "source": "Chain of Thought reasoning model",
+          "message": "Модель міркування Chain of Thought"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.bW9kZWw.desc": {
+          "source": "Model to use for the chat completion",
+          "message": "Модель для використання під час автодоповнення чату"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.bW9kZWw.display_name": {
+          "source": "Model ID",
+          "message": "ID моделі"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.bW9kZWw.short_desc": {
+          "source": "Model to use for the chat completion",
+          "message": "Модель для використання під час автодоповнення чату"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.bWF4X3Rva2Vucw.desc": {
+          "source": "The maximum number of tokens that can be generated in the chat completion. Up to 128,000 tokens supported",
+          "message": "Максимальна кількість токенів, яка може бути згенерована під час автодоповнення чату. Підтримується до 128 000 токенів"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.bWF4X3Rva2Vucw.display_name": {
+          "source": "Max Tokens",
+          "message": "Максимум токенів"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.bWF4X3Rva2Vucw.short_desc": {
+          "source": "The maximum number of tokens to generate",
+          "message": "Максимальна кількість токенів для генерації"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.bWVzc2FnZXM.desc": {
+          "source": "A list of messages comprising the conversation so far",
+          "message": "Список повідомлень, що складають розмову на цей момент"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.bWVzc2FnZXM.display_name": {
+          "source": "Messages",
+          "message": "Повідомлення"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.bWVzc2FnZXM.short_desc": {
+          "source": "A list of messages comprising the conversation so far",
+          "message": "Список повідомлень, що складають розмову на цей момент"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.c2VhcmNoX21vZGU.allowed-value.c3RyaW5nOmFjYWRlbWlj.desc": {
+          "source": "Search academic and research papers",
+          "message": "Пошук академічних і наукових робіт"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.c2VhcmNoX21vZGU.allowed-value.c3RyaW5nOmFjYWRlbWlj.display_name": {
+          "source": "Academic",
+          "message": "Академічний"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.c2VhcmNoX21vZGU.allowed-value.c3RyaW5nOmFjYWRlbWlj.short_desc": {
+          "source": "Academic and research papers",
+          "message": "Академічні та наукові роботи"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.c2VhcmNoX21vZGU.allowed-value.c3RyaW5nOnNlYw.desc": {
+          "source": "Search US SEC regulatory filings",
+          "message": "Пошук у регуляторних звітах SEC США"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.c2VhcmNoX21vZGU.allowed-value.c3RyaW5nOnNlYw.display_name": {
+          "source": "SEC",
+          "message": "SEC"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.c2VhcmNoX21vZGU.allowed-value.c3RyaW5nOnNlYw.short_desc": {
+          "source": "SEC filings",
+          "message": "Звітність SEC"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.c2VhcmNoX21vZGU.allowed-value.c3RyaW5nOndlYg.desc": {
+          "source": "General web search for grounding",
+          "message": "Загальний вебпошук для обґрунтування"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.c2VhcmNoX21vZGU.allowed-value.c3RyaW5nOndlYg.display_name": {
+          "source": "Web",
+          "message": "Веб"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.c2VhcmNoX21vZGU.allowed-value.c3RyaW5nOndlYg.short_desc": {
+          "source": "General web search",
+          "message": "Загальний вебпошук"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.c2VhcmNoX21vZGU.desc": {
+          "source": "The type of search to perform for grounding the response",
+          "message": "Тип пошуку, що виконується для обґрунтування відповіді"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.c2VhcmNoX21vZGU.display_name": {
+          "source": "Search Mode",
+          "message": "Режим пошуку"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.c2VhcmNoX21vZGU.short_desc": {
+          "source": "The type of search to perform",
+          "message": "Тип пошуку для виконання"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.c2VhcmNoX2FmdGVyX2RhdGVfZmlsdGVy.desc": {
+          "source": "Only include sources published after this date. Format: `MM/DD/YYYY`",
+          "message": "Включати лише джерела, опубліковані після цієї дати. Формат: `MM/DD/YYYY`"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.c2VhcmNoX2FmdGVyX2RhdGVfZmlsdGVy.display_name": {
+          "source": "Search After Date",
+          "message": "Шукати після дати"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.c2VhcmNoX2FmdGVyX2RhdGVfZmlsdGVy.short_desc": {
+          "source": "Only include sources published after this date",
+          "message": "Включати лише джерела, опубліковані після цієї дати"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.c2VhcmNoX2JlZm9yZV9kYXRlX2ZpbHRlcg.desc": {
+          "source": "Only include sources published before this date. Format: `MM/DD/YYYY`",
+          "message": "Включати лише джерела, опубліковані до цієї дати. Формат: `MM/DD/YYYY`"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.c2VhcmNoX2JlZm9yZV9kYXRlX2ZpbHRlcg.display_name": {
+          "source": "Search Before Date",
+          "message": "Шукати до дати"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.c2VhcmNoX2JlZm9yZV9kYXRlX2ZpbHRlcg.short_desc": {
+          "source": "Only include sources published before this date",
+          "message": "Включати лише джерела, опубліковані до цієї дати"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.c2VhcmNoX2RvbWFpbl9maWx0ZXI.desc": {
+          "source": "A list of domains to include or exclude from search results. Prefix with `-` to exclude. Maximum of 20 domains",
+          "message": "Список доменів для включення або виключення з результатів пошуку. Додайте префікс `-`, щоб виключити. Не більше 20 доменів"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.c2VhcmNoX2RvbWFpbl9maWx0ZXI.display_name": {
+          "source": "Search Domain Filter",
+          "message": "Фільтр пошуку за доменами"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.c2VhcmNoX2RvbWFpbl9maWx0ZXI.short_desc": {
+          "source": "Domain allowlist or denylist for search (max 20)",
+          "message": "Список дозволених або заблокованих доменів для пошуку (макс. 20)"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.c2VhcmNoX2xhbmd1YWdlX2ZpbHRlcg.desc": {
+          "source": "A list of ISO 639-1 language codes to filter search results. Maximum of 10 languages",
+          "message": "Список мовних кодів ISO 639-1 для фільтрації результатів пошуку. Не більше 10 мов"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.c2VhcmNoX2xhbmd1YWdlX2ZpbHRlcg.display_name": {
+          "source": "Search Language Filter",
+          "message": "Фільтр пошуку за мовою"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.c2VhcmNoX2xhbmd1YWdlX2ZpbHRlcg.short_desc": {
+          "source": "ISO 639-1 language codes to filter search results (max 10)",
+          "message": "Коди мов ISO 639-1 для фільтрації результатів пошуку (макс. 10)"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.c2VhcmNoX3JlY2VuY3lfZmlsdGVy.allowed-value.c3RyaW5nOm1vbnRo.desc": {
+          "source": "Only include sources from the last month",
+          "message": "Включати лише джерела за останній місяць"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.c2VhcmNoX3JlY2VuY3lfZmlsdGVy.allowed-value.c3RyaW5nOm1vbnRo.display_name": {
+          "source": "Last Month",
+          "message": "Минулий місяць"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.c2VhcmNoX3JlY2VuY3lfZmlsdGVy.allowed-value.c3RyaW5nOm1vbnRo.short_desc": {
+          "source": "Sources from the last month",
+          "message": "Джерела за останній місяць"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.c2VhcmNoX3JlY2VuY3lfZmlsdGVy.allowed-value.c3RyaW5nOmRheQ.desc": {
+          "source": "Only include sources from the last day",
+          "message": "Включати лише джерела за останній день"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.c2VhcmNoX3JlY2VuY3lfZmlsdGVy.allowed-value.c3RyaW5nOmRheQ.display_name": {
+          "source": "Last Day",
+          "message": "Останній день"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.c2VhcmNoX3JlY2VuY3lfZmlsdGVy.allowed-value.c3RyaW5nOmRheQ.short_desc": {
+          "source": "Sources from the last day",
+          "message": "Джерела за останній день"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.c2VhcmNoX3JlY2VuY3lfZmlsdGVy.allowed-value.c3RyaW5nOmhvdXI.desc": {
+          "source": "Only include sources from the last hour",
+          "message": "Включати лише джерела за останню годину"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.c2VhcmNoX3JlY2VuY3lfZmlsdGVy.allowed-value.c3RyaW5nOmhvdXI.display_name": {
+          "source": "Last Hour",
+          "message": "Остання година"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.c2VhcmNoX3JlY2VuY3lfZmlsdGVy.allowed-value.c3RyaW5nOmhvdXI.short_desc": {
+          "source": "Sources from the last hour",
+          "message": "Джерела за останню годину"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.c2VhcmNoX3JlY2VuY3lfZmlsdGVy.allowed-value.c3RyaW5nOndlZWs.desc": {
+          "source": "Only include sources from the last week",
+          "message": "Включати лише джерела за останній тиждень"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.c2VhcmNoX3JlY2VuY3lfZmlsdGVy.allowed-value.c3RyaW5nOndlZWs.display_name": {
+          "source": "Last Week",
+          "message": "Останній тиждень"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.c2VhcmNoX3JlY2VuY3lfZmlsdGVy.allowed-value.c3RyaW5nOndlZWs.short_desc": {
+          "source": "Sources from the last week",
+          "message": "Джерела за останній тиждень"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.c2VhcmNoX3JlY2VuY3lfZmlsdGVy.allowed-value.c3RyaW5nOnllYXI.desc": {
+          "source": "Only include sources from the last year",
+          "message": "Включати лише джерела за останній рік"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.c2VhcmNoX3JlY2VuY3lfZmlsdGVy.allowed-value.c3RyaW5nOnllYXI.display_name": {
+          "source": "Last Year",
+          "message": "Останній рік"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.c2VhcmNoX3JlY2VuY3lfZmlsdGVy.allowed-value.c3RyaW5nOnllYXI.short_desc": {
+          "source": "Sources from the last year",
+          "message": "Джерела за останній рік"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.c2VhcmNoX3JlY2VuY3lfZmlsdGVy.desc": {
+          "source": "Filter search results to only include sources from a specific time period",
+          "message": "Фільтрувати результати пошуку, щоб включати лише джерела за певний період часу"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.c2VhcmNoX3JlY2VuY3lfZmlsdGVy.display_name": {
+          "source": "Search Recency Filter",
+          "message": "Фільтр пошуку за новизною"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.c2VhcmNoX3JlY2VuY3lfZmlsdGVy.short_desc": {
+          "source": "Filter search results by recency",
+          "message": "Фільтрувати результати пошуку за новизною"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.c3RvcA.desc": {
+          "source": "Up to 4 sequences where the API will stop generating further tokens",
+          "message": "До 4 послідовностей, на яких API зупинить генерацію подальших токенів"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.c3RvcA.display_name": {
+          "source": "Stop Sequences",
+          "message": "Послідовності зупинки"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.c3RvcA.short_desc": {
+          "source": "Sequences where the API will stop generating tokens",
+          "message": "Послідовності, на яких API припинить генерацію токенів"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.c3RyZWFtX21vZGU.allowed-value.c3RyaW5nOmNvbmNpc2U.desc": {
+          "source": "Provides separate reasoning events during streaming",
+          "message": "Надає окремі події міркування під час потокового передавання"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.c3RyZWFtX21vZGU.allowed-value.c3RyaW5nOmNvbmNpc2U.display_name": {
+          "source": "Concise",
+          "message": "Стислий"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.c3RyZWFtX21vZGU.allowed-value.c3RyaW5nOmNvbmNpc2U.short_desc": {
+          "source": "Separate reasoning events",
+          "message": "Окремі події міркування"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.c3RyZWFtX21vZGU.allowed-value.c3RyaW5nOmZ1bGw.desc": {
+          "source": "Metadata inline with no separate reasoning events",
+          "message": "Метадані вбудовані без окремих подій міркування"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.c3RyZWFtX21vZGU.allowed-value.c3RyaW5nOmZ1bGw.display_name": {
+          "source": "Full",
+          "message": "Повний"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.c3RyZWFtX21vZGU.allowed-value.c3RyaW5nOmZ1bGw.short_desc": {
+          "source": "Metadata inline, no reasoning events",
+          "message": "Метадані вбудовані, без подій міркування"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.c3RyZWFtX21vZGU.desc": {
+          "source": "Controls the streaming format. `full` includes metadata inline with no separate reasoning events. `concise` provides separate reasoning events",
+          "message": "Керує форматом потокового передавання. `full` містить метадані всередині рядка без окремих подій міркування. `concise` надає окремі події міркування"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.c3RyZWFtX21vZGU.display_name": {
+          "source": "Stream Mode",
+          "message": "Режим потоку"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.c3RyZWFtX21vZGU.short_desc": {
+          "source": "Controls the streaming format",
+          "message": "Керує форматом потокового передавання"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.cmV0dXJuX2ltYWdlcw.desc": {
+          "source": "If set to `True`, image results from the web search will be included in the response",
+          "message": "Якщо встановлено значення `True`, результати зображень із вебпошуку будуть включені у відповідь"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.cmV0dXJuX2ltYWdlcw.display_name": {
+          "source": "Return Images?",
+          "message": "Повертати зображення?"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.cmV0dXJuX2ltYWdlcw.short_desc": {
+          "source": "Include image results from search",
+          "message": "Включати результати зображень із пошуку"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.cmV0dXJuX3JlbGF0ZWRfcXVlc3Rpb25z.desc": {
+          "source": "If set to `True`, the response will include suggested follow-up questions",
+          "message": "Якщо встановлено значення `True`, відповідь міститиме запропоновані додаткові запитання"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.cmV0dXJuX3JlbGF0ZWRfcXVlc3Rpb25z.display_name": {
+          "source": "Return Related Questions?",
+          "message": "Повертати пов’язані запитання?"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.cmV0dXJuX3JlbGF0ZWRfcXVlc3Rpb25z.short_desc": {
+          "source": "Generate follow-up question suggestions",
+          "message": "Генерувати пропозиції додаткових запитань"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.cmVhc29uaW5nX2VmZm9ydA.allowed-value.c3RyaW5nOm1lZGl1bQ.desc": {
+          "source": "Medium reasoning effort (default)",
+          "message": "Середній рівень зусиль міркування (за замовчуванням)"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.cmVhc29uaW5nX2VmZm9ydA.allowed-value.c3RyaW5nOm1lZGl1bQ.display_name": {
+          "source": "Medium",
+          "message": "Середній"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.cmVhc29uaW5nX2VmZm9ydA.allowed-value.c3RyaW5nOm1lZGl1bQ.short_desc": {
+          "source": "Medium reasoning effort",
+          "message": "Середній рівень міркування"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.cmVhc29uaW5nX2VmZm9ydA.allowed-value.c3RyaW5nOm1pbmltYWw.desc": {
+          "source": "Minimal reasoning effort for fast responses",
+          "message": "Мінімальний рівень зусиль міркування для швидких відповідей"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.cmVhc29uaW5nX2VmZm9ydA.allowed-value.c3RyaW5nOm1pbmltYWw.display_name": {
+          "source": "Minimal",
+          "message": "Мінімальний"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.cmVhc29uaW5nX2VmZm9ydA.allowed-value.c3RyaW5nOm1pbmltYWw.short_desc": {
+          "source": "Minimal reasoning effort",
+          "message": "Мінімальний рівень зусиль міркування"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.cmVhc29uaW5nX2VmZm9ydA.allowed-value.c3RyaW5nOmhpZ2g.desc": {
+          "source": "Maximum reasoning effort for thorough analysis",
+          "message": "Максимальний рівень зусиль міркування для ретельного аналізу"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.cmVhc29uaW5nX2VmZm9ydA.allowed-value.c3RyaW5nOmhpZ2g.display_name": {
+          "source": "High",
+          "message": "Високий"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.cmVhc29uaW5nX2VmZm9ydA.allowed-value.c3RyaW5nOmhpZ2g.short_desc": {
+          "source": "High reasoning effort",
+          "message": "Високий рівень міркування"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.cmVhc29uaW5nX2VmZm9ydA.allowed-value.c3RyaW5nOmxvdw.desc": {
+          "source": "Low reasoning effort",
+          "message": "Низький рівень міркування"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.cmVhc29uaW5nX2VmZm9ydA.allowed-value.c3RyaW5nOmxvdw.display_name": {
+          "source": "Low",
+          "message": "Низький"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.cmVhc29uaW5nX2VmZm9ydA.allowed-value.c3RyaW5nOmxvdw.short_desc": {
+          "source": "Low reasoning effort",
+          "message": "Низький рівень міркування"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.cmVhc29uaW5nX2VmZm9ydA.desc": {
+          "source": "Controls the depth of reasoning for `sonar-reasoning` and `sonar-reasoning-pro` models",
+          "message": "Керує глибиною міркування для моделей `sonar-reasoning` та `sonar-reasoning-pro`"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.cmVhc29uaW5nX2VmZm9ydA.display_name": {
+          "source": "Reasoning Effort",
+          "message": "Рівень міркування"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.cmVhc29uaW5nX2VmZm9ydA.short_desc": {
+          "source": "Control the reasoning effort for reasoning models",
+          "message": "Керуйте зусиллями міркування для моделей із міркуванням"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.cmVzcG9uc2VfZm9ybWF0.desc": {
+          "source": "An object specifying the format that the model must output. Set `type` to `json_schema` and provide a `json_schema` object to enable structured JSON output",
+          "message": "Об'єкт, що визначає формат, який має виводити модель. Встановіть для `type` значення `json_schema` і надайте об'єкт `json_schema`, щоб увімкнути структурований вивід JSON"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.cmVzcG9uc2VfZm9ybWF0.display_name": {
+          "source": "Response Format",
+          "message": "Формат відповіді"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.cmVzcG9uc2VfZm9ybWF0.short_desc": {
+          "source": "Specify the output format (e.g., JSON schema)",
+          "message": "Вкажіть формат виводу (наприклад, схему JSON)"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.d2ViX3NlYXJjaF9vcHRpb25z.desc": {
+          "source": "Advanced web search configuration options such as search context size",
+          "message": "Розширені параметри конфігурації вебпошуку, такі як розмір контексту пошуку"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.d2ViX3NlYXJjaF9vcHRpb25z.display_name": {
+          "source": "Web Search Options",
+          "message": "Параметри вебпошуку"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.d2ViX3NlYXJjaF9vcHRpb25z.short_desc": {
+          "source": "Advanced web search configuration",
+          "message": "Розширена конфігурація вебпошуку"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.dG9wX3A.desc": {
+          "source": "An alternative to sampling with temperature, called nucleus sampling, where the model considers the results of the tokens with `top_p` probability mass. So `0.1` means only the tokens comprising the top 10% probability mass are considered",
+          "message": "Альтернатива вибірці з температурою під назвою nucleus sampling, де модель розглядає результати токенів із масою ймовірності `top_p`. Отже, `0.1` означає, що розглядаються лише токени, які складають верхні 10% маси ймовірності"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.dG9wX3A.display_name": {
+          "source": "Top P",
+          "message": "Top P"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.dG9wX3A.short_desc": {
+          "source": "Nucleus sampling value",
+          "message": "Значення nucleus sampling"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.dGVtcGVyYXR1cmU.desc": {
+          "source": "What sampling temperature to use, between `0` and `2`. Higher values like `0.8` will make the output more random, while lower values like `0.2` will make it more focused and deterministic",
+          "message": "Яку температуру вибірки використовувати, від `0` до `2`. Більш високі значення, як-от `0.8`, зроблять вивід більш випадковим, тоді як менші значення, як-от `0.2`, зроблять його більш сфокусованим і детермінованим"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.dGVtcGVyYXR1cmU.display_name": {
+          "source": "Sampling Temperature",
+          "message": "Температура вибірки"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.option.dGVtcGVyYXR1cmU.short_desc": {
+          "source": "The sampling temperature to use, between 0 and 2",
+          "message": "Температура вибірки, яку слід використовувати, від 0 до 2"
+        },
+        "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.short_desc": {
+          "source": "Stream a chat response from Perplexity AI via Server-Sent Events",
+          "message": "Отримання потокової відповіді чату від Perplexity AI через Server-Sent Events"
+        },
+        "app.UGVycGxleGl0eQ.desc": {
+          "source": "Perplexity AI provides web-grounded AI search and chat completions with citations.\n\n**Key Features:**\n- Real-time web search grounding for up-to-date responses\n- Automatic citation of sources\n- Multiple search modes: web, academic, and SEC filings\n- Streaming support via Server-Sent Events\n- Structured JSON output with schema validation",
+          "message": "Perplexity AI надає можливості пошуку та завершення чату на основі ШІ з обґрунтуванням у вебджерелах і цитатами.\n\n**Основні можливості:**\n- Обґрунтування за допомогою вебпошуку в реальному часі для актуальних відповідей\n- Автоматичне цитування джерел\n- Кілька режимів пошуку: веб, академічний та звіти SEC\n- Підтримка потокового передавання через Server-Sent Events\n- Структурований вивід JSON із валідацією за схемою"
+        },
+        "app.UGVycGxleGl0eQ.display_name": {
+          "source": "Perplexity AI",
+          "message": "Perplexity AI"
+        },
+        "app.UGVycGxleGl0eQ.short_desc": {
+          "source": "Perplexity AI services",
+          "message": "Служби Perplexity AI"
+        }
+      }
+    }
+  }
+}

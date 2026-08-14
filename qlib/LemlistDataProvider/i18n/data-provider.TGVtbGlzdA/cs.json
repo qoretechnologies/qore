@@ -1,0 +1,1565 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "cs": {
+      "messages": {
+        "app.TGVtbGlzdA.action.Y3JlYXRlLWNhbXBhaWdu.desc": {
+          "source": "Create a new Lemlist campaign with the specified name.",
+          "message": "Vytvořit novou kampaň v Lemlist se zadaným názvem."
+        },
+        "app.TGVtbGlzdA.action.Y3JlYXRlLWNhbXBhaWdu.display_name": {
+          "source": "Create Campaign",
+          "message": "Vytvořit kampaň"
+        },
+        "app.TGVtbGlzdA.action.Y3JlYXRlLWNhbXBhaWdu.option.bmFtZQ.desc": {
+          "source": "The name of the campaign to create",
+          "message": "Název kampaně, která se má vytvořit"
+        },
+        "app.TGVtbGlzdA.action.Y3JlYXRlLWNhbXBhaWdu.option.bmFtZQ.display_name": {
+          "source": "Campaign Name",
+          "message": "Název kampaně"
+        },
+        "app.TGVtbGlzdA.action.Y3JlYXRlLWNhbXBhaWdu.option.bmFtZQ.short_desc": {
+          "source": "Name for the new campaign",
+          "message": "Název nové kampaně"
+        },
+        "app.TGVtbGlzdA.action.Y3JlYXRlLWNhbXBhaWdu.short_desc": {
+          "source": "Create a new campaign",
+          "message": "Vytvořit novou kampaň"
+        },
+        "app.TGVtbGlzdA.action.Y3JlYXRlLWNvbnRhY3Q.desc": {
+          "source": "Create a new contact in Lemlist.",
+          "message": "Vytvořit nový kontakt v Lemlist."
+        },
+        "app.TGVtbGlzdA.action.Y3JlYXRlLWNvbnRhY3Q.display_name": {
+          "source": "Create Contact",
+          "message": "Vytvořit kontakt"
+        },
+        "app.TGVtbGlzdA.action.Y3JlYXRlLWNvbnRhY3Q.option.Y29tcGFueU5hbWU.desc": {
+          "source": "The name of the company the contact works for",
+          "message": "Název společnosti, pro kterou kontakt pracuje"
+        },
+        "app.TGVtbGlzdA.action.Y3JlYXRlLWNvbnRhY3Q.option.Y29tcGFueU5hbWU.display_name": {
+          "source": "Company Name",
+          "message": "Název společnosti"
+        },
+        "app.TGVtbGlzdA.action.Y3JlYXRlLWNvbnRhY3Q.option.Y29tcGFueU5hbWU.short_desc": {
+          "source": "Contact company name",
+          "message": "Název společnosti kontaktu"
+        },
+        "app.TGVtbGlzdA.action.Y3JlYXRlLWNvbnRhY3Q.option.ZW1haWw.desc": {
+          "source": "The email address of the contact (used as the unique identifier)",
+          "message": "E-mailová adresa kontaktu (používá se jako jedinečný identifikátor)"
+        },
+        "app.TGVtbGlzdA.action.Y3JlYXRlLWNvbnRhY3Q.option.ZW1haWw.display_name": {
+          "source": "Email",
+          "message": "E-mail"
+        },
+        "app.TGVtbGlzdA.action.Y3JlYXRlLWNvbnRhY3Q.option.ZW1haWw.short_desc": {
+          "source": "Contact email address",
+          "message": "E-mailová adresa kontaktu"
+        },
+        "app.TGVtbGlzdA.action.Y3JlYXRlLWNvbnRhY3Q.option.Zmlyc3ROYW1l.desc": {
+          "source": "The first name of the contact",
+          "message": "Jméno kontaktu"
+        },
+        "app.TGVtbGlzdA.action.Y3JlYXRlLWNvbnRhY3Q.option.Zmlyc3ROYW1l.display_name": {
+          "source": "First Name",
+          "message": "Křestní jméno"
+        },
+        "app.TGVtbGlzdA.action.Y3JlYXRlLWNvbnRhY3Q.option.Zmlyc3ROYW1l.short_desc": {
+          "source": "Contact first name",
+          "message": "Křestní jméno kontaktu"
+        },
+        "app.TGVtbGlzdA.action.Y3JlYXRlLWNvbnRhY3Q.option.bGFzdE5hbWU.desc": {
+          "source": "The last name of the contact",
+          "message": "Příjmení kontaktu"
+        },
+        "app.TGVtbGlzdA.action.Y3JlYXRlLWNvbnRhY3Q.option.bGFzdE5hbWU.display_name": {
+          "source": "Last Name",
+          "message": "Příjmení"
+        },
+        "app.TGVtbGlzdA.action.Y3JlYXRlLWNvbnRhY3Q.option.bGFzdE5hbWU.short_desc": {
+          "source": "Contact last name",
+          "message": "Příjmení kontaktu"
+        },
+        "app.TGVtbGlzdA.action.Y3JlYXRlLWNvbnRhY3Q.option.bGlua2VkaW5Vcmw.desc": {
+          "source": "The LinkedIn profile URL of the contact",
+          "message": "URL profilu kontaktu na LinkedInu"
+        },
+        "app.TGVtbGlzdA.action.Y3JlYXRlLWNvbnRhY3Q.option.bGlua2VkaW5Vcmw.display_name": {
+          "source": "LinkedIn URL",
+          "message": "URL profilu LinkedIn"
+        },
+        "app.TGVtbGlzdA.action.Y3JlYXRlLWNvbnRhY3Q.option.bGlua2VkaW5Vcmw.short_desc": {
+          "source": "Contact LinkedIn profile URL",
+          "message": "URL profilu kontaktu na LinkedIn"
+        },
+        "app.TGVtbGlzdA.action.Y3JlYXRlLWNvbnRhY3Q.option.cGhvbmU.desc": {
+          "source": "The phone number of the contact",
+          "message": "Telefonní číslo kontaktu"
+        },
+        "app.TGVtbGlzdA.action.Y3JlYXRlLWNvbnRhY3Q.option.cGhvbmU.display_name": {
+          "source": "Phone",
+          "message": "Telefon"
+        },
+        "app.TGVtbGlzdA.action.Y3JlYXRlLWNvbnRhY3Q.option.cGhvbmU.short_desc": {
+          "source": "Contact phone number",
+          "message": "Telefonní číslo kontaktu"
+        },
+        "app.TGVtbGlzdA.action.Y3JlYXRlLWNvbnRhY3Q.option.d2Vic2l0ZQ.desc": {
+          "source": "The website URL associated with the contact",
+          "message": "URL webu přidruženého ke kontaktu"
+        },
+        "app.TGVtbGlzdA.action.Y3JlYXRlLWNvbnRhY3Q.option.d2Vic2l0ZQ.display_name": {
+          "source": "Website",
+          "message": "Webová stránka"
+        },
+        "app.TGVtbGlzdA.action.Y3JlYXRlLWNvbnRhY3Q.option.d2Vic2l0ZQ.short_desc": {
+          "source": "Contact or company website",
+          "message": "Web kontaktu nebo společnosti"
+        },
+        "app.TGVtbGlzdA.action.Y3JlYXRlLWNvbnRhY3Q.short_desc": {
+          "source": "Create a new contact",
+          "message": "Vytvořit nový kontakt"
+        },
+        "app.TGVtbGlzdA.action.Y3JlYXRlLWxlYWQ.desc": {
+          "source": "Add a new lead to a Lemlist campaign. The lead will be enrolled in the campaign's outreach sequence.",
+          "message": "Přidat nového leada do kampaně v Lemlist. Lead bude zařazen do sekvence oslovování dané kampaně."
+        },
+        "app.TGVtbGlzdA.action.Y3JlYXRlLWxlYWQ.display_name": {
+          "source": "Add Lead to Campaign",
+          "message": "Přidat leada do kampaně"
+        },
+        "app.TGVtbGlzdA.action.Y3JlYXRlLWxlYWQ.option.Y29tcGFueU5hbWU.desc": {
+          "source": "The name of the company the lead works for",
+          "message": "Název společnosti, pro kterou lead pracuje"
+        },
+        "app.TGVtbGlzdA.action.Y3JlYXRlLWxlYWQ.option.Y29tcGFueU5hbWU.display_name": {
+          "source": "Company Name",
+          "message": "Název společnosti"
+        },
+        "app.TGVtbGlzdA.action.Y3JlYXRlLWxlYWQ.option.Y29tcGFueU5hbWU.short_desc": {
+          "source": "Lead company name",
+          "message": "Název společnosti leada"
+        },
+        "app.TGVtbGlzdA.action.Y3JlYXRlLWxlYWQ.option.Y2FtcGFpZ25JZA.desc": {
+          "source": "The identifier of the campaign to add this lead to",
+          "message": "Identifikátor kampaně, do které má být tento lead přidán"
+        },
+        "app.TGVtbGlzdA.action.Y3JlYXRlLWxlYWQ.option.Y2FtcGFpZ25JZA.display_name": {
+          "source": "Campaign ID",
+          "message": "ID kampaně"
+        },
+        "app.TGVtbGlzdA.action.Y3JlYXRlLWxlYWQ.option.Y2FtcGFpZ25JZA.short_desc": {
+          "source": "Campaign to add the lead to",
+          "message": "Kampaň, do které má být lead přidán"
+        },
+        "app.TGVtbGlzdA.action.Y3JlYXRlLWxlYWQ.option.ZW1haWw.desc": {
+          "source": "The email address of the lead (used as the unique identifier)",
+          "message": "E-mailová adresa leada (používá se jako jedinečný identifikátor)"
+        },
+        "app.TGVtbGlzdA.action.Y3JlYXRlLWxlYWQ.option.ZW1haWw.display_name": {
+          "source": "Email",
+          "message": "E-mail"
+        },
+        "app.TGVtbGlzdA.action.Y3JlYXRlLWxlYWQ.option.ZW1haWw.short_desc": {
+          "source": "Lead email address",
+          "message": "E-mailová adresa leada"
+        },
+        "app.TGVtbGlzdA.action.Y3JlYXRlLWxlYWQ.option.Zmlyc3ROYW1l.desc": {
+          "source": "The first name of the lead",
+          "message": "Křestní jméno leada"
+        },
+        "app.TGVtbGlzdA.action.Y3JlYXRlLWxlYWQ.option.Zmlyc3ROYW1l.display_name": {
+          "source": "First Name",
+          "message": "Křestní jméno"
+        },
+        "app.TGVtbGlzdA.action.Y3JlYXRlLWxlYWQ.option.Zmlyc3ROYW1l.short_desc": {
+          "source": "Lead first name",
+          "message": "Křestní jméno leada"
+        },
+        "app.TGVtbGlzdA.action.Y3JlYXRlLWxlYWQ.option.bGFzdE5hbWU.desc": {
+          "source": "The last name of the lead",
+          "message": "Příjmení leada"
+        },
+        "app.TGVtbGlzdA.action.Y3JlYXRlLWxlYWQ.option.bGFzdE5hbWU.display_name": {
+          "source": "Last Name",
+          "message": "Příjmení"
+        },
+        "app.TGVtbGlzdA.action.Y3JlYXRlLWxlYWQ.option.bGFzdE5hbWU.short_desc": {
+          "source": "Lead last name",
+          "message": "Příjmení leada"
+        },
+        "app.TGVtbGlzdA.action.Y3JlYXRlLWxlYWQ.option.bGlua2VkaW5Vcmw.desc": {
+          "source": "The LinkedIn profile URL of the lead",
+          "message": "URL profilu leada na LinkedIn"
+        },
+        "app.TGVtbGlzdA.action.Y3JlYXRlLWxlYWQ.option.bGlua2VkaW5Vcmw.display_name": {
+          "source": "LinkedIn URL",
+          "message": "URL profilu LinkedIn"
+        },
+        "app.TGVtbGlzdA.action.Y3JlYXRlLWxlYWQ.option.bGlua2VkaW5Vcmw.short_desc": {
+          "source": "Lead LinkedIn profile URL",
+          "message": "URL profilu leada na LinkedIn"
+        },
+        "app.TGVtbGlzdA.action.Y3JlYXRlLWxlYWQ.option.cGhvbmU.desc": {
+          "source": "The phone number of the lead",
+          "message": "Telefonní číslo leada"
+        },
+        "app.TGVtbGlzdA.action.Y3JlYXRlLWxlYWQ.option.cGhvbmU.display_name": {
+          "source": "Phone",
+          "message": "Telefon"
+        },
+        "app.TGVtbGlzdA.action.Y3JlYXRlLWxlYWQ.option.cGhvbmU.short_desc": {
+          "source": "Lead phone number",
+          "message": "Telefonní číslo leada"
+        },
+        "app.TGVtbGlzdA.action.Y3JlYXRlLWxlYWQ.option.d2Vic2l0ZQ.desc": {
+          "source": "The website URL associated with the lead",
+          "message": "URL webové stránky spojené s leadem"
+        },
+        "app.TGVtbGlzdA.action.Y3JlYXRlLWxlYWQ.option.d2Vic2l0ZQ.display_name": {
+          "source": "Website",
+          "message": "Webová stránka"
+        },
+        "app.TGVtbGlzdA.action.Y3JlYXRlLWxlYWQ.option.d2Vic2l0ZQ.short_desc": {
+          "source": "Lead or company website",
+          "message": "Web leada nebo společnosti"
+        },
+        "app.TGVtbGlzdA.action.Y3JlYXRlLWxlYWQ.short_desc": {
+          "source": "Add a lead to a campaign",
+          "message": "Přidat leada do kampaně"
+        },
+        "app.TGVtbGlzdA.action.Y3JlYXRlLXRhc2s.desc": {
+          "source": "Create a new manual task in Lemlist for a lead (e.g., email, LinkedIn message, call).",
+          "message": "Vytvořit nový manuální úkol v Lemlist pro leada (např. e-mail, zpráva na LinkedIn, hovor)."
+        },
+        "app.TGVtbGlzdA.action.Y3JlYXRlLXRhc2s.display_name": {
+          "source": "Create Task",
+          "message": "Vytvořit úkol"
+        },
+        "app.TGVtbGlzdA.action.Y3JlYXRlLXRhc2s.option.Y2FtcGFpZ25JZA.desc": {
+          "source": "The identifier of the campaign this task belongs to",
+          "message": "Identifikátor kampaně, ke které tento úkol patří"
+        },
+        "app.TGVtbGlzdA.action.Y3JlYXRlLXRhc2s.option.Y2FtcGFpZ25JZA.display_name": {
+          "source": "Campaign ID",
+          "message": "ID kampaně"
+        },
+        "app.TGVtbGlzdA.action.Y3JlYXRlLXRhc2s.option.Y2FtcGFpZ25JZA.short_desc": {
+          "source": "Campaign to associate the task with",
+          "message": "Kampaň, ke které má být úkol přiřazen"
+        },
+        "app.TGVtbGlzdA.action.Y3JlYXRlLXRhc2s.option.YXNzaWduZWRUbw.desc": {
+          "source": "The email or identifier of the user to assign this task to",
+          "message": "E-mail nebo identifikátor uživatele, kterému má být tento úkol přiřazen"
+        },
+        "app.TGVtbGlzdA.action.Y3JlYXRlLXRhc2s.option.YXNzaWduZWRUbw.display_name": {
+          "source": "Assigned To",
+          "message": "Přiřazeno uživateli"
+        },
+        "app.TGVtbGlzdA.action.Y3JlYXRlLXRhc2s.option.YXNzaWduZWRUbw.short_desc": {
+          "source": "User to assign the task to",
+          "message": "Uživatel, kterému má být úkol přiřazen"
+        },
+        "app.TGVtbGlzdA.action.Y3JlYXRlLXRhc2s.option.ZHVlRGF0ZQ.desc": {
+          "source": "Date and time when this task is due",
+          "message": "Datum a čas splnění tohoto úkolu"
+        },
+        "app.TGVtbGlzdA.action.Y3JlYXRlLXRhc2s.option.ZHVlRGF0ZQ.display_name": {
+          "source": "Due Date",
+          "message": "Datum splnění"
+        },
+        "app.TGVtbGlzdA.action.Y3JlYXRlLXRhc2s.option.ZHVlRGF0ZQ.short_desc": {
+          "source": "Task due date",
+          "message": "Termín dokončení úkolu"
+        },
+        "app.TGVtbGlzdA.action.Y3JlYXRlLXRhc2s.option.bGVhZElk.desc": {
+          "source": "The identifier of the lead this task is for",
+          "message": "Identifikátor leada, pro kterého je tento úkol určen"
+        },
+        "app.TGVtbGlzdA.action.Y3JlYXRlLXRhc2s.option.bGVhZElk.display_name": {
+          "source": "Lead ID",
+          "message": "ID leadu"
+        },
+        "app.TGVtbGlzdA.action.Y3JlYXRlLXRhc2s.option.bGVhZElk.short_desc": {
+          "source": "Lead to assign the task to",
+          "message": "Lead, kterému má být úkol přiřazen"
+        },
+        "app.TGVtbGlzdA.action.Y3JlYXRlLXRhc2s.option.dHlwZQ.allowed-value.c3RyaW5nOm1hbnVhbEVtYWls.desc": {
+          "source": "Manual email",
+          "message": "Manuální e-mail"
+        },
+        "app.TGVtbGlzdA.action.Y3JlYXRlLXRhc2s.option.dHlwZQ.allowed-value.c3RyaW5nOmFwaQ.desc": {
+          "source": "API task",
+          "message": "Úkol API"
+        },
+        "app.TGVtbGlzdA.action.Y3JlYXRlLXRhc2s.option.dHlwZQ.allowed-value.c3RyaW5nOmNhbGw.desc": {
+          "source": "Phone call",
+          "message": "Telefonní hovor"
+        },
+        "app.TGVtbGlzdA.action.Y3JlYXRlLXRhc2s.option.dHlwZQ.allowed-value.c3RyaW5nOmxpbmtlZGluSW52aXRl.desc": {
+          "source": "LinkedIn invite",
+          "message": "Pozvánka na LinkedIn"
+        },
+        "app.TGVtbGlzdA.action.Y3JlYXRlLXRhc2s.option.dHlwZQ.allowed-value.c3RyaW5nOmxpbmtlZGluTWVzc2FnZQ.desc": {
+          "source": "LinkedIn message",
+          "message": "Zpráva na LinkedIn"
+        },
+        "app.TGVtbGlzdA.action.Y3JlYXRlLXRhc2s.option.dHlwZQ.desc": {
+          "source": "The type of manual task to create",
+          "message": "Typ manuálního úkolu k vytvoření"
+        },
+        "app.TGVtbGlzdA.action.Y3JlYXRlLXRhc2s.option.dHlwZQ.display_name": {
+          "source": "Task Type",
+          "message": "Typ úkolu"
+        },
+        "app.TGVtbGlzdA.action.Y3JlYXRlLXRhc2s.option.dHlwZQ.short_desc": {
+          "source": "Type of task to create",
+          "message": "Typ úkolu k vytvoření"
+        },
+        "app.TGVtbGlzdA.action.Y3JlYXRlLXRhc2s.short_desc": {
+          "source": "Create a manual task",
+          "message": "Vytvořit manuální úkol"
+        },
+        "app.TGVtbGlzdA.action.Z2V0LWNhbXBhaWdu.desc": {
+          "source": "Retrieve a single Lemlist campaign by its unique identifier.",
+          "message": "Načíst jednu kampaň v Lemlist podle jejího jedinečného identifikátoru."
+        },
+        "app.TGVtbGlzdA.action.Z2V0LWNhbXBhaWdu.display_name": {
+          "source": "Get Campaign",
+          "message": "Získat kampaň"
+        },
+        "app.TGVtbGlzdA.action.Z2V0LWNhbXBhaWdu.option.Y2FtcGFpZ25JZA.desc": {
+          "source": "The unique identifier of the campaign to retrieve",
+          "message": "Jedinečný identifikátor kampaně k načtení"
+        },
+        "app.TGVtbGlzdA.action.Z2V0LWNhbXBhaWdu.option.Y2FtcGFpZ25JZA.display_name": {
+          "source": "Campaign ID",
+          "message": "ID kampaně"
+        },
+        "app.TGVtbGlzdA.action.Z2V0LWNhbXBhaWdu.option.Y2FtcGFpZ25JZA.short_desc": {
+          "source": "ID of the campaign to retrieve",
+          "message": "ID kampaně k načtení"
+        },
+        "app.TGVtbGlzdA.action.Z2V0LWNhbXBhaWdu.short_desc": {
+          "source": "Get a single campaign by ID",
+          "message": "Získat konkrétní kampaň podle ID"
+        },
+        "app.TGVtbGlzdA.action.Z2V0LWNvbnRhY3Q.desc": {
+          "source": "Retrieve a single Lemlist contact by their email address.",
+          "message": "Načíst jeden kontakt v Lemlist podle jeho e-mailové adresy."
+        },
+        "app.TGVtbGlzdA.action.Z2V0LWNvbnRhY3Q.display_name": {
+          "source": "Get Contact",
+          "message": "Získat kontakt"
+        },
+        "app.TGVtbGlzdA.action.Z2V0LWNvbnRhY3Q.option.ZW1haWw.desc": {
+          "source": "The email address of the contact to retrieve",
+          "message": "E-mailová adresa kontaktu k načtení"
+        },
+        "app.TGVtbGlzdA.action.Z2V0LWNvbnRhY3Q.option.ZW1haWw.display_name": {
+          "source": "Email",
+          "message": "E-mail"
+        },
+        "app.TGVtbGlzdA.action.Z2V0LWNvbnRhY3Q.option.ZW1haWw.short_desc": {
+          "source": "Email address of the contact",
+          "message": "E-mailová adresa kontaktu"
+        },
+        "app.TGVtbGlzdA.action.Z2V0LWNvbnRhY3Q.short_desc": {
+          "source": "Get a contact by email",
+          "message": "Získat kontakt podle e-mailu"
+        },
+        "app.TGVtbGlzdA.action.Z2V0LWxlYWQ.desc": {
+          "source": "Retrieve a single Lemlist lead by email address from a specific campaign.",
+          "message": "Načíst jednoho leada v Lemlist podle e-mailové adresy z konkrétní kampaně."
+        },
+        "app.TGVtbGlzdA.action.Z2V0LWxlYWQ.display_name": {
+          "source": "Get Lead",
+          "message": "Získat zájemce"
+        },
+        "app.TGVtbGlzdA.action.Z2V0LWxlYWQ.option.Y2FtcGFpZ25JZA.desc": {
+          "source": "The identifier of the campaign the lead belongs to",
+          "message": "Identifikátor kampaně, do které lead patří"
+        },
+        "app.TGVtbGlzdA.action.Z2V0LWxlYWQ.option.Y2FtcGFpZ25JZA.display_name": {
+          "source": "Campaign ID",
+          "message": "ID kampaně"
+        },
+        "app.TGVtbGlzdA.action.Z2V0LWxlYWQ.option.Y2FtcGFpZ25JZA.short_desc": {
+          "source": "Campaign containing the lead",
+          "message": "Kampaň obsahující leada"
+        },
+        "app.TGVtbGlzdA.action.Z2V0LWxlYWQ.option.ZW1haWw.desc": {
+          "source": "The email address of the lead to retrieve",
+          "message": "E-mailová adresa leada k načtení"
+        },
+        "app.TGVtbGlzdA.action.Z2V0LWxlYWQ.option.ZW1haWw.display_name": {
+          "source": "Email",
+          "message": "E-mail"
+        },
+        "app.TGVtbGlzdA.action.Z2V0LWxlYWQ.option.ZW1haWw.short_desc": {
+          "source": "Lead email address",
+          "message": "E-mailová adresa leada"
+        },
+        "app.TGVtbGlzdA.action.Z2V0LWxlYWQ.short_desc": {
+          "source": "Get a single lead from a campaign",
+          "message": "Získat jednoho leada z kampaně"
+        },
+        "app.TGVtbGlzdA.action.Z2V0LXRhc2s.desc": {
+          "source": "Retrieve a single Lemlist manual task by its unique identifier.",
+          "message": "Načíst jeden manuální úkol v Lemlist podle jeho jedinečného identifikátoru."
+        },
+        "app.TGVtbGlzdA.action.Z2V0LXRhc2s.display_name": {
+          "source": "Get Task",
+          "message": "Získat úlohu"
+        },
+        "app.TGVtbGlzdA.action.Z2V0LXRhc2s.option.dGFza0lk.desc": {
+          "source": "The unique identifier of the task to retrieve",
+          "message": "Jedinečný identifikátor úlohy k načtení"
+        },
+        "app.TGVtbGlzdA.action.Z2V0LXRhc2s.option.dGFza0lk.display_name": {
+          "source": "Task ID",
+          "message": "ID úlohy"
+        },
+        "app.TGVtbGlzdA.action.Z2V0LXRhc2s.option.dGFza0lk.short_desc": {
+          "source": "ID of the task to retrieve",
+          "message": "ID úkolu k načtení"
+        },
+        "app.TGVtbGlzdA.action.Z2V0LXRhc2s.short_desc": {
+          "source": "Get a single task by ID",
+          "message": "Získat jeden úkol podle ID"
+        },
+        "app.TGVtbGlzdA.action.ZGVsZXRlLWNvbnRhY3Q.desc": {
+          "source": "Delete a Lemlist contact by their email address.",
+          "message": "Smazat kontakt v Lemlist podle jeho e-mailové adresy."
+        },
+        "app.TGVtbGlzdA.action.ZGVsZXRlLWNvbnRhY3Q.display_name": {
+          "source": "Delete Contact",
+          "message": "Smazat kontakt"
+        },
+        "app.TGVtbGlzdA.action.ZGVsZXRlLWNvbnRhY3Q.option.ZW1haWw.desc": {
+          "source": "The email address of the contact to delete",
+          "message": "E-mailová adresa kontaktu ke smazání"
+        },
+        "app.TGVtbGlzdA.action.ZGVsZXRlLWNvbnRhY3Q.option.ZW1haWw.display_name": {
+          "source": "Email",
+          "message": "E-mail"
+        },
+        "app.TGVtbGlzdA.action.ZGVsZXRlLWNvbnRhY3Q.option.ZW1haWw.short_desc": {
+          "source": "Contact email address to delete",
+          "message": "E-mailová adresa kontaktu ke smazání"
+        },
+        "app.TGVtbGlzdA.action.ZGVsZXRlLWNvbnRhY3Q.short_desc": {
+          "source": "Delete a contact",
+          "message": "Odstranit kontakt"
+        },
+        "app.TGVtbGlzdA.action.ZGVsZXRlLWxlYWQ.desc": {
+          "source": "Remove a lead from a Lemlist campaign. The lead will stop receiving outreach from that campaign.",
+          "message": "Odebrat leada z kampaně v Lemlist. Lead přestane dostávat zprávy z dané kampaně."
+        },
+        "app.TGVtbGlzdA.action.ZGVsZXRlLWxlYWQ.display_name": {
+          "source": "Remove Lead from Campaign",
+          "message": "Odebrat leada z kampaně"
+        },
+        "app.TGVtbGlzdA.action.ZGVsZXRlLWxlYWQ.option.Y2FtcGFpZ25JZA.desc": {
+          "source": "The identifier of the campaign to remove the lead from",
+          "message": "Identifikátor kampaně, ze které má být lead odebrán"
+        },
+        "app.TGVtbGlzdA.action.ZGVsZXRlLWxlYWQ.option.Y2FtcGFpZ25JZA.display_name": {
+          "source": "Campaign ID",
+          "message": "ID kampaně"
+        },
+        "app.TGVtbGlzdA.action.ZGVsZXRlLWxlYWQ.option.Y2FtcGFpZ25JZA.short_desc": {
+          "source": "Campaign to remove the lead from",
+          "message": "Kampaň, ze které má být lead odebrán"
+        },
+        "app.TGVtbGlzdA.action.ZGVsZXRlLWxlYWQ.option.ZW1haWw.desc": {
+          "source": "The email address of the lead to remove from the campaign",
+          "message": "E-mailová adresa leada k odebrání z kampaně"
+        },
+        "app.TGVtbGlzdA.action.ZGVsZXRlLWxlYWQ.option.ZW1haWw.display_name": {
+          "source": "Email",
+          "message": "E-mail"
+        },
+        "app.TGVtbGlzdA.action.ZGVsZXRlLWxlYWQ.option.ZW1haWw.short_desc": {
+          "source": "Lead email address to delete",
+          "message": "E-mailová adresa leada ke smazání"
+        },
+        "app.TGVtbGlzdA.action.ZGVsZXRlLWxlYWQ.short_desc": {
+          "source": "Remove a lead from a campaign",
+          "message": "Odebrat leada z kampaně"
+        },
+        "app.TGVtbGlzdA.action.ZGVsZXRlLXRhc2s.desc": {
+          "source": "Delete a Lemlist manual task by its unique identifier.",
+          "message": "Smazat manuální úkol v Lemlistu podle jeho jedinečného identifikátoru."
+        },
+        "app.TGVtbGlzdA.action.ZGVsZXRlLXRhc2s.display_name": {
+          "source": "Delete Task",
+          "message": "Odstranit úkol"
+        },
+        "app.TGVtbGlzdA.action.ZGVsZXRlLXRhc2s.option.dGFza0lk.desc": {
+          "source": "The unique identifier of the task to delete",
+          "message": "Jedinečný identifikátor úkolu ke smazání"
+        },
+        "app.TGVtbGlzdA.action.ZGVsZXRlLXRhc2s.option.dGFza0lk.display_name": {
+          "source": "Task ID",
+          "message": "ID úlohy"
+        },
+        "app.TGVtbGlzdA.action.ZGVsZXRlLXRhc2s.option.dGFza0lk.short_desc": {
+          "source": "ID of the task to delete",
+          "message": "ID úkolu ke smazání"
+        },
+        "app.TGVtbGlzdA.action.ZGVsZXRlLXRhc2s.short_desc": {
+          "source": "Delete a manual task",
+          "message": "Smazat manuální úkol"
+        },
+        "app.TGVtbGlzdA.action.ZW1haWwtY2xpY2tlZA.desc": {
+          "source": "Fires when a lead clicks a link in a Lemlist email. Provides campaign, lead, and sequence step details.",
+          "message": "Spustí se, když lead klikne na odkaz v e-mailu z Lemlistu. Poskytuje podrobnosti o kampani, leadu a kroku sekvence."
+        },
+        "app.TGVtbGlzdA.action.ZW1haWwtY2xpY2tlZA.display_name": {
+          "source": "Email Link Clicked",
+          "message": "Kliknuto na odkaz v e-mailu"
+        },
+        "app.TGVtbGlzdA.action.ZW1haWwtY2xpY2tlZA.option.Y2FtcGFpZ25JZA.desc": {
+          "source": "Optionally filter events to a specific Lemlist campaign",
+          "message": "Volitelně filtrovat události na konkrétní kampaň v Lemlistu"
+        },
+        "app.TGVtbGlzdA.action.ZW1haWwtY2xpY2tlZA.option.Y2FtcGFpZ25JZA.display_name": {
+          "source": "Campaign ID",
+          "message": "ID kampaně"
+        },
+        "app.TGVtbGlzdA.action.ZW1haWwtY2xpY2tlZA.option.Y2FtcGFpZ25JZA.short_desc": {
+          "source": "Filter events to a specific campaign",
+          "message": "Filtrovat události na konkrétní kampaň"
+        },
+        "app.TGVtbGlzdA.action.ZW1haWwtY2xpY2tlZA.short_desc": {
+          "source": "Trigger when a lead clicks a link",
+          "message": "Spustit, když lead klikne na odkaz"
+        },
+        "app.TGVtbGlzdA.action.ZW1haWwtYm91bmNlZA.desc": {
+          "source": "Fires when a Lemlist email bounces. Provides campaign and lead details for follow-up.",
+          "message": "Spustí se, když se e-mail z Lemlistu vrátí jako nedoručitelný. Poskytuje podrobnosti o kampani a leadu pro další kroky."
+        },
+        "app.TGVtbGlzdA.action.ZW1haWwtYm91bmNlZA.display_name": {
+          "source": "Email Bounced",
+          "message": "E-mail nedoručen"
+        },
+        "app.TGVtbGlzdA.action.ZW1haWwtYm91bmNlZA.option.Y2FtcGFpZ25JZA.desc": {
+          "source": "Optionally filter events to a specific Lemlist campaign",
+          "message": "Volitelně filtrovat události na konkrétní kampaň v Lemlistu"
+        },
+        "app.TGVtbGlzdA.action.ZW1haWwtYm91bmNlZA.option.Y2FtcGFpZ25JZA.display_name": {
+          "source": "Campaign ID",
+          "message": "ID kampaně"
+        },
+        "app.TGVtbGlzdA.action.ZW1haWwtYm91bmNlZA.option.Y2FtcGFpZ25JZA.short_desc": {
+          "source": "Filter events to a specific campaign",
+          "message": "Filtrovat události na konkrétní kampaň"
+        },
+        "app.TGVtbGlzdA.action.ZW1haWwtYm91bmNlZA.short_desc": {
+          "source": "Trigger when an email bounces",
+          "message": "Spustit při nedoručení e-mailu"
+        },
+        "app.TGVtbGlzdA.action.ZW1haWwtb3BlbmVk.desc": {
+          "source": "Fires when a lead opens a Lemlist email. Provides campaign, lead, and sequence step details.",
+          "message": "Spustí se, když lead otevře e-mail z Lemlistu. Poskytuje podrobnosti o kampani, leadu a kroku sekvence."
+        },
+        "app.TGVtbGlzdA.action.ZW1haWwtb3BlbmVk.display_name": {
+          "source": "Email Opened",
+          "message": "E-mail otevřen"
+        },
+        "app.TGVtbGlzdA.action.ZW1haWwtb3BlbmVk.option.Y2FtcGFpZ25JZA.desc": {
+          "source": "Optionally filter events to a specific Lemlist campaign",
+          "message": "Volitelně filtrovat události na konkrétní kampaň v Lemlistu"
+        },
+        "app.TGVtbGlzdA.action.ZW1haWwtb3BlbmVk.option.Y2FtcGFpZ25JZA.display_name": {
+          "source": "Campaign ID",
+          "message": "ID kampaně"
+        },
+        "app.TGVtbGlzdA.action.ZW1haWwtb3BlbmVk.option.Y2FtcGFpZ25JZA.short_desc": {
+          "source": "Filter events to a specific campaign",
+          "message": "Filtrovat události na konkrétní kampaň"
+        },
+        "app.TGVtbGlzdA.action.ZW1haWwtb3BlbmVk.short_desc": {
+          "source": "Trigger when a lead opens an email",
+          "message": "Spustit, když lead otevře e-mail"
+        },
+        "app.TGVtbGlzdA.action.ZW1haWwtc2VudA.desc": {
+          "source": "Fires when a Lemlist email is sent to a lead. Provides campaign, lead, and sequence step details.",
+          "message": "Spustí se při odeslání e-mailu z Lemlistu leadovi. Poskytuje podrobnosti o kampani, leadu a kroku sekvence."
+        },
+        "app.TGVtbGlzdA.action.ZW1haWwtc2VudA.display_name": {
+          "source": "Email Sent",
+          "message": "E-mail odeslán"
+        },
+        "app.TGVtbGlzdA.action.ZW1haWwtc2VudA.option.Y2FtcGFpZ25JZA.desc": {
+          "source": "Optionally filter events to a specific Lemlist campaign",
+          "message": "Volitelně filtrovat události na konkrétní kampaň v Lemlistu"
+        },
+        "app.TGVtbGlzdA.action.ZW1haWwtc2VudA.option.Y2FtcGFpZ25JZA.display_name": {
+          "source": "Campaign ID",
+          "message": "ID kampaně"
+        },
+        "app.TGVtbGlzdA.action.ZW1haWwtc2VudA.option.Y2FtcGFpZ25JZA.short_desc": {
+          "source": "Filter events to a specific campaign",
+          "message": "Filtrovat události na konkrétní kampaň"
+        },
+        "app.TGVtbGlzdA.action.ZW1haWwtc2VudA.short_desc": {
+          "source": "Trigger when an email is sent",
+          "message": "Spustit při odeslání e-mailu"
+        },
+        "app.TGVtbGlzdA.action.ZW1haWwtcmVwbGllZA.desc": {
+          "source": "Fires when a lead replies to a Lemlist email. Provides campaign, lead, and sequence step details.",
+          "message": "Spustí se, když lead odpoví na e-mail z Lemlistu. Poskytuje podrobnosti o kampani, leadu a kroku sekvence."
+        },
+        "app.TGVtbGlzdA.action.ZW1haWwtcmVwbGllZA.display_name": {
+          "source": "Email Replied",
+          "message": "Na e-mail odpovězeno"
+        },
+        "app.TGVtbGlzdA.action.ZW1haWwtcmVwbGllZA.option.Y2FtcGFpZ25JZA.desc": {
+          "source": "Optionally filter events to a specific Lemlist campaign",
+          "message": "Volitelně filtrovat události na konkrétní kampaň v Lemlistu"
+        },
+        "app.TGVtbGlzdA.action.ZW1haWwtcmVwbGllZA.option.Y2FtcGFpZ25JZA.display_name": {
+          "source": "Campaign ID",
+          "message": "ID kampaně"
+        },
+        "app.TGVtbGlzdA.action.ZW1haWwtcmVwbGllZA.option.Y2FtcGFpZ25JZA.short_desc": {
+          "source": "Filter events to a specific campaign",
+          "message": "Filtrovat události na konkrétní kampaň"
+        },
+        "app.TGVtbGlzdA.action.ZW1haWwtcmVwbGllZA.short_desc": {
+          "source": "Trigger when a lead replies to an email",
+          "message": "Spustit, když lead odpoví na e-mail"
+        },
+        "app.TGVtbGlzdA.action.bGVhZC1pbnRlcmVzdGVk.desc": {
+          "source": "Fires when a lead is marked as interested in Lemlist. This is a key engagement signal for sales follow-up.",
+          "message": "Spustí se, když je lead v Lemlistu označen jako mající zájem. Jedná se o klíčový signál zapojení pro obchodní návaznost."
+        },
+        "app.TGVtbGlzdA.action.bGVhZC1pbnRlcmVzdGVk.display_name": {
+          "source": "Lead Marked Interested",
+          "message": "Lead označen jako: má zájem"
+        },
+        "app.TGVtbGlzdA.action.bGVhZC1pbnRlcmVzdGVk.option.Y2FtcGFpZ25JZA.desc": {
+          "source": "Optionally filter events to a specific Lemlist campaign",
+          "message": "Volitelně filtrovat události na konkrétní kampaň v Lemlistu"
+        },
+        "app.TGVtbGlzdA.action.bGVhZC1pbnRlcmVzdGVk.option.Y2FtcGFpZ25JZA.display_name": {
+          "source": "Campaign ID",
+          "message": "ID kampaně"
+        },
+        "app.TGVtbGlzdA.action.bGVhZC1pbnRlcmVzdGVk.option.Y2FtcGFpZ25JZA.short_desc": {
+          "source": "Filter events to a specific campaign",
+          "message": "Filtrovat události na konkrétní kampaň"
+        },
+        "app.TGVtbGlzdA.action.bGVhZC1pbnRlcmVzdGVk.short_desc": {
+          "source": "Trigger when a lead is marked as interested",
+          "message": "Spustit, když je lead označen jako mající zájem"
+        },
+        "app.TGVtbGlzdA.action.bGVhZC1ub3QtaW50ZXJlc3RlZA.desc": {
+          "source": "Fires when a lead is marked as not interested in Lemlist. Use to suppress future outreach or update CRM records.",
+          "message": "Spustí se, když je lead v Lemlistu označen jako nemající zájem. Použijte k potlačení dalšího oslovování nebo k aktualizaci záznamů v CRM."
+        },
+        "app.TGVtbGlzdA.action.bGVhZC1ub3QtaW50ZXJlc3RlZA.display_name": {
+          "source": "Lead Marked Not Interested",
+          "message": "Lead označen jako: nemá zájem"
+        },
+        "app.TGVtbGlzdA.action.bGVhZC1ub3QtaW50ZXJlc3RlZA.option.Y2FtcGFpZ25JZA.desc": {
+          "source": "Optionally filter events to a specific Lemlist campaign",
+          "message": "Volitelně filtrovat události na konkrétní kampaň v Lemlistu"
+        },
+        "app.TGVtbGlzdA.action.bGVhZC1ub3QtaW50ZXJlc3RlZA.option.Y2FtcGFpZ25JZA.display_name": {
+          "source": "Campaign ID",
+          "message": "ID kampaně"
+        },
+        "app.TGVtbGlzdA.action.bGVhZC1ub3QtaW50ZXJlc3RlZA.option.Y2FtcGFpZ25JZA.short_desc": {
+          "source": "Filter events to a specific campaign",
+          "message": "Filtrovat události na konkrétní kampaň"
+        },
+        "app.TGVtbGlzdA.action.bGVhZC1ub3QtaW50ZXJlc3RlZA.short_desc": {
+          "source": "Trigger when a lead is marked as not interested",
+          "message": "Spustit, když je lead označen jako nemající zájem"
+        },
+        "app.TGVtbGlzdA.action.bGlzdC10YXNrcw.desc": {
+          "source": "Retrieve a list of Lemlist manual tasks.",
+          "message": "Získat seznam manuálních úkolů v Lemlistu."
+        },
+        "app.TGVtbGlzdA.action.bGlzdC10YXNrcw.display_name": {
+          "source": "List Tasks",
+          "message": "Seznam úloh"
+        },
+        "app.TGVtbGlzdA.action.bGlzdC10YXNrcw.option.bGltaXQ.desc": {
+          "source": "Maximum number of tasks to return (max 100)",
+          "message": "Maximální počet vrácených úkolů (max. 100)"
+        },
+        "app.TGVtbGlzdA.action.bGlzdC10YXNrcw.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "Limit"
+        },
+        "app.TGVtbGlzdA.action.bGlzdC10YXNrcw.option.bGltaXQ.short_desc": {
+          "source": "Maximum number of results",
+          "message": "Maximální počet výsledků"
+        },
+        "app.TGVtbGlzdA.action.bGlzdC10YXNrcw.short_desc": {
+          "source": "List manual tasks",
+          "message": "Zobrazit seznam manuálních úkolů"
+        },
+        "app.TGVtbGlzdA.action.bGlzdC1hY3Rpdml0aWVz.desc": {
+          "source": "Retrieve a list of Lemlist activities with optional filtering by type, campaign, or lead.",
+          "message": "Získat seznam aktivit v Lemlistu s volitelným filtrováním podle typu, kampaně nebo leadu."
+        },
+        "app.TGVtbGlzdA.action.bGlzdC1hY3Rpdml0aWVz.display_name": {
+          "source": "List Activities",
+          "message": "Vypsat aktivity"
+        },
+        "app.TGVtbGlzdA.action.bGlzdC1hY3Rpdml0aWVz.option.Y2FtcGFpZ25JZA.desc": {
+          "source": "Filter activities by campaign identifier",
+          "message": "Filtrovat aktivity podle identifikátoru kampaně"
+        },
+        "app.TGVtbGlzdA.action.bGlzdC1hY3Rpdml0aWVz.option.Y2FtcGFpZ25JZA.display_name": {
+          "source": "Campaign ID",
+          "message": "ID kampaně"
+        },
+        "app.TGVtbGlzdA.action.bGlzdC1hY3Rpdml0aWVz.option.Y2FtcGFpZ25JZA.short_desc": {
+          "source": "Filter by campaign",
+          "message": "Filtrovat podle kampaně"
+        },
+        "app.TGVtbGlzdA.action.bGlzdC1hY3Rpdml0aWVz.option.aXNGaXJzdA.desc": {
+          "source": "If `True`, only returns the first occurrence of each activity type per lead per campaign",
+          "message": "Pokud je `True`, vrátí pouze první výskyt každého typu aktivity pro daného leada a kampaň"
+        },
+        "app.TGVtbGlzdA.action.bGlzdC1hY3Rpdml0aWVz.option.aXNGaXJzdA.display_name": {
+          "source": "First Occurrence Only",
+          "message": "Pouze první výskyt"
+        },
+        "app.TGVtbGlzdA.action.bGlzdC1hY3Rpdml0aWVz.option.aXNGaXJzdA.short_desc": {
+          "source": "Only return first occurrences",
+          "message": "Vrátit pouze první výskyty"
+        },
+        "app.TGVtbGlzdA.action.bGlzdC1hY3Rpdml0aWVz.option.bGVhZElk.desc": {
+          "source": "Filter activities by lead identifier",
+          "message": "Filtrovat aktivity podle identifikátoru leadu"
+        },
+        "app.TGVtbGlzdA.action.bGlzdC1hY3Rpdml0aWVz.option.bGVhZElk.display_name": {
+          "source": "Lead ID",
+          "message": "ID leadu"
+        },
+        "app.TGVtbGlzdA.action.bGlzdC1hY3Rpdml0aWVz.option.bGVhZElk.short_desc": {
+          "source": "Filter by lead",
+          "message": "Filtrovat podle leadu"
+        },
+        "app.TGVtbGlzdA.action.bGlzdC1hY3Rpdml0aWVz.option.dHlwZQ.allowed-value.c3RyaW5nOm5vdEludGVyZXN0ZWQ.desc": {
+          "source": "Lead not interested",
+          "message": "Lead nemá zájem"
+        },
+        "app.TGVtbGlzdA.action.bGlzdC1hY3Rpdml0aWVz.option.dHlwZQ.allowed-value.c3RyaW5nOmVtYWlsc09wZW5lZA.desc": {
+          "source": "Emails opened",
+          "message": "E-maily otevřeny"
+        },
+        "app.TGVtbGlzdA.action.bGlzdC1hY3Rpdml0aWVz.option.dHlwZQ.allowed-value.c3RyaW5nOmVtYWlsc0JvdW5jZWQ.desc": {
+          "source": "Emails bounced",
+          "message": "E-maily vráceny jako nedoručitelné"
+        },
+        "app.TGVtbGlzdA.action.bGlzdC1hY3Rpdml0aWVz.option.dHlwZQ.allowed-value.c3RyaW5nOmVtYWlsc0NsaWNrZWQ.desc": {
+          "source": "Emails clicked",
+          "message": "Kliknutí v e-mailech"
+        },
+        "app.TGVtbGlzdA.action.bGlzdC1hY3Rpdml0aWVz.option.dHlwZQ.allowed-value.c3RyaW5nOmVtYWlsc1JlcGxpZWQ.desc": {
+          "source": "Emails replied",
+          "message": "Odpovědi na e-maily"
+        },
+        "app.TGVtbGlzdA.action.bGlzdC1hY3Rpdml0aWVz.option.dHlwZQ.allowed-value.c3RyaW5nOmVtYWlsc1NlbnQ.desc": {
+          "source": "Emails sent",
+          "message": "E-maily odeslány"
+        },
+        "app.TGVtbGlzdA.action.bGlzdC1hY3Rpdml0aWVz.option.dHlwZQ.allowed-value.c3RyaW5nOmludGVyZXN0ZWQ.desc": {
+          "source": "Lead interested",
+          "message": "Lead má zájem"
+        },
+        "app.TGVtbGlzdA.action.bGlzdC1hY3Rpdml0aWVz.option.dHlwZQ.desc": {
+          "source": "Filter activities by their type",
+          "message": "Filtrovat aktivity podle jejich typu"
+        },
+        "app.TGVtbGlzdA.action.bGlzdC1hY3Rpdml0aWVz.option.dHlwZQ.display_name": {
+          "source": "Activity Type",
+          "message": "Typ aktivity"
+        },
+        "app.TGVtbGlzdA.action.bGlzdC1hY3Rpdml0aWVz.option.dHlwZQ.short_desc": {
+          "source": "Filter by activity type",
+          "message": "Filtrovat podle typu aktivity"
+        },
+        "app.TGVtbGlzdA.action.bGlzdC1hY3Rpdml0aWVz.short_desc": {
+          "source": "List email and engagement activities",
+          "message": "Zobrazit seznam e-mailových aktivit a aktivit zapojení"
+        },
+        "app.TGVtbGlzdA.action.bGlzdC1jYW1wYWlnbnM.desc": {
+          "source": "Retrieve a list of Lemlist campaigns with optional filtering by status.",
+          "message": "Získat seznam kampaní v Lemlistu s volitelným filtrováním podle stavu."
+        },
+        "app.TGVtbGlzdA.action.bGlzdC1jYW1wYWlnbnM.display_name": {
+          "source": "List Campaigns",
+          "message": "Seznam kampaní"
+        },
+        "app.TGVtbGlzdA.action.bGlzdC1jYW1wYWlnbnM.option.c3RhdHVz.allowed-value.c3RyaW5nOmFyY2hpdmVk.desc": {
+          "source": "Archived campaigns",
+          "message": "Archivované kampaně"
+        },
+        "app.TGVtbGlzdA.action.bGlzdC1jYW1wYWlnbnM.option.c3RhdHVz.allowed-value.c3RyaW5nOmRyYWZ0.desc": {
+          "source": "Draft campaigns",
+          "message": "Koncepty kampaní"
+        },
+        "app.TGVtbGlzdA.action.bGlzdC1jYW1wYWlnbnM.option.c3RhdHVz.allowed-value.c3RyaW5nOmVuZGVk.desc": {
+          "source": "Ended campaigns",
+          "message": "Ukončené kampaně"
+        },
+        "app.TGVtbGlzdA.action.bGlzdC1jYW1wYWlnbnM.option.c3RhdHVz.allowed-value.c3RyaW5nOmVycm9ycw.desc": {
+          "source": "Campaigns with errors",
+          "message": "Kampaně s chybami"
+        },
+        "app.TGVtbGlzdA.action.bGlzdC1jYW1wYWlnbnM.option.c3RhdHVz.allowed-value.c3RyaW5nOnBhdXNlZA.desc": {
+          "source": "Paused campaigns",
+          "message": "Pozastavené kampaně"
+        },
+        "app.TGVtbGlzdA.action.bGlzdC1jYW1wYWlnbnM.option.c3RhdHVz.allowed-value.c3RyaW5nOnJ1bm5pbmc.desc": {
+          "source": "Running campaigns",
+          "message": "Běžící kampaně"
+        },
+        "app.TGVtbGlzdA.action.bGlzdC1jYW1wYWlnbnM.option.c3RhdHVz.desc": {
+          "source": "Filter campaigns by their current status",
+          "message": "Filtrovat kampaně podle jejich aktuálního stavu"
+        },
+        "app.TGVtbGlzdA.action.bGlzdC1jYW1wYWlnbnM.option.c3RhdHVz.display_name": {
+          "source": "Status",
+          "message": "Stav"
+        },
+        "app.TGVtbGlzdA.action.bGlzdC1jYW1wYWlnbnM.option.c3RhdHVz.short_desc": {
+          "source": "Filter by campaign status",
+          "message": "Filtrovat podle stavu kampaně"
+        },
+        "app.TGVtbGlzdA.action.bGlzdC1jYW1wYWlnbnM.short_desc": {
+          "source": "List and search campaigns",
+          "message": "Vypsat a vyhledávat kampaně"
+        },
+        "app.TGVtbGlzdA.action.bGlzdC1jb250YWN0cw.desc": {
+          "source": "Retrieve a list of Lemlist contacts. Optionally filter by email to get a specific contact.",
+          "message": "Získat seznam kontaktů v Lemlistu. Volitelně filtrovat podle e-mailu pro získání konkrétního kontaktu."
+        },
+        "app.TGVtbGlzdA.action.bGlzdC1jb250YWN0cw.display_name": {
+          "source": "List Contacts",
+          "message": "Seznam kontaktů"
+        },
+        "app.TGVtbGlzdA.action.bGlzdC1jb250YWN0cw.option.ZW1haWw.desc": {
+          "source": "The email address of the contact to retrieve. The Lemlist v2 API requires a specific email address to look up contacts.",
+          "message": "E-mailová adresa kontaktu k načtení. Lemlist v2 API vyžaduje konkrétní e-mailovou adresu k vyhledání kontaktů."
+        },
+        "app.TGVtbGlzdA.action.bGlzdC1jb250YWN0cw.option.ZW1haWw.display_name": {
+          "source": "Email",
+          "message": "E-mail"
+        },
+        "app.TGVtbGlzdA.action.bGlzdC1jb250YWN0cw.option.ZW1haWw.short_desc": {
+          "source": "Email address of the contact to retrieve",
+          "message": "E-mailová adresa kontaktu k načtení"
+        },
+        "app.TGVtbGlzdA.action.bGlzdC1jb250YWN0cw.short_desc": {
+          "source": "List contacts",
+          "message": "Zobrazit seznam kontaktů"
+        },
+        "app.TGVtbGlzdA.action.bGlzdC1sZWFkcw.desc": {
+          "source": "Retrieve a list of leads enrolled in a specific Lemlist campaign.",
+          "message": "Získat seznam leadů zařazených do konkrétní kampaně v Lemlistu."
+        },
+        "app.TGVtbGlzdA.action.bGlzdC1sZWFkcw.display_name": {
+          "source": "List Leads",
+          "message": "Vypsat leady"
+        },
+        "app.TGVtbGlzdA.action.bGlzdC1sZWFkcw.option.Y2FtcGFpZ25JZA.desc": {
+          "source": "The identifier of the campaign to retrieve leads from",
+          "message": "Identifikátor kampaně, ze které se mají načíst leadi"
+        },
+        "app.TGVtbGlzdA.action.bGlzdC1sZWFkcw.option.Y2FtcGFpZ25JZA.display_name": {
+          "source": "Campaign ID",
+          "message": "ID kampaně"
+        },
+        "app.TGVtbGlzdA.action.bGlzdC1sZWFkcw.option.Y2FtcGFpZ25JZA.short_desc": {
+          "source": "Campaign to list leads from",
+          "message": "Kampaň pro výpis leadů"
+        },
+        "app.TGVtbGlzdA.action.bGlzdC1sZWFkcw.short_desc": {
+          "source": "List leads in a campaign",
+          "message": "Zobrazit seznam leadů v kampani"
+        },
+        "app.TGVtbGlzdA.action.bWFrZS1hcGktY2FsbA.desc": {
+          "source": "Make a custom HTTP / REST API call to **Lemlist** using the configured connection's authentication.\n\nSpecify the HTTP method, the URI path (relative to the connection's API base URL), optional query parameters, headers, and request body. The response is returned as a hash containing the status code, response headers, and response body.\n\nUse this action for endpoints that are not yet exposed as first-class actions on this app.",
+          "message": "Proveďte vlastní volání HTTP / REST API do **Lemlist** s využitím ověření nakonfigurovaného připojení.\n\nZadejte metodu HTTP, cestu URI (relativní k základní adrese URL API připojení), volitelné parametry dotazu, záhlaví a tělo požadavku. Odpověď je vrácena jako hash obsahující stavový kód, záhlaví odpovědi a tělo odpovědi.\n\nTuto akci použijte pro koncové body, které ještě nejsou v této aplikaci k dispozici jako samostatné akce."
+        },
+        "app.TGVtbGlzdA.action.bWFrZS1hcGktY2FsbA.display_name": {
+          "source": "Make an API call",
+          "message": "Provést volání API"
+        },
+        "app.TGVtbGlzdA.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.desc": {
+          "source": "The request body. The effective type depends on `body_type`: JSON/form/YAML expect a hash, XML/text expect a string, multipart expects a file structure, binary expects raw bytes.",
+          "message": "Tělo požadavku. Efektivní typ závisí na `body_type`: JSON/form/YAML očekávají hash, XML/text očekávají řetězec, multipart očekává strukturu souboru, binary očekává surové bajty."
+        },
+        "app.TGVtbGlzdA.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.display_name": {
+          "source": "Body",
+          "message": "Tělo"
+        },
+        "app.TGVtbGlzdA.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.short_desc": {
+          "source": "The request body",
+          "message": "Tělo požadavku"
+        },
+        "app.TGVtbGlzdA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.desc": {
+          "source": "Upload a file using `multipart/form-data`. The body must be a @ref DataProvider::FileDataType \"FileDataType\" structure (filename + content + mime_type). The framework builds the multipart envelope and sets the boundary header.",
+          "message": "Nahrát soubor pomocí `multipart/form-data`. Tělo musí být struktura @ref DataProvider::FileDataType \"FileDataType\" (filename + content + mime_type). Framework vytvoří obálku multipart a nastaví záhlaví boundary."
+        },
+        "app.TGVtbGlzdA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.display_name": {
+          "source": "Multipart Form",
+          "message": "Multipart Form"
+        },
+        "app.TGVtbGlzdA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.short_desc": {
+          "source": "Upload a file using multipart/form-data",
+          "message": "Nahrát soubor pomocí multipart/form-data"
+        },
+        "app.TGVtbGlzdA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.desc": {
+          "source": "Pass the body to the REST client unchanged; the client decides serialization based on its configured `data` option and the value type",
+          "message": "Předat tělo klientovi REST beze změny; klient rozhodne o serializaci na základě své nakonfigurované možnosti `data` a typu hodnoty"
+        },
+        "app.TGVtbGlzdA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.display_name": {
+          "source": "Auto",
+          "message": "Automaticky"
+        },
+        "app.TGVtbGlzdA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.short_desc": {
+          "source": "Pass-through; use connection serialization and let the REST client decide",
+          "message": "Předání bez změn; použít serializaci připojení a nechat rozhodnutí na klientovi REST"
+        },
+        "app.TGVtbGlzdA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.desc": {
+          "source": "Send the body as raw bytes. The body must be a binary value. Sets `Content-Type: application/octet-stream` unless overridden by `hdr`.",
+          "message": "Odeslat tělo jako surové bajty. Tělo musí být binární hodnota. Nastavuje `Content-Type: application/octet-stream`, pokud není přepsáno `hdr`."
+        },
+        "app.TGVtbGlzdA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.display_name": {
+          "source": "Raw Binary",
+          "message": "Surová binární data"
+        },
+        "app.TGVtbGlzdA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.short_desc": {
+          "source": "Send body as raw bytes",
+          "message": "Odeslat tělo jako surové bajty"
+        },
+        "app.TGVtbGlzdA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.desc": {
+          "source": "Serialize a hash of form fields as `application/x-www-form-urlencoded`. The body must be a hash whose values are scalars (strings/numbers/booleans).",
+          "message": "Serializovat hash formulářových polí jako `application/x-www-form-urlencoded`. Tělo musí být hash, jehož hodnotami jsou skaláry (řetězce/čísla/booleovské hodnoty)."
+        },
+        "app.TGVtbGlzdA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.display_name": {
+          "source": "Form (URL-encoded)",
+          "message": "Formulář (URL-encoded)"
+        },
+        "app.TGVtbGlzdA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.short_desc": {
+          "source": "Serialize body as application/x-www-form-urlencoded form fields",
+          "message": "Serializovat tělo jako formulářová pole application/x-www-form-urlencoded"
+        },
+        "app.TGVtbGlzdA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.desc": {
+          "source": "Serialize the body as JSON; sets `Content-Type: application/json`. The body should be a hash, list, or scalar value.",
+          "message": "Serializovat tělo jako JSON; nastavuje `Content-Type: application/json`. Tělo by mělo být hash, seznam nebo skalární hodnota."
+        },
+        "app.TGVtbGlzdA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.display_name": {
+          "source": "JSON",
+          "message": "JSON"
+        },
+        "app.TGVtbGlzdA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.short_desc": {
+          "source": "Serialize body as JSON",
+          "message": "Serializovat tělo jako JSON"
+        },
+        "app.TGVtbGlzdA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.desc": {
+          "source": "Send the body as plain text. The body must be a string. Sets `Content-Type: text/plain`.",
+          "message": "Odeslat tělo jako prostý text. Tělo musí být řetězec. Nastavuje `Content-Type: text/plain`."
+        },
+        "app.TGVtbGlzdA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.display_name": {
+          "source": "Plain Text",
+          "message": "Čistý text"
+        },
+        "app.TGVtbGlzdA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.short_desc": {
+          "source": "Send body as text/plain",
+          "message": "Odeslat tělo jako text/plain"
+        },
+        "app.TGVtbGlzdA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.desc": {
+          "source": "Send the body as XML. If the body is a hash it is serialized to XML; if it is a string it is sent verbatim. Sets `Content-Type: application/xml`.",
+          "message": "Odeslat tělo jako XML. Pokud je tělo hash, serializuje se do XML; pokud je to řetězec, odešle se doslovně. Nastavuje `Content-Type: application/xml`."
+        },
+        "app.TGVtbGlzdA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.display_name": {
+          "source": "XML",
+          "message": "XML"
+        },
+        "app.TGVtbGlzdA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.short_desc": {
+          "source": "Send body as XML",
+          "message": "Odeslat tělo jako XML"
+        },
+        "app.TGVtbGlzdA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.desc": {
+          "source": "Send the body as YAML. If the body is a hash it is serialized to YAML; if it is a string it is sent verbatim. Sets `Content-Type: application/x-yaml`.",
+          "message": "Odeslat tělo jako YAML. Pokud je tělo hash, serializuje se do YAML; pokud je to řetězec, odešle se doslovně. Nastavuje `Content-Type: application/x-yaml`."
+        },
+        "app.TGVtbGlzdA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.display_name": {
+          "source": "YAML",
+          "message": "YAML"
+        },
+        "app.TGVtbGlzdA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.short_desc": {
+          "source": "Send body as YAML",
+          "message": "Odeslat tělo jako YAML"
+        },
+        "app.TGVtbGlzdA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.desc": {
+          "source": "Selects the body serialization mode and the corresponding `Content-Type` header. Changing this field reshapes the `body` editor - selecting JSON exposes a JSON editor, selecting Multipart Form exposes a file picker, and so on.",
+          "message": "Vybírá režim serializace těla a odpovídající záhlaví `Content-Type`. Změna tohoto pole upraví editor `body` – výběrem JSON se zobrazí editor JSON, výběrem Multipart Form se zobrazí výběr souboru a podobně."
+        },
+        "app.TGVtbGlzdA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.display_name": {
+          "source": "Body Type",
+          "message": "Typ těla"
+        },
+        "app.TGVtbGlzdA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.short_desc": {
+          "source": "How the body is serialized and what Content-Type is sent",
+          "message": "Jak je tělo serializováno a jaký Content-Type je odeslán"
+        },
+        "app.TGVtbGlzdA.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.desc": {
+          "source": "If `True`, non-2xx HTTP responses return as the normal response hash (with the actual status code) instead of raising `REST-RESPONSE-ERROR`. Useful for handling 4xx/5xx as data - e.g. checking whether a resource exists. Overrides the connection's `error_passthru` setting for this call only.",
+          "message": "Pokud je `True`, odpovědi HTTP jiné než 2xx se vrátí jako běžný hash odpovědi (s reálným stavovým kódem) namísto vyvolání `REST-RESPONSE-ERROR`. Užitečné pro zpracování 4xx/5xx jako dat – např. kontrola, zda prostředek existuje. Přepisuje nastavení `error_passthru` připojení pouze pro toto volání."
+        },
+        "app.TGVtbGlzdA.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.display_name": {
+          "source": "Return Errors as Data",
+          "message": "Vracet chyby jako data"
+        },
+        "app.TGVtbGlzdA.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.short_desc": {
+          "source": "Return non-2xx responses normally instead of throwing",
+          "message": "Vracet odpovědi jiné než 2xx normálně namísto vyvolání výjimky"
+        },
+        "app.TGVtbGlzdA.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.desc": {
+          "source": "Optional list of HTTP status codes treated as success. If set and the response status is not in this list, the action throws `REST-STATUS-ERROR`. When unset, the REST client's default behavior applies (typically: 2xx is success, non-2xx throws).",
+          "message": "Volitelný seznam stavových kódů HTTP považovaných za úspěch. Je-li nastaven a stav odpovědi není v tomto seznamu, akce vyvolá `REST-STATUS-ERROR`. Pokud není nastaven, uplatní se výchozí chování klienta REST (obvykle: 2xx je úspěch, jiné než 2xx vyvolá výjimku)."
+        },
+        "app.TGVtbGlzdA.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.display_name": {
+          "source": "Expected Status Codes",
+          "message": "Očekávané stavové kódy"
+        },
+        "app.TGVtbGlzdA.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.short_desc": {
+          "source": "Response status codes treated as success",
+          "message": "Stavové kódy odpovědi považované za úspěch"
+        },
+        "app.TGVtbGlzdA.action.bWFrZS1hcGktY2FsbA.option.aGRy.desc": {
+          "source": "Hash of custom headers added to the request. These override any default headers set by `body_type` (e.g. supplying `Content-Type` here wins over the body-type default).",
+          "message": "Hash vlastních záhlaví přidaných k požadavku. Tyto přepisují jakákoli výchozí záhlaví nastavená `body_type` (např. zadání `Content-Type` zde má přednost před výchozím nastavením typu těla)."
+        },
+        "app.TGVtbGlzdA.action.bWFrZS1hcGktY2FsbA.option.aGRy.display_name": {
+          "source": "Custom Headers",
+          "message": "Vlastní záhlaví"
+        },
+        "app.TGVtbGlzdA.action.bWFrZS1hcGktY2FsbA.option.aGRy.short_desc": {
+          "source": "Extra request headers",
+          "message": "Dodatečná záhlaví požadavku"
+        },
+        "app.TGVtbGlzdA.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.desc": {
+          "source": "If `True`, the response hash includes a `debug` sub-hash containing the request method/URL/headers (with sensitive values redacted), request and response sizes, and round-trip duration. Useful when investigating slow or failing calls. Off by default to keep responses lean.",
+          "message": "Pokud je `True`, hash odpovědi obsahuje pod-hash `debug` obsahující metodu/URL/záhlaví požadavku (s cenzurovanými citlivými hodnotami), velikosti požadavku a odpovědi a dobu trvání. Užitečné při zkoumání pomalých nebo selhávajících volání. Ve výchozím nastavení vypnuto pro zachování kompaktních odpovědí."
+        },
+        "app.TGVtbGlzdA.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.display_name": {
+          "source": "Include Debug Info",
+          "message": "Zahrnout ladicí informace"
+        },
+        "app.TGVtbGlzdA.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.short_desc": {
+          "source": "Include request/timing/size debug info in the response",
+          "message": "Zahrnout do odpovědi ladicí informace o požadavku/časování/velikosti"
+        },
+        "app.TGVtbGlzdA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.desc": {
+          "source": "HTTP `OPTIONS`",
+          "message": "HTTP `OPTIONS`"
+        },
+        "app.TGVtbGlzdA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.display_name": {
+          "source": "OPTIONS",
+          "message": "OPTIONS"
+        },
+        "app.TGVtbGlzdA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.short_desc": {
+          "source": "HTTP OPTIONS",
+          "message": "HTTP OPTIONS"
+        },
+        "app.TGVtbGlzdA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.desc": {
+          "source": "HTTP `DELETE`",
+          "message": "HTTP `DELETE`"
+        },
+        "app.TGVtbGlzdA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.display_name": {
+          "source": "DELETE",
+          "message": "DELETE"
+        },
+        "app.TGVtbGlzdA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.short_desc": {
+          "source": "HTTP DELETE",
+          "message": "HTTP DELETE"
+        },
+        "app.TGVtbGlzdA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.desc": {
+          "source": "HTTP `GET`",
+          "message": "HTTP `GET`"
+        },
+        "app.TGVtbGlzdA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.display_name": {
+          "source": "GET",
+          "message": "GET"
+        },
+        "app.TGVtbGlzdA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.short_desc": {
+          "source": "HTTP GET",
+          "message": "HTTP GET"
+        },
+        "app.TGVtbGlzdA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.desc": {
+          "source": "HTTP `HEAD`",
+          "message": "HTTP `HEAD`"
+        },
+        "app.TGVtbGlzdA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.display_name": {
+          "source": "HEAD",
+          "message": "HEAD"
+        },
+        "app.TGVtbGlzdA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.short_desc": {
+          "source": "HTTP HEAD",
+          "message": "HTTP HEAD"
+        },
+        "app.TGVtbGlzdA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.desc": {
+          "source": "HTTP `PATCH`",
+          "message": "HTTP `PATCH`"
+        },
+        "app.TGVtbGlzdA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.display_name": {
+          "source": "PATCH",
+          "message": "PATCH"
+        },
+        "app.TGVtbGlzdA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.short_desc": {
+          "source": "HTTP PATCH",
+          "message": "HTTP PATCH"
+        },
+        "app.TGVtbGlzdA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.desc": {
+          "source": "HTTP `POST`",
+          "message": "HTTP `POST`"
+        },
+        "app.TGVtbGlzdA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.display_name": {
+          "source": "POST",
+          "message": "POST"
+        },
+        "app.TGVtbGlzdA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.short_desc": {
+          "source": "HTTP POST",
+          "message": "HTTP POST"
+        },
+        "app.TGVtbGlzdA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.desc": {
+          "source": "HTTP `PUT`",
+          "message": "HTTP `PUT`"
+        },
+        "app.TGVtbGlzdA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.display_name": {
+          "source": "PUT",
+          "message": "PUT"
+        },
+        "app.TGVtbGlzdA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.short_desc": {
+          "source": "HTTP PUT",
+          "message": "HTTP PUT"
+        },
+        "app.TGVtbGlzdA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.desc": {
+          "source": "HTTP `TRACE`",
+          "message": "HTTP `TRACE`"
+        },
+        "app.TGVtbGlzdA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.display_name": {
+          "source": "TRACE",
+          "message": "TRACE"
+        },
+        "app.TGVtbGlzdA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.short_desc": {
+          "source": "HTTP TRACE",
+          "message": "HTTP TRACE"
+        },
+        "app.TGVtbGlzdA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "Metoda HTTP, která se má použít pro požadavek"
+        },
+        "app.TGVtbGlzdA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.display_name": {
+          "source": "HTTP Method",
+          "message": "Metoda HTTP"
+        },
+        "app.TGVtbGlzdA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.short_desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "Metoda HTTP, která se má použít pro požadavek"
+        },
+        "app.TGVtbGlzdA.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain `{name}` placeholders that are replaced from `path_vars`. Example: `/users/{id}/comments`.",
+          "message": "Cesta URI relativní k základní adrese URL API připojení. Může obsahovat zástupné symboly `{name}`, které jsou nahrazeny z `path_vars`. Příklad: `/users/{id}/comments`."
+        },
+        "app.TGVtbGlzdA.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.display_name": {
+          "source": "URI Path",
+          "message": "Cesta URI"
+        },
+        "app.TGVtbGlzdA.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.short_desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain '{name}' placeholders that are replaced from 'path_vars'. Example: '/users/{id}/comments'",
+          "message": "Cesta URI relativní vůči základní URL API připojení. Může obsahovat zástupné symboly '{name}', které jsou nahrazeny z 'path_vars'. Příklad: '/users/{id}/comments'"
+        },
+        "app.TGVtbGlzdA.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.desc": {
+          "source": "Hash of values substituted into `{name}` placeholders in the URI path. Example: with `path = /users/{id}` and `path_vars = {id: 123}` the framework sends `/users/123`. Values are URL-encoded.",
+          "message": "Haš hodnot nahrazených za zástupné symboly `{name}` v cestě URI. Příklad: s `path = /users/{id}` a `path_vars = {id: 123}` rozhraní odesílá `/users/123`. Hodnoty jsou kódovány v URL."
+        },
+        "app.TGVtbGlzdA.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.display_name": {
+          "source": "Path Variables",
+          "message": "Proměnné cesty"
+        },
+        "app.TGVtbGlzdA.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.short_desc": {
+          "source": "Values for {name} placeholders in path",
+          "message": "Hodnoty pro zástupné symboly {name} v cestě"
+        },
+        "app.TGVtbGlzdA.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.desc": {
+          "source": "Hash of query string parameters to append to the URI path. Values are URL-encoded; list values are joined with `,`.",
+          "message": "Haš parametrů dotazovacího řetězce, které se připojí k cestě URI. Hodnoty jsou kódovány v URL; hodnoty seznamu jsou spojeny pomocí `,`."
+        },
+        "app.TGVtbGlzdA.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.display_name": {
+          "source": "Query Arguments",
+          "message": "Argumenty dotazu"
+        },
+        "app.TGVtbGlzdA.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.short_desc": {
+          "source": "Query string parameters",
+          "message": "Parametry dotazovacího řetězce"
+        },
+        "app.TGVtbGlzdA.action.bWFrZS1hcGktY2FsbA.short_desc": {
+          "source": "Make a custom API call to Lemlist",
+          "message": "Provést vlastní volání API do Lemlistu"
+        },
+        "app.TGVtbGlzdA.action.c3RhcnQtY2FtcGFpZ24.desc": {
+          "source": "Start or resume a paused Lemlist campaign to begin or continue sending emails.",
+          "message": "Spustit nebo obnovit pozastavenou kampaň v Lemlistu pro zahájení nebo pokračování v odesílání e-mailů."
+        },
+        "app.TGVtbGlzdA.action.c3RhcnQtY2FtcGFpZ24.display_name": {
+          "source": "Start Campaign",
+          "message": "Spustit kampaň"
+        },
+        "app.TGVtbGlzdA.action.c3RhcnQtY2FtcGFpZ24.option.Y2FtcGFpZ25JZA.desc": {
+          "source": "The unique identifier of the campaign to start",
+          "message": "Jedinečný identifikátor kampaně, která se má spustit"
+        },
+        "app.TGVtbGlzdA.action.c3RhcnQtY2FtcGFpZ24.option.Y2FtcGFpZ25JZA.display_name": {
+          "source": "Campaign ID",
+          "message": "ID kampaně"
+        },
+        "app.TGVtbGlzdA.action.c3RhcnQtY2FtcGFpZ24.option.Y2FtcGFpZ25JZA.short_desc": {
+          "source": "ID of the campaign to start",
+          "message": "ID kampaně ke spuštění"
+        },
+        "app.TGVtbGlzdA.action.c3RhcnQtY2FtcGFpZ24.short_desc": {
+          "source": "Start or resume a campaign",
+          "message": "Spustit nebo obnovit kampaň"
+        },
+        "app.TGVtbGlzdA.action.cGF1c2UtY2FtcGFpZ24.desc": {
+          "source": "Pause an active Lemlist campaign to temporarily stop sending emails.",
+          "message": "Pozastavit aktivní kampaň v Lemlistu a dočasně zastavit odesílání e-mailů."
+        },
+        "app.TGVtbGlzdA.action.cGF1c2UtY2FtcGFpZ24.display_name": {
+          "source": "Pause Campaign",
+          "message": "Pozastavit kampaň"
+        },
+        "app.TGVtbGlzdA.action.cGF1c2UtY2FtcGFpZ24.option.Y2FtcGFpZ25JZA.desc": {
+          "source": "The unique identifier of the campaign to pause",
+          "message": "Jedinečný identifikátor kampaně, která se má pozastavit"
+        },
+        "app.TGVtbGlzdA.action.cGF1c2UtY2FtcGFpZ24.option.Y2FtcGFpZ25JZA.display_name": {
+          "source": "Campaign ID",
+          "message": "ID kampaně"
+        },
+        "app.TGVtbGlzdA.action.cGF1c2UtY2FtcGFpZ24.option.Y2FtcGFpZ25JZA.short_desc": {
+          "source": "ID of the campaign to pause",
+          "message": "ID kampaně k pozastavení"
+        },
+        "app.TGVtbGlzdA.action.cGF1c2UtY2FtcGFpZ24.short_desc": {
+          "source": "Pause a running campaign",
+          "message": "Pozastavit běžící kampaň"
+        },
+        "app.TGVtbGlzdA.action.dXBkYXRlLWNvbnRhY3Q.desc": {
+          "source": "Update the properties of an existing Lemlist contact by email address.",
+          "message": "Aktualizovat vlastnosti existujícího kontaktu v Lemlistu podle e-mailové adresy."
+        },
+        "app.TGVtbGlzdA.action.dXBkYXRlLWNvbnRhY3Q.display_name": {
+          "source": "Update Contact",
+          "message": "Aktualizovat kontakt"
+        },
+        "app.TGVtbGlzdA.action.dXBkYXRlLWNvbnRhY3Q.option.Y29tcGFueU5hbWU.desc": {
+          "source": "Updated company name for the contact",
+          "message": "Aktualizovaný název společnosti pro kontakt"
+        },
+        "app.TGVtbGlzdA.action.dXBkYXRlLWNvbnRhY3Q.option.Y29tcGFueU5hbWU.display_name": {
+          "source": "Company Name",
+          "message": "Název společnosti"
+        },
+        "app.TGVtbGlzdA.action.dXBkYXRlLWNvbnRhY3Q.option.Y29tcGFueU5hbWU.short_desc": {
+          "source": "Contact company name",
+          "message": "Název společnosti kontaktu"
+        },
+        "app.TGVtbGlzdA.action.dXBkYXRlLWNvbnRhY3Q.option.ZW1haWw.desc": {
+          "source": "The email address of the contact to update (used as the unique identifier)",
+          "message": "E-mailová adresa kontaktu k aktualizaci (používá se jako jedinečný identifikátor)"
+        },
+        "app.TGVtbGlzdA.action.dXBkYXRlLWNvbnRhY3Q.option.ZW1haWw.display_name": {
+          "source": "Email",
+          "message": "E-mail"
+        },
+        "app.TGVtbGlzdA.action.dXBkYXRlLWNvbnRhY3Q.option.ZW1haWw.short_desc": {
+          "source": "Contact email address to update",
+          "message": "E-mailová adresa kontaktu k aktualizaci"
+        },
+        "app.TGVtbGlzdA.action.dXBkYXRlLWNvbnRhY3Q.option.Zmlyc3ROYW1l.desc": {
+          "source": "Updated first name for the contact",
+          "message": "Aktualizované křestní jméno kontaktu"
+        },
+        "app.TGVtbGlzdA.action.dXBkYXRlLWNvbnRhY3Q.option.Zmlyc3ROYW1l.display_name": {
+          "source": "First Name",
+          "message": "Křestní jméno"
+        },
+        "app.TGVtbGlzdA.action.dXBkYXRlLWNvbnRhY3Q.option.Zmlyc3ROYW1l.short_desc": {
+          "source": "Contact first name",
+          "message": "Křestní jméno kontaktu"
+        },
+        "app.TGVtbGlzdA.action.dXBkYXRlLWNvbnRhY3Q.option.bGFzdE5hbWU.desc": {
+          "source": "Updated last name for the contact",
+          "message": "Aktualizované příjmení kontaktu"
+        },
+        "app.TGVtbGlzdA.action.dXBkYXRlLWNvbnRhY3Q.option.bGFzdE5hbWU.display_name": {
+          "source": "Last Name",
+          "message": "Příjmení"
+        },
+        "app.TGVtbGlzdA.action.dXBkYXRlLWNvbnRhY3Q.option.bGFzdE5hbWU.short_desc": {
+          "source": "Contact last name",
+          "message": "Příjmení kontaktu"
+        },
+        "app.TGVtbGlzdA.action.dXBkYXRlLWNvbnRhY3Q.option.bGlua2VkaW5Vcmw.desc": {
+          "source": "Updated LinkedIn profile URL for the contact",
+          "message": "Aktualizovaná URL adresa profilu na LinkedIn pro kontakt"
+        },
+        "app.TGVtbGlzdA.action.dXBkYXRlLWNvbnRhY3Q.option.bGlua2VkaW5Vcmw.display_name": {
+          "source": "LinkedIn URL",
+          "message": "URL profilu LinkedIn"
+        },
+        "app.TGVtbGlzdA.action.dXBkYXRlLWNvbnRhY3Q.option.bGlua2VkaW5Vcmw.short_desc": {
+          "source": "Contact LinkedIn profile URL",
+          "message": "URL profilu kontaktu na LinkedIn"
+        },
+        "app.TGVtbGlzdA.action.dXBkYXRlLWNvbnRhY3Q.option.cGhvbmU.desc": {
+          "source": "Updated phone number for the contact",
+          "message": "Aktualizované telefonní číslo kontaktu"
+        },
+        "app.TGVtbGlzdA.action.dXBkYXRlLWNvbnRhY3Q.option.cGhvbmU.display_name": {
+          "source": "Phone",
+          "message": "Telefon"
+        },
+        "app.TGVtbGlzdA.action.dXBkYXRlLWNvbnRhY3Q.option.cGhvbmU.short_desc": {
+          "source": "Contact phone number",
+          "message": "Telefonní číslo kontaktu"
+        },
+        "app.TGVtbGlzdA.action.dXBkYXRlLWNvbnRhY3Q.option.d2Vic2l0ZQ.desc": {
+          "source": "Updated website URL for the contact",
+          "message": "Aktualizovaná URL adresa webu pro kontakt"
+        },
+        "app.TGVtbGlzdA.action.dXBkYXRlLWNvbnRhY3Q.option.d2Vic2l0ZQ.display_name": {
+          "source": "Website",
+          "message": "Webová stránka"
+        },
+        "app.TGVtbGlzdA.action.dXBkYXRlLWNvbnRhY3Q.option.d2Vic2l0ZQ.short_desc": {
+          "source": "Contact or company website",
+          "message": "Web kontaktu nebo společnosti"
+        },
+        "app.TGVtbGlzdA.action.dXBkYXRlLWNvbnRhY3Q.short_desc": {
+          "source": "Update an existing contact",
+          "message": "Aktualizovat stávající kontakt"
+        },
+        "app.TGVtbGlzdA.action.dXBkYXRlLWxlYWQ.desc": {
+          "source": "Update the properties of an existing Lemlist lead by email address.",
+          "message": "Aktualizovat vlastnosti existujícího leada v Lemlistu podle e-mailové adresy."
+        },
+        "app.TGVtbGlzdA.action.dXBkYXRlLWxlYWQ.display_name": {
+          "source": "Update Lead",
+          "message": "Aktualizovat leada"
+        },
+        "app.TGVtbGlzdA.action.dXBkYXRlLWxlYWQ.option.Y29tcGFueU5hbWU.desc": {
+          "source": "Updated company name for the lead",
+          "message": "Aktualizovaný název společnosti pro leada"
+        },
+        "app.TGVtbGlzdA.action.dXBkYXRlLWxlYWQ.option.Y29tcGFueU5hbWU.display_name": {
+          "source": "Company Name",
+          "message": "Název společnosti"
+        },
+        "app.TGVtbGlzdA.action.dXBkYXRlLWxlYWQ.option.Y29tcGFueU5hbWU.short_desc": {
+          "source": "Lead company name",
+          "message": "Název společnosti leada"
+        },
+        "app.TGVtbGlzdA.action.dXBkYXRlLWxlYWQ.option.ZW1haWw.desc": {
+          "source": "The email address of the lead to update (used as identifier)",
+          "message": "E-mailová adresa leada k aktualizaci (používá se jako identifikátor)"
+        },
+        "app.TGVtbGlzdA.action.dXBkYXRlLWxlYWQ.option.ZW1haWw.display_name": {
+          "source": "Email",
+          "message": "E-mail"
+        },
+        "app.TGVtbGlzdA.action.dXBkYXRlLWxlYWQ.option.ZW1haWw.short_desc": {
+          "source": "Lead email address to update",
+          "message": "E-mailová adresa leada k aktualizaci"
+        },
+        "app.TGVtbGlzdA.action.dXBkYXRlLWxlYWQ.option.Zmlyc3ROYW1l.desc": {
+          "source": "Updated first name for the lead",
+          "message": "Aktualizované křestní jméno leada"
+        },
+        "app.TGVtbGlzdA.action.dXBkYXRlLWxlYWQ.option.Zmlyc3ROYW1l.display_name": {
+          "source": "First Name",
+          "message": "Křestní jméno"
+        },
+        "app.TGVtbGlzdA.action.dXBkYXRlLWxlYWQ.option.Zmlyc3ROYW1l.short_desc": {
+          "source": "Lead first name",
+          "message": "Křestní jméno leada"
+        },
+        "app.TGVtbGlzdA.action.dXBkYXRlLWxlYWQ.option.aXNJbnRlcmVzdGVk.desc": {
+          "source": "Set to `True` to mark this lead as interested in your offer",
+          "message": "Nastavte na `True` pro označení tohoto leada jako majícího zájem o vaši nabídku"
+        },
+        "app.TGVtbGlzdA.action.dXBkYXRlLWxlYWQ.option.aXNJbnRlcmVzdGVk.display_name": {
+          "source": "Is Interested",
+          "message": "Má zájem"
+        },
+        "app.TGVtbGlzdA.action.dXBkYXRlLWxlYWQ.option.aXNJbnRlcmVzdGVk.short_desc": {
+          "source": "Mark the lead as interested or not",
+          "message": "Označit, zda má lead zájem, či nikoli"
+        },
+        "app.TGVtbGlzdA.action.dXBkYXRlLWxlYWQ.option.aXNQYXVzZWQ.desc": {
+          "source": "Set to `True` to pause outreach to this lead, `False` to resume",
+          "message": "Nastavte na `True` pro pozastavení oslovování tohoto leada, `False` pro obnovení"
+        },
+        "app.TGVtbGlzdA.action.dXBkYXRlLWxlYWQ.option.aXNQYXVzZWQ.display_name": {
+          "source": "Is Paused",
+          "message": "Je pozastaveno"
+        },
+        "app.TGVtbGlzdA.action.dXBkYXRlLWxlYWQ.option.aXNQYXVzZWQ.short_desc": {
+          "source": "Pause or resume outreach to this lead",
+          "message": "Pozastavit nebo obnovit oslovování tohoto leada"
+        },
+        "app.TGVtbGlzdA.action.dXBkYXRlLWxlYWQ.option.bGFzdE5hbWU.desc": {
+          "source": "Updated last name for the lead",
+          "message": "Aktualizované příjmení leada"
+        },
+        "app.TGVtbGlzdA.action.dXBkYXRlLWxlYWQ.option.bGFzdE5hbWU.display_name": {
+          "source": "Last Name",
+          "message": "Příjmení"
+        },
+        "app.TGVtbGlzdA.action.dXBkYXRlLWxlYWQ.option.bGFzdE5hbWU.short_desc": {
+          "source": "Lead last name",
+          "message": "Příjmení leada"
+        },
+        "app.TGVtbGlzdA.action.dXBkYXRlLWxlYWQ.option.bGlua2VkaW5Vcmw.desc": {
+          "source": "Updated LinkedIn profile URL for the lead",
+          "message": "Aktualizovaná URL adresa profilu na LinkedIn pro leada"
+        },
+        "app.TGVtbGlzdA.action.dXBkYXRlLWxlYWQ.option.bGlua2VkaW5Vcmw.display_name": {
+          "source": "LinkedIn URL",
+          "message": "URL profilu LinkedIn"
+        },
+        "app.TGVtbGlzdA.action.dXBkYXRlLWxlYWQ.option.bGlua2VkaW5Vcmw.short_desc": {
+          "source": "Lead LinkedIn profile URL",
+          "message": "URL profilu leada na LinkedIn"
+        },
+        "app.TGVtbGlzdA.action.dXBkYXRlLWxlYWQ.option.cGhvbmU.desc": {
+          "source": "Updated phone number for the lead",
+          "message": "Aktualizované telefonní číslo leada"
+        },
+        "app.TGVtbGlzdA.action.dXBkYXRlLWxlYWQ.option.cGhvbmU.display_name": {
+          "source": "Phone",
+          "message": "Telefon"
+        },
+        "app.TGVtbGlzdA.action.dXBkYXRlLWxlYWQ.option.cGhvbmU.short_desc": {
+          "source": "Lead phone number",
+          "message": "Telefonní číslo leada"
+        },
+        "app.TGVtbGlzdA.action.dXBkYXRlLWxlYWQ.option.d2Vic2l0ZQ.desc": {
+          "source": "Updated website URL for the lead",
+          "message": "Aktualizovaná URL adresa webu pro leada"
+        },
+        "app.TGVtbGlzdA.action.dXBkYXRlLWxlYWQ.option.d2Vic2l0ZQ.display_name": {
+          "source": "Website",
+          "message": "Webová stránka"
+        },
+        "app.TGVtbGlzdA.action.dXBkYXRlLWxlYWQ.option.d2Vic2l0ZQ.short_desc": {
+          "source": "Lead or company website",
+          "message": "Web leada nebo společnosti"
+        },
+        "app.TGVtbGlzdA.action.dXBkYXRlLWxlYWQ.short_desc": {
+          "source": "Update an existing lead",
+          "message": "Aktualizovat existující lead"
+        },
+        "app.TGVtbGlzdA.action.dXBkYXRlLXRhc2s.desc": {
+          "source": "Update a Lemlist manual task, such as marking it as done or changing the assignee.",
+          "message": "Aktualizovat manuální úkol v Lemlistu, například jej označit jako hotový nebo změnit řešitele."
+        },
+        "app.TGVtbGlzdA.action.dXBkYXRlLXRhc2s.display_name": {
+          "source": "Update Task",
+          "message": "Aktualizovat úkol"
+        },
+        "app.TGVtbGlzdA.action.dXBkYXRlLXRhc2s.option.YXNzaWduZWRUbw.desc": {
+          "source": "Updated assignee for the task",
+          "message": "Aktualizovaný řešitel úkolu"
+        },
+        "app.TGVtbGlzdA.action.dXBkYXRlLXRhc2s.option.YXNzaWduZWRUbw.display_name": {
+          "source": "Assigned To",
+          "message": "Přiřazeno uživateli"
+        },
+        "app.TGVtbGlzdA.action.dXBkYXRlLXRhc2s.option.YXNzaWduZWRUbw.short_desc": {
+          "source": "User to assign the task to",
+          "message": "Uživatel, kterému má být úkol přiřazen"
+        },
+        "app.TGVtbGlzdA.action.dXBkYXRlLXRhc2s.option.ZHVlRGF0ZQ.desc": {
+          "source": "Updated date and time when this task is due",
+          "message": "Aktualizované datum a čas termínu splnění tohoto úkolu"
+        },
+        "app.TGVtbGlzdA.action.dXBkYXRlLXRhc2s.option.ZHVlRGF0ZQ.display_name": {
+          "source": "Due Date",
+          "message": "Datum splnění"
+        },
+        "app.TGVtbGlzdA.action.dXBkYXRlLXRhc2s.option.ZHVlRGF0ZQ.short_desc": {
+          "source": "Updated task due date",
+          "message": "Aktualizovaný termín splnění úkolu"
+        },
+        "app.TGVtbGlzdA.action.dXBkYXRlLXRhc2s.option.c3RhdHVz.allowed-value.c3RyaW5nOmRvbmU.desc": {
+          "source": "Task completed",
+          "message": "Úkol dokončen"
+        },
+        "app.TGVtbGlzdA.action.dXBkYXRlLXRhc2s.option.c3RhdHVz.allowed-value.c3RyaW5nOmlnbm9yZWQ.desc": {
+          "source": "Task ignored",
+          "message": "Úkol ignorován"
+        },
+        "app.TGVtbGlzdA.action.dXBkYXRlLXRhc2s.option.c3RhdHVz.desc": {
+          "source": "The updated status of the task",
+          "message": "Aktualizovaný stav úkolu"
+        },
+        "app.TGVtbGlzdA.action.dXBkYXRlLXRhc2s.option.c3RhdHVz.display_name": {
+          "source": "Status",
+          "message": "Stav"
+        },
+        "app.TGVtbGlzdA.action.dXBkYXRlLXRhc2s.option.c3RhdHVz.short_desc": {
+          "source": "New task status",
+          "message": "Nový stav úkolu"
+        },
+        "app.TGVtbGlzdA.action.dXBkYXRlLXRhc2s.option.dGFza0lk.desc": {
+          "source": "The unique identifier of the task to update",
+          "message": "Jedinečný identifikátor úkolu k aktualizaci"
+        },
+        "app.TGVtbGlzdA.action.dXBkYXRlLXRhc2s.option.dGFza0lk.display_name": {
+          "source": "Task ID",
+          "message": "ID úlohy"
+        },
+        "app.TGVtbGlzdA.action.dXBkYXRlLXRhc2s.option.dGFza0lk.short_desc": {
+          "source": "ID of the task to update",
+          "message": "ID úkolu k aktualizaci"
+        },
+        "app.TGVtbGlzdA.action.dXBkYXRlLXRhc2s.short_desc": {
+          "source": "Update a task status",
+          "message": "Aktualizovat stav úkolu"
+        },
+        "app.TGVtbGlzdA.desc": {
+          "source": "Lemlist is a sales engagement platform enabling personalized outreach campaigns with email, LinkedIn, and multi-channel automation. This integration enables managing campaigns, leads, activities, tasks, and contacts, plus receiving real-time webhook notifications.\n\n**Features:**\n- Campaign management (create, pause, start)\n- Lead management (add, update, remove leads from campaigns)\n- Activity tracking (emails sent, opened, clicked, replied, bounced)\n- Task management (create and update manual tasks)\n- Contact management\n- Real-time webhooks for email and engagement events",
+          "message": "Lemlist je platforma pro zapojení do prodeje (sales engagement), která umožňuje personalizované oslovovací kampaně pomocí e-mailu, sítě LinkedIn a vícekanálové automatizace. Tato integrace umožňuje správu kampaní, leadů, aktivit, úkolů a kontaktů a také příjem oznámení z webhooků v reálném čase.\n\n**Funkce:**\n- Správa kampaní (vytváření, pozastavení, spouštění)\n- Správa leadů (přidávání, aktualizace a odebírání leadů z kampaní)\n- Sledování aktivit (odeslané, otevřené, prokliknuté e-maily, odpovědi, nedoručené e-maily)\n- Správa úkolů (vytváření a aktualizace manuálních úkolů)\n- Správa kontaktů\n- Webhooky v reálném čase pro události týkající se e-mailů a zapojení"
+        },
+        "app.TGVtbGlzdA.display_name": {
+          "source": "Lemlist",
+          "message": "Lemlist"
+        },
+        "app.TGVtbGlzdA.short_desc": {
+          "source": "Lemlist sales outreach and email automation platform",
+          "message": "Platforma Lemlist pro oslovování v prodeji a automatizaci e-mailů"
+        }
+      }
+    }
+  }
+}

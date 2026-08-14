@@ -1,0 +1,21 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "zh-TW": {
+      "messages": {
+        "app.U1FMaXRl.desc": {
+          "source": "Create and manage connections to a SQLite embedded database",
+          "message": "建立並管理至 SQLite 嵌入式資料庫的連線"
+        },
+        "app.U1FMaXRl.display_name": {
+          "source": "SQLite",
+          "message": "SQLite"
+        },
+        "app.U1FMaXRl.short_desc": {
+          "source": "SQLite embedded database",
+          "message": "SQLite 嵌入式資料庫"
+        }
+      }
+    }
+  }
+}

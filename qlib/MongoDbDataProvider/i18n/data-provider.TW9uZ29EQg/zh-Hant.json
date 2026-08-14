@@ -1,0 +1,237 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "zh-Hant": {
+      "messages": {
+        "app.TW9uZ29EQg.action.YWdncmVnYXRl.desc": {
+          "source": "Execute an aggregation pipeline on a MongoDB collection",
+          "message": "在 MongoDB 集合上執行聚合管道"
+        },
+        "app.TW9uZ29EQg.action.YWdncmVnYXRl.display_name": {
+          "source": "Aggregation Pipeline",
+          "message": "聚合管道"
+        },
+        "app.TW9uZ29EQg.action.YWdncmVnYXRl.option.Y29sbGVjdGlvbg.desc": {
+          "source": "The name of the MongoDB collection",
+          "message": "MongoDB 集合名稱"
+        },
+        "app.TW9uZ29EQg.action.YWdncmVnYXRl.option.Y29sbGVjdGlvbg.display_name": {
+          "source": "Collection",
+          "message": "集合"
+        },
+        "app.TW9uZ29EQg.action.YWdncmVnYXRl.option.Y29sbGVjdGlvbg.short_desc": {
+          "source": "MongoDB collection name",
+          "message": "MongoDB 集合名稱"
+        },
+        "app.TW9uZ29EQg.action.YWdncmVnYXRl.option.ZGF0YWJhc2U.desc": {
+          "source": "The name of the MongoDB database",
+          "message": "MongoDB 資料庫名稱"
+        },
+        "app.TW9uZ29EQg.action.YWdncmVnYXRl.option.ZGF0YWJhc2U.display_name": {
+          "source": "Database",
+          "message": "資料庫"
+        },
+        "app.TW9uZ29EQg.action.YWdncmVnYXRl.option.ZGF0YWJhc2U.short_desc": {
+          "source": "MongoDB database name",
+          "message": "MongoDB 資料庫名稱"
+        },
+        "app.TW9uZ29EQg.action.YWdncmVnYXRl.short_desc": {
+          "source": "Run aggregation pipeline",
+          "message": "執行聚合管道"
+        },
+        "app.TW9uZ29EQg.action.YnVsaw.desc": {
+          "source": "Execute bulk insert, update, and delete operations on a MongoDB collection",
+          "message": "在 MongoDB 集合上執行批次插入、更新和刪除操作"
+        },
+        "app.TW9uZ29EQg.action.YnVsaw.display_name": {
+          "source": "Bulk Operations",
+          "message": "批次操作"
+        },
+        "app.TW9uZ29EQg.action.YnVsaw.option.Y29sbGVjdGlvbg.desc": {
+          "source": "The name of the MongoDB collection",
+          "message": "MongoDB 集合名稱"
+        },
+        "app.TW9uZ29EQg.action.YnVsaw.option.Y29sbGVjdGlvbg.display_name": {
+          "source": "Collection",
+          "message": "集合"
+        },
+        "app.TW9uZ29EQg.action.YnVsaw.option.Y29sbGVjdGlvbg.short_desc": {
+          "source": "MongoDB collection name",
+          "message": "MongoDB 集合名稱"
+        },
+        "app.TW9uZ29EQg.action.YnVsaw.option.ZGF0YWJhc2U.desc": {
+          "source": "The name of the MongoDB database",
+          "message": "MongoDB 資料庫名稱"
+        },
+        "app.TW9uZ29EQg.action.YnVsaw.option.ZGF0YWJhc2U.display_name": {
+          "source": "Database",
+          "message": "資料庫"
+        },
+        "app.TW9uZ29EQg.action.YnVsaw.option.ZGF0YWJhc2U.short_desc": {
+          "source": "MongoDB database name",
+          "message": "MongoDB 資料庫名稱"
+        },
+        "app.TW9uZ29EQg.action.YnVsaw.short_desc": {
+          "source": "Execute bulk write operations",
+          "message": "執行批次寫入操作"
+        },
+        "app.TW9uZ29EQg.action.ZGVsZXRl.desc": {
+          "source": "Delete one or more documents from a MongoDB collection",
+          "message": "從 MongoDB 集合中刪除一個或多個文件"
+        },
+        "app.TW9uZ29EQg.action.ZGVsZXRl.display_name": {
+          "source": "Delete Documents",
+          "message": "刪除文件"
+        },
+        "app.TW9uZ29EQg.action.ZGVsZXRl.option.Y29sbGVjdGlvbg.desc": {
+          "source": "The name of the MongoDB collection",
+          "message": "MongoDB 集合名稱"
+        },
+        "app.TW9uZ29EQg.action.ZGVsZXRl.option.Y29sbGVjdGlvbg.display_name": {
+          "source": "Collection",
+          "message": "集合"
+        },
+        "app.TW9uZ29EQg.action.ZGVsZXRl.option.Y29sbGVjdGlvbg.short_desc": {
+          "source": "MongoDB collection name",
+          "message": "MongoDB 集合名稱"
+        },
+        "app.TW9uZ29EQg.action.ZGVsZXRl.option.ZGF0YWJhc2U.desc": {
+          "source": "The name of the MongoDB database",
+          "message": "MongoDB 資料庫名稱"
+        },
+        "app.TW9uZ29EQg.action.ZGVsZXRl.option.ZGF0YWJhc2U.display_name": {
+          "source": "Database",
+          "message": "資料庫"
+        },
+        "app.TW9uZ29EQg.action.ZGVsZXRl.option.ZGF0YWJhc2U.short_desc": {
+          "source": "MongoDB database name",
+          "message": "MongoDB 資料庫名稱"
+        },
+        "app.TW9uZ29EQg.action.ZGVsZXRl.short_desc": {
+          "source": "Delete documents from a collection",
+          "message": "從集合中刪除文件"
+        },
+        "app.TW9uZ29EQg.action.ZmluZA.desc": {
+          "source": "Find documents in a MongoDB collection using query filters",
+          "message": "使用查詢篩選器在 MongoDB 集合中尋找文件"
+        },
+        "app.TW9uZ29EQg.action.ZmluZA.display_name": {
+          "source": "Find Documents",
+          "message": "尋找文件"
+        },
+        "app.TW9uZ29EQg.action.ZmluZA.option.Y29sbGVjdGlvbg.desc": {
+          "source": "The name of the MongoDB collection",
+          "message": "MongoDB 集合名稱"
+        },
+        "app.TW9uZ29EQg.action.ZmluZA.option.Y29sbGVjdGlvbg.display_name": {
+          "source": "Collection",
+          "message": "集合"
+        },
+        "app.TW9uZ29EQg.action.ZmluZA.option.Y29sbGVjdGlvbg.short_desc": {
+          "source": "MongoDB collection name",
+          "message": "MongoDB 集合名稱"
+        },
+        "app.TW9uZ29EQg.action.ZmluZA.option.ZGF0YWJhc2U.desc": {
+          "source": "The name of the MongoDB database",
+          "message": "MongoDB 資料庫名稱"
+        },
+        "app.TW9uZ29EQg.action.ZmluZA.option.ZGF0YWJhc2U.display_name": {
+          "source": "Database",
+          "message": "資料庫"
+        },
+        "app.TW9uZ29EQg.action.ZmluZA.option.ZGF0YWJhc2U.short_desc": {
+          "source": "MongoDB database name",
+          "message": "MongoDB 資料庫名稱"
+        },
+        "app.TW9uZ29EQg.action.ZmluZA.short_desc": {
+          "source": "Query documents in a collection",
+          "message": "查詢集合中的文件"
+        },
+        "app.TW9uZ29EQg.action.aW5zZXJ0.desc": {
+          "source": "Insert one or more documents into a MongoDB collection",
+          "message": "將一個或多個文件插入 MongoDB 集合中"
+        },
+        "app.TW9uZ29EQg.action.aW5zZXJ0.display_name": {
+          "source": "Insert Document",
+          "message": "插入文件"
+        },
+        "app.TW9uZ29EQg.action.aW5zZXJ0.option.Y29sbGVjdGlvbg.desc": {
+          "source": "The name of the MongoDB collection",
+          "message": "MongoDB 集合名稱"
+        },
+        "app.TW9uZ29EQg.action.aW5zZXJ0.option.Y29sbGVjdGlvbg.display_name": {
+          "source": "Collection",
+          "message": "集合"
+        },
+        "app.TW9uZ29EQg.action.aW5zZXJ0.option.Y29sbGVjdGlvbg.short_desc": {
+          "source": "MongoDB collection name",
+          "message": "MongoDB 集合名稱"
+        },
+        "app.TW9uZ29EQg.action.aW5zZXJ0.option.ZGF0YWJhc2U.desc": {
+          "source": "The name of the MongoDB database",
+          "message": "MongoDB 資料庫名稱"
+        },
+        "app.TW9uZ29EQg.action.aW5zZXJ0.option.ZGF0YWJhc2U.display_name": {
+          "source": "Database",
+          "message": "資料庫"
+        },
+        "app.TW9uZ29EQg.action.aW5zZXJ0.option.ZGF0YWJhc2U.short_desc": {
+          "source": "MongoDB database name",
+          "message": "MongoDB 資料庫名稱"
+        },
+        "app.TW9uZ29EQg.action.aW5zZXJ0.short_desc": {
+          "source": "Insert a document into a collection",
+          "message": "將文件插入集合"
+        },
+        "app.TW9uZ29EQg.action.dXBkYXRl.desc": {
+          "source": "Update one or more documents in a MongoDB collection",
+          "message": "更新 MongoDB 集合中的一個或多個文件"
+        },
+        "app.TW9uZ29EQg.action.dXBkYXRl.display_name": {
+          "source": "Update Documents",
+          "message": "更新文件"
+        },
+        "app.TW9uZ29EQg.action.dXBkYXRl.option.Y29sbGVjdGlvbg.desc": {
+          "source": "The name of the MongoDB collection",
+          "message": "MongoDB 集合名稱"
+        },
+        "app.TW9uZ29EQg.action.dXBkYXRl.option.Y29sbGVjdGlvbg.display_name": {
+          "source": "Collection",
+          "message": "集合"
+        },
+        "app.TW9uZ29EQg.action.dXBkYXRl.option.Y29sbGVjdGlvbg.short_desc": {
+          "source": "MongoDB collection name",
+          "message": "MongoDB 集合名稱"
+        },
+        "app.TW9uZ29EQg.action.dXBkYXRl.option.ZGF0YWJhc2U.desc": {
+          "source": "The name of the MongoDB database",
+          "message": "MongoDB 資料庫名稱"
+        },
+        "app.TW9uZ29EQg.action.dXBkYXRl.option.ZGF0YWJhc2U.display_name": {
+          "source": "Database",
+          "message": "資料庫"
+        },
+        "app.TW9uZ29EQg.action.dXBkYXRl.option.ZGF0YWJhc2U.short_desc": {
+          "source": "MongoDB database name",
+          "message": "MongoDB 資料庫名稱"
+        },
+        "app.TW9uZ29EQg.action.dXBkYXRl.short_desc": {
+          "source": "Update documents in a collection",
+          "message": "更新集合中的文件"
+        },
+        "app.TW9uZ29EQg.desc": {
+          "source": "MongoDB is a document-oriented NoSQL database for high volume data storage",
+          "message": "MongoDB 是一種用於大量資料儲存的文件導向 NoSQL 資料庫"
+        },
+        "app.TW9uZ29EQg.display_name": {
+          "source": "MongoDB Server",
+          "message": "MongoDB 伺服器"
+        },
+        "app.TW9uZ29EQg.short_desc": {
+          "source": "MongoDB NoSQL database",
+          "message": "MongoDB NoSQL 資料庫"
+        }
+      }
+    }
+  }
+}

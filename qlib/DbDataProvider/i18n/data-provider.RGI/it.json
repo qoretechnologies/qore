@@ -1,0 +1,189 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "it": {
+      "messages": {
+        "app.RGI.action.Y3JlYXRl.desc": {
+          "source": "Create a record in the table",
+          "message": "Crea un record nella tabella"
+        },
+        "app.RGI.action.Y3JlYXRl.display_name": {
+          "source": "Create Record",
+          "message": "Crea record"
+        },
+        "app.RGI.action.Y3JlYXRl.option.dGFibGU.desc": {
+          "source": "The name of the table",
+          "message": "Il nome della tabella"
+        },
+        "app.RGI.action.Y3JlYXRl.option.dGFibGU.display_name": {
+          "source": "Table",
+          "message": "Tabella"
+        },
+        "app.RGI.action.Y3JlYXRl.option.dGFibGU.short_desc": {
+          "source": "The name of the table",
+          "message": "Il nome della tabella"
+        },
+        "app.RGI.action.Y3JlYXRl.short_desc": {
+          "source": "Create a record in the table",
+          "message": "Crea un record nella tabella"
+        },
+        "app.RGI.action.ZGVsZXRl.desc": {
+          "source": "Delete records in the table",
+          "message": "Elimina i record nella tabella"
+        },
+        "app.RGI.action.ZGVsZXRl.display_name": {
+          "source": "Delete Records",
+          "message": "Elimina record"
+        },
+        "app.RGI.action.ZGVsZXRl.option.dGFibGU.desc": {
+          "source": "The name of the table",
+          "message": "Il nome della tabella"
+        },
+        "app.RGI.action.ZGVsZXRl.option.dGFibGU.display_name": {
+          "source": "Table",
+          "message": "Tabella"
+        },
+        "app.RGI.action.ZGVsZXRl.option.dGFibGU.short_desc": {
+          "source": "The name of the table",
+          "message": "Il nome della tabella"
+        },
+        "app.RGI.action.ZGVsZXRl.short_desc": {
+          "source": "Delete records in the table",
+          "message": "Elimina i record nella tabella"
+        },
+        "app.RGI.action.ZXhlYy1zcWw.desc": {
+          "source": "Execute an SQL statement",
+          "message": "Esegui un'istruzione SQL"
+        },
+        "app.RGI.action.ZXhlYy1zcWw.display_name": {
+          "source": "Execute an SQL Statement",
+          "message": "Esegui un'istruzione SQL"
+        },
+        "app.RGI.action.ZXhlYy1zcWw.short_desc": {
+          "source": "Execute an SQL statement",
+          "message": "Esegui un'istruzione SQL"
+        },
+        "app.RGI.action.ZmluZA.desc": {
+          "source": "Find records in the table",
+          "message": "Trova record nella tabella"
+        },
+        "app.RGI.action.ZmluZA.display_name": {
+          "source": "Find Matching Records",
+          "message": "Trova record corrispondenti"
+        },
+        "app.RGI.action.ZmluZA.option.dGFibGU.desc": {
+          "source": "The name of the table",
+          "message": "Il nome della tabella"
+        },
+        "app.RGI.action.ZmluZA.option.dGFibGU.display_name": {
+          "source": "Table",
+          "message": "Tabella"
+        },
+        "app.RGI.action.ZmluZA.option.dGFibGU.short_desc": {
+          "source": "The name of the table",
+          "message": "Il nome della tabella"
+        },
+        "app.RGI.action.ZmluZA.short_desc": {
+          "source": "Find records in the table",
+          "message": "Trova record nella tabella"
+        },
+        "app.RGI.action.ZmluZF9zaW5nbGU.desc": {
+          "source": "Find a single record in the table",
+          "message": "Trova un singolo record nella tabella"
+        },
+        "app.RGI.action.ZmluZF9zaW5nbGU.display_name": {
+          "source": "Find Single Record",
+          "message": "Trova record singolo"
+        },
+        "app.RGI.action.ZmluZF9zaW5nbGU.option.dGFibGU.desc": {
+          "source": "The name of the table",
+          "message": "Il nome della tabella"
+        },
+        "app.RGI.action.ZmluZF9zaW5nbGU.option.dGFibGU.display_name": {
+          "source": "Table",
+          "message": "Tabella"
+        },
+        "app.RGI.action.ZmluZF9zaW5nbGU.option.dGFibGU.short_desc": {
+          "source": "The name of the table",
+          "message": "Il nome della tabella"
+        },
+        "app.RGI.action.ZmluZF9zaW5nbGU.short_desc": {
+          "source": "Find a single record in the table",
+          "message": "Trova un singolo record nella tabella"
+        },
+        "app.RGI.action.c2VsZWN0LXNxbA.desc": {
+          "source": "Execute an SQL select statement",
+          "message": "Esegui un'istruzione SELECT SQL"
+        },
+        "app.RGI.action.c2VsZWN0LXNxbA.display_name": {
+          "source": "Execute an SQL Select Statement",
+          "message": "Esegui un'istruzione SELECT SQL"
+        },
+        "app.RGI.action.c2VsZWN0LXNxbA.short_desc": {
+          "source": "Execute an SQL select statement",
+          "message": "Esegui un'istruzione SELECT SQL"
+        },
+        "app.RGI.action.dXBkYXRl.desc": {
+          "source": "Update records in the table",
+          "message": "Aggiorna record nella tabella"
+        },
+        "app.RGI.action.dXBkYXRl.display_name": {
+          "source": "Update Records",
+          "message": "Aggiorna record"
+        },
+        "app.RGI.action.dXBkYXRl.option.dGFibGU.desc": {
+          "source": "The name of the table",
+          "message": "Il nome della tabella"
+        },
+        "app.RGI.action.dXBkYXRl.option.dGFibGU.display_name": {
+          "source": "Table",
+          "message": "Tabella"
+        },
+        "app.RGI.action.dXBkYXRl.option.dGFibGU.short_desc": {
+          "source": "The name of the table",
+          "message": "Il nome della tabella"
+        },
+        "app.RGI.action.dXBkYXRl.short_desc": {
+          "source": "Update records in the table",
+          "message": "Aggiorna record nella tabella"
+        },
+        "app.RGI.action.dXBzZXJ0.desc": {
+          "source": "Upsert records in the table",
+          "message": "Esegui l'upsert di record nella tabella"
+        },
+        "app.RGI.action.dXBzZXJ0.display_name": {
+          "source": "Upsert Records",
+          "message": "Upsert record"
+        },
+        "app.RGI.action.dXBzZXJ0.option.dGFibGU.desc": {
+          "source": "The name of the table",
+          "message": "Il nome della tabella"
+        },
+        "app.RGI.action.dXBzZXJ0.option.dGFibGU.display_name": {
+          "source": "Table",
+          "message": "Tabella"
+        },
+        "app.RGI.action.dXBzZXJ0.option.dGFibGU.short_desc": {
+          "source": "The name of the table",
+          "message": "Il nome della tabella"
+        },
+        "app.RGI.action.dXBzZXJ0.short_desc": {
+          "source": "Upsert records in the table",
+          "message": "Esegui l'upsert di record nella tabella"
+        },
+        "app.RGI.desc": {
+          "source": "DB operations on connected datasources.",
+          "message": "Operazioni DB sulle origini dati collegate."
+        },
+        "app.RGI.display_name": {
+          "source": "DB",
+          "message": "DB"
+        },
+        "app.RGI.short_desc": {
+          "source": "DB operations on connected datasources",
+          "message": "Operazioni DB sulle origini dati collegate"
+        }
+      }
+    }
+  }
+}

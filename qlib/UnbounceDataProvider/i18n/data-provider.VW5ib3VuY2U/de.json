@@ -1,0 +1,1221 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "de": {
+      "messages": {
+        "app.VW5ib3VuY2U.action.Y3JlYXRlLWxlYWQ.desc": {
+          "source": "Create a new lead on an Unbounce landing page with form submission data",
+          "message": "Einen neuen Lead auf einer Unbounce-Landingpage mit Formulardaten erstellen"
+        },
+        "app.VW5ib3VuY2U.action.Y3JlYXRlLWxlYWQ.display_name": {
+          "source": "Create a Lead",
+          "message": "Lead erstellen"
+        },
+        "app.VW5ib3VuY2U.action.Y3JlYXRlLWxlYWQ.option.Y29udmVyc2lvbg.desc": {
+          "source": "Whether to count this lead as a conversion",
+          "message": "Gibt an, ob dieser Lead als Conversion gezählt werden soll"
+        },
+        "app.VW5ib3VuY2U.action.Y3JlYXRlLWxlYWQ.option.Y29udmVyc2lvbg.display_name": {
+          "source": "Conversion",
+          "message": "Conversion"
+        },
+        "app.VW5ib3VuY2U.action.Y3JlYXRlLWxlYWQ.option.Y29udmVyc2lvbg.short_desc": {
+          "source": "Count as conversion",
+          "message": "Als Conversion zählen"
+        },
+        "app.VW5ib3VuY2U.action.Y3JlYXRlLWxlYWQ.option.Zm9ybV9zdWJtaXNzaW9u.desc": {
+          "source": "The form submission data including variant ID, submitter IP, and form field values",
+          "message": "Die Formularübermittlungsdaten einschließlich Varianten-ID, Absender-IP und Formularfeldwerten"
+        },
+        "app.VW5ib3VuY2U.action.Y3JlYXRlLWxlYWQ.option.Zm9ybV9zdWJtaXNzaW9u.display_name": {
+          "source": "Form Submission",
+          "message": "Formularübermittlung"
+        },
+        "app.VW5ib3VuY2U.action.Y3JlYXRlLWxlYWQ.option.Zm9ybV9zdWJtaXNzaW9u.short_desc": {
+          "source": "Form submission data",
+          "message": "Formularübermittlungsdaten"
+        },
+        "app.VW5ib3VuY2U.action.Y3JlYXRlLWxlYWQ.option.cGFnZV9pZA.desc": {
+          "source": "The ID of the page to create the lead on",
+          "message": "Die ID der Seite, auf der der Lead erstellt werden soll"
+        },
+        "app.VW5ib3VuY2U.action.Y3JlYXRlLWxlYWQ.option.cGFnZV9pZA.display_name": {
+          "source": "Page ID",
+          "message": "Seiten-ID"
+        },
+        "app.VW5ib3VuY2U.action.Y3JlYXRlLWxlYWQ.option.cGFnZV9pZA.short_desc": {
+          "source": "Target page ID",
+          "message": "Zielseiten-ID"
+        },
+        "app.VW5ib3VuY2U.action.Y3JlYXRlLWxlYWQ.option.dmlzaXRvcl9pZA.desc": {
+          "source": "The visitor ID to associate with this lead",
+          "message": "Die Besucher-ID, die diesem Lead zugeordnet werden soll"
+        },
+        "app.VW5ib3VuY2U.action.Y3JlYXRlLWxlYWQ.option.dmlzaXRvcl9pZA.display_name": {
+          "source": "Visitor ID",
+          "message": "Besucher-ID"
+        },
+        "app.VW5ib3VuY2U.action.Y3JlYXRlLWxlYWQ.option.dmlzaXRvcl9pZA.short_desc": {
+          "source": "Visitor identifier",
+          "message": "Besucherkennung"
+        },
+        "app.VW5ib3VuY2U.action.Y3JlYXRlLWxlYWQ.short_desc": {
+          "source": "Create a new lead on a page",
+          "message": "Einen neuen Lead auf einer Seite erstellen"
+        },
+        "app.VW5ib3VuY2U.action.Y3JlYXRlLWxlYWQtZGVsZXRpb24tcmVxdWVzdA.desc": {
+          "source": "Create a lead deletion request to delete leads in bulk for a specific page. Can delete specific leads by ID, all leads, or leads within a date range",
+          "message": "Eine Lead-Löschanforderung erstellen, um Leads für eine bestimmte Seite gesammelt zu löschen. Kann bestimmte Leads nach ID, alle Leads oder Leads innerhalb eines Datumsbereichs löschen"
+        },
+        "app.VW5ib3VuY2U.action.Y3JlYXRlLWxlYWQtZGVsZXRpb24tcmVxdWVzdA.display_name": {
+          "source": "Create Lead Deletion Request",
+          "message": "Lead-Löschanforderung erstellen"
+        },
+        "app.VW5ib3VuY2U.action.Y3JlYXRlLWxlYWQtZGVsZXRpb24tcmVxdWVzdA.option.YWxsX2xlYWRz.desc": {
+          "source": "If `True`, delete all leads for the page. Cannot be combined with `lead_ids`",
+          "message": "Wenn `True`, alle Leads für die Seite löschen. Kann nicht mit `lead_ids` kombiniert werden"
+        },
+        "app.VW5ib3VuY2U.action.Y3JlYXRlLWxlYWQtZGVsZXRpb24tcmVxdWVzdA.option.YWxsX2xlYWRz.display_name": {
+          "source": "All Leads",
+          "message": "Alle Leads"
+        },
+        "app.VW5ib3VuY2U.action.Y3JlYXRlLWxlYWQtZGVsZXRpb24tcmVxdWVzdA.option.YWxsX2xlYWRz.short_desc": {
+          "source": "Delete all leads",
+          "message": "Alle Leads löschen"
+        },
+        "app.VW5ib3VuY2U.action.Y3JlYXRlLWxlYWQtZGVsZXRpb24tcmVxdWVzdA.option.ZnJvbQ.desc": {
+          "source": "Delete leads created on or after this date",
+          "message": "Leads löschen, die an oder nach diesem Datum erstellt wurden"
+        },
+        "app.VW5ib3VuY2U.action.Y3JlYXRlLWxlYWQtZGVsZXRpb24tcmVxdWVzdA.option.ZnJvbQ.display_name": {
+          "source": "From",
+          "message": "Von"
+        },
+        "app.VW5ib3VuY2U.action.Y3JlYXRlLWxlYWQtZGVsZXRpb24tcmVxdWVzdA.option.ZnJvbQ.short_desc": {
+          "source": "Start date filter",
+          "message": "Startdatumsfilter"
+        },
+        "app.VW5ib3VuY2U.action.Y3JlYXRlLWxlYWQtZGVsZXRpb24tcmVxdWVzdA.option.bGVhZF9pZHM.desc": {
+          "source": "A list of specific lead IDs to delete. If not provided, use `all_leads` or date range filters instead",
+          "message": "Eine Liste bestimmter zu löschender Lead-IDs. Falls nicht angegeben, verwenden Sie stattdessen `all_leads` oder Datumsbereichsfilter"
+        },
+        "app.VW5ib3VuY2U.action.Y3JlYXRlLWxlYWQtZGVsZXRpb24tcmVxdWVzdA.option.bGVhZF9pZHM.display_name": {
+          "source": "Lead IDs",
+          "message": "Lead-IDs"
+        },
+        "app.VW5ib3VuY2U.action.Y3JlYXRlLWxlYWQtZGVsZXRpb24tcmVxdWVzdA.option.bGVhZF9pZHM.short_desc": {
+          "source": "Specific lead IDs to delete",
+          "message": "Bestimmte zu löschende Lead-IDs"
+        },
+        "app.VW5ib3VuY2U.action.Y3JlYXRlLWxlYWQtZGVsZXRpb24tcmVxdWVzdA.option.cGFnZV9pZA.desc": {
+          "source": "The ID of the page to create the lead deletion request for",
+          "message": "Die ID der Seite, für die die Lead-Löschanforderung erstellt werden soll"
+        },
+        "app.VW5ib3VuY2U.action.Y3JlYXRlLWxlYWQtZGVsZXRpb24tcmVxdWVzdA.option.cGFnZV9pZA.display_name": {
+          "source": "Page ID",
+          "message": "Seiten-ID"
+        },
+        "app.VW5ib3VuY2U.action.Y3JlYXRlLWxlYWQtZGVsZXRpb24tcmVxdWVzdA.option.cGFnZV9pZA.short_desc": {
+          "source": "Target page ID",
+          "message": "Zielseiten-ID"
+        },
+        "app.VW5ib3VuY2U.action.Y3JlYXRlLWxlYWQtZGVsZXRpb24tcmVxdWVzdA.option.dG8.desc": {
+          "source": "Delete leads created on or before this date",
+          "message": "Leads löschen, die an oder vor diesem Datum erstellt wurden"
+        },
+        "app.VW5ib3VuY2U.action.Y3JlYXRlLWxlYWQtZGVsZXRpb24tcmVxdWVzdA.option.dG8.display_name": {
+          "source": "To",
+          "message": "An"
+        },
+        "app.VW5ib3VuY2U.action.Y3JlYXRlLWxlYWQtZGVsZXRpb24tcmVxdWVzdA.option.dG8.short_desc": {
+          "source": "End date filter",
+          "message": "Enddatumsfilter"
+        },
+        "app.VW5ib3VuY2U.action.Y3JlYXRlLWxlYWQtZGVsZXRpb24tcmVxdWVzdA.short_desc": {
+          "source": "Create a bulk lead deletion request",
+          "message": "Massenanforderung zur Lead-Löschung erstellen"
+        },
+        "app.VW5ib3VuY2U.action.Z2V0LWFjY291bnQ.desc": {
+          "source": "Retrieve a single account by ID",
+          "message": "Ein einzelnes Konto anhand der ID abrufen"
+        },
+        "app.VW5ib3VuY2U.action.Z2V0LWFjY291bnQ.display_name": {
+          "source": "Get an Account",
+          "message": "Einen Account abrufen"
+        },
+        "app.VW5ib3VuY2U.action.Z2V0LWFjY291bnQ.option.YWNjb3VudF9pZA.display_name": {
+          "source": "Account ID",
+          "message": "Konto-ID"
+        },
+        "app.VW5ib3VuY2U.action.Z2V0LWFjY291bnQ.option.YWNjb3VudF9pZA.short_desc": {
+          "source": "The account ID",
+          "message": "Die Account-ID"
+        },
+        "app.VW5ib3VuY2U.action.Z2V0LWFjY291bnQ.short_desc": {
+          "source": "Get a single account by ID",
+          "message": "Einen einzelnen Account anhand der ID abrufen"
+        },
+        "app.VW5ib3VuY2U.action.Z2V0LWRvbWFpbg.desc": {
+          "source": "Retrieve a single domain by ID",
+          "message": "Einzelne Domain nach ID abrufen"
+        },
+        "app.VW5ib3VuY2U.action.Z2V0LWRvbWFpbg.display_name": {
+          "source": "Get a Domain",
+          "message": "Domain abrufen"
+        },
+        "app.VW5ib3VuY2U.action.Z2V0LWRvbWFpbg.option.ZG9tYWluX2lk.display_name": {
+          "source": "Domain ID",
+          "message": "Domain-ID"
+        },
+        "app.VW5ib3VuY2U.action.Z2V0LWRvbWFpbg.option.ZG9tYWluX2lk.short_desc": {
+          "source": "The domain ID",
+          "message": "Die Domain-ID"
+        },
+        "app.VW5ib3VuY2U.action.Z2V0LWRvbWFpbg.short_desc": {
+          "source": "Get a single domain by ID",
+          "message": "Einzelne Domain nach ID abrufen"
+        },
+        "app.VW5ib3VuY2U.action.Z2V0LWxlYWQ.desc": {
+          "source": "Retrieve a single lead by ID",
+          "message": "Einzelnen Lead nach ID abrufen"
+        },
+        "app.VW5ib3VuY2U.action.Z2V0LWxlYWQ.display_name": {
+          "source": "Get a Lead",
+          "message": "Lead abrufen"
+        },
+        "app.VW5ib3VuY2U.action.Z2V0LWxlYWQ.option.bGVhZF9pZA.display_name": {
+          "source": "Lead ID",
+          "message": "Lead-ID"
+        },
+        "app.VW5ib3VuY2U.action.Z2V0LWxlYWQ.option.bGVhZF9pZA.short_desc": {
+          "source": "The lead ID",
+          "message": "Die Lead-ID"
+        },
+        "app.VW5ib3VuY2U.action.Z2V0LWxlYWQ.short_desc": {
+          "source": "Get a single lead by ID",
+          "message": "Einen einzelnen Lead anhand der ID abrufen"
+        },
+        "app.VW5ib3VuY2U.action.Z2V0LWxlYWQtZGVsZXRpb24tcmVxdWVzdA.desc": {
+          "source": "Retrieve the status of a lead deletion request by page ID and deletion request ID",
+          "message": "Status einer Lead-Löschanforderung nach Seiten-ID und Löschanforderungs-ID abrufen"
+        },
+        "app.VW5ib3VuY2U.action.Z2V0LWxlYWQtZGVsZXRpb24tcmVxdWVzdA.display_name": {
+          "source": "Get Lead Deletion Request",
+          "message": "Lead-Löschanforderung abrufen"
+        },
+        "app.VW5ib3VuY2U.action.Z2V0LWxlYWQtZGVsZXRpb24tcmVxdWVzdA.option.ZGVsZXRpb25fcmVxdWVzdF9pZA.display_name": {
+          "source": "Deletion Request ID",
+          "message": "Löschanforderungs-ID"
+        },
+        "app.VW5ib3VuY2U.action.Z2V0LWxlYWQtZGVsZXRpb24tcmVxdWVzdA.option.ZGVsZXRpb25fcmVxdWVzdF9pZA.short_desc": {
+          "source": "Deletion request ID",
+          "message": "Löschanforderungs-ID"
+        },
+        "app.VW5ib3VuY2U.action.Z2V0LWxlYWQtZGVsZXRpb24tcmVxdWVzdA.option.cGFnZV9pZA.display_name": {
+          "source": "Page ID",
+          "message": "Seiten-ID"
+        },
+        "app.VW5ib3VuY2U.action.Z2V0LWxlYWQtZGVsZXRpb24tcmVxdWVzdA.option.cGFnZV9pZA.short_desc": {
+          "source": "Page ID",
+          "message": "Seiten-ID"
+        },
+        "app.VW5ib3VuY2U.action.Z2V0LWxlYWQtZGVsZXRpb24tcmVxdWVzdA.short_desc": {
+          "source": "Get a lead deletion request status",
+          "message": "Status einer Lead-Löschanforderung abrufen"
+        },
+        "app.VW5ib3VuY2U.action.Z2V0LXBhZ2U.desc": {
+          "source": "Retrieve a single landing page by ID",
+          "message": "Einzelne Landingpage nach ID abrufen"
+        },
+        "app.VW5ib3VuY2U.action.Z2V0LXBhZ2U.display_name": {
+          "source": "Get a Page",
+          "message": "Seite abrufen"
+        },
+        "app.VW5ib3VuY2U.action.Z2V0LXBhZ2U.option.cGFnZV9pZA.display_name": {
+          "source": "Page ID",
+          "message": "Seiten-ID"
+        },
+        "app.VW5ib3VuY2U.action.Z2V0LXBhZ2U.option.cGFnZV9pZA.short_desc": {
+          "source": "The page ID",
+          "message": "Die Seiten-ID"
+        },
+        "app.VW5ib3VuY2U.action.Z2V0LXBhZ2U.short_desc": {
+          "source": "Get a single page by ID",
+          "message": "Einzelne Seite nach ID abrufen"
+        },
+        "app.VW5ib3VuY2U.action.Z2V0LXN1Yi1hY2NvdW50.desc": {
+          "source": "Retrieve a single sub-account by ID",
+          "message": "Einzelnes Unterkonto nach ID abrufen"
+        },
+        "app.VW5ib3VuY2U.action.Z2V0LXN1Yi1hY2NvdW50.display_name": {
+          "source": "Get a Sub-Account",
+          "message": "Unterkonto abrufen"
+        },
+        "app.VW5ib3VuY2U.action.Z2V0LXN1Yi1hY2NvdW50.option.c3ViX2FjY291bnRfaWQ.display_name": {
+          "source": "Sub Account ID",
+          "message": "Unterkonto-ID"
+        },
+        "app.VW5ib3VuY2U.action.Z2V0LXN1Yi1hY2NvdW50.option.c3ViX2FjY291bnRfaWQ.short_desc": {
+          "source": "The sub-account ID",
+          "message": "Die Unterkonto-ID"
+        },
+        "app.VW5ib3VuY2U.action.Z2V0LXN1Yi1hY2NvdW50.short_desc": {
+          "source": "Get a single sub-account by ID",
+          "message": "Einzelnes Unterkonto nach ID abrufen"
+        },
+        "app.VW5ib3VuY2U.action.Z2V0LXVzZXI.desc": {
+          "source": "Retrieve a user by ID, or the current authenticated user if no ID is provided",
+          "message": "Benutzer nach ID abrufen oder den aktuell authentifizierten Benutzer, wenn keine ID angegeben ist"
+        },
+        "app.VW5ib3VuY2U.action.Z2V0LXVzZXI.display_name": {
+          "source": "Get User",
+          "message": "Benutzer abrufen"
+        },
+        "app.VW5ib3VuY2U.action.Z2V0LXVzZXI.option.dXNlcl9pZA.display_name": {
+          "source": "User ID",
+          "message": "Benutzer-ID"
+        },
+        "app.VW5ib3VuY2U.action.Z2V0LXVzZXI.option.dXNlcl9pZA.short_desc": {
+          "source": "The user ID (leave empty for current user)",
+          "message": "Die Benutzer-ID (für aktuellen Benutzer leer lassen)"
+        },
+        "app.VW5ib3VuY2U.action.Z2V0LXVzZXI.short_desc": {
+          "source": "Get a user by ID or the current user",
+          "message": "Benutzer nach ID oder aktuellen Benutzer abrufen"
+        },
+        "app.VW5ib3VuY2U.action.ZGVsZXRlLWxlYWQ.desc": {
+          "source": "Delete a lead from an Unbounce landing page. The deletion is processed asynchronously (HTTP 202)",
+          "message": "Lead von einer Unbounce-Landingpage löschen. Die Löschung wird asynchron verarbeitet (HTTP 202)"
+        },
+        "app.VW5ib3VuY2U.action.ZGVsZXRlLWxlYWQ.display_name": {
+          "source": "Delete a Lead",
+          "message": "Lead löschen"
+        },
+        "app.VW5ib3VuY2U.action.ZGVsZXRlLWxlYWQ.option.bGVhZF9pZA.desc": {
+          "source": "The unique identifier of the lead to delete",
+          "message": "Die eindeutige Kennung des zu löschenden Leads"
+        },
+        "app.VW5ib3VuY2U.action.ZGVsZXRlLWxlYWQ.option.bGVhZF9pZA.display_name": {
+          "source": "Lead ID",
+          "message": "Lead-ID"
+        },
+        "app.VW5ib3VuY2U.action.ZGVsZXRlLWxlYWQ.option.bGVhZF9pZA.short_desc": {
+          "source": "Lead to delete",
+          "message": "Zu löschender Lead"
+        },
+        "app.VW5ib3VuY2U.action.ZGVsZXRlLWxlYWQ.option.cGFnZV9pZA.desc": {
+          "source": "The ID of the page containing the lead to delete",
+          "message": "Die ID der Seite, die den zu löschenden Lead enthält"
+        },
+        "app.VW5ib3VuY2U.action.ZGVsZXRlLWxlYWQ.option.cGFnZV9pZA.display_name": {
+          "source": "Page ID",
+          "message": "Seiten-ID"
+        },
+        "app.VW5ib3VuY2U.action.ZGVsZXRlLWxlYWQ.option.cGFnZV9pZA.short_desc": {
+          "source": "Page containing the lead",
+          "message": "Seite, die den Lead enthält"
+        },
+        "app.VW5ib3VuY2U.action.ZGVsZXRlLWxlYWQ.short_desc": {
+          "source": "Delete a lead from a page",
+          "message": "Lead von einer Seite löschen"
+        },
+        "app.VW5ib3VuY2U.action.bGVhZC1hZGRlZA.desc": {
+          "source": "Fires when a new lead is captured on an Unbounce landing page, detected via polling",
+          "message": "Wird ausgelöst, wenn ein neuer Lead auf einer Unbounce-Landingpage erfasst wird, erkannt über Polling"
+        },
+        "app.VW5ib3VuY2U.action.bGVhZC1hZGRlZA.display_name": {
+          "source": "Watch New Leads",
+          "message": "Neue Leads überwachen"
+        },
+        "app.VW5ib3VuY2U.action.bGVhZC1hZGRlZA.short_desc": {
+          "source": "Trigger when new leads are captured on a page",
+          "message": "Auslösen, wenn neue Leads auf einer Seite erfasst werden"
+        },
+        "app.VW5ib3VuY2U.action.bGlzdC1hY2NvdW50cw.desc": {
+          "source": "List all accounts accessible to the authenticated user",
+          "message": "Alle Konten auflisten, auf die der authentifizierte Benutzer Zugriff hat"
+        },
+        "app.VW5ib3VuY2U.action.bGlzdC1hY2NvdW50cw.display_name": {
+          "source": "List Accounts",
+          "message": "Konten auflisten"
+        },
+        "app.VW5ib3VuY2U.action.bGlzdC1hY2NvdW50cw.option.YWNjb3VudF9pZA.display_name": {
+          "source": "Account ID",
+          "message": "Konto-ID"
+        },
+        "app.VW5ib3VuY2U.action.bGlzdC1hY2NvdW50cw.option.YWNjb3VudF9pZA.short_desc": {
+          "source": "Filter by account ID",
+          "message": "Nach Account-ID filtern"
+        },
+        "app.VW5ib3VuY2U.action.bGlzdC1hY2NvdW50cw.option.ZnJvbQ.display_name": {
+          "source": "From",
+          "message": "Von"
+        },
+        "app.VW5ib3VuY2U.action.bGlzdC1hY2NvdW50cw.option.ZnJvbQ.short_desc": {
+          "source": "Start date filter",
+          "message": "Startdatumsfilter"
+        },
+        "app.VW5ib3VuY2U.action.bGlzdC1hY2NvdW50cw.option.b2Zmc2V0.display_name": {
+          "source": "Offset",
+          "message": "Offset"
+        },
+        "app.VW5ib3VuY2U.action.bGlzdC1hY2NvdW50cw.option.b2Zmc2V0.short_desc": {
+          "source": "Result offset",
+          "message": "Ergebnis-Offset"
+        },
+        "app.VW5ib3VuY2U.action.bGlzdC1hY2NvdW50cw.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "Limit"
+        },
+        "app.VW5ib3VuY2U.action.bGlzdC1hY2NvdW50cw.option.bGltaXQ.short_desc": {
+          "source": "Maximum results",
+          "message": "Maximale Ergebnisse"
+        },
+        "app.VW5ib3VuY2U.action.bGlzdC1hY2NvdW50cw.option.c29ydF9vcmRlcg.allowed-value.c3RyaW5nOmFzYw.desc": {
+          "source": "Sort in ascending order",
+          "message": "In aufsteigender Reihenfolge sortieren"
+        },
+        "app.VW5ib3VuY2U.action.bGlzdC1hY2NvdW50cw.option.c29ydF9vcmRlcg.allowed-value.c3RyaW5nOmFzYw.display_name": {
+          "source": "Ascending",
+          "message": "Aufsteigend"
+        },
+        "app.VW5ib3VuY2U.action.bGlzdC1hY2NvdW50cw.option.c29ydF9vcmRlcg.allowed-value.c3RyaW5nOmRlc2M.desc": {
+          "source": "Sort in descending order",
+          "message": "In absteigender Reihenfolge sortieren"
+        },
+        "app.VW5ib3VuY2U.action.bGlzdC1hY2NvdW50cw.option.c29ydF9vcmRlcg.allowed-value.c3RyaW5nOmRlc2M.display_name": {
+          "source": "Descending",
+          "message": "Absteigend"
+        },
+        "app.VW5ib3VuY2U.action.bGlzdC1hY2NvdW50cw.option.c29ydF9vcmRlcg.display_name": {
+          "source": "Sort Order",
+          "message": "Sortierreihenfolge"
+        },
+        "app.VW5ib3VuY2U.action.bGlzdC1hY2NvdW50cw.option.c29ydF9vcmRlcg.short_desc": {
+          "source": "Sort direction",
+          "message": "Sortierrichtung"
+        },
+        "app.VW5ib3VuY2U.action.bGlzdC1hY2NvdW50cw.option.dG8.display_name": {
+          "source": "To",
+          "message": "An"
+        },
+        "app.VW5ib3VuY2U.action.bGlzdC1hY2NvdW50cw.option.dG8.short_desc": {
+          "source": "End date filter",
+          "message": "Enddatumsfilter"
+        },
+        "app.VW5ib3VuY2U.action.bGlzdC1hY2NvdW50cw.short_desc": {
+          "source": "List all accounts",
+          "message": "Alle Konten auflisten"
+        },
+        "app.VW5ib3VuY2U.action.bGlzdC1kb21haW5z.desc": {
+          "source": "List all domains for a given sub-account",
+          "message": "Alle Domains für ein bestimmtes Unterkonto auflisten"
+        },
+        "app.VW5ib3VuY2U.action.bGlzdC1kb21haW5z.display_name": {
+          "source": "List Domains",
+          "message": "Domains auflisten"
+        },
+        "app.VW5ib3VuY2U.action.bGlzdC1kb21haW5z.option.ZG9tYWluX2lk.display_name": {
+          "source": "Domain ID",
+          "message": "Domain-ID"
+        },
+        "app.VW5ib3VuY2U.action.bGlzdC1kb21haW5z.option.ZG9tYWluX2lk.short_desc": {
+          "source": "Filter by domain ID",
+          "message": "Nach Domain-ID filtern"
+        },
+        "app.VW5ib3VuY2U.action.bGlzdC1kb21haW5z.option.ZnJvbQ.display_name": {
+          "source": "From",
+          "message": "Von"
+        },
+        "app.VW5ib3VuY2U.action.bGlzdC1kb21haW5z.option.ZnJvbQ.short_desc": {
+          "source": "Start date filter",
+          "message": "Startdatumsfilter"
+        },
+        "app.VW5ib3VuY2U.action.bGlzdC1kb21haW5z.option.b2Zmc2V0.display_name": {
+          "source": "Offset",
+          "message": "Offset"
+        },
+        "app.VW5ib3VuY2U.action.bGlzdC1kb21haW5z.option.b2Zmc2V0.short_desc": {
+          "source": "Result offset",
+          "message": "Ergebnis-Offset"
+        },
+        "app.VW5ib3VuY2U.action.bGlzdC1kb21haW5z.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "Limit"
+        },
+        "app.VW5ib3VuY2U.action.bGlzdC1kb21haW5z.option.bGltaXQ.short_desc": {
+          "source": "Maximum results",
+          "message": "Maximale Ergebnisse"
+        },
+        "app.VW5ib3VuY2U.action.bGlzdC1kb21haW5z.option.c29ydF9vcmRlcg.allowed-value.c3RyaW5nOmFzYw.desc": {
+          "source": "Sort in ascending order",
+          "message": "In aufsteigender Reihenfolge sortieren"
+        },
+        "app.VW5ib3VuY2U.action.bGlzdC1kb21haW5z.option.c29ydF9vcmRlcg.allowed-value.c3RyaW5nOmFzYw.display_name": {
+          "source": "Ascending",
+          "message": "Aufsteigend"
+        },
+        "app.VW5ib3VuY2U.action.bGlzdC1kb21haW5z.option.c29ydF9vcmRlcg.allowed-value.c3RyaW5nOmRlc2M.desc": {
+          "source": "Sort in descending order",
+          "message": "In absteigender Reihenfolge sortieren"
+        },
+        "app.VW5ib3VuY2U.action.bGlzdC1kb21haW5z.option.c29ydF9vcmRlcg.allowed-value.c3RyaW5nOmRlc2M.display_name": {
+          "source": "Descending",
+          "message": "Absteigend"
+        },
+        "app.VW5ib3VuY2U.action.bGlzdC1kb21haW5z.option.c29ydF9vcmRlcg.display_name": {
+          "source": "Sort Order",
+          "message": "Sortierreihenfolge"
+        },
+        "app.VW5ib3VuY2U.action.bGlzdC1kb21haW5z.option.c29ydF9vcmRlcg.short_desc": {
+          "source": "Sort direction",
+          "message": "Sortierrichtung"
+        },
+        "app.VW5ib3VuY2U.action.bGlzdC1kb21haW5z.option.c3ViX2FjY291bnRfaWQ.display_name": {
+          "source": "Sub Account ID",
+          "message": "Unterkonto-ID"
+        },
+        "app.VW5ib3VuY2U.action.bGlzdC1kb21haW5z.option.c3ViX2FjY291bnRfaWQ.short_desc": {
+          "source": "Sub-account to list domains for",
+          "message": "Unterkonto, für das Domains aufgelistet werden sollen"
+        },
+        "app.VW5ib3VuY2U.action.bGlzdC1kb21haW5z.option.dG8.display_name": {
+          "source": "To",
+          "message": "An"
+        },
+        "app.VW5ib3VuY2U.action.bGlzdC1kb21haW5z.option.dG8.short_desc": {
+          "source": "End date filter",
+          "message": "Enddatumsfilter"
+        },
+        "app.VW5ib3VuY2U.action.bGlzdC1kb21haW5z.short_desc": {
+          "source": "List domains for a sub-account",
+          "message": "Domains für ein Unterkonto auflisten"
+        },
+        "app.VW5ib3VuY2U.action.bGlzdC1mb3JtLWZpZWxkcw.desc": {
+          "source": "List all form fields configured on a specific landing page",
+          "message": "Alle Formularfelder auflisten, die auf einer bestimmten Landingpage konfiguriert sind"
+        },
+        "app.VW5ib3VuY2U.action.bGlzdC1mb3JtLWZpZWxkcw.display_name": {
+          "source": "List Form Fields",
+          "message": "Formularfelder auflisten"
+        },
+        "app.VW5ib3VuY2U.action.bGlzdC1mb3JtLWZpZWxkcw.option.b2Zmc2V0.display_name": {
+          "source": "Offset",
+          "message": "Offset"
+        },
+        "app.VW5ib3VuY2U.action.bGlzdC1mb3JtLWZpZWxkcw.option.b2Zmc2V0.short_desc": {
+          "source": "Result offset",
+          "message": "Ergebnis-Offset"
+        },
+        "app.VW5ib3VuY2U.action.bGlzdC1mb3JtLWZpZWxkcw.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "Limit"
+        },
+        "app.VW5ib3VuY2U.action.bGlzdC1mb3JtLWZpZWxkcw.option.bGltaXQ.short_desc": {
+          "source": "Maximum results",
+          "message": "Maximale Ergebnisse"
+        },
+        "app.VW5ib3VuY2U.action.bGlzdC1mb3JtLWZpZWxkcw.option.cGFnZV9pZA.display_name": {
+          "source": "Page ID",
+          "message": "Seiten-ID"
+        },
+        "app.VW5ib3VuY2U.action.bGlzdC1mb3JtLWZpZWxkcw.option.cGFnZV9pZA.short_desc": {
+          "source": "Page to list form fields for",
+          "message": "Seite, für die Formularfelder aufgelistet werden sollen"
+        },
+        "app.VW5ib3VuY2U.action.bGlzdC1mb3JtLWZpZWxkcw.short_desc": {
+          "source": "List form fields for a page",
+          "message": "Formularfelder für eine Seite auflisten"
+        },
+        "app.VW5ib3VuY2U.action.bGlzdC1sZWFkcw.desc": {
+          "source": "List all leads captured on a specific landing page",
+          "message": "Alle Leads auflisten, die auf einer bestimmten Landingpage erfasst wurden"
+        },
+        "app.VW5ib3VuY2U.action.bGlzdC1sZWFkcw.display_name": {
+          "source": "List Leads",
+          "message": "Leads auflisten"
+        },
+        "app.VW5ib3VuY2U.action.bGlzdC1sZWFkcw.option.ZnJvbQ.display_name": {
+          "source": "From",
+          "message": "Von"
+        },
+        "app.VW5ib3VuY2U.action.bGlzdC1sZWFkcw.option.ZnJvbQ.short_desc": {
+          "source": "Start date filter",
+          "message": "Startdatumsfilter"
+        },
+        "app.VW5ib3VuY2U.action.bGlzdC1sZWFkcw.option.b2Zmc2V0.display_name": {
+          "source": "Offset",
+          "message": "Offset"
+        },
+        "app.VW5ib3VuY2U.action.bGlzdC1sZWFkcw.option.b2Zmc2V0.short_desc": {
+          "source": "Result offset",
+          "message": "Ergebnis-Offset"
+        },
+        "app.VW5ib3VuY2U.action.bGlzdC1sZWFkcw.option.bGVhZF9pZA.display_name": {
+          "source": "Lead ID",
+          "message": "Lead-ID"
+        },
+        "app.VW5ib3VuY2U.action.bGlzdC1sZWFkcw.option.bGVhZF9pZA.short_desc": {
+          "source": "Filter by lead ID",
+          "message": "Nach Lead-ID filtern"
+        },
+        "app.VW5ib3VuY2U.action.bGlzdC1sZWFkcw.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "Limit"
+        },
+        "app.VW5ib3VuY2U.action.bGlzdC1sZWFkcw.option.bGltaXQ.short_desc": {
+          "source": "Maximum results",
+          "message": "Maximale Ergebnisse"
+        },
+        "app.VW5ib3VuY2U.action.bGlzdC1sZWFkcw.option.c29ydF9vcmRlcg.allowed-value.c3RyaW5nOmFzYw.desc": {
+          "source": "Sort in ascending order",
+          "message": "In aufsteigender Reihenfolge sortieren"
+        },
+        "app.VW5ib3VuY2U.action.bGlzdC1sZWFkcw.option.c29ydF9vcmRlcg.allowed-value.c3RyaW5nOmFzYw.display_name": {
+          "source": "Ascending",
+          "message": "Aufsteigend"
+        },
+        "app.VW5ib3VuY2U.action.bGlzdC1sZWFkcw.option.c29ydF9vcmRlcg.allowed-value.c3RyaW5nOmRlc2M.desc": {
+          "source": "Sort in descending order",
+          "message": "In absteigender Reihenfolge sortieren"
+        },
+        "app.VW5ib3VuY2U.action.bGlzdC1sZWFkcw.option.c29ydF9vcmRlcg.allowed-value.c3RyaW5nOmRlc2M.display_name": {
+          "source": "Descending",
+          "message": "Absteigend"
+        },
+        "app.VW5ib3VuY2U.action.bGlzdC1sZWFkcw.option.c29ydF9vcmRlcg.display_name": {
+          "source": "Sort Order",
+          "message": "Sortierreihenfolge"
+        },
+        "app.VW5ib3VuY2U.action.bGlzdC1sZWFkcw.option.c29ydF9vcmRlcg.short_desc": {
+          "source": "Sort direction",
+          "message": "Sortierrichtung"
+        },
+        "app.VW5ib3VuY2U.action.bGlzdC1sZWFkcw.option.cGFnZV9pZA.display_name": {
+          "source": "Page ID",
+          "message": "Seiten-ID"
+        },
+        "app.VW5ib3VuY2U.action.bGlzdC1sZWFkcw.option.cGFnZV9pZA.short_desc": {
+          "source": "Page to list leads for",
+          "message": "Seite, für die Leads aufgelistet werden sollen"
+        },
+        "app.VW5ib3VuY2U.action.bGlzdC1sZWFkcw.option.dG8.display_name": {
+          "source": "To",
+          "message": "An"
+        },
+        "app.VW5ib3VuY2U.action.bGlzdC1sZWFkcw.option.dG8.short_desc": {
+          "source": "End date filter",
+          "message": "Enddatumsfilter"
+        },
+        "app.VW5ib3VuY2U.action.bGlzdC1sZWFkcw.short_desc": {
+          "source": "List leads for a page",
+          "message": "Leads für eine Seite auflisten"
+        },
+        "app.VW5ib3VuY2U.action.bGlzdC1wYWdlLWdyb3Vwcw.desc": {
+          "source": "List all page groups for a given sub-account",
+          "message": "Alle Seitengruppen für ein bestimmtes Unterkonto auflisten"
+        },
+        "app.VW5ib3VuY2U.action.bGlzdC1wYWdlLWdyb3Vwcw.display_name": {
+          "source": "List Page Groups",
+          "message": "Seitengruppen auflisten"
+        },
+        "app.VW5ib3VuY2U.action.bGlzdC1wYWdlLWdyb3Vwcw.option.ZnJvbQ.display_name": {
+          "source": "From",
+          "message": "Von"
+        },
+        "app.VW5ib3VuY2U.action.bGlzdC1wYWdlLWdyb3Vwcw.option.ZnJvbQ.short_desc": {
+          "source": "Start date filter",
+          "message": "Startdatumsfilter"
+        },
+        "app.VW5ib3VuY2U.action.bGlzdC1wYWdlLWdyb3Vwcw.option.b2Zmc2V0.display_name": {
+          "source": "Offset",
+          "message": "Offset"
+        },
+        "app.VW5ib3VuY2U.action.bGlzdC1wYWdlLWdyb3Vwcw.option.b2Zmc2V0.short_desc": {
+          "source": "Result offset",
+          "message": "Ergebnis-Offset"
+        },
+        "app.VW5ib3VuY2U.action.bGlzdC1wYWdlLWdyb3Vwcw.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "Limit"
+        },
+        "app.VW5ib3VuY2U.action.bGlzdC1wYWdlLWdyb3Vwcw.option.bGltaXQ.short_desc": {
+          "source": "Maximum results",
+          "message": "Maximale Ergebnisse"
+        },
+        "app.VW5ib3VuY2U.action.bGlzdC1wYWdlLWdyb3Vwcw.option.c29ydF9vcmRlcg.allowed-value.c3RyaW5nOmFzYw.desc": {
+          "source": "Sort in ascending order",
+          "message": "In aufsteigender Reihenfolge sortieren"
+        },
+        "app.VW5ib3VuY2U.action.bGlzdC1wYWdlLWdyb3Vwcw.option.c29ydF9vcmRlcg.allowed-value.c3RyaW5nOmFzYw.display_name": {
+          "source": "Ascending",
+          "message": "Aufsteigend"
+        },
+        "app.VW5ib3VuY2U.action.bGlzdC1wYWdlLWdyb3Vwcw.option.c29ydF9vcmRlcg.allowed-value.c3RyaW5nOmRlc2M.desc": {
+          "source": "Sort in descending order",
+          "message": "In absteigender Reihenfolge sortieren"
+        },
+        "app.VW5ib3VuY2U.action.bGlzdC1wYWdlLWdyb3Vwcw.option.c29ydF9vcmRlcg.allowed-value.c3RyaW5nOmRlc2M.display_name": {
+          "source": "Descending",
+          "message": "Absteigend"
+        },
+        "app.VW5ib3VuY2U.action.bGlzdC1wYWdlLWdyb3Vwcw.option.c29ydF9vcmRlcg.display_name": {
+          "source": "Sort Order",
+          "message": "Sortierreihenfolge"
+        },
+        "app.VW5ib3VuY2U.action.bGlzdC1wYWdlLWdyb3Vwcw.option.c29ydF9vcmRlcg.short_desc": {
+          "source": "Sort direction",
+          "message": "Sortierrichtung"
+        },
+        "app.VW5ib3VuY2U.action.bGlzdC1wYWdlLWdyb3Vwcw.option.c3ViX2FjY291bnRfaWQ.display_name": {
+          "source": "Sub Account ID",
+          "message": "Unterkonto-ID"
+        },
+        "app.VW5ib3VuY2U.action.bGlzdC1wYWdlLWdyb3Vwcw.option.c3ViX2FjY291bnRfaWQ.short_desc": {
+          "source": "Sub-account to list page groups for",
+          "message": "Unterkonto, für das Seitengruppen aufgelistet werden sollen"
+        },
+        "app.VW5ib3VuY2U.action.bGlzdC1wYWdlLWdyb3Vwcw.option.dG8.display_name": {
+          "source": "To",
+          "message": "An"
+        },
+        "app.VW5ib3VuY2U.action.bGlzdC1wYWdlLWdyb3Vwcw.option.dG8.short_desc": {
+          "source": "End date filter",
+          "message": "Enddatumsfilter"
+        },
+        "app.VW5ib3VuY2U.action.bGlzdC1wYWdlLWdyb3Vwcw.short_desc": {
+          "source": "List page groups for a sub-account",
+          "message": "Seitengruppen für ein Unterkonto auflisten"
+        },
+        "app.VW5ib3VuY2U.action.bGlzdC1wYWdlcw.desc": {
+          "source": "List all landing pages with optional filtering by role, date range, and sort order",
+          "message": "Alle Landingpages mit optionaler Filterung nach Rolle, Datumsbereich und Sortierreihenfolge auflisten"
+        },
+        "app.VW5ib3VuY2U.action.bGlzdC1wYWdlcw.display_name": {
+          "source": "List Pages",
+          "message": "Seiten auflisten"
+        },
+        "app.VW5ib3VuY2U.action.bGlzdC1wYWdlcw.option.ZnJvbQ.display_name": {
+          "source": "From",
+          "message": "Von"
+        },
+        "app.VW5ib3VuY2U.action.bGlzdC1wYWdlcw.option.ZnJvbQ.short_desc": {
+          "source": "Start date filter",
+          "message": "Startdatumsfilter"
+        },
+        "app.VW5ib3VuY2U.action.bGlzdC1wYWdlcw.option.b2Zmc2V0.display_name": {
+          "source": "Offset",
+          "message": "Offset"
+        },
+        "app.VW5ib3VuY2U.action.bGlzdC1wYWdlcw.option.b2Zmc2V0.short_desc": {
+          "source": "Result offset",
+          "message": "Ergebnis-Offset"
+        },
+        "app.VW5ib3VuY2U.action.bGlzdC1wYWdlcw.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "Limit"
+        },
+        "app.VW5ib3VuY2U.action.bGlzdC1wYWdlcw.option.bGltaXQ.short_desc": {
+          "source": "Maximum results",
+          "message": "Maximale Ergebnisse"
+        },
+        "app.VW5ib3VuY2U.action.bGlzdC1wYWdlcw.option.c29ydF9vcmRlcg.allowed-value.c3RyaW5nOmFzYw.desc": {
+          "source": "Sort in ascending order",
+          "message": "In aufsteigender Reihenfolge sortieren"
+        },
+        "app.VW5ib3VuY2U.action.bGlzdC1wYWdlcw.option.c29ydF9vcmRlcg.allowed-value.c3RyaW5nOmFzYw.display_name": {
+          "source": "Ascending",
+          "message": "Aufsteigend"
+        },
+        "app.VW5ib3VuY2U.action.bGlzdC1wYWdlcw.option.c29ydF9vcmRlcg.allowed-value.c3RyaW5nOmRlc2M.desc": {
+          "source": "Sort in descending order",
+          "message": "In absteigender Reihenfolge sortieren"
+        },
+        "app.VW5ib3VuY2U.action.bGlzdC1wYWdlcw.option.c29ydF9vcmRlcg.allowed-value.c3RyaW5nOmRlc2M.display_name": {
+          "source": "Descending",
+          "message": "Absteigend"
+        },
+        "app.VW5ib3VuY2U.action.bGlzdC1wYWdlcw.option.c29ydF9vcmRlcg.display_name": {
+          "source": "Sort Order",
+          "message": "Sortierreihenfolge"
+        },
+        "app.VW5ib3VuY2U.action.bGlzdC1wYWdlcw.option.c29ydF9vcmRlcg.short_desc": {
+          "source": "Sort direction",
+          "message": "Sortierrichtung"
+        },
+        "app.VW5ib3VuY2U.action.bGlzdC1wYWdlcw.option.cGFnZV9pZA.display_name": {
+          "source": "Page ID",
+          "message": "Seiten-ID"
+        },
+        "app.VW5ib3VuY2U.action.bGlzdC1wYWdlcw.option.cGFnZV9pZA.short_desc": {
+          "source": "Filter by page ID",
+          "message": "Nach Seiten-ID filtern"
+        },
+        "app.VW5ib3VuY2U.action.bGlzdC1wYWdlcw.option.cm9sZQ.allowed-value.c3RyaW5nOmF1dGhvcg.desc": {
+          "source": "Pages where the user is an author",
+          "message": "Seiten, bei denen der Benutzer Autor ist"
+        },
+        "app.VW5ib3VuY2U.action.bGlzdC1wYWdlcw.option.cm9sZQ.allowed-value.c3RyaW5nOmF1dGhvcg.display_name": {
+          "source": "Author",
+          "message": "Autor"
+        },
+        "app.VW5ib3VuY2U.action.bGlzdC1wYWdlcw.option.cm9sZQ.allowed-value.c3RyaW5nOnZpZXdlcg.desc": {
+          "source": "Pages where the user is a viewer",
+          "message": "Seiten, bei denen der Benutzer Betrachter ist"
+        },
+        "app.VW5ib3VuY2U.action.bGlzdC1wYWdlcw.option.cm9sZQ.allowed-value.c3RyaW5nOnZpZXdlcg.display_name": {
+          "source": "Viewer",
+          "message": "Betrachter"
+        },
+        "app.VW5ib3VuY2U.action.bGlzdC1wYWdlcw.option.cm9sZQ.display_name": {
+          "source": "Role",
+          "message": "Rolle"
+        },
+        "app.VW5ib3VuY2U.action.bGlzdC1wYWdlcw.option.cm9sZQ.short_desc": {
+          "source": "Filter by user role",
+          "message": "Nach Benutzerrolle filtern"
+        },
+        "app.VW5ib3VuY2U.action.bGlzdC1wYWdlcw.option.d2l0aF9zdGF0cw.display_name": {
+          "source": "With Stats",
+          "message": "Mit Statistiken"
+        },
+        "app.VW5ib3VuY2U.action.bGlzdC1wYWdlcw.option.d2l0aF9zdGF0cw.short_desc": {
+          "source": "Include page statistics",
+          "message": "Seitenstatistiken einschließen"
+        },
+        "app.VW5ib3VuY2U.action.bGlzdC1wYWdlcw.option.dG8.display_name": {
+          "source": "To",
+          "message": "An"
+        },
+        "app.VW5ib3VuY2U.action.bGlzdC1wYWdlcw.option.dG8.short_desc": {
+          "source": "End date filter",
+          "message": "Enddatumsfilter"
+        },
+        "app.VW5ib3VuY2U.action.bGlzdC1wYWdlcw.short_desc": {
+          "source": "List all landing pages",
+          "message": "Alle Landingpages auflisten"
+        },
+        "app.VW5ib3VuY2U.action.bGlzdC1zdWItYWNjb3VudHM.desc": {
+          "source": "List all sub-accounts for a given account",
+          "message": "Alle Unterkonten für ein bestimmtes Konto auflisten"
+        },
+        "app.VW5ib3VuY2U.action.bGlzdC1zdWItYWNjb3VudHM.display_name": {
+          "source": "List Sub-Accounts",
+          "message": "Unterkonten auflisten"
+        },
+        "app.VW5ib3VuY2U.action.bGlzdC1zdWItYWNjb3VudHM.option.YWNjb3VudF9pZA.display_name": {
+          "source": "Account ID",
+          "message": "Konto-ID"
+        },
+        "app.VW5ib3VuY2U.action.bGlzdC1zdWItYWNjb3VudHM.option.YWNjb3VudF9pZA.short_desc": {
+          "source": "Parent account ID",
+          "message": "Übergeordnete Konto-ID"
+        },
+        "app.VW5ib3VuY2U.action.bGlzdC1zdWItYWNjb3VudHM.option.ZnJvbQ.display_name": {
+          "source": "From",
+          "message": "Von"
+        },
+        "app.VW5ib3VuY2U.action.bGlzdC1zdWItYWNjb3VudHM.option.ZnJvbQ.short_desc": {
+          "source": "Start date filter",
+          "message": "Startdatumsfilter"
+        },
+        "app.VW5ib3VuY2U.action.bGlzdC1zdWItYWNjb3VudHM.option.b2Zmc2V0.display_name": {
+          "source": "Offset",
+          "message": "Offset"
+        },
+        "app.VW5ib3VuY2U.action.bGlzdC1zdWItYWNjb3VudHM.option.b2Zmc2V0.short_desc": {
+          "source": "Result offset",
+          "message": "Ergebnis-Offset"
+        },
+        "app.VW5ib3VuY2U.action.bGlzdC1zdWItYWNjb3VudHM.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "Limit"
+        },
+        "app.VW5ib3VuY2U.action.bGlzdC1zdWItYWNjb3VudHM.option.bGltaXQ.short_desc": {
+          "source": "Maximum results",
+          "message": "Maximale Ergebnisse"
+        },
+        "app.VW5ib3VuY2U.action.bGlzdC1zdWItYWNjb3VudHM.option.c29ydF9vcmRlcg.allowed-value.c3RyaW5nOmFzYw.desc": {
+          "source": "Sort in ascending order",
+          "message": "In aufsteigender Reihenfolge sortieren"
+        },
+        "app.VW5ib3VuY2U.action.bGlzdC1zdWItYWNjb3VudHM.option.c29ydF9vcmRlcg.allowed-value.c3RyaW5nOmFzYw.display_name": {
+          "source": "Ascending",
+          "message": "Aufsteigend"
+        },
+        "app.VW5ib3VuY2U.action.bGlzdC1zdWItYWNjb3VudHM.option.c29ydF9vcmRlcg.allowed-value.c3RyaW5nOmRlc2M.desc": {
+          "source": "Sort in descending order",
+          "message": "In absteigender Reihenfolge sortieren"
+        },
+        "app.VW5ib3VuY2U.action.bGlzdC1zdWItYWNjb3VudHM.option.c29ydF9vcmRlcg.allowed-value.c3RyaW5nOmRlc2M.display_name": {
+          "source": "Descending",
+          "message": "Absteigend"
+        },
+        "app.VW5ib3VuY2U.action.bGlzdC1zdWItYWNjb3VudHM.option.c29ydF9vcmRlcg.display_name": {
+          "source": "Sort Order",
+          "message": "Sortierreihenfolge"
+        },
+        "app.VW5ib3VuY2U.action.bGlzdC1zdWItYWNjb3VudHM.option.c29ydF9vcmRlcg.short_desc": {
+          "source": "Sort direction",
+          "message": "Sortierrichtung"
+        },
+        "app.VW5ib3VuY2U.action.bGlzdC1zdWItYWNjb3VudHM.option.c3ViX2FjY291bnRfaWQ.display_name": {
+          "source": "Sub Account ID",
+          "message": "Unterkonto-ID"
+        },
+        "app.VW5ib3VuY2U.action.bGlzdC1zdWItYWNjb3VudHM.option.c3ViX2FjY291bnRfaWQ.short_desc": {
+          "source": "Filter by sub-account ID",
+          "message": "Nach Unterkonto-ID filtern"
+        },
+        "app.VW5ib3VuY2U.action.bGlzdC1zdWItYWNjb3VudHM.option.dG8.display_name": {
+          "source": "To",
+          "message": "An"
+        },
+        "app.VW5ib3VuY2U.action.bGlzdC1zdWItYWNjb3VudHM.option.dG8.short_desc": {
+          "source": "End date filter",
+          "message": "Enddatumsfilter"
+        },
+        "app.VW5ib3VuY2U.action.bGlzdC1zdWItYWNjb3VudHM.short_desc": {
+          "source": "List sub-accounts for an account",
+          "message": "Unterkonten für ein Konto auflisten"
+        },
+        "app.VW5ib3VuY2U.action.bWFrZS1hcGktY2FsbA.desc": {
+          "source": "Make a custom HTTP / REST API call to **Unbounce** using the configured connection's authentication.\n\nSpecify the HTTP method, the URI path (relative to the connection's API base URL), optional query parameters, headers, and request body. The response is returned as a hash containing the status code, response headers, and response body.\n\nUse this action for endpoints that are not yet exposed as first-class actions on this app.",
+          "message": "Führen Sie einen benutzerdefinierten HTTP- / REST-API-Aufruf an **Unbounce** unter Verwendung der Authentifizierung der konfigurierten Verbindung aus.\n\nGeben Sie die HTTP-Methode, den URI-Pfad (relativ zur API-Basis-URL der Verbindung), optionale Abfrageparameter, Header und den Anforderungstext an. Die Antwort wird als Hash zurückgegeben, der den Statuscode, die Antwort-Header und den Antworttext enthält.\n\nVerwenden Sie diese Aktion für Endpunkte, die in dieser App noch nicht als erstklassige Aktionen bereitgestellt werden."
+        },
+        "app.VW5ib3VuY2U.action.bWFrZS1hcGktY2FsbA.display_name": {
+          "source": "Make an API call",
+          "message": "API-Aufruf ausführen"
+        },
+        "app.VW5ib3VuY2U.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.desc": {
+          "source": "The request body. The effective type depends on `body_type`: JSON/form/YAML expect a hash, XML/text expect a string, multipart expects a file structure, binary expects raw bytes.",
+          "message": "Der Anfragen-Body. Der effektive Typ hängt von `body_type` ab: JSON/form/YAML erwarten einen Hash, XML/Text erwarten einen String, Multipart erwartet eine Dateistruktur, Binary erwartet Rohbytes."
+        },
+        "app.VW5ib3VuY2U.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.display_name": {
+          "source": "Body",
+          "message": "Body"
+        },
+        "app.VW5ib3VuY2U.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.short_desc": {
+          "source": "The request body",
+          "message": "Der Anfragen-Body"
+        },
+        "app.VW5ib3VuY2U.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.desc": {
+          "source": "Upload a file using `multipart/form-data`. The body must be a @ref DataProvider::FileDataType \"FileDataType\" structure (filename + content + mime_type). The framework builds the multipart envelope and sets the boundary header.",
+          "message": "Laden Sie eine Datei mit `multipart/form-data` hoch. Der Body muss eine @ref DataProvider::FileDataType \"FileDataType\"-Struktur sein (filename + content + mime_type). Das Framework erstellt die Multipart-Hülle und setzt den Boundary-Header."
+        },
+        "app.VW5ib3VuY2U.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.display_name": {
+          "source": "Multipart Form",
+          "message": "Multipart-Formular"
+        },
+        "app.VW5ib3VuY2U.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.short_desc": {
+          "source": "Upload a file using multipart/form-data",
+          "message": "Eine Datei mit multipart/form-data hochladen"
+        },
+        "app.VW5ib3VuY2U.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.desc": {
+          "source": "Pass the body to the REST client unchanged; the client decides serialization based on its configured `data` option and the value type",
+          "message": "Übergeben Sie den Body unverändert an den REST-Client; der Client entscheidet über die Serialisierung basierend auf seiner konfigurierten `data`-Option und dem Werttyp"
+        },
+        "app.VW5ib3VuY2U.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.display_name": {
+          "source": "Auto",
+          "message": "Auto"
+        },
+        "app.VW5ib3VuY2U.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.short_desc": {
+          "source": "Pass-through; use connection serialization and let the REST client decide",
+          "message": "Durchreichen; Verbindungsserialisierung verwenden und den REST-Client entscheiden lassen"
+        },
+        "app.VW5ib3VuY2U.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.desc": {
+          "source": "Send the body as raw bytes. The body must be a binary value. Sets `Content-Type: application/octet-stream` unless overridden by `hdr`.",
+          "message": "Senden Sie den Body als Rohbytes. Der Body muss ein Binärwert sein. Setzt `Content-Type: application/octet-stream`, sofern nicht durch `hdr` überschrieben."
+        },
+        "app.VW5ib3VuY2U.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.display_name": {
+          "source": "Raw Binary",
+          "message": "Rohbinärdaten"
+        },
+        "app.VW5ib3VuY2U.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.short_desc": {
+          "source": "Send body as raw bytes",
+          "message": "Body als Rohbytes senden"
+        },
+        "app.VW5ib3VuY2U.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.desc": {
+          "source": "Serialize a hash of form fields as `application/x-www-form-urlencoded`. The body must be a hash whose values are scalars (strings/numbers/booleans).",
+          "message": "Serialisieren Sie einen Hash von Formularfeldern als `application/x-www-form-urlencoded`. Der Body muss ein Hash sein, dessen Werte Skalare sind (Strings/Zahlen/Booleans)."
+        },
+        "app.VW5ib3VuY2U.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.display_name": {
+          "source": "Form (URL-encoded)",
+          "message": "Formular (URL-kodiert)"
+        },
+        "app.VW5ib3VuY2U.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.short_desc": {
+          "source": "Serialize body as application/x-www-form-urlencoded form fields",
+          "message": "Body als application/x-www-form-urlencoded-Formularfelder serialisieren"
+        },
+        "app.VW5ib3VuY2U.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.desc": {
+          "source": "Serialize the body as JSON; sets `Content-Type: application/json`. The body should be a hash, list, or scalar value.",
+          "message": "Serialisieren Sie den Body als JSON; setzt `Content-Type: application/json`. Der Body sollte ein Hash, eine Liste oder ein Skalarwert sein."
+        },
+        "app.VW5ib3VuY2U.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.display_name": {
+          "source": "JSON",
+          "message": "JSON"
+        },
+        "app.VW5ib3VuY2U.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.short_desc": {
+          "source": "Serialize body as JSON",
+          "message": "Body als JSON serialisieren"
+        },
+        "app.VW5ib3VuY2U.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.desc": {
+          "source": "Send the body as plain text. The body must be a string. Sets `Content-Type: text/plain`.",
+          "message": "Senden Sie den Body als Klartext. Der Body muss ein String sein. Setzt `Content-Type: text/plain`."
+        },
+        "app.VW5ib3VuY2U.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.display_name": {
+          "source": "Plain Text",
+          "message": "Klartext"
+        },
+        "app.VW5ib3VuY2U.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.short_desc": {
+          "source": "Send body as text/plain",
+          "message": "Body als text/plain senden"
+        },
+        "app.VW5ib3VuY2U.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.desc": {
+          "source": "Send the body as XML. If the body is a hash it is serialized to XML; if it is a string it is sent verbatim. Sets `Content-Type: application/xml`.",
+          "message": "Senden Sie den Body als XML. Wenn der Body ein Hash ist, wird er zu XML serialisiert; wenn er ein String ist, wird er wörtlich gesendet. Setzt `Content-Type: application/xml`."
+        },
+        "app.VW5ib3VuY2U.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.display_name": {
+          "source": "XML",
+          "message": "XML"
+        },
+        "app.VW5ib3VuY2U.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.short_desc": {
+          "source": "Send body as XML",
+          "message": "Body als XML senden"
+        },
+        "app.VW5ib3VuY2U.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.desc": {
+          "source": "Send the body as YAML. If the body is a hash it is serialized to YAML; if it is a string it is sent verbatim. Sets `Content-Type: application/x-yaml`.",
+          "message": "Senden Sie den Body als YAML. Wenn der Body ein Hash ist, wird er zu YAML serialisiert; wenn er ein String ist, wird er wörtlich gesendet. Setzt `Content-Type: application/x-yaml`."
+        },
+        "app.VW5ib3VuY2U.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.display_name": {
+          "source": "YAML",
+          "message": "YAML"
+        },
+        "app.VW5ib3VuY2U.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.short_desc": {
+          "source": "Send body as YAML",
+          "message": "Body als YAML senden"
+        },
+        "app.VW5ib3VuY2U.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.desc": {
+          "source": "Selects the body serialization mode and the corresponding `Content-Type` header. Changing this field reshapes the `body` editor - selecting JSON exposes a JSON editor, selecting Multipart Form exposes a file picker, and so on.",
+          "message": "Wählt den Body-Serialisierungsmodus und den entsprechenden Header `Content-Type` aus. Das Ändern dieses Feldes passt den Editor `body` an – die Auswahl von JSON zeigt einen JSON-Editor an, die Auswahl von Multipart Form zeigt eine Dateiauswahl an usw."
+        },
+        "app.VW5ib3VuY2U.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.display_name": {
+          "source": "Body Type",
+          "message": "Body-Typ"
+        },
+        "app.VW5ib3VuY2U.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.short_desc": {
+          "source": "How the body is serialized and what Content-Type is sent",
+          "message": "Wie der Body serialisiert wird und welcher Content-Type gesendet wird"
+        },
+        "app.VW5ib3VuY2U.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.desc": {
+          "source": "If `True`, non-2xx HTTP responses return as the normal response hash (with the actual status code) instead of raising `REST-RESPONSE-ERROR`. Useful for handling 4xx/5xx as data - e.g. checking whether a resource exists. Overrides the connection's `error_passthru` setting for this call only.",
+          "message": "Wenn `True`, werden Nicht-2xx-HTTP-Antworten als normaler Antwort-Hash (mit dem tatsächlichen Statuscode) zurückgegeben, anstatt `REST-RESPONSE-ERROR` auszulösen. Nützlich für die Behandlung von 4xx/5xx als Daten – z. B. zum Überprüfen, ob eine Ressource existiert. Überschreibt die Einstellung `error_passthru` der Verbindung nur für diesen Aufruf."
+        },
+        "app.VW5ib3VuY2U.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.display_name": {
+          "source": "Return Errors as Data",
+          "message": "Fehler als Daten zurückgeben"
+        },
+        "app.VW5ib3VuY2U.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.short_desc": {
+          "source": "Return non-2xx responses normally instead of throwing",
+          "message": "Nicht-2xx-Antworten normal zurückgeben, anstatt eine Exception auszulösen"
+        },
+        "app.VW5ib3VuY2U.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.desc": {
+          "source": "Optional list of HTTP status codes treated as success. If set and the response status is not in this list, the action throws `REST-STATUS-ERROR`. When unset, the REST client's default behavior applies (typically: 2xx is success, non-2xx throws).",
+          "message": "Optionale Liste von HTTP-Statuscodes, die als Erfolg behandelt werden. Wenn festgelegt und der Antwortstatus nicht in dieser Liste enthalten ist, löst die Aktion `REST-STATUS-ERROR` aus. Wenn nicht festgelegt, gilt das Standardverhalten des REST-Clients (typischerweise: 2xx ist Erfolg, Nicht-2xx löst eine Exception aus)."
+        },
+        "app.VW5ib3VuY2U.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.display_name": {
+          "source": "Expected Status Codes",
+          "message": "Erwartete Statuscodes"
+        },
+        "app.VW5ib3VuY2U.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.short_desc": {
+          "source": "Response status codes treated as success",
+          "message": "Antwort-Statuscodes, die als Erfolg behandelt werden"
+        },
+        "app.VW5ib3VuY2U.action.bWFrZS1hcGktY2FsbA.option.aGRy.desc": {
+          "source": "Hash of custom headers added to the request. These override any default headers set by `body_type` (e.g. supplying `Content-Type` here wins over the body-type default).",
+          "message": "Hash benutzerdefinierter Header, die der Anfrage hinzugefügt werden. Diese überschreiben alle von `body_type` festgelegten Standard-Header (z. B. überschreibt die Angabe von `Content-Type` hier den Standard für den Body-Typ)."
+        },
+        "app.VW5ib3VuY2U.action.bWFrZS1hcGktY2FsbA.option.aGRy.display_name": {
+          "source": "Custom Headers",
+          "message": "Benutzerdefinierte Header"
+        },
+        "app.VW5ib3VuY2U.action.bWFrZS1hcGktY2FsbA.option.aGRy.short_desc": {
+          "source": "Extra request headers",
+          "message": "Zusätzliche Anfrage-Header"
+        },
+        "app.VW5ib3VuY2U.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.desc": {
+          "source": "If `True`, the response hash includes a `debug` sub-hash containing the request method/URL/headers (with sensitive values redacted), request and response sizes, and round-trip duration. Useful when investigating slow or failing calls. Off by default to keep responses lean.",
+          "message": "Wenn `True`, enthält der Antwort-Hash einen Sub-Hash `debug`, der die Anfragemethode/URL/Header (mit unkenntlich gemachten sensiblen Werten), Anfrage- und Antwortgrößen sowie die Verarbeitungsdauer enthält. Nützlich bei der Untersuchung langsamer oder fehlschlagender Aufrufe. Standardmäßig deaktiviert, um Antworten schlank zu halten."
+        },
+        "app.VW5ib3VuY2U.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.display_name": {
+          "source": "Include Debug Info",
+          "message": "Debug-Informationen einschließen"
+        },
+        "app.VW5ib3VuY2U.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.short_desc": {
+          "source": "Include request/timing/size debug info in the response",
+          "message": "Debug-Informationen zu Anfrage/Laufzeit/Größe in die Antwort einschließen"
+        },
+        "app.VW5ib3VuY2U.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.desc": {
+          "source": "HTTP `OPTIONS`",
+          "message": "HTTP `OPTIONS`"
+        },
+        "app.VW5ib3VuY2U.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.display_name": {
+          "source": "OPTIONS",
+          "message": "OPTIONS"
+        },
+        "app.VW5ib3VuY2U.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.short_desc": {
+          "source": "HTTP OPTIONS",
+          "message": "HTTP OPTIONS"
+        },
+        "app.VW5ib3VuY2U.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.desc": {
+          "source": "HTTP `DELETE`",
+          "message": "HTTP `DELETE`"
+        },
+        "app.VW5ib3VuY2U.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.display_name": {
+          "source": "DELETE",
+          "message": "DELETE"
+        },
+        "app.VW5ib3VuY2U.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.short_desc": {
+          "source": "HTTP DELETE",
+          "message": "HTTP DELETE"
+        },
+        "app.VW5ib3VuY2U.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.desc": {
+          "source": "HTTP `GET`",
+          "message": "HTTP `GET`"
+        },
+        "app.VW5ib3VuY2U.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.display_name": {
+          "source": "GET",
+          "message": "GET"
+        },
+        "app.VW5ib3VuY2U.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.short_desc": {
+          "source": "HTTP GET",
+          "message": "HTTP GET"
+        },
+        "app.VW5ib3VuY2U.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.desc": {
+          "source": "HTTP `HEAD`",
+          "message": "HTTP `HEAD`"
+        },
+        "app.VW5ib3VuY2U.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.display_name": {
+          "source": "HEAD",
+          "message": "HEAD"
+        },
+        "app.VW5ib3VuY2U.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.short_desc": {
+          "source": "HTTP HEAD",
+          "message": "HTTP HEAD"
+        },
+        "app.VW5ib3VuY2U.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.desc": {
+          "source": "HTTP `PATCH`",
+          "message": "HTTP `PATCH`"
+        },
+        "app.VW5ib3VuY2U.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.display_name": {
+          "source": "PATCH",
+          "message": "PATCH"
+        },
+        "app.VW5ib3VuY2U.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.short_desc": {
+          "source": "HTTP PATCH",
+          "message": "HTTP PATCH"
+        },
+        "app.VW5ib3VuY2U.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.desc": {
+          "source": "HTTP `POST`",
+          "message": "HTTP `POST`"
+        },
+        "app.VW5ib3VuY2U.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.display_name": {
+          "source": "POST",
+          "message": "POST"
+        },
+        "app.VW5ib3VuY2U.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.short_desc": {
+          "source": "HTTP POST",
+          "message": "HTTP POST"
+        },
+        "app.VW5ib3VuY2U.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.desc": {
+          "source": "HTTP `PUT`",
+          "message": "HTTP `PUT`"
+        },
+        "app.VW5ib3VuY2U.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.display_name": {
+          "source": "PUT",
+          "message": "PUT"
+        },
+        "app.VW5ib3VuY2U.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.short_desc": {
+          "source": "HTTP PUT",
+          "message": "HTTP PUT"
+        },
+        "app.VW5ib3VuY2U.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.desc": {
+          "source": "HTTP `TRACE`",
+          "message": "HTTP `TRACE`"
+        },
+        "app.VW5ib3VuY2U.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.display_name": {
+          "source": "TRACE",
+          "message": "TRACE"
+        },
+        "app.VW5ib3VuY2U.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.short_desc": {
+          "source": "HTTP TRACE",
+          "message": "HTTP TRACE"
+        },
+        "app.VW5ib3VuY2U.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "Die für die Anfrage zu verwendende HTTP-Methode"
+        },
+        "app.VW5ib3VuY2U.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.display_name": {
+          "source": "HTTP Method",
+          "message": "HTTP-Methode"
+        },
+        "app.VW5ib3VuY2U.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.short_desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "Die für die Anfrage zu verwendende HTTP-Methode"
+        },
+        "app.VW5ib3VuY2U.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain `{name}` placeholders that are replaced from `path_vars`. Example: `/users/{id}/comments`.",
+          "message": "Der URI-Pfad relativ zur API-Basis-URL der Verbindung. Kann `{name}`-Platzhalter enthalten, die aus `path_vars` ersetzt werden. Beispiel: `/users/{id}/comments`."
+        },
+        "app.VW5ib3VuY2U.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.display_name": {
+          "source": "URI Path",
+          "message": "URI-Pfad"
+        },
+        "app.VW5ib3VuY2U.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.short_desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain '{name}' placeholders that are replaced from 'path_vars'. Example: '/users/{id}/comments'",
+          "message": "Der URI-Pfad relativ zur API-Basis-URL der Verbindung. Kann '{name}'-Platzhalter enthalten, die aus 'path_vars' ersetzt werden. Beispiel: '/users/{id}/comments'"
+        },
+        "app.VW5ib3VuY2U.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.desc": {
+          "source": "Hash of values substituted into `{name}` placeholders in the URI path. Example: with `path = /users/{id}` and `path_vars = {id: 123}` the framework sends `/users/123`. Values are URL-encoded.",
+          "message": "Hash von Werten, die in `{name}`-Platzhalter im URI-Pfad eingesetzt werden. Beispiel: Bei `path = /users/{id}` und `path_vars = {id: 123}` sendet das Framework `/users/123`. Werte werden URL-codiert."
+        },
+        "app.VW5ib3VuY2U.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.display_name": {
+          "source": "Path Variables",
+          "message": "Pfadvariablen"
+        },
+        "app.VW5ib3VuY2U.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.short_desc": {
+          "source": "Values for {name} placeholders in path",
+          "message": "Werte für {name}-Platzhalter im Pfad"
+        },
+        "app.VW5ib3VuY2U.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.desc": {
+          "source": "Hash of query string parameters to append to the URI path. Values are URL-encoded; list values are joined with `,`.",
+          "message": "Hash von Abfragezeichenfolgen-Parametern, die an den URI-Pfad angehängt werden sollen. Werte werden URL-codiert; Listenwerte werden mit `,` zusammengefügt."
+        },
+        "app.VW5ib3VuY2U.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.display_name": {
+          "source": "Query Arguments",
+          "message": "Abfrageargumente"
+        },
+        "app.VW5ib3VuY2U.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.short_desc": {
+          "source": "Query string parameters",
+          "message": "Abfragezeichenfolgen-Parameter"
+        },
+        "app.VW5ib3VuY2U.action.bWFrZS1hcGktY2FsbA.short_desc": {
+          "source": "Make a custom API call to Unbounce",
+          "message": "Benutzerdefinierten API-Aufruf an Unbounce ausführen"
+        },
+        "app.VW5ib3VuY2U.desc": {
+          "source": "Unbounce is a landing page builder and conversion optimization platform.\n\nThis integration supports listing accounts, sub-accounts, domains, pages, page groups, leads, and users, as well as creating and deleting leads, managing lead deletion requests, and watching for new leads via polling.",
+          "message": "Unbounce ist ein Landingpage-Builder und eine Plattform zur Conversion-Optimierung.\n\nDiese Integration unterstützt das Auflisten von Accounts, Unter-Accounts, Domains, Seiten, Seitengruppen, Leads und Benutzern sowie das Erstellen und Löschen von Leads, das Verwalten von Lead-Löschanfragen und das Überwachen neuer Leads per Polling."
+        },
+        "app.VW5ib3VuY2U.display_name": {
+          "source": "Unbounce",
+          "message": "Unbounce"
+        },
+        "app.VW5ib3VuY2U.short_desc": {
+          "source": "Unbounce landing page and lead management platform",
+          "message": "Unbounce-Landingpage- und Lead-Management-Plattform"
+        }
+      }
+    }
+  }
+}

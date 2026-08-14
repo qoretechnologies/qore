@@ -1,0 +1,2581 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "pl": {
+      "messages": {
+        "app.Q3VzdG9tZXJJbw.action.Y3JlYXRlLWNvbGxlY3Rpb24.desc": {
+          "source": "Create a new collection in Customer.io for storing and managing data.",
+          "message": "Utwórz nową kolekcję w Customer.io do przechowywania danych i zarządzania nimi."
+        },
+        "app.Q3VzdG9tZXJJbw.action.Y3JlYXRlLWNvbGxlY3Rpb24.display_name": {
+          "source": "Create Collection",
+          "message": "Utwórz kolekcję"
+        },
+        "app.Q3VzdG9tZXJJbw.action.Y3JlYXRlLWNvbGxlY3Rpb24.option.ZGF0YQ.desc": {
+          "source": "The data array for the collection",
+          "message": "Tablica danych dla kolekcji"
+        },
+        "app.Q3VzdG9tZXJJbw.action.Y3JlYXRlLWNvbGxlY3Rpb24.option.ZGF0YQ.display_name": {
+          "source": "Data",
+          "message": "Dane"
+        },
+        "app.Q3VzdG9tZXJJbw.action.Y3JlYXRlLWNvbGxlY3Rpb24.option.ZGF0YQ.short_desc": {
+          "source": "Collection data array",
+          "message": "Tablica danych kolekcji"
+        },
+        "app.Q3VzdG9tZXJJbw.action.Y3JlYXRlLWNvbGxlY3Rpb24.option.bmFtZQ.desc": {
+          "source": "The name for the new collection",
+          "message": "Nazwa nowej kolekcji"
+        },
+        "app.Q3VzdG9tZXJJbw.action.Y3JlYXRlLWNvbGxlY3Rpb24.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "Nazwa"
+        },
+        "app.Q3VzdG9tZXJJbw.action.Y3JlYXRlLWNvbGxlY3Rpb24.option.bmFtZQ.short_desc": {
+          "source": "Collection name",
+          "message": "Nazwa kolekcji"
+        },
+        "app.Q3VzdG9tZXJJbw.action.Y3JlYXRlLWNvbGxlY3Rpb24.option.dXJs.desc": {
+          "source": "URL for an external data source for the collection",
+          "message": "Adres URL zewnętrznego źródła danych dla kolekcji"
+        },
+        "app.Q3VzdG9tZXJJbw.action.Y3JlYXRlLWNvbGxlY3Rpb24.option.dXJs.display_name": {
+          "source": "URL",
+          "message": "URL"
+        },
+        "app.Q3VzdG9tZXJJbw.action.Y3JlYXRlLWNvbGxlY3Rpb24.option.dXJs.short_desc": {
+          "source": "URL for external data source",
+          "message": "Adres URL zewnętrznego źródła danych"
+        },
+        "app.Q3VzdG9tZXJJbw.action.Y3JlYXRlLWNvbGxlY3Rpb24.short_desc": {
+          "source": "Create a new collection",
+          "message": "Utwórz nową kolekcję"
+        },
+        "app.Q3VzdG9tZXJJbw.action.Y3JlYXRlLWV4cG9ydA.desc": {
+          "source": "Create a new data export in Customer.io for customers or deliveries.",
+          "message": "Utwórz nowy eksport danych w Customer.io dla klientów lub dostaw."
+        },
+        "app.Q3VzdG9tZXJJbw.action.Y3JlYXRlLWV4cG9ydA.display_name": {
+          "source": "Create Export",
+          "message": "Utwórz eksport"
+        },
+        "app.Q3VzdG9tZXJJbw.action.Y3JlYXRlLWV4cG9ydA.option.ZXhwb3J0X3R5cGU.allowed-value.c3RyaW5nOmN1c3RvbWVycw.desc": {
+          "source": "Export customers",
+          "message": "Eksportuj klientów"
+        },
+        "app.Q3VzdG9tZXJJbw.action.Y3JlYXRlLWV4cG9ydA.option.ZXhwb3J0X3R5cGU.allowed-value.c3RyaW5nOmRlbGl2ZXJpZXM.desc": {
+          "source": "Export deliveries",
+          "message": "Eksportuj dostawy"
+        },
+        "app.Q3VzdG9tZXJJbw.action.Y3JlYXRlLWV4cG9ydA.option.ZXhwb3J0X3R5cGU.desc": {
+          "source": "The type of export to create (customers or deliveries)",
+          "message": "Typ eksportu do utworzenia (klienci lub dostawy)"
+        },
+        "app.Q3VzdG9tZXJJbw.action.Y3JlYXRlLWV4cG9ydA.option.ZXhwb3J0X3R5cGU.display_name": {
+          "source": "Export Type",
+          "message": "Typ eksportu"
+        },
+        "app.Q3VzdG9tZXJJbw.action.Y3JlYXRlLWV4cG9ydA.option.ZXhwb3J0X3R5cGU.short_desc": {
+          "source": "Export type",
+          "message": "Typ eksportu"
+        },
+        "app.Q3VzdG9tZXJJbw.action.Y3JlYXRlLWV4cG9ydA.option.ZmlsdGVycw.desc": {
+          "source": "Filters to apply to the export",
+          "message": "Filtry do zastosowania w eksporcie"
+        },
+        "app.Q3VzdG9tZXJJbw.action.Y3JlYXRlLWV4cG9ydA.option.ZmlsdGVycw.display_name": {
+          "source": "Filters",
+          "message": "Filtry"
+        },
+        "app.Q3VzdG9tZXJJbw.action.Y3JlYXRlLWV4cG9ydA.option.ZmlsdGVycw.short_desc": {
+          "source": "Export filters",
+          "message": "Filtry eksportu"
+        },
+        "app.Q3VzdG9tZXJJbw.action.Y3JlYXRlLWV4cG9ydA.short_desc": {
+          "source": "Create a data export",
+          "message": "Utwórz eksport danych"
+        },
+        "app.Q3VzdG9tZXJJbw.action.Y3JlYXRlLXNuaXBwZXQ.desc": {
+          "source": "Create a new snippet in Customer.io for reusable content in messages.",
+          "message": "Utwórz nowy fragment w Customer.io dla treści wielokrotnego użytku w wiadomościach."
+        },
+        "app.Q3VzdG9tZXJJbw.action.Y3JlYXRlLXNuaXBwZXQ.display_name": {
+          "source": "Create Snippet",
+          "message": "Utwórz fragment"
+        },
+        "app.Q3VzdG9tZXJJbw.action.Y3JlYXRlLXNuaXBwZXQ.option.bmFtZQ.desc": {
+          "source": "The unique name for the new snippet",
+          "message": "Unikalna nazwa nowego fragmentu"
+        },
+        "app.Q3VzdG9tZXJJbw.action.Y3JlYXRlLXNuaXBwZXQ.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "Nazwa"
+        },
+        "app.Q3VzdG9tZXJJbw.action.Y3JlYXRlLXNuaXBwZXQ.option.bmFtZQ.short_desc": {
+          "source": "Snippet name",
+          "message": "Nazwa fragmentu"
+        },
+        "app.Q3VzdG9tZXJJbw.action.Y3JlYXRlLXNuaXBwZXQ.option.dmFsdWU.desc": {
+          "source": "The content of the snippet",
+          "message": "Treść fragmentu"
+        },
+        "app.Q3VzdG9tZXJJbw.action.Y3JlYXRlLXNuaXBwZXQ.option.dmFsdWU.display_name": {
+          "source": "Value",
+          "message": "Wartość"
+        },
+        "app.Q3VzdG9tZXJJbw.action.Y3JlYXRlLXNuaXBwZXQ.option.dmFsdWU.short_desc": {
+          "source": "Snippet content",
+          "message": "Treść fragmentu"
+        },
+        "app.Q3VzdG9tZXJJbw.action.Y3JlYXRlLXNuaXBwZXQ.short_desc": {
+          "source": "Create a new snippet",
+          "message": "Utwórz nowy fragment"
+        },
+        "app.Q3VzdG9tZXJJbw.action.Y3JlYXRlLXVwZGF0ZS1jdXN0b21lcg.desc": {
+          "source": "Create a new customer or update an existing customer in Customer.io via the Track API. Sets the customer's email, attributes, and other properties.",
+          "message": "Utwórz nowego klienta lub zaktualizuj istniejącego klienta w Customer.io za pośrednictwem Track API. Ustawia adres e-mail, atrybuty i inne właściwości klienta."
+        },
+        "app.Q3VzdG9tZXJJbw.action.Y3JlYXRlLXVwZGF0ZS1jdXN0b21lcg.display_name": {
+          "source": "Create/Update Customer",
+          "message": "Utwórz/zaktualizuj klienta"
+        },
+        "app.Q3VzdG9tZXJJbw.action.Y3JlYXRlLXVwZGF0ZS1jdXN0b21lcg.option.Y3JlYXRlZF9hdA.desc": {
+          "source": "Unix timestamp when customer was created",
+          "message": "Znacznik czasu Unix utworzenia klienta"
+        },
+        "app.Q3VzdG9tZXJJbw.action.Y3JlYXRlLXVwZGF0ZS1jdXN0b21lcg.option.Y3JlYXRlZF9hdA.display_name": {
+          "source": "Created At",
+          "message": "Data utworzenia"
+        },
+        "app.Q3VzdG9tZXJJbw.action.Y3JlYXRlLXVwZGF0ZS1jdXN0b21lcg.option.Y3JlYXRlZF9hdA.short_desc": {
+          "source": "Unix timestamp when customer was created",
+          "message": "Znacznik czasu Unix utworzenia klienta"
+        },
+        "app.Q3VzdG9tZXJJbw.action.Y3JlYXRlLXVwZGF0ZS1jdXN0b21lcg.option.Y3VzdG9tZXJfaWQ.desc": {
+          "source": "The unique customer identifier",
+          "message": "Unikalny identyfikator klienta"
+        },
+        "app.Q3VzdG9tZXJJbw.action.Y3JlYXRlLXVwZGF0ZS1jdXN0b21lcg.option.Y3VzdG9tZXJfaWQ.display_name": {
+          "source": "Customer ID",
+          "message": "Identyfikator klienta"
+        },
+        "app.Q3VzdG9tZXJJbw.action.Y3JlYXRlLXVwZGF0ZS1jdXN0b21lcg.option.Y3VzdG9tZXJfaWQ.short_desc": {
+          "source": "The unique customer identifier",
+          "message": "Unikalny identyfikator klienta"
+        },
+        "app.Q3VzdG9tZXJJbw.action.Y3JlYXRlLXVwZGF0ZS1jdXN0b21lcg.option.YXR0cmlidXRlcw.desc": {
+          "source": "Custom attributes to set on the customer",
+          "message": "Niestandardowe atrybuty do ustawienia dla klienta"
+        },
+        "app.Q3VzdG9tZXJJbw.action.Y3JlYXRlLXVwZGF0ZS1jdXN0b21lcg.option.YXR0cmlidXRlcw.display_name": {
+          "source": "Attributes",
+          "message": "Atrybuty"
+        },
+        "app.Q3VzdG9tZXJJbw.action.Y3JlYXRlLXVwZGF0ZS1jdXN0b21lcg.option.YXR0cmlidXRlcw.short_desc": {
+          "source": "Custom attributes to set on the customer",
+          "message": "Niestandardowe atrybuty do ustawienia dla klienta"
+        },
+        "app.Q3VzdG9tZXJJbw.action.Y3JlYXRlLXVwZGF0ZS1jdXN0b21lcg.option.ZW1haWw.desc": {
+          "source": "Customer email address",
+          "message": "Adres e-mail klienta"
+        },
+        "app.Q3VzdG9tZXJJbw.action.Y3JlYXRlLXVwZGF0ZS1jdXN0b21lcg.option.ZW1haWw.display_name": {
+          "source": "Email",
+          "message": "E-mail"
+        },
+        "app.Q3VzdG9tZXJJbw.action.Y3JlYXRlLXVwZGF0ZS1jdXN0b21lcg.option.ZW1haWw.short_desc": {
+          "source": "Customer email address",
+          "message": "Adres e-mail klienta"
+        },
+        "app.Q3VzdG9tZXJJbw.action.Y3JlYXRlLXVwZGF0ZS1jdXN0b21lcg.short_desc": {
+          "source": "Create or update a customer",
+          "message": "Utwórz lub zaktualizuj klienta"
+        },
+        "app.Q3VzdG9tZXJJbw.action.Y3JlYXRlLXVwZGF0ZS1vYmplY3Q.desc": {
+          "source": "Create or update a custom object in Customer.io via the Track API.",
+          "message": "Utwórz lub zaktualizuj obiekt niestandardowy w Customer.io za pośrednictwem Track API."
+        },
+        "app.Q3VzdG9tZXJJbw.action.Y3JlYXRlLXVwZGF0ZS1vYmplY3Q.display_name": {
+          "source": "Create/Update Object",
+          "message": "Utwórz/zaktualizuj obiekt"
+        },
+        "app.Q3VzdG9tZXJJbw.action.Y3JlYXRlLXVwZGF0ZS1vYmplY3Q.option.YXR0cmlidXRlcw.desc": {
+          "source": "Custom attributes to set on the object",
+          "message": "Niestandardowe atrybuty do ustawienia dla obiektu"
+        },
+        "app.Q3VzdG9tZXJJbw.action.Y3JlYXRlLXVwZGF0ZS1vYmplY3Q.option.YXR0cmlidXRlcw.display_name": {
+          "source": "Attributes",
+          "message": "Atrybuty"
+        },
+        "app.Q3VzdG9tZXJJbw.action.Y3JlYXRlLXVwZGF0ZS1vYmplY3Q.option.YXR0cmlidXRlcw.short_desc": {
+          "source": "Custom attributes to set",
+          "message": "Niestandardowe atrybuty do ustawienia"
+        },
+        "app.Q3VzdG9tZXJJbw.action.Y3JlYXRlLXVwZGF0ZS1vYmplY3Q.option.b2JqZWN0X2lk.desc": {
+          "source": "The object identifier",
+          "message": "Identyfikator obiektu"
+        },
+        "app.Q3VzdG9tZXJJbw.action.Y3JlYXRlLXVwZGF0ZS1vYmplY3Q.option.b2JqZWN0X2lk.display_name": {
+          "source": "Object ID",
+          "message": "Identyfikator obiektu"
+        },
+        "app.Q3VzdG9tZXJJbw.action.Y3JlYXRlLXVwZGF0ZS1vYmplY3Q.option.b2JqZWN0X2lk.short_desc": {
+          "source": "The object identifier",
+          "message": "Identyfikator obiektu"
+        },
+        "app.Q3VzdG9tZXJJbw.action.Y3JlYXRlLXVwZGF0ZS1vYmplY3Q.option.b2JqZWN0X3R5cGVfaWQ.desc": {
+          "source": "The object type identifier",
+          "message": "Identyfikator typu obiektu"
+        },
+        "app.Q3VzdG9tZXJJbw.action.Y3JlYXRlLXVwZGF0ZS1vYmplY3Q.option.b2JqZWN0X3R5cGVfaWQ.display_name": {
+          "source": "Object Type ID",
+          "message": "Identyfikator typu obiektu"
+        },
+        "app.Q3VzdG9tZXJJbw.action.Y3JlYXRlLXVwZGF0ZS1vYmplY3Q.option.b2JqZWN0X3R5cGVfaWQ.short_desc": {
+          "source": "The object type identifier",
+          "message": "Identyfikator typu obiektu"
+        },
+        "app.Q3VzdG9tZXJJbw.action.Y3JlYXRlLXVwZGF0ZS1vYmplY3Q.short_desc": {
+          "source": "Create or update an object",
+          "message": "Utwórz lub zaktualizuj obiekt"
+        },
+        "app.Q3VzdG9tZXJJbw.action.YWRkLWRldmljZQ.desc": {
+          "source": "Add a mobile device to a customer in Customer.io for push notification targeting.",
+          "message": "Dodaj urządzenie mobilne do klienta w Customer.io w celu targetowania powiadomień push."
+        },
+        "app.Q3VzdG9tZXJJbw.action.YWRkLWRldmljZQ.display_name": {
+          "source": "Add Device",
+          "message": "Dodaj urządzenie"
+        },
+        "app.Q3VzdG9tZXJJbw.action.YWRkLWRldmljZQ.option.Y3VzdG9tZXJfaWQ.desc": {
+          "source": "The unique customer identifier",
+          "message": "Unikalny identyfikator klienta"
+        },
+        "app.Q3VzdG9tZXJJbw.action.YWRkLWRldmljZQ.option.Y3VzdG9tZXJfaWQ.display_name": {
+          "source": "Customer ID",
+          "message": "Identyfikator klienta"
+        },
+        "app.Q3VzdG9tZXJJbw.action.YWRkLWRldmljZQ.option.Y3VzdG9tZXJfaWQ.short_desc": {
+          "source": "The unique customer identifier",
+          "message": "Unikalny identyfikator klienta"
+        },
+        "app.Q3VzdG9tZXJJbw.action.YWRkLWRldmljZQ.option.YXR0cmlidXRlcw.desc": {
+          "source": "Device attributes",
+          "message": "Atrybuty urządzenia"
+        },
+        "app.Q3VzdG9tZXJJbw.action.YWRkLWRldmljZQ.option.YXR0cmlidXRlcw.display_name": {
+          "source": "Attributes",
+          "message": "Atrybuty"
+        },
+        "app.Q3VzdG9tZXJJbw.action.YWRkLWRldmljZQ.option.YXR0cmlidXRlcw.short_desc": {
+          "source": "Device attributes",
+          "message": "Atrybuty urządzenia"
+        },
+        "app.Q3VzdG9tZXJJbw.action.YWRkLWRldmljZQ.option.ZGV2aWNlX2lk.desc": {
+          "source": "The device token",
+          "message": "Token urządzenia"
+        },
+        "app.Q3VzdG9tZXJJbw.action.YWRkLWRldmljZQ.option.ZGV2aWNlX2lk.display_name": {
+          "source": "Device ID",
+          "message": "Identyfikator urządzenia"
+        },
+        "app.Q3VzdG9tZXJJbw.action.YWRkLWRldmljZQ.option.ZGV2aWNlX2lk.short_desc": {
+          "source": "The device token",
+          "message": "Token urządzenia"
+        },
+        "app.Q3VzdG9tZXJJbw.action.YWRkLWRldmljZQ.option.bGFzdF91c2Vk.desc": {
+          "source": "Unix timestamp of last device use",
+          "message": "Znacznik czasu Unix ostatniego użycia urządzenia"
+        },
+        "app.Q3VzdG9tZXJJbw.action.YWRkLWRldmljZQ.option.bGFzdF91c2Vk.display_name": {
+          "source": "Last Used",
+          "message": "Ostatnio użyte"
+        },
+        "app.Q3VzdG9tZXJJbw.action.YWRkLWRldmljZQ.option.bGFzdF91c2Vk.short_desc": {
+          "source": "Unix timestamp of last device use",
+          "message": "Znacznik czasu Unix ostatniego użycia urządzenia"
+        },
+        "app.Q3VzdG9tZXJJbw.action.YWRkLWRldmljZQ.option.cGxhdGZvcm0.allowed-value.c3RyaW5nOmFuZHJvaWQ.desc": {
+          "source": "Android device",
+          "message": "Urządzenie z systemem Android"
+        },
+        "app.Q3VzdG9tZXJJbw.action.YWRkLWRldmljZQ.option.cGxhdGZvcm0.allowed-value.c3RyaW5nOmlvcw.desc": {
+          "source": "iOS device",
+          "message": "Urządzenie z systemem iOS"
+        },
+        "app.Q3VzdG9tZXJJbw.action.YWRkLWRldmljZQ.option.cGxhdGZvcm0.desc": {
+          "source": "Device platform (ios or android)",
+          "message": "Platforma urządzenia (ios lub android)"
+        },
+        "app.Q3VzdG9tZXJJbw.action.YWRkLWRldmljZQ.option.cGxhdGZvcm0.display_name": {
+          "source": "Platform",
+          "message": "Platforma"
+        },
+        "app.Q3VzdG9tZXJJbw.action.YWRkLWRldmljZQ.option.cGxhdGZvcm0.short_desc": {
+          "source": "Device platform",
+          "message": "Platforma urządzenia"
+        },
+        "app.Q3VzdG9tZXJJbw.action.YWRkLWRldmljZQ.short_desc": {
+          "source": "Add a device to a customer",
+          "message": "Dodaj urządzenie do klienta"
+        },
+        "app.Q3VzdG9tZXJJbw.action.YWRkLXJlbGF0aW9uc2hpcHM.desc": {
+          "source": "Add relationships between an object and people in Customer.io via the Track API.",
+          "message": "Dodaj relacje między obiektem a osobami w Customer.io za pośrednictwem Track API."
+        },
+        "app.Q3VzdG9tZXJJbw.action.YWRkLXJlbGF0aW9uc2hpcHM.display_name": {
+          "source": "Add Relationships",
+          "message": "Dodaj relacje"
+        },
+        "app.Q3VzdG9tZXJJbw.action.YWRkLXJlbGF0aW9uc2hpcHM.option.aWRlbnRpZmllcnM.desc": {
+          "source": "List of identifier hashes, each with 'identifier' and optionally 'relationship_attributes'",
+          "message": "Lista hashy identyfikatorów, z których każdy zawiera 'identifier' i opcjonalnie 'relationship_attributes'"
+        },
+        "app.Q3VzdG9tZXJJbw.action.YWRkLXJlbGF0aW9uc2hpcHM.option.aWRlbnRpZmllcnM.display_name": {
+          "source": "Identifiers",
+          "message": "Identyfikatory"
+        },
+        "app.Q3VzdG9tZXJJbw.action.YWRkLXJlbGF0aW9uc2hpcHM.option.aWRlbnRpZmllcnM.short_desc": {
+          "source": "List of identifier hashes",
+          "message": "Lista hashy identyfikatorów"
+        },
+        "app.Q3VzdG9tZXJJbw.action.YWRkLXJlbGF0aW9uc2hpcHM.option.b2JqZWN0X2lk.desc": {
+          "source": "The object identifier",
+          "message": "Identyfikator obiektu"
+        },
+        "app.Q3VzdG9tZXJJbw.action.YWRkLXJlbGF0aW9uc2hpcHM.option.b2JqZWN0X2lk.display_name": {
+          "source": "Object ID",
+          "message": "Identyfikator obiektu"
+        },
+        "app.Q3VzdG9tZXJJbw.action.YWRkLXJlbGF0aW9uc2hpcHM.option.b2JqZWN0X2lk.short_desc": {
+          "source": "The object identifier",
+          "message": "Identyfikator obiektu"
+        },
+        "app.Q3VzdG9tZXJJbw.action.YWRkLXJlbGF0aW9uc2hpcHM.option.b2JqZWN0X3R5cGVfaWQ.desc": {
+          "source": "The object type identifier",
+          "message": "Identyfikator typu obiektu"
+        },
+        "app.Q3VzdG9tZXJJbw.action.YWRkLXJlbGF0aW9uc2hpcHM.option.b2JqZWN0X3R5cGVfaWQ.display_name": {
+          "source": "Object Type ID",
+          "message": "Identyfikator typu obiektu"
+        },
+        "app.Q3VzdG9tZXJJbw.action.YWRkLXJlbGF0aW9uc2hpcHM.option.b2JqZWN0X3R5cGVfaWQ.short_desc": {
+          "source": "The object type identifier",
+          "message": "Identyfikator typu obiektu"
+        },
+        "app.Q3VzdG9tZXJJbw.action.YWRkLXJlbGF0aW9uc2hpcHM.short_desc": {
+          "source": "Add relationships between an object and people",
+          "message": "Dodaj relacje między obiektem a osobami"
+        },
+        "app.Q3VzdG9tZXJJbw.action.Z2V0LW1lc3NhZ2U.desc": {
+          "source": "Retrieve a message's details from Customer.io by message ID.",
+          "message": "Pobierz szczegóły wiadomości z Customer.io według identyfikatora wiadomości."
+        },
+        "app.Q3VzdG9tZXJJbw.action.Z2V0LW1lc3NhZ2U.display_name": {
+          "source": "Get Message",
+          "message": "Pobierz wiadomość"
+        },
+        "app.Q3VzdG9tZXJJbw.action.Z2V0LW1lc3NhZ2U.option.bWVzc2FnZV9pZA.desc": {
+          "source": "The unique Customer.io message ID",
+          "message": "Unikalny identyfikator wiadomości w Customer.io"
+        },
+        "app.Q3VzdG9tZXJJbw.action.Z2V0LW1lc3NhZ2U.option.bWVzc2FnZV9pZA.display_name": {
+          "source": "Message ID",
+          "message": "Identyfikator wiadomości"
+        },
+        "app.Q3VzdG9tZXJJbw.action.Z2V0LW1lc3NhZ2U.option.bWVzc2FnZV9pZA.short_desc": {
+          "source": "The message ID to retrieve",
+          "message": "Identyfikator wiadomości do pobrania"
+        },
+        "app.Q3VzdG9tZXJJbw.action.Z2V0LW1lc3NhZ2U.short_desc": {
+          "source": "Get a message by ID",
+          "message": "Pobierz wiadomość według identyfikatora"
+        },
+        "app.Q3VzdG9tZXJJbw.action.Z2V0LW5ld3NsZXR0ZXI.desc": {
+          "source": "Retrieve a newsletter's details from Customer.io by newsletter ID.",
+          "message": "Pobierz szczegóły newslettera z Customer.io według identyfikatora newslettera."
+        },
+        "app.Q3VzdG9tZXJJbw.action.Z2V0LW5ld3NsZXR0ZXI.display_name": {
+          "source": "Get Newsletter",
+          "message": "Pobierz newsletter"
+        },
+        "app.Q3VzdG9tZXJJbw.action.Z2V0LW5ld3NsZXR0ZXI.option.bmV3c2xldHRlcl9pZA.desc": {
+          "source": "The unique Customer.io newsletter ID",
+          "message": "Unikalny identyfikator newslettera w Customer.io"
+        },
+        "app.Q3VzdG9tZXJJbw.action.Z2V0LW5ld3NsZXR0ZXI.option.bmV3c2xldHRlcl9pZA.display_name": {
+          "source": "Newsletter ID",
+          "message": "Identyfikator newslettera"
+        },
+        "app.Q3VzdG9tZXJJbw.action.Z2V0LW5ld3NsZXR0ZXI.option.bmV3c2xldHRlcl9pZA.short_desc": {
+          "source": "The newsletter ID to retrieve",
+          "message": "Identyfikator newslettera do pobrania"
+        },
+        "app.Q3VzdG9tZXJJbw.action.Z2V0LW5ld3NsZXR0ZXI.short_desc": {
+          "source": "Get a newsletter by ID",
+          "message": "Pobierz newsletter według identyfikatora"
+        },
+        "app.Q3VzdG9tZXJJbw.action.Z2V0LWJyb2FkY2FzdA.desc": {
+          "source": "Retrieve a broadcast's details from Customer.io by broadcast ID.",
+          "message": "Pobierz szczegóły transmisji z Customer.io według identyfikatora transmisji."
+        },
+        "app.Q3VzdG9tZXJJbw.action.Z2V0LWJyb2FkY2FzdA.display_name": {
+          "source": "Get Broadcast",
+          "message": "Pobierz transmisję"
+        },
+        "app.Q3VzdG9tZXJJbw.action.Z2V0LWJyb2FkY2FzdA.option.YnJvYWRjYXN0X2lk.desc": {
+          "source": "The unique Customer.io broadcast ID",
+          "message": "Unikalny identyfikator transmisji w Customer.io"
+        },
+        "app.Q3VzdG9tZXJJbw.action.Z2V0LWJyb2FkY2FzdA.option.YnJvYWRjYXN0X2lk.display_name": {
+          "source": "Broadcast ID",
+          "message": "Identyfikator transmisji"
+        },
+        "app.Q3VzdG9tZXJJbw.action.Z2V0LWJyb2FkY2FzdA.option.YnJvYWRjYXN0X2lk.short_desc": {
+          "source": "The broadcast ID to retrieve",
+          "message": "Identyfikator transmisji do pobrania"
+        },
+        "app.Q3VzdG9tZXJJbw.action.Z2V0LWJyb2FkY2FzdA.short_desc": {
+          "source": "Get a broadcast by ID",
+          "message": "Pobierz transmisję według identyfikatora"
+        },
+        "app.Q3VzdG9tZXJJbw.action.Z2V0LWNhbXBhaWdu.desc": {
+          "source": "Retrieve a campaign's details from Customer.io by campaign ID.",
+          "message": "Pobierz szczegóły kampanii z Customer.io według identyfikatora kampanii."
+        },
+        "app.Q3VzdG9tZXJJbw.action.Z2V0LWNhbXBhaWdu.display_name": {
+          "source": "Get Campaign",
+          "message": "Pobierz kampanię"
+        },
+        "app.Q3VzdG9tZXJJbw.action.Z2V0LWNhbXBhaWdu.option.Y2FtcGFpZ25faWQ.desc": {
+          "source": "The unique Customer.io campaign ID",
+          "message": "Unikalny identyfikator kampanii w Customer.io"
+        },
+        "app.Q3VzdG9tZXJJbw.action.Z2V0LWNhbXBhaWdu.option.Y2FtcGFpZ25faWQ.display_name": {
+          "source": "Campaign ID",
+          "message": "ID kampanii"
+        },
+        "app.Q3VzdG9tZXJJbw.action.Z2V0LWNhbXBhaWdu.option.Y2FtcGFpZ25faWQ.short_desc": {
+          "source": "The campaign ID to retrieve",
+          "message": "Identyfikator kampanii do pobrania"
+        },
+        "app.Q3VzdG9tZXJJbw.action.Z2V0LWNhbXBhaWdu.short_desc": {
+          "source": "Get a campaign by ID",
+          "message": "Pobierz kampanię według identyfikatora"
+        },
+        "app.Q3VzdG9tZXJJbw.action.Z2V0LWNhbXBhaWduLW1ldHJpY3M.desc": {
+          "source": "Retrieve metrics and performance data for a Customer.io campaign.",
+          "message": "Pobierz metryki i dane dotyczące wydajności dla kampanii Customer.io."
+        },
+        "app.Q3VzdG9tZXJJbw.action.Z2V0LWNhbXBhaWduLW1ldHJpY3M.display_name": {
+          "source": "Get Campaign Metrics",
+          "message": "Pobierz metryki kampanii"
+        },
+        "app.Q3VzdG9tZXJJbw.action.Z2V0LWNhbXBhaWduLW1ldHJpY3M.option.Y2FtcGFpZ25faWQ.desc": {
+          "source": "The unique Customer.io campaign ID to get metrics for",
+          "message": "Unikalny identyfikator kampanii w Customer.io, dla której mają zostać pobrane metryki"
+        },
+        "app.Q3VzdG9tZXJJbw.action.Z2V0LWNhbXBhaWduLW1ldHJpY3M.option.Y2FtcGFpZ25faWQ.display_name": {
+          "source": "Campaign ID",
+          "message": "ID kampanii"
+        },
+        "app.Q3VzdG9tZXJJbw.action.Z2V0LWNhbXBhaWduLW1ldHJpY3M.option.Y2FtcGFpZ25faWQ.short_desc": {
+          "source": "The campaign ID",
+          "message": "Identyfikator kampanii"
+        },
+        "app.Q3VzdG9tZXJJbw.action.Z2V0LWNhbXBhaWduLW1ldHJpY3M.option.cGVyaW9k.desc": {
+          "source": "The period for metrics aggregation",
+          "message": "Okres agregacji metryk"
+        },
+        "app.Q3VzdG9tZXJJbw.action.Z2V0LWNhbXBhaWduLW1ldHJpY3M.option.cGVyaW9k.display_name": {
+          "source": "Period",
+          "message": "Okres"
+        },
+        "app.Q3VzdG9tZXJJbw.action.Z2V0LWNhbXBhaWduLW1ldHJpY3M.option.cGVyaW9k.short_desc": {
+          "source": "Metrics period",
+          "message": "Okres metryk"
+        },
+        "app.Q3VzdG9tZXJJbw.action.Z2V0LWNhbXBhaWduLW1ldHJpY3M.short_desc": {
+          "source": "Get metrics for a campaign",
+          "message": "Pobierz metryki dla kampanii"
+        },
+        "app.Q3VzdG9tZXJJbw.action.Z2V0LWNhbXBhaWduLWFjdGlvbnM.desc": {
+          "source": "Retrieve the list of actions (messages) configured for a Customer.io campaign.",
+          "message": "Pobierz listę akcji (wiadomości) skonfigurowanych dla kampanii Customer.io."
+        },
+        "app.Q3VzdG9tZXJJbw.action.Z2V0LWNhbXBhaWduLWFjdGlvbnM.display_name": {
+          "source": "Get Campaign Actions",
+          "message": "Pobierz akcje kampanii"
+        },
+        "app.Q3VzdG9tZXJJbw.action.Z2V0LWNhbXBhaWduLWFjdGlvbnM.option.Y2FtcGFpZ25faWQ.desc": {
+          "source": "The unique Customer.io campaign ID to get actions for",
+          "message": "Unikalny identyfikator kampanii w Customer.io, dla której mają zostać pobrane akcje"
+        },
+        "app.Q3VzdG9tZXJJbw.action.Z2V0LWNhbXBhaWduLWFjdGlvbnM.option.Y2FtcGFpZ25faWQ.display_name": {
+          "source": "Campaign ID",
+          "message": "ID kampanii"
+        },
+        "app.Q3VzdG9tZXJJbw.action.Z2V0LWNhbXBhaWduLWFjdGlvbnM.option.Y2FtcGFpZ25faWQ.short_desc": {
+          "source": "The campaign ID",
+          "message": "Identyfikator kampanii"
+        },
+        "app.Q3VzdG9tZXJJbw.action.Z2V0LWNhbXBhaWduLWFjdGlvbnM.short_desc": {
+          "source": "Get actions for a campaign",
+          "message": "Pobierz akcje dla kampanii"
+        },
+        "app.Q3VzdG9tZXJJbw.action.Z2V0LWNvbGxlY3Rpb24.desc": {
+          "source": "Retrieve a collection's details from Customer.io by collection ID.",
+          "message": "Pobierz szczegóły kolekcji z Customer.io według identyfikatora kolekcji."
+        },
+        "app.Q3VzdG9tZXJJbw.action.Z2V0LWNvbGxlY3Rpb24.display_name": {
+          "source": "Get Collection",
+          "message": "Pobierz kolekcję"
+        },
+        "app.Q3VzdG9tZXJJbw.action.Z2V0LWNvbGxlY3Rpb24.option.Y29sbGVjdGlvbl9pZA.desc": {
+          "source": "The unique Customer.io collection ID",
+          "message": "Unikalny identyfikator kolekcji w Customer.io"
+        },
+        "app.Q3VzdG9tZXJJbw.action.Z2V0LWNvbGxlY3Rpb24.option.Y29sbGVjdGlvbl9pZA.display_name": {
+          "source": "Collection ID",
+          "message": "Identyfikator kolekcji"
+        },
+        "app.Q3VzdG9tZXJJbw.action.Z2V0LWNvbGxlY3Rpb24.option.Y29sbGVjdGlvbl9pZA.short_desc": {
+          "source": "The collection ID to retrieve",
+          "message": "Identyfikator kolekcji do pobrania"
+        },
+        "app.Q3VzdG9tZXJJbw.action.Z2V0LWNvbGxlY3Rpb24.short_desc": {
+          "source": "Get a collection by ID",
+          "message": "Pobierz kolekcję według identyfikatora"
+        },
+        "app.Q3VzdG9tZXJJbw.action.Z2V0LWV4cG9ydC1zdGF0dXM.desc": {
+          "source": "Check the status of a Customer.io data export by export ID.",
+          "message": "Sprawdź stan eksportu danych Customer.io według identyfikatora eksportu."
+        },
+        "app.Q3VzdG9tZXJJbw.action.Z2V0LWV4cG9ydC1zdGF0dXM.display_name": {
+          "source": "Get Export Status",
+          "message": "Pobierz stan eksportu"
+        },
+        "app.Q3VzdG9tZXJJbw.action.Z2V0LWV4cG9ydC1zdGF0dXM.option.ZXhwb3J0X2lk.desc": {
+          "source": "The unique Customer.io export ID to check status for",
+          "message": "Unikalny identyfikator eksportu w Customer.io, którego stan ma zostać sprawdzony"
+        },
+        "app.Q3VzdG9tZXJJbw.action.Z2V0LWV4cG9ydC1zdGF0dXM.option.ZXhwb3J0X2lk.display_name": {
+          "source": "Export ID",
+          "message": "Identyfikator eksportu"
+        },
+        "app.Q3VzdG9tZXJJbw.action.Z2V0LWV4cG9ydC1zdGF0dXM.option.ZXhwb3J0X2lk.short_desc": {
+          "source": "The export ID to check",
+          "message": "Identyfikator eksportu do sprawdzenia"
+        },
+        "app.Q3VzdG9tZXJJbw.action.Z2V0LWV4cG9ydC1zdGF0dXM.short_desc": {
+          "source": "Get the status of an export",
+          "message": "Pobierz status eksportu"
+        },
+        "app.Q3VzdG9tZXJJbw.action.Z2V0LXBlcnNvbg.desc": {
+          "source": "Retrieve a person's attributes from Customer.io by customer ID, email, or cio_id.",
+          "message": "Pobierz atrybuty osoby z Customer.io na podstawie identyfikatora klienta, adresu e-mail lub cio_id."
+        },
+        "app.Q3VzdG9tZXJJbw.action.Z2V0LXBlcnNvbg.display_name": {
+          "source": "Get Person",
+          "message": "Pobierz osobę"
+        },
+        "app.Q3VzdG9tZXJJbw.action.Z2V0LXBlcnNvbg.option.Y3VzdG9tZXJfaWQ.desc": {
+          "source": "The customer ID, email, or cio_id to look up",
+          "message": "Identyfikator klienta, adres e-mail lub cio_id do wyszukania"
+        },
+        "app.Q3VzdG9tZXJJbw.action.Z2V0LXBlcnNvbg.option.Y3VzdG9tZXJfaWQ.display_name": {
+          "source": "Customer ID",
+          "message": "Identyfikator klienta"
+        },
+        "app.Q3VzdG9tZXJJbw.action.Z2V0LXBlcnNvbg.option.Y3VzdG9tZXJfaWQ.short_desc": {
+          "source": "The customer ID, email, or cio_id",
+          "message": "Identyfikator klienta, adres e-mail lub cio_id"
+        },
+        "app.Q3VzdG9tZXJJbw.action.Z2V0LXBlcnNvbg.short_desc": {
+          "source": "Get a person by ID",
+          "message": "Pobierz osobę po identyfikatorze"
+        },
+        "app.Q3VzdG9tZXJJbw.action.Z2V0LXNlZ21lbnQ.desc": {
+          "source": "Retrieve a segment's details from Customer.io by segment ID.",
+          "message": "Pobierz szczegóły segmentu z Customer.io na podstawie identyfikatora segmentu."
+        },
+        "app.Q3VzdG9tZXJJbw.action.Z2V0LXNlZ21lbnQ.display_name": {
+          "source": "Get Segment",
+          "message": "Pobierz segment"
+        },
+        "app.Q3VzdG9tZXJJbw.action.Z2V0LXNlZ21lbnQ.option.c2VnbWVudF9pZA.desc": {
+          "source": "The unique Customer.io segment ID",
+          "message": "Unikalny identyfikator segmentu Customer.io"
+        },
+        "app.Q3VzdG9tZXJJbw.action.Z2V0LXNlZ21lbnQ.option.c2VnbWVudF9pZA.display_name": {
+          "source": "Segment ID",
+          "message": "Identyfikator segmentu"
+        },
+        "app.Q3VzdG9tZXJJbw.action.Z2V0LXNlZ21lbnQ.option.c2VnbWVudF9pZA.short_desc": {
+          "source": "The segment ID to retrieve",
+          "message": "Identyfikator segmentu do pobrania"
+        },
+        "app.Q3VzdG9tZXJJbw.action.Z2V0LXNlZ21lbnQ.short_desc": {
+          "source": "Get a segment by ID",
+          "message": "Pobierz segment po identyfikatorze"
+        },
+        "app.Q3VzdG9tZXJJbw.action.Z2V0LXNlZ21lbnQtcGVvcGxl.desc": {
+          "source": "Retrieve the list of people belonging to a Customer.io segment.",
+          "message": "Pobierz listę osób należących do segmentu Customer.io."
+        },
+        "app.Q3VzdG9tZXJJbw.action.Z2V0LXNlZ21lbnQtcGVvcGxl.display_name": {
+          "source": "Get Segment People",
+          "message": "Pobierz osoby z segmentu"
+        },
+        "app.Q3VzdG9tZXJJbw.action.Z2V0LXNlZ21lbnQtcGVvcGxl.option.c2VnbWVudF9pZA.desc": {
+          "source": "The unique Customer.io segment ID to get membership for",
+          "message": "Unikalny identyfikator segmentu Customer.io, dla którego mają zostać pobrani członkowie"
+        },
+        "app.Q3VzdG9tZXJJbw.action.Z2V0LXNlZ21lbnQtcGVvcGxl.option.c2VnbWVudF9pZA.display_name": {
+          "source": "Segment ID",
+          "message": "Identyfikator segmentu"
+        },
+        "app.Q3VzdG9tZXJJbw.action.Z2V0LXNlZ21lbnQtcGVvcGxl.option.c2VnbWVudF9pZA.short_desc": {
+          "source": "The segment ID",
+          "message": "Identyfikator segmentu"
+        },
+        "app.Q3VzdG9tZXJJbw.action.Z2V0LXNlZ21lbnQtcGVvcGxl.option.cGFnZQ.desc": {
+          "source": "The page number for paginated results",
+          "message": "Numer strony dla wyników stronicowanych"
+        },
+        "app.Q3VzdG9tZXJJbw.action.Z2V0LXNlZ21lbnQtcGVvcGxl.option.cGFnZQ.display_name": {
+          "source": "Page",
+          "message": "Strona"
+        },
+        "app.Q3VzdG9tZXJJbw.action.Z2V0LXNlZ21lbnQtcGVvcGxl.option.cGFnZQ.short_desc": {
+          "source": "Page number for pagination",
+          "message": "Numer strony do stronicowania"
+        },
+        "app.Q3VzdG9tZXJJbw.action.Z2V0LXNlZ21lbnQtcGVvcGxl.short_desc": {
+          "source": "Get people in a segment",
+          "message": "Pobierz osoby w segmencie"
+        },
+        "app.Q3VzdG9tZXJJbw.action.Z2V0LXNuaXBwZXQ.desc": {
+          "source": "Retrieve a snippet's details from Customer.io by snippet name.",
+          "message": "Pobierz szczegóły fragmentu z Customer.io na podstawie nazwy fragmentu."
+        },
+        "app.Q3VzdG9tZXJJbw.action.Z2V0LXNuaXBwZXQ.display_name": {
+          "source": "Get Snippet",
+          "message": "Pobierz fragment"
+        },
+        "app.Q3VzdG9tZXJJbw.action.Z2V0LXNuaXBwZXQ.option.c25pcHBldF9uYW1l.desc": {
+          "source": "The unique name identifier for the snippet to retrieve",
+          "message": "Unikalny identyfikator nazwy fragmentu do pobrania"
+        },
+        "app.Q3VzdG9tZXJJbw.action.Z2V0LXNuaXBwZXQ.option.c25pcHBldF9uYW1l.display_name": {
+          "source": "Snippet Name",
+          "message": "Nazwa fragmentu"
+        },
+        "app.Q3VzdG9tZXJJbw.action.Z2V0LXNuaXBwZXQ.option.c25pcHBldF9uYW1l.short_desc": {
+          "source": "The snippet name",
+          "message": "Nazwa fragmentu"
+        },
+        "app.Q3VzdG9tZXJJbw.action.Z2V0LXNuaXBwZXQ.short_desc": {
+          "source": "Get a snippet by name",
+          "message": "Pobierz fragment po nazwie"
+        },
+        "app.Q3VzdG9tZXJJbw.action.ZG93bmxvYWQtZXhwb3J0.desc": {
+          "source": "Download the data from a completed Customer.io export.",
+          "message": "Pobierz dane z ukończonego eksportu Customer.io."
+        },
+        "app.Q3VzdG9tZXJJbw.action.ZG93bmxvYWQtZXhwb3J0.display_name": {
+          "source": "Download Export",
+          "message": "Pobierz eksport"
+        },
+        "app.Q3VzdG9tZXJJbw.action.ZG93bmxvYWQtZXhwb3J0.option.ZXhwb3J0X2lk.desc": {
+          "source": "The unique Customer.io export ID to download",
+          "message": "Unikalny identyfikator eksportu Customer.io do pobrania"
+        },
+        "app.Q3VzdG9tZXJJbw.action.ZG93bmxvYWQtZXhwb3J0.option.ZXhwb3J0X2lk.display_name": {
+          "source": "Export ID",
+          "message": "Identyfikator eksportu"
+        },
+        "app.Q3VzdG9tZXJJbw.action.ZG93bmxvYWQtZXhwb3J0.option.ZXhwb3J0X2lk.short_desc": {
+          "source": "The export ID to download",
+          "message": "Identyfikator eksportu do pobrania"
+        },
+        "app.Q3VzdG9tZXJJbw.action.ZG93bmxvYWQtZXhwb3J0.short_desc": {
+          "source": "Download a completed export",
+          "message": "Pobierz ukończony eksport"
+        },
+        "app.Q3VzdG9tZXJJbw.action.ZGVsZXRlLW9iamVjdA.desc": {
+          "source": "Delete a custom object from Customer.io via the Track API.",
+          "message": "Usuń obiekt niestandardowy z Customer.io za pomocą interfejsu API Track."
+        },
+        "app.Q3VzdG9tZXJJbw.action.ZGVsZXRlLW9iamVjdA.display_name": {
+          "source": "Delete Object",
+          "message": "Usuń obiekt"
+        },
+        "app.Q3VzdG9tZXJJbw.action.ZGVsZXRlLW9iamVjdA.option.b2JqZWN0X2lk.desc": {
+          "source": "The object identifier",
+          "message": "Identyfikator obiektu"
+        },
+        "app.Q3VzdG9tZXJJbw.action.ZGVsZXRlLW9iamVjdA.option.b2JqZWN0X2lk.display_name": {
+          "source": "Object ID",
+          "message": "Identyfikator obiektu"
+        },
+        "app.Q3VzdG9tZXJJbw.action.ZGVsZXRlLW9iamVjdA.option.b2JqZWN0X2lk.short_desc": {
+          "source": "The object identifier",
+          "message": "Identyfikator obiektu"
+        },
+        "app.Q3VzdG9tZXJJbw.action.ZGVsZXRlLW9iamVjdA.option.b2JqZWN0X3R5cGVfaWQ.desc": {
+          "source": "The object type identifier",
+          "message": "Identyfikator typu obiektu"
+        },
+        "app.Q3VzdG9tZXJJbw.action.ZGVsZXRlLW9iamVjdA.option.b2JqZWN0X3R5cGVfaWQ.display_name": {
+          "source": "Object Type ID",
+          "message": "Identyfikator typu obiektu"
+        },
+        "app.Q3VzdG9tZXJJbw.action.ZGVsZXRlLW9iamVjdA.option.b2JqZWN0X3R5cGVfaWQ.short_desc": {
+          "source": "The object type identifier",
+          "message": "Identyfikator typu obiektu"
+        },
+        "app.Q3VzdG9tZXJJbw.action.ZGVsZXRlLW9iamVjdA.short_desc": {
+          "source": "Delete an object",
+          "message": "Usuń obiekt"
+        },
+        "app.Q3VzdG9tZXJJbw.action.ZGVsZXRlLWN1c3RvbWVy.desc": {
+          "source": "Delete a customer from Customer.io via the Track API. This action cannot be undone.",
+          "message": "Usuń klienta z Customer.io za pomocą interfejsu API Track. Tej operacji nie można cofnąć."
+        },
+        "app.Q3VzdG9tZXJJbw.action.ZGVsZXRlLWN1c3RvbWVy.display_name": {
+          "source": "Delete Customer",
+          "message": "Usuń klienta"
+        },
+        "app.Q3VzdG9tZXJJbw.action.ZGVsZXRlLWN1c3RvbWVy.option.Y3VzdG9tZXJfaWQ.desc": {
+          "source": "The unique customer identifier to delete",
+          "message": "Unikalny identyfikator klienta do usunięcia"
+        },
+        "app.Q3VzdG9tZXJJbw.action.ZGVsZXRlLWN1c3RvbWVy.option.Y3VzdG9tZXJfaWQ.display_name": {
+          "source": "Customer ID",
+          "message": "Identyfikator klienta"
+        },
+        "app.Q3VzdG9tZXJJbw.action.ZGVsZXRlLWN1c3RvbWVy.option.Y3VzdG9tZXJfaWQ.short_desc": {
+          "source": "The unique customer identifier",
+          "message": "Unikalny identyfikator klienta"
+        },
+        "app.Q3VzdG9tZXJJbw.action.ZGVsZXRlLWN1c3RvbWVy.short_desc": {
+          "source": "Delete a customer",
+          "message": "Usuń klienta"
+        },
+        "app.Q3VzdG9tZXJJbw.action.ZGVsZXRlLWNvbGxlY3Rpb24.desc": {
+          "source": "Delete a collection from Customer.io. This action cannot be undone.",
+          "message": "Usuń kolekcję z Customer.io. Tej operacji nie można cofnąć."
+        },
+        "app.Q3VzdG9tZXJJbw.action.ZGVsZXRlLWNvbGxlY3Rpb24.display_name": {
+          "source": "Delete Collection",
+          "message": "Usuń kolekcję"
+        },
+        "app.Q3VzdG9tZXJJbw.action.ZGVsZXRlLWNvbGxlY3Rpb24.option.Y29sbGVjdGlvbl9pZA.desc": {
+          "source": "The unique Customer.io collection ID to delete",
+          "message": "Unikalny identyfikator kolekcji Customer.io do usunięcia"
+        },
+        "app.Q3VzdG9tZXJJbw.action.ZGVsZXRlLWNvbGxlY3Rpb24.option.Y29sbGVjdGlvbl9pZA.display_name": {
+          "source": "Collection ID",
+          "message": "Identyfikator kolekcji"
+        },
+        "app.Q3VzdG9tZXJJbw.action.ZGVsZXRlLWNvbGxlY3Rpb24.option.Y29sbGVjdGlvbl9pZA.short_desc": {
+          "source": "The collection ID to delete",
+          "message": "Identyfikator kolekcji do usunięcia"
+        },
+        "app.Q3VzdG9tZXJJbw.action.ZGVsZXRlLWNvbGxlY3Rpb24.short_desc": {
+          "source": "Delete a collection",
+          "message": "Usuń kolekcję"
+        },
+        "app.Q3VzdG9tZXJJbw.action.ZGVsZXRlLWRldmljZQ.desc": {
+          "source": "Remove a mobile device from a customer in Customer.io.",
+          "message": "Usuń urządzenie mobilne przypisane do klienta w Customer.io."
+        },
+        "app.Q3VzdG9tZXJJbw.action.ZGVsZXRlLWRldmljZQ.display_name": {
+          "source": "Delete Device",
+          "message": "Usuń urządzenie"
+        },
+        "app.Q3VzdG9tZXJJbw.action.ZGVsZXRlLWRldmljZQ.option.Y3VzdG9tZXJfaWQ.desc": {
+          "source": "The unique customer identifier",
+          "message": "Unikalny identyfikator klienta"
+        },
+        "app.Q3VzdG9tZXJJbw.action.ZGVsZXRlLWRldmljZQ.option.Y3VzdG9tZXJfaWQ.display_name": {
+          "source": "Customer ID",
+          "message": "Identyfikator klienta"
+        },
+        "app.Q3VzdG9tZXJJbw.action.ZGVsZXRlLWRldmljZQ.option.Y3VzdG9tZXJfaWQ.short_desc": {
+          "source": "The unique customer identifier",
+          "message": "Unikalny identyfikator klienta"
+        },
+        "app.Q3VzdG9tZXJJbw.action.ZGVsZXRlLWRldmljZQ.option.ZGV2aWNlX3Rva2Vu.desc": {
+          "source": "The device token to remove",
+          "message": "Token urządzenia do usunięcia"
+        },
+        "app.Q3VzdG9tZXJJbw.action.ZGVsZXRlLWRldmljZQ.option.ZGV2aWNlX3Rva2Vu.display_name": {
+          "source": "Device Token",
+          "message": "Token urządzenia"
+        },
+        "app.Q3VzdG9tZXJJbw.action.ZGVsZXRlLWRldmljZQ.option.ZGV2aWNlX3Rva2Vu.short_desc": {
+          "source": "The device token to remove",
+          "message": "Token urządzenia do usunięcia"
+        },
+        "app.Q3VzdG9tZXJJbw.action.ZGVsZXRlLWRldmljZQ.short_desc": {
+          "source": "Delete a device from a customer",
+          "message": "Usuń urządzenie klienta"
+        },
+        "app.Q3VzdG9tZXJJbw.action.ZGVsZXRlLXJlbGF0aW9uc2hpcHM.desc": {
+          "source": "Delete relationships between an object and people in Customer.io via the Track API.",
+          "message": "Usuń relacje między obiektem a osobami w Customer.io za pomocą interfejsu API Track."
+        },
+        "app.Q3VzdG9tZXJJbw.action.ZGVsZXRlLXJlbGF0aW9uc2hpcHM.display_name": {
+          "source": "Delete Relationships",
+          "message": "Usuń relacje"
+        },
+        "app.Q3VzdG9tZXJJbw.action.ZGVsZXRlLXJlbGF0aW9uc2hpcHM.option.aWRlbnRpZmllcnM.desc": {
+          "source": "List of identifier hashes to disconnect from the object",
+          "message": "Lista haszy identyfikatorów do odłączenia od obiektu"
+        },
+        "app.Q3VzdG9tZXJJbw.action.ZGVsZXRlLXJlbGF0aW9uc2hpcHM.option.aWRlbnRpZmllcnM.display_name": {
+          "source": "Identifiers",
+          "message": "Identyfikatory"
+        },
+        "app.Q3VzdG9tZXJJbw.action.ZGVsZXRlLXJlbGF0aW9uc2hpcHM.option.aWRlbnRpZmllcnM.short_desc": {
+          "source": "List of identifier hashes to disconnect",
+          "message": "Lista haszy identyfikatorów do odłączenia"
+        },
+        "app.Q3VzdG9tZXJJbw.action.ZGVsZXRlLXJlbGF0aW9uc2hpcHM.option.b2JqZWN0X2lk.desc": {
+          "source": "The object identifier",
+          "message": "Identyfikator obiektu"
+        },
+        "app.Q3VzdG9tZXJJbw.action.ZGVsZXRlLXJlbGF0aW9uc2hpcHM.option.b2JqZWN0X2lk.display_name": {
+          "source": "Object ID",
+          "message": "Identyfikator obiektu"
+        },
+        "app.Q3VzdG9tZXJJbw.action.ZGVsZXRlLXJlbGF0aW9uc2hpcHM.option.b2JqZWN0X2lk.short_desc": {
+          "source": "The object identifier",
+          "message": "Identyfikator obiektu"
+        },
+        "app.Q3VzdG9tZXJJbw.action.ZGVsZXRlLXJlbGF0aW9uc2hpcHM.option.b2JqZWN0X3R5cGVfaWQ.desc": {
+          "source": "The object type identifier",
+          "message": "Identyfikator typu obiektu"
+        },
+        "app.Q3VzdG9tZXJJbw.action.ZGVsZXRlLXJlbGF0aW9uc2hpcHM.option.b2JqZWN0X3R5cGVfaWQ.display_name": {
+          "source": "Object Type ID",
+          "message": "Identyfikator typu obiektu"
+        },
+        "app.Q3VzdG9tZXJJbw.action.ZGVsZXRlLXJlbGF0aW9uc2hpcHM.option.b2JqZWN0X3R5cGVfaWQ.short_desc": {
+          "source": "The object type identifier",
+          "message": "Identyfikator typu obiektu"
+        },
+        "app.Q3VzdG9tZXJJbw.action.ZGVsZXRlLXJlbGF0aW9uc2hpcHM.short_desc": {
+          "source": "Delete relationships between an object and people",
+          "message": "Usuń relacje między obiektem a osobami"
+        },
+        "app.Q3VzdG9tZXJJbw.action.ZGVsZXRlLXNuaXBwZXQ.desc": {
+          "source": "Delete a snippet from Customer.io. This action cannot be undone.",
+          "message": "Usuń fragment z Customer.io. Tej operacji nie można cofnąć."
+        },
+        "app.Q3VzdG9tZXJJbw.action.ZGVsZXRlLXNuaXBwZXQ.display_name": {
+          "source": "Delete Snippet",
+          "message": "Usuń fragment"
+        },
+        "app.Q3VzdG9tZXJJbw.action.ZGVsZXRlLXNuaXBwZXQ.option.c25pcHBldF9uYW1l.desc": {
+          "source": "The unique name identifier for the snippet to delete",
+          "message": "Unikalny identyfikator nazwy fragmentu do usunięcia"
+        },
+        "app.Q3VzdG9tZXJJbw.action.ZGVsZXRlLXNuaXBwZXQ.option.c25pcHBldF9uYW1l.display_name": {
+          "source": "Snippet Name",
+          "message": "Nazwa fragmentu"
+        },
+        "app.Q3VzdG9tZXJJbw.action.ZGVsZXRlLXNuaXBwZXQ.option.c25pcHBldF9uYW1l.short_desc": {
+          "source": "The snippet name to delete",
+          "message": "Nazwa fragmentu do usunięcia"
+        },
+        "app.Q3VzdG9tZXJJbw.action.ZGVsZXRlLXNuaXBwZXQ.short_desc": {
+          "source": "Delete a snippet",
+          "message": "Usuń fragment"
+        },
+        "app.Q3VzdG9tZXJJbw.action.bGlzdC1hY3Rpdml0aWVz.desc": {
+          "source": "Retrieve a list of activities from Customer.io with optional filtering by type, customer ID, and date range.",
+          "message": "Pobierz listę aktywności z Customer.io z opcjonalnym filtrowaniem według typu, identyfikatora klienta i zakresu dat."
+        },
+        "app.Q3VzdG9tZXJJbw.action.bGlzdC1hY3Rpdml0aWVz.display_name": {
+          "source": "List Activities",
+          "message": "Pobierz listę aktywności"
+        },
+        "app.Q3VzdG9tZXJJbw.action.bGlzdC1hY3Rpdml0aWVz.option.Y3VzdG9tZXJfaWQ.desc": {
+          "source": "Filter activities by customer ID",
+          "message": "Filtruj aktywności według identyfikatora klienta"
+        },
+        "app.Q3VzdG9tZXJJbw.action.bGlzdC1hY3Rpdml0aWVz.option.Y3VzdG9tZXJfaWQ.display_name": {
+          "source": "Customer ID",
+          "message": "Identyfikator klienta"
+        },
+        "app.Q3VzdG9tZXJJbw.action.bGlzdC1hY3Rpdml0aWVz.option.Y3VzdG9tZXJfaWQ.short_desc": {
+          "source": "Filter by customer ID",
+          "message": "Filtruj według identyfikatora klienta"
+        },
+        "app.Q3VzdG9tZXJJbw.action.bGlzdC1hY3Rpdml0aWVz.option.ZW5k.desc": {
+          "source": "Filter activities on or before this Unix timestamp",
+          "message": "Filtruj aktywności w tym uniksowym znaczniku czasu lub przed nim"
+        },
+        "app.Q3VzdG9tZXJJbw.action.bGlzdC1hY3Rpdml0aWVz.option.ZW5k.display_name": {
+          "source": "End Timestamp",
+          "message": "Końcowy znacznik czasu"
+        },
+        "app.Q3VzdG9tZXJJbw.action.bGlzdC1hY3Rpdml0aWVz.option.ZW5k.short_desc": {
+          "source": "Filter until this Unix timestamp",
+          "message": "Filtruj do tego uniksowego znacznika czasu"
+        },
+        "app.Q3VzdG9tZXJJbw.action.bGlzdC1hY3Rpdml0aWVz.option.c3RhcnQ.desc": {
+          "source": "Filter activities on or after this Unix timestamp",
+          "message": "Filtruj aktywności w tym uniksowym znaczniku czasu lub po nim"
+        },
+        "app.Q3VzdG9tZXJJbw.action.bGlzdC1hY3Rpdml0aWVz.option.c3RhcnQ.display_name": {
+          "source": "Start Timestamp",
+          "message": "Początkowy znacznik czasu"
+        },
+        "app.Q3VzdG9tZXJJbw.action.bGlzdC1hY3Rpdml0aWVz.option.c3RhcnQ.short_desc": {
+          "source": "Filter from this Unix timestamp",
+          "message": "Filtruj od tego uniksowego znacznika czasu"
+        },
+        "app.Q3VzdG9tZXJJbw.action.bGlzdC1hY3Rpdml0aWVz.option.dHlwZQ.desc": {
+          "source": "Filter activities by type",
+          "message": "Filtruj aktywności według typu"
+        },
+        "app.Q3VzdG9tZXJJbw.action.bGlzdC1hY3Rpdml0aWVz.option.dHlwZQ.display_name": {
+          "source": "Activity Type",
+          "message": "Typ aktywności"
+        },
+        "app.Q3VzdG9tZXJJbw.action.bGlzdC1hY3Rpdml0aWVz.option.dHlwZQ.short_desc": {
+          "source": "Filter by activity type",
+          "message": "Filtruj według typu aktywności"
+        },
+        "app.Q3VzdG9tZXJJbw.action.bGlzdC1hY3Rpdml0aWVz.short_desc": {
+          "source": "List activities",
+          "message": "Pobierz listę aktywności"
+        },
+        "app.Q3VzdG9tZXJJbw.action.bGlzdC1icm9hZGNhc3Rz.desc": {
+          "source": "Retrieve a list of broadcasts from Customer.io.",
+          "message": "Pobierz listę transmisji z Customer.io."
+        },
+        "app.Q3VzdG9tZXJJbw.action.bGlzdC1icm9hZGNhc3Rz.display_name": {
+          "source": "List Broadcasts",
+          "message": "Wyświetl listę transmisji"
+        },
+        "app.Q3VzdG9tZXJJbw.action.bGlzdC1icm9hZGNhc3Rz.option.cGFnZQ.desc": {
+          "source": "Page number for pagination (starting at 1)",
+          "message": "Numer strony do paginacji (zaczynając od 1)"
+        },
+        "app.Q3VzdG9tZXJJbw.action.bGlzdC1icm9hZGNhc3Rz.option.cGFnZQ.display_name": {
+          "source": "Page",
+          "message": "Strona"
+        },
+        "app.Q3VzdG9tZXJJbw.action.bGlzdC1icm9hZGNhc3Rz.option.cGFnZQ.short_desc": {
+          "source": "Page number",
+          "message": "Numer strony"
+        },
+        "app.Q3VzdG9tZXJJbw.action.bGlzdC1icm9hZGNhc3Rz.option.cGFnZV9zaXpl.desc": {
+          "source": "Number of results per page",
+          "message": "Liczba wyników na stronę"
+        },
+        "app.Q3VzdG9tZXJJbw.action.bGlzdC1icm9hZGNhc3Rz.option.cGFnZV9zaXpl.display_name": {
+          "source": "Page Size",
+          "message": "Rozmiar strony"
+        },
+        "app.Q3VzdG9tZXJJbw.action.bGlzdC1icm9hZGNhc3Rz.option.cGFnZV9zaXpl.short_desc": {
+          "source": "Results per page",
+          "message": "Wyniki na stronę"
+        },
+        "app.Q3VzdG9tZXJJbw.action.bGlzdC1icm9hZGNhc3Rz.short_desc": {
+          "source": "List broadcasts",
+          "message": "Wyświetl listę transmisji"
+        },
+        "app.Q3VzdG9tZXJJbw.action.bGlzdC1jYW1wYWlnbnM.desc": {
+          "source": "Retrieve a list of campaigns from Customer.io.",
+          "message": "Pobierz listę kampanii z Customer.io."
+        },
+        "app.Q3VzdG9tZXJJbw.action.bGlzdC1jYW1wYWlnbnM.display_name": {
+          "source": "List Campaigns",
+          "message": "Lista kampanii"
+        },
+        "app.Q3VzdG9tZXJJbw.action.bGlzdC1jYW1wYWlnbnM.option.cGFnZQ.desc": {
+          "source": "Page number for pagination (starting at 1)",
+          "message": "Numer strony do paginacji (zaczynając od 1)"
+        },
+        "app.Q3VzdG9tZXJJbw.action.bGlzdC1jYW1wYWlnbnM.option.cGFnZQ.display_name": {
+          "source": "Page",
+          "message": "Strona"
+        },
+        "app.Q3VzdG9tZXJJbw.action.bGlzdC1jYW1wYWlnbnM.option.cGFnZQ.short_desc": {
+          "source": "Page number",
+          "message": "Numer strony"
+        },
+        "app.Q3VzdG9tZXJJbw.action.bGlzdC1jYW1wYWlnbnM.option.cGFnZV9zaXpl.desc": {
+          "source": "Number of results per page",
+          "message": "Liczba wyników na stronę"
+        },
+        "app.Q3VzdG9tZXJJbw.action.bGlzdC1jYW1wYWlnbnM.option.cGFnZV9zaXpl.display_name": {
+          "source": "Page Size",
+          "message": "Rozmiar strony"
+        },
+        "app.Q3VzdG9tZXJJbw.action.bGlzdC1jYW1wYWlnbnM.option.cGFnZV9zaXpl.short_desc": {
+          "source": "Results per page",
+          "message": "Wyniki na stronę"
+        },
+        "app.Q3VzdG9tZXJJbw.action.bGlzdC1jYW1wYWlnbnM.short_desc": {
+          "source": "List campaigns",
+          "message": "Wyświetl listę kampanii"
+        },
+        "app.Q3VzdG9tZXJJbw.action.bGlzdC1jb2xsZWN0aW9ucw.desc": {
+          "source": "Retrieve a list of collections from Customer.io.",
+          "message": "Pobierz listę kolekcji z Customer.io."
+        },
+        "app.Q3VzdG9tZXJJbw.action.bGlzdC1jb2xsZWN0aW9ucw.display_name": {
+          "source": "List Collections",
+          "message": "Lista kolekcji"
+        },
+        "app.Q3VzdG9tZXJJbw.action.bGlzdC1jb2xsZWN0aW9ucw.option.cGFnZQ.desc": {
+          "source": "Page number for pagination (starting at 1)",
+          "message": "Numer strony do paginacji (zaczynając od 1)"
+        },
+        "app.Q3VzdG9tZXJJbw.action.bGlzdC1jb2xsZWN0aW9ucw.option.cGFnZQ.display_name": {
+          "source": "Page",
+          "message": "Strona"
+        },
+        "app.Q3VzdG9tZXJJbw.action.bGlzdC1jb2xsZWN0aW9ucw.option.cGFnZQ.short_desc": {
+          "source": "Page number",
+          "message": "Numer strony"
+        },
+        "app.Q3VzdG9tZXJJbw.action.bGlzdC1jb2xsZWN0aW9ucw.option.cGFnZV9zaXpl.desc": {
+          "source": "Number of results per page",
+          "message": "Liczba wyników na stronę"
+        },
+        "app.Q3VzdG9tZXJJbw.action.bGlzdC1jb2xsZWN0aW9ucw.option.cGFnZV9zaXpl.display_name": {
+          "source": "Page Size",
+          "message": "Rozmiar strony"
+        },
+        "app.Q3VzdG9tZXJJbw.action.bGlzdC1jb2xsZWN0aW9ucw.option.cGFnZV9zaXpl.short_desc": {
+          "source": "Results per page",
+          "message": "Wyniki na stronę"
+        },
+        "app.Q3VzdG9tZXJJbw.action.bGlzdC1jb2xsZWN0aW9ucw.short_desc": {
+          "source": "List collections",
+          "message": "Wyświetl listę kolekcji"
+        },
+        "app.Q3VzdG9tZXJJbw.action.bGlzdC1kZWxpdmVyaWVz.desc": {
+          "source": "Retrieve a list of message deliveries from Customer.io with optional filtering by metric type and date range.",
+          "message": "Pobierz listę doręczeń wiadomości z Customer.io z opcjonalnym filtrowaniem według typu wskaźnika i zakresu dat."
+        },
+        "app.Q3VzdG9tZXJJbw.action.bGlzdC1kZWxpdmVyaWVz.display_name": {
+          "source": "List Deliveries",
+          "message": "Wyświetl listę doręczeń"
+        },
+        "app.Q3VzdG9tZXJJbw.action.bGlzdC1kZWxpdmVyaWVz.option.ZW5k.desc": {
+          "source": "Filter messages sent on or before this Unix timestamp",
+          "message": "Filtruj wiadomości wysłane w tym znaczniku czasu Unix lub wcześniej"
+        },
+        "app.Q3VzdG9tZXJJbw.action.bGlzdC1kZWxpdmVyaWVz.option.ZW5k.display_name": {
+          "source": "End Timestamp",
+          "message": "Końcowy znacznik czasu"
+        },
+        "app.Q3VzdG9tZXJJbw.action.bGlzdC1kZWxpdmVyaWVz.option.ZW5k.short_desc": {
+          "source": "Filter until this Unix timestamp",
+          "message": "Filtruj do tego uniksowego znacznika czasu"
+        },
+        "app.Q3VzdG9tZXJJbw.action.bGlzdC1kZWxpdmVyaWVz.option.bWV0cmlj.allowed-value.c3RyaW5nOmVtYWlsX29wZW5lZA.desc": {
+          "source": "Email opened",
+          "message": "Wiadomość e-mail otwarta"
+        },
+        "app.Q3VzdG9tZXJJbw.action.bGlzdC1kZWxpdmVyaWVz.option.bWV0cmlj.allowed-value.c3RyaW5nOmVtYWlsX2JvdW5jZWQ.desc": {
+          "source": "Email bounced",
+          "message": "Wiadomość e-mail odbita"
+        },
+        "app.Q3VzdG9tZXJJbw.action.bGlzdC1kZWxpdmVyaWVz.option.bWV0cmlj.allowed-value.c3RyaW5nOmVtYWlsX2NsaWNrZWQ.desc": {
+          "source": "Email clicked",
+          "message": "Kliknięto wiadomość e-mail"
+        },
+        "app.Q3VzdG9tZXJJbw.action.bGlzdC1kZWxpdmVyaWVz.option.bWV0cmlj.allowed-value.c3RyaW5nOmVtYWlsX2RlbGl2ZXJlZA.desc": {
+          "source": "Email delivered",
+          "message": "Wiadomość e-mail doręczona"
+        },
+        "app.Q3VzdG9tZXJJbw.action.bGlzdC1kZWxpdmVyaWVz.option.bWV0cmlj.allowed-value.c3RyaW5nOmVtYWlsX2Ryb3BwZWQ.desc": {
+          "source": "Email dropped",
+          "message": "Wiadomość e-mail porzucona"
+        },
+        "app.Q3VzdG9tZXJJbw.action.bGlzdC1kZWxpdmVyaWVz.option.bWV0cmlj.allowed-value.c3RyaW5nOmVtYWlsX3NlbnQ.desc": {
+          "source": "Email sent",
+          "message": "Wiadomość e-mail wysłana"
+        },
+        "app.Q3VzdG9tZXJJbw.action.bGlzdC1kZWxpdmVyaWVz.option.bWV0cmlj.allowed-value.c3RyaW5nOmVtYWlsX3NwYW1tZWQ.desc": {
+          "source": "Email marked as spam",
+          "message": "Wiadomość e-mail oznaczona jako spam"
+        },
+        "app.Q3VzdG9tZXJJbw.action.bGlzdC1kZWxpdmVyaWVz.option.bWV0cmlj.allowed-value.c3RyaW5nOmVtYWlsX3Vuc3Vic2NyaWJlZA.desc": {
+          "source": "Email unsubscribed",
+          "message": "Wypisano z wiadomości e-mail"
+        },
+        "app.Q3VzdG9tZXJJbw.action.bGlzdC1kZWxpdmVyaWVz.option.bWV0cmlj.allowed-value.c3RyaW5nOnB1c2hfZGVsaXZlcmVk.desc": {
+          "source": "Push delivered",
+          "message": "Powiadomienie push doręczone"
+        },
+        "app.Q3VzdG9tZXJJbw.action.bGlzdC1kZWxpdmVyaWVz.option.bWV0cmlj.allowed-value.c3RyaW5nOnB1c2hfZmFpbGVk.desc": {
+          "source": "Push failed",
+          "message": "Niepowodzenie powiadomienia push"
+        },
+        "app.Q3VzdG9tZXJJbw.action.bGlzdC1kZWxpdmVyaWVz.option.bWV0cmlj.allowed-value.c3RyaW5nOnB1c2hfb3BlbmVk.desc": {
+          "source": "Push opened",
+          "message": "Powiadomienie push otwarte"
+        },
+        "app.Q3VzdG9tZXJJbw.action.bGlzdC1kZWxpdmVyaWVz.option.bWV0cmlj.allowed-value.c3RyaW5nOnB1c2hfc2VudA.desc": {
+          "source": "Push sent",
+          "message": "Powiadomienie push wysłane"
+        },
+        "app.Q3VzdG9tZXJJbw.action.bGlzdC1kZWxpdmVyaWVz.option.bWV0cmlj.allowed-value.c3RyaW5nOnNtc19kZWxpdmVyZWQ.desc": {
+          "source": "SMS delivered",
+          "message": "Wiadomość SMS doręczona"
+        },
+        "app.Q3VzdG9tZXJJbw.action.bGlzdC1kZWxpdmVyaWVz.option.bWV0cmlj.allowed-value.c3RyaW5nOnNtc19mYWlsZWQ.desc": {
+          "source": "SMS failed",
+          "message": "Niepowodzenie wiadomości SMS"
+        },
+        "app.Q3VzdG9tZXJJbw.action.bGlzdC1kZWxpdmVyaWVz.option.bWV0cmlj.allowed-value.c3RyaW5nOnNtc19zZW50.desc": {
+          "source": "SMS sent",
+          "message": "Wiadomość SMS wysłana"
+        },
+        "app.Q3VzdG9tZXJJbw.action.bGlzdC1kZWxpdmVyaWVz.option.bWV0cmlj.desc": {
+          "source": "Filter messages by delivery metric type (e.g., `email_sent`, `email_delivered`)",
+          "message": "Filtruj wiadomości według typu wskaźnika doręczenia (np. `email_sent`, `email_delivered`)"
+        },
+        "app.Q3VzdG9tZXJJbw.action.bGlzdC1kZWxpdmVyaWVz.option.bWV0cmlj.display_name": {
+          "source": "Metric",
+          "message": "Metryka"
+        },
+        "app.Q3VzdG9tZXJJbw.action.bGlzdC1kZWxpdmVyaWVz.option.bWV0cmlj.short_desc": {
+          "source": "Filter by delivery metric type",
+          "message": "Filtruj według typu wskaźnika doręczenia"
+        },
+        "app.Q3VzdG9tZXJJbw.action.bGlzdC1kZWxpdmVyaWVz.option.c3RhcnQ.desc": {
+          "source": "Filter messages sent on or after this Unix timestamp",
+          "message": "Filtruj wiadomości wysłane w tym znaczniku czasu Unix lub później"
+        },
+        "app.Q3VzdG9tZXJJbw.action.bGlzdC1kZWxpdmVyaWVz.option.c3RhcnQ.display_name": {
+          "source": "Start Timestamp",
+          "message": "Początkowy znacznik czasu"
+        },
+        "app.Q3VzdG9tZXJJbw.action.bGlzdC1kZWxpdmVyaWVz.option.c3RhcnQ.short_desc": {
+          "source": "Filter from this Unix timestamp",
+          "message": "Filtruj od tego uniksowego znacznika czasu"
+        },
+        "app.Q3VzdG9tZXJJbw.action.bGlzdC1kZWxpdmVyaWVz.short_desc": {
+          "source": "List message deliveries",
+          "message": "Wyświetl listę doręczeń wiadomości"
+        },
+        "app.Q3VzdG9tZXJJbw.action.bGlzdC1uZXdzbGV0dGVycw.desc": {
+          "source": "Retrieve a list of newsletters from Customer.io.",
+          "message": "Pobierz listę newsletterów z Customer.io."
+        },
+        "app.Q3VzdG9tZXJJbw.action.bGlzdC1uZXdzbGV0dGVycw.display_name": {
+          "source": "List Newsletters",
+          "message": "Wyświetl listę newsletterów"
+        },
+        "app.Q3VzdG9tZXJJbw.action.bGlzdC1uZXdzbGV0dGVycw.option.cGFnZQ.desc": {
+          "source": "Page number for pagination (starting at 1)",
+          "message": "Numer strony do paginacji (zaczynając od 1)"
+        },
+        "app.Q3VzdG9tZXJJbw.action.bGlzdC1uZXdzbGV0dGVycw.option.cGFnZQ.display_name": {
+          "source": "Page",
+          "message": "Strona"
+        },
+        "app.Q3VzdG9tZXJJbw.action.bGlzdC1uZXdzbGV0dGVycw.option.cGFnZQ.short_desc": {
+          "source": "Page number",
+          "message": "Numer strony"
+        },
+        "app.Q3VzdG9tZXJJbw.action.bGlzdC1uZXdzbGV0dGVycw.option.cGFnZV9zaXpl.desc": {
+          "source": "Number of results per page",
+          "message": "Liczba wyników na stronę"
+        },
+        "app.Q3VzdG9tZXJJbw.action.bGlzdC1uZXdzbGV0dGVycw.option.cGFnZV9zaXpl.display_name": {
+          "source": "Page Size",
+          "message": "Rozmiar strony"
+        },
+        "app.Q3VzdG9tZXJJbw.action.bGlzdC1uZXdzbGV0dGVycw.option.cGFnZV9zaXpl.short_desc": {
+          "source": "Results per page",
+          "message": "Wyniki na stronę"
+        },
+        "app.Q3VzdG9tZXJJbw.action.bGlzdC1uZXdzbGV0dGVycw.short_desc": {
+          "source": "List newsletters",
+          "message": "Wyświetl listę newsletterów"
+        },
+        "app.Q3VzdG9tZXJJbw.action.bGlzdC1wZW9wbGU.desc": {
+          "source": "Retrieve a list of people from Customer.io with optional filtering by email, ID, or Customer.io internal ID.",
+          "message": "Pobierz listę osób z Customer.io z opcjonalnym filtrowaniem według adresu e-mail, identyfikatora lub wewnętrznego identyfikatora Customer.io."
+        },
+        "app.Q3VzdG9tZXJJbw.action.bGlzdC1wZW9wbGU.display_name": {
+          "source": "List People",
+          "message": "Wyświetl listę osób"
+        },
+        "app.Q3VzdG9tZXJJbw.action.bGlzdC1wZW9wbGU.option.Y2lvX2lk.desc": {
+          "source": "Filter people by Customer.io internal ID",
+          "message": "Filtruj osoby według wewnętrznego identyfikatora Customer.io"
+        },
+        "app.Q3VzdG9tZXJJbw.action.bGlzdC1wZW9wbGU.option.Y2lvX2lk.display_name": {
+          "source": "CIO ID",
+          "message": "CIO ID"
+        },
+        "app.Q3VzdG9tZXJJbw.action.bGlzdC1wZW9wbGU.option.Y2lvX2lk.short_desc": {
+          "source": "Filter by Customer.io ID",
+          "message": "Filtruj według identyfikatora Customer.io"
+        },
+        "app.Q3VzdG9tZXJJbw.action.bGlzdC1wZW9wbGU.option.ZW1haWw.desc": {
+          "source": "Filter people by email address",
+          "message": "Filtruj osoby według adresu e-mail"
+        },
+        "app.Q3VzdG9tZXJJbw.action.bGlzdC1wZW9wbGU.option.ZW1haWw.display_name": {
+          "source": "Email",
+          "message": "E-mail"
+        },
+        "app.Q3VzdG9tZXJJbw.action.bGlzdC1wZW9wbGU.option.ZW1haWw.short_desc": {
+          "source": "Filter by email address",
+          "message": "Filtruj według adresu e-mail"
+        },
+        "app.Q3VzdG9tZXJJbw.action.bGlzdC1wZW9wbGU.option.aWQ.desc": {
+          "source": "Filter people by customer ID",
+          "message": "Filtruj osoby według identyfikatora klienta"
+        },
+        "app.Q3VzdG9tZXJJbw.action.bGlzdC1wZW9wbGU.option.aWQ.display_name": {
+          "source": "ID",
+          "message": "ID"
+        },
+        "app.Q3VzdG9tZXJJbw.action.bGlzdC1wZW9wbGU.option.aWQ.short_desc": {
+          "source": "Filter by customer ID",
+          "message": "Filtruj według identyfikatora klienta"
+        },
+        "app.Q3VzdG9tZXJJbw.action.bGlzdC1wZW9wbGU.short_desc": {
+          "source": "List and search people",
+          "message": "Wyświetlaj i wyszukuj osoby"
+        },
+        "app.Q3VzdG9tZXJJbw.action.bGlzdC1zZWdtZW50cw.desc": {
+          "source": "Retrieve a list of segments from Customer.io.",
+          "message": "Pobierz listę segmentów z Customer.io."
+        },
+        "app.Q3VzdG9tZXJJbw.action.bGlzdC1zZWdtZW50cw.display_name": {
+          "source": "List Segments",
+          "message": "Wyświetl listę segmentów"
+        },
+        "app.Q3VzdG9tZXJJbw.action.bGlzdC1zZWdtZW50cw.option.cGFnZQ.desc": {
+          "source": "Page number for pagination (starting at 1)",
+          "message": "Numer strony do paginacji (zaczynając od 1)"
+        },
+        "app.Q3VzdG9tZXJJbw.action.bGlzdC1zZWdtZW50cw.option.cGFnZQ.display_name": {
+          "source": "Page",
+          "message": "Strona"
+        },
+        "app.Q3VzdG9tZXJJbw.action.bGlzdC1zZWdtZW50cw.option.cGFnZQ.short_desc": {
+          "source": "Page number",
+          "message": "Numer strony"
+        },
+        "app.Q3VzdG9tZXJJbw.action.bGlzdC1zZWdtZW50cw.option.cGFnZV9zaXpl.desc": {
+          "source": "Number of results per page",
+          "message": "Liczba wyników na stronę"
+        },
+        "app.Q3VzdG9tZXJJbw.action.bGlzdC1zZWdtZW50cw.option.cGFnZV9zaXpl.display_name": {
+          "source": "Page Size",
+          "message": "Rozmiar strony"
+        },
+        "app.Q3VzdG9tZXJJbw.action.bGlzdC1zZWdtZW50cw.option.cGFnZV9zaXpl.short_desc": {
+          "source": "Results per page",
+          "message": "Wyniki na stronę"
+        },
+        "app.Q3VzdG9tZXJJbw.action.bGlzdC1zZWdtZW50cw.short_desc": {
+          "source": "List segments",
+          "message": "Wyświetl listę segmentów"
+        },
+        "app.Q3VzdG9tZXJJbw.action.bGlzdC1zbmlwcGV0cw.desc": {
+          "source": "Retrieve a list of all snippets from Customer.io.",
+          "message": "Pobierz listę wszystkich fragmentów z Customer.io."
+        },
+        "app.Q3VzdG9tZXJJbw.action.bGlzdC1zbmlwcGV0cw.display_name": {
+          "source": "List Snippets",
+          "message": "Wyświetl listę fragmentów"
+        },
+        "app.Q3VzdG9tZXJJbw.action.bGlzdC1zbmlwcGV0cw.short_desc": {
+          "source": "List snippets",
+          "message": "Wyświetl listę fragmentów"
+        },
+        "app.Q3VzdG9tZXJJbw.action.bWFrZS1hcGktY2FsbA.desc": {
+          "source": "Make a custom HTTP / REST API call to **Customer.io** using the configured connection's authentication.\n\nSpecify the HTTP method, the URI path (relative to the connection's API base URL), optional query parameters, headers, and request body. The response is returned as a hash containing the status code, response headers, and response body.\n\nUse this action for endpoints that are not yet exposed as first-class actions on this app.",
+          "message": "Wykonaj niestandardowe wywołanie HTTP / REST API do **Customer.io** przy użyciu uwierzytelniania skonfigurowanego połączenia.\n\nOkreśl metodę HTTP, ścieżkę URI (względną wobec podstawowego adresu URL API połączenia), opcjonalne parametry zapytania, nagłówki i treść żądania. Odpowiedź jest zwracana jako hash zawierający kod statusu, nagłówki odpowiedzi i treść odpowiedzi.\n\nUżyj tej akcji dla punktów końcowych, które nie są jeszcze udostępnione jako natywne akcje w tej aplikacji."
+        },
+        "app.Q3VzdG9tZXJJbw.action.bWFrZS1hcGktY2FsbA.display_name": {
+          "source": "Make an API call",
+          "message": "Wykonaj wywołanie API"
+        },
+        "app.Q3VzdG9tZXJJbw.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.desc": {
+          "source": "The request body. The effective type depends on `body_type`: JSON/form/YAML expect a hash, XML/text expect a string, multipart expects a file structure, binary expects raw bytes.",
+          "message": "Ciało żądania. Rzeczywisty typ zależy od `body_type`: JSON/form/YAML oczekują hasza, XML/text oczekują ciągu znaków, multipart oczekuje struktury pliku, binary oczekuje surowych bajtów."
+        },
+        "app.Q3VzdG9tZXJJbw.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.display_name": {
+          "source": "Body",
+          "message": "Treść"
+        },
+        "app.Q3VzdG9tZXJJbw.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.short_desc": {
+          "source": "The request body",
+          "message": "Ciało żądania"
+        },
+        "app.Q3VzdG9tZXJJbw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.desc": {
+          "source": "Upload a file using `multipart/form-data`. The body must be a @ref DataProvider::FileDataType \"FileDataType\" structure (filename + content + mime_type). The framework builds the multipart envelope and sets the boundary header.",
+          "message": "Przesyłanie pliku za pomocą `multipart/form-data`. Ciało żądania musi być strukturą @ref DataProvider::FileDataType \"FileDataType\" (filename + content + mime_type). Szablon buduje kopertę multipart i ustawia nagłówek boundary."
+        },
+        "app.Q3VzdG9tZXJJbw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.display_name": {
+          "source": "Multipart Form",
+          "message": "Formularz Multipart"
+        },
+        "app.Q3VzdG9tZXJJbw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.short_desc": {
+          "source": "Upload a file using multipart/form-data",
+          "message": "Przesyłanie pliku za pomocą multipart/form-data"
+        },
+        "app.Q3VzdG9tZXJJbw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.desc": {
+          "source": "Pass the body to the REST client unchanged; the client decides serialization based on its configured `data` option and the value type",
+          "message": "Przekaż ciało żądania do klienta REST bez zmian; klient decyduje o serializacji na podstawie skonfigurowanej opcji `data` i typu wartości"
+        },
+        "app.Q3VzdG9tZXJJbw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.display_name": {
+          "source": "Auto",
+          "message": "Auto"
+        },
+        "app.Q3VzdG9tZXJJbw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.short_desc": {
+          "source": "Pass-through; use connection serialization and let the REST client decide",
+          "message": "Przekazywanie bez zmian; użyj serializacji połączenia i pozwól klientowi REST zadecydować"
+        },
+        "app.Q3VzdG9tZXJJbw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.desc": {
+          "source": "Send the body as raw bytes. The body must be a binary value. Sets `Content-Type: application/octet-stream` unless overridden by `hdr`.",
+          "message": "Wyślij ciało jako surowe bajty. Ciało musi być wartością binarną. Ustawia `Content-Type: application/octet-stream`, chyba że zostanie nadpisane przez `hdr`."
+        },
+        "app.Q3VzdG9tZXJJbw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.display_name": {
+          "source": "Raw Binary",
+          "message": "Surowe dane binarne"
+        },
+        "app.Q3VzdG9tZXJJbw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.short_desc": {
+          "source": "Send body as raw bytes",
+          "message": "Wyślij ciało jako surowe bajty"
+        },
+        "app.Q3VzdG9tZXJJbw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.desc": {
+          "source": "Serialize a hash of form fields as `application/x-www-form-urlencoded`. The body must be a hash whose values are scalars (strings/numbers/booleans).",
+          "message": "Serializuj hasz pól formularza jako `application/x-www-form-urlencoded`. Ciało musi być haszem, którego wartości są skalarami (ciągi znaków/liczby/wartości logiczne)."
+        },
+        "app.Q3VzdG9tZXJJbw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.display_name": {
+          "source": "Form (URL-encoded)",
+          "message": "Formularz (zakodowany w URL)"
+        },
+        "app.Q3VzdG9tZXJJbw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.short_desc": {
+          "source": "Serialize body as application/x-www-form-urlencoded form fields",
+          "message": "Serializuj ciało jako pola formularza application/x-www-form-urlencoded"
+        },
+        "app.Q3VzdG9tZXJJbw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.desc": {
+          "source": "Serialize the body as JSON; sets `Content-Type: application/json`. The body should be a hash, list, or scalar value.",
+          "message": "Serializuj ciało jako JSON; ustawia `Content-Type: application/json`. Ciało powinno być haszem, listą lub wartością skalarną."
+        },
+        "app.Q3VzdG9tZXJJbw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.display_name": {
+          "source": "JSON",
+          "message": "JSON"
+        },
+        "app.Q3VzdG9tZXJJbw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.short_desc": {
+          "source": "Serialize body as JSON",
+          "message": "Serializuj ciało jako JSON"
+        },
+        "app.Q3VzdG9tZXJJbw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.desc": {
+          "source": "Send the body as plain text. The body must be a string. Sets `Content-Type: text/plain`.",
+          "message": "Wyślij ciało jako zwykły tekst. Ciało musi być ciągiem znaków. Ustawia `Content-Type: text/plain`."
+        },
+        "app.Q3VzdG9tZXJJbw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.display_name": {
+          "source": "Plain Text",
+          "message": "Czysty tekst"
+        },
+        "app.Q3VzdG9tZXJJbw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.short_desc": {
+          "source": "Send body as text/plain",
+          "message": "Wyślij ciało jako text/plain"
+        },
+        "app.Q3VzdG9tZXJJbw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.desc": {
+          "source": "Send the body as XML. If the body is a hash it is serialized to XML; if it is a string it is sent verbatim. Sets `Content-Type: application/xml`.",
+          "message": "Wyślij ciało jako XML. Jeśli ciało jest haszem, jest serializowane do XML; jeśli jest ciągiem znaków, jest wysyłane bez zmian. Ustawia `Content-Type: application/xml`."
+        },
+        "app.Q3VzdG9tZXJJbw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.display_name": {
+          "source": "XML",
+          "message": "XML"
+        },
+        "app.Q3VzdG9tZXJJbw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.short_desc": {
+          "source": "Send body as XML",
+          "message": "Wyślij ciało jako XML"
+        },
+        "app.Q3VzdG9tZXJJbw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.desc": {
+          "source": "Send the body as YAML. If the body is a hash it is serialized to YAML; if it is a string it is sent verbatim. Sets `Content-Type: application/x-yaml`.",
+          "message": "Wyślij ciało jako YAML. Jeśli ciało jest haszem, jest serializowane do YAML; jeśli jest ciągiem znaków, jest wysyłane bez zmian. Ustawia `Content-Type: application/x-yaml`."
+        },
+        "app.Q3VzdG9tZXJJbw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.display_name": {
+          "source": "YAML",
+          "message": "YAML"
+        },
+        "app.Q3VzdG9tZXJJbw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.short_desc": {
+          "source": "Send body as YAML",
+          "message": "Wyślij ciało jako YAML"
+        },
+        "app.Q3VzdG9tZXJJbw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.desc": {
+          "source": "Selects the body serialization mode and the corresponding `Content-Type` header. Changing this field reshapes the `body` editor - selecting JSON exposes a JSON editor, selecting Multipart Form exposes a file picker, and so on.",
+          "message": "Wybiera tryb serializacji ciała i odpowiadający mu nagłówek `Content-Type`. Zmiana tego pola zmienia edytor `body` - wybór JSON udostępnia edytor JSON, wybór Multipart Form udostępnia okno wyboru pliku i tak dalej."
+        },
+        "app.Q3VzdG9tZXJJbw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.display_name": {
+          "source": "Body Type",
+          "message": "Typ ciała"
+        },
+        "app.Q3VzdG9tZXJJbw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.short_desc": {
+          "source": "How the body is serialized and what Content-Type is sent",
+          "message": "Sposób serializacji ciała i wysyłany Content-Type"
+        },
+        "app.Q3VzdG9tZXJJbw.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.desc": {
+          "source": "If `True`, non-2xx HTTP responses return as the normal response hash (with the actual status code) instead of raising `REST-RESPONSE-ERROR`. Useful for handling 4xx/5xx as data - e.g. checking whether a resource exists. Overrides the connection's `error_passthru` setting for this call only.",
+          "message": "Jeśli `True`, odpowiedzi HTTP inne niż 2xx są zwracane jako zwykły hasz odpowiedzi (z rzeczywistym kodem stanu) zamiast zgłaszania `REST-RESPONSE-ERROR`. Przydatne do obsługi 4xx/5xx jako danych - np. do sprawdzania, czy zasób istnieje. Nadpisuje ustawienie połączenia `error_passthru` tylko dla tego wywołania."
+        },
+        "app.Q3VzdG9tZXJJbw.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.display_name": {
+          "source": "Return Errors as Data",
+          "message": "Zwracaj błędy jako dane"
+        },
+        "app.Q3VzdG9tZXJJbw.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.short_desc": {
+          "source": "Return non-2xx responses normally instead of throwing",
+          "message": "Zwracaj odpowiedzi inne niż 2xx normalnie zamiast zgłaszać błąd"
+        },
+        "app.Q3VzdG9tZXJJbw.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.desc": {
+          "source": "Optional list of HTTP status codes treated as success. If set and the response status is not in this list, the action throws `REST-STATUS-ERROR`. When unset, the REST client's default behavior applies (typically: 2xx is success, non-2xx throws).",
+          "message": "Opcjonalna lista kodów stanu HTTP traktowanych jako sukces. Jeśli ustawiono, a kod stanu odpowiedzi nie znajduje się na tej liście, akcja zgłasza `REST-STATUS-ERROR`. Gdy pole nie jest ustawione, stosowane jest domyślne zachowanie klienta REST (zwykle: 2xx to sukces, inne niż 2xx zgłaszają błąd)."
+        },
+        "app.Q3VzdG9tZXJJbw.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.display_name": {
+          "source": "Expected Status Codes",
+          "message": "Oczekiwane kody stanu"
+        },
+        "app.Q3VzdG9tZXJJbw.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.short_desc": {
+          "source": "Response status codes treated as success",
+          "message": "Kody stanu odpowiedzi traktowane jako sukces"
+        },
+        "app.Q3VzdG9tZXJJbw.action.bWFrZS1hcGktY2FsbA.option.aGRy.desc": {
+          "source": "Hash of custom headers added to the request. These override any default headers set by `body_type` (e.g. supplying `Content-Type` here wins over the body-type default).",
+          "message": "Hasz niestandardowych nagłówków dodawanych do żądania. Nadpisują one wszelkie domyślne nagłówki ustawione przez `body_type` (np. podanie tutaj `Content-Type` zastępuje domyślną wartość dla typu ciała)."
+        },
+        "app.Q3VzdG9tZXJJbw.action.bWFrZS1hcGktY2FsbA.option.aGRy.display_name": {
+          "source": "Custom Headers",
+          "message": "Niestandardowe nagłówki"
+        },
+        "app.Q3VzdG9tZXJJbw.action.bWFrZS1hcGktY2FsbA.option.aGRy.short_desc": {
+          "source": "Extra request headers",
+          "message": "Dodatkowe nagłówki żądania"
+        },
+        "app.Q3VzdG9tZXJJbw.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.desc": {
+          "source": "If `True`, the response hash includes a `debug` sub-hash containing the request method/URL/headers (with sensitive values redacted), request and response sizes, and round-trip duration. Useful when investigating slow or failing calls. Off by default to keep responses lean.",
+          "message": "Jeśli `True`, hasz odpowiedzi zawiera pod-hasz `debug` zawierający metodę/URL/nagłówki żądania (z zredagowanymi poufnymi wartościami), rozmiary żądania i odpowiedzi oraz czas trwania w obie strony. Przydatne podczas badania wolnych lub nieudanych wywołań. Domyślnie wyłączone, aby odpowiedzi były lekkie."
+        },
+        "app.Q3VzdG9tZXJJbw.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.display_name": {
+          "source": "Include Debug Info",
+          "message": "Dołącz informacje diagnostyczne"
+        },
+        "app.Q3VzdG9tZXJJbw.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.short_desc": {
+          "source": "Include request/timing/size debug info in the response",
+          "message": "Dołącz informacje diagnostyczne dotyczące żądania/czasu/rozmiaru w odpowiedzi"
+        },
+        "app.Q3VzdG9tZXJJbw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.desc": {
+          "source": "HTTP `OPTIONS`",
+          "message": "HTTP `OPTIONS`"
+        },
+        "app.Q3VzdG9tZXJJbw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.display_name": {
+          "source": "OPTIONS",
+          "message": "OPTIONS"
+        },
+        "app.Q3VzdG9tZXJJbw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.short_desc": {
+          "source": "HTTP OPTIONS",
+          "message": "HTTP OPTIONS"
+        },
+        "app.Q3VzdG9tZXJJbw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.desc": {
+          "source": "HTTP `DELETE`",
+          "message": "HTTP `DELETE`"
+        },
+        "app.Q3VzdG9tZXJJbw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.display_name": {
+          "source": "DELETE",
+          "message": "DELETE"
+        },
+        "app.Q3VzdG9tZXJJbw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.short_desc": {
+          "source": "HTTP DELETE",
+          "message": "HTTP DELETE"
+        },
+        "app.Q3VzdG9tZXJJbw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.desc": {
+          "source": "HTTP `GET`",
+          "message": "HTTP `GET`"
+        },
+        "app.Q3VzdG9tZXJJbw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.display_name": {
+          "source": "GET",
+          "message": "GET"
+        },
+        "app.Q3VzdG9tZXJJbw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.short_desc": {
+          "source": "HTTP GET",
+          "message": "HTTP GET"
+        },
+        "app.Q3VzdG9tZXJJbw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.desc": {
+          "source": "HTTP `HEAD`",
+          "message": "HTTP `HEAD`"
+        },
+        "app.Q3VzdG9tZXJJbw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.display_name": {
+          "source": "HEAD",
+          "message": "HEAD"
+        },
+        "app.Q3VzdG9tZXJJbw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.short_desc": {
+          "source": "HTTP HEAD",
+          "message": "HTTP HEAD"
+        },
+        "app.Q3VzdG9tZXJJbw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.desc": {
+          "source": "HTTP `PATCH`",
+          "message": "HTTP `PATCH`"
+        },
+        "app.Q3VzdG9tZXJJbw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.display_name": {
+          "source": "PATCH",
+          "message": "PATCH"
+        },
+        "app.Q3VzdG9tZXJJbw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.short_desc": {
+          "source": "HTTP PATCH",
+          "message": "HTTP PATCH"
+        },
+        "app.Q3VzdG9tZXJJbw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.desc": {
+          "source": "HTTP `POST`",
+          "message": "HTTP `POST`"
+        },
+        "app.Q3VzdG9tZXJJbw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.display_name": {
+          "source": "POST",
+          "message": "POST"
+        },
+        "app.Q3VzdG9tZXJJbw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.short_desc": {
+          "source": "HTTP POST",
+          "message": "HTTP POST"
+        },
+        "app.Q3VzdG9tZXJJbw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.desc": {
+          "source": "HTTP `PUT`",
+          "message": "HTTP `PUT`"
+        },
+        "app.Q3VzdG9tZXJJbw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.display_name": {
+          "source": "PUT",
+          "message": "PUT"
+        },
+        "app.Q3VzdG9tZXJJbw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.short_desc": {
+          "source": "HTTP PUT",
+          "message": "HTTP PUT"
+        },
+        "app.Q3VzdG9tZXJJbw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.desc": {
+          "source": "HTTP `TRACE`",
+          "message": "HTTP `TRACE`"
+        },
+        "app.Q3VzdG9tZXJJbw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.display_name": {
+          "source": "TRACE",
+          "message": "TRACE"
+        },
+        "app.Q3VzdG9tZXJJbw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.short_desc": {
+          "source": "HTTP TRACE",
+          "message": "HTTP TRACE"
+        },
+        "app.Q3VzdG9tZXJJbw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "Metoda HTTP do użycia w żądaniu"
+        },
+        "app.Q3VzdG9tZXJJbw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.display_name": {
+          "source": "HTTP Method",
+          "message": "Metoda HTTP"
+        },
+        "app.Q3VzdG9tZXJJbw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.short_desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "Metoda HTTP do użycia w żądaniu"
+        },
+        "app.Q3VzdG9tZXJJbw.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain `{name}` placeholders that are replaced from `path_vars`. Example: `/users/{id}/comments`.",
+          "message": "Ścieżka URI względna wobec bazowego URL API połączenia. Może zawierać symbole zastępcze `{name}`, które zostaną zastąpione z `path_vars`. Przykład: `/users/{id}/comments`."
+        },
+        "app.Q3VzdG9tZXJJbw.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.display_name": {
+          "source": "URI Path",
+          "message": "Ścieżka URI"
+        },
+        "app.Q3VzdG9tZXJJbw.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.short_desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain '{name}' placeholders that are replaced from 'path_vars'. Example: '/users/{id}/comments'",
+          "message": "Ścieżka URI względna wobec bazowego adresu URL API połączenia. Może zawierać symbole zastępcze '{name}', które są zastępowane z 'path_vars'. Przykład: '/users/{id}/comments'"
+        },
+        "app.Q3VzdG9tZXJJbw.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.desc": {
+          "source": "Hash of values substituted into `{name}` placeholders in the URI path. Example: with `path = /users/{id}` and `path_vars = {id: 123}` the framework sends `/users/123`. Values are URL-encoded.",
+          "message": "Hash wartości podstawianych w miejsce symboli zastępczych `{name}` w ścieżce URI. Przykład: dla `path = /users/{id}` i `path_vars = {id: 123}` framework wysyła `/users/123`. Wartości są kodowane w formacie URL."
+        },
+        "app.Q3VzdG9tZXJJbw.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.display_name": {
+          "source": "Path Variables",
+          "message": "Zmienne ścieżki"
+        },
+        "app.Q3VzdG9tZXJJbw.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.short_desc": {
+          "source": "Values for {name} placeholders in path",
+          "message": "Wartości dla symboli zastępczych {name} w ścieżce"
+        },
+        "app.Q3VzdG9tZXJJbw.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.desc": {
+          "source": "Hash of query string parameters to append to the URI path. Values are URL-encoded; list values are joined with `,`.",
+          "message": "Hash parametrów zapytania do dołączenia do ścieżki URI. Wartości są kodowane w formacie URL; wartości list są łączone za pomocą `,`."
+        },
+        "app.Q3VzdG9tZXJJbw.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.display_name": {
+          "source": "Query Arguments",
+          "message": "Argumenty zapytania"
+        },
+        "app.Q3VzdG9tZXJJbw.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.short_desc": {
+          "source": "Query string parameters",
+          "message": "Parametry zapytania"
+        },
+        "app.Q3VzdG9tZXJJbw.action.bWFrZS1hcGktY2FsbA.short_desc": {
+          "source": "Make a custom API call to Customer.io",
+          "message": "Wykonaj niestandardowe wywołanie API do Customer.io"
+        },
+        "app.Q3VzdG9tZXJJbw.action.bWVyZ2UtY3VzdG9tZXJz.desc": {
+          "source": "Merge two customer profiles in Customer.io. The primary profile is kept and the secondary profile's data is merged into it.",
+          "message": "Połącz dwa profile klientów w Customer.io. Profil główny jest zachowywany, a dane profilu pomocniczego są z nim scalane."
+        },
+        "app.Q3VzdG9tZXJJbw.action.bWVyZ2UtY3VzdG9tZXJz.display_name": {
+          "source": "Merge Customers",
+          "message": "Połącz klientów"
+        },
+        "app.Q3VzdG9tZXJJbw.action.bWVyZ2UtY3VzdG9tZXJz.option.c2Vjb25kYXJ5X3R5cGU.allowed-value.c3RyaW5nOmNpb19pZA.desc": {
+          "source": "Customer.io ID",
+          "message": "Identyfikator Customer.io"
+        },
+        "app.Q3VzdG9tZXJJbw.action.bWVyZ2UtY3VzdG9tZXJz.option.c2Vjb25kYXJ5X3R5cGU.allowed-value.c3RyaW5nOmVtYWls.desc": {
+          "source": "Email address",
+          "message": "Adres e-mail"
+        },
+        "app.Q3VzdG9tZXJJbw.action.bWVyZ2UtY3VzdG9tZXJz.option.c2Vjb25kYXJ5X3R5cGU.allowed-value.c3RyaW5nOmlk.desc": {
+          "source": "Customer ID",
+          "message": "Identyfikator klienta"
+        },
+        "app.Q3VzdG9tZXJJbw.action.bWVyZ2UtY3VzdG9tZXJz.option.c2Vjb25kYXJ5X3R5cGU.desc": {
+          "source": "Secondary identifier type (id, email, or cio_id)",
+          "message": "Typ identyfikatora pomocniczego (id, email lub cio_id)"
+        },
+        "app.Q3VzdG9tZXJJbw.action.bWVyZ2UtY3VzdG9tZXJz.option.c2Vjb25kYXJ5X3R5cGU.display_name": {
+          "source": "Secondary Type",
+          "message": "Typ pomocniczy"
+        },
+        "app.Q3VzdG9tZXJJbw.action.bWVyZ2UtY3VzdG9tZXJz.option.c2Vjb25kYXJ5X3R5cGU.short_desc": {
+          "source": "Secondary identifier type",
+          "message": "Typ identyfikatora pomocniczego"
+        },
+        "app.Q3VzdG9tZXJJbw.action.bWVyZ2UtY3VzdG9tZXJz.option.c2Vjb25kYXJ5X3ZhbHVl.desc": {
+          "source": "Secondary identifier value",
+          "message": "Wartość identyfikatora pomocniczego"
+        },
+        "app.Q3VzdG9tZXJJbw.action.bWVyZ2UtY3VzdG9tZXJz.option.c2Vjb25kYXJ5X3ZhbHVl.display_name": {
+          "source": "Secondary Value",
+          "message": "Wartość pomocnicza"
+        },
+        "app.Q3VzdG9tZXJJbw.action.bWVyZ2UtY3VzdG9tZXJz.option.c2Vjb25kYXJ5X3ZhbHVl.short_desc": {
+          "source": "Secondary identifier value",
+          "message": "Wartość identyfikatora pomocniczego"
+        },
+        "app.Q3VzdG9tZXJJbw.action.bWVyZ2UtY3VzdG9tZXJz.option.cHJpbWFyeV90eXBl.allowed-value.c3RyaW5nOmNpb19pZA.desc": {
+          "source": "Customer.io ID",
+          "message": "Identyfikator Customer.io"
+        },
+        "app.Q3VzdG9tZXJJbw.action.bWVyZ2UtY3VzdG9tZXJz.option.cHJpbWFyeV90eXBl.allowed-value.c3RyaW5nOmVtYWls.desc": {
+          "source": "Email address",
+          "message": "Adres e-mail"
+        },
+        "app.Q3VzdG9tZXJJbw.action.bWVyZ2UtY3VzdG9tZXJz.option.cHJpbWFyeV90eXBl.allowed-value.c3RyaW5nOmlk.desc": {
+          "source": "Customer ID",
+          "message": "Identyfikator klienta"
+        },
+        "app.Q3VzdG9tZXJJbw.action.bWVyZ2UtY3VzdG9tZXJz.option.cHJpbWFyeV90eXBl.desc": {
+          "source": "Primary identifier type (id, email, or cio_id)",
+          "message": "Typ identyfikatora głównego (id, email lub cio_id)"
+        },
+        "app.Q3VzdG9tZXJJbw.action.bWVyZ2UtY3VzdG9tZXJz.option.cHJpbWFyeV90eXBl.display_name": {
+          "source": "Primary Type",
+          "message": "Typ główny"
+        },
+        "app.Q3VzdG9tZXJJbw.action.bWVyZ2UtY3VzdG9tZXJz.option.cHJpbWFyeV90eXBl.short_desc": {
+          "source": "Primary identifier type",
+          "message": "Typ identyfikatora głównego"
+        },
+        "app.Q3VzdG9tZXJJbw.action.bWVyZ2UtY3VzdG9tZXJz.option.cHJpbWFyeV92YWx1ZQ.desc": {
+          "source": "Primary identifier value",
+          "message": "Wartość identyfikatora głównego"
+        },
+        "app.Q3VzdG9tZXJJbw.action.bWVyZ2UtY3VzdG9tZXJz.option.cHJpbWFyeV92YWx1ZQ.display_name": {
+          "source": "Primary Value",
+          "message": "Wartość główna"
+        },
+        "app.Q3VzdG9tZXJJbw.action.bWVyZ2UtY3VzdG9tZXJz.option.cHJpbWFyeV92YWx1ZQ.short_desc": {
+          "source": "Primary identifier value",
+          "message": "Wartość identyfikatora głównego"
+        },
+        "app.Q3VzdG9tZXJJbw.action.bWVyZ2UtY3VzdG9tZXJz.short_desc": {
+          "source": "Merge two customer profiles",
+          "message": "Połącz dwa profile klientów"
+        },
+        "app.Q3VzdG9tZXJJbw.action.c2VuZC10cmFuc2FjdGlvbmFsLWVtYWls.desc": {
+          "source": "Send a transactional email via Customer.io using a pre-defined transactional message template.",
+          "message": "Wyślij transakcyjną wiadomość e-mail przez Customer.io przy użyciu wstępnie zdefiniowanego szablonu wiadomości transakcyjnej."
+        },
+        "app.Q3VzdG9tZXJJbw.action.c2VuZC10cmFuc2FjdGlvbmFsLWVtYWls.display_name": {
+          "source": "Send Transactional Email",
+          "message": "Wyślij transakcyjną wiadomość e-mail"
+        },
+        "app.Q3VzdG9tZXJJbw.action.c2VuZC10cmFuc2FjdGlvbmFsLWVtYWls.option.Ym9keQ.desc": {
+          "source": "Override the message body with HTML content",
+          "message": "Zastąp treść wiadomości zawartością HTML"
+        },
+        "app.Q3VzdG9tZXJJbw.action.c2VuZC10cmFuc2FjdGlvbmFsLWVtYWls.option.Ym9keQ.display_name": {
+          "source": "Body",
+          "message": "Treść"
+        },
+        "app.Q3VzdG9tZXJJbw.action.c2VuZC10cmFuc2FjdGlvbmFsLWVtYWls.option.Ym9keQ.short_desc": {
+          "source": "Override message body (HTML)",
+          "message": "Zastąp treść wiadomości (HTML)"
+        },
+        "app.Q3VzdG9tZXJJbw.action.c2VuZC10cmFuc2FjdGlvbmFsLWVtYWls.option.ZnJvbQ.desc": {
+          "source": "Override the sender email address",
+          "message": "Zastąp adres e-mail nadawcy"
+        },
+        "app.Q3VzdG9tZXJJbw.action.c2VuZC10cmFuc2FjdGlvbmFsLWVtYWls.option.ZnJvbQ.display_name": {
+          "source": "From",
+          "message": "Od"
+        },
+        "app.Q3VzdG9tZXJJbw.action.c2VuZC10cmFuc2FjdGlvbmFsLWVtYWls.option.ZnJvbQ.short_desc": {
+          "source": "Override sender email",
+          "message": "Zastąp adres e-mail nadawcy"
+        },
+        "app.Q3VzdG9tZXJJbw.action.c2VuZC10cmFuc2FjdGlvbmFsLWVtYWls.option.aWRlbnRpZmllcnM.desc": {
+          "source": "Customer identifiers such as id, email, or cio_id",
+          "message": "Identyfikatory klienta, takie jak id, email lub cio_id"
+        },
+        "app.Q3VzdG9tZXJJbw.action.c2VuZC10cmFuc2FjdGlvbmFsLWVtYWls.option.aWRlbnRpZmllcnM.display_name": {
+          "source": "Identifiers",
+          "message": "Identyfikatory"
+        },
+        "app.Q3VzdG9tZXJJbw.action.c2VuZC10cmFuc2FjdGlvbmFsLWVtYWls.option.aWRlbnRpZmllcnM.short_desc": {
+          "source": "Customer identifiers (id, email, or cio_id)",
+          "message": "Identyfikatory klienta (id, email lub cio_id)"
+        },
+        "app.Q3VzdG9tZXJJbw.action.c2VuZC10cmFuc2FjdGlvbmFsLWVtYWls.option.bWVzc2FnZV9kYXRh.desc": {
+          "source": "Data for Liquid merge tags in the message template",
+          "message": "Dane dla tagów scalania Liquid w szablonie wiadomości"
+        },
+        "app.Q3VzdG9tZXJJbw.action.c2VuZC10cmFuc2FjdGlvbmFsLWVtYWls.option.bWVzc2FnZV9kYXRh.display_name": {
+          "source": "Message Data",
+          "message": "Dane wiadomości"
+        },
+        "app.Q3VzdG9tZXJJbw.action.c2VuZC10cmFuc2FjdGlvbmFsLWVtYWls.option.bWVzc2FnZV9kYXRh.short_desc": {
+          "source": "Data for Liquid merge tags in the message",
+          "message": "Dane dla tagów scalania Liquid w wiadomości"
+        },
+        "app.Q3VzdG9tZXJJbw.action.c2VuZC10cmFuc2FjdGlvbmFsLWVtYWls.option.c3ViamVjdA.desc": {
+          "source": "Override the subject line of the email",
+          "message": "Zastąp temat wiadomości e-mail"
+        },
+        "app.Q3VzdG9tZXJJbw.action.c2VuZC10cmFuc2FjdGlvbmFsLWVtYWls.option.c3ViamVjdA.display_name": {
+          "source": "Subject",
+          "message": "Temat"
+        },
+        "app.Q3VzdG9tZXJJbw.action.c2VuZC10cmFuc2FjdGlvbmFsLWVtYWls.option.c3ViamVjdA.short_desc": {
+          "source": "Override subject line",
+          "message": "Zastąp temat"
+        },
+        "app.Q3VzdG9tZXJJbw.action.c2VuZC10cmFuc2FjdGlvbmFsLWVtYWls.option.cmVwbHlfdG8.desc": {
+          "source": "Override the reply-to email address",
+          "message": "Zastąp adres e-mail do odpowiedzi"
+        },
+        "app.Q3VzdG9tZXJJbw.action.c2VuZC10cmFuc2FjdGlvbmFsLWVtYWls.option.cmVwbHlfdG8.display_name": {
+          "source": "Reply To",
+          "message": "Odpowiedz do"
+        },
+        "app.Q3VzdG9tZXJJbw.action.c2VuZC10cmFuc2FjdGlvbmFsLWVtYWls.option.cmVwbHlfdG8.short_desc": {
+          "source": "Override reply-to email",
+          "message": "Zastąp adres e-mail do odpowiedzi"
+        },
+        "app.Q3VzdG9tZXJJbw.action.c2VuZC10cmFuc2FjdGlvbmFsLWVtYWls.option.dG8.desc": {
+          "source": "The recipient email address",
+          "message": "Adres e-mail odbiorcy"
+        },
+        "app.Q3VzdG9tZXJJbw.action.c2VuZC10cmFuc2FjdGlvbmFsLWVtYWls.option.dG8.display_name": {
+          "source": "To",
+          "message": "Do"
+        },
+        "app.Q3VzdG9tZXJJbw.action.c2VuZC10cmFuc2FjdGlvbmFsLWVtYWls.option.dG8.short_desc": {
+          "source": "Recipient email address",
+          "message": "Adres e-mail odbiorcy"
+        },
+        "app.Q3VzdG9tZXJJbw.action.c2VuZC10cmFuc2FjdGlvbmFsLWVtYWls.option.dHJhbnNhY3Rpb25hbF9tZXNzYWdlX2lk.desc": {
+          "source": "The transactional message template ID to use for the email",
+          "message": "Identyfikator szablonu wiadomości transakcyjnej do użycia w wiadomości e-mail"
+        },
+        "app.Q3VzdG9tZXJJbw.action.c2VuZC10cmFuc2FjdGlvbmFsLWVtYWls.option.dHJhbnNhY3Rpb25hbF9tZXNzYWdlX2lk.display_name": {
+          "source": "Transactional Message ID",
+          "message": "Identyfikator wiadomości transakcyjnej"
+        },
+        "app.Q3VzdG9tZXJJbw.action.c2VuZC10cmFuc2FjdGlvbmFsLWVtYWls.option.dHJhbnNhY3Rpb25hbF9tZXNzYWdlX2lk.short_desc": {
+          "source": "The transactional message template ID",
+          "message": "Identyfikator szablonu wiadomości transakcyjnej"
+        },
+        "app.Q3VzdG9tZXJJbw.action.c2VuZC10cmFuc2FjdGlvbmFsLWVtYWls.short_desc": {
+          "source": "Send a transactional email",
+          "message": "Wyślij transakcyjną wiadomość e-mail"
+        },
+        "app.Q3VzdG9tZXJJbw.action.c2VuZC10cmFuc2FjdGlvbmFsLXB1c2g.desc": {
+          "source": "Send a transactional push notification via Customer.io using a pre-defined transactional message template.",
+          "message": "Wyślij transakcyjne powiadomienie push za pośrednictwem Customer.io przy użyciu predefiniowanego szablonu wiadomości transakcyjnej."
+        },
+        "app.Q3VzdG9tZXJJbw.action.c2VuZC10cmFuc2FjdGlvbmFsLXB1c2g.display_name": {
+          "source": "Send Transactional Push",
+          "message": "Wyślij transakcyjne powiadomienie push"
+        },
+        "app.Q3VzdG9tZXJJbw.action.c2VuZC10cmFuc2FjdGlvbmFsLXB1c2g.option.Ym9keV90ZXh0.desc": {
+          "source": "Override the push notification body text",
+          "message": "Zastąp treść powiadomienia push"
+        },
+        "app.Q3VzdG9tZXJJbw.action.c2VuZC10cmFuc2FjdGlvbmFsLXB1c2g.option.Ym9keV90ZXh0.display_name": {
+          "source": "Body Text",
+          "message": "Treść tekstowa"
+        },
+        "app.Q3VzdG9tZXJJbw.action.c2VuZC10cmFuc2FjdGlvbmFsLXB1c2g.option.Ym9keV90ZXh0.short_desc": {
+          "source": "Override push body text",
+          "message": "Zastąp treść powiadomienia push"
+        },
+        "app.Q3VzdG9tZXJJbw.action.c2VuZC10cmFuc2FjdGlvbmFsLXB1c2g.option.aWRlbnRpZmllcnM.desc": {
+          "source": "Customer identifiers such as id, email, or cio_id",
+          "message": "Identyfikatory klienta, takie jak id, email lub cio_id"
+        },
+        "app.Q3VzdG9tZXJJbw.action.c2VuZC10cmFuc2FjdGlvbmFsLXB1c2g.option.aWRlbnRpZmllcnM.display_name": {
+          "source": "Identifiers",
+          "message": "Identyfikatory"
+        },
+        "app.Q3VzdG9tZXJJbw.action.c2VuZC10cmFuc2FjdGlvbmFsLXB1c2g.option.aWRlbnRpZmllcnM.short_desc": {
+          "source": "Customer identifiers",
+          "message": "Identyfikatory klienta"
+        },
+        "app.Q3VzdG9tZXJJbw.action.c2VuZC10cmFuc2FjdGlvbmFsLXB1c2g.option.bWVzc2FnZV9kYXRh.desc": {
+          "source": "Data for merge tags in the push notification template",
+          "message": "Dane dla tagów scalania w szablonie powiadomienia push"
+        },
+        "app.Q3VzdG9tZXJJbw.action.c2VuZC10cmFuc2FjdGlvbmFsLXB1c2g.option.bWVzc2FnZV9kYXRh.display_name": {
+          "source": "Message Data",
+          "message": "Dane wiadomości"
+        },
+        "app.Q3VzdG9tZXJJbw.action.c2VuZC10cmFuc2FjdGlvbmFsLXB1c2g.option.bWVzc2FnZV9kYXRh.short_desc": {
+          "source": "Data for merge tags",
+          "message": "Dane dla tagów scalania"
+        },
+        "app.Q3VzdG9tZXJJbw.action.c2VuZC10cmFuc2FjdGlvbmFsLXB1c2g.option.dGl0bGU.desc": {
+          "source": "Override the push notification title",
+          "message": "Zastąp tytuł powiadomienia push"
+        },
+        "app.Q3VzdG9tZXJJbw.action.c2VuZC10cmFuc2FjdGlvbmFsLXB1c2g.option.dGl0bGU.display_name": {
+          "source": "Title",
+          "message": "Tytuł"
+        },
+        "app.Q3VzdG9tZXJJbw.action.c2VuZC10cmFuc2FjdGlvbmFsLXB1c2g.option.dGl0bGU.short_desc": {
+          "source": "Override push title",
+          "message": "Zastąp tytuł powiadomienia push"
+        },
+        "app.Q3VzdG9tZXJJbw.action.c2VuZC10cmFuc2FjdGlvbmFsLXB1c2g.option.dHJhbnNhY3Rpb25hbF9tZXNzYWdlX2lk.desc": {
+          "source": "The transactional message template ID to use for the push notification",
+          "message": "Identyfikator szablonu wiadomości transakcyjnej do użycia w powiadomieniu push"
+        },
+        "app.Q3VzdG9tZXJJbw.action.c2VuZC10cmFuc2FjdGlvbmFsLXB1c2g.option.dHJhbnNhY3Rpb25hbF9tZXNzYWdlX2lk.display_name": {
+          "source": "Transactional Message ID",
+          "message": "Identyfikator wiadomości transakcyjnej"
+        },
+        "app.Q3VzdG9tZXJJbw.action.c2VuZC10cmFuc2FjdGlvbmFsLXB1c2g.option.dHJhbnNhY3Rpb25hbF9tZXNzYWdlX2lk.short_desc": {
+          "source": "The transactional message template ID",
+          "message": "Identyfikator szablonu wiadomości transakcyjnej"
+        },
+        "app.Q3VzdG9tZXJJbw.action.c2VuZC10cmFuc2FjdGlvbmFsLXB1c2g.short_desc": {
+          "source": "Send a transactional push notification",
+          "message": "Wyślij transakcyjne powiadomienie push"
+        },
+        "app.Q3VzdG9tZXJJbw.action.c3VwcHJlc3MtY3VzdG9tZXI.desc": {
+          "source": "Suppress a customer in Customer.io, blocking all messaging to the customer.",
+          "message": "Wyklucz klienta w Customer.io, blokując wszelkie wiadomości do klienta."
+        },
+        "app.Q3VzdG9tZXJJbw.action.c3VwcHJlc3MtY3VzdG9tZXI.display_name": {
+          "source": "Suppress Customer",
+          "message": "Wyklucz klienta"
+        },
+        "app.Q3VzdG9tZXJJbw.action.c3VwcHJlc3MtY3VzdG9tZXI.option.Y3VzdG9tZXJfaWQ.desc": {
+          "source": "The unique customer identifier to suppress",
+          "message": "Unikalny identyfikator klienta do wykluczenia"
+        },
+        "app.Q3VzdG9tZXJJbw.action.c3VwcHJlc3MtY3VzdG9tZXI.option.Y3VzdG9tZXJfaWQ.display_name": {
+          "source": "Customer ID",
+          "message": "Identyfikator klienta"
+        },
+        "app.Q3VzdG9tZXJJbw.action.c3VwcHJlc3MtY3VzdG9tZXI.option.Y3VzdG9tZXJfaWQ.short_desc": {
+          "source": "The unique customer identifier",
+          "message": "Unikalny identyfikator klienta"
+        },
+        "app.Q3VzdG9tZXJJbw.action.c3VwcHJlc3MtY3VzdG9tZXI.short_desc": {
+          "source": "Suppress a customer",
+          "message": "Wyklucz klienta"
+        },
+        "app.Q3VzdG9tZXJJbw.action.d2F0Y2gtZW1haWwtY2xpY2tlZA.desc": {
+          "source": "Receive a notification when a link in an email is clicked via Customer.io.",
+          "message": "Odbieraj powiadomienie po kliknięciu linku w wiadomości e-mail za pośrednictwem Customer.io."
+        },
+        "app.Q3VzdG9tZXJJbw.action.d2F0Y2gtZW1haWwtY2xpY2tlZA.display_name": {
+          "source": "Watch Email Clicked",
+          "message": "Monitoruj kliknięcie wiadomości e-mail"
+        },
+        "app.Q3VzdG9tZXJJbw.action.d2F0Y2gtZW1haWwtY2xpY2tlZA.short_desc": {
+          "source": "Watch for email clicked events",
+          "message": "Monitoruj zdarzenia kliknięcia wiadomości e-mail"
+        },
+        "app.Q3VzdG9tZXJJbw.action.d2F0Y2gtZW1haWwtYm91bmNlZA.desc": {
+          "source": "Receive a notification when an email bounces via Customer.io.",
+          "message": "Odbieraj powiadomienie o odrzuceniu wiadomości e-mail za pośrednictwem Customer.io."
+        },
+        "app.Q3VzdG9tZXJJbw.action.d2F0Y2gtZW1haWwtYm91bmNlZA.display_name": {
+          "source": "Watch Email Bounced",
+          "message": "Monitoruj odrzucenie wiadomości e-mail"
+        },
+        "app.Q3VzdG9tZXJJbw.action.d2F0Y2gtZW1haWwtYm91bmNlZA.short_desc": {
+          "source": "Watch for email bounced events",
+          "message": "Monitoruj zdarzenia odrzucenia wiadomości e-mail"
+        },
+        "app.Q3VzdG9tZXJJbw.action.d2F0Y2gtZW1haWwtZGVsaXZlcmVk.desc": {
+          "source": "Receive a notification when an email is delivered via Customer.io.",
+          "message": "Odbieraj powiadomienie o doręczeniu wiadomości e-mail za pośrednictwem Customer.io."
+        },
+        "app.Q3VzdG9tZXJJbw.action.d2F0Y2gtZW1haWwtZGVsaXZlcmVk.display_name": {
+          "source": "Watch Email Delivered",
+          "message": "Monitoruj doręczenie wiadomości e-mail"
+        },
+        "app.Q3VzdG9tZXJJbw.action.d2F0Y2gtZW1haWwtZGVsaXZlcmVk.short_desc": {
+          "source": "Watch for email delivered events",
+          "message": "Monitoruj zdarzenia doręczenia wiadomości e-mail"
+        },
+        "app.Q3VzdG9tZXJJbw.action.d2F0Y2gtZW1haWwtZHJvcHBlZA.desc": {
+          "source": "Receive a notification when an email is dropped by Customer.io.",
+          "message": "Odbieraj powiadomienie o porzuceniu wiadomości e-mail przez Customer.io."
+        },
+        "app.Q3VzdG9tZXJJbw.action.d2F0Y2gtZW1haWwtZHJvcHBlZA.display_name": {
+          "source": "Watch Email Dropped",
+          "message": "Monitoruj porzucenie wiadomości e-mail"
+        },
+        "app.Q3VzdG9tZXJJbw.action.d2F0Y2gtZW1haWwtZHJvcHBlZA.short_desc": {
+          "source": "Watch for email dropped events",
+          "message": "Monitoruj zdarzenia porzucenia wiadomości e-mail"
+        },
+        "app.Q3VzdG9tZXJJbw.action.d2F0Y2gtZW1haWwtb3BlbmVk.desc": {
+          "source": "Receive a notification when an email is opened via Customer.io.",
+          "message": "Odbieraj powiadomienie o otwarciu wiadomości e-mail za pośrednictwem Customer.io."
+        },
+        "app.Q3VzdG9tZXJJbw.action.d2F0Y2gtZW1haWwtb3BlbmVk.display_name": {
+          "source": "Watch Email Opened",
+          "message": "Monitoruj otwarcie wiadomości e-mail"
+        },
+        "app.Q3VzdG9tZXJJbw.action.d2F0Y2gtZW1haWwtb3BlbmVk.short_desc": {
+          "source": "Watch for email opened events",
+          "message": "Monitoruj zdarzenia otwarcia wiadomości e-mail"
+        },
+        "app.Q3VzdG9tZXJJbw.action.d2F0Y2gtZW1haWwtc2VudA.desc": {
+          "source": "Receive a notification when an email is sent via Customer.io.",
+          "message": "Odbieraj powiadomienie o wysłaniu wiadomości e-mail za pośrednictwem Customer.io."
+        },
+        "app.Q3VzdG9tZXJJbw.action.d2F0Y2gtZW1haWwtc2VudA.display_name": {
+          "source": "Watch Email Sent",
+          "message": "Monitoruj wysłanie wiadomości e-mail"
+        },
+        "app.Q3VzdG9tZXJJbw.action.d2F0Y2gtZW1haWwtc2VudA.short_desc": {
+          "source": "Watch for email sent events",
+          "message": "Monitoruj zdarzenia wysłania wiadomości e-mail"
+        },
+        "app.Q3VzdG9tZXJJbw.action.d2F0Y2gtZW1haWwtc3BhbW1lZA.desc": {
+          "source": "Receive a notification when an email is marked as spam via Customer.io.",
+          "message": "Odbieraj powiadomienie o oznaczeniu wiadomości e-mail jako spam za pośrednictwem Customer.io."
+        },
+        "app.Q3VzdG9tZXJJbw.action.d2F0Y2gtZW1haWwtc3BhbW1lZA.display_name": {
+          "source": "Watch Email Spammed",
+          "message": "Monitoruj oznaczenie wiadomości e-mail jako spam"
+        },
+        "app.Q3VzdG9tZXJJbw.action.d2F0Y2gtZW1haWwtc3BhbW1lZA.short_desc": {
+          "source": "Watch for email marked as spam events",
+          "message": "Monitoruj zdarzenia oznaczenia wiadomości e-mail jako spam"
+        },
+        "app.Q3VzdG9tZXJJbw.action.d2F0Y2gtZW1haWwtdW5zdWJzY3JpYmVk.desc": {
+          "source": "Receive a notification when a recipient unsubscribes via an email from Customer.io.",
+          "message": "Odbieraj powiadomienie o anulowaniu subskrypcji przez odbiorcę z wiadomości e-mail z Customer.io."
+        },
+        "app.Q3VzdG9tZXJJbw.action.d2F0Y2gtZW1haWwtdW5zdWJzY3JpYmVk.display_name": {
+          "source": "Watch Email Unsubscribed",
+          "message": "Monitoruj wypisanie się z wiadomości e-mail"
+        },
+        "app.Q3VzdG9tZXJJbw.action.d2F0Y2gtZW1haWwtdW5zdWJzY3JpYmVk.short_desc": {
+          "source": "Watch for email unsubscribed events",
+          "message": "Monitoruj zdarzenia wypisania się z wiadomości e-mail"
+        },
+        "app.Q3VzdG9tZXJJbw.action.d2F0Y2gtc21zLWNsaWNrZWQ.desc": {
+          "source": "Receive a notification when a link in an SMS message is clicked via Customer.io.",
+          "message": "Odbieraj powiadomienie po kliknięciu linku w wiadomości SMS za pośrednictwem Customer.io."
+        },
+        "app.Q3VzdG9tZXJJbw.action.d2F0Y2gtc21zLWNsaWNrZWQ.display_name": {
+          "source": "Watch SMS Clicked",
+          "message": "Monitoruj kliknięcie wiadomości SMS"
+        },
+        "app.Q3VzdG9tZXJJbw.action.d2F0Y2gtc21zLWNsaWNrZWQ.short_desc": {
+          "source": "Watch for SMS clicked events",
+          "message": "Monitoruj zdarzenia kliknięcia wiadomości SMS"
+        },
+        "app.Q3VzdG9tZXJJbw.action.d2F0Y2gtc21zLWRlbGl2ZXJlZA.desc": {
+          "source": "Receive a notification when an SMS message is delivered via Customer.io.",
+          "message": "Odbieraj powiadomienie o doręczeniu wiadomości SMS za pośrednictwem Customer.io."
+        },
+        "app.Q3VzdG9tZXJJbw.action.d2F0Y2gtc21zLWRlbGl2ZXJlZA.display_name": {
+          "source": "Watch SMS Delivered",
+          "message": "Monitoruj doręczenie wiadomości SMS"
+        },
+        "app.Q3VzdG9tZXJJbw.action.d2F0Y2gtc21zLWRlbGl2ZXJlZA.short_desc": {
+          "source": "Watch for SMS delivered events",
+          "message": "Monitoruj zdarzenia doręczenia wiadomości SMS"
+        },
+        "app.Q3VzdG9tZXJJbw.action.d2F0Y2gtc21zLWZhaWxlZA.desc": {
+          "source": "Receive a notification when an SMS message fails to send via Customer.io.",
+          "message": "Odbieraj powiadomienie o niepowodzeniu wysłania wiadomości SMS za pośrednictwem Customer.io."
+        },
+        "app.Q3VzdG9tZXJJbw.action.d2F0Y2gtc21zLWZhaWxlZA.display_name": {
+          "source": "Watch SMS Failed",
+          "message": "Monitoruj niepowodzenie wysłania wiadomości SMS"
+        },
+        "app.Q3VzdG9tZXJJbw.action.d2F0Y2gtc21zLWZhaWxlZA.short_desc": {
+          "source": "Watch for SMS failed events",
+          "message": "Monitoruj zdarzenia niepowodzenia wysłania wiadomości SMS"
+        },
+        "app.Q3VzdG9tZXJJbw.action.d2F0Y2gtc21zLXNlbnQ.desc": {
+          "source": "Receive a notification when an SMS message is sent via Customer.io.",
+          "message": "Odbieraj powiadomienia, gdy wiadomość SMS zostanie wysłana za pośrednictwem Customer.io."
+        },
+        "app.Q3VzdG9tZXJJbw.action.d2F0Y2gtc21zLXNlbnQ.display_name": {
+          "source": "Watch SMS Sent",
+          "message": "Obserwuj wysłane wiadomości SMS"
+        },
+        "app.Q3VzdG9tZXJJbw.action.d2F0Y2gtc21zLXNlbnQ.short_desc": {
+          "source": "Watch for SMS sent events",
+          "message": "Obserwuj zdarzenia wysłania wiadomości SMS"
+        },
+        "app.Q3VzdG9tZXJJbw.action.d2F0Y2gtc2xhY2stY2xpY2tlZA.desc": {
+          "source": "Receive a notification when a link in a Slack message is clicked via Customer.io.",
+          "message": "Odbieraj powiadomienia, gdy link w wiadomości Slack zostanie kliknięty za pośrednictwem Customer.io."
+        },
+        "app.Q3VzdG9tZXJJbw.action.d2F0Y2gtc2xhY2stY2xpY2tlZA.display_name": {
+          "source": "Watch Slack Clicked",
+          "message": "Obserwuj kliknięcia w Slacku"
+        },
+        "app.Q3VzdG9tZXJJbw.action.d2F0Y2gtc2xhY2stY2xpY2tlZA.short_desc": {
+          "source": "Watch for Slack clicked events",
+          "message": "Obserwuj zdarzenia kliknięcia w Slacku"
+        },
+        "app.Q3VzdG9tZXJJbw.action.d2F0Y2gtc2xhY2stZmFpbGVk.desc": {
+          "source": "Receive a notification when a Slack message fails to send via Customer.io.",
+          "message": "Odbieraj powiadomienia, gdy wysyłanie wiadomości Slack za pośrednictwem Customer.io zakończy się niepowodzeniem."
+        },
+        "app.Q3VzdG9tZXJJbw.action.d2F0Y2gtc2xhY2stZmFpbGVk.display_name": {
+          "source": "Watch Slack Failed",
+          "message": "Obserwuj nieudane wysyłki Slack"
+        },
+        "app.Q3VzdG9tZXJJbw.action.d2F0Y2gtc2xhY2stZmFpbGVk.short_desc": {
+          "source": "Watch for Slack failed events",
+          "message": "Obserwuj zdarzenia nieudanego wysłania wiadomości Slack"
+        },
+        "app.Q3VzdG9tZXJJbw.action.d2F0Y2gtc2xhY2stc2VudA.desc": {
+          "source": "Receive a notification when a Slack message is sent via Customer.io.",
+          "message": "Odbieraj powiadomienia, gdy wiadomość Slack zostanie wysłana za pośrednictwem Customer.io."
+        },
+        "app.Q3VzdG9tZXJJbw.action.d2F0Y2gtc2xhY2stc2VudA.display_name": {
+          "source": "Watch Slack Sent",
+          "message": "Obserwuj wysłane wiadomości Slack"
+        },
+        "app.Q3VzdG9tZXJJbw.action.d2F0Y2gtc2xhY2stc2VudA.short_desc": {
+          "source": "Watch for Slack sent events",
+          "message": "Obserwuj zdarzenia wysłania wiadomości Slack"
+        },
+        "app.Q3VzdG9tZXJJbw.action.d2F0Y2gtc3Vic2NyaWJlZA.desc": {
+          "source": "Receive a notification when a customer subscribes via Customer.io.",
+          "message": "Odbieraj powiadomienia, gdy klient zasubskrybuje za pośrednictwem Customer.io."
+        },
+        "app.Q3VzdG9tZXJJbw.action.d2F0Y2gtc3Vic2NyaWJlZA.display_name": {
+          "source": "Watch Subscribed",
+          "message": "Obserwuj subskrypcje"
+        },
+        "app.Q3VzdG9tZXJJbw.action.d2F0Y2gtc3Vic2NyaWJlZA.short_desc": {
+          "source": "Watch for customer subscribed events",
+          "message": "Obserwuj zdarzenia subskrypcji klienta"
+        },
+        "app.Q3VzdG9tZXJJbw.action.d2F0Y2gtcHVzaC1kZWxpdmVyZWQ.desc": {
+          "source": "Receive a notification when a push notification is delivered via Customer.io.",
+          "message": "Odbieraj powiadomienia, gdy powiadomienie push zostanie dostarczone za pośrednictwem Customer.io."
+        },
+        "app.Q3VzdG9tZXJJbw.action.d2F0Y2gtcHVzaC1kZWxpdmVyZWQ.display_name": {
+          "source": "Watch Push Delivered",
+          "message": "Obserwuj dostarczone powiadomienia push"
+        },
+        "app.Q3VzdG9tZXJJbw.action.d2F0Y2gtcHVzaC1kZWxpdmVyZWQ.short_desc": {
+          "source": "Watch for push delivered events",
+          "message": "Obserwuj zdarzenia dostarczenia powiadomienia push"
+        },
+        "app.Q3VzdG9tZXJJbw.action.d2F0Y2gtcHVzaC1mYWlsZWQ.desc": {
+          "source": "Receive a notification when a push notification fails to send via Customer.io.",
+          "message": "Odbieraj powiadomienia, gdy wysyłanie powiadomienia push za pośrednictwem Customer.io zakończy się niepowodzeniem."
+        },
+        "app.Q3VzdG9tZXJJbw.action.d2F0Y2gtcHVzaC1mYWlsZWQ.display_name": {
+          "source": "Watch Push Failed",
+          "message": "Obserwuj nieudane powiadomienia push"
+        },
+        "app.Q3VzdG9tZXJJbw.action.d2F0Y2gtcHVzaC1mYWlsZWQ.short_desc": {
+          "source": "Watch for push failed events",
+          "message": "Obserwuj zdarzenia nieudanego wysłania powiadomienia push"
+        },
+        "app.Q3VzdG9tZXJJbw.action.d2F0Y2gtcHVzaC1vcGVuZWQ.desc": {
+          "source": "Receive a notification when a push notification is opened via Customer.io.",
+          "message": "Odbieraj powiadomienia, gdy powiadomienie push zostanie otwarte za pośrednictwem Customer.io."
+        },
+        "app.Q3VzdG9tZXJJbw.action.d2F0Y2gtcHVzaC1vcGVuZWQ.display_name": {
+          "source": "Watch Push Opened",
+          "message": "Obserwuj otwarte powiadomienia push"
+        },
+        "app.Q3VzdG9tZXJJbw.action.d2F0Y2gtcHVzaC1vcGVuZWQ.short_desc": {
+          "source": "Watch for push opened events",
+          "message": "Obserwuj zdarzenia otwarcia powiadomienia push"
+        },
+        "app.Q3VzdG9tZXJJbw.action.d2F0Y2gtcHVzaC1zZW50.desc": {
+          "source": "Receive a notification when a push notification is sent via Customer.io.",
+          "message": "Odbieraj powiadomienia, gdy powiadomienie push zostanie wysłane za pośrednictwem Customer.io."
+        },
+        "app.Q3VzdG9tZXJJbw.action.d2F0Y2gtcHVzaC1zZW50.display_name": {
+          "source": "Watch Push Sent",
+          "message": "Obserwuj wysłane powiadomienia push"
+        },
+        "app.Q3VzdG9tZXJJbw.action.d2F0Y2gtcHVzaC1zZW50.short_desc": {
+          "source": "Watch for push sent events",
+          "message": "Obserwuj zdarzenia wysłania powiadomienia push"
+        },
+        "app.Q3VzdG9tZXJJbw.action.d2F0Y2gtdW5zdWJzY3JpYmVk.desc": {
+          "source": "Receive a notification when a customer unsubscribes via Customer.io.",
+          "message": "Odbieraj powiadomienia, gdy klient anuluje subskrypcję za pośrednictwem Customer.io."
+        },
+        "app.Q3VzdG9tZXJJbw.action.d2F0Y2gtdW5zdWJzY3JpYmVk.display_name": {
+          "source": "Watch Unsubscribed",
+          "message": "Obserwuj anulowanie subskrypcji"
+        },
+        "app.Q3VzdG9tZXJJbw.action.d2F0Y2gtdW5zdWJzY3JpYmVk.short_desc": {
+          "source": "Watch for customer unsubscribed events",
+          "message": "Obserwuj zdarzenia anulowania subskrypcji przez klienta"
+        },
+        "app.Q3VzdG9tZXJJbw.action.dHJhY2stYW5vbnltb3VzLWV2ZW50.desc": {
+          "source": "Track an anonymous event in Customer.io that is not tied to a specific customer.",
+          "message": "Śledź anonimowe zdarzenie w Customer.io, które nie jest powiązane z konkretnym klientem."
+        },
+        "app.Q3VzdG9tZXJJbw.action.dHJhY2stYW5vbnltb3VzLWV2ZW50.display_name": {
+          "source": "Track Anonymous Event",
+          "message": "Śledź anonimowe zdarzenie"
+        },
+        "app.Q3VzdG9tZXJJbw.action.dHJhY2stYW5vbnltb3VzLWV2ZW50.option.YW5vbnltb3VzX2lk.desc": {
+          "source": "Anonymous identifier",
+          "message": "Identyfikator anonimowy"
+        },
+        "app.Q3VzdG9tZXJJbw.action.dHJhY2stYW5vbnltb3VzLWV2ZW50.option.YW5vbnltb3VzX2lk.display_name": {
+          "source": "Anonymous ID",
+          "message": "Anonimowy identyfikator"
+        },
+        "app.Q3VzdG9tZXJJbw.action.dHJhY2stYW5vbnltb3VzLWV2ZW50.option.YW5vbnltb3VzX2lk.short_desc": {
+          "source": "Anonymous identifier",
+          "message": "Identyfikator anonimowy"
+        },
+        "app.Q3VzdG9tZXJJbw.action.dHJhY2stYW5vbnltb3VzLWV2ZW50.option.ZGF0YQ.desc": {
+          "source": "Event data/properties",
+          "message": "Dane/właściwości zdarzenia"
+        },
+        "app.Q3VzdG9tZXJJbw.action.dHJhY2stYW5vbnltb3VzLWV2ZW50.option.ZGF0YQ.display_name": {
+          "source": "Event Data",
+          "message": "Dane zdarzenia"
+        },
+        "app.Q3VzdG9tZXJJbw.action.dHJhY2stYW5vbnltb3VzLWV2ZW50.option.ZGF0YQ.short_desc": {
+          "source": "Event data/properties",
+          "message": "Dane/właściwości zdarzenia"
+        },
+        "app.Q3VzdG9tZXJJbw.action.dHJhY2stYW5vbnltb3VzLWV2ZW50.option.bmFtZQ.desc": {
+          "source": "Event name",
+          "message": "Nazwa zdarzenia"
+        },
+        "app.Q3VzdG9tZXJJbw.action.dHJhY2stYW5vbnltb3VzLWV2ZW50.option.bmFtZQ.display_name": {
+          "source": "Event Name",
+          "message": "Nazwa zdarzenia"
+        },
+        "app.Q3VzdG9tZXJJbw.action.dHJhY2stYW5vbnltb3VzLWV2ZW50.option.bmFtZQ.short_desc": {
+          "source": "Event name",
+          "message": "Nazwa zdarzenia"
+        },
+        "app.Q3VzdG9tZXJJbw.action.dHJhY2stYW5vbnltb3VzLWV2ZW50.option.dGltZXN0YW1w.desc": {
+          "source": "Unix timestamp for the event",
+          "message": "Znacznik czasu Unix dla zdarzenia"
+        },
+        "app.Q3VzdG9tZXJJbw.action.dHJhY2stYW5vbnltb3VzLWV2ZW50.option.dGltZXN0YW1w.display_name": {
+          "source": "Timestamp",
+          "message": "Znacznik czasu"
+        },
+        "app.Q3VzdG9tZXJJbw.action.dHJhY2stYW5vbnltb3VzLWV2ZW50.option.dGltZXN0YW1w.short_desc": {
+          "source": "Unix timestamp",
+          "message": "Znacznik czasu Unix"
+        },
+        "app.Q3VzdG9tZXJJbw.action.dHJhY2stYW5vbnltb3VzLWV2ZW50.short_desc": {
+          "source": "Track an anonymous event",
+          "message": "Śledź anonimowe zdarzenie"
+        },
+        "app.Q3VzdG9tZXJJbw.action.dHJhY2stZXZlbnQ.desc": {
+          "source": "Track a custom event for a customer in Customer.io via the Track API. Events can trigger campaigns and workflows.",
+          "message": "Śledź zdarzenie niestandardowe dla klienta w Customer.io za pośrednictwem interfejsu Track API. Zdarzenia mogą uruchamiać kampanie i przepływy pracy."
+        },
+        "app.Q3VzdG9tZXJJbw.action.dHJhY2stZXZlbnQ.display_name": {
+          "source": "Track Event",
+          "message": "Śledź zdarzenie"
+        },
+        "app.Q3VzdG9tZXJJbw.action.dHJhY2stZXZlbnQ.option.Y3VzdG9tZXJfaWQ.desc": {
+          "source": "The unique customer identifier",
+          "message": "Unikalny identyfikator klienta"
+        },
+        "app.Q3VzdG9tZXJJbw.action.dHJhY2stZXZlbnQ.option.Y3VzdG9tZXJfaWQ.display_name": {
+          "source": "Customer ID",
+          "message": "Identyfikator klienta"
+        },
+        "app.Q3VzdG9tZXJJbw.action.dHJhY2stZXZlbnQ.option.Y3VzdG9tZXJfaWQ.short_desc": {
+          "source": "The unique customer identifier",
+          "message": "Unikalny identyfikator klienta"
+        },
+        "app.Q3VzdG9tZXJJbw.action.dHJhY2stZXZlbnQ.option.ZGF0YQ.desc": {
+          "source": "Event data/properties",
+          "message": "Dane/właściwości zdarzenia"
+        },
+        "app.Q3VzdG9tZXJJbw.action.dHJhY2stZXZlbnQ.option.ZGF0YQ.display_name": {
+          "source": "Event Data",
+          "message": "Dane zdarzenia"
+        },
+        "app.Q3VzdG9tZXJJbw.action.dHJhY2stZXZlbnQ.option.ZGF0YQ.short_desc": {
+          "source": "Event data/properties",
+          "message": "Dane/właściwości zdarzenia"
+        },
+        "app.Q3VzdG9tZXJJbw.action.dHJhY2stZXZlbnQ.option.bmFtZQ.desc": {
+          "source": "Event name",
+          "message": "Nazwa zdarzenia"
+        },
+        "app.Q3VzdG9tZXJJbw.action.dHJhY2stZXZlbnQ.option.bmFtZQ.display_name": {
+          "source": "Event Name",
+          "message": "Nazwa zdarzenia"
+        },
+        "app.Q3VzdG9tZXJJbw.action.dHJhY2stZXZlbnQ.option.bmFtZQ.short_desc": {
+          "source": "Event name",
+          "message": "Nazwa zdarzenia"
+        },
+        "app.Q3VzdG9tZXJJbw.action.dHJhY2stZXZlbnQ.option.dGltZXN0YW1w.desc": {
+          "source": "Unix timestamp for the event",
+          "message": "Znacznik czasu Unix dla zdarzenia"
+        },
+        "app.Q3VzdG9tZXJJbw.action.dHJhY2stZXZlbnQ.option.dGltZXN0YW1w.display_name": {
+          "source": "Timestamp",
+          "message": "Znacznik czasu"
+        },
+        "app.Q3VzdG9tZXJJbw.action.dHJhY2stZXZlbnQ.option.dGltZXN0YW1w.short_desc": {
+          "source": "Unix timestamp for the event",
+          "message": "Znacznik czasu Unix dla zdarzenia"
+        },
+        "app.Q3VzdG9tZXJJbw.action.dHJhY2stZXZlbnQ.short_desc": {
+          "source": "Track a custom event for a customer",
+          "message": "Śledź zdarzenie niestandardowe dla klienta"
+        },
+        "app.Q3VzdG9tZXJJbw.action.dHJhY2stcGFnZS12aWV3.desc": {
+          "source": "Track a page view event for a customer in Customer.io via the Track API.",
+          "message": "Śledź zdarzenie wyświetlenia strony dla klienta w Customer.io za pośrednictwem interfejsu Track API."
+        },
+        "app.Q3VzdG9tZXJJbw.action.dHJhY2stcGFnZS12aWV3.display_name": {
+          "source": "Track Page View",
+          "message": "Śledź wyświetlenie strony"
+        },
+        "app.Q3VzdG9tZXJJbw.action.dHJhY2stcGFnZS12aWV3.option.Y3VzdG9tZXJfaWQ.desc": {
+          "source": "The unique customer identifier",
+          "message": "Unikalny identyfikator klienta"
+        },
+        "app.Q3VzdG9tZXJJbw.action.dHJhY2stcGFnZS12aWV3.option.Y3VzdG9tZXJfaWQ.display_name": {
+          "source": "Customer ID",
+          "message": "Identyfikator klienta"
+        },
+        "app.Q3VzdG9tZXJJbw.action.dHJhY2stcGFnZS12aWV3.option.Y3VzdG9tZXJfaWQ.short_desc": {
+          "source": "The unique customer identifier",
+          "message": "Unikalny identyfikator klienta"
+        },
+        "app.Q3VzdG9tZXJJbw.action.dHJhY2stcGFnZS12aWV3.option.ZGF0YQ.desc": {
+          "source": "Additional page view data",
+          "message": "Dodatkowe dane wyświetlenia strony"
+        },
+        "app.Q3VzdG9tZXJJbw.action.dHJhY2stcGFnZS12aWV3.option.ZGF0YQ.display_name": {
+          "source": "Page View Data",
+          "message": "Dane wyświetlenia strony"
+        },
+        "app.Q3VzdG9tZXJJbw.action.dHJhY2stcGFnZS12aWV3.option.ZGF0YQ.short_desc": {
+          "source": "Additional page view data",
+          "message": "Dodatkowe dane wyświetlenia strony"
+        },
+        "app.Q3VzdG9tZXJJbw.action.dHJhY2stcGFnZS12aWV3.option.dGltZXN0YW1w.desc": {
+          "source": "Unix timestamp for the page view event",
+          "message": "Znacznik czasu Unix dla zdarzenia wyświetlenia strony"
+        },
+        "app.Q3VzdG9tZXJJbw.action.dHJhY2stcGFnZS12aWV3.option.dGltZXN0YW1w.display_name": {
+          "source": "Timestamp",
+          "message": "Znacznik czasu"
+        },
+        "app.Q3VzdG9tZXJJbw.action.dHJhY2stcGFnZS12aWV3.option.dGltZXN0YW1w.short_desc": {
+          "source": "Unix timestamp",
+          "message": "Znacznik czasu Unix"
+        },
+        "app.Q3VzdG9tZXJJbw.action.dHJhY2stcGFnZS12aWV3.option.dXJs.desc": {
+          "source": "The URL of the page viewed",
+          "message": "Adres URL wyświetlonej strony"
+        },
+        "app.Q3VzdG9tZXJJbw.action.dHJhY2stcGFnZS12aWV3.option.dXJs.display_name": {
+          "source": "URL",
+          "message": "URL"
+        },
+        "app.Q3VzdG9tZXJJbw.action.dHJhY2stcGFnZS12aWV3.option.dXJs.short_desc": {
+          "source": "The URL of the page viewed",
+          "message": "Adres URL wyświetlonej strony"
+        },
+        "app.Q3VzdG9tZXJJbw.action.dHJhY2stcGFnZS12aWV3.short_desc": {
+          "source": "Track a page view for a customer",
+          "message": "Śledź wyświetlenie strony dla klienta"
+        },
+        "app.Q3VzdG9tZXJJbw.action.dHJpZ2dlci1icm9hZGNhc3Q.desc": {
+          "source": "Trigger a Customer.io broadcast, optionally targeting specific recipients with custom data.",
+          "message": "Uruchom transmisję w Customer.io, opcjonalnie kierując ją do określonych odbiorców z niestandardowymi danymi."
+        },
+        "app.Q3VzdG9tZXJJbw.action.dHJpZ2dlci1icm9hZGNhc3Q.display_name": {
+          "source": "Trigger Broadcast",
+          "message": "Uruchom transmisję"
+        },
+        "app.Q3VzdG9tZXJJbw.action.dHJpZ2dlci1icm9hZGNhc3Q.option.YnJvYWRjYXN0X2lk.desc": {
+          "source": "The unique Customer.io broadcast ID to trigger",
+          "message": "Unikalny identyfikator transmisji Customer.io do uruchomienia"
+        },
+        "app.Q3VzdG9tZXJJbw.action.dHJpZ2dlci1icm9hZGNhc3Q.option.YnJvYWRjYXN0X2lk.display_name": {
+          "source": "Broadcast ID",
+          "message": "Identyfikator transmisji"
+        },
+        "app.Q3VzdG9tZXJJbw.action.dHJpZ2dlci1icm9hZGNhc3Q.option.YnJvYWRjYXN0X2lk.short_desc": {
+          "source": "The broadcast ID to trigger",
+          "message": "Identyfikator transmisji do uruchomienia"
+        },
+        "app.Q3VzdG9tZXJJbw.action.dHJpZ2dlci1icm9hZGNhc3Q.option.ZGF0YQ.desc": {
+          "source": "Data to pass to the broadcast",
+          "message": "Dane do przekazania do transmisji"
+        },
+        "app.Q3VzdG9tZXJJbw.action.dHJpZ2dlci1icm9hZGNhc3Q.option.ZGF0YQ.display_name": {
+          "source": "Data",
+          "message": "Dane"
+        },
+        "app.Q3VzdG9tZXJJbw.action.dHJpZ2dlci1icm9hZGNhc3Q.option.ZGF0YQ.short_desc": {
+          "source": "Data to pass to the broadcast",
+          "message": "Dane do przekazania do transmisji"
+        },
+        "app.Q3VzdG9tZXJJbw.action.dHJpZ2dlci1icm9hZGNhc3Q.option.ZW1haWxz.desc": {
+          "source": "List of email addresses to send the broadcast to",
+          "message": "Lista adresów e-mail, do których ma zostać wysłana transmisja"
+        },
+        "app.Q3VzdG9tZXJJbw.action.dHJpZ2dlci1icm9hZGNhc3Q.option.ZW1haWxz.display_name": {
+          "source": "Emails",
+          "message": "Adresy e-mail"
+        },
+        "app.Q3VzdG9tZXJJbw.action.dHJpZ2dlci1icm9hZGNhc3Q.option.ZW1haWxz.short_desc": {
+          "source": "List of email addresses",
+          "message": "Lista adresów e-mail"
+        },
+        "app.Q3VzdG9tZXJJbw.action.dHJpZ2dlci1icm9hZGNhc3Q.option.aWRfaWdub3JlX21pc3Npbmc.desc": {
+          "source": "Whether to ignore missing customer IDs",
+          "message": "Czy ignorować brakujące identyfikatory klientów"
+        },
+        "app.Q3VzdG9tZXJJbw.action.dHJpZ2dlci1icm9hZGNhc3Q.option.aWRfaWdub3JlX21pc3Npbmc.display_name": {
+          "source": "Ignore Missing IDs",
+          "message": "Ignoruj brakujące identyfikatory"
+        },
+        "app.Q3VzdG9tZXJJbw.action.dHJpZ2dlci1icm9hZGNhc3Q.option.aWRfaWdub3JlX21pc3Npbmc.short_desc": {
+          "source": "Ignore missing IDs",
+          "message": "Ignoruj brakujące identyfikatory"
+        },
+        "app.Q3VzdG9tZXJJbw.action.dHJpZ2dlci1icm9hZGNhc3Q.option.aWRz.desc": {
+          "source": "List of customer IDs to send the broadcast to",
+          "message": "Lista identyfikatorów klientów, do których ma zostać wysłana transmisja"
+        },
+        "app.Q3VzdG9tZXJJbw.action.dHJpZ2dlci1icm9hZGNhc3Q.option.aWRz.display_name": {
+          "source": "IDs",
+          "message": "Identyfikatory"
+        },
+        "app.Q3VzdG9tZXJJbw.action.dHJpZ2dlci1icm9hZGNhc3Q.option.aWRz.short_desc": {
+          "source": "List of customer IDs",
+          "message": "Lista identyfikatorów klientów"
+        },
+        "app.Q3VzdG9tZXJJbw.action.dHJpZ2dlci1icm9hZGNhc3Q.option.cGVyX3VzZXJfZGF0YQ.desc": {
+          "source": "Per-user data array for the broadcast",
+          "message": "Tablica danych dla poszczególnych użytkowników dla transmisji"
+        },
+        "app.Q3VzdG9tZXJJbw.action.dHJpZ2dlci1icm9hZGNhc3Q.option.cGVyX3VzZXJfZGF0YQ.display_name": {
+          "source": "Per-User Data",
+          "message": "Dane dla poszczególnych użytkowników"
+        },
+        "app.Q3VzdG9tZXJJbw.action.dHJpZ2dlci1icm9hZGNhc3Q.option.cGVyX3VzZXJfZGF0YQ.short_desc": {
+          "source": "Per-user data array",
+          "message": "Tablica danych dla poszczególnych użytkowników"
+        },
+        "app.Q3VzdG9tZXJJbw.action.dHJpZ2dlci1icm9hZGNhc3Q.option.cmVjaXBpZW50cw.desc": {
+          "source": "Recipients filter for the broadcast",
+          "message": "Filtr odbiorców dla transmisji"
+        },
+        "app.Q3VzdG9tZXJJbw.action.dHJpZ2dlci1icm9hZGNhc3Q.option.cmVjaXBpZW50cw.display_name": {
+          "source": "Recipients",
+          "message": "Odbiorcy"
+        },
+        "app.Q3VzdG9tZXJJbw.action.dHJpZ2dlci1icm9hZGNhc3Q.option.cmVjaXBpZW50cw.short_desc": {
+          "source": "Recipients filter",
+          "message": "Filtr odbiorców"
+        },
+        "app.Q3VzdG9tZXJJbw.action.dHJpZ2dlci1icm9hZGNhc3Q.short_desc": {
+          "source": "Trigger a broadcast",
+          "message": "Uruchom transmisję"
+        },
+        "app.Q3VzdG9tZXJJbw.action.dW5zdXBwcmVzcy1jdXN0b21lcg.desc": {
+          "source": "Unsuppress a customer in Customer.io, re-enabling messaging to the customer.",
+          "message": "Cofa blokadę klienta w Customer.io, ponownie włączając wysyłanie wiadomości do klienta."
+        },
+        "app.Q3VzdG9tZXJJbw.action.dW5zdXBwcmVzcy1jdXN0b21lcg.display_name": {
+          "source": "Unsuppress Customer",
+          "message": "Cofnij blokadę klienta"
+        },
+        "app.Q3VzdG9tZXJJbw.action.dW5zdXBwcmVzcy1jdXN0b21lcg.option.Y3VzdG9tZXJfaWQ.desc": {
+          "source": "The unique customer identifier to unsuppress",
+          "message": "Unikalny identyfikator klienta do odblokowania"
+        },
+        "app.Q3VzdG9tZXJJbw.action.dW5zdXBwcmVzcy1jdXN0b21lcg.option.Y3VzdG9tZXJfaWQ.display_name": {
+          "source": "Customer ID",
+          "message": "Identyfikator klienta"
+        },
+        "app.Q3VzdG9tZXJJbw.action.dW5zdXBwcmVzcy1jdXN0b21lcg.option.Y3VzdG9tZXJfaWQ.short_desc": {
+          "source": "The unique customer identifier",
+          "message": "Unikalny identyfikator klienta"
+        },
+        "app.Q3VzdG9tZXJJbw.action.dW5zdXBwcmVzcy1jdXN0b21lcg.short_desc": {
+          "source": "Unsuppress a customer",
+          "message": "Cofnij blokadę klienta"
+        },
+        "app.Q3VzdG9tZXJJbw.action.dXBkYXRlLWNvbGxlY3Rpb24.desc": {
+          "source": "Update an existing collection in Customer.io.",
+          "message": "Zaktualizuj istniejącą kolekcję w Customer.io."
+        },
+        "app.Q3VzdG9tZXJJbw.action.dXBkYXRlLWNvbGxlY3Rpb24.display_name": {
+          "source": "Update Collection",
+          "message": "Zaktualizuj kolekcję"
+        },
+        "app.Q3VzdG9tZXJJbw.action.dXBkYXRlLWNvbGxlY3Rpb24.option.Y29sbGVjdGlvbl9pZA.desc": {
+          "source": "The unique Customer.io collection ID to update",
+          "message": "Unikalny identyfikator kolekcji Customer.io do zaktualizowania"
+        },
+        "app.Q3VzdG9tZXJJbw.action.dXBkYXRlLWNvbGxlY3Rpb24.option.Y29sbGVjdGlvbl9pZA.display_name": {
+          "source": "Collection ID",
+          "message": "Identyfikator kolekcji"
+        },
+        "app.Q3VzdG9tZXJJbw.action.dXBkYXRlLWNvbGxlY3Rpb24.option.Y29sbGVjdGlvbl9pZA.short_desc": {
+          "source": "The collection ID to update",
+          "message": "Identyfikator kolekcji do zaktualizowania"
+        },
+        "app.Q3VzdG9tZXJJbw.action.dXBkYXRlLWNvbGxlY3Rpb24.option.ZGF0YQ.desc": {
+          "source": "The updated data array for the collection",
+          "message": "Zaktualizowana tablica danych dla kolekcji"
+        },
+        "app.Q3VzdG9tZXJJbw.action.dXBkYXRlLWNvbGxlY3Rpb24.option.ZGF0YQ.display_name": {
+          "source": "Data",
+          "message": "Dane"
+        },
+        "app.Q3VzdG9tZXJJbw.action.dXBkYXRlLWNvbGxlY3Rpb24.option.ZGF0YQ.short_desc": {
+          "source": "Collection data array",
+          "message": "Tablica danych kolekcji"
+        },
+        "app.Q3VzdG9tZXJJbw.action.dXBkYXRlLWNvbGxlY3Rpb24.option.bmFtZQ.desc": {
+          "source": "The updated name for the collection",
+          "message": "Zaktualizowana nazwa kolekcji"
+        },
+        "app.Q3VzdG9tZXJJbw.action.dXBkYXRlLWNvbGxlY3Rpb24.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "Nazwa"
+        },
+        "app.Q3VzdG9tZXJJbw.action.dXBkYXRlLWNvbGxlY3Rpb24.option.bmFtZQ.short_desc": {
+          "source": "Collection name",
+          "message": "Nazwa kolekcji"
+        },
+        "app.Q3VzdG9tZXJJbw.action.dXBkYXRlLWNvbGxlY3Rpb24.option.dXJs.desc": {
+          "source": "Updated URL for an external data source",
+          "message": "Zaktualizowany adres URL zewnętrznego źródła danych"
+        },
+        "app.Q3VzdG9tZXJJbw.action.dXBkYXRlLWNvbGxlY3Rpb24.option.dXJs.display_name": {
+          "source": "URL",
+          "message": "URL"
+        },
+        "app.Q3VzdG9tZXJJbw.action.dXBkYXRlLWNvbGxlY3Rpb24.option.dXJs.short_desc": {
+          "source": "URL for external data source",
+          "message": "Adres URL zewnętrznego źródła danych"
+        },
+        "app.Q3VzdG9tZXJJbw.action.dXBkYXRlLWNvbGxlY3Rpb24.short_desc": {
+          "source": "Update an existing collection",
+          "message": "Zaktualizuj istniejącą kolekcję"
+        },
+        "app.Q3VzdG9tZXJJbw.action.dXBkYXRlLXNuaXBwZXQ.desc": {
+          "source": "Update an existing snippet in Customer.io.",
+          "message": "Zaktualizuj istniejący fragment kodu (snippet) w Customer.io."
+        },
+        "app.Q3VzdG9tZXJJbw.action.dXBkYXRlLXNuaXBwZXQ.display_name": {
+          "source": "Update Snippet",
+          "message": "Zaktualizuj fragment kodu"
+        },
+        "app.Q3VzdG9tZXJJbw.action.dXBkYXRlLXNuaXBwZXQ.option.c25pcHBldF9uYW1l.desc": {
+          "source": "The unique name identifier for the snippet to update",
+          "message": "Unikalny identyfikator nazwy fragmentu kodu do zaktualizowania"
+        },
+        "app.Q3VzdG9tZXJJbw.action.dXBkYXRlLXNuaXBwZXQ.option.c25pcHBldF9uYW1l.display_name": {
+          "source": "Snippet Name",
+          "message": "Nazwa fragmentu"
+        },
+        "app.Q3VzdG9tZXJJbw.action.dXBkYXRlLXNuaXBwZXQ.option.c25pcHBldF9uYW1l.short_desc": {
+          "source": "The snippet name to update",
+          "message": "Nazwa fragmentu kodu do zaktualizowania"
+        },
+        "app.Q3VzdG9tZXJJbw.action.dXBkYXRlLXNuaXBwZXQ.option.dmFsdWU.desc": {
+          "source": "The updated content of the snippet",
+          "message": "Zaktualizowana zawartość fragmentu kodu"
+        },
+        "app.Q3VzdG9tZXJJbw.action.dXBkYXRlLXNuaXBwZXQ.option.dmFsdWU.display_name": {
+          "source": "Value",
+          "message": "Wartość"
+        },
+        "app.Q3VzdG9tZXJJbw.action.dXBkYXRlLXNuaXBwZXQ.option.dmFsdWU.short_desc": {
+          "source": "Snippet content",
+          "message": "Treść fragmentu"
+        },
+        "app.Q3VzdG9tZXJJbw.action.dXBkYXRlLXNuaXBwZXQ.short_desc": {
+          "source": "Update an existing snippet",
+          "message": "Zaktualizuj istniejący fragment kodu"
+        },
+        "app.Q3VzdG9tZXJJbw.desc": {
+          "source": "Customer.io is a marketing automation platform for sending targeted emails, push notifications, SMS messages, and Slack messages based on customer behavior and attributes.\n\n**Features:**\n- Customer management (create, update, delete, suppress)\n- Campaign and broadcast management\n- Transactional email and push notification sending\n- Event tracking and page view tracking\n- Segment management\n- Collection and snippet management\n- Real-time webhooks for email, SMS, push, and Slack events",
+          "message": "Customer.io to platforma automatyzacji marketingu służąca do wysyłania ukierunkowanych wiadomości e-mail, powiadomień push, wiadomości SMS oraz wiadomości Slack w oparciu o zachowania i atrybuty klientów.\n\n**Funkcje:**\n- Zarządzanie klientami (tworzenie, aktualizowanie, usuwanie, blokowanie)\n- Zarządzanie kampaniami i transmisjami\n- Wysyłanie transakcyjnych wiadomości e-mail i powiadomień push\n- Śledzenie zdarzeń i wyświetleń stron\n- Zarządzanie segmentami\n- Zarządzanie kolekcjami i fragmentami kodu (snippets)\n- Webhooki w czasie rzeczywistym dla zdarzeń e-mail, SMS, push i Slack"
+        },
+        "app.Q3VzdG9tZXJJbw.display_name": {
+          "source": "Customer.io",
+          "message": "Customer.io"
+        },
+        "app.Q3VzdG9tZXJJbw.short_desc": {
+          "source": "Customer.io marketing automation platform",
+          "message": "Platforma automatyzacji marketingu Customer.io"
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,365 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "ja": {
+      "messages": {
+        "app.SnNvbkZpbGU.action.cmVhZA.desc": {
+          "source": "Read standard JSON file data from a specific file location.\n\nThe JSON file may contain:\n- An **array of objects**: each element is iterated as a separate record\n- A **single object**: returned as one record\n- An **array of non-object values**: each element is wrapped in `{\"value\": <element>}`\n\n### Key Options\n- `path`: the file location to read from (required)\n- `encoding`: character encoding (default: `UTF-8`)\n",
+          "message": "特定のファイルロケーションから標準の JSON ファイルデータを読み取ります。\n\nJSON ファイルには以下を含めることができます:\n- **オブジェクトの配列**: 各要素は個別のレコードとして繰り返し処理されます\n- **単一のオブジェクト**: 1 つのレコードとして返されます\n- **オブジェクト以外の値の配列**: 各要素は `{\"value\": <element>}` にラップされます\n\n### 主なオプション\n- `path`: 読み取り元のファイルロケーション（必須）\n- `encoding`: 文字エンコーディング（デフォルト: `UTF-8`）\n"
+        },
+        "app.SnNvbkZpbGU.action.cmVhZA.display_name": {
+          "source": "Read JSON File",
+          "message": "JSON ファイルの読み取り"
+        },
+        "app.SnNvbkZpbGU.action.cmVhZA.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOklTTy04ODU5LTE.desc": {
+          "source": "Latin-1 encoding",
+          "message": "Latin-1 エンコーディング"
+        },
+        "app.SnNvbkZpbGU.action.cmVhZA.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOklTTy04ODU5LTE.display_name": {
+          "source": "ISO-8859-1",
+          "message": "ISO-8859-1"
+        },
+        "app.SnNvbkZpbGU.action.cmVhZA.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOlVTLUFTQ0lJ.desc": {
+          "source": "US-ASCII encoding",
+          "message": "US-ASCII エンコーディング"
+        },
+        "app.SnNvbkZpbGU.action.cmVhZA.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOlVTLUFTQ0lJ.display_name": {
+          "source": "US-ASCII",
+          "message": "US-ASCII"
+        },
+        "app.SnNvbkZpbGU.action.cmVhZA.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOlVURi04.desc": {
+          "source": "UTF-8 encoding (recommended)",
+          "message": "UTF-8 エンコーディング（推奨）"
+        },
+        "app.SnNvbkZpbGU.action.cmVhZA.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOlVURi04.display_name": {
+          "source": "UTF-8",
+          "message": "UTF-8"
+        },
+        "app.SnNvbkZpbGU.action.cmVhZA.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOlVURi0xNg.desc": {
+          "source": "UTF-16 encoding",
+          "message": "UTF-16 エンコーディング"
+        },
+        "app.SnNvbkZpbGU.action.cmVhZA.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOlVURi0xNg.display_name": {
+          "source": "UTF-16",
+          "message": "UTF-16"
+        },
+        "app.SnNvbkZpbGU.action.cmVhZA.option.ZW5jb2Rpbmc.desc": {
+          "source": "The character encoding to use when reading the input (default: `UTF-8`)",
+          "message": "入力の読み取り時に使用する文字エンコーディング（デフォルト: `UTF-8`）"
+        },
+        "app.SnNvbkZpbGU.action.cmVhZA.option.ZW5jb2Rpbmc.display_name": {
+          "source": "Encoding",
+          "message": "エンコーディング"
+        },
+        "app.SnNvbkZpbGU.action.cmVhZA.option.ZW5jb2Rpbmc.short_desc": {
+          "source": "Character encoding for the input",
+          "message": "入力の文字エンコーディング"
+        },
+        "app.SnNvbkZpbGU.action.cmVhZA.option.cGF0aA.desc": {
+          "source": "The filesystem path or location URL of the JSON file to read; mutually exclusive with `stream` and `data`; resolved with a call to [FileLocationHandler::getBinaryStreamFromLocation()](https://qoretechnologies.com/manual/qorus/current/qore/modules/FileLocationHandler/html/class_file_location_handler_1_1_file_location_handler.html#a29c2338efc901a6b8f24542505e2a094)",
+          "message": "読み取る JSON ファイルのファイルシステムパスまたはロケーション URL。`stream` および `data` と相互排他的。[FileLocationHandler::getBinaryStreamFromLocation()](https://qoretechnologies.com/manual/qorus/current/qore/modules/FileLocationHandler/html/class_file_location_handler_1_1_file_location_handler.html#a29c2338efc901a6b8f24542505e2a094) の呼び出しによって解決されます"
+        },
+        "app.SnNvbkZpbGU.action.cmVhZA.option.cGF0aA.display_name": {
+          "source": "File Path",
+          "message": "ファイルパス"
+        },
+        "app.SnNvbkZpbGU.action.cmVhZA.option.cGF0aA.short_desc": {
+          "source": "The path to the JSON file to read",
+          "message": "読み取る JSON ファイルへのパス"
+        },
+        "app.SnNvbkZpbGU.action.cmVhZA.short_desc": {
+          "source": "Read standard JSON file data from a file location",
+          "message": "ファイルロケーションから標準 JSON ファイルデータを読み取ります"
+        },
+        "app.SnNvbkZpbGU.action.cmVhZC1kYXRh.desc": {
+          "source": "Read standard JSON inline data provided directly as a string.\n\nThe JSON data may contain:\n- An **array of objects**: each element is iterated as a separate record\n- A **single object**: returned as one record\n- An **array of non-object values**: each element is wrapped in `{\"value\": <element>}`\n\n### Key Options\n- `data`: the JSON string to parse (required)\n- `encoding`: character encoding (default: `UTF-8`)\n",
+          "message": "文字列として直接提供される標準 JSON インラインデータを読み取ります。\n\nJSON データには以下を含めることができます:\n- **オブジェクトの配列**: 各要素は個別のレコードとして繰り返し処理されます\n- **単一のオブジェクト**: 1 つのレコードとして返されます\n- **オブジェクト以外の値の配列**: 各要素は `{\"value\": <element>}` にラップされます\n\n### 主なオプション\n- `data`: 解析する JSON 文字列（必須）\n- `encoding`: 文字エンコーディング（デフォルト: `UTF-8`）\n"
+        },
+        "app.SnNvbkZpbGU.action.cmVhZC1kYXRh.display_name": {
+          "source": "Read JSON Inline Data",
+          "message": "JSON インラインデータの読み取り"
+        },
+        "app.SnNvbkZpbGU.action.cmVhZC1kYXRh.option.ZGF0YQ.desc": {
+          "source": "JSON data provided directly as a string; mutually exclusive with `path` and `stream`",
+          "message": "文字列として直接提供される JSON データ。`path` および `stream` と相互排他的"
+        },
+        "app.SnNvbkZpbGU.action.cmVhZC1kYXRh.option.ZGF0YQ.display_name": {
+          "source": "Data",
+          "message": "データ"
+        },
+        "app.SnNvbkZpbGU.action.cmVhZC1kYXRh.option.ZGF0YQ.short_desc": {
+          "source": "JSON data as a string",
+          "message": "文字列としての JSON データ"
+        },
+        "app.SnNvbkZpbGU.action.cmVhZC1kYXRh.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOklTTy04ODU5LTE.desc": {
+          "source": "Latin-1 encoding",
+          "message": "Latin-1 エンコーディング"
+        },
+        "app.SnNvbkZpbGU.action.cmVhZC1kYXRh.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOklTTy04ODU5LTE.display_name": {
+          "source": "ISO-8859-1",
+          "message": "ISO-8859-1"
+        },
+        "app.SnNvbkZpbGU.action.cmVhZC1kYXRh.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOlVTLUFTQ0lJ.desc": {
+          "source": "US-ASCII encoding",
+          "message": "US-ASCII エンコーディング"
+        },
+        "app.SnNvbkZpbGU.action.cmVhZC1kYXRh.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOlVTLUFTQ0lJ.display_name": {
+          "source": "US-ASCII",
+          "message": "US-ASCII"
+        },
+        "app.SnNvbkZpbGU.action.cmVhZC1kYXRh.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOlVURi04.desc": {
+          "source": "UTF-8 encoding (recommended)",
+          "message": "UTF-8 エンコーディング（推奨）"
+        },
+        "app.SnNvbkZpbGU.action.cmVhZC1kYXRh.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOlVURi04.display_name": {
+          "source": "UTF-8",
+          "message": "UTF-8"
+        },
+        "app.SnNvbkZpbGU.action.cmVhZC1kYXRh.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOlVURi0xNg.desc": {
+          "source": "UTF-16 encoding",
+          "message": "UTF-16 エンコーディング"
+        },
+        "app.SnNvbkZpbGU.action.cmVhZC1kYXRh.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOlVURi0xNg.display_name": {
+          "source": "UTF-16",
+          "message": "UTF-16"
+        },
+        "app.SnNvbkZpbGU.action.cmVhZC1kYXRh.option.ZW5jb2Rpbmc.desc": {
+          "source": "The character encoding to use when reading the input (default: `UTF-8`)",
+          "message": "入力の読み取り時に使用する文字エンコーディング（デフォルト: `UTF-8`）"
+        },
+        "app.SnNvbkZpbGU.action.cmVhZC1kYXRh.option.ZW5jb2Rpbmc.display_name": {
+          "source": "Encoding",
+          "message": "エンコーディング"
+        },
+        "app.SnNvbkZpbGU.action.cmVhZC1kYXRh.option.ZW5jb2Rpbmc.short_desc": {
+          "source": "Character encoding for the input",
+          "message": "入力の文字エンコーディング"
+        },
+        "app.SnNvbkZpbGU.action.cmVhZC1kYXRh.short_desc": {
+          "source": "Read standard JSON inline data",
+          "message": "標準 JSON インラインデータを読み取ります"
+        },
+        "app.SnNvbkZpbGU.action.d3JpdGU.desc": {
+          "source": "Write records as a standard JSON array to a specific file location.\n\nRecords are accumulated and written as a JSON array when `commit()` is called or the provider is destroyed.\n\n### Key Options\n- `path`: the output file location (required)\n- `pretty_print`: format JSON output with indentation (default: `True`)\n- `encoding`: character encoding (default: `UTF-8`)\n",
+          "message": "レコードを標準 JSON 配列として特定のファイルロケーションに書き込みます。\n\nレコードは蓄積され、`commit()` が呼び出されたとき、またはプロバイダーが破棄されたときに JSON 配列として書き込まれます。\n\n### 主なオプション\n- `path`: 出力ファイルロケーション（必須）\n- `pretty_print`: インデントを付けて JSON 出力を整形（デフォルト: `True`）\n- `encoding`: 文字エンコーディング（デフォルト: `UTF-8`）\n"
+        },
+        "app.SnNvbkZpbGU.action.d3JpdGU.display_name": {
+          "source": "Write JSON File",
+          "message": "JSON ファイルの書き込み"
+        },
+        "app.SnNvbkZpbGU.action.d3JpdGU.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOklTTy04ODU5LTE.desc": {
+          "source": "Latin-1 encoding",
+          "message": "Latin-1 エンコーディング"
+        },
+        "app.SnNvbkZpbGU.action.d3JpdGU.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOklTTy04ODU5LTE.display_name": {
+          "source": "ISO-8859-1",
+          "message": "ISO-8859-1"
+        },
+        "app.SnNvbkZpbGU.action.d3JpdGU.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOlVTLUFTQ0lJ.desc": {
+          "source": "US-ASCII encoding",
+          "message": "US-ASCII エンコーディング"
+        },
+        "app.SnNvbkZpbGU.action.d3JpdGU.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOlVTLUFTQ0lJ.display_name": {
+          "source": "US-ASCII",
+          "message": "US-ASCII"
+        },
+        "app.SnNvbkZpbGU.action.d3JpdGU.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOlVURi04.desc": {
+          "source": "UTF-8 encoding (recommended)",
+          "message": "UTF-8 エンコーディング（推奨）"
+        },
+        "app.SnNvbkZpbGU.action.d3JpdGU.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOlVURi04.display_name": {
+          "source": "UTF-8",
+          "message": "UTF-8"
+        },
+        "app.SnNvbkZpbGU.action.d3JpdGU.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOlVURi0xNg.desc": {
+          "source": "UTF-16 encoding",
+          "message": "UTF-16 エンコーディング"
+        },
+        "app.SnNvbkZpbGU.action.d3JpdGU.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOlVURi0xNg.display_name": {
+          "source": "UTF-16",
+          "message": "UTF-16"
+        },
+        "app.SnNvbkZpbGU.action.d3JpdGU.option.ZW5jb2Rpbmc.desc": {
+          "source": "The character encoding to use when writing the output (default: `UTF-8`)",
+          "message": "出力の書き込み時に使用する文字エンコーディング（デフォルト: `UTF-8`）"
+        },
+        "app.SnNvbkZpbGU.action.d3JpdGU.option.ZW5jb2Rpbmc.display_name": {
+          "source": "Encoding",
+          "message": "エンコーディング"
+        },
+        "app.SnNvbkZpbGU.action.d3JpdGU.option.ZW5jb2Rpbmc.short_desc": {
+          "source": "Character encoding for the output",
+          "message": "出力の文字エンコーディング"
+        },
+        "app.SnNvbkZpbGU.action.d3JpdGU.option.cGF0aA.desc": {
+          "source": "The filesystem path or location URL for the output JSON data file; mutually exclusive with `stream`; resolved with a call to [FileLocationHandler::getOutputStreamForLocation()](https://qoretechnologies.com/manual/qorus/current/qore/modules/FileLocationHandler/html/class_file_location_handler_1_1_file_location_handler.html#a9d1ca411ea23126280b9d2e4b4b3ede9)",
+          "message": "出力 JSON データファイルのファイルシステムパスまたはロケーション URL。`stream` と相互排他的。[FileLocationHandler::getOutputStreamForLocation()](https://qoretechnologies.com/manual/qorus/current/qore/modules/FileLocationHandler/html/class_file_location_handler_1_1_file_location_handler.html#a9d1ca411ea23126280b9d2e4b4b3ede9) の呼び出しによって解決されます"
+        },
+        "app.SnNvbkZpbGU.action.d3JpdGU.option.cGF0aA.display_name": {
+          "source": "Output File Path",
+          "message": "出力ファイルパス"
+        },
+        "app.SnNvbkZpbGU.action.d3JpdGU.option.cGF0aA.short_desc": {
+          "source": "The path to the JSON output file",
+          "message": "JSON 出力ファイルへのパス"
+        },
+        "app.SnNvbkZpbGU.action.d3JpdGU.option.cHJldHR5X3ByaW50.allowed-value.Ym9vbDp0cnVl.desc": {
+          "source": "Format the JSON output with indentation for readability",
+          "message": "読みやすさのためにインデントを付けて JSON 出力を整形します"
+        },
+        "app.SnNvbkZpbGU.action.d3JpdGU.option.cHJldHR5X3ByaW50.allowed-value.Ym9vbDp0cnVl.display_name": {
+          "source": "Yes",
+          "message": "はい"
+        },
+        "app.SnNvbkZpbGU.action.d3JpdGU.option.cHJldHR5X3ByaW50.allowed-value.Ym9vbDp0cnVl.short_desc": {
+          "source": "Pretty-print with indentation",
+          "message": "インデント付きで整形出力"
+        },
+        "app.SnNvbkZpbGU.action.d3JpdGU.option.cHJldHR5X3ByaW50.allowed-value.Ym9vbDpmYWxzZQ.desc": {
+          "source": "Write compact JSON output with no extra whitespace",
+          "message": "余分な空白なしでコンパクトな JSON 出力を書き込みます"
+        },
+        "app.SnNvbkZpbGU.action.d3JpdGU.option.cHJldHR5X3ByaW50.allowed-value.Ym9vbDpmYWxzZQ.display_name": {
+          "source": "No",
+          "message": "いいえ"
+        },
+        "app.SnNvbkZpbGU.action.d3JpdGU.option.cHJldHR5X3ByaW50.allowed-value.Ym9vbDpmYWxzZQ.short_desc": {
+          "source": "Compact output",
+          "message": "コンパクト出力"
+        },
+        "app.SnNvbkZpbGU.action.d3JpdGU.option.cHJldHR5X3ByaW50.desc": {
+          "source": "If `True` (default), the JSON output is formatted with indentation for readability; if `False`, the output is compact with no extra whitespace",
+          "message": "`True`（デフォルト）の場合、JSON 出力は可読性のためにインデント付きで整形されます。`False` の場合、出力は余分な空白なしでコンパクトになります"
+        },
+        "app.SnNvbkZpbGU.action.d3JpdGU.option.cHJldHR5X3ByaW50.display_name": {
+          "source": "Pretty Print",
+          "message": "整形出力"
+        },
+        "app.SnNvbkZpbGU.action.d3JpdGU.option.cHJldHR5X3ByaW50.short_desc": {
+          "source": "Format JSON with indentation",
+          "message": "インデントを付けて JSON を整形"
+        },
+        "app.SnNvbkZpbGU.action.d3JpdGU.short_desc": {
+          "source": "Write standard JSON file data to a file location",
+          "message": "標準 JSON ファイルデータをファイルロケーションに書き込みます"
+        },
+        "app.SnNvbkZpbGU.action.d3JpdGUtZGF0YQ.desc": {
+          "source": "Write records as a standard JSON array to an output stream or retrieve the result as binary data.\n\nRecords are accumulated and written as a JSON array when `commit()` is called or the provider is destroyed.\n\n### Key Options\n- `stream`: the output stream to write to\n- `pretty_print`: format JSON output with indentation (default: `True`)\n- `encoding`: character encoding (default: `UTF-8`)\n",
+          "message": "レコードを標準 JSON 配列として出力ストリームに書き込むか、結果をバイナリデータとして取得します。\n\nレコードは蓄積され、`commit()` が呼び出されたとき、またはプロバイダーが破棄されたときに JSON 配列として書き込まれます。\n\n### 主なオプション\n- `stream`: 書き込み先の出力ストリーム\n- `pretty_print`: インデントを付けて JSON 出力を整形（デフォルト: `True`）\n- `encoding`: 文字エンコーディング（デフォルト: `UTF-8`）\n"
+        },
+        "app.SnNvbkZpbGU.action.d3JpdGUtZGF0YQ.display_name": {
+          "source": "Write JSON Data",
+          "message": "JSON データの書き込み"
+        },
+        "app.SnNvbkZpbGU.action.d3JpdGUtZGF0YQ.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOklTTy04ODU5LTE.desc": {
+          "source": "Latin-1 encoding",
+          "message": "Latin-1 エンコーディング"
+        },
+        "app.SnNvbkZpbGU.action.d3JpdGUtZGF0YQ.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOklTTy04ODU5LTE.display_name": {
+          "source": "ISO-8859-1",
+          "message": "ISO-8859-1"
+        },
+        "app.SnNvbkZpbGU.action.d3JpdGUtZGF0YQ.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOlVTLUFTQ0lJ.desc": {
+          "source": "US-ASCII encoding",
+          "message": "US-ASCII エンコーディング"
+        },
+        "app.SnNvbkZpbGU.action.d3JpdGUtZGF0YQ.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOlVTLUFTQ0lJ.display_name": {
+          "source": "US-ASCII",
+          "message": "US-ASCII"
+        },
+        "app.SnNvbkZpbGU.action.d3JpdGUtZGF0YQ.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOlVURi04.desc": {
+          "source": "UTF-8 encoding (recommended)",
+          "message": "UTF-8 エンコーディング（推奨）"
+        },
+        "app.SnNvbkZpbGU.action.d3JpdGUtZGF0YQ.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOlVURi04.display_name": {
+          "source": "UTF-8",
+          "message": "UTF-8"
+        },
+        "app.SnNvbkZpbGU.action.d3JpdGUtZGF0YQ.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOlVURi0xNg.desc": {
+          "source": "UTF-16 encoding",
+          "message": "UTF-16 エンコーディング"
+        },
+        "app.SnNvbkZpbGU.action.d3JpdGUtZGF0YQ.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOlVURi0xNg.display_name": {
+          "source": "UTF-16",
+          "message": "UTF-16"
+        },
+        "app.SnNvbkZpbGU.action.d3JpdGUtZGF0YQ.option.ZW5jb2Rpbmc.desc": {
+          "source": "The character encoding to use when writing the output (default: `UTF-8`)",
+          "message": "出力の書き込み時に使用する文字エンコーディング（デフォルト: `UTF-8`）"
+        },
+        "app.SnNvbkZpbGU.action.d3JpdGUtZGF0YQ.option.ZW5jb2Rpbmc.display_name": {
+          "source": "Encoding",
+          "message": "エンコーディング"
+        },
+        "app.SnNvbkZpbGU.action.d3JpdGUtZGF0YQ.option.ZW5jb2Rpbmc.short_desc": {
+          "source": "Character encoding for the output",
+          "message": "出力の文字エンコーディング"
+        },
+        "app.SnNvbkZpbGU.action.d3JpdGUtZGF0YQ.option.c3RyZWFt.desc": {
+          "source": "An output stream to write JSON data to; mutually exclusive with `path`",
+          "message": "JSON データを書き込む出力ストリーム。`path` と排他的です"
+        },
+        "app.SnNvbkZpbGU.action.d3JpdGUtZGF0YQ.option.c3RyZWFt.display_name": {
+          "source": "Output Stream",
+          "message": "出力ストリーム"
+        },
+        "app.SnNvbkZpbGU.action.d3JpdGUtZGF0YQ.option.c3RyZWFt.short_desc": {
+          "source": "An output stream object for the JSON data",
+          "message": "JSON データ用出力ストリームオブジェクト"
+        },
+        "app.SnNvbkZpbGU.action.d3JpdGUtZGF0YQ.option.cHJldHR5X3ByaW50.allowed-value.Ym9vbDp0cnVl.desc": {
+          "source": "Format the JSON output with indentation for readability",
+          "message": "読みやすさのためにインデントを付けて JSON 出力を整形します"
+        },
+        "app.SnNvbkZpbGU.action.d3JpdGUtZGF0YQ.option.cHJldHR5X3ByaW50.allowed-value.Ym9vbDp0cnVl.display_name": {
+          "source": "Yes",
+          "message": "はい"
+        },
+        "app.SnNvbkZpbGU.action.d3JpdGUtZGF0YQ.option.cHJldHR5X3ByaW50.allowed-value.Ym9vbDp0cnVl.short_desc": {
+          "source": "Pretty-print with indentation",
+          "message": "インデント付きで整形出力"
+        },
+        "app.SnNvbkZpbGU.action.d3JpdGUtZGF0YQ.option.cHJldHR5X3ByaW50.allowed-value.Ym9vbDpmYWxzZQ.desc": {
+          "source": "Write compact JSON output with no extra whitespace",
+          "message": "余分な空白なしでコンパクトな JSON 出力を書き込みます"
+        },
+        "app.SnNvbkZpbGU.action.d3JpdGUtZGF0YQ.option.cHJldHR5X3ByaW50.allowed-value.Ym9vbDpmYWxzZQ.display_name": {
+          "source": "No",
+          "message": "いいえ"
+        },
+        "app.SnNvbkZpbGU.action.d3JpdGUtZGF0YQ.option.cHJldHR5X3ByaW50.allowed-value.Ym9vbDpmYWxzZQ.short_desc": {
+          "source": "Compact output",
+          "message": "コンパクト出力"
+        },
+        "app.SnNvbkZpbGU.action.d3JpdGUtZGF0YQ.option.cHJldHR5X3ByaW50.desc": {
+          "source": "If `True` (default), the JSON output is formatted with indentation for readability; if `False`, the output is compact with no extra whitespace",
+          "message": "`True`（デフォルト）の場合、JSON 出力は可読性のためにインデント付きで整形されます。`False` の場合、出力は余分な空白なしでコンパクトになります"
+        },
+        "app.SnNvbkZpbGU.action.d3JpdGUtZGF0YQ.option.cHJldHR5X3ByaW50.display_name": {
+          "source": "Pretty Print",
+          "message": "整形出力"
+        },
+        "app.SnNvbkZpbGU.action.d3JpdGUtZGF0YQ.option.cHJldHR5X3ByaW50.short_desc": {
+          "source": "Format JSON with indentation",
+          "message": "インデントを付けて JSON を整形"
+        },
+        "app.SnNvbkZpbGU.action.d3JpdGUtZGF0YQ.short_desc": {
+          "source": "Write standard JSON data to an output stream",
+          "message": "標準 JSON データを出力ストリームに書き込む"
+        },
+        "app.SnNvbkZpbGU.desc": {
+          "source": "Read and write standard JSON files (not NDJSON/JSON Lines). Supports JSON files containing an array of objects (iterated as individual records) or a single object (returned as one record). Provides configurable pretty-print output for writing.",
+          "message": "標準 JSON ファイル (NDJSON/JSON Lines 以外) の読み書きを行います。オブジェクトの配列 (個別レコードとして反復処理) または単一オブジェクト (1 つのレコードとして返却) を含む JSON ファイルをサポートします。書き込みの際に設定可能なプリティプリント出力を提供します。"
+        },
+        "app.SnNvbkZpbGU.display_name": {
+          "source": "JSON Files",
+          "message": "JSON ファイル"
+        },
+        "app.SnNvbkZpbGU.short_desc": {
+          "source": "Read and write standard JSON files",
+          "message": "標準 JSON ファイルの読み書き"
+        }
+      }
+    }
+  }
+}

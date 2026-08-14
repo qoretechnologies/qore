@@ -1,0 +1,2125 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "de": {
+      "messages": {
+        "app.R29yZ2lhcw.action.Y3JlYXRlLW1lc3NhZ2U.desc": {
+          "source": "Add a new message (reply or internal note) to a Gorgias ticket",
+          "message": "Eine neue Nachricht (Antwort oder interne Notiz) zu einem Gorgias-Ticket hinzufügen"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLW1lc3NhZ2U.display_name": {
+          "source": "Create a Message",
+          "message": "Eine Nachricht erstellen"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLW1lc3NhZ2U.option.Y2hhbm5lbA.allowed-value.c3RyaW5nOmFwaQ.display_name": {
+          "source": "API",
+          "message": "API"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLW1lc3NhZ2U.option.Y2hhbm5lbA.allowed-value.c3RyaW5nOmNoYXQ.display_name": {
+          "source": "Chat",
+          "message": "Chat"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLW1lc3NhZ2U.option.Y2hhbm5lbA.allowed-value.c3RyaW5nOmNvbnRhY3RfZm9ybQ.display_name": {
+          "source": "Contact Form",
+          "message": "Kontaktformular"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLW1lc3NhZ2U.option.Y2hhbm5lbA.allowed-value.c3RyaW5nOmVtYWls.display_name": {
+          "source": "Email",
+          "message": "E-Mail"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLW1lc3NhZ2U.option.Y2hhbm5lbA.allowed-value.c3RyaW5nOmZhY2Vib29r.display_name": {
+          "source": "Facebook",
+          "message": "Facebook"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLW1lc3NhZ2U.option.Y2hhbm5lbA.allowed-value.c3RyaW5nOmhlbHAtY2VudGVy.display_name": {
+          "source": "Help Center",
+          "message": "Hilfecenter"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLW1lc3NhZ2U.option.Y2hhbm5lbA.allowed-value.c3RyaW5nOmluc3RhZ3JhbQ.display_name": {
+          "source": "Instagram",
+          "message": "Instagram"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLW1lc3NhZ2U.option.Y2hhbm5lbA.allowed-value.c3RyaW5nOmludGVybmFsLW5vdGU.display_name": {
+          "source": "Internal Note",
+          "message": "Interne Notiz"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLW1lc3NhZ2U.option.Y2hhbm5lbA.allowed-value.c3RyaW5nOnBob25l.display_name": {
+          "source": "Phone",
+          "message": "Telefon"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLW1lc3NhZ2U.option.Y2hhbm5lbA.allowed-value.c3RyaW5nOnNtcw.display_name": {
+          "source": "SMS",
+          "message": "SMS"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLW1lc3NhZ2U.option.Y2hhbm5lbA.allowed-value.c3RyaW5nOnR3aXR0ZXI.display_name": {
+          "source": "Twitter",
+          "message": "Twitter"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLW1lc3NhZ2U.option.Y2hhbm5lbA.allowed-value.c3RyaW5nOndoYXRzYXBw.display_name": {
+          "source": "WhatsApp",
+          "message": "WhatsApp"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLW1lc3NhZ2U.option.Y2hhbm5lbA.desc": {
+          "source": "The channel for the message",
+          "message": "Der Kanal für die Nachricht"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLW1lc3NhZ2U.option.Y2hhbm5lbA.display_name": {
+          "source": "Channel",
+          "message": "Kanal"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLW1lc3NhZ2U.option.Y2hhbm5lbA.short_desc": {
+          "source": "Message channel",
+          "message": "Nachrichtenkanal"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLW1lc3NhZ2U.option.YXR0YWNobWVudHM.desc": {
+          "source": "List of file attachments for the message. Each attachment requires a `url` pointing to the file location, and optionally `name`, `content_type`, `size`, and `public` fields",
+          "message": "Liste der Dateianhänge für die Nachricht. Jeder Anhang erfordert `url`, das auf den Dateispeicherort verweist, und optional die Felder `name`, `content_type`, `size` und `public`"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLW1lc3NhZ2U.option.YXR0YWNobWVudHM.display_name": {
+          "source": "Attachments",
+          "message": "Anhänge"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLW1lc3NhZ2U.option.YXR0YWNobWVudHM.short_desc": {
+          "source": "File attachments",
+          "message": "Dateianhänge"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLW1lc3NhZ2U.option.Ym9keV90ZXh0.desc": {
+          "source": "The plain text body of the message. Provide either `body_text` or `body_html`",
+          "message": "Der Nur-Text-Inhalt der Nachricht. Geben Sie entweder `body_text` oder `body_html` an"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLW1lc3NhZ2U.option.Ym9keV90ZXh0.display_name": {
+          "source": "Body Text",
+          "message": "Textkörper"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLW1lc3NhZ2U.option.Ym9keV90ZXh0.short_desc": {
+          "source": "Plain text body",
+          "message": "Nur-Text-Inhalt"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLW1lc3NhZ2U.option.Ym9keV9odG1s.desc": {
+          "source": "The HTML body of the message. Provide either `body_text` or `body_html`",
+          "message": "Der HTML-Inhalt der Nachricht. Geben Sie entweder `body_text` oder `body_html` an"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLW1lc3NhZ2U.option.Ym9keV9odG1s.display_name": {
+          "source": "Body HTML",
+          "message": "HTML-Textkörper"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLW1lc3NhZ2U.option.Ym9keV9odG1s.short_desc": {
+          "source": "HTML body",
+          "message": "HTML-Inhalt"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLW1lc3NhZ2U.option.ZnJvbV9hZ2VudA.desc": {
+          "source": "Whether the message is from an agent (`True`) or customer (`False`)",
+          "message": "Gibt an, ob die Nachricht von einem Agenten (`True`) oder einem Kunden (`False`) stammt"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLW1lc3NhZ2U.option.ZnJvbV9hZ2VudA.display_name": {
+          "source": "From Agent",
+          "message": "Vom Agenten"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLW1lc3NhZ2U.option.ZnJvbV9hZ2VudA.short_desc": {
+          "source": "Whether from agent",
+          "message": "Ob vom Agenten"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLW1lc3NhZ2U.option.c2VuZGVy.desc": {
+          "source": "The sender of the message. Provide `id` for agents or `email` for customers",
+          "message": "Der Absender der Nachricht. Geben Sie `id` für Agenten oder `email` für Kunden an"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLW1lc3NhZ2U.option.c2VuZGVy.display_name": {
+          "source": "Sender",
+          "message": "Absender"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLW1lc3NhZ2U.option.c2VuZGVy.short_desc": {
+          "source": "Message sender",
+          "message": "Nachrichtenabsender"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLW1lc3NhZ2U.option.c3ViamVjdA.desc": {
+          "source": "The subject line of the message (for email channel)",
+          "message": "Die Betreffzeile der Nachricht (für den E-Mail-Kanal)"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLW1lc3NhZ2U.option.c3ViamVjdA.display_name": {
+          "source": "Subject",
+          "message": "Betreff"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLW1lc3NhZ2U.option.c3ViamVjdA.short_desc": {
+          "source": "Message subject",
+          "message": "Nachrichtenbetreff"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLW1lc3NhZ2U.option.cmVjZWl2ZXI.desc": {
+          "source": "The receiver of the message. Provide `id` for an agent or `email` for a customer",
+          "message": "Der Empfänger der Nachricht. Geben Sie `id` für einen Agenten oder `email` für einen Kunden an"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLW1lc3NhZ2U.option.cmVjZWl2ZXI.display_name": {
+          "source": "Receiver",
+          "message": "Empfänger"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLW1lc3NhZ2U.option.cmVjZWl2ZXI.short_desc": {
+          "source": "Message receiver",
+          "message": "Nachrichtenempfänger"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLW1lc3NhZ2U.option.dGlja2V0X2lk.desc": {
+          "source": "The ID of the ticket to add the message to",
+          "message": "Die ID des Tickets, zu dem die Nachricht hinzugefügt werden soll"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLW1lc3NhZ2U.option.dGlja2V0X2lk.display_name": {
+          "source": "Ticket ID",
+          "message": "Ticket-ID"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLW1lc3NhZ2U.option.dGlja2V0X2lk.short_desc": {
+          "source": "The ticket to add a message to",
+          "message": "Das Ticket, zu dem eine Nachricht hinzugefügt werden soll"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLW1lc3NhZ2U.option.dmlh.allowed-value.c3RyaW5nOmFwaQ.display_name": {
+          "source": "API",
+          "message": "API"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLW1lc3NhZ2U.option.dmlh.allowed-value.c3RyaW5nOmNoYXQ.display_name": {
+          "source": "Chat",
+          "message": "Chat"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLW1lc3NhZ2U.option.dmlh.allowed-value.c3RyaW5nOmNvbnRhY3RfZm9ybQ.display_name": {
+          "source": "Contact Form",
+          "message": "Kontaktformular"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLW1lc3NhZ2U.option.dmlh.allowed-value.c3RyaW5nOmVtYWls.display_name": {
+          "source": "Email",
+          "message": "E-Mail"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLW1lc3NhZ2U.option.dmlh.allowed-value.c3RyaW5nOmZhY2Vib29r.display_name": {
+          "source": "Facebook",
+          "message": "Facebook"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLW1lc3NhZ2U.option.dmlh.allowed-value.c3RyaW5nOmhlbHAtY2VudGVy.display_name": {
+          "source": "Help Center",
+          "message": "Hilfecenter"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLW1lc3NhZ2U.option.dmlh.allowed-value.c3RyaW5nOmhlbHBkZXNr.display_name": {
+          "source": "Helpdesk",
+          "message": "Helpdesk"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLW1lc3NhZ2U.option.dmlh.allowed-value.c3RyaW5nOmluc3RhZ3JhbQ.display_name": {
+          "source": "Instagram",
+          "message": "Instagram"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLW1lc3NhZ2U.option.dmlh.allowed-value.c3RyaW5nOnBob25l.display_name": {
+          "source": "Phone",
+          "message": "Telefon"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLW1lc3NhZ2U.option.dmlh.allowed-value.c3RyaW5nOnNtcw.display_name": {
+          "source": "SMS",
+          "message": "SMS"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLW1lc3NhZ2U.option.dmlh.allowed-value.c3RyaW5nOnR3aXR0ZXI.display_name": {
+          "source": "Twitter",
+          "message": "Twitter"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLW1lc3NhZ2U.option.dmlh.allowed-value.c3RyaW5nOndoYXRzYXBw.display_name": {
+          "source": "WhatsApp",
+          "message": "WhatsApp"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLW1lc3NhZ2U.option.dmlh.desc": {
+          "source": "How the message was created",
+          "message": "Wie die Nachricht erstellt wurde"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLW1lc3NhZ2U.option.dmlh.display_name": {
+          "source": "Via",
+          "message": "Über"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLW1lc3NhZ2U.option.dmlh.short_desc": {
+          "source": "Message source",
+          "message": "Nachrichtenquelle"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLW1lc3NhZ2U.short_desc": {
+          "source": "Add a message to a ticket",
+          "message": "Eine Nachricht zu einem Ticket hinzufügen"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLWN1c3RvbWVy.desc": {
+          "source": "Create a new Gorgias customer profile",
+          "message": "Ein neues Gorgias-Kundenprofil erstellen"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLWN1c3RvbWVy.display_name": {
+          "source": "Create a Customer",
+          "message": "Kunden erstellen"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLWN1c3RvbWVy.option.Y2hhbm5lbHM.desc": {
+          "source": "List of communication channels for the customer. Each channel has an `address`, `type`, and optional `preferred` flag",
+          "message": "Liste der Kommunikationskanäle für den Kunden. Jeder Kanal hat ein `address`, `type` und ein optionales `preferred`-Flag"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLWN1c3RvbWVy.option.Y2hhbm5lbHM.display_name": {
+          "source": "Channels",
+          "message": "Kanäle"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLWN1c3RvbWVy.option.Y2hhbm5lbHM.short_desc": {
+          "source": "Communication channels",
+          "message": "Kommunikationskanäle"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLWN1c3RvbWVy.option.ZW1haWw.desc": {
+          "source": "The primary email address of the customer",
+          "message": "Die primäre E-Mail-Adresse des Kunden"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLWN1c3RvbWVy.option.ZW1haWw.display_name": {
+          "source": "Email",
+          "message": "E-Mail"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLWN1c3RvbWVy.option.ZW1haWw.short_desc": {
+          "source": "Customer email address",
+          "message": "E-Mail-Adresse des Kunden"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLWN1c3RvbWVy.option.ZXh0ZXJuYWxfaWQ.desc": {
+          "source": "An external identifier for the customer from an integrated system",
+          "message": "Eine externe Kennung für den Kunden aus einem integrierten System"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLWN1c3RvbWVy.option.ZXh0ZXJuYWxfaWQ.display_name": {
+          "source": "External ID",
+          "message": "Externe ID"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLWN1c3RvbWVy.option.ZXh0ZXJuYWxfaWQ.short_desc": {
+          "source": "External identifier",
+          "message": "Externe Kennung"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLWN1c3RvbWVy.option.Zmlyc3RuYW1l.desc": {
+          "source": "The first name of the customer",
+          "message": "Der Vorname des Kunden"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLWN1c3RvbWVy.option.Zmlyc3RuYW1l.display_name": {
+          "source": "First Name",
+          "message": "Vorname"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLWN1c3RvbWVy.option.Zmlyc3RuYW1l.short_desc": {
+          "source": "Customer first name",
+          "message": "Vorname des Kunden"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLWN1c3RvbWVy.option.bGFuZ3VhZ2U.desc": {
+          "source": "The preferred language of the customer (ISO 639-1 code)",
+          "message": "Die bevorzugte Sprache des Kunden (ISO 639-1-Code)"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLWN1c3RvbWVy.option.bGFuZ3VhZ2U.display_name": {
+          "source": "Language",
+          "message": "Sprache"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLWN1c3RvbWVy.option.bGFuZ3VhZ2U.short_desc": {
+          "source": "Preferred language",
+          "message": "Bevorzugte Sprache"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLWN1c3RvbWVy.option.bGFzdG5hbWU.desc": {
+          "source": "The last name of the customer",
+          "message": "Der Nachname des Kunden"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLWN1c3RvbWVy.option.bGFzdG5hbWU.display_name": {
+          "source": "Last Name",
+          "message": "Nachname"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLWN1c3RvbWVy.option.bGFzdG5hbWU.short_desc": {
+          "source": "Customer last name",
+          "message": "Nachname des Kunden"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLWN1c3RvbWVy.option.bm90ZQ.desc": {
+          "source": "Internal notes about the customer",
+          "message": "Interne Notizen über den Kunden"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLWN1c3RvbWVy.option.bm90ZQ.display_name": {
+          "source": "Note",
+          "message": "Notiz"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLWN1c3RvbWVy.option.bm90ZQ.short_desc": {
+          "source": "Internal note",
+          "message": "Interne Notiz"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLWN1c3RvbWVy.option.bmFtZQ.desc": {
+          "source": "The full name of the customer",
+          "message": "Der vollständige Name des Kunden"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLWN1c3RvbWVy.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "Name"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLWN1c3RvbWVy.option.bmFtZQ.short_desc": {
+          "source": "Full name",
+          "message": "Vollständiger Name"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLWN1c3RvbWVy.option.dGltZXpvbmU.desc": {
+          "source": "The timezone of the customer (e.g., `America/New_York`)",
+          "message": "Die Zeitzone des Kunden (z. B. `America/New_York`)"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLWN1c3RvbWVy.option.dGltZXpvbmU.display_name": {
+          "source": "Timezone",
+          "message": "Zeitzone"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLWN1c3RvbWVy.option.dGltZXpvbmU.short_desc": {
+          "source": "Customer timezone",
+          "message": "Kundenzeitzone"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLWN1c3RvbWVy.short_desc": {
+          "source": "Create a new customer",
+          "message": "Einen neuen Kunden erstellen"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLXRhZw.desc": {
+          "source": "Create a new Gorgias tag for organizing tickets",
+          "message": "Ein neues Gorgias-Tag zur Organisation von Tickets erstellen"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLXRhZw.display_name": {
+          "source": "Create a Tag",
+          "message": "Tag erstellen"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLXRhZw.option.ZGVjb3JhdGlvbg.desc": {
+          "source": "Visual decoration settings for the tag",
+          "message": "Visuelle Dekorationseinstellungen für das Tag"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLXRhZw.option.ZGVjb3JhdGlvbg.display_name": {
+          "source": "Decoration",
+          "message": "Dekoration"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLXRhZw.option.ZGVjb3JhdGlvbg.short_desc": {
+          "source": "Visual decoration",
+          "message": "Visuelle Dekoration"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLXRhZw.option.ZGVzY3JpcHRpb24.desc": {
+          "source": "A short description of the tag",
+          "message": "Eine kurze Beschreibung des Tags"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLXRhZw.option.ZGVzY3JpcHRpb24.display_name": {
+          "source": "Description",
+          "message": "Beschreibung"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLXRhZw.option.ZGVzY3JpcHRpb24.short_desc": {
+          "source": "Tag description",
+          "message": "Tag-Beschreibung"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLXRhZw.option.bmFtZQ.desc": {
+          "source": "The name of the tag (min 1, max 256 characters)",
+          "message": "Der Name des Tags (mind. 1, max. 256 Zeichen)"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLXRhZw.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "Name"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLXRhZw.option.bmFtZQ.short_desc": {
+          "source": "Tag name",
+          "message": "Tag-Name"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLXRhZw.short_desc": {
+          "source": "Create a new tag",
+          "message": "Neuen Tag erstellen"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLXRpY2tldA.desc": {
+          "source": "Create a new Gorgias support ticket with messages, channel, and optional assignment",
+          "message": "Ein neues Gorgias-Support-Ticket mit Nachrichten, Kanal und optionaler Zuweisung erstellen"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLXRpY2tldA.display_name": {
+          "source": "Create a Ticket",
+          "message": "Ticket erstellen"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLXRpY2tldA.option.Y2hhbm5lbA.allowed-value.c3RyaW5nOmFwaQ.display_name": {
+          "source": "API",
+          "message": "API"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLXRpY2tldA.option.Y2hhbm5lbA.allowed-value.c3RyaW5nOmNoYXQ.display_name": {
+          "source": "Chat",
+          "message": "Chat"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLXRpY2tldA.option.Y2hhbm5lbA.allowed-value.c3RyaW5nOmNvbnRhY3RfZm9ybQ.display_name": {
+          "source": "Contact Form",
+          "message": "Kontaktformular"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLXRpY2tldA.option.Y2hhbm5lbA.allowed-value.c3RyaW5nOmVtYWls.display_name": {
+          "source": "Email",
+          "message": "E-Mail"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLXRpY2tldA.option.Y2hhbm5lbA.allowed-value.c3RyaW5nOmZhY2Vib29r.display_name": {
+          "source": "Facebook",
+          "message": "Facebook"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLXRpY2tldA.option.Y2hhbm5lbA.allowed-value.c3RyaW5nOmhlbHAtY2VudGVy.display_name": {
+          "source": "Help Center",
+          "message": "Hilfecenter"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLXRpY2tldA.option.Y2hhbm5lbA.allowed-value.c3RyaW5nOmluc3RhZ3JhbQ.display_name": {
+          "source": "Instagram",
+          "message": "Instagram"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLXRpY2tldA.option.Y2hhbm5lbA.allowed-value.c3RyaW5nOmludGVybmFsLW5vdGU.display_name": {
+          "source": "Internal Note",
+          "message": "Interne Notiz"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLXRpY2tldA.option.Y2hhbm5lbA.allowed-value.c3RyaW5nOnBob25l.display_name": {
+          "source": "Phone",
+          "message": "Telefon"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLXRpY2tldA.option.Y2hhbm5lbA.allowed-value.c3RyaW5nOnNtcw.display_name": {
+          "source": "SMS",
+          "message": "SMS"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLXRpY2tldA.option.Y2hhbm5lbA.allowed-value.c3RyaW5nOnR3aXR0ZXI.display_name": {
+          "source": "Twitter",
+          "message": "Twitter"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLXRpY2tldA.option.Y2hhbm5lbA.allowed-value.c3RyaW5nOndoYXRzYXBw.display_name": {
+          "source": "WhatsApp",
+          "message": "WhatsApp"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLXRpY2tldA.option.Y2hhbm5lbA.desc": {
+          "source": "The channel for the ticket (e.g., `email`, `chat`, `api`)",
+          "message": "Der Kanal für das Ticket (z. B. `email`, `chat`, `api`)"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLXRpY2tldA.option.Y2hhbm5lbA.display_name": {
+          "source": "Channel",
+          "message": "Kanal"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLXRpY2tldA.option.Y2hhbm5lbA.short_desc": {
+          "source": "Communication channel",
+          "message": "Kommunikationskanal"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLXRpY2tldA.option.Y3VzdG9tZXI.desc": {
+          "source": "The customer for this ticket. Provide `id` to reference an existing customer, or `email` to match or create by email address",
+          "message": "Der Kunde für dieses Ticket. Geben Sie `id` an, um auf einen bestehenden Kunden zu verweisen, oder `email`, um anhand der E-Mail-Adresse abzugleichen oder zu erstellen"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLXRpY2tldA.option.Y3VzdG9tZXI.display_name": {
+          "source": "Customer",
+          "message": "Kunde"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLXRpY2tldA.option.Y3VzdG9tZXI.short_desc": {
+          "source": "Customer data",
+          "message": "Kundendaten"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLXRpY2tldA.option.YXNzaWduZWVfdGVhbQ.desc": {
+          "source": "The team to assign to this ticket",
+          "message": "Das Team, dem dieses Ticket zugewiesen werden soll"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLXRpY2tldA.option.YXNzaWduZWVfdGVhbQ.display_name": {
+          "source": "Assignee Team",
+          "message": "Zugewiesenes Team"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLXRpY2tldA.option.YXNzaWduZWVfdGVhbQ.short_desc": {
+          "source": "Assigned team",
+          "message": "Zugewiesenes Team"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLXRpY2tldA.option.YXNzaWduZWVfdXNlcg.desc": {
+          "source": "The agent to assign to this ticket",
+          "message": "Der Agent, dem dieses Ticket zugewiesen werden soll"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLXRpY2tldA.option.YXNzaWduZWVfdXNlcg.display_name": {
+          "source": "Assignee User",
+          "message": "Zugewiesener Benutzer"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLXRpY2tldA.option.YXNzaWduZWVfdXNlcg.short_desc": {
+          "source": "Assigned agent",
+          "message": "Zugewiesener Agent"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLXRpY2tldA.option.ZXh0ZXJuYWxfaWQ.desc": {
+          "source": "An external identifier for the ticket (max 255 characters)",
+          "message": "Eine externe Kennung für das Ticket (max. 255 Zeichen)"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLXRpY2tldA.option.ZXh0ZXJuYWxfaWQ.display_name": {
+          "source": "External ID",
+          "message": "Externe ID"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLXRpY2tldA.option.ZXh0ZXJuYWxfaWQ.short_desc": {
+          "source": "External identifier",
+          "message": "Externe Kennung"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLXRpY2tldA.option.bGFuZ3VhZ2U.desc": {
+          "source": "The language of the ticket content",
+          "message": "Die Sprache des Ticketinhalts"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLXRpY2tldA.option.bGFuZ3VhZ2U.display_name": {
+          "source": "Language",
+          "message": "Sprache"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLXRpY2tldA.option.bGFuZ3VhZ2U.short_desc": {
+          "source": "Ticket language",
+          "message": "Ticketsprache"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLXRpY2tldA.option.bWVzc2FnZXM.desc": {
+          "source": "List of initial messages for the ticket. Required field. Each message must have `channel`, `from_agent`, and `via`. Provide either `body_text` or `body_html` for message content. Up to 500 messages per ticket",
+          "message": "Liste der anfänglichen Nachrichten für das Ticket. Pflichtfeld. Jede Nachricht muss `channel`, `from_agent` und `via` enthalten. Geben Sie entweder `body_text` oder `body_html` für den Nachrichteninhalt an. Bis zu 500 Nachrichten pro Ticket"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLXRpY2tldA.option.bWVzc2FnZXM.display_name": {
+          "source": "Messages",
+          "message": "Nachrichten"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLXRpY2tldA.option.bWVzc2FnZXM.short_desc": {
+          "source": "Initial messages",
+          "message": "Anfängliche Nachrichten"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLXRpY2tldA.option.c3BhbQ.desc": {
+          "source": "Whether to mark the ticket as spam. Default: `False`",
+          "message": "Gibt an, ob das Ticket als Spam markiert werden soll. Standard: `False`"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLXRpY2tldA.option.c3BhbQ.display_name": {
+          "source": "Spam",
+          "message": "Spam"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLXRpY2tldA.option.c3BhbQ.short_desc": {
+          "source": "Mark as spam",
+          "message": "Als Spam markieren"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLXRpY2tldA.option.c3RhdHVz.allowed-value.c3RyaW5nOm9wZW4.display_name": {
+          "source": "Open",
+          "message": "Offen"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLXRpY2tldA.option.c3RhdHVz.allowed-value.c3RyaW5nOmNsb3NlZA.display_name": {
+          "source": "Closed",
+          "message": "Geschlossen"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLXRpY2tldA.option.c3RhdHVz.desc": {
+          "source": "The initial status of the ticket",
+          "message": "Der anfängliche Status des Tickets"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLXRpY2tldA.option.c3RhdHVz.display_name": {
+          "source": "Status",
+          "message": "Status"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLXRpY2tldA.option.c3RhdHVz.short_desc": {
+          "source": "Ticket status",
+          "message": "Ticketstatus"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLXRpY2tldA.option.c3ViamVjdA.desc": {
+          "source": "The subject line of the ticket (max 998 characters)",
+          "message": "Die Betreffzeile des Tickets (max. 998 Zeichen)"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLXRpY2tldA.option.c3ViamVjdA.display_name": {
+          "source": "Subject",
+          "message": "Betreff"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLXRpY2tldA.option.c3ViamVjdA.short_desc": {
+          "source": "Ticket subject line",
+          "message": "Ticket-Betreffzeile"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLXRpY2tldA.option.cHJpb3JpdHk.allowed-value.c3RyaW5nOm5vcm1hbA.display_name": {
+          "source": "Normal",
+          "message": "Normal"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLXRpY2tldA.option.cHJpb3JpdHk.allowed-value.c3RyaW5nOmNyaXRpY2Fs.display_name": {
+          "source": "Critical",
+          "message": "Kritisch"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLXRpY2tldA.option.cHJpb3JpdHk.allowed-value.c3RyaW5nOmhpZ2g.display_name": {
+          "source": "High",
+          "message": "Hoch"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLXRpY2tldA.option.cHJpb3JpdHk.allowed-value.c3RyaW5nOmxvdw.display_name": {
+          "source": "Low",
+          "message": "Niedrig"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLXRpY2tldA.option.cHJpb3JpdHk.desc": {
+          "source": "The priority level of the ticket",
+          "message": "Die Prioritätsstufe des Tickets"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLXRpY2tldA.option.cHJpb3JpdHk.display_name": {
+          "source": "Priority",
+          "message": "Priorität"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLXRpY2tldA.option.cHJpb3JpdHk.short_desc": {
+          "source": "Ticket priority",
+          "message": "Ticket-Priorität"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLXRpY2tldA.option.dGFncw.desc": {
+          "source": "List of tags to apply to the ticket. Each tag must have a `name` field",
+          "message": "Liste der Tags, die auf das Ticket angewendet werden sollen. Jedes Tag muss ein Feld `name` enthalten"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLXRpY2tldA.option.dGFncw.display_name": {
+          "source": "Tags",
+          "message": "Tags"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLXRpY2tldA.option.dGFncw.short_desc": {
+          "source": "Tags to apply",
+          "message": "Anzuwendende Tags"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLXRpY2tldA.option.dmlh.allowed-value.c3RyaW5nOmFwaQ.display_name": {
+          "source": "API",
+          "message": "API"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLXRpY2tldA.option.dmlh.allowed-value.c3RyaW5nOmNoYXQ.display_name": {
+          "source": "Chat",
+          "message": "Chat"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLXRpY2tldA.option.dmlh.allowed-value.c3RyaW5nOmNvbnRhY3RfZm9ybQ.display_name": {
+          "source": "Contact Form",
+          "message": "Kontaktformular"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLXRpY2tldA.option.dmlh.allowed-value.c3RyaW5nOmVtYWls.display_name": {
+          "source": "Email",
+          "message": "E-Mail"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLXRpY2tldA.option.dmlh.allowed-value.c3RyaW5nOmZhY2Vib29r.display_name": {
+          "source": "Facebook",
+          "message": "Facebook"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLXRpY2tldA.option.dmlh.allowed-value.c3RyaW5nOmhlbHAtY2VudGVy.display_name": {
+          "source": "Help Center",
+          "message": "Hilfecenter"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLXRpY2tldA.option.dmlh.allowed-value.c3RyaW5nOmhlbHBkZXNr.display_name": {
+          "source": "Helpdesk",
+          "message": "Helpdesk"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLXRpY2tldA.option.dmlh.allowed-value.c3RyaW5nOmluc3RhZ3JhbQ.display_name": {
+          "source": "Instagram",
+          "message": "Instagram"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLXRpY2tldA.option.dmlh.allowed-value.c3RyaW5nOnBob25l.display_name": {
+          "source": "Phone",
+          "message": "Telefon"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLXRpY2tldA.option.dmlh.allowed-value.c3RyaW5nOnNtcw.display_name": {
+          "source": "SMS",
+          "message": "SMS"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLXRpY2tldA.option.dmlh.allowed-value.c3RyaW5nOnR3aXR0ZXI.display_name": {
+          "source": "Twitter",
+          "message": "Twitter"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLXRpY2tldA.option.dmlh.allowed-value.c3RyaW5nOndoYXRzYXBw.display_name": {
+          "source": "WhatsApp",
+          "message": "WhatsApp"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLXRpY2tldA.option.dmlh.desc": {
+          "source": "How the ticket was created. Required field",
+          "message": "Wie das Ticket erstellt wurde. Pflichtfeld"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLXRpY2tldA.option.dmlh.display_name": {
+          "source": "Via",
+          "message": "Über"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLXRpY2tldA.option.dmlh.short_desc": {
+          "source": "Ticket source",
+          "message": "Ticket-Quelle"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLXRpY2tldA.short_desc": {
+          "source": "Create a new support ticket",
+          "message": "Ein neues Support-Ticket erstellen"
+        },
+        "app.R29yZ2lhcw.action.Z2V0LW1lc3NhZ2U.desc": {
+          "source": "Retrieve a single message from a Gorgias ticket",
+          "message": "Eine einzelne Nachricht aus einem Gorgias-Ticket abrufen"
+        },
+        "app.R29yZ2lhcw.action.Z2V0LW1lc3NhZ2U.display_name": {
+          "source": "Get a Message",
+          "message": "Eine Nachricht abrufen"
+        },
+        "app.R29yZ2lhcw.action.Z2V0LW1lc3NhZ2U.option.bWVzc2FnZV9pZA.display_name": {
+          "source": "Message ID",
+          "message": "Nachrichten-ID"
+        },
+        "app.R29yZ2lhcw.action.Z2V0LW1lc3NhZ2U.option.bWVzc2FnZV9pZA.short_desc": {
+          "source": "The message ID",
+          "message": "Die Nachrichten-ID"
+        },
+        "app.R29yZ2lhcw.action.Z2V0LW1lc3NhZ2U.option.dGlja2V0X2lk.display_name": {
+          "source": "Ticket ID",
+          "message": "Ticket-ID"
+        },
+        "app.R29yZ2lhcw.action.Z2V0LW1lc3NhZ2U.option.dGlja2V0X2lk.short_desc": {
+          "source": "The ticket containing the message",
+          "message": "Das Ticket, das die Nachricht enthält"
+        },
+        "app.R29yZ2lhcw.action.Z2V0LW1lc3NhZ2U.short_desc": {
+          "source": "Get a single message by ID",
+          "message": "Eine einzelne Nachricht anhand der ID abrufen"
+        },
+        "app.R29yZ2lhcw.action.Z2V0LWN1c3RvbWVy.desc": {
+          "source": "Retrieve a single Gorgias customer by their ID",
+          "message": "Einen einzelnen Gorgias-Kunden anhand seiner ID abrufen"
+        },
+        "app.R29yZ2lhcw.action.Z2V0LWN1c3RvbWVy.display_name": {
+          "source": "Get a Customer",
+          "message": "Kunden abrufen"
+        },
+        "app.R29yZ2lhcw.action.Z2V0LWN1c3RvbWVy.option.Y3VzdG9tZXJfaWQ.display_name": {
+          "source": "Customer ID",
+          "message": "Kunden-ID"
+        },
+        "app.R29yZ2lhcw.action.Z2V0LWN1c3RvbWVy.option.Y3VzdG9tZXJfaWQ.short_desc": {
+          "source": "The customer ID",
+          "message": "Die Kunden-ID"
+        },
+        "app.R29yZ2lhcw.action.Z2V0LWN1c3RvbWVy.short_desc": {
+          "source": "Get a single customer by ID",
+          "message": "Einzelnen Kunden anhand der ID abrufen"
+        },
+        "app.R29yZ2lhcw.action.Z2V0LXRhZw.desc": {
+          "source": "Retrieve a single Gorgias tag by its ID",
+          "message": "Ein einzelnes Gorgias-Tag anhand seiner ID abrufen"
+        },
+        "app.R29yZ2lhcw.action.Z2V0LXRhZw.display_name": {
+          "source": "Get a Tag",
+          "message": "Tag abrufen"
+        },
+        "app.R29yZ2lhcw.action.Z2V0LXRhZw.option.dGFnX2lk.display_name": {
+          "source": "Tag ID",
+          "message": "Tag-ID"
+        },
+        "app.R29yZ2lhcw.action.Z2V0LXRhZw.option.dGFnX2lk.short_desc": {
+          "source": "The tag ID",
+          "message": "Die Tag-ID"
+        },
+        "app.R29yZ2lhcw.action.Z2V0LXRhZw.short_desc": {
+          "source": "Get a single tag by ID",
+          "message": "Einzelnen Tag anhand der ID abrufen"
+        },
+        "app.R29yZ2lhcw.action.Z2V0LXRpY2tldA.desc": {
+          "source": "Retrieve a single Gorgias ticket by its ID",
+          "message": "Ein einzelnes Gorgias-Ticket anhand seiner ID abrufen"
+        },
+        "app.R29yZ2lhcw.action.Z2V0LXRpY2tldA.display_name": {
+          "source": "Get a Ticket",
+          "message": "Ticket abrufen"
+        },
+        "app.R29yZ2lhcw.action.Z2V0LXRpY2tldA.option.dGlja2V0X2lk.display_name": {
+          "source": "Ticket ID",
+          "message": "Ticket-ID"
+        },
+        "app.R29yZ2lhcw.action.Z2V0LXRpY2tldA.option.dGlja2V0X2lk.short_desc": {
+          "source": "The ticket ID",
+          "message": "Die Ticket-ID"
+        },
+        "app.R29yZ2lhcw.action.Z2V0LXRpY2tldA.short_desc": {
+          "source": "Get a single ticket by ID",
+          "message": "Ein einzelnes Ticket anhand der ID abrufen"
+        },
+        "app.R29yZ2lhcw.action.Z2V0LXVzZXI.desc": {
+          "source": "Retrieve a single Gorgias user (agent) by their ID",
+          "message": "Einen einzelnen Gorgias-Benutzer (Agent) anhand seiner ID abrufen"
+        },
+        "app.R29yZ2lhcw.action.Z2V0LXVzZXI.display_name": {
+          "source": "Get a User",
+          "message": "Benutzer abrufen"
+        },
+        "app.R29yZ2lhcw.action.Z2V0LXVzZXI.option.dXNlcl9pZA.display_name": {
+          "source": "User ID",
+          "message": "Benutzer-ID"
+        },
+        "app.R29yZ2lhcw.action.Z2V0LXVzZXI.option.dXNlcl9pZA.short_desc": {
+          "source": "The user ID",
+          "message": "Die Benutzer-ID"
+        },
+        "app.R29yZ2lhcw.action.Z2V0LXVzZXI.short_desc": {
+          "source": "Get a single user by ID",
+          "message": "Einen einzelnen Benutzer anhand der ID abrufen"
+        },
+        "app.R29yZ2lhcw.action.ZGVsZXRlLW1lc3NhZ2U.desc": {
+          "source": "Permanently delete a message from a Gorgias ticket",
+          "message": "Eine Nachricht dauerhaft aus einem Gorgias-Ticket löschen"
+        },
+        "app.R29yZ2lhcw.action.ZGVsZXRlLW1lc3NhZ2U.display_name": {
+          "source": "Delete a Message",
+          "message": "Nachricht löschen"
+        },
+        "app.R29yZ2lhcw.action.ZGVsZXRlLW1lc3NhZ2U.option.bWVzc2FnZV9pZA.desc": {
+          "source": "The ID of the message to delete",
+          "message": "Die ID der zu löschenden Nachricht"
+        },
+        "app.R29yZ2lhcw.action.ZGVsZXRlLW1lc3NhZ2U.option.bWVzc2FnZV9pZA.display_name": {
+          "source": "Message ID",
+          "message": "Nachrichten-ID"
+        },
+        "app.R29yZ2lhcw.action.ZGVsZXRlLW1lc3NhZ2U.option.bWVzc2FnZV9pZA.short_desc": {
+          "source": "The message to delete",
+          "message": "Die zu löschende Nachricht"
+        },
+        "app.R29yZ2lhcw.action.ZGVsZXRlLW1lc3NhZ2U.option.dGlja2V0X2lk.desc": {
+          "source": "The ID of the ticket containing the message to delete",
+          "message": "Die ID des Tickets, das die zu löschende Nachricht enthält"
+        },
+        "app.R29yZ2lhcw.action.ZGVsZXRlLW1lc3NhZ2U.option.dGlja2V0X2lk.display_name": {
+          "source": "Ticket ID",
+          "message": "Ticket-ID"
+        },
+        "app.R29yZ2lhcw.action.ZGVsZXRlLW1lc3NhZ2U.option.dGlja2V0X2lk.short_desc": {
+          "source": "The ticket containing the message",
+          "message": "Das Ticket, das die Nachricht enthält"
+        },
+        "app.R29yZ2lhcw.action.ZGVsZXRlLW1lc3NhZ2U.short_desc": {
+          "source": "Delete an existing message",
+          "message": "Eine bestehende Nachricht löschen"
+        },
+        "app.R29yZ2lhcw.action.ZGVsZXRlLWN1c3RvbWVy.desc": {
+          "source": "Permanently delete a Gorgias customer",
+          "message": "Einen Gorgias-Kunden dauerhaft löschen"
+        },
+        "app.R29yZ2lhcw.action.ZGVsZXRlLWN1c3RvbWVy.display_name": {
+          "source": "Delete a Customer",
+          "message": "Kunden löschen"
+        },
+        "app.R29yZ2lhcw.action.ZGVsZXRlLWN1c3RvbWVy.option.Y3VzdG9tZXJfaWQ.desc": {
+          "source": "The ID of the customer to delete",
+          "message": "Die ID des zu löschenden Kunden"
+        },
+        "app.R29yZ2lhcw.action.ZGVsZXRlLWN1c3RvbWVy.option.Y3VzdG9tZXJfaWQ.display_name": {
+          "source": "Customer ID",
+          "message": "Kunden-ID"
+        },
+        "app.R29yZ2lhcw.action.ZGVsZXRlLWN1c3RvbWVy.option.Y3VzdG9tZXJfaWQ.short_desc": {
+          "source": "The customer to delete",
+          "message": "Der zu löschende Kunde"
+        },
+        "app.R29yZ2lhcw.action.ZGVsZXRlLWN1c3RvbWVy.short_desc": {
+          "source": "Delete an existing customer",
+          "message": "Einen bestehenden Kunden löschen"
+        },
+        "app.R29yZ2lhcw.action.ZGVsZXRlLXRhZw.desc": {
+          "source": "Permanently delete a Gorgias tag",
+          "message": "Ein Gorgias-Tag dauerhaft löschen"
+        },
+        "app.R29yZ2lhcw.action.ZGVsZXRlLXRhZw.display_name": {
+          "source": "Delete a Tag",
+          "message": "Ein Tag löschen"
+        },
+        "app.R29yZ2lhcw.action.ZGVsZXRlLXRhZw.option.dGFnX2lk.desc": {
+          "source": "The ID of the tag to delete",
+          "message": "Die ID des zu löschenden Tags"
+        },
+        "app.R29yZ2lhcw.action.ZGVsZXRlLXRhZw.option.dGFnX2lk.display_name": {
+          "source": "Tag ID",
+          "message": "Tag-ID"
+        },
+        "app.R29yZ2lhcw.action.ZGVsZXRlLXRhZw.option.dGFnX2lk.short_desc": {
+          "source": "The tag to delete",
+          "message": "Der zu löschende Tag"
+        },
+        "app.R29yZ2lhcw.action.ZGVsZXRlLXRhZw.short_desc": {
+          "source": "Delete an existing tag",
+          "message": "Ein bestehendes Tag löschen"
+        },
+        "app.R29yZ2lhcw.action.ZGVsZXRlLXRpY2tldA.desc": {
+          "source": "Permanently delete a Gorgias ticket",
+          "message": "Ein Gorgias-Ticket dauerhaft löschen"
+        },
+        "app.R29yZ2lhcw.action.ZGVsZXRlLXRpY2tldA.display_name": {
+          "source": "Delete a Ticket",
+          "message": "Ticket löschen"
+        },
+        "app.R29yZ2lhcw.action.ZGVsZXRlLXRpY2tldA.option.dGlja2V0X2lk.desc": {
+          "source": "The ID of the ticket to delete",
+          "message": "Die ID des zu löschenden Tickets"
+        },
+        "app.R29yZ2lhcw.action.ZGVsZXRlLXRpY2tldA.option.dGlja2V0X2lk.display_name": {
+          "source": "Ticket ID",
+          "message": "Ticket-ID"
+        },
+        "app.R29yZ2lhcw.action.ZGVsZXRlLXRpY2tldA.option.dGlja2V0X2lk.short_desc": {
+          "source": "The ticket to delete",
+          "message": "Das zu löschende Ticket"
+        },
+        "app.R29yZ2lhcw.action.ZGVsZXRlLXRpY2tldA.short_desc": {
+          "source": "Delete an existing ticket",
+          "message": "Ein bestehendes Ticket löschen"
+        },
+        "app.R29yZ2lhcw.action.bGlzdC10YWdz.desc": {
+          "source": "List all Gorgias tags",
+          "message": "Alle Gorgias-Tags auflisten"
+        },
+        "app.R29yZ2lhcw.action.bGlzdC10YWdz.display_name": {
+          "source": "List Tags",
+          "message": "Tags auflisten"
+        },
+        "app.R29yZ2lhcw.action.bGlzdC10YWdz.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "Limit"
+        },
+        "app.R29yZ2lhcw.action.bGlzdC10YWdz.option.bGltaXQ.short_desc": {
+          "source": "Maximum results",
+          "message": "Maximale Ergebnisse"
+        },
+        "app.R29yZ2lhcw.action.bGlzdC10YWdz.option.dGFnX2lk.display_name": {
+          "source": "Tag ID",
+          "message": "Tag-ID"
+        },
+        "app.R29yZ2lhcw.action.bGlzdC10YWdz.option.dGFnX2lk.short_desc": {
+          "source": "Get a specific tag",
+          "message": "Ein bestimmtes Tag abrufen"
+        },
+        "app.R29yZ2lhcw.action.bGlzdC10YWdz.short_desc": {
+          "source": "List tags",
+          "message": "Tags auflisten"
+        },
+        "app.R29yZ2lhcw.action.bGlzdC10aWNrZXRz.desc": {
+          "source": "List Gorgias support tickets with optional filtering by status, assignee, customer, and channel",
+          "message": "Gorgias-Support-Tickets mit optionaler Filterung nach Status, Zuweisung, Kunde und Kanal auflisten"
+        },
+        "app.R29yZ2lhcw.action.bGlzdC10aWNrZXRz.display_name": {
+          "source": "List Tickets",
+          "message": "Tickets auflisten"
+        },
+        "app.R29yZ2lhcw.action.bGlzdC10aWNrZXRz.option.Y2hhbm5lbA.allowed-value.c3RyaW5nOmFwaQ.display_name": {
+          "source": "API",
+          "message": "API"
+        },
+        "app.R29yZ2lhcw.action.bGlzdC10aWNrZXRz.option.Y2hhbm5lbA.allowed-value.c3RyaW5nOmNoYXQ.display_name": {
+          "source": "Chat",
+          "message": "Chat"
+        },
+        "app.R29yZ2lhcw.action.bGlzdC10aWNrZXRz.option.Y2hhbm5lbA.allowed-value.c3RyaW5nOmNvbnRhY3RfZm9ybQ.display_name": {
+          "source": "Contact Form",
+          "message": "Kontaktformular"
+        },
+        "app.R29yZ2lhcw.action.bGlzdC10aWNrZXRz.option.Y2hhbm5lbA.allowed-value.c3RyaW5nOmVtYWls.display_name": {
+          "source": "Email",
+          "message": "E-Mail"
+        },
+        "app.R29yZ2lhcw.action.bGlzdC10aWNrZXRz.option.Y2hhbm5lbA.allowed-value.c3RyaW5nOmZhY2Vib29r.display_name": {
+          "source": "Facebook",
+          "message": "Facebook"
+        },
+        "app.R29yZ2lhcw.action.bGlzdC10aWNrZXRz.option.Y2hhbm5lbA.allowed-value.c3RyaW5nOmhlbHAtY2VudGVy.display_name": {
+          "source": "Help Center",
+          "message": "Hilfecenter"
+        },
+        "app.R29yZ2lhcw.action.bGlzdC10aWNrZXRz.option.Y2hhbm5lbA.allowed-value.c3RyaW5nOmluc3RhZ3JhbQ.display_name": {
+          "source": "Instagram",
+          "message": "Instagram"
+        },
+        "app.R29yZ2lhcw.action.bGlzdC10aWNrZXRz.option.Y2hhbm5lbA.allowed-value.c3RyaW5nOmludGVybmFsLW5vdGU.display_name": {
+          "source": "Internal Note",
+          "message": "Interne Notiz"
+        },
+        "app.R29yZ2lhcw.action.bGlzdC10aWNrZXRz.option.Y2hhbm5lbA.allowed-value.c3RyaW5nOnBob25l.display_name": {
+          "source": "Phone",
+          "message": "Telefon"
+        },
+        "app.R29yZ2lhcw.action.bGlzdC10aWNrZXRz.option.Y2hhbm5lbA.allowed-value.c3RyaW5nOnNtcw.display_name": {
+          "source": "SMS",
+          "message": "SMS"
+        },
+        "app.R29yZ2lhcw.action.bGlzdC10aWNrZXRz.option.Y2hhbm5lbA.allowed-value.c3RyaW5nOnR3aXR0ZXI.display_name": {
+          "source": "Twitter",
+          "message": "Twitter"
+        },
+        "app.R29yZ2lhcw.action.bGlzdC10aWNrZXRz.option.Y2hhbm5lbA.allowed-value.c3RyaW5nOndoYXRzYXBw.display_name": {
+          "source": "WhatsApp",
+          "message": "WhatsApp"
+        },
+        "app.R29yZ2lhcw.action.bGlzdC10aWNrZXRz.option.Y2hhbm5lbA.display_name": {
+          "source": "Channel",
+          "message": "Kanal"
+        },
+        "app.R29yZ2lhcw.action.bGlzdC10aWNrZXRz.option.Y2hhbm5lbA.short_desc": {
+          "source": "Filter by channel",
+          "message": "Nach Kanal filtern"
+        },
+        "app.R29yZ2lhcw.action.bGlzdC10aWNrZXRz.option.Y3VzdG9tZXJfaWQ.display_name": {
+          "source": "Customer ID",
+          "message": "Kunden-ID"
+        },
+        "app.R29yZ2lhcw.action.bGlzdC10aWNrZXRz.option.Y3VzdG9tZXJfaWQ.short_desc": {
+          "source": "Filter by customer",
+          "message": "Nach Kunde filtern"
+        },
+        "app.R29yZ2lhcw.action.bGlzdC10aWNrZXRz.option.YXNzaWduZWVfdXNlcl9pZA.display_name": {
+          "source": "Assignee User ID",
+          "message": "Zugewiesene Benutzer-ID"
+        },
+        "app.R29yZ2lhcw.action.bGlzdC10aWNrZXRz.option.YXNzaWduZWVfdXNlcl9pZA.short_desc": {
+          "source": "Filter by assigned agent",
+          "message": "Nach zugewiesenem Agenten filtern"
+        },
+        "app.R29yZ2lhcw.action.bGlzdC10aWNrZXRz.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "Limit"
+        },
+        "app.R29yZ2lhcw.action.bGlzdC10aWNrZXRz.option.bGltaXQ.short_desc": {
+          "source": "Maximum results",
+          "message": "Maximale Ergebnisse"
+        },
+        "app.R29yZ2lhcw.action.bGlzdC10aWNrZXRz.option.c3RhdHVz.allowed-value.c3RyaW5nOm9wZW4.display_name": {
+          "source": "Open",
+          "message": "Offen"
+        },
+        "app.R29yZ2lhcw.action.bGlzdC10aWNrZXRz.option.c3RhdHVz.allowed-value.c3RyaW5nOmNsb3NlZA.display_name": {
+          "source": "Closed",
+          "message": "Geschlossen"
+        },
+        "app.R29yZ2lhcw.action.bGlzdC10aWNrZXRz.option.c3RhdHVz.display_name": {
+          "source": "Status",
+          "message": "Status"
+        },
+        "app.R29yZ2lhcw.action.bGlzdC10aWNrZXRz.option.c3RhdHVz.short_desc": {
+          "source": "Filter by status",
+          "message": "Nach Status filtern"
+        },
+        "app.R29yZ2lhcw.action.bGlzdC10aWNrZXRz.option.dGlja2V0X2lk.display_name": {
+          "source": "Ticket ID",
+          "message": "Ticket-ID"
+        },
+        "app.R29yZ2lhcw.action.bGlzdC10aWNrZXRz.option.dGlja2V0X2lk.short_desc": {
+          "source": "Get a specific ticket",
+          "message": "Ein bestimmtes Ticket abrufen"
+        },
+        "app.R29yZ2lhcw.action.bGlzdC10aWNrZXRz.short_desc": {
+          "source": "List support tickets",
+          "message": "Support-Tickets auflisten"
+        },
+        "app.R29yZ2lhcw.action.bGlzdC11c2Vycw.desc": {
+          "source": "List all Gorgias helpdesk agents (users)",
+          "message": "Alle Gorgias-Helpdesk-Agenten (Benutzer) auflisten"
+        },
+        "app.R29yZ2lhcw.action.bGlzdC11c2Vycw.display_name": {
+          "source": "List Users",
+          "message": "Benutzer auflisten"
+        },
+        "app.R29yZ2lhcw.action.bGlzdC11c2Vycw.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "Limit"
+        },
+        "app.R29yZ2lhcw.action.bGlzdC11c2Vycw.option.bGltaXQ.short_desc": {
+          "source": "Maximum results",
+          "message": "Maximale Ergebnisse"
+        },
+        "app.R29yZ2lhcw.action.bGlzdC11c2Vycw.option.dXNlcl9pZA.display_name": {
+          "source": "User ID",
+          "message": "Benutzer-ID"
+        },
+        "app.R29yZ2lhcw.action.bGlzdC11c2Vycw.option.dXNlcl9pZA.short_desc": {
+          "source": "Get a specific user",
+          "message": "Einen bestimmten Benutzer abrufen"
+        },
+        "app.R29yZ2lhcw.action.bGlzdC11c2Vycw.short_desc": {
+          "source": "List helpdesk agents",
+          "message": "Helpdesk-Agenten auflisten"
+        },
+        "app.R29yZ2lhcw.action.bGlzdC1jdXN0b21lcnM.desc": {
+          "source": "List Gorgias customers with optional filtering",
+          "message": "Gorgias-Kunden mit optionaler Filterung auflisten"
+        },
+        "app.R29yZ2lhcw.action.bGlzdC1jdXN0b21lcnM.display_name": {
+          "source": "List Customers",
+          "message": "Kunden auflisten"
+        },
+        "app.R29yZ2lhcw.action.bGlzdC1jdXN0b21lcnM.option.Y3VzdG9tZXJfaWQ.display_name": {
+          "source": "Customer ID",
+          "message": "Kunden-ID"
+        },
+        "app.R29yZ2lhcw.action.bGlzdC1jdXN0b21lcnM.option.Y3VzdG9tZXJfaWQ.short_desc": {
+          "source": "Get a specific customer",
+          "message": "Einen bestimmten Kunden abrufen"
+        },
+        "app.R29yZ2lhcw.action.bGlzdC1jdXN0b21lcnM.option.ZW1haWw.display_name": {
+          "source": "Email",
+          "message": "E-Mail"
+        },
+        "app.R29yZ2lhcw.action.bGlzdC1jdXN0b21lcnM.option.ZW1haWw.short_desc": {
+          "source": "Filter by email",
+          "message": "Nach E-Mail filtern"
+        },
+        "app.R29yZ2lhcw.action.bGlzdC1jdXN0b21lcnM.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "Limit"
+        },
+        "app.R29yZ2lhcw.action.bGlzdC1jdXN0b21lcnM.option.bGltaXQ.short_desc": {
+          "source": "Maximum results",
+          "message": "Maximale Ergebnisse"
+        },
+        "app.R29yZ2lhcw.action.bGlzdC1jdXN0b21lcnM.short_desc": {
+          "source": "List customers",
+          "message": "Kunden auflisten"
+        },
+        "app.R29yZ2lhcw.action.bGlzdC1tZXNzYWdlcw.desc": {
+          "source": "List all messages for a specific Gorgias ticket",
+          "message": "Alle Nachrichten für ein bestimmtes Gorgias-Ticket auflisten"
+        },
+        "app.R29yZ2lhcw.action.bGlzdC1tZXNzYWdlcw.display_name": {
+          "source": "List Messages",
+          "message": "Nachrichten auflisten"
+        },
+        "app.R29yZ2lhcw.action.bGlzdC1tZXNzYWdlcw.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "Limit"
+        },
+        "app.R29yZ2lhcw.action.bGlzdC1tZXNzYWdlcw.option.bGltaXQ.short_desc": {
+          "source": "Maximum results",
+          "message": "Maximale Ergebnisse"
+        },
+        "app.R29yZ2lhcw.action.bGlzdC1tZXNzYWdlcw.option.bWVzc2FnZV9pZA.display_name": {
+          "source": "Message ID",
+          "message": "Nachrichten-ID"
+        },
+        "app.R29yZ2lhcw.action.bGlzdC1tZXNzYWdlcw.option.bWVzc2FnZV9pZA.short_desc": {
+          "source": "Get a specific message",
+          "message": "Eine bestimmte Nachricht abrufen"
+        },
+        "app.R29yZ2lhcw.action.bGlzdC1tZXNzYWdlcw.option.dGlja2V0X2lk.display_name": {
+          "source": "Ticket ID",
+          "message": "Ticket-ID"
+        },
+        "app.R29yZ2lhcw.action.bGlzdC1tZXNzYWdlcw.option.dGlja2V0X2lk.short_desc": {
+          "source": "The ticket to list messages for",
+          "message": "Das Ticket, für das Nachrichten aufgelistet werden sollen"
+        },
+        "app.R29yZ2lhcw.action.bGlzdC1tZXNzYWdlcw.short_desc": {
+          "source": "List messages for a ticket",
+          "message": "Nachrichten für ein Ticket auflisten"
+        },
+        "app.R29yZ2lhcw.action.bWFrZS1hcGktY2FsbA.desc": {
+          "source": "Make a custom HTTP / REST API call to **Gorgias** using the configured connection's authentication.\n\nSpecify the HTTP method, the URI path (relative to the connection's API base URL), optional query parameters, headers, and request body. The response is returned as a hash containing the status code, response headers, and response body.\n\nUse this action for endpoints that are not yet exposed as first-class actions on this app.",
+          "message": "Einen benutzerdefinierten HTTP- / REST-API-Aufruf an **Gorgias** unter Verwendung der Authentifizierung der konfigurierten Verbindung durchführen.\n\nGeben Sie die HTTP-Methode, den URI-Pfad (relativ zur API-Basis-URL der Verbindung), optionale Abfrageparameter, Header und den Anfragetext an. Die Antwort wird als Hash zurückgegeben, der den Statuscode, die Antwort-Header und den Antworttext enthält.\n\nVerwenden Sie diese Aktion für Endpunkte, die in dieser App noch nicht als erstklassige Aktionen bereitgestellt werden."
+        },
+        "app.R29yZ2lhcw.action.bWFrZS1hcGktY2FsbA.display_name": {
+          "source": "Make an API call",
+          "message": "API-Aufruf ausführen"
+        },
+        "app.R29yZ2lhcw.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.desc": {
+          "source": "The request body. The effective type depends on `body_type`: JSON/form/YAML expect a hash, XML/text expect a string, multipart expects a file structure, binary expects raw bytes.",
+          "message": "Der Anfragen-Body. Der effektive Typ hängt von `body_type` ab: JSON/form/YAML erwarten einen Hash, XML/Text erwarten einen String, Multipart erwartet eine Dateistruktur, Binary erwartet Rohbytes."
+        },
+        "app.R29yZ2lhcw.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.display_name": {
+          "source": "Body",
+          "message": "Body"
+        },
+        "app.R29yZ2lhcw.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.short_desc": {
+          "source": "The request body",
+          "message": "Der Anfragen-Body"
+        },
+        "app.R29yZ2lhcw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.desc": {
+          "source": "Upload a file using `multipart/form-data`. The body must be a @ref DataProvider::FileDataType \"FileDataType\" structure (filename + content + mime_type). The framework builds the multipart envelope and sets the boundary header.",
+          "message": "Laden Sie eine Datei mit `multipart/form-data` hoch. Der Body muss eine @ref DataProvider::FileDataType \"FileDataType\"-Struktur sein (filename + content + mime_type). Das Framework erstellt die Multipart-Hülle und setzt den Boundary-Header."
+        },
+        "app.R29yZ2lhcw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.display_name": {
+          "source": "Multipart Form",
+          "message": "Multipart-Formular"
+        },
+        "app.R29yZ2lhcw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.short_desc": {
+          "source": "Upload a file using multipart/form-data",
+          "message": "Eine Datei mit multipart/form-data hochladen"
+        },
+        "app.R29yZ2lhcw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.desc": {
+          "source": "Pass the body to the REST client unchanged; the client decides serialization based on its configured `data` option and the value type",
+          "message": "Übergeben Sie den Body unverändert an den REST-Client; der Client entscheidet über die Serialisierung basierend auf seiner konfigurierten `data`-Option und dem Werttyp"
+        },
+        "app.R29yZ2lhcw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.display_name": {
+          "source": "Auto",
+          "message": "Auto"
+        },
+        "app.R29yZ2lhcw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.short_desc": {
+          "source": "Pass-through; use connection serialization and let the REST client decide",
+          "message": "Durchreichen; Verbindungsserialisierung verwenden und den REST-Client entscheiden lassen"
+        },
+        "app.R29yZ2lhcw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.desc": {
+          "source": "Send the body as raw bytes. The body must be a binary value. Sets `Content-Type: application/octet-stream` unless overridden by `hdr`.",
+          "message": "Senden Sie den Body als Rohbytes. Der Body muss ein Binärwert sein. Setzt `Content-Type: application/octet-stream`, sofern nicht durch `hdr` überschrieben."
+        },
+        "app.R29yZ2lhcw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.display_name": {
+          "source": "Raw Binary",
+          "message": "Rohbinärdaten"
+        },
+        "app.R29yZ2lhcw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.short_desc": {
+          "source": "Send body as raw bytes",
+          "message": "Body als Rohbytes senden"
+        },
+        "app.R29yZ2lhcw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.desc": {
+          "source": "Serialize a hash of form fields as `application/x-www-form-urlencoded`. The body must be a hash whose values are scalars (strings/numbers/booleans).",
+          "message": "Serialisieren Sie einen Hash von Formularfeldern als `application/x-www-form-urlencoded`. Der Body muss ein Hash sein, dessen Werte Skalare sind (Strings/Zahlen/Booleans)."
+        },
+        "app.R29yZ2lhcw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.display_name": {
+          "source": "Form (URL-encoded)",
+          "message": "Formular (URL-kodiert)"
+        },
+        "app.R29yZ2lhcw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.short_desc": {
+          "source": "Serialize body as application/x-www-form-urlencoded form fields",
+          "message": "Body als application/x-www-form-urlencoded-Formularfelder serialisieren"
+        },
+        "app.R29yZ2lhcw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.desc": {
+          "source": "Serialize the body as JSON; sets `Content-Type: application/json`. The body should be a hash, list, or scalar value.",
+          "message": "Serialisieren Sie den Body als JSON; setzt `Content-Type: application/json`. Der Body sollte ein Hash, eine Liste oder ein Skalarwert sein."
+        },
+        "app.R29yZ2lhcw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.display_name": {
+          "source": "JSON",
+          "message": "JSON"
+        },
+        "app.R29yZ2lhcw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.short_desc": {
+          "source": "Serialize body as JSON",
+          "message": "Body als JSON serialisieren"
+        },
+        "app.R29yZ2lhcw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.desc": {
+          "source": "Send the body as plain text. The body must be a string. Sets `Content-Type: text/plain`.",
+          "message": "Senden Sie den Body als Klartext. Der Body muss ein String sein. Setzt `Content-Type: text/plain`."
+        },
+        "app.R29yZ2lhcw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.display_name": {
+          "source": "Plain Text",
+          "message": "Klartext"
+        },
+        "app.R29yZ2lhcw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.short_desc": {
+          "source": "Send body as text/plain",
+          "message": "Body als text/plain senden"
+        },
+        "app.R29yZ2lhcw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.desc": {
+          "source": "Send the body as XML. If the body is a hash it is serialized to XML; if it is a string it is sent verbatim. Sets `Content-Type: application/xml`.",
+          "message": "Senden Sie den Body als XML. Wenn der Body ein Hash ist, wird er zu XML serialisiert; wenn er ein String ist, wird er wörtlich gesendet. Setzt `Content-Type: application/xml`."
+        },
+        "app.R29yZ2lhcw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.display_name": {
+          "source": "XML",
+          "message": "XML"
+        },
+        "app.R29yZ2lhcw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.short_desc": {
+          "source": "Send body as XML",
+          "message": "Body als XML senden"
+        },
+        "app.R29yZ2lhcw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.desc": {
+          "source": "Send the body as YAML. If the body is a hash it is serialized to YAML; if it is a string it is sent verbatim. Sets `Content-Type: application/x-yaml`.",
+          "message": "Senden Sie den Body als YAML. Wenn der Body ein Hash ist, wird er zu YAML serialisiert; wenn er ein String ist, wird er wörtlich gesendet. Setzt `Content-Type: application/x-yaml`."
+        },
+        "app.R29yZ2lhcw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.display_name": {
+          "source": "YAML",
+          "message": "YAML"
+        },
+        "app.R29yZ2lhcw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.short_desc": {
+          "source": "Send body as YAML",
+          "message": "Body als YAML senden"
+        },
+        "app.R29yZ2lhcw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.desc": {
+          "source": "Selects the body serialization mode and the corresponding `Content-Type` header. Changing this field reshapes the `body` editor - selecting JSON exposes a JSON editor, selecting Multipart Form exposes a file picker, and so on.",
+          "message": "Wählt den Body-Serialisierungsmodus und den entsprechenden Header `Content-Type` aus. Das Ändern dieses Feldes passt den Editor `body` an – die Auswahl von JSON zeigt einen JSON-Editor an, die Auswahl von Multipart Form zeigt eine Dateiauswahl an usw."
+        },
+        "app.R29yZ2lhcw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.display_name": {
+          "source": "Body Type",
+          "message": "Body-Typ"
+        },
+        "app.R29yZ2lhcw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.short_desc": {
+          "source": "How the body is serialized and what Content-Type is sent",
+          "message": "Wie der Body serialisiert wird und welcher Content-Type gesendet wird"
+        },
+        "app.R29yZ2lhcw.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.desc": {
+          "source": "If `True`, non-2xx HTTP responses return as the normal response hash (with the actual status code) instead of raising `REST-RESPONSE-ERROR`. Useful for handling 4xx/5xx as data - e.g. checking whether a resource exists. Overrides the connection's `error_passthru` setting for this call only.",
+          "message": "Wenn `True`, werden Nicht-2xx-HTTP-Antworten als normaler Antwort-Hash (mit dem tatsächlichen Statuscode) zurückgegeben, anstatt `REST-RESPONSE-ERROR` auszulösen. Nützlich für die Behandlung von 4xx/5xx als Daten – z. B. zum Überprüfen, ob eine Ressource existiert. Überschreibt die Einstellung `error_passthru` der Verbindung nur für diesen Aufruf."
+        },
+        "app.R29yZ2lhcw.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.display_name": {
+          "source": "Return Errors as Data",
+          "message": "Fehler als Daten zurückgeben"
+        },
+        "app.R29yZ2lhcw.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.short_desc": {
+          "source": "Return non-2xx responses normally instead of throwing",
+          "message": "Nicht-2xx-Antworten normal zurückgeben, anstatt eine Exception auszulösen"
+        },
+        "app.R29yZ2lhcw.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.desc": {
+          "source": "Optional list of HTTP status codes treated as success. If set and the response status is not in this list, the action throws `REST-STATUS-ERROR`. When unset, the REST client's default behavior applies (typically: 2xx is success, non-2xx throws).",
+          "message": "Optionale Liste von HTTP-Statuscodes, die als Erfolg behandelt werden. Wenn festgelegt und der Antwortstatus nicht in dieser Liste enthalten ist, löst die Aktion `REST-STATUS-ERROR` aus. Wenn nicht festgelegt, gilt das Standardverhalten des REST-Clients (typischerweise: 2xx ist Erfolg, Nicht-2xx löst eine Exception aus)."
+        },
+        "app.R29yZ2lhcw.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.display_name": {
+          "source": "Expected Status Codes",
+          "message": "Erwartete Statuscodes"
+        },
+        "app.R29yZ2lhcw.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.short_desc": {
+          "source": "Response status codes treated as success",
+          "message": "Antwort-Statuscodes, die als Erfolg behandelt werden"
+        },
+        "app.R29yZ2lhcw.action.bWFrZS1hcGktY2FsbA.option.aGRy.desc": {
+          "source": "Hash of custom headers added to the request. These override any default headers set by `body_type` (e.g. supplying `Content-Type` here wins over the body-type default).",
+          "message": "Hash benutzerdefinierter Header, die der Anfrage hinzugefügt werden. Diese überschreiben alle von `body_type` festgelegten Standard-Header (z. B. überschreibt die Angabe von `Content-Type` hier den Standard für den Body-Typ)."
+        },
+        "app.R29yZ2lhcw.action.bWFrZS1hcGktY2FsbA.option.aGRy.display_name": {
+          "source": "Custom Headers",
+          "message": "Benutzerdefinierte Header"
+        },
+        "app.R29yZ2lhcw.action.bWFrZS1hcGktY2FsbA.option.aGRy.short_desc": {
+          "source": "Extra request headers",
+          "message": "Zusätzliche Anfrage-Header"
+        },
+        "app.R29yZ2lhcw.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.desc": {
+          "source": "If `True`, the response hash includes a `debug` sub-hash containing the request method/URL/headers (with sensitive values redacted), request and response sizes, and round-trip duration. Useful when investigating slow or failing calls. Off by default to keep responses lean.",
+          "message": "Wenn `True`, enthält der Antwort-Hash einen Sub-Hash `debug`, der die Anfragemethode/URL/Header (mit unkenntlich gemachten sensiblen Werten), Anfrage- und Antwortgrößen sowie die Verarbeitungsdauer enthält. Nützlich bei der Untersuchung langsamer oder fehlschlagender Aufrufe. Standardmäßig deaktiviert, um Antworten schlank zu halten."
+        },
+        "app.R29yZ2lhcw.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.display_name": {
+          "source": "Include Debug Info",
+          "message": "Debug-Informationen einschließen"
+        },
+        "app.R29yZ2lhcw.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.short_desc": {
+          "source": "Include request/timing/size debug info in the response",
+          "message": "Debug-Informationen zu Anfrage/Laufzeit/Größe in die Antwort einschließen"
+        },
+        "app.R29yZ2lhcw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.desc": {
+          "source": "HTTP `OPTIONS`",
+          "message": "HTTP `OPTIONS`"
+        },
+        "app.R29yZ2lhcw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.display_name": {
+          "source": "OPTIONS",
+          "message": "OPTIONS"
+        },
+        "app.R29yZ2lhcw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.short_desc": {
+          "source": "HTTP OPTIONS",
+          "message": "HTTP OPTIONS"
+        },
+        "app.R29yZ2lhcw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.desc": {
+          "source": "HTTP `DELETE`",
+          "message": "HTTP `DELETE`"
+        },
+        "app.R29yZ2lhcw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.display_name": {
+          "source": "DELETE",
+          "message": "DELETE"
+        },
+        "app.R29yZ2lhcw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.short_desc": {
+          "source": "HTTP DELETE",
+          "message": "HTTP DELETE"
+        },
+        "app.R29yZ2lhcw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.desc": {
+          "source": "HTTP `GET`",
+          "message": "HTTP `GET`"
+        },
+        "app.R29yZ2lhcw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.display_name": {
+          "source": "GET",
+          "message": "GET"
+        },
+        "app.R29yZ2lhcw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.short_desc": {
+          "source": "HTTP GET",
+          "message": "HTTP GET"
+        },
+        "app.R29yZ2lhcw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.desc": {
+          "source": "HTTP `HEAD`",
+          "message": "HTTP `HEAD`"
+        },
+        "app.R29yZ2lhcw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.display_name": {
+          "source": "HEAD",
+          "message": "HEAD"
+        },
+        "app.R29yZ2lhcw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.short_desc": {
+          "source": "HTTP HEAD",
+          "message": "HTTP HEAD"
+        },
+        "app.R29yZ2lhcw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.desc": {
+          "source": "HTTP `PATCH`",
+          "message": "HTTP `PATCH`"
+        },
+        "app.R29yZ2lhcw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.display_name": {
+          "source": "PATCH",
+          "message": "PATCH"
+        },
+        "app.R29yZ2lhcw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.short_desc": {
+          "source": "HTTP PATCH",
+          "message": "HTTP PATCH"
+        },
+        "app.R29yZ2lhcw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.desc": {
+          "source": "HTTP `POST`",
+          "message": "HTTP `POST`"
+        },
+        "app.R29yZ2lhcw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.display_name": {
+          "source": "POST",
+          "message": "POST"
+        },
+        "app.R29yZ2lhcw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.short_desc": {
+          "source": "HTTP POST",
+          "message": "HTTP POST"
+        },
+        "app.R29yZ2lhcw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.desc": {
+          "source": "HTTP `PUT`",
+          "message": "HTTP `PUT`"
+        },
+        "app.R29yZ2lhcw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.display_name": {
+          "source": "PUT",
+          "message": "PUT"
+        },
+        "app.R29yZ2lhcw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.short_desc": {
+          "source": "HTTP PUT",
+          "message": "HTTP PUT"
+        },
+        "app.R29yZ2lhcw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.desc": {
+          "source": "HTTP `TRACE`",
+          "message": "HTTP `TRACE`"
+        },
+        "app.R29yZ2lhcw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.display_name": {
+          "source": "TRACE",
+          "message": "TRACE"
+        },
+        "app.R29yZ2lhcw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.short_desc": {
+          "source": "HTTP TRACE",
+          "message": "HTTP TRACE"
+        },
+        "app.R29yZ2lhcw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "Die für die Anfrage zu verwendende HTTP-Methode"
+        },
+        "app.R29yZ2lhcw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.display_name": {
+          "source": "HTTP Method",
+          "message": "HTTP-Methode"
+        },
+        "app.R29yZ2lhcw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.short_desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "Die für die Anfrage zu verwendende HTTP-Methode"
+        },
+        "app.R29yZ2lhcw.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain `{name}` placeholders that are replaced from `path_vars`. Example: `/users/{id}/comments`.",
+          "message": "Der URI-Pfad relativ zur API-Basis-URL der Verbindung. Kann `{name}`-Platzhalter enthalten, die aus `path_vars` ersetzt werden. Beispiel: `/users/{id}/comments`."
+        },
+        "app.R29yZ2lhcw.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.display_name": {
+          "source": "URI Path",
+          "message": "URI-Pfad"
+        },
+        "app.R29yZ2lhcw.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.short_desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain '{name}' placeholders that are replaced from 'path_vars'. Example: '/users/{id}/comments'",
+          "message": "Der URI-Pfad relativ zur API-Basis-URL der Verbindung. Kann '{name}'-Platzhalter enthalten, die aus 'path_vars' ersetzt werden. Beispiel: '/users/{id}/comments'"
+        },
+        "app.R29yZ2lhcw.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.desc": {
+          "source": "Hash of values substituted into `{name}` placeholders in the URI path. Example: with `path = /users/{id}` and `path_vars = {id: 123}` the framework sends `/users/123`. Values are URL-encoded.",
+          "message": "Hash von Werten, die in `{name}`-Platzhalter im URI-Pfad eingesetzt werden. Beispiel: Bei `path = /users/{id}` und `path_vars = {id: 123}` sendet das Framework `/users/123`. Werte werden URL-codiert."
+        },
+        "app.R29yZ2lhcw.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.display_name": {
+          "source": "Path Variables",
+          "message": "Pfadvariablen"
+        },
+        "app.R29yZ2lhcw.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.short_desc": {
+          "source": "Values for {name} placeholders in path",
+          "message": "Werte für {name}-Platzhalter im Pfad"
+        },
+        "app.R29yZ2lhcw.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.desc": {
+          "source": "Hash of query string parameters to append to the URI path. Values are URL-encoded; list values are joined with `,`.",
+          "message": "Hash von Abfragezeichenfolgen-Parametern, die an den URI-Pfad angehängt werden sollen. Werte werden URL-codiert; Listenwerte werden mit `,` zusammengefügt."
+        },
+        "app.R29yZ2lhcw.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.display_name": {
+          "source": "Query Arguments",
+          "message": "Abfrageargumente"
+        },
+        "app.R29yZ2lhcw.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.short_desc": {
+          "source": "Query string parameters",
+          "message": "Abfragezeichenfolgen-Parameter"
+        },
+        "app.R29yZ2lhcw.action.bWFrZS1hcGktY2FsbA.short_desc": {
+          "source": "Make a custom API call to Gorgias",
+          "message": "Benutzerdefinierten API-Aufruf an Gorgias durchführen"
+        },
+        "app.R29yZ2lhcw.action.bmV3LXRpY2tldA.desc": {
+          "source": "Fires when a new ticket is created in Gorgias",
+          "message": "Wird ausgelöst, wenn ein neues Ticket in Gorgias erstellt wird"
+        },
+        "app.R29yZ2lhcw.action.bmV3LXRpY2tldA.display_name": {
+          "source": "New Ticket",
+          "message": "Neues Ticket"
+        },
+        "app.R29yZ2lhcw.action.bmV3LXRpY2tldA.short_desc": {
+          "source": "Trigger when a new ticket is created",
+          "message": "Auslösen, wenn ein neues Ticket erstellt wird"
+        },
+        "app.R29yZ2lhcw.action.dGlja2V0LXVwZGF0ZQ.desc": {
+          "source": "Fires when a ticket is modified in Gorgias",
+          "message": "Wird ausgelöst, wenn ein Ticket in Gorgias geändert wird"
+        },
+        "app.R29yZ2lhcw.action.dGlja2V0LXVwZGF0ZQ.display_name": {
+          "source": "Ticket Updated",
+          "message": "Ticket aktualisiert"
+        },
+        "app.R29yZ2lhcw.action.dGlja2V0LXVwZGF0ZQ.short_desc": {
+          "source": "Trigger when a ticket is updated",
+          "message": "Auslösen, wenn ein Ticket aktualisiert wird"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLW1lc3NhZ2U.desc": {
+          "source": "Update the body, channel, or other properties of a message on a ticket",
+          "message": "Text, Kanal oder andere Eigenschaften einer Nachricht in einem Ticket aktualisieren"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLW1lc3NhZ2U.display_name": {
+          "source": "Update a Message",
+          "message": "Nachricht aktualisieren"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLW1lc3NhZ2U.option.Y2hhbm5lbA.allowed-value.c3RyaW5nOmFwaQ.display_name": {
+          "source": "API",
+          "message": "API"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLW1lc3NhZ2U.option.Y2hhbm5lbA.allowed-value.c3RyaW5nOmNoYXQ.display_name": {
+          "source": "Chat",
+          "message": "Chat"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLW1lc3NhZ2U.option.Y2hhbm5lbA.allowed-value.c3RyaW5nOmNvbnRhY3RfZm9ybQ.display_name": {
+          "source": "Contact Form",
+          "message": "Kontaktformular"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLW1lc3NhZ2U.option.Y2hhbm5lbA.allowed-value.c3RyaW5nOmVtYWls.display_name": {
+          "source": "Email",
+          "message": "E-Mail"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLW1lc3NhZ2U.option.Y2hhbm5lbA.allowed-value.c3RyaW5nOmZhY2Vib29r.display_name": {
+          "source": "Facebook",
+          "message": "Facebook"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLW1lc3NhZ2U.option.Y2hhbm5lbA.allowed-value.c3RyaW5nOmhlbHAtY2VudGVy.display_name": {
+          "source": "Help Center",
+          "message": "Hilfecenter"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLW1lc3NhZ2U.option.Y2hhbm5lbA.allowed-value.c3RyaW5nOmluc3RhZ3JhbQ.display_name": {
+          "source": "Instagram",
+          "message": "Instagram"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLW1lc3NhZ2U.option.Y2hhbm5lbA.allowed-value.c3RyaW5nOmludGVybmFsLW5vdGU.display_name": {
+          "source": "Internal Note",
+          "message": "Interne Notiz"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLW1lc3NhZ2U.option.Y2hhbm5lbA.allowed-value.c3RyaW5nOnBob25l.display_name": {
+          "source": "Phone",
+          "message": "Telefon"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLW1lc3NhZ2U.option.Y2hhbm5lbA.allowed-value.c3RyaW5nOnNtcw.display_name": {
+          "source": "SMS",
+          "message": "SMS"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLW1lc3NhZ2U.option.Y2hhbm5lbA.allowed-value.c3RyaW5nOnR3aXR0ZXI.display_name": {
+          "source": "Twitter",
+          "message": "Twitter"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLW1lc3NhZ2U.option.Y2hhbm5lbA.allowed-value.c3RyaW5nOndoYXRzYXBw.display_name": {
+          "source": "WhatsApp",
+          "message": "WhatsApp"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLW1lc3NhZ2U.option.Y2hhbm5lbA.desc": {
+          "source": "The channel for the message",
+          "message": "Der Kanal für die Nachricht"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLW1lc3NhZ2U.option.Y2hhbm5lbA.display_name": {
+          "source": "Channel",
+          "message": "Kanal"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLW1lc3NhZ2U.option.Y2hhbm5lbA.short_desc": {
+          "source": "Message channel",
+          "message": "Nachrichtenkanal"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLW1lc3NhZ2U.option.YXR0YWNobWVudHM.desc": {
+          "source": "Updated list of file attachments for the message",
+          "message": "Aktualisierte Liste der Dateianhänge für die Nachricht"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLW1lc3NhZ2U.option.YXR0YWNobWVudHM.display_name": {
+          "source": "Attachments",
+          "message": "Anhänge"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLW1lc3NhZ2U.option.YXR0YWNobWVudHM.short_desc": {
+          "source": "File attachments",
+          "message": "Dateianhänge"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLW1lc3NhZ2U.option.Ym9keV90ZXh0.desc": {
+          "source": "The updated plain text body of the message",
+          "message": "Der aktualisierte Nur-Text-Inhalt der Nachricht"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLW1lc3NhZ2U.option.Ym9keV90ZXh0.display_name": {
+          "source": "Body Text",
+          "message": "Textkörper"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLW1lc3NhZ2U.option.Ym9keV90ZXh0.short_desc": {
+          "source": "Plain text body",
+          "message": "Nur-Text-Inhalt"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLW1lc3NhZ2U.option.Ym9keV9odG1s.desc": {
+          "source": "The updated HTML body of the message",
+          "message": "Der aktualisierte HTML-Inhalt der Nachricht"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLW1lc3NhZ2U.option.Ym9keV9odG1s.display_name": {
+          "source": "Body HTML",
+          "message": "HTML-Textkörper"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLW1lc3NhZ2U.option.Ym9keV9odG1s.short_desc": {
+          "source": "HTML body",
+          "message": "HTML-Inhalt"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLW1lc3NhZ2U.option.ZXh0ZXJuYWxfaWQ.desc": {
+          "source": "An external identifier for the message",
+          "message": "Eine externe Kennung für die Nachricht"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLW1lc3NhZ2U.option.ZXh0ZXJuYWxfaWQ.display_name": {
+          "source": "External ID",
+          "message": "Externe ID"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLW1lc3NhZ2U.option.ZXh0ZXJuYWxfaWQ.short_desc": {
+          "source": "External identifier",
+          "message": "Externe Kennung"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLW1lc3NhZ2U.option.ZnJvbV9hZ2VudA.desc": {
+          "source": "Whether the message is from an agent (`True`) or customer (`False`)",
+          "message": "Gibt an, ob die Nachricht von einem Agenten (`True`) oder einem Kunden (`False`) stammt"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLW1lc3NhZ2U.option.ZnJvbV9hZ2VudA.display_name": {
+          "source": "From Agent",
+          "message": "Vom Agenten"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLW1lc3NhZ2U.option.ZnJvbV9hZ2VudA.short_desc": {
+          "source": "Whether from agent",
+          "message": "Ob vom Agenten"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLW1lc3NhZ2U.option.bWVzc2FnZV9pZA.desc": {
+          "source": "The ID of the message to update",
+          "message": "Die ID der zu aktualisierenden Nachricht"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLW1lc3NhZ2U.option.bWVzc2FnZV9pZA.display_name": {
+          "source": "Message ID",
+          "message": "Nachrichten-ID"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLW1lc3NhZ2U.option.bWVzc2FnZV9pZA.short_desc": {
+          "source": "The message to update",
+          "message": "Die zu aktualisierende Nachricht"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLW1lc3NhZ2U.option.c2VuZGVy.desc": {
+          "source": "The sender of the message. Provide `id` for agents or `email` for customers",
+          "message": "Der Absender der Nachricht. Geben Sie `id` für Agenten oder `email` für Kunden an"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLW1lc3NhZ2U.option.c2VuZGVy.display_name": {
+          "source": "Sender",
+          "message": "Absender"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLW1lc3NhZ2U.option.c2VuZGVy.short_desc": {
+          "source": "Message sender",
+          "message": "Nachrichtenabsender"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLW1lc3NhZ2U.option.c3ViamVjdA.desc": {
+          "source": "The updated subject line of the message",
+          "message": "Die aktualisierte Betreffzeile der Nachricht"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLW1lc3NhZ2U.option.c3ViamVjdA.display_name": {
+          "source": "Subject",
+          "message": "Betreff"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLW1lc3NhZ2U.option.c3ViamVjdA.short_desc": {
+          "source": "Message subject",
+          "message": "Nachrichtenbetreff"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLW1lc3NhZ2U.option.cmVjZWl2ZXI.desc": {
+          "source": "The receiver of the message. Provide `id` for an agent or `email` for a customer",
+          "message": "Der Empfänger der Nachricht. Geben Sie `id` für einen Agenten oder `email` für einen Kunden an"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLW1lc3NhZ2U.option.cmVjZWl2ZXI.display_name": {
+          "source": "Receiver",
+          "message": "Empfänger"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLW1lc3NhZ2U.option.cmVjZWl2ZXI.short_desc": {
+          "source": "Message receiver",
+          "message": "Nachrichtenempfänger"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLW1lc3NhZ2U.option.dGlja2V0X2lk.desc": {
+          "source": "The ID of the ticket containing the message to update",
+          "message": "Die ID des Tickets, das die zu aktualisierende Nachricht enthält"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLW1lc3NhZ2U.option.dGlja2V0X2lk.display_name": {
+          "source": "Ticket ID",
+          "message": "Ticket-ID"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLW1lc3NhZ2U.option.dGlja2V0X2lk.short_desc": {
+          "source": "The ticket containing the message",
+          "message": "Das Ticket, das die Nachricht enthält"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLW1lc3NhZ2U.option.dmlh.allowed-value.c3RyaW5nOmFwaQ.display_name": {
+          "source": "API",
+          "message": "API"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLW1lc3NhZ2U.option.dmlh.allowed-value.c3RyaW5nOmNoYXQ.display_name": {
+          "source": "Chat",
+          "message": "Chat"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLW1lc3NhZ2U.option.dmlh.allowed-value.c3RyaW5nOmNvbnRhY3RfZm9ybQ.display_name": {
+          "source": "Contact Form",
+          "message": "Kontaktformular"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLW1lc3NhZ2U.option.dmlh.allowed-value.c3RyaW5nOmVtYWls.display_name": {
+          "source": "Email",
+          "message": "E-Mail"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLW1lc3NhZ2U.option.dmlh.allowed-value.c3RyaW5nOmZhY2Vib29r.display_name": {
+          "source": "Facebook",
+          "message": "Facebook"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLW1lc3NhZ2U.option.dmlh.allowed-value.c3RyaW5nOmhlbHAtY2VudGVy.display_name": {
+          "source": "Help Center",
+          "message": "Hilfecenter"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLW1lc3NhZ2U.option.dmlh.allowed-value.c3RyaW5nOmhlbHBkZXNr.display_name": {
+          "source": "Helpdesk",
+          "message": "Helpdesk"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLW1lc3NhZ2U.option.dmlh.allowed-value.c3RyaW5nOmluc3RhZ3JhbQ.display_name": {
+          "source": "Instagram",
+          "message": "Instagram"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLW1lc3NhZ2U.option.dmlh.allowed-value.c3RyaW5nOnBob25l.display_name": {
+          "source": "Phone",
+          "message": "Telefon"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLW1lc3NhZ2U.option.dmlh.allowed-value.c3RyaW5nOnNtcw.display_name": {
+          "source": "SMS",
+          "message": "SMS"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLW1lc3NhZ2U.option.dmlh.allowed-value.c3RyaW5nOnR3aXR0ZXI.display_name": {
+          "source": "Twitter",
+          "message": "Twitter"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLW1lc3NhZ2U.option.dmlh.allowed-value.c3RyaW5nOndoYXRzYXBw.display_name": {
+          "source": "WhatsApp",
+          "message": "WhatsApp"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLW1lc3NhZ2U.option.dmlh.desc": {
+          "source": "How the message was created",
+          "message": "Wie die Nachricht erstellt wurde"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLW1lc3NhZ2U.option.dmlh.display_name": {
+          "source": "Via",
+          "message": "Über"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLW1lc3NhZ2U.option.dmlh.short_desc": {
+          "source": "Message source",
+          "message": "Nachrichtenquelle"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLW1lc3NhZ2U.short_desc": {
+          "source": "Update an existing message",
+          "message": "Eine vorhandene Nachricht aktualisieren"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLWN1c3RvbWVy.desc": {
+          "source": "Update the name, email, or other properties of a customer",
+          "message": "Namen, E-Mail-Adresse oder andere Eigenschaften eines Kunden aktualisieren"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLWN1c3RvbWVy.display_name": {
+          "source": "Update a Customer",
+          "message": "Einen Kunden aktualisieren"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLWN1c3RvbWVy.option.Y2hhbm5lbHM.desc": {
+          "source": "List of communication channels for the customer. Each channel has an `address`, `type`, and optional `preferred` flag",
+          "message": "Liste der Kommunikationskanäle für den Kunden. Jeder Kanal hat ein `address`, `type` und ein optionales `preferred`-Flag"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLWN1c3RvbWVy.option.Y2hhbm5lbHM.display_name": {
+          "source": "Channels",
+          "message": "Kanäle"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLWN1c3RvbWVy.option.Y2hhbm5lbHM.short_desc": {
+          "source": "Communication channels",
+          "message": "Kommunikationskanäle"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLWN1c3RvbWVy.option.Y3VzdG9tZXJfaWQ.desc": {
+          "source": "The ID of the customer to update",
+          "message": "Die ID des zu aktualisierenden Kunden"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLWN1c3RvbWVy.option.Y3VzdG9tZXJfaWQ.display_name": {
+          "source": "Customer ID",
+          "message": "Kunden-ID"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLWN1c3RvbWVy.option.Y3VzdG9tZXJfaWQ.short_desc": {
+          "source": "The customer to update",
+          "message": "Der zu aktualisierende Kunde"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLWN1c3RvbWVy.option.ZW1haWw.desc": {
+          "source": "The primary email address of the customer",
+          "message": "Die primäre E-Mail-Adresse des Kunden"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLWN1c3RvbWVy.option.ZW1haWw.display_name": {
+          "source": "Email",
+          "message": "E-Mail"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLWN1c3RvbWVy.option.ZW1haWw.short_desc": {
+          "source": "Customer email address",
+          "message": "E-Mail-Adresse des Kunden"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLWN1c3RvbWVy.option.ZXh0ZXJuYWxfaWQ.desc": {
+          "source": "An external identifier for the customer",
+          "message": "Eine externe Kennung für den Kunden"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLWN1c3RvbWVy.option.ZXh0ZXJuYWxfaWQ.display_name": {
+          "source": "External ID",
+          "message": "Externe ID"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLWN1c3RvbWVy.option.ZXh0ZXJuYWxfaWQ.short_desc": {
+          "source": "External identifier",
+          "message": "Externe Kennung"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLWN1c3RvbWVy.option.Zmlyc3RuYW1l.desc": {
+          "source": "The first name of the customer",
+          "message": "Der Vorname des Kunden"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLWN1c3RvbWVy.option.Zmlyc3RuYW1l.display_name": {
+          "source": "First Name",
+          "message": "Vorname"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLWN1c3RvbWVy.option.Zmlyc3RuYW1l.short_desc": {
+          "source": "Customer first name",
+          "message": "Vorname des Kunden"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLWN1c3RvbWVy.option.bGFuZ3VhZ2U.desc": {
+          "source": "The preferred language of the customer (ISO 639-1 code)",
+          "message": "Die bevorzugte Sprache des Kunden (ISO 639-1-Code)"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLWN1c3RvbWVy.option.bGFuZ3VhZ2U.display_name": {
+          "source": "Language",
+          "message": "Sprache"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLWN1c3RvbWVy.option.bGFuZ3VhZ2U.short_desc": {
+          "source": "Preferred language",
+          "message": "Bevorzugte Sprache"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLWN1c3RvbWVy.option.bGFzdG5hbWU.desc": {
+          "source": "The last name of the customer",
+          "message": "Der Nachname des Kunden"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLWN1c3RvbWVy.option.bGFzdG5hbWU.display_name": {
+          "source": "Last Name",
+          "message": "Nachname"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLWN1c3RvbWVy.option.bGFzdG5hbWU.short_desc": {
+          "source": "Customer last name",
+          "message": "Nachname des Kunden"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLWN1c3RvbWVy.option.bm90ZQ.desc": {
+          "source": "Internal notes about the customer",
+          "message": "Interne Notizen über den Kunden"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLWN1c3RvbWVy.option.bm90ZQ.display_name": {
+          "source": "Note",
+          "message": "Notiz"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLWN1c3RvbWVy.option.bm90ZQ.short_desc": {
+          "source": "Internal note",
+          "message": "Interne Notiz"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLWN1c3RvbWVy.option.bmFtZQ.desc": {
+          "source": "The full name of the customer",
+          "message": "Der vollständige Name des Kunden"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLWN1c3RvbWVy.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "Name"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLWN1c3RvbWVy.option.bmFtZQ.short_desc": {
+          "source": "Full name",
+          "message": "Vollständiger Name"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLWN1c3RvbWVy.option.dGltZXpvbmU.desc": {
+          "source": "The timezone of the customer",
+          "message": "Die Zeitzone des Kunden"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLWN1c3RvbWVy.option.dGltZXpvbmU.display_name": {
+          "source": "Timezone",
+          "message": "Zeitzone"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLWN1c3RvbWVy.option.dGltZXpvbmU.short_desc": {
+          "source": "Customer timezone",
+          "message": "Kundenzeitzone"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLWN1c3RvbWVy.short_desc": {
+          "source": "Update an existing customer",
+          "message": "Einen vorhandenen Kunden aktualisieren"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLXRhZw.desc": {
+          "source": "Update the name or decoration of a tag",
+          "message": "Namen oder Dekoration eines Tags aktualisieren"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLXRhZw.display_name": {
+          "source": "Update a Tag",
+          "message": "Tag aktualisieren"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLXRhZw.option.ZGVjb3JhdGlvbg.desc": {
+          "source": "Visual decoration settings for the tag",
+          "message": "Visuelle Dekorationseinstellungen für das Tag"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLXRhZw.option.ZGVjb3JhdGlvbg.display_name": {
+          "source": "Decoration",
+          "message": "Dekoration"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLXRhZw.option.ZGVjb3JhdGlvbg.short_desc": {
+          "source": "Visual decoration",
+          "message": "Visuelle Dekoration"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLXRhZw.option.ZGVzY3JpcHRpb24.desc": {
+          "source": "A short description of the tag",
+          "message": "Eine kurze Beschreibung des Tags"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLXRhZw.option.ZGVzY3JpcHRpb24.display_name": {
+          "source": "Description",
+          "message": "Beschreibung"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLXRhZw.option.ZGVzY3JpcHRpb24.short_desc": {
+          "source": "Tag description",
+          "message": "Tag-Beschreibung"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLXRhZw.option.bmFtZQ.desc": {
+          "source": "The new name of the tag (min 1, max 256 characters)",
+          "message": "Der neue Name des Tags (min. 1, max. 256 Zeichen)"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLXRhZw.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "Name"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLXRhZw.option.bmFtZQ.short_desc": {
+          "source": "Tag name",
+          "message": "Tag-Name"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLXRhZw.option.dGFnX2lk.desc": {
+          "source": "The ID of the tag to update",
+          "message": "Die ID des zu aktualisierenden Tags"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLXRhZw.option.dGFnX2lk.display_name": {
+          "source": "Tag ID",
+          "message": "Tag-ID"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLXRhZw.option.dGFnX2lk.short_desc": {
+          "source": "The tag to update",
+          "message": "Das zu aktualisierende Tag"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLXRhZw.short_desc": {
+          "source": "Update an existing tag",
+          "message": "Vorhandenes Tag aktualisieren"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLXRpY2tldA.desc": {
+          "source": "Update the status, priority, assignment, or other properties of a ticket",
+          "message": "Status, Priorität, Zuweisung oder andere Eigenschaften eines Tickets aktualisieren"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLXRpY2tldA.display_name": {
+          "source": "Update a Ticket",
+          "message": "Ticket aktualisieren"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLXRpY2tldA.option.Y3VzdG9tZXI.desc": {
+          "source": "Update the customer associated with this ticket. Provide `id` to reference an existing customer, or `email` to match by email address",
+          "message": "Den diesem Ticket zugeordneten Kunden aktualisieren. Geben Sie `id` an, um auf einen vorhandenen Kunden zu verweisen, oder `email`, um nach E-Mail-Adresse abzugleichen"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLXRpY2tldA.option.Y3VzdG9tZXI.display_name": {
+          "source": "Customer",
+          "message": "Kunde"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLXRpY2tldA.option.Y3VzdG9tZXI.short_desc": {
+          "source": "Customer data",
+          "message": "Kundendaten"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLXRpY2tldA.option.YXNzaWduZWVfdGVhbQ.desc": {
+          "source": "The team to assign, or `NOTHING` to unassign",
+          "message": "Das zuzuweisende Team oder `NOTHING`, um die Zuweisung aufzuheben"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLXRpY2tldA.option.YXNzaWduZWVfdGVhbQ.display_name": {
+          "source": "Assignee Team",
+          "message": "Zugewiesenes Team"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLXRpY2tldA.option.YXNzaWduZWVfdGVhbQ.short_desc": {
+          "source": "Assigned team",
+          "message": "Zugewiesenes Team"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLXRpY2tldA.option.YXNzaWduZWVfdXNlcg.desc": {
+          "source": "The agent to assign, or `NOTHING` to unassign",
+          "message": "Der zuzuweisende Agent oder `NOTHING`, um die Zuweisung aufzuheben"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLXRpY2tldA.option.YXNzaWduZWVfdXNlcg.display_name": {
+          "source": "Assignee User",
+          "message": "Zugewiesener Benutzer"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLXRpY2tldA.option.YXNzaWduZWVfdXNlcg.short_desc": {
+          "source": "Assigned agent",
+          "message": "Zugewiesener Agent"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLXRpY2tldA.option.ZXh0ZXJuYWxfaWQ.desc": {
+          "source": "An external identifier for the ticket (max 255 characters)",
+          "message": "Eine externe Kennung für das Ticket (max. 255 Zeichen)"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLXRpY2tldA.option.ZXh0ZXJuYWxfaWQ.display_name": {
+          "source": "External ID",
+          "message": "Externe ID"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLXRpY2tldA.option.ZXh0ZXJuYWxfaWQ.short_desc": {
+          "source": "External identifier",
+          "message": "Externe Kennung"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLXRpY2tldA.option.c25vb3plX2RhdGV0aW1l.desc": {
+          "source": "ISO 8601 timestamp until which to snooze the ticket",
+          "message": "ISO 8601-Zeitstempel, bis zu dem das Ticket auf Schlummern gesetzt werden soll"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLXRpY2tldA.option.c25vb3plX2RhdGV0aW1l.display_name": {
+          "source": "Snooze Until",
+          "message": "Schlummern bis"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLXRpY2tldA.option.c25vb3plX2RhdGV0aW1l.short_desc": {
+          "source": "Snooze datetime",
+          "message": "Schlummerdatum/-uhrzeit"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLXRpY2tldA.option.c3BhbQ.desc": {
+          "source": "Whether to mark the ticket as spam",
+          "message": "Gibt an, ob das Ticket als Spam markiert werden soll"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLXRpY2tldA.option.c3BhbQ.display_name": {
+          "source": "Spam",
+          "message": "Spam"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLXRpY2tldA.option.c3BhbQ.short_desc": {
+          "source": "Mark as spam",
+          "message": "Als Spam markieren"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLXRpY2tldA.option.c3RhdHVz.allowed-value.c3RyaW5nOm9wZW4.display_name": {
+          "source": "Open",
+          "message": "Offen"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLXRpY2tldA.option.c3RhdHVz.allowed-value.c3RyaW5nOmNsb3NlZA.display_name": {
+          "source": "Closed",
+          "message": "Geschlossen"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLXRpY2tldA.option.c3RhdHVz.desc": {
+          "source": "The new status of the ticket",
+          "message": "Der neue Status des Tickets"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLXRpY2tldA.option.c3RhdHVz.display_name": {
+          "source": "Status",
+          "message": "Status"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLXRpY2tldA.option.c3RhdHVz.short_desc": {
+          "source": "Ticket status",
+          "message": "Ticketstatus"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLXRpY2tldA.option.c3ViamVjdA.desc": {
+          "source": "The new subject line (max 998 characters)",
+          "message": "Die neue Betreffzeile (max. 998 Zeichen)"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLXRpY2tldA.option.c3ViamVjdA.display_name": {
+          "source": "Subject",
+          "message": "Betreff"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLXRpY2tldA.option.c3ViamVjdA.short_desc": {
+          "source": "Ticket subject",
+          "message": "Ticket-Betreff"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLXRpY2tldA.option.cHJpb3JpdHk.allowed-value.c3RyaW5nOm5vcm1hbA.display_name": {
+          "source": "Normal",
+          "message": "Normal"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLXRpY2tldA.option.cHJpb3JpdHk.allowed-value.c3RyaW5nOmNyaXRpY2Fs.display_name": {
+          "source": "Critical",
+          "message": "Kritisch"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLXRpY2tldA.option.cHJpb3JpdHk.allowed-value.c3RyaW5nOmhpZ2g.display_name": {
+          "source": "High",
+          "message": "Hoch"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLXRpY2tldA.option.cHJpb3JpdHk.allowed-value.c3RyaW5nOmxvdw.display_name": {
+          "source": "Low",
+          "message": "Niedrig"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLXRpY2tldA.option.cHJpb3JpdHk.desc": {
+          "source": "The new priority level",
+          "message": "Die neue Prioritätsstufe"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLXRpY2tldA.option.cHJpb3JpdHk.display_name": {
+          "source": "Priority",
+          "message": "Priorität"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLXRpY2tldA.option.cHJpb3JpdHk.short_desc": {
+          "source": "Ticket priority",
+          "message": "Ticket-Priorität"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLXRpY2tldA.option.dGFncw.desc": {
+          "source": "List of tags to set on the ticket. Replaces existing tags. Each tag must have a `name` field",
+          "message": "Liste der für das Ticket festzulegenden Tags. Ersetzt vorhandene Tags. Jedes Tag muss ein Feld `name` haben"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLXRpY2tldA.option.dGFncw.display_name": {
+          "source": "Tags",
+          "message": "Tags"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLXRpY2tldA.option.dGFncw.short_desc": {
+          "source": "Tags to set",
+          "message": "Festzulegende Tags"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLXRpY2tldA.option.dGlja2V0X2lk.desc": {
+          "source": "The ID of the ticket to update",
+          "message": "Die ID des zu aktualisierenden Tickets"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLXRpY2tldA.option.dGlja2V0X2lk.display_name": {
+          "source": "Ticket ID",
+          "message": "Ticket-ID"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLXRpY2tldA.option.dGlja2V0X2lk.short_desc": {
+          "source": "The ticket to update",
+          "message": "Das zu aktualisierende Ticket"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLXRpY2tldA.short_desc": {
+          "source": "Update an existing ticket",
+          "message": "Ein vorhandenes Ticket aktualisieren"
+        },
+        "app.R29yZ2lhcw.desc": {
+          "source": "Gorgias is a customer support and helpdesk platform for e-commerce and SaaS businesses.\n\nThis integration supports managing tickets, customers, tags, messages, and monitoring ticket events.",
+          "message": "Gorgias ist eine Kundensupport- und Helpdesk-Plattform für E-Commerce- und SaaS-Unternehmen.\n\nDiese Integration unterstützt das Verwalten von Tickets, Kunden, Tags und Nachrichten sowie die Überwachung von Ticket-Ereignissen."
+        },
+        "app.R29yZ2lhcw.display_name": {
+          "source": "Gorgias",
+          "message": "Gorgias"
+        },
+        "app.R29yZ2lhcw.short_desc": {
+          "source": "Gorgias customer support and helpdesk platform",
+          "message": "Gorgias-Kundensupport- und Helpdesk-Plattform"
+        }
+      }
+    }
+  }
+}

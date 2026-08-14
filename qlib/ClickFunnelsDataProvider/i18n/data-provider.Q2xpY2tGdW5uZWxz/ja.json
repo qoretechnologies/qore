@@ -1,0 +1,3261 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "ja": {
+      "messages": {
+        "app.Q2xpY2tGdW5uZWxz.action.Y29udGFjdC11cGRhdGVk.desc": {
+          "source": "Fires when a contact is updated in ClickFunnels",
+          "message": "ClickFunnelsで連絡先が更新されたときにトリガーされます"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y29udGFjdC11cGRhdGVk.display_name": {
+          "source": "Contact Updated",
+          "message": "連絡先が更新されました"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y29udGFjdC11cGRhdGVk.short_desc": {
+          "source": "Trigger when a contact is updated",
+          "message": "連絡先が更新されたときにトリガー"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y29udGFjdC1jcmVhdGVk.desc": {
+          "source": "Fires when a new contact is created in ClickFunnels",
+          "message": "ClickFunnelsで新しい連絡先が作成されたときにトリガーされます"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y29udGFjdC1jcmVhdGVk.display_name": {
+          "source": "Contact Created",
+          "message": "連絡先作成時"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y29udGFjdC1jcmVhdGVk.short_desc": {
+          "source": "Trigger when a new contact is created",
+          "message": "新しい連絡先が作成されたときにトリガー"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y2FuY2VsLWZ1bGZpbGxtZW50.desc": {
+          "source": "Cancel an existing fulfillment in ClickFunnels",
+          "message": "ClickFunnelsの既存のフルフィルメントをキャンセル"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y2FuY2VsLWZ1bGZpbGxtZW50.display_name": {
+          "source": "Cancel a Fulfillment",
+          "message": "フルフィルメントをキャンセル"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y2FuY2VsLWZ1bGZpbGxtZW50.option.ZnVsZmlsbG1lbnRfaWQ.desc": {
+          "source": "The unique identifier of the fulfillment to cancel",
+          "message": "キャンセルするフルフィルメントの一意の識別子"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y2FuY2VsLWZ1bGZpbGxtZW50.option.ZnVsZmlsbG1lbnRfaWQ.display_name": {
+          "source": "Fulfillment ID",
+          "message": "フルフィルメントID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y2FuY2VsLWZ1bGZpbGxtZW50.option.ZnVsZmlsbG1lbnRfaWQ.short_desc": {
+          "source": "The fulfillment to cancel",
+          "message": "キャンセルするフルフィルメント"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y2FuY2VsLWZ1bGZpbGxtZW50.option.d29ya3NwYWNlX2lk.desc": {
+          "source": "The ClickFunnels workspace ID for workspace-scoped endpoints. You can find the workspace ID in the ClickFunnels admin panel URL or by calling the `GET /teams/{team_id}/workspaces` endpoint",
+          "message": "ワークスペーススコープのエンドポイント用のClickFunnelsワークスペースID。ワークスペースIDはClickFunnels管理パネルのURLで確認するか、`GET /teams/{team_id}/workspaces`エンドポイントを呼び出すことで取得できます"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y2FuY2VsLWZ1bGZpbGxtZW50.option.d29ya3NwYWNlX2lk.display_name": {
+          "source": "Workspace ID",
+          "message": "ワークスペース ID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y2FuY2VsLWZ1bGZpbGxtZW50.option.d29ya3NwYWNlX2lk.short_desc": {
+          "source": "ClickFunnels workspace ID",
+          "message": "ClickFunnelsワークスペースID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y2FuY2VsLWZ1bGZpbGxtZW50.short_desc": {
+          "source": "Cancel a fulfillment",
+          "message": "フルフィルメントをキャンセル"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLW9yZGVy.desc": {
+          "source": "Create a new order in ClickFunnels",
+          "message": "ClickFunnelsで新しい注文を作成"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLW9yZGVy.display_name": {
+          "source": "Create an Order",
+          "message": "注文を作成"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLW9yZGVy.option.Y29udGFjdF9pZA.desc": {
+          "source": "The ID of the contact for this order",
+          "message": "この注文の連絡先のID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLW9yZGVy.option.Y29udGFjdF9pZA.display_name": {
+          "source": "Contact ID",
+          "message": "連絡先ID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLW9yZGVy.option.Y29udGFjdF9pZA.short_desc": {
+          "source": "The associated contact",
+          "message": "関連付けられた連絡先"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLW9yZGVy.option.Y3VycmVuY3k.desc": {
+          "source": "The currency code for the order (e.g., `USD`)",
+          "message": "注文の通貨コード（例: `USD`）"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLW9yZGVy.option.Y3VycmVuY3k.display_name": {
+          "source": "Currency",
+          "message": "通貨"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLW9yZGVy.option.Y3VycmVuY3k.short_desc": {
+          "source": "The order currency",
+          "message": "注文通貨"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLW9yZGVy.option.b3JkZXJfdHlwZQ.allowed-value.c3RyaW5nOm9uZS10aW1lLW9yZGVy.display_name": {
+          "source": "One-Time Order",
+          "message": "都度注文"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLW9yZGVy.option.b3JkZXJfdHlwZQ.allowed-value.c3RyaW5nOnN1YnNjcmlwdGlvbi1vcmRlcg.display_name": {
+          "source": "Subscription Order",
+          "message": "サブスクリプション注文"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLW9yZGVy.option.b3JkZXJfdHlwZQ.desc": {
+          "source": "The type of the order to create",
+          "message": "作成する注文のタイプ"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLW9yZGVy.option.b3JkZXJfdHlwZQ.display_name": {
+          "source": "Order Type",
+          "message": "並べ替えタイプ"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLW9yZGVy.option.b3JkZXJfdHlwZQ.short_desc": {
+          "source": "The type of order",
+          "message": "注文のタイプ"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLW9yZGVy.option.b3JpZ2luYXRpb25fY2hhbm5lbF90eXBl.desc": {
+          "source": "The type of the origination channel",
+          "message": "発生元チャネルのタイプ"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLW9yZGVy.option.b3JpZ2luYXRpb25fY2hhbm5lbF90eXBl.display_name": {
+          "source": "Origination Channel Type",
+          "message": "発生元チャネルタイプ"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLW9yZGVy.option.b3JpZ2luYXRpb25fY2hhbm5lbF90eXBl.short_desc": {
+          "source": "The origination channel type",
+          "message": "発生元チャネルタイプ"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLW9yZGVy.option.b3JpZ2luYXRpb25fY2hhbm5lbF9pZA.desc": {
+          "source": "The ID of the origination channel",
+          "message": "発生元チャネルのID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLW9yZGVy.option.b3JpZ2luYXRpb25fY2hhbm5lbF9pZA.display_name": {
+          "source": "Origination Channel ID",
+          "message": "発生元チャネルID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLW9yZGVy.option.b3JpZ2luYXRpb25fY2hhbm5lbF9pZA.short_desc": {
+          "source": "The origination channel",
+          "message": "発生元チャネル"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLW9yZGVy.option.bGl2ZV9tb2Rl.desc": {
+          "source": "Whether this is a live order (`True`) or a test order (`False`)",
+          "message": "本番注文（`True`）かテスト注文（`False`）か"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLW9yZGVy.option.bGl2ZV9tb2Rl.display_name": {
+          "source": "Live Mode",
+          "message": "ライブモード"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLW9yZGVy.option.bGl2ZV9tb2Rl.short_desc": {
+          "source": "Whether this is a live order",
+          "message": "本番注文かどうか"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLW9yZGVy.option.bGluZV9pdGVtc19hdHRyaWJ1dGVz.desc": {
+          "source": "A list of line items for the order. Each item requires `variant_id`, `products_price_id`, and `quantity`.\n\n**Note**: for one-time orders, line items must reference one-time products. For subscription orders, line items can include both one-time and subscription products",
+          "message": "注文の明細アイテムのリスト。各アイテムには`variant_id`、`products_price_id`、および`quantity`が必要です。\n\n**注意**: 都度注文の場合、明細アイテムは買い切り製品を参照する必要があります。サブスクリプション注文の場合、明細アイテムには買い切り製品とサブスクリプション製品の両方を含めることができます"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLW9yZGVy.option.bGluZV9pdGVtc19hdHRyaWJ1dGVz.display_name": {
+          "source": "Line Items",
+          "message": "品目"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLW9yZGVy.option.bGluZV9pdGVtc19hdHRyaWJ1dGVz.short_desc": {
+          "source": "Order line items",
+          "message": "注文明細アイテム"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLW9yZGVy.option.d29ya3NwYWNlX2lk.desc": {
+          "source": "The ClickFunnels workspace ID for workspace-scoped endpoints. You can find the workspace ID in the ClickFunnels admin panel URL or by calling the `GET /teams/{team_id}/workspaces` endpoint",
+          "message": "ワークスペーススコープのエンドポイント用のClickFunnelsワークスペースID。ワークスペースIDはClickFunnels管理パネルのURLで確認するか、`GET /teams/{team_id}/workspaces`エンドポイントを呼び出すことで取得できます"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLW9yZGVy.option.d29ya3NwYWNlX2lk.display_name": {
+          "source": "Workspace ID",
+          "message": "ワークスペース ID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLW9yZGVy.option.d29ya3NwYWNlX2lk.short_desc": {
+          "source": "ClickFunnels workspace ID",
+          "message": "ClickFunnelsワークスペースID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLW9yZGVy.short_desc": {
+          "source": "Create a new order",
+          "message": "新規注文を作成"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLWNvbnRhY3Q.desc": {
+          "source": "Create a new contact in ClickFunnels",
+          "message": "ClickFunnelsで新しい連絡先を作成"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLWNvbnRhY3Q.display_name": {
+          "source": "Create a Contact",
+          "message": "連絡先を作成"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLWNvbnRhY3Q.option.Y3VzdG9tX2F0dHJpYnV0ZXM.desc": {
+          "source": "Custom key-value attributes for the contact. Both keys and values must be strings. Keys with special characters are automatically converted to `snake_case`",
+          "message": "連絡先のカスタムキー/値属性。キーと値は両方とも文字列である必要があります。特殊文字を含むキーは自動的に`snake_case`に変換されます"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLWNvbnRhY3Q.option.Y3VzdG9tX2F0dHJpYnV0ZXM.display_name": {
+          "source": "Custom Attributes",
+          "message": "カスタム属性"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLWNvbnRhY3Q.option.Y3VzdG9tX2F0dHJpYnV0ZXM.short_desc": {
+          "source": "Custom key-value attributes",
+          "message": "カスタムキー/値属性"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLWNvbnRhY3Q.option.ZW1haWxfYWRkcmVzcw.desc": {
+          "source": "The email address of the contact to create",
+          "message": "作成する連絡先のメールアドレス"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLWNvbnRhY3Q.option.ZW1haWxfYWRkcmVzcw.display_name": {
+          "source": "Email Address",
+          "message": "メールアドレス"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLWNvbnRhY3Q.option.ZW1haWxfYWRkcmVzcw.short_desc": {
+          "source": "The contact's email address",
+          "message": "コンタクトのメールアドレス"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLWNvbnRhY3Q.option.ZmJfdXJs.desc": {
+          "source": "The Facebook profile URL of the contact",
+          "message": "連絡先のFacebookプロフィールのURL"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLWNvbnRhY3Q.option.ZmJfdXJs.display_name": {
+          "source": "Facebook URL",
+          "message": "Facebook URL"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLWNvbnRhY3Q.option.ZmJfdXJs.short_desc": {
+          "source": "The contact's Facebook URL",
+          "message": "連絡先のFacebook URL"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLWNvbnRhY3Q.option.Zmlyc3RfbmFtZQ.desc": {
+          "source": "The first name of the contact",
+          "message": "コンタクトの名"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLWNvbnRhY3Q.option.Zmlyc3RfbmFtZQ.display_name": {
+          "source": "First Name",
+          "message": "名"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLWNvbnRhY3Q.option.Zmlyc3RfbmFtZQ.short_desc": {
+          "source": "The contact's first name",
+          "message": "コンタクトの名"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLWNvbnRhY3Q.option.aW5zdGFncmFtX3VybA.desc": {
+          "source": "The Instagram profile URL of the contact",
+          "message": "連絡先のInstagramプロフィールのURL"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLWNvbnRhY3Q.option.aW5zdGFncmFtX3VybA.display_name": {
+          "source": "Instagram URL",
+          "message": "Instagram URL"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLWNvbnRhY3Q.option.aW5zdGFncmFtX3VybA.short_desc": {
+          "source": "The contact's Instagram URL",
+          "message": "連絡先のInstagram URL"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLWNvbnRhY3Q.option.bGFzdF9uYW1l.desc": {
+          "source": "The last name of the contact",
+          "message": "コンタクトの姓"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLWNvbnRhY3Q.option.bGFzdF9uYW1l.display_name": {
+          "source": "Last Name",
+          "message": "姓"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLWNvbnRhY3Q.option.bGFzdF9uYW1l.short_desc": {
+          "source": "The contact's last name",
+          "message": "コンタクトの姓"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLWNvbnRhY3Q.option.bGlua2VkaW5fdXJs.desc": {
+          "source": "The LinkedIn profile URL of the contact",
+          "message": "連絡先のLinkedInプロフィールのURL"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLWNvbnRhY3Q.option.bGlua2VkaW5fdXJs.display_name": {
+          "source": "LinkedIn URL",
+          "message": "LinkedIn URL"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLWNvbnRhY3Q.option.bGlua2VkaW5fdXJs.short_desc": {
+          "source": "The contact's LinkedIn URL",
+          "message": "連絡先のLinkedIn URL"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLWNvbnRhY3Q.option.cGhvbmVfbnVtYmVy.desc": {
+          "source": "The phone number of the contact",
+          "message": "連絡先の電話番号"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLWNvbnRhY3Q.option.cGhvbmVfbnVtYmVy.display_name": {
+          "source": "Phone Number",
+          "message": "電話番号"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLWNvbnRhY3Q.option.cGhvbmVfbnVtYmVy.short_desc": {
+          "source": "The contact's phone number",
+          "message": "コンタクトの電話番号"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLWNvbnRhY3Q.option.d29ya3NwYWNlX2lk.desc": {
+          "source": "The ClickFunnels workspace ID for workspace-scoped endpoints. You can find the workspace ID in the ClickFunnels admin panel URL or by calling the `GET /teams/{team_id}/workspaces` endpoint",
+          "message": "ワークスペーススコープのエンドポイント用のClickFunnelsワークスペースID。ワークスペースIDはClickFunnels管理パネルのURLで確認するか、`GET /teams/{team_id}/workspaces`エンドポイントを呼び出すことで取得できます"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLWNvbnRhY3Q.option.d29ya3NwYWNlX2lk.display_name": {
+          "source": "Workspace ID",
+          "message": "ワークスペース ID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLWNvbnRhY3Q.option.d29ya3NwYWNlX2lk.short_desc": {
+          "source": "ClickFunnels workspace ID",
+          "message": "ClickFunnelsワークスペースID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLWNvbnRhY3Q.option.d2Vic2l0ZV91cmw.desc": {
+          "source": "The website URL of the contact",
+          "message": "連絡先のウェブサイトURL"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLWNvbnRhY3Q.option.d2Vic2l0ZV91cmw.display_name": {
+          "source": "Website URL",
+          "message": "ウェブサイトの URL"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLWNvbnRhY3Q.option.d2Vic2l0ZV91cmw.short_desc": {
+          "source": "The contact's website URL",
+          "message": "連絡先のウェブサイトURL"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLWNvbnRhY3Q.option.dGFnX2lkcw.desc": {
+          "source": "A list of contact tag IDs to apply to the contact. Any valid array will overwrite existing values",
+          "message": "連絡先に適用する連絡先タグIDのリスト。有効な配列を指定すると既存の値が上書きされます"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLWNvbnRhY3Q.option.dGFnX2lkcw.display_name": {
+          "source": "Tag IDs",
+          "message": "タグID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLWNvbnRhY3Q.option.dGFnX2lkcw.short_desc": {
+          "source": "Contact tag IDs to apply",
+          "message": "適用する連絡先タグID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLWNvbnRhY3Q.option.dGltZV96b25l.desc": {
+          "source": "The time zone of the contact (e.g., `America/New_York`)",
+          "message": "連絡先のタイムゾーン（例: `America/New_York`）"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLWNvbnRhY3Q.option.dGltZV96b25l.display_name": {
+          "source": "Time Zone",
+          "message": "タイムゾーン"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLWNvbnRhY3Q.option.dGltZV96b25l.short_desc": {
+          "source": "The contact's time zone",
+          "message": "連絡先のタイムゾーン"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLWNvbnRhY3Q.option.dHdpdHRlcl91cmw.desc": {
+          "source": "The Twitter profile URL of the contact",
+          "message": "連絡先のTwitterプロファイルURL"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLWNvbnRhY3Q.option.dHdpdHRlcl91cmw.display_name": {
+          "source": "Twitter URL",
+          "message": "Twitter URL"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLWNvbnRhY3Q.option.dHdpdHRlcl91cmw.short_desc": {
+          "source": "The contact's Twitter URL",
+          "message": "連絡先のTwitter URL"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLWNvbnRhY3Q.short_desc": {
+          "source": "Create a new contact",
+          "message": "新しいコンタクトを作成"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLWNvbnRhY3QtdGFn.desc": {
+          "source": "Create a new contact tag in ClickFunnels",
+          "message": "ClickFunnelsで新しい連絡先タグを作成"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLWNvbnRhY3QtdGFn.display_name": {
+          "source": "Create a Contact Tag",
+          "message": "連絡先タグを作成"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLWNvbnRhY3QtdGFn.option.Y29sb3I.desc": {
+          "source": "The color code for the tag",
+          "message": "タグのカラーコード"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLWNvbnRhY3QtdGFn.option.Y29sb3I.display_name": {
+          "source": "Color",
+          "message": "色"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLWNvbnRhY3QtdGFn.option.Y29sb3I.short_desc": {
+          "source": "The tag color",
+          "message": "タグの色"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLWNvbnRhY3QtdGFn.option.bmFtZQ.desc": {
+          "source": "The name of the contact tag to create",
+          "message": "作成する連絡先タグの名前"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLWNvbnRhY3QtdGFn.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "名前"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLWNvbnRhY3QtdGFn.option.bmFtZQ.short_desc": {
+          "source": "The tag name",
+          "message": "タグ名"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLWNvbnRhY3QtdGFn.option.d29ya3NwYWNlX2lk.desc": {
+          "source": "The ClickFunnels workspace ID for workspace-scoped endpoints. You can find the workspace ID in the ClickFunnels admin panel URL or by calling the `GET /teams/{team_id}/workspaces` endpoint",
+          "message": "ワークスペーススコープのエンドポイント用のClickFunnelsワークスペースID。ワークスペースIDはClickFunnels管理パネルのURLで確認するか、`GET /teams/{team_id}/workspaces`エンドポイントを呼び出すことで取得できます"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLWNvbnRhY3QtdGFn.option.d29ya3NwYWNlX2lk.display_name": {
+          "source": "Workspace ID",
+          "message": "ワークスペース ID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLWNvbnRhY3QtdGFn.option.d29ya3NwYWNlX2lk.short_desc": {
+          "source": "ClickFunnels workspace ID",
+          "message": "ClickFunnelsワークスペースID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLWNvbnRhY3QtdGFn.short_desc": {
+          "source": "Create a new contact tag",
+          "message": "新しい連絡先タグを作成"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLWVucm9sbG1lbnQ.desc": {
+          "source": "Create a new course enrollment in ClickFunnels",
+          "message": "ClickFunnelsで新しいコース登録を作成"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLWVucm9sbG1lbnQ.display_name": {
+          "source": "Create an Enrollment",
+          "message": "登録を作成"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLWVucm9sbG1lbnQ.option.Y291cnNlX2lk.desc": {
+          "source": "The ID of the course",
+          "message": "コースのID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLWVucm9sbG1lbnQ.option.Y291cnNlX2lk.display_name": {
+          "source": "Course ID",
+          "message": "コースID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLWVucm9sbG1lbnQ.option.Y291cnNlX2lk.short_desc": {
+          "source": "The course to enroll in",
+          "message": "登録するコース"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLWVucm9sbG1lbnQ.option.Y29udGFjdF9pZA.desc": {
+          "source": "The ID of the contact to enroll",
+          "message": "登録する連絡先のID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLWVucm9sbG1lbnQ.option.Y29udGFjdF9pZA.display_name": {
+          "source": "Contact ID",
+          "message": "連絡先ID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLWVucm9sbG1lbnQ.option.Y29udGFjdF9pZA.short_desc": {
+          "source": "The contact to enroll",
+          "message": "登録する連絡先"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLWVucm9sbG1lbnQ.option.c3VzcGVuZGVk.desc": {
+          "source": "Whether the enrollment should be suspended",
+          "message": "登録を一時停止するかどうか"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLWVucm9sbG1lbnQ.option.c3VzcGVuZGVk.display_name": {
+          "source": "Suspended",
+          "message": "一時停止"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLWVucm9sbG1lbnQ.option.c3VzcGVuZGVk.short_desc": {
+          "source": "Whether enrollment is suspended",
+          "message": "登録が一時停止されているかどうか"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLWVucm9sbG1lbnQ.option.c3VzcGVuc2lvbl9yZWFzb24.desc": {
+          "source": "The reason for suspending the enrollment",
+          "message": "登録を一時停止する理由"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLWVucm9sbG1lbnQ.option.c3VzcGVuc2lvbl9yZWFzb24.display_name": {
+          "source": "Suspension Reason",
+          "message": "一時停止の理由"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLWVucm9sbG1lbnQ.option.c3VzcGVuc2lvbl9yZWFzb24.short_desc": {
+          "source": "Reason for suspension",
+          "message": "一時停止の理由"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLWVucm9sbG1lbnQ.option.d29ya3NwYWNlX2lk.desc": {
+          "source": "The ClickFunnels workspace ID for workspace-scoped endpoints. You can find the workspace ID in the ClickFunnels admin panel URL or by calling the `GET /teams/{team_id}/workspaces` endpoint",
+          "message": "ワークスペーススコープのエンドポイント用のClickFunnelsワークスペースID。ワークスペースIDはClickFunnels管理パネルのURLで確認するか、`GET /teams/{team_id}/workspaces`エンドポイントを呼び出すことで取得できます"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLWVucm9sbG1lbnQ.option.d29ya3NwYWNlX2lk.display_name": {
+          "source": "Workspace ID",
+          "message": "ワークスペース ID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLWVucm9sbG1lbnQ.option.d29ya3NwYWNlX2lk.short_desc": {
+          "source": "ClickFunnels workspace ID",
+          "message": "ClickFunnelsワークスペースID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLWVucm9sbG1lbnQ.short_desc": {
+          "source": "Enroll a contact in a course",
+          "message": "連絡先をコースに登録"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLWZ1bGZpbGxtZW50.desc": {
+          "source": "Create a new fulfillment in ClickFunnels",
+          "message": "ClickFunnelsで新しいフルフィルメントを作成"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLWZ1bGZpbGxtZW50.display_name": {
+          "source": "Create a Fulfillment",
+          "message": "フルフィルメントを作成"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLWZ1bGZpbGxtZW50.option.Y29udGFjdF9pZA.desc": {
+          "source": "The ID of the contact for this fulfillment",
+          "message": "このフルフィルメントの対象となる連絡先のID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLWZ1bGZpbGxtZW50.option.Y29udGFjdF9pZA.display_name": {
+          "source": "Contact ID",
+          "message": "連絡先ID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLWZ1bGZpbGxtZW50.option.Y29udGFjdF9pZA.short_desc": {
+          "source": "The contact",
+          "message": "連絡先"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLWZ1bGZpbGxtZW50.option.aW5jbHVkZWRfb3JkZXJzX2ludm9pY2VzX2xpbmVfaXRlbXNfYXR0cmlidXRlcw.desc": {
+          "source": "A list of invoice line items to fulfill. Each item requires `invoices_line_item_id` and `quantity`",
+          "message": "フルフィルメント対象の請求書明細項目のリスト。各項目には`invoices_line_item_id`および`quantity`が必要です"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLWZ1bGZpbGxtZW50.option.aW5jbHVkZWRfb3JkZXJzX2ludm9pY2VzX2xpbmVfaXRlbXNfYXR0cmlidXRlcw.display_name": {
+          "source": "Line Items to Fulfill",
+          "message": "フルフィルメント対象の明細項目"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLWZ1bGZpbGxtZW50.option.aW5jbHVkZWRfb3JkZXJzX2ludm9pY2VzX2xpbmVfaXRlbXNfYXR0cmlidXRlcw.short_desc": {
+          "source": "Invoice line items to fulfill",
+          "message": "フルフィルメント対象の請求書明細項目"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLWZ1bGZpbGxtZW50.option.aWdub3JlX291dF9vZl9zdG9jaw.desc": {
+          "source": "Whether to ignore out-of-stock inventory checks when creating the fulfillment",
+          "message": "フルフィルメントの作成時に在庫切れチェックを無視するかどうか"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLWZ1bGZpbGxtZW50.option.aWdub3JlX291dF9vZl9zdG9jaw.display_name": {
+          "source": "Ignore Out of Stock",
+          "message": "在庫切れを無視"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLWZ1bGZpbGxtZW50.option.aWdub3JlX291dF9vZl9zdG9jaw.short_desc": {
+          "source": "Override inventory checks",
+          "message": "在庫チェックをオーバーライド"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLWZ1bGZpbGxtZW50.option.bG9jYXRpb25faWQ.desc": {
+          "source": "The ID of the fulfillment location where items are shipped from",
+          "message": "アイテムの発送元となるフルフィルメント拠点のID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLWZ1bGZpbGxtZW50.option.bG9jYXRpb25faWQ.display_name": {
+          "source": "Location ID",
+          "message": "ロケーションID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLWZ1bGZpbGxtZW50.option.bG9jYXRpb25faWQ.short_desc": {
+          "source": "The fulfillment location",
+          "message": "フルフィルメント拠点"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLWZ1bGZpbGxtZW50.option.bm90aWZ5X2N1c3RvbWVy.desc": {
+          "source": "Whether to send an email notification to the customer about the fulfillment",
+          "message": "フルフィルメントに関するメール通知を顧客に送信するかどうか"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLWZ1bGZpbGxtZW50.option.bm90aWZ5X2N1c3RvbWVy.display_name": {
+          "source": "Notify Customer",
+          "message": "顧客に通知"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLWZ1bGZpbGxtZW50.option.bm90aWZ5X2N1c3RvbWVy.short_desc": {
+          "source": "Send email notification",
+          "message": "メール通知を送信"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLWZ1bGZpbGxtZW50.option.c2hpcHBpbmdfcHJvdmlkZXI.desc": {
+          "source": "The shipping provider for this fulfillment",
+          "message": "このフルフィルメントの配送業者"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLWZ1bGZpbGxtZW50.option.c2hpcHBpbmdfcHJvdmlkZXI.display_name": {
+          "source": "Shipping Provider",
+          "message": "配送業者"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLWZ1bGZpbGxtZW50.option.c2hpcHBpbmdfcHJvdmlkZXI.short_desc": {
+          "source": "The shipping provider",
+          "message": "配送業者"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLWZ1bGZpbGxtZW50.option.d29ya3NwYWNlX2lk.desc": {
+          "source": "The ClickFunnels workspace ID for workspace-scoped endpoints. You can find the workspace ID in the ClickFunnels admin panel URL or by calling the `GET /teams/{team_id}/workspaces` endpoint",
+          "message": "ワークスペーススコープのエンドポイント用のClickFunnelsワークスペースID。ワークスペースIDはClickFunnels管理パネルのURLで確認するか、`GET /teams/{team_id}/workspaces`エンドポイントを呼び出すことで取得できます"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLWZ1bGZpbGxtZW50.option.d29ya3NwYWNlX2lk.display_name": {
+          "source": "Workspace ID",
+          "message": "ワークスペース ID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLWZ1bGZpbGxtZW50.option.d29ya3NwYWNlX2lk.short_desc": {
+          "source": "ClickFunnels workspace ID",
+          "message": "ClickFunnelsワークスペースID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLWZ1bGZpbGxtZW50.option.dHJhY2tpbmdfY29kZQ.desc": {
+          "source": "The shipment tracking code",
+          "message": "配送追跡コード"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLWZ1bGZpbGxtZW50.option.dHJhY2tpbmdfY29kZQ.display_name": {
+          "source": "Tracking Code",
+          "message": "追跡コード"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLWZ1bGZpbGxtZW50.option.dHJhY2tpbmdfY29kZQ.short_desc": {
+          "source": "The tracking code",
+          "message": "追跡コード"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLWZ1bGZpbGxtZW50.option.dHJhY2tpbmdfdXJs.desc": {
+          "source": "The shipment tracking URL",
+          "message": "配送追跡URL"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLWZ1bGZpbGxtZW50.option.dHJhY2tpbmdfdXJs.display_name": {
+          "source": "Tracking URL",
+          "message": "追跡URL"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLWZ1bGZpbGxtZW50.option.dHJhY2tpbmdfdXJs.short_desc": {
+          "source": "The tracking URL",
+          "message": "追跡URL"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLWZ1bGZpbGxtZW50.short_desc": {
+          "source": "Create a new fulfillment",
+          "message": "新しいフルフィルメントを作成"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLWZvcm0.desc": {
+          "source": "Create a new form in ClickFunnels",
+          "message": "ClickFunnelsで新しいフォームを作成"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLWZvcm0.display_name": {
+          "source": "Create a Form",
+          "message": "フォームを作成"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLWZvcm0.option.bmFtZQ.desc": {
+          "source": "The name of the form",
+          "message": "フォームの名前"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLWZvcm0.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "名前"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLWZvcm0.option.bmFtZQ.short_desc": {
+          "source": "The form name",
+          "message": "フォーム名"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLWZvcm0.option.cmVkaXJlY3RfdXJs.desc": {
+          "source": "The URL to redirect to after form submission",
+          "message": "フォーム送信後にリダイレクトするURL"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLWZvcm0.option.cmVkaXJlY3RfdXJs.display_name": {
+          "source": "Redirect URL",
+          "message": "リダイレクトURL"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLWZvcm0.option.cmVkaXJlY3RfdXJs.short_desc": {
+          "source": "The redirect URL",
+          "message": "リダイレクトURL"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLWZvcm0.option.d29ya3NwYWNlX2lk.desc": {
+          "source": "The ClickFunnels workspace ID for workspace-scoped endpoints. You can find the workspace ID in the ClickFunnels admin panel URL or by calling the `GET /teams/{team_id}/workspaces` endpoint",
+          "message": "ワークスペーススコープのエンドポイント用のClickFunnelsワークスペースID。ワークスペースIDはClickFunnels管理パネルのURLで確認するか、`GET /teams/{team_id}/workspaces`エンドポイントを呼び出すことで取得できます"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLWZvcm0.option.d29ya3NwYWNlX2lk.display_name": {
+          "source": "Workspace ID",
+          "message": "ワークスペース ID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLWZvcm0.option.d29ya3NwYWNlX2lk.short_desc": {
+          "source": "ClickFunnels workspace ID",
+          "message": "ClickFunnelsワークスペースID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLWZvcm0.short_desc": {
+          "source": "Create a new form",
+          "message": "新しいフォームを作成"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLXByb2R1Y3Q.desc": {
+          "source": "Create a new product in ClickFunnels",
+          "message": "ClickFunnelsで新しい商品を作成"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLXByb2R1Y3Q.display_name": {
+          "source": "Create a Product",
+          "message": "商品を作成"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLXByb2R1Y3Q.option.Y29tbWlzc2lvbmFibGU.desc": {
+          "source": "Whether eligible for affiliate commissions",
+          "message": "アフィリエイト報酬の対象かどうか"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLXByb2R1Y3Q.option.Y29tbWlzc2lvbmFibGU.display_name": {
+          "source": "Commissionable",
+          "message": "報酬対象"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLXByb2R1Y3Q.option.Y29tbWlzc2lvbmFibGU.short_desc": {
+          "source": "Whether commissionable",
+          "message": "報酬対象かどうか"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLXByb2R1Y3Q.option.Y3VycmVudF9wYXRo.desc": {
+          "source": "The URL path for the product",
+          "message": "商品のURLパス"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLXByb2R1Y3Q.option.Y3VycmVudF9wYXRo.display_name": {
+          "source": "Current Path",
+          "message": "現在のパス"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLXByb2R1Y3Q.option.Y3VycmVudF9wYXRo.short_desc": {
+          "source": "The product URL path",
+          "message": "商品のURLパス"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLXByb2R1Y3Q.option.bmFtZQ.desc": {
+          "source": "The name of the product",
+          "message": "商品の名前"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLXByb2R1Y3Q.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "名前"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLXByb2R1Y3Q.option.bmFtZQ.short_desc": {
+          "source": "The product name",
+          "message": "商品名"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLXByb2R1Y3Q.option.c2VvX2Rlc2NyaXB0aW9u.desc": {
+          "source": "The SEO meta description",
+          "message": "SEOメタディスクリプション"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLXByb2R1Y3Q.option.c2VvX2Rlc2NyaXB0aW9u.display_name": {
+          "source": "SEO Description",
+          "message": "SEOディスクリプション"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLXByb2R1Y3Q.option.c2VvX2Rlc2NyaXB0aW9u.short_desc": {
+          "source": "The SEO description",
+          "message": "SEOディスクリプション"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLXByb2R1Y3Q.option.c2VvX2ltYWdlX3VybA.desc": {
+          "source": "The SEO image URL for the product",
+          "message": "商品のSEO画像URL"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLXByb2R1Y3Q.option.c2VvX2ltYWdlX3VybA.display_name": {
+          "source": "SEO Image URL",
+          "message": "SEO画像URL"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLXByb2R1Y3Q.option.c2VvX2ltYWdlX3VybA.short_desc": {
+          "source": "The SEO image URL",
+          "message": "SEO画像URL"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLXByb2R1Y3Q.option.c2VvX3RpdGxl.desc": {
+          "source": "The SEO title for the product",
+          "message": "商品のSEOタイトル"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLXByb2R1Y3Q.option.c2VvX3RpdGxl.display_name": {
+          "source": "SEO Title",
+          "message": "SEOタイトル"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLXByb2R1Y3Q.option.c2VvX3RpdGxl.short_desc": {
+          "source": "The SEO title",
+          "message": "SEOタイトル"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLXByb2R1Y3Q.option.d29ya3NwYWNlX2lk.desc": {
+          "source": "The ClickFunnels workspace ID for workspace-scoped endpoints. You can find the workspace ID in the ClickFunnels admin panel URL or by calling the `GET /teams/{team_id}/workspaces` endpoint",
+          "message": "ワークスペーススコープのエンドポイント用のClickFunnelsワークスペースID。ワークスペースIDはClickFunnels管理パネルのURLで確認するか、`GET /teams/{team_id}/workspaces`エンドポイントを呼び出すことで取得できます"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLXByb2R1Y3Q.option.d29ya3NwYWNlX2lk.display_name": {
+          "source": "Workspace ID",
+          "message": "ワークスペース ID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLXByb2R1Y3Q.option.d29ya3NwYWNlX2lk.short_desc": {
+          "source": "ClickFunnels workspace ID",
+          "message": "ClickFunnelsワークスペースID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLXByb2R1Y3Q.option.dmlzaWJsZV9pbl9jdXN0b21lcl9jZW50ZXI.desc": {
+          "source": "Whether the product is visible in the customer center",
+          "message": "カスタマーセンターで商品を表示するかどうか"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLXByb2R1Y3Q.option.dmlzaWJsZV9pbl9jdXN0b21lcl9jZW50ZXI.display_name": {
+          "source": "Visible in Customer Center",
+          "message": "カスタマーセンターで表示"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLXByb2R1Y3Q.option.dmlzaWJsZV9pbl9jdXN0b21lcl9jZW50ZXI.short_desc": {
+          "source": "Whether visible in customer center",
+          "message": "カスタマーセンターで表示するかどうか"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLXByb2R1Y3Q.option.dmlzaWJsZV9pbl9zdG9yZQ.desc": {
+          "source": "Whether the product is visible in the store",
+          "message": "ストアで商品を表示するかどうか"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLXByb2R1Y3Q.option.dmlzaWJsZV9pbl9zdG9yZQ.display_name": {
+          "source": "Visible in Store",
+          "message": "ストアで表示"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLXByb2R1Y3Q.option.dmlzaWJsZV9pbl9zdG9yZQ.short_desc": {
+          "source": "Whether visible in store",
+          "message": "ストアで表示するかどうか"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Y3JlYXRlLXByb2R1Y3Q.short_desc": {
+          "source": "Create a new product",
+          "message": "新しい商品を作成"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.YXBwbHktdGFn.desc": {
+          "source": "Apply a tag to a contact in ClickFunnels",
+          "message": "ClickFunnelsで連絡先にタグを適用します"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.YXBwbHktdGFn.display_name": {
+          "source": "Apply Tag to Contact",
+          "message": "連絡先にタグを適用"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.YXBwbHktdGFn.option.Y29udGFjdF9pZA.desc": {
+          "source": "The ID of the contact to apply the tag to",
+          "message": "タグを適用する連絡先のID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.YXBwbHktdGFn.option.Y29udGFjdF9pZA.display_name": {
+          "source": "Contact ID",
+          "message": "連絡先ID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.YXBwbHktdGFn.option.Y29udGFjdF9pZA.short_desc": {
+          "source": "The contact to tag",
+          "message": "タグを適用する連絡先"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.YXBwbHktdGFn.option.d29ya3NwYWNlX2lk.desc": {
+          "source": "The ClickFunnels workspace ID for workspace-scoped endpoints. You can find the workspace ID in the ClickFunnels admin panel URL or by calling the `GET /teams/{team_id}/workspaces` endpoint",
+          "message": "ワークスペーススコープのエンドポイント用のClickFunnelsワークスペースID。ワークスペースIDはClickFunnels管理パネルのURLで確認するか、`GET /teams/{team_id}/workspaces`エンドポイントを呼び出すことで取得できます"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.YXBwbHktdGFn.option.d29ya3NwYWNlX2lk.display_name": {
+          "source": "Workspace ID",
+          "message": "ワークスペース ID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.YXBwbHktdGFn.option.d29ya3NwYWNlX2lk.short_desc": {
+          "source": "ClickFunnels workspace ID",
+          "message": "ClickFunnelsワークスペースID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.YXBwbHktdGFn.option.dGFnX2lk.desc": {
+          "source": "The ID of the tag to apply to the contact",
+          "message": "連絡先に適用するタグのID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.YXBwbHktdGFn.option.dGFnX2lk.display_name": {
+          "source": "Tag ID",
+          "message": "タグ ID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.YXBwbHktdGFn.option.dGFnX2lk.short_desc": {
+          "source": "The tag to apply",
+          "message": "適用するタグ"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.YXBwbHktdGFn.short_desc": {
+          "source": "Apply a tag to a contact",
+          "message": "連絡先にタグを適用します"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Z2V0LW9yZGVy.desc": {
+          "source": "Retrieve a single order by ID from ClickFunnels",
+          "message": "ClickFunnelsからIDで単一の注文を取得します"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Z2V0LW9yZGVy.display_name": {
+          "source": "Get an Order",
+          "message": "注文を取得"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Z2V0LW9yZGVy.option.b3JkZXJfaWQ.display_name": {
+          "source": "Order ID",
+          "message": "注文 ID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Z2V0LW9yZGVy.option.b3JkZXJfaWQ.short_desc": {
+          "source": "The order ID to retrieve",
+          "message": "取得する注文のID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Z2V0LW9yZGVy.option.d29ya3NwYWNlX2lk.display_name": {
+          "source": "Workspace ID",
+          "message": "ワークスペース ID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Z2V0LW9yZGVy.option.d29ya3NwYWNlX2lk.short_desc": {
+          "source": "ClickFunnels workspace ID",
+          "message": "ClickFunnelsワークスペースID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Z2V0LW9yZGVy.short_desc": {
+          "source": "Get a single order by ID",
+          "message": "ID で単一の注文を取得"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Z2V0LWNvbnRhY3Q.desc": {
+          "source": "Retrieve a single contact by ID from ClickFunnels",
+          "message": "ClickFunnelsからIDで単一の連絡先を取得します"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Z2V0LWNvbnRhY3Q.display_name": {
+          "source": "Get a Contact",
+          "message": "連絡先を取得"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Z2V0LWNvbnRhY3Q.option.Y29udGFjdF9pZA.display_name": {
+          "source": "Contact ID",
+          "message": "連絡先ID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Z2V0LWNvbnRhY3Q.option.Y29udGFjdF9pZA.short_desc": {
+          "source": "The contact ID",
+          "message": "連絡先ID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Z2V0LWNvbnRhY3Q.option.d29ya3NwYWNlX2lk.display_name": {
+          "source": "Workspace ID",
+          "message": "ワークスペース ID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Z2V0LWNvbnRhY3Q.option.d29ya3NwYWNlX2lk.short_desc": {
+          "source": "ClickFunnels workspace ID",
+          "message": "ClickFunnelsワークスペースID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Z2V0LWNvbnRhY3Q.short_desc": {
+          "source": "Get a single contact by ID",
+          "message": "IDによって単一の連絡先を取得"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Z2V0LWNvbnRhY3QtdGFn.desc": {
+          "source": "Retrieve a single contact tag by ID from ClickFunnels",
+          "message": "ClickFunnelsからIDで単一の連絡先タグを取得します"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Z2V0LWNvbnRhY3QtdGFn.display_name": {
+          "source": "Get a Contact Tag",
+          "message": "連絡先タグを取得"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Z2V0LWNvbnRhY3QtdGFn.option.d29ya3NwYWNlX2lk.display_name": {
+          "source": "Workspace ID",
+          "message": "ワークスペース ID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Z2V0LWNvbnRhY3QtdGFn.option.d29ya3NwYWNlX2lk.short_desc": {
+          "source": "ClickFunnels workspace ID",
+          "message": "ClickFunnelsワークスペースID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Z2V0LWNvbnRhY3QtdGFn.option.dGFnX2lk.display_name": {
+          "source": "Tag ID",
+          "message": "タグ ID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Z2V0LWNvbnRhY3QtdGFn.option.dGFnX2lk.short_desc": {
+          "source": "The tag ID to retrieve",
+          "message": "取得するタグのID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Z2V0LWNvbnRhY3QtdGFn.short_desc": {
+          "source": "Get a single contact tag by ID",
+          "message": "IDで単一の連絡先タグを取得します"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Z2V0LWNvdXJzZQ.desc": {
+          "source": "Retrieve a single course by ID from ClickFunnels",
+          "message": "ClickFunnelsからIDで単一のコースを取得します"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Z2V0LWNvdXJzZQ.display_name": {
+          "source": "Get a Course",
+          "message": "コースを取得"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Z2V0LWNvdXJzZQ.option.Y291cnNlX2lk.display_name": {
+          "source": "Course ID",
+          "message": "コースID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Z2V0LWNvdXJzZQ.option.Y291cnNlX2lk.short_desc": {
+          "source": "The course ID to retrieve",
+          "message": "取得するコースのID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Z2V0LWNvdXJzZQ.option.d29ya3NwYWNlX2lk.display_name": {
+          "source": "Workspace ID",
+          "message": "ワークスペース ID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Z2V0LWNvdXJzZQ.option.d29ya3NwYWNlX2lk.short_desc": {
+          "source": "ClickFunnels workspace ID",
+          "message": "ClickFunnelsワークスペースID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Z2V0LWNvdXJzZQ.short_desc": {
+          "source": "Get a single course by ID",
+          "message": "IDで単一のコースを取得します"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Z2V0LWVucm9sbG1lbnQ.desc": {
+          "source": "Retrieve a single enrollment by ID from ClickFunnels",
+          "message": "ClickFunnelsからIDで単一の受講登録を取得します"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Z2V0LWVucm9sbG1lbnQ.display_name": {
+          "source": "Get an Enrollment",
+          "message": "受講登録を取得"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Z2V0LWVucm9sbG1lbnQ.option.ZW5yb2xsbWVudF9pZA.display_name": {
+          "source": "Enrollment ID",
+          "message": "受講登録ID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Z2V0LWVucm9sbG1lbnQ.option.ZW5yb2xsbWVudF9pZA.short_desc": {
+          "source": "The enrollment ID to retrieve",
+          "message": "取得する受講登録のID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Z2V0LWVucm9sbG1lbnQ.option.d29ya3NwYWNlX2lk.display_name": {
+          "source": "Workspace ID",
+          "message": "ワークスペース ID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Z2V0LWVucm9sbG1lbnQ.option.d29ya3NwYWNlX2lk.short_desc": {
+          "source": "ClickFunnels workspace ID",
+          "message": "ClickFunnelsワークスペースID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Z2V0LWVucm9sbG1lbnQ.short_desc": {
+          "source": "Get a single enrollment by ID",
+          "message": "IDで単一の受講登録を取得します"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Z2V0LWZ1bGZpbGxtZW50.desc": {
+          "source": "Retrieve a single fulfillment by ID from ClickFunnels",
+          "message": "ClickFunnelsからIDで単一のフルフィルメントを取得します"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Z2V0LWZ1bGZpbGxtZW50.display_name": {
+          "source": "Get a Fulfillment",
+          "message": "フルフィルメントを取得"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Z2V0LWZ1bGZpbGxtZW50.option.ZnVsZmlsbG1lbnRfaWQ.display_name": {
+          "source": "Fulfillment ID",
+          "message": "フルフィルメントID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Z2V0LWZ1bGZpbGxtZW50.option.ZnVsZmlsbG1lbnRfaWQ.short_desc": {
+          "source": "The fulfillment ID to retrieve",
+          "message": "取得するフルフィルメントのID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Z2V0LWZ1bGZpbGxtZW50.option.d29ya3NwYWNlX2lk.display_name": {
+          "source": "Workspace ID",
+          "message": "ワークスペース ID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Z2V0LWZ1bGZpbGxtZW50.option.d29ya3NwYWNlX2lk.short_desc": {
+          "source": "ClickFunnels workspace ID",
+          "message": "ClickFunnelsワークスペースID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Z2V0LWZ1bGZpbGxtZW50.short_desc": {
+          "source": "Get a single fulfillment by ID",
+          "message": "IDで単一のフルフィルメントを取得します"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Z2V0LWZ1bm5lbA.desc": {
+          "source": "Retrieve a single funnel by ID from ClickFunnels",
+          "message": "ClickFunnelsからIDで単一のファネルを取得します"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Z2V0LWZ1bm5lbA.display_name": {
+          "source": "Get a Funnel",
+          "message": "ファネルを取得"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Z2V0LWZ1bm5lbA.option.ZnVubmVsX2lk.display_name": {
+          "source": "Funnel ID",
+          "message": "ファネルID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Z2V0LWZ1bm5lbA.option.ZnVubmVsX2lk.short_desc": {
+          "source": "The funnel ID to retrieve",
+          "message": "取得するファネルのID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Z2V0LWZ1bm5lbA.option.d29ya3NwYWNlX2lk.display_name": {
+          "source": "Workspace ID",
+          "message": "ワークスペース ID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Z2V0LWZ1bm5lbA.option.d29ya3NwYWNlX2lk.short_desc": {
+          "source": "ClickFunnels workspace ID",
+          "message": "ClickFunnelsワークスペースID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Z2V0LWZ1bm5lbA.short_desc": {
+          "source": "Get a single funnel by ID",
+          "message": "IDで単一のファネルを取得します"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Z2V0LWZvcm0.desc": {
+          "source": "Retrieve a single form by ID from ClickFunnels",
+          "message": "ClickFunnelsからIDで単一のフォームを取得します"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Z2V0LWZvcm0.display_name": {
+          "source": "Get a Form",
+          "message": "フォームを取得"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Z2V0LWZvcm0.option.Zm9ybV9pZA.display_name": {
+          "source": "Form ID",
+          "message": "フォームID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Z2V0LWZvcm0.option.Zm9ybV9pZA.short_desc": {
+          "source": "The form ID to retrieve",
+          "message": "取得するフォームのID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Z2V0LWZvcm0.option.d29ya3NwYWNlX2lk.display_name": {
+          "source": "Workspace ID",
+          "message": "ワークスペース ID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Z2V0LWZvcm0.option.d29ya3NwYWNlX2lk.short_desc": {
+          "source": "ClickFunnels workspace ID",
+          "message": "ClickFunnelsワークスペースID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Z2V0LWZvcm0.short_desc": {
+          "source": "Get a single form by ID",
+          "message": "IDで単一のフォームを取得します"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Z2V0LWZvcm0tc3VibWlzc2lvbg.desc": {
+          "source": "Retrieve a single form submission by ID from ClickFunnels",
+          "message": "ClickFunnelsからIDで単一のフォーム送信を取得します"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Z2V0LWZvcm0tc3VibWlzc2lvbg.display_name": {
+          "source": "Get a Form Submission",
+          "message": "フォーム送信を取得"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Z2V0LWZvcm0tc3VibWlzc2lvbg.option.c3VibWlzc2lvbl9pZA.display_name": {
+          "source": "Submission ID",
+          "message": "送信ID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Z2V0LWZvcm0tc3VibWlzc2lvbg.option.c3VibWlzc2lvbl9pZA.short_desc": {
+          "source": "The submission ID to retrieve",
+          "message": "取得する送信ID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Z2V0LWZvcm0tc3VibWlzc2lvbg.option.d29ya3NwYWNlX2lk.display_name": {
+          "source": "Workspace ID",
+          "message": "ワークスペース ID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Z2V0LWZvcm0tc3VibWlzc2lvbg.option.d29ya3NwYWNlX2lk.short_desc": {
+          "source": "ClickFunnels workspace ID",
+          "message": "ClickFunnelsワークスペースID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Z2V0LWZvcm0tc3VibWlzc2lvbg.short_desc": {
+          "source": "Get a single form submission by ID",
+          "message": "IDで単一のフォーム送信を取得します"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Z2V0LXByb2R1Y3Q.desc": {
+          "source": "Retrieve a single product by ID from ClickFunnels",
+          "message": "ClickFunnelsからIDで単一の商品を取得します"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Z2V0LXByb2R1Y3Q.display_name": {
+          "source": "Get a Product",
+          "message": "商品を取得"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Z2V0LXByb2R1Y3Q.option.cHJvZHVjdF9pZA.display_name": {
+          "source": "Product ID",
+          "message": "商品 ID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Z2V0LXByb2R1Y3Q.option.cHJvZHVjdF9pZA.short_desc": {
+          "source": "The product ID to retrieve",
+          "message": "取得する商品のID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Z2V0LXByb2R1Y3Q.option.d29ya3NwYWNlX2lk.display_name": {
+          "source": "Workspace ID",
+          "message": "ワークスペース ID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Z2V0LXByb2R1Y3Q.option.d29ya3NwYWNlX2lk.short_desc": {
+          "source": "ClickFunnels workspace ID",
+          "message": "ClickFunnelsワークスペースID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Z2V0LXByb2R1Y3Q.short_desc": {
+          "source": "Get a single product by ID",
+          "message": "IDで単一の商品を取得"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.ZGVsZXRlLWNvbnRhY3Q.desc": {
+          "source": "Delete a contact from ClickFunnels",
+          "message": "ClickFunnelsから連絡先を削除します"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.ZGVsZXRlLWNvbnRhY3Q.display_name": {
+          "source": "Delete a Contact",
+          "message": "連絡先を削除"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.ZGVsZXRlLWNvbnRhY3Q.option.Y29udGFjdF9pZA.desc": {
+          "source": "The unique identifier of the contact to delete",
+          "message": "削除する連絡先の一意の識別子"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.ZGVsZXRlLWNvbnRhY3Q.option.Y29udGFjdF9pZA.display_name": {
+          "source": "Contact ID",
+          "message": "連絡先ID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.ZGVsZXRlLWNvbnRhY3Q.option.Y29udGFjdF9pZA.short_desc": {
+          "source": "The contact to delete",
+          "message": "削除する連絡先"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.ZGVsZXRlLWNvbnRhY3Q.option.d29ya3NwYWNlX2lk.desc": {
+          "source": "The ClickFunnels workspace ID for workspace-scoped endpoints. You can find the workspace ID in the ClickFunnels admin panel URL or by calling the `GET /teams/{team_id}/workspaces` endpoint",
+          "message": "ワークスペーススコープのエンドポイント用のClickFunnelsワークスペースID。ワークスペースIDはClickFunnels管理パネルのURLで確認するか、`GET /teams/{team_id}/workspaces`エンドポイントを呼び出すことで取得できます"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.ZGVsZXRlLWNvbnRhY3Q.option.d29ya3NwYWNlX2lk.display_name": {
+          "source": "Workspace ID",
+          "message": "ワークスペース ID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.ZGVsZXRlLWNvbnRhY3Q.option.d29ya3NwYWNlX2lk.short_desc": {
+          "source": "ClickFunnels workspace ID",
+          "message": "ClickFunnelsワークスペースID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.ZGVsZXRlLWNvbnRhY3Q.short_desc": {
+          "source": "Delete a contact",
+          "message": "連絡先の削除"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.ZGVsZXRlLWNvbnRhY3QtdGFn.desc": {
+          "source": "Delete a contact tag from ClickFunnels",
+          "message": "ClickFunnelsから連絡先タグを削除します"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.ZGVsZXRlLWNvbnRhY3QtdGFn.display_name": {
+          "source": "Delete a Contact Tag",
+          "message": "連絡先タグを削除"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.ZGVsZXRlLWNvbnRhY3QtdGFn.option.d29ya3NwYWNlX2lk.desc": {
+          "source": "The ClickFunnels workspace ID for workspace-scoped endpoints. You can find the workspace ID in the ClickFunnels admin panel URL or by calling the `GET /teams/{team_id}/workspaces` endpoint",
+          "message": "ワークスペーススコープのエンドポイント用のClickFunnelsワークスペースID。ワークスペースIDはClickFunnels管理パネルのURLで確認するか、`GET /teams/{team_id}/workspaces`エンドポイントを呼び出すことで取得できます"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.ZGVsZXRlLWNvbnRhY3QtdGFn.option.d29ya3NwYWNlX2lk.display_name": {
+          "source": "Workspace ID",
+          "message": "ワークスペース ID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.ZGVsZXRlLWNvbnRhY3QtdGFn.option.d29ya3NwYWNlX2lk.short_desc": {
+          "source": "ClickFunnels workspace ID",
+          "message": "ClickFunnelsワークスペースID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.ZGVsZXRlLWNvbnRhY3QtdGFn.option.dGFnX2lk.desc": {
+          "source": "The unique identifier of the tag to delete",
+          "message": "削除するタグの一意の識別子"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.ZGVsZXRlLWNvbnRhY3QtdGFn.option.dGFnX2lk.display_name": {
+          "source": "Tag ID",
+          "message": "タグ ID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.ZGVsZXRlLWNvbnRhY3QtdGFn.option.dGFnX2lk.short_desc": {
+          "source": "The tag to delete",
+          "message": "削除するタグ"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.ZGVsZXRlLWNvbnRhY3QtdGFn.short_desc": {
+          "source": "Delete a contact tag",
+          "message": "コンタクトタグを削除"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.ZGVsZXRlLWZ1bGZpbGxtZW50.desc": {
+          "source": "Delete a fulfillment from ClickFunnels",
+          "message": "ClickFunnelsからフルフィルメントを削除"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.ZGVsZXRlLWZ1bGZpbGxtZW50.display_name": {
+          "source": "Delete a Fulfillment",
+          "message": "フルフィルメントを削除"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.ZGVsZXRlLWZ1bGZpbGxtZW50.option.ZnVsZmlsbG1lbnRfaWQ.desc": {
+          "source": "The unique identifier of the fulfillment to delete",
+          "message": "削除するフルフィルメントの一意の識別子"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.ZGVsZXRlLWZ1bGZpbGxtZW50.option.ZnVsZmlsbG1lbnRfaWQ.display_name": {
+          "source": "Fulfillment ID",
+          "message": "フルフィルメントID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.ZGVsZXRlLWZ1bGZpbGxtZW50.option.ZnVsZmlsbG1lbnRfaWQ.short_desc": {
+          "source": "The fulfillment to delete",
+          "message": "削除するフルフィルメント"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.ZGVsZXRlLWZ1bGZpbGxtZW50.option.d29ya3NwYWNlX2lk.desc": {
+          "source": "The ClickFunnels workspace ID for workspace-scoped endpoints. You can find the workspace ID in the ClickFunnels admin panel URL or by calling the `GET /teams/{team_id}/workspaces` endpoint",
+          "message": "ワークスペーススコープのエンドポイント用のClickFunnelsワークスペースID。ワークスペースIDはClickFunnels管理パネルのURLで確認するか、`GET /teams/{team_id}/workspaces`エンドポイントを呼び出すことで取得できます"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.ZGVsZXRlLWZ1bGZpbGxtZW50.option.d29ya3NwYWNlX2lk.display_name": {
+          "source": "Workspace ID",
+          "message": "ワークスペース ID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.ZGVsZXRlLWZ1bGZpbGxtZW50.option.d29ya3NwYWNlX2lk.short_desc": {
+          "source": "ClickFunnels workspace ID",
+          "message": "ClickFunnelsワークスペースID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.ZGVsZXRlLWZ1bGZpbGxtZW50.short_desc": {
+          "source": "Delete a fulfillment",
+          "message": "フルフィルメントを削除"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.ZGVsZXRlLWZvcm0.desc": {
+          "source": "Delete a form from ClickFunnels",
+          "message": "ClickFunnelsからフォームを削除"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.ZGVsZXRlLWZvcm0.display_name": {
+          "source": "Delete a Form",
+          "message": "フォームを削除"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.ZGVsZXRlLWZvcm0.option.Zm9ybV9pZA.desc": {
+          "source": "The unique identifier of the form to delete",
+          "message": "削除するフォームの一意の識別子"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.ZGVsZXRlLWZvcm0.option.Zm9ybV9pZA.display_name": {
+          "source": "Form ID",
+          "message": "フォームID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.ZGVsZXRlLWZvcm0.option.Zm9ybV9pZA.short_desc": {
+          "source": "The form to delete",
+          "message": "削除するフォーム"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.ZGVsZXRlLWZvcm0.option.d29ya3NwYWNlX2lk.desc": {
+          "source": "The ClickFunnels workspace ID for workspace-scoped endpoints. You can find the workspace ID in the ClickFunnels admin panel URL or by calling the `GET /teams/{team_id}/workspaces` endpoint",
+          "message": "ワークスペーススコープのエンドポイント用のClickFunnelsワークスペースID。ワークスペースIDはClickFunnels管理パネルのURLで確認するか、`GET /teams/{team_id}/workspaces`エンドポイントを呼び出すことで取得できます"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.ZGVsZXRlLWZvcm0.option.d29ya3NwYWNlX2lk.display_name": {
+          "source": "Workspace ID",
+          "message": "ワークスペース ID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.ZGVsZXRlLWZvcm0.option.d29ya3NwYWNlX2lk.short_desc": {
+          "source": "ClickFunnels workspace ID",
+          "message": "ClickFunnelsワークスペースID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.ZGVsZXRlLWZvcm0.short_desc": {
+          "source": "Delete a form",
+          "message": "フォームを削除"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.ZW5yb2xsbWVudC1jcmVhdGVk.desc": {
+          "source": "Fires when a new course enrollment is created in ClickFunnels",
+          "message": "ClickFunnelsで新しいコース登録が作成されたときにトリガーされます"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.ZW5yb2xsbWVudC1jcmVhdGVk.display_name": {
+          "source": "Enrollment Created",
+          "message": "登録作成"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.ZW5yb2xsbWVudC1jcmVhdGVk.short_desc": {
+          "source": "Trigger when a new enrollment is created",
+          "message": "新しい登録が作成されたときにトリガー"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Zm9ybS1zdWJtaXNzaW9uLWNyZWF0ZWQ.desc": {
+          "source": "Fires when a form is submitted in ClickFunnels",
+          "message": "ClickFunnelsでフォームが送信されたときにトリガーされます"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Zm9ybS1zdWJtaXNzaW9uLWNyZWF0ZWQ.display_name": {
+          "source": "Form Submission Created",
+          "message": "フォーム送信作成"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.Zm9ybS1zdWJtaXNzaW9uLWNyZWF0ZWQ.short_desc": {
+          "source": "Trigger when a new form submission is created",
+          "message": "新しいフォーム送信が作成されたときにトリガー"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.ZnVsZmlsbG1lbnQtY3JlYXRlZA.desc": {
+          "source": "Fires when a new fulfillment is created in ClickFunnels",
+          "message": "ClickFunnelsで新しいフルフィルメントが作成されたときにトリガーされます"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.ZnVsZmlsbG1lbnQtY3JlYXRlZA.display_name": {
+          "source": "Fulfillment Created",
+          "message": "フルフィルメント作成"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.ZnVsZmlsbG1lbnQtY3JlYXRlZA.short_desc": {
+          "source": "Trigger when a new fulfillment is created",
+          "message": "新しいフルフィルメントが作成されたときにトリガー"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.b3JkZXItY29tcGxldGVk.desc": {
+          "source": "Fires when an order is completed in ClickFunnels",
+          "message": "ClickFunnelsで注文が完了したときにトリガーされます"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.b3JkZXItY29tcGxldGVk.display_name": {
+          "source": "Order Completed",
+          "message": "注文完了"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.b3JkZXItY29tcGxldGVk.short_desc": {
+          "source": "Trigger when an order is completed",
+          "message": "注文が完了したときにトリガー"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.b3JkZXItY3JlYXRlZA.desc": {
+          "source": "Fires when a new order is created in ClickFunnels",
+          "message": "ClickFunnelsで新しい注文が作成されたときにトリガーされます"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.b3JkZXItY3JlYXRlZA.display_name": {
+          "source": "Order Created",
+          "message": "注文が作成されたとき"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.b3JkZXItY3JlYXRlZA.short_desc": {
+          "source": "Trigger when a new order is created",
+          "message": "新しい注文が作成されたときにトリガー"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.b3JkZXItdXBkYXRlZA.desc": {
+          "source": "Fires when an order is updated in ClickFunnels",
+          "message": "ClickFunnelsで注文が更新されたときにトリガーされます"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.b3JkZXItdXBkYXRlZA.display_name": {
+          "source": "Order Updated",
+          "message": "注文更新"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.b3JkZXItdXBkYXRlZA.short_desc": {
+          "source": "Trigger when an order is updated",
+          "message": "注文が更新されたときにトリガーします"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1hcHBsaWVkLXRhZ3M.desc": {
+          "source": "List applied tags in ClickFunnels",
+          "message": "ClickFunnelsの適用済みタグを一覧表示"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1hcHBsaWVkLXRhZ3M.display_name": {
+          "source": "List Applied Tags",
+          "message": "適用済みタグを一覧表示"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1hcHBsaWVkLXRhZ3M.option.Y29udGFjdF9pZA.display_name": {
+          "source": "Contact ID",
+          "message": "連絡先ID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1hcHBsaWVkLXRhZ3M.option.Y29udGFjdF9pZA.short_desc": {
+          "source": "Filter by contact",
+          "message": "コンタクトで絞り込み"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1hcHBsaWVkLXRhZ3M.option.YWZ0ZXI.display_name": {
+          "source": "After Cursor",
+          "message": "カーソル以降"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1hcHBsaWVkLXRhZ3M.option.YWZ0ZXI.short_desc": {
+          "source": "Pagination cursor",
+          "message": "ページネーションカーソル"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1hcHBsaWVkLXRhZ3M.option.YXBwbGllZF90YWdfaWQ.display_name": {
+          "source": "Applied Tag ID",
+          "message": "適用済みタグID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1hcHBsaWVkLXRhZ3M.option.YXBwbGllZF90YWdfaWQ.short_desc": {
+          "source": "Filter by applied tag ID",
+          "message": "適用済みタグIDで絞り込み"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1hcHBsaWVkLXRhZ3M.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "上限"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1hcHBsaWVkLXRhZ3M.option.bGltaXQ.short_desc": {
+          "source": "Maximum results",
+          "message": "最大結果数"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1hcHBsaWVkLXRhZ3M.option.c29ydF9vcmRlcg.allowed-value.c3RyaW5nOmFzYw.display_name": {
+          "source": "Ascending",
+          "message": "昇順"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1hcHBsaWVkLXRhZ3M.option.c29ydF9vcmRlcg.allowed-value.c3RyaW5nOmRlc2M.display_name": {
+          "source": "Descending",
+          "message": "降順"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1hcHBsaWVkLXRhZ3M.option.c29ydF9vcmRlcg.display_name": {
+          "source": "Sort Order",
+          "message": "並べ替え順序"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1hcHBsaWVkLXRhZ3M.option.c29ydF9vcmRlcg.short_desc": {
+          "source": "Sort order",
+          "message": "並べ替え順序"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1hcHBsaWVkLXRhZ3M.option.d29ya3NwYWNlX2lk.display_name": {
+          "source": "Workspace ID",
+          "message": "ワークスペース ID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1hcHBsaWVkLXRhZ3M.option.d29ya3NwYWNlX2lk.short_desc": {
+          "source": "ClickFunnels workspace ID",
+          "message": "ClickFunnelsワークスペースID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1hcHBsaWVkLXRhZ3M.option.dGFnX2lk.display_name": {
+          "source": "Tag ID",
+          "message": "タグ ID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1hcHBsaWVkLXRhZ3M.option.dGFnX2lk.short_desc": {
+          "source": "Filter by tag",
+          "message": "タグで絞り込み"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1hcHBsaWVkLXRhZ3M.short_desc": {
+          "source": "List all applied tags",
+          "message": "すべての適用済みタグを一覧表示"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1jb250YWN0LXRhZ3M.desc": {
+          "source": "List contact tags in ClickFunnels",
+          "message": "ClickFunnelsのコンタクトタグを一覧表示"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1jb250YWN0LXRhZ3M.display_name": {
+          "source": "List Contact Tags",
+          "message": "コンタクトタグを一覧表示"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1jb250YWN0LXRhZ3M.option.YWZ0ZXI.display_name": {
+          "source": "After Cursor",
+          "message": "カーソル以降"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1jb250YWN0LXRhZ3M.option.YWZ0ZXI.short_desc": {
+          "source": "Pagination cursor",
+          "message": "ページネーションカーソル"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1jb250YWN0LXRhZ3M.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "上限"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1jb250YWN0LXRhZ3M.option.bGltaXQ.short_desc": {
+          "source": "Maximum results",
+          "message": "最大結果数"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1jb250YWN0LXRhZ3M.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "名前"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1jb250YWN0LXRhZ3M.option.bmFtZQ.short_desc": {
+          "source": "Filter by name",
+          "message": "名前で絞り込み"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1jb250YWN0LXRhZ3M.option.c29ydF9vcmRlcg.allowed-value.c3RyaW5nOmFzYw.display_name": {
+          "source": "Ascending",
+          "message": "昇順"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1jb250YWN0LXRhZ3M.option.c29ydF9vcmRlcg.allowed-value.c3RyaW5nOmRlc2M.display_name": {
+          "source": "Descending",
+          "message": "降順"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1jb250YWN0LXRhZ3M.option.c29ydF9vcmRlcg.display_name": {
+          "source": "Sort Order",
+          "message": "並べ替え順序"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1jb250YWN0LXRhZ3M.option.c29ydF9vcmRlcg.short_desc": {
+          "source": "Sort order",
+          "message": "並べ替え順序"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1jb250YWN0LXRhZ3M.option.d29ya3NwYWNlX2lk.display_name": {
+          "source": "Workspace ID",
+          "message": "ワークスペース ID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1jb250YWN0LXRhZ3M.option.d29ya3NwYWNlX2lk.short_desc": {
+          "source": "ClickFunnels workspace ID",
+          "message": "ClickFunnelsワークスペースID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1jb250YWN0LXRhZ3M.option.dGFnX2lk.display_name": {
+          "source": "Tag ID",
+          "message": "タグ ID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1jb250YWN0LXRhZ3M.option.dGFnX2lk.short_desc": {
+          "source": "Filter by tag ID",
+          "message": "タグIDで絞り込み"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1jb250YWN0LXRhZ3M.short_desc": {
+          "source": "List all contact tags",
+          "message": "すべてのコンタクトタグを一覧表示"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1jb250YWN0cw.desc": {
+          "source": "List contacts in ClickFunnels with optional filtering",
+          "message": "ClickFunnelsのコンタクトを任意のフィルターで一覧表示"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1jb250YWN0cw.display_name": {
+          "source": "List Contacts",
+          "message": "連絡先一覧"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1jb250YWN0cw.option.Y29udGFjdF9pZA.display_name": {
+          "source": "Contact ID",
+          "message": "連絡先ID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1jb250YWN0cw.option.Y29udGFjdF9pZA.short_desc": {
+          "source": "Filter by contact ID",
+          "message": "連絡先IDで絞り込み"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1jb250YWN0cw.option.YWZ0ZXI.display_name": {
+          "source": "After Cursor",
+          "message": "カーソル以降"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1jb250YWN0cw.option.YWZ0ZXI.short_desc": {
+          "source": "Pagination cursor",
+          "message": "ページネーションカーソル"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1jb250YWN0cw.option.ZW1haWw.display_name": {
+          "source": "Email",
+          "message": "メール"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1jb250YWN0cw.option.ZW1haWw.short_desc": {
+          "source": "Filter by email",
+          "message": "メールアドレスで絞り込み"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1jb250YWN0cw.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "上限"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1jb250YWN0cw.option.bGltaXQ.short_desc": {
+          "source": "Maximum results",
+          "message": "最大結果数"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1jb250YWN0cw.option.c29ydF9vcmRlcg.allowed-value.c3RyaW5nOmFzYw.display_name": {
+          "source": "Ascending",
+          "message": "昇順"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1jb250YWN0cw.option.c29ydF9vcmRlcg.allowed-value.c3RyaW5nOmRlc2M.display_name": {
+          "source": "Descending",
+          "message": "降順"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1jb250YWN0cw.option.c29ydF9vcmRlcg.display_name": {
+          "source": "Sort Order",
+          "message": "並べ替え順序"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1jb250YWN0cw.option.c29ydF9vcmRlcg.short_desc": {
+          "source": "Sort order",
+          "message": "並べ替え順序"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1jb250YWN0cw.option.d29ya3NwYWNlX2lk.display_name": {
+          "source": "Workspace ID",
+          "message": "ワークスペース ID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1jb250YWN0cw.option.d29ya3NwYWNlX2lk.short_desc": {
+          "source": "ClickFunnels workspace ID",
+          "message": "ClickFunnelsワークスペースID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1jb250YWN0cw.short_desc": {
+          "source": "List all contacts",
+          "message": "すべてのコンタクトを一覧表示"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1jb3Vyc2Vz.desc": {
+          "source": "List courses in ClickFunnels",
+          "message": "ClickFunnelsのコースを一覧表示"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1jb3Vyc2Vz.display_name": {
+          "source": "List Courses",
+          "message": "コースを一覧表示"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1jb3Vyc2Vz.option.Y291cnNlX2lk.display_name": {
+          "source": "Course ID",
+          "message": "コースID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1jb3Vyc2Vz.option.Y291cnNlX2lk.short_desc": {
+          "source": "Filter by course ID",
+          "message": "コースIDで絞り込み"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1jb3Vyc2Vz.option.YWZ0ZXI.display_name": {
+          "source": "After Cursor",
+          "message": "カーソル以降"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1jb3Vyc2Vz.option.YWZ0ZXI.short_desc": {
+          "source": "Pagination cursor",
+          "message": "ページネーションカーソル"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1jb3Vyc2Vz.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "上限"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1jb3Vyc2Vz.option.bGltaXQ.short_desc": {
+          "source": "Maximum results",
+          "message": "最大結果数"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1jb3Vyc2Vz.option.c29ydF9vcmRlcg.allowed-value.c3RyaW5nOmFzYw.display_name": {
+          "source": "Ascending",
+          "message": "昇順"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1jb3Vyc2Vz.option.c29ydF9vcmRlcg.allowed-value.c3RyaW5nOmRlc2M.display_name": {
+          "source": "Descending",
+          "message": "降順"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1jb3Vyc2Vz.option.c29ydF9vcmRlcg.display_name": {
+          "source": "Sort Order",
+          "message": "並べ替え順序"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1jb3Vyc2Vz.option.c29ydF9vcmRlcg.short_desc": {
+          "source": "Sort order",
+          "message": "並べ替え順序"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1jb3Vyc2Vz.option.d29ya3NwYWNlX2lk.display_name": {
+          "source": "Workspace ID",
+          "message": "ワークスペース ID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1jb3Vyc2Vz.option.d29ya3NwYWNlX2lk.short_desc": {
+          "source": "ClickFunnels workspace ID",
+          "message": "ClickFunnelsワークスペースID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1jb3Vyc2Vz.short_desc": {
+          "source": "List all courses",
+          "message": "すべてのコースを一覧表示"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1lbnJvbGxtZW50cw.desc": {
+          "source": "List course enrollments in ClickFunnels",
+          "message": "ClickFunnelsのコース登録を一覧表示"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1lbnJvbGxtZW50cw.display_name": {
+          "source": "List Enrollments",
+          "message": "登録を一覧表示"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1lbnJvbGxtZW50cw.option.Y291cnNlX2lk.display_name": {
+          "source": "Course ID",
+          "message": "コースID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1lbnJvbGxtZW50cw.option.Y291cnNlX2lk.short_desc": {
+          "source": "Filter by course",
+          "message": "コースで絞り込み"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1lbnJvbGxtZW50cw.option.YWZ0ZXI.display_name": {
+          "source": "After Cursor",
+          "message": "カーソル以降"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1lbnJvbGxtZW50cw.option.YWZ0ZXI.short_desc": {
+          "source": "Pagination cursor",
+          "message": "ページネーションカーソル"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1lbnJvbGxtZW50cw.option.ZW5yb2xsbWVudF9pZA.display_name": {
+          "source": "Enrollment ID",
+          "message": "受講登録ID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1lbnJvbGxtZW50cw.option.ZW5yb2xsbWVudF9pZA.short_desc": {
+          "source": "Filter by enrollment ID",
+          "message": "登録IDで絞り込み"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1lbnJvbGxtZW50cw.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "上限"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1lbnJvbGxtZW50cw.option.bGltaXQ.short_desc": {
+          "source": "Maximum results",
+          "message": "最大結果数"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1lbnJvbGxtZW50cw.option.c29ydF9vcmRlcg.allowed-value.c3RyaW5nOmFzYw.display_name": {
+          "source": "Ascending",
+          "message": "昇順"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1lbnJvbGxtZW50cw.option.c29ydF9vcmRlcg.allowed-value.c3RyaW5nOmRlc2M.display_name": {
+          "source": "Descending",
+          "message": "降順"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1lbnJvbGxtZW50cw.option.c29ydF9vcmRlcg.display_name": {
+          "source": "Sort Order",
+          "message": "並べ替え順序"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1lbnJvbGxtZW50cw.option.c29ydF9vcmRlcg.short_desc": {
+          "source": "Sort order",
+          "message": "並べ替え順序"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1lbnJvbGxtZW50cw.option.d29ya3NwYWNlX2lk.display_name": {
+          "source": "Workspace ID",
+          "message": "ワークスペース ID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1lbnJvbGxtZW50cw.option.d29ya3NwYWNlX2lk.short_desc": {
+          "source": "ClickFunnels workspace ID",
+          "message": "ClickFunnelsワークスペースID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1lbnJvbGxtZW50cw.short_desc": {
+          "source": "List all enrollments",
+          "message": "すべての登録を一覧表示"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1mb3JtLXN1Ym1pc3Npb25z.desc": {
+          "source": "List form submissions in ClickFunnels",
+          "message": "ClickFunnelsのフォーム送信を一覧表示"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1mb3JtLXN1Ym1pc3Npb25z.display_name": {
+          "source": "List Form Submissions",
+          "message": "フォーム送信を一覧表示"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1mb3JtLXN1Ym1pc3Npb25z.option.YWZ0ZXI.display_name": {
+          "source": "After Cursor",
+          "message": "カーソル以降"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1mb3JtLXN1Ym1pc3Npb25z.option.YWZ0ZXI.short_desc": {
+          "source": "Pagination cursor",
+          "message": "ページネーションカーソル"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1mb3JtLXN1Ym1pc3Npb25z.option.Zm9ybV9pZA.display_name": {
+          "source": "Form ID",
+          "message": "フォームID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1mb3JtLXN1Ym1pc3Npb25z.option.Zm9ybV9pZA.short_desc": {
+          "source": "Filter by form",
+          "message": "フォームで絞り込み"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1mb3JtLXN1Ym1pc3Npb25z.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "上限"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1mb3JtLXN1Ym1pc3Npb25z.option.bGltaXQ.short_desc": {
+          "source": "Maximum results",
+          "message": "最大結果数"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1mb3JtLXN1Ym1pc3Npb25z.option.c29ydF9vcmRlcg.allowed-value.c3RyaW5nOmFzYw.display_name": {
+          "source": "Ascending",
+          "message": "昇順"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1mb3JtLXN1Ym1pc3Npb25z.option.c29ydF9vcmRlcg.allowed-value.c3RyaW5nOmRlc2M.display_name": {
+          "source": "Descending",
+          "message": "降順"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1mb3JtLXN1Ym1pc3Npb25z.option.c29ydF9vcmRlcg.display_name": {
+          "source": "Sort Order",
+          "message": "並べ替え順序"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1mb3JtLXN1Ym1pc3Npb25z.option.c29ydF9vcmRlcg.short_desc": {
+          "source": "Sort order",
+          "message": "並べ替え順序"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1mb3JtLXN1Ym1pc3Npb25z.option.c3VibWlzc2lvbl9pZA.display_name": {
+          "source": "Submission ID",
+          "message": "送信ID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1mb3JtLXN1Ym1pc3Npb25z.option.c3VibWlzc2lvbl9pZA.short_desc": {
+          "source": "Filter by submission ID",
+          "message": "送信IDで絞り込み"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1mb3JtLXN1Ym1pc3Npb25z.option.d29ya3NwYWNlX2lk.display_name": {
+          "source": "Workspace ID",
+          "message": "ワークスペース ID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1mb3JtLXN1Ym1pc3Npb25z.option.d29ya3NwYWNlX2lk.short_desc": {
+          "source": "ClickFunnels workspace ID",
+          "message": "ClickFunnelsワークスペースID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1mb3JtLXN1Ym1pc3Npb25z.short_desc": {
+          "source": "List all form submissions",
+          "message": "すべてのフォーム送信を一覧表示"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1mb3Jtcw.desc": {
+          "source": "List forms in ClickFunnels",
+          "message": "ClickFunnelsのフォームを一覧表示"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1mb3Jtcw.display_name": {
+          "source": "List Forms",
+          "message": "フォーム一覧"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1mb3Jtcw.option.YWZ0ZXI.display_name": {
+          "source": "After Cursor",
+          "message": "カーソル以降"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1mb3Jtcw.option.YWZ0ZXI.short_desc": {
+          "source": "Pagination cursor",
+          "message": "ページネーションカーソル"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1mb3Jtcw.option.Zm9ybV9pZA.display_name": {
+          "source": "Form ID",
+          "message": "フォームID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1mb3Jtcw.option.Zm9ybV9pZA.short_desc": {
+          "source": "Filter by form ID",
+          "message": "フォームIDで絞り込み"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1mb3Jtcw.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "上限"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1mb3Jtcw.option.bGltaXQ.short_desc": {
+          "source": "Maximum results",
+          "message": "最大結果数"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1mb3Jtcw.option.c29ydF9vcmRlcg.allowed-value.c3RyaW5nOmFzYw.display_name": {
+          "source": "Ascending",
+          "message": "昇順"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1mb3Jtcw.option.c29ydF9vcmRlcg.allowed-value.c3RyaW5nOmRlc2M.display_name": {
+          "source": "Descending",
+          "message": "降順"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1mb3Jtcw.option.c29ydF9vcmRlcg.display_name": {
+          "source": "Sort Order",
+          "message": "並べ替え順序"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1mb3Jtcw.option.c29ydF9vcmRlcg.short_desc": {
+          "source": "Sort order",
+          "message": "並べ替え順序"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1mb3Jtcw.option.d29ya3NwYWNlX2lk.display_name": {
+          "source": "Workspace ID",
+          "message": "ワークスペース ID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1mb3Jtcw.option.d29ya3NwYWNlX2lk.short_desc": {
+          "source": "ClickFunnels workspace ID",
+          "message": "ClickFunnelsワークスペースID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1mb3Jtcw.short_desc": {
+          "source": "List all forms",
+          "message": "すべてのフォームを一覧表示"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1mdW5uZWxz.desc": {
+          "source": "List funnels in ClickFunnels",
+          "message": "ClickFunnelsのファネルを一覧表示"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1mdW5uZWxz.display_name": {
+          "source": "List Funnels",
+          "message": "ファネルを一覧表示"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1mdW5uZWxz.option.YWZ0ZXI.display_name": {
+          "source": "After Cursor",
+          "message": "カーソル以降"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1mdW5uZWxz.option.YWZ0ZXI.short_desc": {
+          "source": "Pagination cursor",
+          "message": "ページネーションカーソル"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1mdW5uZWxz.option.ZnVubmVsX2lk.display_name": {
+          "source": "Funnel ID",
+          "message": "ファネルID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1mdW5uZWxz.option.ZnVubmVsX2lk.short_desc": {
+          "source": "Filter by funnel ID",
+          "message": "ファネルIDで絞り込み"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1mdW5uZWxz.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "上限"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1mdW5uZWxz.option.bGltaXQ.short_desc": {
+          "source": "Maximum results",
+          "message": "最大結果数"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1mdW5uZWxz.option.c29ydF9vcmRlcg.allowed-value.c3RyaW5nOmFzYw.display_name": {
+          "source": "Ascending",
+          "message": "昇順"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1mdW5uZWxz.option.c29ydF9vcmRlcg.allowed-value.c3RyaW5nOmRlc2M.display_name": {
+          "source": "Descending",
+          "message": "降順"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1mdW5uZWxz.option.c29ydF9vcmRlcg.display_name": {
+          "source": "Sort Order",
+          "message": "並べ替え順序"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1mdW5uZWxz.option.c29ydF9vcmRlcg.short_desc": {
+          "source": "Sort order",
+          "message": "並べ替え順序"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1mdW5uZWxz.option.d29ya3NwYWNlX2lk.display_name": {
+          "source": "Workspace ID",
+          "message": "ワークスペース ID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1mdW5uZWxz.option.d29ya3NwYWNlX2lk.short_desc": {
+          "source": "ClickFunnels workspace ID",
+          "message": "ClickFunnelsワークスペースID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1mdW5uZWxz.short_desc": {
+          "source": "List all funnels",
+          "message": "すべてのファネルを一覧表示"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1mdWxmaWxsbWVudHM.desc": {
+          "source": "List fulfillments in ClickFunnels",
+          "message": "ClickFunnelsのフルフィルメントを一覧表示"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1mdWxmaWxsbWVudHM.display_name": {
+          "source": "List Fulfillments",
+          "message": "フルフィルメントを一覧表示"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1mdWxmaWxsbWVudHM.option.Y29udGFjdF9pZA.display_name": {
+          "source": "Contact ID",
+          "message": "連絡先ID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1mdWxmaWxsbWVudHM.option.Y29udGFjdF9pZA.short_desc": {
+          "source": "Filter by contact",
+          "message": "コンタクトで絞り込み"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1mdWxmaWxsbWVudHM.option.YWZ0ZXI.display_name": {
+          "source": "After Cursor",
+          "message": "カーソル以降"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1mdWxmaWxsbWVudHM.option.YWZ0ZXI.short_desc": {
+          "source": "Pagination cursor",
+          "message": "ページネーションカーソル"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1mdWxmaWxsbWVudHM.option.ZnVsZmlsbG1lbnRfaWQ.display_name": {
+          "source": "Fulfillment ID",
+          "message": "フルフィルメントID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1mdWxmaWxsbWVudHM.option.ZnVsZmlsbG1lbnRfaWQ.short_desc": {
+          "source": "Filter by fulfillment ID",
+          "message": "フルフィルメントIDで絞り込み"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1mdWxmaWxsbWVudHM.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "上限"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1mdWxmaWxsbWVudHM.option.bGltaXQ.short_desc": {
+          "source": "Maximum results",
+          "message": "最大結果数"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1mdWxmaWxsbWVudHM.option.c29ydF9vcmRlcg.allowed-value.c3RyaW5nOmFzYw.display_name": {
+          "source": "Ascending",
+          "message": "昇順"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1mdWxmaWxsbWVudHM.option.c29ydF9vcmRlcg.allowed-value.c3RyaW5nOmRlc2M.display_name": {
+          "source": "Descending",
+          "message": "降順"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1mdWxmaWxsbWVudHM.option.c29ydF9vcmRlcg.display_name": {
+          "source": "Sort Order",
+          "message": "並べ替え順序"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1mdWxmaWxsbWVudHM.option.c29ydF9vcmRlcg.short_desc": {
+          "source": "Sort order",
+          "message": "並べ替え順序"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1mdWxmaWxsbWVudHM.option.d29ya3NwYWNlX2lk.display_name": {
+          "source": "Workspace ID",
+          "message": "ワークスペース ID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1mdWxmaWxsbWVudHM.option.d29ya3NwYWNlX2lk.short_desc": {
+          "source": "ClickFunnels workspace ID",
+          "message": "ClickFunnelsワークスペースID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1mdWxmaWxsbWVudHM.short_desc": {
+          "source": "List all fulfillments",
+          "message": "すべてのフルフィルメントを一覧表示"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1vcmRlcnM.desc": {
+          "source": "List orders in ClickFunnels",
+          "message": "ClickFunnels の注文を一覧表示"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1vcmRlcnM.display_name": {
+          "source": "List Orders",
+          "message": "注文の一覧取得"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1vcmRlcnM.option.Y29udGFjdF9pZA.display_name": {
+          "source": "Contact ID",
+          "message": "連絡先ID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1vcmRlcnM.option.Y29udGFjdF9pZA.short_desc": {
+          "source": "Filter by contact",
+          "message": "コンタクトで絞り込み"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1vcmRlcnM.option.YWZ0ZXI.display_name": {
+          "source": "After Cursor",
+          "message": "カーソル以降"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1vcmRlcnM.option.YWZ0ZXI.short_desc": {
+          "source": "Pagination cursor",
+          "message": "ページネーションカーソル"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1vcmRlcnM.option.b3JkZXJfaWQ.display_name": {
+          "source": "Order ID",
+          "message": "注文 ID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1vcmRlcnM.option.b3JkZXJfaWQ.short_desc": {
+          "source": "Filter by order ID",
+          "message": "注文IDで絞り込み"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1vcmRlcnM.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "上限"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1vcmRlcnM.option.bGltaXQ.short_desc": {
+          "source": "Maximum results",
+          "message": "最大結果数"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1vcmRlcnM.option.c29ydF9vcmRlcg.allowed-value.c3RyaW5nOmFzYw.display_name": {
+          "source": "Ascending",
+          "message": "昇順"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1vcmRlcnM.option.c29ydF9vcmRlcg.allowed-value.c3RyaW5nOmRlc2M.display_name": {
+          "source": "Descending",
+          "message": "降順"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1vcmRlcnM.option.c29ydF9vcmRlcg.display_name": {
+          "source": "Sort Order",
+          "message": "並べ替え順序"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1vcmRlcnM.option.c29ydF9vcmRlcg.short_desc": {
+          "source": "Sort order",
+          "message": "並べ替え順序"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1vcmRlcnM.option.d29ya3NwYWNlX2lk.display_name": {
+          "source": "Workspace ID",
+          "message": "ワークスペース ID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1vcmRlcnM.option.d29ya3NwYWNlX2lk.short_desc": {
+          "source": "ClickFunnels workspace ID",
+          "message": "ClickFunnelsワークスペースID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1vcmRlcnM.short_desc": {
+          "source": "List all orders",
+          "message": "すべての注文を一覧表示"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1wcm9kdWN0cw.desc": {
+          "source": "List products in ClickFunnels",
+          "message": "ClickFunnels の商品を一覧表示"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1wcm9kdWN0cw.display_name": {
+          "source": "List Products",
+          "message": "商品一覧"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1wcm9kdWN0cw.option.YWZ0ZXI.display_name": {
+          "source": "After Cursor",
+          "message": "カーソル以降"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1wcm9kdWN0cw.option.YWZ0ZXI.short_desc": {
+          "source": "Pagination cursor",
+          "message": "ページネーションカーソル"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1wcm9kdWN0cw.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "上限"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1wcm9kdWN0cw.option.bGltaXQ.short_desc": {
+          "source": "Maximum results",
+          "message": "最大結果数"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1wcm9kdWN0cw.option.c29ydF9vcmRlcg.allowed-value.c3RyaW5nOmFzYw.display_name": {
+          "source": "Ascending",
+          "message": "昇順"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1wcm9kdWN0cw.option.c29ydF9vcmRlcg.allowed-value.c3RyaW5nOmRlc2M.display_name": {
+          "source": "Descending",
+          "message": "降順"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1wcm9kdWN0cw.option.c29ydF9vcmRlcg.display_name": {
+          "source": "Sort Order",
+          "message": "並べ替え順序"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1wcm9kdWN0cw.option.c29ydF9vcmRlcg.short_desc": {
+          "source": "Sort order",
+          "message": "並べ替え順序"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1wcm9kdWN0cw.option.cHJvZHVjdF9pZA.display_name": {
+          "source": "Product ID",
+          "message": "商品 ID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1wcm9kdWN0cw.option.cHJvZHVjdF9pZA.short_desc": {
+          "source": "Filter by product ID",
+          "message": "商品IDで絞り込み"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1wcm9kdWN0cw.option.d29ya3NwYWNlX2lk.display_name": {
+          "source": "Workspace ID",
+          "message": "ワークスペース ID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1wcm9kdWN0cw.option.d29ya3NwYWNlX2lk.short_desc": {
+          "source": "ClickFunnels workspace ID",
+          "message": "ClickFunnelsワークスペースID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bGlzdC1wcm9kdWN0cw.short_desc": {
+          "source": "List all products",
+          "message": "すべての商品を一覧表示"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bWFrZS1hcGktY2FsbA.desc": {
+          "source": "Make a custom HTTP / REST API call to **ClickFunnels** using the configured connection's authentication.\n\nSpecify the HTTP method, the URI path (relative to the connection's API base URL), optional query parameters, headers, and request body. The response is returned as a hash containing the status code, response headers, and response body.\n\nUse this action for endpoints that are not yet exposed as first-class actions on this app.",
+          "message": "設定された接続の認証を使用して、**ClickFunnels** へのカスタム HTTP / REST API 呼び出しを行います。\n\nHTTP メソッド、URI パス (接続の API ベース URL からの相対パス)、オプションのクエリパラメータ、ヘッダー、リクエスト本文を指定します。レスポンスはステータスコード、レスポンスヘッダー、レスポンス本文を含むハッシュとして返されます。\n\nこのアプリでファーストクラスのアクションとしてまだ公開されていないエンドポイントに対してこのアクションを使用します。"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bWFrZS1hcGktY2FsbA.display_name": {
+          "source": "Make an API call",
+          "message": "API コールを実行"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.desc": {
+          "source": "The request body. The effective type depends on `body_type`: JSON/form/YAML expect a hash, XML/text expect a string, multipart expects a file structure, binary expects raw bytes.",
+          "message": "リクエストボディ。有効な型は`body_type`に依存します。JSON/form/YAMLはハッシュを期待し、XML/textは文字列を期待し、multipartはファイル構造を期待し、binaryは生バイトを期待します。"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.display_name": {
+          "source": "Body",
+          "message": "ボディ"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.short_desc": {
+          "source": "The request body",
+          "message": "リクエストボディ"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.desc": {
+          "source": "Upload a file using `multipart/form-data`. The body must be a @ref DataProvider::FileDataType \"FileDataType\" structure (filename + content + mime_type). The framework builds the multipart envelope and sets the boundary header.",
+          "message": "`multipart/form-data`を使用してファイルをアップロードします。ボディは@ref DataProvider::FileDataType \"FileDataType\"構造（filename + content + mime_type）である必要があります。フレームワークがmultipartエンベロープを構築し、boundaryヘッダーを設定します。"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.display_name": {
+          "source": "Multipart Form",
+          "message": "マルチパートフォーム"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.short_desc": {
+          "source": "Upload a file using multipart/form-data",
+          "message": "multipart/form-dataを使用してファイルをアップロード"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.desc": {
+          "source": "Pass the body to the REST client unchanged; the client decides serialization based on its configured `data` option and the value type",
+          "message": "ボディを変更せずにRESTクライアントに渡します。クライアントは設定された`data`オプションと値の型に基づいてシリアライズを決定します"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.display_name": {
+          "source": "Auto",
+          "message": "自動"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.short_desc": {
+          "source": "Pass-through; use connection serialization and let the REST client decide",
+          "message": "パススルー。接続のシリアライズを使用し、RESTクライアントに決定させます"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.desc": {
+          "source": "Send the body as raw bytes. The body must be a binary value. Sets `Content-Type: application/octet-stream` unless overridden by `hdr`.",
+          "message": "ボディを生バイトとして送信します。ボディはバイナリ値である必要があります。`hdr`によってオーバーライドされない限り、`Content-Type: application/octet-stream`を設定します。"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.display_name": {
+          "source": "Raw Binary",
+          "message": "生バイナリ"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.short_desc": {
+          "source": "Send body as raw bytes",
+          "message": "ボディを生バイトとして送信"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.desc": {
+          "source": "Serialize a hash of form fields as `application/x-www-form-urlencoded`. The body must be a hash whose values are scalars (strings/numbers/booleans).",
+          "message": "フォームフィールドのハッシュを`application/x-www-form-urlencoded`としてシリアライズします。ボディは値がスカラー（文字列/数値/ブール値）のハッシュである必要があります。"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.display_name": {
+          "source": "Form (URL-encoded)",
+          "message": "フォーム (URLエンコード)"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.short_desc": {
+          "source": "Serialize body as application/x-www-form-urlencoded form fields",
+          "message": "ボディをapplication/x-www-form-urlencodedフォームフィールドとしてシリアライズ"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.desc": {
+          "source": "Serialize the body as JSON; sets `Content-Type: application/json`. The body should be a hash, list, or scalar value.",
+          "message": "ボディをJSONとしてシリアライズします。`Content-Type: application/json`を設定します。ボディはハッシュ、リスト、またはスカラー値である必要があります。"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.display_name": {
+          "source": "JSON",
+          "message": "JSON"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.short_desc": {
+          "source": "Serialize body as JSON",
+          "message": "ボディをJSONとしてシリアライズ"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.desc": {
+          "source": "Send the body as plain text. The body must be a string. Sets `Content-Type: text/plain`.",
+          "message": "ボディをプレーンテキストとして送信します。ボディは文字列である必要があります。`Content-Type: text/plain`を設定します。"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.display_name": {
+          "source": "Plain Text",
+          "message": "プレーンテキスト"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.short_desc": {
+          "source": "Send body as text/plain",
+          "message": "ボディをtext/plainとして送信"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.desc": {
+          "source": "Send the body as XML. If the body is a hash it is serialized to XML; if it is a string it is sent verbatim. Sets `Content-Type: application/xml`.",
+          "message": "ボディをXMLとして送信します。ボディがハッシュの場合はXMLにシリアライズされ、文字列の場合はそのまま送信されます。`Content-Type: application/xml`を設定します。"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.display_name": {
+          "source": "XML",
+          "message": "XML"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.short_desc": {
+          "source": "Send body as XML",
+          "message": "ボディをXMLとして送信"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.desc": {
+          "source": "Send the body as YAML. If the body is a hash it is serialized to YAML; if it is a string it is sent verbatim. Sets `Content-Type: application/x-yaml`.",
+          "message": "ボディをYAMLとして送信します。ボディがハッシュの場合はYAMLにシリアライズされ、文字列の場合はそのまま送信されます。`Content-Type: application/x-yaml`を設定します。"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.display_name": {
+          "source": "YAML",
+          "message": "YAML"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.short_desc": {
+          "source": "Send body as YAML",
+          "message": "ボディをYAMLとして送信"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.desc": {
+          "source": "Selects the body serialization mode and the corresponding `Content-Type` header. Changing this field reshapes the `body` editor - selecting JSON exposes a JSON editor, selecting Multipart Form exposes a file picker, and so on.",
+          "message": "ボディのシリアライズモードと対応する`Content-Type`ヘッダーを選択します。このフィールドを変更すると`body`エディターの形状が変わります。JSONを選択するとJSONエディターが表示され、マルチパートフォームを選択するとファイルピッカーが表示される、などです。"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.display_name": {
+          "source": "Body Type",
+          "message": "ボディタイプ"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.short_desc": {
+          "source": "How the body is serialized and what Content-Type is sent",
+          "message": "ボディのシリアライズ方法および送信されるContent-Type"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.desc": {
+          "source": "If `True`, non-2xx HTTP responses return as the normal response hash (with the actual status code) instead of raising `REST-RESPONSE-ERROR`. Useful for handling 4xx/5xx as data - e.g. checking whether a resource exists. Overrides the connection's `error_passthru` setting for this call only.",
+          "message": "`True`の場合、2xx以外のHTTPレスポンスは`REST-RESPONSE-ERROR`を発生させる代わりに（実際のステータスコードを含む）通常のレスポンスハッシュとして返されます。リソースが存在するかどうかの確認など、4xx/5xxをデータとして処理する場合に便利です。この呼び出しに限り、接続の`error_passthru`設定をオーバーライドします。"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.display_name": {
+          "source": "Return Errors as Data",
+          "message": "エラーをデータとして返す"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.short_desc": {
+          "source": "Return non-2xx responses normally instead of throwing",
+          "message": "例外をスローする代わりに2xx以外のレスポンスを通常通り返す"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.desc": {
+          "source": "Optional list of HTTP status codes treated as success. If set and the response status is not in this list, the action throws `REST-STATUS-ERROR`. When unset, the REST client's default behavior applies (typically: 2xx is success, non-2xx throws).",
+          "message": "成功として扱われるHTTPステータスコードのオプションリスト。設定されていてレスポンスステータスがこのリストに含まれない場合、アクションは`REST-STATUS-ERROR`をスローします。未設定の場合、RESTクライアントのデフォルト動作が適用されます（通常：2xxは成功、2xx以外はスロー）。"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.display_name": {
+          "source": "Expected Status Codes",
+          "message": "期待されるステータスコード"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.short_desc": {
+          "source": "Response status codes treated as success",
+          "message": "成功として扱われるレスポンスステータスコード"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bWFrZS1hcGktY2FsbA.option.aGRy.desc": {
+          "source": "Hash of custom headers added to the request. These override any default headers set by `body_type` (e.g. supplying `Content-Type` here wins over the body-type default).",
+          "message": "リクエストに追加されるカスタムヘッダーのハッシュ。これらは`body_type`によって設定されたデフォルトヘッダーをオーバーライドします（例：ここで`Content-Type`を指定すると、ボディタイプのデフォルトより優先されます）。"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bWFrZS1hcGktY2FsbA.option.aGRy.display_name": {
+          "source": "Custom Headers",
+          "message": "カスタムヘッダー"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bWFrZS1hcGktY2FsbA.option.aGRy.short_desc": {
+          "source": "Extra request headers",
+          "message": "追加のリクエストヘッダー"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.desc": {
+          "source": "If `True`, the response hash includes a `debug` sub-hash containing the request method/URL/headers (with sensitive values redacted), request and response sizes, and round-trip duration. Useful when investigating slow or failing calls. Off by default to keep responses lean.",
+          "message": "`True`の場合、レスポンスハッシュにはリクエストメソッド/URL/ヘッダー（機密値は伏字処理済み）、リクエストとレスポンスのサイズ、およびラウンドトリップ時間を含む`debug`サブハッシュが含まれます。遅い呼び出しや失敗した呼び出しを調査する際に便利です。レスポンスを軽量に保つため、デフォルトではオフになっています。"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.display_name": {
+          "source": "Include Debug Info",
+          "message": "デバッグ情報を含める"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.short_desc": {
+          "source": "Include request/timing/size debug info in the response",
+          "message": "レスポンスにリクエスト/タイミング/サイズのデバッグ情報を含める"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.desc": {
+          "source": "HTTP `OPTIONS`",
+          "message": "HTTP `OPTIONS`"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.display_name": {
+          "source": "OPTIONS",
+          "message": "OPTIONS"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.short_desc": {
+          "source": "HTTP OPTIONS",
+          "message": "HTTP OPTIONS"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.desc": {
+          "source": "HTTP `DELETE`",
+          "message": "HTTP `DELETE`"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.display_name": {
+          "source": "DELETE",
+          "message": "DELETE"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.short_desc": {
+          "source": "HTTP DELETE",
+          "message": "HTTP DELETE"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.desc": {
+          "source": "HTTP `GET`",
+          "message": "HTTP `GET`"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.display_name": {
+          "source": "GET",
+          "message": "GET"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.short_desc": {
+          "source": "HTTP GET",
+          "message": "HTTP GET"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.desc": {
+          "source": "HTTP `HEAD`",
+          "message": "HTTP `HEAD`"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.display_name": {
+          "source": "HEAD",
+          "message": "HEAD"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.short_desc": {
+          "source": "HTTP HEAD",
+          "message": "HTTP HEAD"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.desc": {
+          "source": "HTTP `PATCH`",
+          "message": "HTTP `PATCH`"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.display_name": {
+          "source": "PATCH",
+          "message": "PATCH"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.short_desc": {
+          "source": "HTTP PATCH",
+          "message": "HTTP PATCH"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.desc": {
+          "source": "HTTP `POST`",
+          "message": "HTTP `POST`"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.display_name": {
+          "source": "POST",
+          "message": "POST"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.short_desc": {
+          "source": "HTTP POST",
+          "message": "HTTP POST"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.desc": {
+          "source": "HTTP `PUT`",
+          "message": "HTTP `PUT`"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.display_name": {
+          "source": "PUT",
+          "message": "PUT"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.short_desc": {
+          "source": "HTTP PUT",
+          "message": "HTTP PUT"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.desc": {
+          "source": "HTTP `TRACE`",
+          "message": "HTTP `TRACE`"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.display_name": {
+          "source": "TRACE",
+          "message": "TRACE"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.short_desc": {
+          "source": "HTTP TRACE",
+          "message": "HTTP TRACE"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "リクエストに使用するHTTPメソッド"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.display_name": {
+          "source": "HTTP Method",
+          "message": "HTTPメソッド"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.short_desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "リクエストに使用するHTTPメソッド"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain `{name}` placeholders that are replaced from `path_vars`. Example: `/users/{id}/comments`.",
+          "message": "接続のAPIベースURLに対する相対URIパス。`path_vars`から置換される`{name}`プレースホルダーを含めることができます。例: `/users/{id}/comments`。"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.display_name": {
+          "source": "URI Path",
+          "message": "URIパス"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.short_desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain '{name}' placeholders that are replaced from 'path_vars'. Example: '/users/{id}/comments'",
+          "message": "接続のAPIベースURLに対する相対URIパス。'path_vars' から置換される '{name}' プレースホルダーを含めることができます。例: '/users/{id}/comments'"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.desc": {
+          "source": "Hash of values substituted into `{name}` placeholders in the URI path. Example: with `path = /users/{id}` and `path_vars = {id: 123}` the framework sends `/users/123`. Values are URL-encoded.",
+          "message": "URIパス内の `{name}` プレースホルダーに置換される値のハッシュ。例: `path = /users/{id}` と `path_vars = {id: 123}` を指定すると、フレームワークは `/users/123` を送信します。値はURLエンコードされます。"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.display_name": {
+          "source": "Path Variables",
+          "message": "パス変数"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.short_desc": {
+          "source": "Values for {name} placeholders in path",
+          "message": "パス内の {name} プレースホルダーの値"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.desc": {
+          "source": "Hash of query string parameters to append to the URI path. Values are URL-encoded; list values are joined with `,`.",
+          "message": "URIパスに追加するクエリ文字列パラメータのハッシュ。値はURLエンコードされます。リスト値は `,` で結合されます。"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.display_name": {
+          "source": "Query Arguments",
+          "message": "クエリ引数"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.short_desc": {
+          "source": "Query string parameters",
+          "message": "クエリ文字列パラメータ"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.bWFrZS1hcGktY2FsbA.short_desc": {
+          "source": "Make a custom API call to ClickFunnels",
+          "message": "ClickFunnels へのカスタム API 呼び出しを行う"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.cmVtb3ZlLXRhZw.desc": {
+          "source": "Remove an applied tag from a contact in ClickFunnels",
+          "message": "ClickFunnels の連絡先から適用されたタグを削除"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.cmVtb3ZlLXRhZw.display_name": {
+          "source": "Remove Tag from Contact",
+          "message": "連絡先からタグを削除"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.cmVtb3ZlLXRhZw.option.Y29udGFjdF9pZA.desc": {
+          "source": "Select the contact whose applied tag you want to remove",
+          "message": "適用されたタグを削除する連絡先を選択します"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.cmVtb3ZlLXRhZw.option.Y29udGFjdF9pZA.display_name": {
+          "source": "Contact",
+          "message": "コンタクト"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.cmVtb3ZlLXRhZw.option.Y29udGFjdF9pZA.short_desc": {
+          "source": "The contact to remove a tag from",
+          "message": "タグを削除する連絡先"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.cmVtb3ZlLXRhZw.option.YXBwbGllZF90YWdfaWQ.desc": {
+          "source": "The applied tag to remove from the contact",
+          "message": "連絡先から削除する適用されたタグ"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.cmVtb3ZlLXRhZw.option.YXBwbGllZF90YWdfaWQ.display_name": {
+          "source": "Applied Tag",
+          "message": "適用されたタグ"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.cmVtb3ZlLXRhZw.option.YXBwbGllZF90YWdfaWQ.short_desc": {
+          "source": "The applied tag to remove",
+          "message": "削除する適用されたタグ"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.cmVtb3ZlLXRhZw.option.d29ya3NwYWNlX2lk.display_name": {
+          "source": "Workspace ID",
+          "message": "ワークスペース ID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.cmVtb3ZlLXRhZw.option.d29ya3NwYWNlX2lk.short_desc": {
+          "source": "ClickFunnels workspace ID",
+          "message": "ClickFunnelsワークスペースID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.cmVtb3ZlLXRhZw.short_desc": {
+          "source": "Remove a tag from a contact",
+          "message": "連絡先からタグを削除"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLW9yZGVy.desc": {
+          "source": "Update an existing order in ClickFunnels",
+          "message": "ClickFunnels の既存の注文を更新"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLW9yZGVy.display_name": {
+          "source": "Update an Order",
+          "message": "注文を更新"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLW9yZGVy.option.Y3VycmVuY3k.desc": {
+          "source": "The new currency code for the order",
+          "message": "注文の新しい通貨コード"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLW9yZGVy.option.Y3VycmVuY3k.display_name": {
+          "source": "Currency",
+          "message": "通貨"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLW9yZGVy.option.Y3VycmVuY3k.short_desc": {
+          "source": "The order currency",
+          "message": "注文通貨"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLW9yZGVy.option.b3JkZXJfaWQ.desc": {
+          "source": "The unique identifier of the order to update",
+          "message": "更新する注文の一意識別子"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLW9yZGVy.option.b3JkZXJfaWQ.display_name": {
+          "source": "Order ID",
+          "message": "注文 ID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLW9yZGVy.option.b3JkZXJfaWQ.short_desc": {
+          "source": "The order to update",
+          "message": "更新する注文"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLW9yZGVy.option.c3RhdHVz.desc": {
+          "source": "The new status for the order",
+          "message": "注文の新しいステータス"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLW9yZGVy.option.c3RhdHVz.display_name": {
+          "source": "Status",
+          "message": "ステータス"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLW9yZGVy.option.c3RhdHVz.short_desc": {
+          "source": "The order status",
+          "message": "注文ステータス"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLW9yZGVy.option.d29ya3NwYWNlX2lk.desc": {
+          "source": "The ClickFunnels workspace ID for workspace-scoped endpoints. You can find the workspace ID in the ClickFunnels admin panel URL or by calling the `GET /teams/{team_id}/workspaces` endpoint",
+          "message": "ワークスペーススコープのエンドポイント用のClickFunnelsワークスペースID。ワークスペースIDはClickFunnels管理パネルのURLで確認するか、`GET /teams/{team_id}/workspaces`エンドポイントを呼び出すことで取得できます"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLW9yZGVy.option.d29ya3NwYWNlX2lk.display_name": {
+          "source": "Workspace ID",
+          "message": "ワークスペース ID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLW9yZGVy.option.d29ya3NwYWNlX2lk.short_desc": {
+          "source": "ClickFunnels workspace ID",
+          "message": "ClickFunnelsワークスペースID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLW9yZGVy.short_desc": {
+          "source": "Update an existing order",
+          "message": "既存の注文を更新"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLWNvbnRhY3Q.desc": {
+          "source": "Update an existing contact in ClickFunnels",
+          "message": "ClickFunnels の既存の連絡先を更新"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLWNvbnRhY3Q.display_name": {
+          "source": "Update a Contact",
+          "message": "連絡先を更新"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLWNvbnRhY3Q.option.Y29udGFjdF9pZA.desc": {
+          "source": "The unique identifier of the contact to update",
+          "message": "更新する連絡先の一意識別子"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLWNvbnRhY3Q.option.Y29udGFjdF9pZA.display_name": {
+          "source": "Contact ID",
+          "message": "連絡先ID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLWNvbnRhY3Q.option.Y29udGFjdF9pZA.short_desc": {
+          "source": "The contact ID to update",
+          "message": "更新する連絡先 ID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLWNvbnRhY3Q.option.Y3VzdG9tX2F0dHJpYnV0ZXM.desc": {
+          "source": "Custom key-value attributes for the contact. Both keys and values must be strings. Keys with special characters are automatically converted to `snake_case`",
+          "message": "連絡先のカスタムキー/値属性。キーと値は両方とも文字列である必要があります。特殊文字を含むキーは自動的に`snake_case`に変換されます"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLWNvbnRhY3Q.option.Y3VzdG9tX2F0dHJpYnV0ZXM.display_name": {
+          "source": "Custom Attributes",
+          "message": "カスタム属性"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLWNvbnRhY3Q.option.Y3VzdG9tX2F0dHJpYnV0ZXM.short_desc": {
+          "source": "Custom key-value attributes",
+          "message": "カスタムキー/値属性"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLWNvbnRhY3Q.option.ZW1haWxfYWRkcmVzcw.desc": {
+          "source": "The new email address for the contact",
+          "message": "連絡先の新しいメールアドレス"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLWNvbnRhY3Q.option.ZW1haWxfYWRkcmVzcw.display_name": {
+          "source": "Email Address",
+          "message": "メールアドレス"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLWNvbnRhY3Q.option.ZW1haWxfYWRkcmVzcw.short_desc": {
+          "source": "The contact's email address",
+          "message": "コンタクトのメールアドレス"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLWNvbnRhY3Q.option.ZmJfdXJs.desc": {
+          "source": "The new Facebook profile URL for the contact",
+          "message": "連絡先の新しい Facebook プロフィール URL"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLWNvbnRhY3Q.option.ZmJfdXJs.display_name": {
+          "source": "Facebook URL",
+          "message": "Facebook URL"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLWNvbnRhY3Q.option.ZmJfdXJs.short_desc": {
+          "source": "The contact's Facebook URL",
+          "message": "連絡先のFacebook URL"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLWNvbnRhY3Q.option.Zmlyc3RfbmFtZQ.desc": {
+          "source": "The new first name for the contact",
+          "message": "連絡先の新しい名"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLWNvbnRhY3Q.option.Zmlyc3RfbmFtZQ.display_name": {
+          "source": "First Name",
+          "message": "名"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLWNvbnRhY3Q.option.Zmlyc3RfbmFtZQ.short_desc": {
+          "source": "The contact's first name",
+          "message": "コンタクトの名"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLWNvbnRhY3Q.option.aW5zdGFncmFtX3VybA.desc": {
+          "source": "The new Instagram profile URL for the contact",
+          "message": "連絡先の新しい Instagram プロフィール URL"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLWNvbnRhY3Q.option.aW5zdGFncmFtX3VybA.display_name": {
+          "source": "Instagram URL",
+          "message": "Instagram URL"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLWNvbnRhY3Q.option.aW5zdGFncmFtX3VybA.short_desc": {
+          "source": "The contact's Instagram URL",
+          "message": "連絡先のInstagram URL"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLWNvbnRhY3Q.option.bGFzdF9uYW1l.desc": {
+          "source": "The new last name for the contact",
+          "message": "連絡先の新しい姓"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLWNvbnRhY3Q.option.bGFzdF9uYW1l.display_name": {
+          "source": "Last Name",
+          "message": "姓"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLWNvbnRhY3Q.option.bGFzdF9uYW1l.short_desc": {
+          "source": "The contact's last name",
+          "message": "コンタクトの姓"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLWNvbnRhY3Q.option.bGlua2VkaW5fdXJs.desc": {
+          "source": "The new LinkedIn profile URL for the contact",
+          "message": "連絡先の新しい LinkedIn プロフィール URL"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLWNvbnRhY3Q.option.bGlua2VkaW5fdXJs.display_name": {
+          "source": "LinkedIn URL",
+          "message": "LinkedIn URL"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLWNvbnRhY3Q.option.bGlua2VkaW5fdXJs.short_desc": {
+          "source": "The contact's LinkedIn URL",
+          "message": "連絡先のLinkedIn URL"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLWNvbnRhY3Q.option.cGhvbmVfbnVtYmVy.desc": {
+          "source": "The new phone number for the contact",
+          "message": "連絡先の新しい電話番号"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLWNvbnRhY3Q.option.cGhvbmVfbnVtYmVy.display_name": {
+          "source": "Phone Number",
+          "message": "電話番号"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLWNvbnRhY3Q.option.cGhvbmVfbnVtYmVy.short_desc": {
+          "source": "The contact's phone number",
+          "message": "コンタクトの電話番号"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLWNvbnRhY3Q.option.d29ya3NwYWNlX2lk.desc": {
+          "source": "The ClickFunnels workspace ID for workspace-scoped endpoints. You can find the workspace ID in the ClickFunnels admin panel URL or by calling the `GET /teams/{team_id}/workspaces` endpoint",
+          "message": "ワークスペーススコープのエンドポイント用のClickFunnelsワークスペースID。ワークスペースIDはClickFunnels管理パネルのURLで確認するか、`GET /teams/{team_id}/workspaces`エンドポイントを呼び出すことで取得できます"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLWNvbnRhY3Q.option.d29ya3NwYWNlX2lk.display_name": {
+          "source": "Workspace ID",
+          "message": "ワークスペース ID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLWNvbnRhY3Q.option.d29ya3NwYWNlX2lk.short_desc": {
+          "source": "ClickFunnels workspace ID",
+          "message": "ClickFunnelsワークスペースID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLWNvbnRhY3Q.option.d2Vic2l0ZV91cmw.desc": {
+          "source": "The new website URL for the contact",
+          "message": "連絡先の新しい Web サイト URL"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLWNvbnRhY3Q.option.d2Vic2l0ZV91cmw.display_name": {
+          "source": "Website URL",
+          "message": "ウェブサイトの URL"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLWNvbnRhY3Q.option.d2Vic2l0ZV91cmw.short_desc": {
+          "source": "The contact's website URL",
+          "message": "連絡先のウェブサイトURL"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLWNvbnRhY3Q.option.dGFnX2lkcw.desc": {
+          "source": "A list of contact tag IDs to apply to the contact. Any valid array will overwrite existing values",
+          "message": "連絡先に適用する連絡先タグIDのリスト。有効な配列を指定すると既存の値が上書きされます"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLWNvbnRhY3Q.option.dGFnX2lkcw.display_name": {
+          "source": "Tag IDs",
+          "message": "タグID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLWNvbnRhY3Q.option.dGFnX2lkcw.short_desc": {
+          "source": "Contact tag IDs to apply",
+          "message": "適用する連絡先タグID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLWNvbnRhY3Q.option.dGltZV96b25l.desc": {
+          "source": "The new time zone for the contact",
+          "message": "連絡先の新しいタイムゾーン"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLWNvbnRhY3Q.option.dGltZV96b25l.display_name": {
+          "source": "Time Zone",
+          "message": "タイムゾーン"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLWNvbnRhY3Q.option.dGltZV96b25l.short_desc": {
+          "source": "The contact's time zone",
+          "message": "連絡先のタイムゾーン"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLWNvbnRhY3Q.option.dHdpdHRlcl91cmw.desc": {
+          "source": "The new Twitter profile URL for the contact",
+          "message": "連絡先の新しい Twitter プロフィール URL"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLWNvbnRhY3Q.option.dHdpdHRlcl91cmw.display_name": {
+          "source": "Twitter URL",
+          "message": "Twitter URL"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLWNvbnRhY3Q.option.dHdpdHRlcl91cmw.short_desc": {
+          "source": "The contact's Twitter URL",
+          "message": "連絡先のTwitter URL"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLWNvbnRhY3Q.short_desc": {
+          "source": "Update an existing contact",
+          "message": "既存の連絡先を更新"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLWNvbnRhY3QtdGFn.desc": {
+          "source": "Update an existing contact tag in ClickFunnels",
+          "message": "ClickFunnels の既存の連絡先タグを更新"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLWNvbnRhY3QtdGFn.display_name": {
+          "source": "Update a Contact Tag",
+          "message": "連絡先タグを更新"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLWNvbnRhY3QtdGFn.option.Y29sb3I.desc": {
+          "source": "The new color code for the tag",
+          "message": "タグの新しいカラーコード"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLWNvbnRhY3QtdGFn.option.Y29sb3I.display_name": {
+          "source": "Color",
+          "message": "色"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLWNvbnRhY3QtdGFn.option.Y29sb3I.short_desc": {
+          "source": "The tag color",
+          "message": "タグの色"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLWNvbnRhY3QtdGFn.option.bmFtZQ.desc": {
+          "source": "The new name for the tag",
+          "message": "タグの新しい名前"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLWNvbnRhY3QtdGFn.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "名前"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLWNvbnRhY3QtdGFn.option.bmFtZQ.short_desc": {
+          "source": "The tag name",
+          "message": "タグ名"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLWNvbnRhY3QtdGFn.option.d29ya3NwYWNlX2lk.desc": {
+          "source": "The ClickFunnels workspace ID for workspace-scoped endpoints. You can find the workspace ID in the ClickFunnels admin panel URL or by calling the `GET /teams/{team_id}/workspaces` endpoint",
+          "message": "ワークスペーススコープのエンドポイント用のClickFunnelsワークスペースID。ワークスペースIDはClickFunnels管理パネルのURLで確認するか、`GET /teams/{team_id}/workspaces`エンドポイントを呼び出すことで取得できます"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLWNvbnRhY3QtdGFn.option.d29ya3NwYWNlX2lk.display_name": {
+          "source": "Workspace ID",
+          "message": "ワークスペース ID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLWNvbnRhY3QtdGFn.option.d29ya3NwYWNlX2lk.short_desc": {
+          "source": "ClickFunnels workspace ID",
+          "message": "ClickFunnelsワークスペースID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLWNvbnRhY3QtdGFn.option.dGFnX2lk.desc": {
+          "source": "The unique identifier of the tag to update",
+          "message": "更新するタグの一意識別子"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLWNvbnRhY3QtdGFn.option.dGFnX2lk.display_name": {
+          "source": "Tag ID",
+          "message": "タグ ID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLWNvbnRhY3QtdGFn.option.dGFnX2lk.short_desc": {
+          "source": "The tag ID to update",
+          "message": "更新するタグ ID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLWNvbnRhY3QtdGFn.short_desc": {
+          "source": "Update a contact tag",
+          "message": "連絡先タグを更新"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLWVucm9sbG1lbnQ.desc": {
+          "source": "Update an existing course enrollment in ClickFunnels",
+          "message": "ClickFunnels の既存のコース登録を更新"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLWVucm9sbG1lbnQ.display_name": {
+          "source": "Update an Enrollment",
+          "message": "登録を更新"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLWVucm9sbG1lbnQ.option.Y29tcGxldGVk.desc": {
+          "source": "Whether the enrollment has been completed",
+          "message": "登録が完了したかどうか"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLWVucm9sbG1lbnQ.option.Y29tcGxldGVk.display_name": {
+          "source": "Completed",
+          "message": "完了"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLWVucm9sbG1lbnQ.option.Y29tcGxldGVk.short_desc": {
+          "source": "Whether enrollment is completed",
+          "message": "登録が完了しているかどうか"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLWVucm9sbG1lbnQ.option.ZW5yb2xsbWVudF9pZA.desc": {
+          "source": "The unique identifier of the enrollment to update",
+          "message": "更新する登録の一意識別子"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLWVucm9sbG1lbnQ.option.ZW5yb2xsbWVudF9pZA.display_name": {
+          "source": "Enrollment ID",
+          "message": "受講登録ID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLWVucm9sbG1lbnQ.option.ZW5yb2xsbWVudF9pZA.short_desc": {
+          "source": "The enrollment to update",
+          "message": "更新する登録"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLWVucm9sbG1lbnQ.option.c3VzcGVuZGVk.desc": {
+          "source": "Whether the enrollment should be suspended",
+          "message": "登録を一時停止するかどうか"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLWVucm9sbG1lbnQ.option.c3VzcGVuZGVk.display_name": {
+          "source": "Suspended",
+          "message": "一時停止"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLWVucm9sbG1lbnQ.option.c3VzcGVuZGVk.short_desc": {
+          "source": "Whether enrollment is suspended",
+          "message": "登録が一時停止されているかどうか"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLWVucm9sbG1lbnQ.option.d29ya3NwYWNlX2lk.desc": {
+          "source": "The ClickFunnels workspace ID for workspace-scoped endpoints. You can find the workspace ID in the ClickFunnels admin panel URL or by calling the `GET /teams/{team_id}/workspaces` endpoint",
+          "message": "ワークスペーススコープのエンドポイント用のClickFunnelsワークスペースID。ワークスペースIDはClickFunnels管理パネルのURLで確認するか、`GET /teams/{team_id}/workspaces`エンドポイントを呼び出すことで取得できます"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLWVucm9sbG1lbnQ.option.d29ya3NwYWNlX2lk.display_name": {
+          "source": "Workspace ID",
+          "message": "ワークスペース ID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLWVucm9sbG1lbnQ.option.d29ya3NwYWNlX2lk.short_desc": {
+          "source": "ClickFunnels workspace ID",
+          "message": "ClickFunnelsワークスペースID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLWVucm9sbG1lbnQ.short_desc": {
+          "source": "Update a course enrollment",
+          "message": "コース登録を更新"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLWZ1bGZpbGxtZW50.desc": {
+          "source": "Update an existing fulfillment in ClickFunnels",
+          "message": "ClickFunnels の既存のフルフィルメントを更新"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLWZ1bGZpbGxtZW50.display_name": {
+          "source": "Update a Fulfillment",
+          "message": "フルフィルメントを更新"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLWZ1bGZpbGxtZW50.option.ZnVsZmlsbG1lbnRfaWQ.desc": {
+          "source": "The unique identifier of the fulfillment to update",
+          "message": "更新するフルフィルメントの一意識別子"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLWZ1bGZpbGxtZW50.option.ZnVsZmlsbG1lbnRfaWQ.display_name": {
+          "source": "Fulfillment ID",
+          "message": "フルフィルメントID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLWZ1bGZpbGxtZW50.option.ZnVsZmlsbG1lbnRfaWQ.short_desc": {
+          "source": "The fulfillment to update",
+          "message": "更新するフルフィルメント"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLWZ1bGZpbGxtZW50.option.bm90aWZ5X2N1c3RvbWVy.desc": {
+          "source": "Whether to send an email notification to the customer about the fulfillment update",
+          "message": "フルフィルメントの更新について顧客にメール通知を送信するかどうか"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLWZ1bGZpbGxtZW50.option.bm90aWZ5X2N1c3RvbWVy.display_name": {
+          "source": "Notify Customer",
+          "message": "顧客に通知"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLWZ1bGZpbGxtZW50.option.bm90aWZ5X2N1c3RvbWVy.short_desc": {
+          "source": "Send email notification",
+          "message": "メール通知を送信"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLWZ1bGZpbGxtZW50.option.c2hpcHBpbmdfcHJvdmlkZXI.desc": {
+          "source": "The new shipping provider",
+          "message": "新しい配送業者"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLWZ1bGZpbGxtZW50.option.c2hpcHBpbmdfcHJvdmlkZXI.display_name": {
+          "source": "Shipping Provider",
+          "message": "配送業者"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLWZ1bGZpbGxtZW50.option.c2hpcHBpbmdfcHJvdmlkZXI.short_desc": {
+          "source": "The shipping provider",
+          "message": "配送業者"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLWZ1bGZpbGxtZW50.option.d29ya3NwYWNlX2lk.desc": {
+          "source": "The ClickFunnels workspace ID for workspace-scoped endpoints. You can find the workspace ID in the ClickFunnels admin panel URL or by calling the `GET /teams/{team_id}/workspaces` endpoint",
+          "message": "ワークスペーススコープのエンドポイント用のClickFunnelsワークスペースID。ワークスペースIDはClickFunnels管理パネルのURLで確認するか、`GET /teams/{team_id}/workspaces`エンドポイントを呼び出すことで取得できます"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLWZ1bGZpbGxtZW50.option.d29ya3NwYWNlX2lk.display_name": {
+          "source": "Workspace ID",
+          "message": "ワークスペース ID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLWZ1bGZpbGxtZW50.option.d29ya3NwYWNlX2lk.short_desc": {
+          "source": "ClickFunnels workspace ID",
+          "message": "ClickFunnelsワークスペースID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLWZ1bGZpbGxtZW50.option.dHJhY2tpbmdfY29kZQ.desc": {
+          "source": "The new tracking code",
+          "message": "新しい追跡コード"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLWZ1bGZpbGxtZW50.option.dHJhY2tpbmdfY29kZQ.display_name": {
+          "source": "Tracking Code",
+          "message": "追跡コード"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLWZ1bGZpbGxtZW50.option.dHJhY2tpbmdfY29kZQ.short_desc": {
+          "source": "The tracking code",
+          "message": "追跡コード"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLWZ1bGZpbGxtZW50.option.dHJhY2tpbmdfdXJs.desc": {
+          "source": "The new tracking URL",
+          "message": "新しい追跡 URL"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLWZ1bGZpbGxtZW50.option.dHJhY2tpbmdfdXJs.display_name": {
+          "source": "Tracking URL",
+          "message": "追跡URL"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLWZ1bGZpbGxtZW50.option.dHJhY2tpbmdfdXJs.short_desc": {
+          "source": "The tracking URL",
+          "message": "追跡URL"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLWZ1bGZpbGxtZW50.short_desc": {
+          "source": "Update a fulfillment",
+          "message": "フルフィルメントを更新"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLWZ1bm5lbA.desc": {
+          "source": "Update an existing funnel in ClickFunnels",
+          "message": "ClickFunnels の既存のファネルを更新"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLWZ1bm5lbA.display_name": {
+          "source": "Update a Funnel",
+          "message": "ファネルを更新"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLWZ1bm5lbA.option.ZnVubmVsX2lk.desc": {
+          "source": "The unique identifier of the funnel to update",
+          "message": "更新するファネルの一意識別子"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLWZ1bm5lbA.option.ZnVubmVsX2lk.display_name": {
+          "source": "Funnel ID",
+          "message": "ファネルID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLWZ1bm5lbA.option.ZnVubmVsX2lk.short_desc": {
+          "source": "The funnel to update",
+          "message": "更新するファネル"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLWZ1bm5lbA.option.bmFtZQ.desc": {
+          "source": "The new name for the funnel",
+          "message": "ファネルの新しい名前"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLWZ1bm5lbA.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "名前"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLWZ1bm5lbA.option.bmFtZQ.short_desc": {
+          "source": "The funnel name",
+          "message": "ファネル名"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLWZ1bm5lbA.option.d29ya3NwYWNlX2lk.desc": {
+          "source": "The ClickFunnels workspace ID for workspace-scoped endpoints. You can find the workspace ID in the ClickFunnels admin panel URL or by calling the `GET /teams/{team_id}/workspaces` endpoint",
+          "message": "ワークスペーススコープのエンドポイント用のClickFunnelsワークスペースID。ワークスペースIDはClickFunnels管理パネルのURLで確認するか、`GET /teams/{team_id}/workspaces`エンドポイントを呼び出すことで取得できます"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLWZ1bm5lbA.option.d29ya3NwYWNlX2lk.display_name": {
+          "source": "Workspace ID",
+          "message": "ワークスペース ID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLWZ1bm5lbA.option.d29ya3NwYWNlX2lk.short_desc": {
+          "source": "ClickFunnels workspace ID",
+          "message": "ClickFunnelsワークスペースID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLWZ1bm5lbA.short_desc": {
+          "source": "Update an existing funnel",
+          "message": "既存のファネルを更新"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLWZvcm0.desc": {
+          "source": "Update an existing form in ClickFunnels",
+          "message": "ClickFunnels の既存のフォームを更新"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLWZvcm0.display_name": {
+          "source": "Update a Form",
+          "message": "フォームを更新"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLWZvcm0.option.Zm9ybV9pZA.desc": {
+          "source": "The unique identifier of the form to update",
+          "message": "更新するフォームの一意識別子"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLWZvcm0.option.Zm9ybV9pZA.display_name": {
+          "source": "Form ID",
+          "message": "フォームID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLWZvcm0.option.Zm9ybV9pZA.short_desc": {
+          "source": "The form to update",
+          "message": "更新するフォーム"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLWZvcm0.option.bmFtZQ.desc": {
+          "source": "The new name for the form",
+          "message": "フォームの新しい名前"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLWZvcm0.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "名前"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLWZvcm0.option.bmFtZQ.short_desc": {
+          "source": "The form name",
+          "message": "フォーム名"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLWZvcm0.option.cmVkaXJlY3RfdXJs.desc": {
+          "source": "The new redirect URL",
+          "message": "新しいリダイレクト URL"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLWZvcm0.option.cmVkaXJlY3RfdXJs.display_name": {
+          "source": "Redirect URL",
+          "message": "リダイレクトURL"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLWZvcm0.option.cmVkaXJlY3RfdXJs.short_desc": {
+          "source": "The redirect URL",
+          "message": "リダイレクトURL"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLWZvcm0.option.d29ya3NwYWNlX2lk.desc": {
+          "source": "The ClickFunnels workspace ID for workspace-scoped endpoints. You can find the workspace ID in the ClickFunnels admin panel URL or by calling the `GET /teams/{team_id}/workspaces` endpoint",
+          "message": "ワークスペーススコープのエンドポイント用のClickFunnelsワークスペースID。ワークスペースIDはClickFunnels管理パネルのURLで確認するか、`GET /teams/{team_id}/workspaces`エンドポイントを呼び出すことで取得できます"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLWZvcm0.option.d29ya3NwYWNlX2lk.display_name": {
+          "source": "Workspace ID",
+          "message": "ワークスペース ID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLWZvcm0.option.d29ya3NwYWNlX2lk.short_desc": {
+          "source": "ClickFunnels workspace ID",
+          "message": "ClickFunnelsワークスペースID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLWZvcm0.short_desc": {
+          "source": "Update an existing form",
+          "message": "既存のフォームを更新"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLXByb2R1Y3Q.desc": {
+          "source": "Update an existing product in ClickFunnels",
+          "message": "ClickFunnels の既存の商品を更新"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLXByb2R1Y3Q.display_name": {
+          "source": "Update a Product",
+          "message": "商品の更新"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLXByb2R1Y3Q.option.Y29tbWlzc2lvbmFibGU.desc": {
+          "source": "Whether eligible for affiliate commissions",
+          "message": "アフィリエイト報酬の対象かどうか"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLXByb2R1Y3Q.option.Y29tbWlzc2lvbmFibGU.display_name": {
+          "source": "Commissionable",
+          "message": "報酬対象"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLXByb2R1Y3Q.option.Y29tbWlzc2lvbmFibGU.short_desc": {
+          "source": "Whether commissionable",
+          "message": "報酬対象かどうか"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLXByb2R1Y3Q.option.Y3VycmVudF9wYXRo.desc": {
+          "source": "The new URL path for the product",
+          "message": "商品の新しい URL パス"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLXByb2R1Y3Q.option.Y3VycmVudF9wYXRo.display_name": {
+          "source": "Current Path",
+          "message": "現在のパス"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLXByb2R1Y3Q.option.Y3VycmVudF9wYXRo.short_desc": {
+          "source": "The product URL path",
+          "message": "商品のURLパス"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLXByb2R1Y3Q.option.bmFtZQ.desc": {
+          "source": "The new name for the product",
+          "message": "商品の新しい名前"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLXByb2R1Y3Q.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "名前"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLXByb2R1Y3Q.option.bmFtZQ.short_desc": {
+          "source": "The product name",
+          "message": "商品名"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLXByb2R1Y3Q.option.c2VvX2Rlc2NyaXB0aW9u.desc": {
+          "source": "The new SEO description",
+          "message": "新しいSEO説明"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLXByb2R1Y3Q.option.c2VvX2Rlc2NyaXB0aW9u.display_name": {
+          "source": "SEO Description",
+          "message": "SEOディスクリプション"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLXByb2R1Y3Q.option.c2VvX2Rlc2NyaXB0aW9u.short_desc": {
+          "source": "The SEO description",
+          "message": "SEOディスクリプション"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLXByb2R1Y3Q.option.c2VvX2ltYWdlX3VybA.desc": {
+          "source": "The new SEO image URL",
+          "message": "新しいSEO画像URL"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLXByb2R1Y3Q.option.c2VvX2ltYWdlX3VybA.display_name": {
+          "source": "SEO Image URL",
+          "message": "SEO画像URL"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLXByb2R1Y3Q.option.c2VvX2ltYWdlX3VybA.short_desc": {
+          "source": "The SEO image URL",
+          "message": "SEO画像URL"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLXByb2R1Y3Q.option.c2VvX3RpdGxl.desc": {
+          "source": "The new SEO title",
+          "message": "新しいSEOタイトル"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLXByb2R1Y3Q.option.c2VvX3RpdGxl.display_name": {
+          "source": "SEO Title",
+          "message": "SEOタイトル"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLXByb2R1Y3Q.option.c2VvX3RpdGxl.short_desc": {
+          "source": "The SEO title",
+          "message": "SEOタイトル"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLXByb2R1Y3Q.option.cHJvZHVjdF9pZA.desc": {
+          "source": "The unique identifier of the product to update",
+          "message": "更新する商品の一意の識別子"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLXByb2R1Y3Q.option.cHJvZHVjdF9pZA.display_name": {
+          "source": "Product ID",
+          "message": "商品 ID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLXByb2R1Y3Q.option.cHJvZHVjdF9pZA.short_desc": {
+          "source": "The product to update",
+          "message": "更新する商品"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLXByb2R1Y3Q.option.d29ya3NwYWNlX2lk.desc": {
+          "source": "The ClickFunnels workspace ID for workspace-scoped endpoints. You can find the workspace ID in the ClickFunnels admin panel URL or by calling the `GET /teams/{team_id}/workspaces` endpoint",
+          "message": "ワークスペーススコープのエンドポイント用のClickFunnelsワークスペースID。ワークスペースIDはClickFunnels管理パネルのURLで確認するか、`GET /teams/{team_id}/workspaces`エンドポイントを呼び出すことで取得できます"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLXByb2R1Y3Q.option.d29ya3NwYWNlX2lk.display_name": {
+          "source": "Workspace ID",
+          "message": "ワークスペース ID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLXByb2R1Y3Q.option.d29ya3NwYWNlX2lk.short_desc": {
+          "source": "ClickFunnels workspace ID",
+          "message": "ClickFunnelsワークスペースID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLXByb2R1Y3Q.option.dmlzaWJsZV9pbl9jdXN0b21lcl9jZW50ZXI.desc": {
+          "source": "Whether the product is visible in the customer center",
+          "message": "カスタマーセンターで商品を表示するかどうか"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLXByb2R1Y3Q.option.dmlzaWJsZV9pbl9jdXN0b21lcl9jZW50ZXI.display_name": {
+          "source": "Visible in Customer Center",
+          "message": "カスタマーセンターで表示"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLXByb2R1Y3Q.option.dmlzaWJsZV9pbl9jdXN0b21lcl9jZW50ZXI.short_desc": {
+          "source": "Whether visible in customer center",
+          "message": "カスタマーセンターで表示するかどうか"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLXByb2R1Y3Q.option.dmlzaWJsZV9pbl9zdG9yZQ.desc": {
+          "source": "Whether the product is visible in the store",
+          "message": "ストアで商品を表示するかどうか"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLXByb2R1Y3Q.option.dmlzaWJsZV9pbl9zdG9yZQ.display_name": {
+          "source": "Visible in Store",
+          "message": "ストアで表示"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLXByb2R1Y3Q.option.dmlzaWJsZV9pbl9zdG9yZQ.short_desc": {
+          "source": "Whether visible in store",
+          "message": "ストアで表示するかどうか"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBkYXRlLXByb2R1Y3Q.short_desc": {
+          "source": "Update an existing product",
+          "message": "既存の製品を更新します"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBzZXJ0LWNvbnRhY3Q.desc": {
+          "source": "Create a new contact or update an existing one by email address in ClickFunnels",
+          "message": "ClickFunnelsでメールアドレスに基づいて新しい連絡先を作成または既存の連絡先を更新します"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBzZXJ0LWNvbnRhY3Q.display_name": {
+          "source": "Upsert a Contact",
+          "message": "連絡先を作成または更新"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBzZXJ0LWNvbnRhY3Q.option.Y3VzdG9tX2F0dHJpYnV0ZXM.desc": {
+          "source": "Custom key-value attributes for the contact. Both keys and values must be strings. Keys with special characters are automatically converted to `snake_case`",
+          "message": "連絡先のカスタムキー/値属性。キーと値は両方とも文字列である必要があります。特殊文字を含むキーは自動的に`snake_case`に変換されます"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBzZXJ0LWNvbnRhY3Q.option.Y3VzdG9tX2F0dHJpYnV0ZXM.display_name": {
+          "source": "Custom Attributes",
+          "message": "カスタム属性"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBzZXJ0LWNvbnRhY3Q.option.Y3VzdG9tX2F0dHJpYnV0ZXM.short_desc": {
+          "source": "Custom key-value attributes",
+          "message": "カスタムキー/値属性"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBzZXJ0LWNvbnRhY3Q.option.ZW1haWxfYWRkcmVzcw.desc": {
+          "source": "The email address of the contact to create",
+          "message": "作成する連絡先のメールアドレス"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBzZXJ0LWNvbnRhY3Q.option.ZW1haWxfYWRkcmVzcw.display_name": {
+          "source": "Email Address",
+          "message": "メールアドレス"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBzZXJ0LWNvbnRhY3Q.option.ZW1haWxfYWRkcmVzcw.short_desc": {
+          "source": "The contact's email address",
+          "message": "コンタクトのメールアドレス"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBzZXJ0LWNvbnRhY3Q.option.ZmJfdXJs.desc": {
+          "source": "The Facebook profile URL of the contact",
+          "message": "連絡先のFacebookプロフィールのURL"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBzZXJ0LWNvbnRhY3Q.option.ZmJfdXJs.display_name": {
+          "source": "Facebook URL",
+          "message": "Facebook URL"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBzZXJ0LWNvbnRhY3Q.option.ZmJfdXJs.short_desc": {
+          "source": "The contact's Facebook URL",
+          "message": "連絡先のFacebook URL"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBzZXJ0LWNvbnRhY3Q.option.Zmlyc3RfbmFtZQ.desc": {
+          "source": "The first name of the contact",
+          "message": "コンタクトの名"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBzZXJ0LWNvbnRhY3Q.option.Zmlyc3RfbmFtZQ.display_name": {
+          "source": "First Name",
+          "message": "名"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBzZXJ0LWNvbnRhY3Q.option.Zmlyc3RfbmFtZQ.short_desc": {
+          "source": "The contact's first name",
+          "message": "コンタクトの名"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBzZXJ0LWNvbnRhY3Q.option.aW5zdGFncmFtX3VybA.desc": {
+          "source": "The Instagram profile URL of the contact",
+          "message": "連絡先のInstagramプロフィールのURL"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBzZXJ0LWNvbnRhY3Q.option.aW5zdGFncmFtX3VybA.display_name": {
+          "source": "Instagram URL",
+          "message": "Instagram URL"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBzZXJ0LWNvbnRhY3Q.option.aW5zdGFncmFtX3VybA.short_desc": {
+          "source": "The contact's Instagram URL",
+          "message": "連絡先のInstagram URL"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBzZXJ0LWNvbnRhY3Q.option.bGFzdF9uYW1l.desc": {
+          "source": "The last name of the contact",
+          "message": "コンタクトの姓"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBzZXJ0LWNvbnRhY3Q.option.bGFzdF9uYW1l.display_name": {
+          "source": "Last Name",
+          "message": "姓"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBzZXJ0LWNvbnRhY3Q.option.bGFzdF9uYW1l.short_desc": {
+          "source": "The contact's last name",
+          "message": "コンタクトの姓"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBzZXJ0LWNvbnRhY3Q.option.bGlua2VkaW5fdXJs.desc": {
+          "source": "The LinkedIn profile URL of the contact",
+          "message": "連絡先のLinkedInプロフィールのURL"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBzZXJ0LWNvbnRhY3Q.option.bGlua2VkaW5fdXJs.display_name": {
+          "source": "LinkedIn URL",
+          "message": "LinkedIn URL"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBzZXJ0LWNvbnRhY3Q.option.bGlua2VkaW5fdXJs.short_desc": {
+          "source": "The contact's LinkedIn URL",
+          "message": "連絡先のLinkedIn URL"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBzZXJ0LWNvbnRhY3Q.option.cGhvbmVfbnVtYmVy.desc": {
+          "source": "The phone number of the contact",
+          "message": "連絡先の電話番号"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBzZXJ0LWNvbnRhY3Q.option.cGhvbmVfbnVtYmVy.display_name": {
+          "source": "Phone Number",
+          "message": "電話番号"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBzZXJ0LWNvbnRhY3Q.option.cGhvbmVfbnVtYmVy.short_desc": {
+          "source": "The contact's phone number",
+          "message": "コンタクトの電話番号"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBzZXJ0LWNvbnRhY3Q.option.d29ya3NwYWNlX2lk.desc": {
+          "source": "The ClickFunnels workspace ID for workspace-scoped endpoints. You can find the workspace ID in the ClickFunnels admin panel URL or by calling the `GET /teams/{team_id}/workspaces` endpoint",
+          "message": "ワークスペーススコープのエンドポイント用のClickFunnelsワークスペースID。ワークスペースIDはClickFunnels管理パネルのURLで確認するか、`GET /teams/{team_id}/workspaces`エンドポイントを呼び出すことで取得できます"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBzZXJ0LWNvbnRhY3Q.option.d29ya3NwYWNlX2lk.display_name": {
+          "source": "Workspace ID",
+          "message": "ワークスペース ID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBzZXJ0LWNvbnRhY3Q.option.d29ya3NwYWNlX2lk.short_desc": {
+          "source": "ClickFunnels workspace ID",
+          "message": "ClickFunnelsワークスペースID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBzZXJ0LWNvbnRhY3Q.option.d2Vic2l0ZV91cmw.desc": {
+          "source": "The website URL of the contact",
+          "message": "連絡先のウェブサイトURL"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBzZXJ0LWNvbnRhY3Q.option.d2Vic2l0ZV91cmw.display_name": {
+          "source": "Website URL",
+          "message": "ウェブサイトの URL"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBzZXJ0LWNvbnRhY3Q.option.d2Vic2l0ZV91cmw.short_desc": {
+          "source": "The contact's website URL",
+          "message": "連絡先のウェブサイトURL"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBzZXJ0LWNvbnRhY3Q.option.dGFnX2lkcw.desc": {
+          "source": "A list of contact tag IDs to apply to the contact. Any valid array will overwrite existing values",
+          "message": "連絡先に適用する連絡先タグIDのリスト。有効な配列を指定すると既存の値が上書きされます"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBzZXJ0LWNvbnRhY3Q.option.dGFnX2lkcw.display_name": {
+          "source": "Tag IDs",
+          "message": "タグID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBzZXJ0LWNvbnRhY3Q.option.dGFnX2lkcw.short_desc": {
+          "source": "Contact tag IDs to apply",
+          "message": "適用する連絡先タグID"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBzZXJ0LWNvbnRhY3Q.option.dGltZV96b25l.desc": {
+          "source": "The time zone of the contact (e.g., `America/New_York`)",
+          "message": "連絡先のタイムゾーン（例: `America/New_York`）"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBzZXJ0LWNvbnRhY3Q.option.dGltZV96b25l.display_name": {
+          "source": "Time Zone",
+          "message": "タイムゾーン"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBzZXJ0LWNvbnRhY3Q.option.dGltZV96b25l.short_desc": {
+          "source": "The contact's time zone",
+          "message": "連絡先のタイムゾーン"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBzZXJ0LWNvbnRhY3Q.option.dHdpdHRlcl91cmw.desc": {
+          "source": "The Twitter profile URL of the contact",
+          "message": "連絡先のTwitterプロファイルURL"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBzZXJ0LWNvbnRhY3Q.option.dHdpdHRlcl91cmw.display_name": {
+          "source": "Twitter URL",
+          "message": "Twitter URL"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBzZXJ0LWNvbnRhY3Q.option.dHdpdHRlcl91cmw.short_desc": {
+          "source": "The contact's Twitter URL",
+          "message": "連絡先のTwitter URL"
+        },
+        "app.Q2xpY2tGdW5uZWxz.action.dXBzZXJ0LWNvbnRhY3Q.short_desc": {
+          "source": "Create or update a contact by email",
+          "message": "メールアドレスで連絡先を作成または更新"
+        },
+        "app.Q2xpY2tGdW5uZWxz.desc": {
+          "source": "ClickFunnels 2.0 is a marketing and sales funnel platform for managing contacts, orders, products, funnels, courses, forms, and fulfillments.\n\nThis integration supports full CRUD operations on core resources, tag management, and event-based triggers.",
+          "message": "ClickFunnels 2.0は、連絡先、注文、商品、ファネル、コース、フォーム、フルフィルメントを管理するためのマーケティングおよびセールスファネルプラットフォームです。\n\nこの統合機能は、主要リソースに対する完全なCRUD操作、タグ管理、イベントベースのトリガーをサポートします。"
+        },
+        "app.Q2xpY2tGdW5uZWxz.display_name": {
+          "source": "ClickFunnels",
+          "message": "ClickFunnels"
+        },
+        "app.Q2xpY2tGdW5uZWxz.short_desc": {
+          "source": "ClickFunnels 2.0 marketing and sales funnel platform",
+          "message": "ClickFunnels 2.0 マーケティングおよびセールスファネルプラットフォーム"
+        }
+      }
+    }
+  }
+}

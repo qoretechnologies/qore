@@ -1,0 +1,1565 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "it": {
+      "messages": {
+        "app.TGVtbGlzdA.action.Y3JlYXRlLWNhbXBhaWdu.desc": {
+          "source": "Create a new Lemlist campaign with the specified name.",
+          "message": "Crea una nuova campagna Lemlist con il nome specificato."
+        },
+        "app.TGVtbGlzdA.action.Y3JlYXRlLWNhbXBhaWdu.display_name": {
+          "source": "Create Campaign",
+          "message": "Crea campagna"
+        },
+        "app.TGVtbGlzdA.action.Y3JlYXRlLWNhbXBhaWdu.option.bmFtZQ.desc": {
+          "source": "The name of the campaign to create",
+          "message": "Il nome della campagna da creare"
+        },
+        "app.TGVtbGlzdA.action.Y3JlYXRlLWNhbXBhaWdu.option.bmFtZQ.display_name": {
+          "source": "Campaign Name",
+          "message": "Nome campagna"
+        },
+        "app.TGVtbGlzdA.action.Y3JlYXRlLWNhbXBhaWdu.option.bmFtZQ.short_desc": {
+          "source": "Name for the new campaign",
+          "message": "Nome per la nuova campagna"
+        },
+        "app.TGVtbGlzdA.action.Y3JlYXRlLWNhbXBhaWdu.short_desc": {
+          "source": "Create a new campaign",
+          "message": "Crea una nuova campagna"
+        },
+        "app.TGVtbGlzdA.action.Y3JlYXRlLWNvbnRhY3Q.desc": {
+          "source": "Create a new contact in Lemlist.",
+          "message": "Crea un nuovo contatto in Lemlist."
+        },
+        "app.TGVtbGlzdA.action.Y3JlYXRlLWNvbnRhY3Q.display_name": {
+          "source": "Create Contact",
+          "message": "Crea contatto"
+        },
+        "app.TGVtbGlzdA.action.Y3JlYXRlLWNvbnRhY3Q.option.Y29tcGFueU5hbWU.desc": {
+          "source": "The name of the company the contact works for",
+          "message": "Il nome dell'azienda per cui lavora il contatto"
+        },
+        "app.TGVtbGlzdA.action.Y3JlYXRlLWNvbnRhY3Q.option.Y29tcGFueU5hbWU.display_name": {
+          "source": "Company Name",
+          "message": "Nome azienda"
+        },
+        "app.TGVtbGlzdA.action.Y3JlYXRlLWNvbnRhY3Q.option.Y29tcGFueU5hbWU.short_desc": {
+          "source": "Contact company name",
+          "message": "Nome dell'azienda del contatto"
+        },
+        "app.TGVtbGlzdA.action.Y3JlYXRlLWNvbnRhY3Q.option.ZW1haWw.desc": {
+          "source": "The email address of the contact (used as the unique identifier)",
+          "message": "L'indirizzo email del contatto (utilizzato come identificatore univoco)"
+        },
+        "app.TGVtbGlzdA.action.Y3JlYXRlLWNvbnRhY3Q.option.ZW1haWw.display_name": {
+          "source": "Email",
+          "message": "E-mail"
+        },
+        "app.TGVtbGlzdA.action.Y3JlYXRlLWNvbnRhY3Q.option.ZW1haWw.short_desc": {
+          "source": "Contact email address",
+          "message": "Indirizzo email del contatto"
+        },
+        "app.TGVtbGlzdA.action.Y3JlYXRlLWNvbnRhY3Q.option.Zmlyc3ROYW1l.desc": {
+          "source": "The first name of the contact",
+          "message": "Il nome del contatto"
+        },
+        "app.TGVtbGlzdA.action.Y3JlYXRlLWNvbnRhY3Q.option.Zmlyc3ROYW1l.display_name": {
+          "source": "First Name",
+          "message": "Nome"
+        },
+        "app.TGVtbGlzdA.action.Y3JlYXRlLWNvbnRhY3Q.option.Zmlyc3ROYW1l.short_desc": {
+          "source": "Contact first name",
+          "message": "Nome del contatto"
+        },
+        "app.TGVtbGlzdA.action.Y3JlYXRlLWNvbnRhY3Q.option.bGFzdE5hbWU.desc": {
+          "source": "The last name of the contact",
+          "message": "Il cognome del contatto"
+        },
+        "app.TGVtbGlzdA.action.Y3JlYXRlLWNvbnRhY3Q.option.bGFzdE5hbWU.display_name": {
+          "source": "Last Name",
+          "message": "Cognome"
+        },
+        "app.TGVtbGlzdA.action.Y3JlYXRlLWNvbnRhY3Q.option.bGFzdE5hbWU.short_desc": {
+          "source": "Contact last name",
+          "message": "Cognome del contatto"
+        },
+        "app.TGVtbGlzdA.action.Y3JlYXRlLWNvbnRhY3Q.option.bGlua2VkaW5Vcmw.desc": {
+          "source": "The LinkedIn profile URL of the contact",
+          "message": "L'URL del profilo LinkedIn del contatto"
+        },
+        "app.TGVtbGlzdA.action.Y3JlYXRlLWNvbnRhY3Q.option.bGlua2VkaW5Vcmw.display_name": {
+          "source": "LinkedIn URL",
+          "message": "URL LinkedIn"
+        },
+        "app.TGVtbGlzdA.action.Y3JlYXRlLWNvbnRhY3Q.option.bGlua2VkaW5Vcmw.short_desc": {
+          "source": "Contact LinkedIn profile URL",
+          "message": "URL del profilo LinkedIn del contatto"
+        },
+        "app.TGVtbGlzdA.action.Y3JlYXRlLWNvbnRhY3Q.option.cGhvbmU.desc": {
+          "source": "The phone number of the contact",
+          "message": "Il numero di telefono del contatto"
+        },
+        "app.TGVtbGlzdA.action.Y3JlYXRlLWNvbnRhY3Q.option.cGhvbmU.display_name": {
+          "source": "Phone",
+          "message": "Telefono"
+        },
+        "app.TGVtbGlzdA.action.Y3JlYXRlLWNvbnRhY3Q.option.cGhvbmU.short_desc": {
+          "source": "Contact phone number",
+          "message": "Numero di telefono del contatto"
+        },
+        "app.TGVtbGlzdA.action.Y3JlYXRlLWNvbnRhY3Q.option.d2Vic2l0ZQ.desc": {
+          "source": "The website URL associated with the contact",
+          "message": "L'URL del sito web associato al contatto"
+        },
+        "app.TGVtbGlzdA.action.Y3JlYXRlLWNvbnRhY3Q.option.d2Vic2l0ZQ.display_name": {
+          "source": "Website",
+          "message": "Sito web"
+        },
+        "app.TGVtbGlzdA.action.Y3JlYXRlLWNvbnRhY3Q.option.d2Vic2l0ZQ.short_desc": {
+          "source": "Contact or company website",
+          "message": "Sito web del contatto o dell'azienda"
+        },
+        "app.TGVtbGlzdA.action.Y3JlYXRlLWNvbnRhY3Q.short_desc": {
+          "source": "Create a new contact",
+          "message": "Crea un nuovo contatto"
+        },
+        "app.TGVtbGlzdA.action.Y3JlYXRlLWxlYWQ.desc": {
+          "source": "Add a new lead to a Lemlist campaign. The lead will be enrolled in the campaign's outreach sequence.",
+          "message": "Aggiungi un nuovo lead a una campagna Lemlist. Il lead verrà inserito nella sequenza di outreach della campagna."
+        },
+        "app.TGVtbGlzdA.action.Y3JlYXRlLWxlYWQ.display_name": {
+          "source": "Add Lead to Campaign",
+          "message": "Aggiungi lead alla campagna"
+        },
+        "app.TGVtbGlzdA.action.Y3JlYXRlLWxlYWQ.option.Y29tcGFueU5hbWU.desc": {
+          "source": "The name of the company the lead works for",
+          "message": "Il nome dell'azienda per cui lavora il lead"
+        },
+        "app.TGVtbGlzdA.action.Y3JlYXRlLWxlYWQ.option.Y29tcGFueU5hbWU.display_name": {
+          "source": "Company Name",
+          "message": "Nome azienda"
+        },
+        "app.TGVtbGlzdA.action.Y3JlYXRlLWxlYWQ.option.Y29tcGFueU5hbWU.short_desc": {
+          "source": "Lead company name",
+          "message": "Nome dell'azienda del lead"
+        },
+        "app.TGVtbGlzdA.action.Y3JlYXRlLWxlYWQ.option.Y2FtcGFpZ25JZA.desc": {
+          "source": "The identifier of the campaign to add this lead to",
+          "message": "L'identificatore della campagna a cui aggiungere questo lead"
+        },
+        "app.TGVtbGlzdA.action.Y3JlYXRlLWxlYWQ.option.Y2FtcGFpZ25JZA.display_name": {
+          "source": "Campaign ID",
+          "message": "ID campagna"
+        },
+        "app.TGVtbGlzdA.action.Y3JlYXRlLWxlYWQ.option.Y2FtcGFpZ25JZA.short_desc": {
+          "source": "Campaign to add the lead to",
+          "message": "Campagna a cui aggiungere il lead"
+        },
+        "app.TGVtbGlzdA.action.Y3JlYXRlLWxlYWQ.option.ZW1haWw.desc": {
+          "source": "The email address of the lead (used as the unique identifier)",
+          "message": "L'indirizzo email del lead (utilizzato come identificatore univoco)"
+        },
+        "app.TGVtbGlzdA.action.Y3JlYXRlLWxlYWQ.option.ZW1haWw.display_name": {
+          "source": "Email",
+          "message": "E-mail"
+        },
+        "app.TGVtbGlzdA.action.Y3JlYXRlLWxlYWQ.option.ZW1haWw.short_desc": {
+          "source": "Lead email address",
+          "message": "Indirizzo email del lead"
+        },
+        "app.TGVtbGlzdA.action.Y3JlYXRlLWxlYWQ.option.Zmlyc3ROYW1l.desc": {
+          "source": "The first name of the lead",
+          "message": "Il nome del lead"
+        },
+        "app.TGVtbGlzdA.action.Y3JlYXRlLWxlYWQ.option.Zmlyc3ROYW1l.display_name": {
+          "source": "First Name",
+          "message": "Nome"
+        },
+        "app.TGVtbGlzdA.action.Y3JlYXRlLWxlYWQ.option.Zmlyc3ROYW1l.short_desc": {
+          "source": "Lead first name",
+          "message": "Nome del lead"
+        },
+        "app.TGVtbGlzdA.action.Y3JlYXRlLWxlYWQ.option.bGFzdE5hbWU.desc": {
+          "source": "The last name of the lead",
+          "message": "Il cognome del lead"
+        },
+        "app.TGVtbGlzdA.action.Y3JlYXRlLWxlYWQ.option.bGFzdE5hbWU.display_name": {
+          "source": "Last Name",
+          "message": "Cognome"
+        },
+        "app.TGVtbGlzdA.action.Y3JlYXRlLWxlYWQ.option.bGFzdE5hbWU.short_desc": {
+          "source": "Lead last name",
+          "message": "Cognome del lead"
+        },
+        "app.TGVtbGlzdA.action.Y3JlYXRlLWxlYWQ.option.bGlua2VkaW5Vcmw.desc": {
+          "source": "The LinkedIn profile URL of the lead",
+          "message": "L'URL del profilo LinkedIn del lead"
+        },
+        "app.TGVtbGlzdA.action.Y3JlYXRlLWxlYWQ.option.bGlua2VkaW5Vcmw.display_name": {
+          "source": "LinkedIn URL",
+          "message": "URL LinkedIn"
+        },
+        "app.TGVtbGlzdA.action.Y3JlYXRlLWxlYWQ.option.bGlua2VkaW5Vcmw.short_desc": {
+          "source": "Lead LinkedIn profile URL",
+          "message": "URL del profilo LinkedIn del lead"
+        },
+        "app.TGVtbGlzdA.action.Y3JlYXRlLWxlYWQ.option.cGhvbmU.desc": {
+          "source": "The phone number of the lead",
+          "message": "Il numero di telefono del lead"
+        },
+        "app.TGVtbGlzdA.action.Y3JlYXRlLWxlYWQ.option.cGhvbmU.display_name": {
+          "source": "Phone",
+          "message": "Telefono"
+        },
+        "app.TGVtbGlzdA.action.Y3JlYXRlLWxlYWQ.option.cGhvbmU.short_desc": {
+          "source": "Lead phone number",
+          "message": "Numero di telefono del lead"
+        },
+        "app.TGVtbGlzdA.action.Y3JlYXRlLWxlYWQ.option.d2Vic2l0ZQ.desc": {
+          "source": "The website URL associated with the lead",
+          "message": "L'URL del sito web associato al lead"
+        },
+        "app.TGVtbGlzdA.action.Y3JlYXRlLWxlYWQ.option.d2Vic2l0ZQ.display_name": {
+          "source": "Website",
+          "message": "Sito web"
+        },
+        "app.TGVtbGlzdA.action.Y3JlYXRlLWxlYWQ.option.d2Vic2l0ZQ.short_desc": {
+          "source": "Lead or company website",
+          "message": "Sito web del lead o dell'azienda"
+        },
+        "app.TGVtbGlzdA.action.Y3JlYXRlLWxlYWQ.short_desc": {
+          "source": "Add a lead to a campaign",
+          "message": "Aggiungi un lead a una campagna"
+        },
+        "app.TGVtbGlzdA.action.Y3JlYXRlLXRhc2s.desc": {
+          "source": "Create a new manual task in Lemlist for a lead (e.g., email, LinkedIn message, call).",
+          "message": "Crea una nuova attività manuale in Lemlist per un lead (es. email, messaggio LinkedIn, chiamata)."
+        },
+        "app.TGVtbGlzdA.action.Y3JlYXRlLXRhc2s.display_name": {
+          "source": "Create Task",
+          "message": "Crea attività"
+        },
+        "app.TGVtbGlzdA.action.Y3JlYXRlLXRhc2s.option.Y2FtcGFpZ25JZA.desc": {
+          "source": "The identifier of the campaign this task belongs to",
+          "message": "L'identificatore della campagna a cui appartiene questa attività"
+        },
+        "app.TGVtbGlzdA.action.Y3JlYXRlLXRhc2s.option.Y2FtcGFpZ25JZA.display_name": {
+          "source": "Campaign ID",
+          "message": "ID campagna"
+        },
+        "app.TGVtbGlzdA.action.Y3JlYXRlLXRhc2s.option.Y2FtcGFpZ25JZA.short_desc": {
+          "source": "Campaign to associate the task with",
+          "message": "Campagna a cui associare l'attività"
+        },
+        "app.TGVtbGlzdA.action.Y3JlYXRlLXRhc2s.option.YXNzaWduZWRUbw.desc": {
+          "source": "The email or identifier of the user to assign this task to",
+          "message": "L'email o l'identificatore dell'utente a cui assegnare questa attività"
+        },
+        "app.TGVtbGlzdA.action.Y3JlYXRlLXRhc2s.option.YXNzaWduZWRUbw.display_name": {
+          "source": "Assigned To",
+          "message": "Assegnato a"
+        },
+        "app.TGVtbGlzdA.action.Y3JlYXRlLXRhc2s.option.YXNzaWduZWRUbw.short_desc": {
+          "source": "User to assign the task to",
+          "message": "Utente a cui assegnare l'attività"
+        },
+        "app.TGVtbGlzdA.action.Y3JlYXRlLXRhc2s.option.ZHVlRGF0ZQ.desc": {
+          "source": "Date and time when this task is due",
+          "message": "Data e ora di scadenza di questa attività"
+        },
+        "app.TGVtbGlzdA.action.Y3JlYXRlLXRhc2s.option.ZHVlRGF0ZQ.display_name": {
+          "source": "Due Date",
+          "message": "Data di scadenza"
+        },
+        "app.TGVtbGlzdA.action.Y3JlYXRlLXRhc2s.option.ZHVlRGF0ZQ.short_desc": {
+          "source": "Task due date",
+          "message": "Data di scadenza del compito"
+        },
+        "app.TGVtbGlzdA.action.Y3JlYXRlLXRhc2s.option.bGVhZElk.desc": {
+          "source": "The identifier of the lead this task is for",
+          "message": "L'identificatore del lead a cui è destinata questa attività"
+        },
+        "app.TGVtbGlzdA.action.Y3JlYXRlLXRhc2s.option.bGVhZElk.display_name": {
+          "source": "Lead ID",
+          "message": "ID lead"
+        },
+        "app.TGVtbGlzdA.action.Y3JlYXRlLXRhc2s.option.bGVhZElk.short_desc": {
+          "source": "Lead to assign the task to",
+          "message": "Lead a cui assegnare l'attività"
+        },
+        "app.TGVtbGlzdA.action.Y3JlYXRlLXRhc2s.option.dHlwZQ.allowed-value.c3RyaW5nOm1hbnVhbEVtYWls.desc": {
+          "source": "Manual email",
+          "message": "Email manuale"
+        },
+        "app.TGVtbGlzdA.action.Y3JlYXRlLXRhc2s.option.dHlwZQ.allowed-value.c3RyaW5nOmFwaQ.desc": {
+          "source": "API task",
+          "message": "Attività API"
+        },
+        "app.TGVtbGlzdA.action.Y3JlYXRlLXRhc2s.option.dHlwZQ.allowed-value.c3RyaW5nOmNhbGw.desc": {
+          "source": "Phone call",
+          "message": "Telefonata"
+        },
+        "app.TGVtbGlzdA.action.Y3JlYXRlLXRhc2s.option.dHlwZQ.allowed-value.c3RyaW5nOmxpbmtlZGluSW52aXRl.desc": {
+          "source": "LinkedIn invite",
+          "message": "Invito LinkedIn"
+        },
+        "app.TGVtbGlzdA.action.Y3JlYXRlLXRhc2s.option.dHlwZQ.allowed-value.c3RyaW5nOmxpbmtlZGluTWVzc2FnZQ.desc": {
+          "source": "LinkedIn message",
+          "message": "Messaggio LinkedIn"
+        },
+        "app.TGVtbGlzdA.action.Y3JlYXRlLXRhc2s.option.dHlwZQ.desc": {
+          "source": "The type of manual task to create",
+          "message": "Il tipo di attività manuale da creare"
+        },
+        "app.TGVtbGlzdA.action.Y3JlYXRlLXRhc2s.option.dHlwZQ.display_name": {
+          "source": "Task Type",
+          "message": "Tipo di attività"
+        },
+        "app.TGVtbGlzdA.action.Y3JlYXRlLXRhc2s.option.dHlwZQ.short_desc": {
+          "source": "Type of task to create",
+          "message": "Tipo di attività da creare"
+        },
+        "app.TGVtbGlzdA.action.Y3JlYXRlLXRhc2s.short_desc": {
+          "source": "Create a manual task",
+          "message": "Crea un'attività manuale"
+        },
+        "app.TGVtbGlzdA.action.Z2V0LWNhbXBhaWdu.desc": {
+          "source": "Retrieve a single Lemlist campaign by its unique identifier.",
+          "message": "Recupera una singola campagna Lemlist tramite il relativo identificatore univoco."
+        },
+        "app.TGVtbGlzdA.action.Z2V0LWNhbXBhaWdu.display_name": {
+          "source": "Get Campaign",
+          "message": "Ottieni campagna"
+        },
+        "app.TGVtbGlzdA.action.Z2V0LWNhbXBhaWdu.option.Y2FtcGFpZ25JZA.desc": {
+          "source": "The unique identifier of the campaign to retrieve",
+          "message": "L'identificatore univoco della campagna da recuperare"
+        },
+        "app.TGVtbGlzdA.action.Z2V0LWNhbXBhaWdu.option.Y2FtcGFpZ25JZA.display_name": {
+          "source": "Campaign ID",
+          "message": "ID campagna"
+        },
+        "app.TGVtbGlzdA.action.Z2V0LWNhbXBhaWdu.option.Y2FtcGFpZ25JZA.short_desc": {
+          "source": "ID of the campaign to retrieve",
+          "message": "ID della campagna da recuperare"
+        },
+        "app.TGVtbGlzdA.action.Z2V0LWNhbXBhaWdu.short_desc": {
+          "source": "Get a single campaign by ID",
+          "message": "Ottieni una singola campagna per ID"
+        },
+        "app.TGVtbGlzdA.action.Z2V0LWNvbnRhY3Q.desc": {
+          "source": "Retrieve a single Lemlist contact by their email address.",
+          "message": "Recupera un singolo contatto Lemlist tramite il relativo indirizzo email."
+        },
+        "app.TGVtbGlzdA.action.Z2V0LWNvbnRhY3Q.display_name": {
+          "source": "Get Contact",
+          "message": "Ottieni contatto"
+        },
+        "app.TGVtbGlzdA.action.Z2V0LWNvbnRhY3Q.option.ZW1haWw.desc": {
+          "source": "The email address of the contact to retrieve",
+          "message": "L'indirizzo email del contatto da recuperare"
+        },
+        "app.TGVtbGlzdA.action.Z2V0LWNvbnRhY3Q.option.ZW1haWw.display_name": {
+          "source": "Email",
+          "message": "E-mail"
+        },
+        "app.TGVtbGlzdA.action.Z2V0LWNvbnRhY3Q.option.ZW1haWw.short_desc": {
+          "source": "Email address of the contact",
+          "message": "Indirizzo email del contatto"
+        },
+        "app.TGVtbGlzdA.action.Z2V0LWNvbnRhY3Q.short_desc": {
+          "source": "Get a contact by email",
+          "message": "Ottieni un contatto tramite email"
+        },
+        "app.TGVtbGlzdA.action.Z2V0LWxlYWQ.desc": {
+          "source": "Retrieve a single Lemlist lead by email address from a specific campaign.",
+          "message": "Recupera un singolo lead Lemlist tramite indirizzo email da una campagna specifica."
+        },
+        "app.TGVtbGlzdA.action.Z2V0LWxlYWQ.display_name": {
+          "source": "Get Lead",
+          "message": "Ottieni lead"
+        },
+        "app.TGVtbGlzdA.action.Z2V0LWxlYWQ.option.Y2FtcGFpZ25JZA.desc": {
+          "source": "The identifier of the campaign the lead belongs to",
+          "message": "L'identificatore della campagna a cui appartiene il lead"
+        },
+        "app.TGVtbGlzdA.action.Z2V0LWxlYWQ.option.Y2FtcGFpZ25JZA.display_name": {
+          "source": "Campaign ID",
+          "message": "ID campagna"
+        },
+        "app.TGVtbGlzdA.action.Z2V0LWxlYWQ.option.Y2FtcGFpZ25JZA.short_desc": {
+          "source": "Campaign containing the lead",
+          "message": "Campagna contenente il lead"
+        },
+        "app.TGVtbGlzdA.action.Z2V0LWxlYWQ.option.ZW1haWw.desc": {
+          "source": "The email address of the lead to retrieve",
+          "message": "L'indirizzo email del lead da recuperare"
+        },
+        "app.TGVtbGlzdA.action.Z2V0LWxlYWQ.option.ZW1haWw.display_name": {
+          "source": "Email",
+          "message": "E-mail"
+        },
+        "app.TGVtbGlzdA.action.Z2V0LWxlYWQ.option.ZW1haWw.short_desc": {
+          "source": "Lead email address",
+          "message": "Indirizzo email del lead"
+        },
+        "app.TGVtbGlzdA.action.Z2V0LWxlYWQ.short_desc": {
+          "source": "Get a single lead from a campaign",
+          "message": "Ottieni un singolo lead da una campagna"
+        },
+        "app.TGVtbGlzdA.action.Z2V0LXRhc2s.desc": {
+          "source": "Retrieve a single Lemlist manual task by its unique identifier.",
+          "message": "Recupera una singola attività manuale Lemlist tramite il relativo identificatore univoco."
+        },
+        "app.TGVtbGlzdA.action.Z2V0LXRhc2s.display_name": {
+          "source": "Get Task",
+          "message": "Ottieni attività"
+        },
+        "app.TGVtbGlzdA.action.Z2V0LXRhc2s.option.dGFza0lk.desc": {
+          "source": "The unique identifier of the task to retrieve",
+          "message": "L'identificatore univoco dell'attività da recuperare"
+        },
+        "app.TGVtbGlzdA.action.Z2V0LXRhc2s.option.dGFza0lk.display_name": {
+          "source": "Task ID",
+          "message": "ID attività"
+        },
+        "app.TGVtbGlzdA.action.Z2V0LXRhc2s.option.dGFza0lk.short_desc": {
+          "source": "ID of the task to retrieve",
+          "message": "ID dell'attività da recuperare"
+        },
+        "app.TGVtbGlzdA.action.Z2V0LXRhc2s.short_desc": {
+          "source": "Get a single task by ID",
+          "message": "Ottieni una singola attività tramite ID"
+        },
+        "app.TGVtbGlzdA.action.ZGVsZXRlLWNvbnRhY3Q.desc": {
+          "source": "Delete a Lemlist contact by their email address.",
+          "message": "Elimina un contatto Lemlist tramite il relativo indirizzo email."
+        },
+        "app.TGVtbGlzdA.action.ZGVsZXRlLWNvbnRhY3Q.display_name": {
+          "source": "Delete Contact",
+          "message": "Elimina contatto"
+        },
+        "app.TGVtbGlzdA.action.ZGVsZXRlLWNvbnRhY3Q.option.ZW1haWw.desc": {
+          "source": "The email address of the contact to delete",
+          "message": "L'indirizzo email del contatto da eliminare"
+        },
+        "app.TGVtbGlzdA.action.ZGVsZXRlLWNvbnRhY3Q.option.ZW1haWw.display_name": {
+          "source": "Email",
+          "message": "E-mail"
+        },
+        "app.TGVtbGlzdA.action.ZGVsZXRlLWNvbnRhY3Q.option.ZW1haWw.short_desc": {
+          "source": "Contact email address to delete",
+          "message": "Indirizzo email del contatto da eliminare"
+        },
+        "app.TGVtbGlzdA.action.ZGVsZXRlLWNvbnRhY3Q.short_desc": {
+          "source": "Delete a contact",
+          "message": "Elimina un contatto"
+        },
+        "app.TGVtbGlzdA.action.ZGVsZXRlLWxlYWQ.desc": {
+          "source": "Remove a lead from a Lemlist campaign. The lead will stop receiving outreach from that campaign.",
+          "message": "Rimuovi un lead da una campagna Lemlist. Il lead non riceverà più comunicazioni da quella campagna."
+        },
+        "app.TGVtbGlzdA.action.ZGVsZXRlLWxlYWQ.display_name": {
+          "source": "Remove Lead from Campaign",
+          "message": "Rimuovi lead dalla campagna"
+        },
+        "app.TGVtbGlzdA.action.ZGVsZXRlLWxlYWQ.option.Y2FtcGFpZ25JZA.desc": {
+          "source": "The identifier of the campaign to remove the lead from",
+          "message": "L'identificatore della campagna da cui rimuovere il lead"
+        },
+        "app.TGVtbGlzdA.action.ZGVsZXRlLWxlYWQ.option.Y2FtcGFpZ25JZA.display_name": {
+          "source": "Campaign ID",
+          "message": "ID campagna"
+        },
+        "app.TGVtbGlzdA.action.ZGVsZXRlLWxlYWQ.option.Y2FtcGFpZ25JZA.short_desc": {
+          "source": "Campaign to remove the lead from",
+          "message": "Campagna da cui rimuovere il lead"
+        },
+        "app.TGVtbGlzdA.action.ZGVsZXRlLWxlYWQ.option.ZW1haWw.desc": {
+          "source": "The email address of the lead to remove from the campaign",
+          "message": "L'indirizzo email del lead da rimuovere dalla campagna"
+        },
+        "app.TGVtbGlzdA.action.ZGVsZXRlLWxlYWQ.option.ZW1haWw.display_name": {
+          "source": "Email",
+          "message": "E-mail"
+        },
+        "app.TGVtbGlzdA.action.ZGVsZXRlLWxlYWQ.option.ZW1haWw.short_desc": {
+          "source": "Lead email address to delete",
+          "message": "Indirizzo email del lead da eliminare"
+        },
+        "app.TGVtbGlzdA.action.ZGVsZXRlLWxlYWQ.short_desc": {
+          "source": "Remove a lead from a campaign",
+          "message": "Rimuovi un lead da una campagna"
+        },
+        "app.TGVtbGlzdA.action.ZGVsZXRlLXRhc2s.desc": {
+          "source": "Delete a Lemlist manual task by its unique identifier.",
+          "message": "Elimina un'attività manuale di Lemlist tramite il suo identificatore univoco."
+        },
+        "app.TGVtbGlzdA.action.ZGVsZXRlLXRhc2s.display_name": {
+          "source": "Delete Task",
+          "message": "Elimina attività"
+        },
+        "app.TGVtbGlzdA.action.ZGVsZXRlLXRhc2s.option.dGFza0lk.desc": {
+          "source": "The unique identifier of the task to delete",
+          "message": "L'identificatore univoco dell'attività da eliminare"
+        },
+        "app.TGVtbGlzdA.action.ZGVsZXRlLXRhc2s.option.dGFza0lk.display_name": {
+          "source": "Task ID",
+          "message": "ID attività"
+        },
+        "app.TGVtbGlzdA.action.ZGVsZXRlLXRhc2s.option.dGFza0lk.short_desc": {
+          "source": "ID of the task to delete",
+          "message": "ID dell'attività da eliminare"
+        },
+        "app.TGVtbGlzdA.action.ZGVsZXRlLXRhc2s.short_desc": {
+          "source": "Delete a manual task",
+          "message": "Elimina un'attività manuale"
+        },
+        "app.TGVtbGlzdA.action.ZW1haWwtY2xpY2tlZA.desc": {
+          "source": "Fires when a lead clicks a link in a Lemlist email. Provides campaign, lead, and sequence step details.",
+          "message": "Si attiva quando un lead fa clic su un link in un'email di Lemlist. Fornisce dettagli su campagna, lead e fase della sequenza."
+        },
+        "app.TGVtbGlzdA.action.ZW1haWwtY2xpY2tlZA.display_name": {
+          "source": "Email Link Clicked",
+          "message": "Link dell'email selezionato"
+        },
+        "app.TGVtbGlzdA.action.ZW1haWwtY2xpY2tlZA.option.Y2FtcGFpZ25JZA.desc": {
+          "source": "Optionally filter events to a specific Lemlist campaign",
+          "message": "Filtra facoltativamente gli eventi per una campagna Lemlist specifica"
+        },
+        "app.TGVtbGlzdA.action.ZW1haWwtY2xpY2tlZA.option.Y2FtcGFpZ25JZA.display_name": {
+          "source": "Campaign ID",
+          "message": "ID campagna"
+        },
+        "app.TGVtbGlzdA.action.ZW1haWwtY2xpY2tlZA.option.Y2FtcGFpZ25JZA.short_desc": {
+          "source": "Filter events to a specific campaign",
+          "message": "Filtra gli eventi per una campagna specifica"
+        },
+        "app.TGVtbGlzdA.action.ZW1haWwtY2xpY2tlZA.short_desc": {
+          "source": "Trigger when a lead clicks a link",
+          "message": "Attiva quando un lead fa clic su un link"
+        },
+        "app.TGVtbGlzdA.action.ZW1haWwtYm91bmNlZA.desc": {
+          "source": "Fires when a Lemlist email bounces. Provides campaign and lead details for follow-up.",
+          "message": "Si attiva quando un'email di Lemlist rimbalza. Fornisce dettagli su campagna e lead per il follow-up."
+        },
+        "app.TGVtbGlzdA.action.ZW1haWwtYm91bmNlZA.display_name": {
+          "source": "Email Bounced",
+          "message": "Email rimbalzata"
+        },
+        "app.TGVtbGlzdA.action.ZW1haWwtYm91bmNlZA.option.Y2FtcGFpZ25JZA.desc": {
+          "source": "Optionally filter events to a specific Lemlist campaign",
+          "message": "Filtra facoltativamente gli eventi per una campagna Lemlist specifica"
+        },
+        "app.TGVtbGlzdA.action.ZW1haWwtYm91bmNlZA.option.Y2FtcGFpZ25JZA.display_name": {
+          "source": "Campaign ID",
+          "message": "ID campagna"
+        },
+        "app.TGVtbGlzdA.action.ZW1haWwtYm91bmNlZA.option.Y2FtcGFpZ25JZA.short_desc": {
+          "source": "Filter events to a specific campaign",
+          "message": "Filtra gli eventi per una campagna specifica"
+        },
+        "app.TGVtbGlzdA.action.ZW1haWwtYm91bmNlZA.short_desc": {
+          "source": "Trigger when an email bounces",
+          "message": "Attiva quando un'email rimbalza"
+        },
+        "app.TGVtbGlzdA.action.ZW1haWwtb3BlbmVk.desc": {
+          "source": "Fires when a lead opens a Lemlist email. Provides campaign, lead, and sequence step details.",
+          "message": "Si attiva quando un lead apre un'email di Lemlist. Fornisce dettagli su campagna, lead e fase della sequenza."
+        },
+        "app.TGVtbGlzdA.action.ZW1haWwtb3BlbmVk.display_name": {
+          "source": "Email Opened",
+          "message": "Email aperta"
+        },
+        "app.TGVtbGlzdA.action.ZW1haWwtb3BlbmVk.option.Y2FtcGFpZ25JZA.desc": {
+          "source": "Optionally filter events to a specific Lemlist campaign",
+          "message": "Filtra facoltativamente gli eventi per una campagna Lemlist specifica"
+        },
+        "app.TGVtbGlzdA.action.ZW1haWwtb3BlbmVk.option.Y2FtcGFpZ25JZA.display_name": {
+          "source": "Campaign ID",
+          "message": "ID campagna"
+        },
+        "app.TGVtbGlzdA.action.ZW1haWwtb3BlbmVk.option.Y2FtcGFpZ25JZA.short_desc": {
+          "source": "Filter events to a specific campaign",
+          "message": "Filtra gli eventi per una campagna specifica"
+        },
+        "app.TGVtbGlzdA.action.ZW1haWwtb3BlbmVk.short_desc": {
+          "source": "Trigger when a lead opens an email",
+          "message": "Attiva quando un lead apre un'email"
+        },
+        "app.TGVtbGlzdA.action.ZW1haWwtc2VudA.desc": {
+          "source": "Fires when a Lemlist email is sent to a lead. Provides campaign, lead, and sequence step details.",
+          "message": "Si attiva quando un'email di Lemlist viene inviata a un lead. Fornisce dettagli su campagna, lead e fase della sequenza."
+        },
+        "app.TGVtbGlzdA.action.ZW1haWwtc2VudA.display_name": {
+          "source": "Email Sent",
+          "message": "Email inviata"
+        },
+        "app.TGVtbGlzdA.action.ZW1haWwtc2VudA.option.Y2FtcGFpZ25JZA.desc": {
+          "source": "Optionally filter events to a specific Lemlist campaign",
+          "message": "Filtra facoltativamente gli eventi per una campagna Lemlist specifica"
+        },
+        "app.TGVtbGlzdA.action.ZW1haWwtc2VudA.option.Y2FtcGFpZ25JZA.display_name": {
+          "source": "Campaign ID",
+          "message": "ID campagna"
+        },
+        "app.TGVtbGlzdA.action.ZW1haWwtc2VudA.option.Y2FtcGFpZ25JZA.short_desc": {
+          "source": "Filter events to a specific campaign",
+          "message": "Filtra gli eventi per una campagna specifica"
+        },
+        "app.TGVtbGlzdA.action.ZW1haWwtc2VudA.short_desc": {
+          "source": "Trigger when an email is sent",
+          "message": "Attiva quando viene inviata un'email"
+        },
+        "app.TGVtbGlzdA.action.ZW1haWwtcmVwbGllZA.desc": {
+          "source": "Fires when a lead replies to a Lemlist email. Provides campaign, lead, and sequence step details.",
+          "message": "Si attiva quando un lead risponde a un'email di Lemlist. Fornisce dettagli su campagna, lead e fase della sequenza."
+        },
+        "app.TGVtbGlzdA.action.ZW1haWwtcmVwbGllZA.display_name": {
+          "source": "Email Replied",
+          "message": "Email con risposta"
+        },
+        "app.TGVtbGlzdA.action.ZW1haWwtcmVwbGllZA.option.Y2FtcGFpZ25JZA.desc": {
+          "source": "Optionally filter events to a specific Lemlist campaign",
+          "message": "Filtra facoltativamente gli eventi per una campagna Lemlist specifica"
+        },
+        "app.TGVtbGlzdA.action.ZW1haWwtcmVwbGllZA.option.Y2FtcGFpZ25JZA.display_name": {
+          "source": "Campaign ID",
+          "message": "ID campagna"
+        },
+        "app.TGVtbGlzdA.action.ZW1haWwtcmVwbGllZA.option.Y2FtcGFpZ25JZA.short_desc": {
+          "source": "Filter events to a specific campaign",
+          "message": "Filtra gli eventi per una campagna specifica"
+        },
+        "app.TGVtbGlzdA.action.ZW1haWwtcmVwbGllZA.short_desc": {
+          "source": "Trigger when a lead replies to an email",
+          "message": "Attiva quando un lead risponde a un'email"
+        },
+        "app.TGVtbGlzdA.action.bGVhZC1pbnRlcmVzdGVk.desc": {
+          "source": "Fires when a lead is marked as interested in Lemlist. This is a key engagement signal for sales follow-up.",
+          "message": "Si attiva quando un lead viene contrassegnato come interessato in Lemlist. Questo è un segnale di interazione chiave per il follow-up di vendita."
+        },
+        "app.TGVtbGlzdA.action.bGVhZC1pbnRlcmVzdGVk.display_name": {
+          "source": "Lead Marked Interested",
+          "message": "Lead contrassegnato come interessato"
+        },
+        "app.TGVtbGlzdA.action.bGVhZC1pbnRlcmVzdGVk.option.Y2FtcGFpZ25JZA.desc": {
+          "source": "Optionally filter events to a specific Lemlist campaign",
+          "message": "Filtra facoltativamente gli eventi per una campagna Lemlist specifica"
+        },
+        "app.TGVtbGlzdA.action.bGVhZC1pbnRlcmVzdGVk.option.Y2FtcGFpZ25JZA.display_name": {
+          "source": "Campaign ID",
+          "message": "ID campagna"
+        },
+        "app.TGVtbGlzdA.action.bGVhZC1pbnRlcmVzdGVk.option.Y2FtcGFpZ25JZA.short_desc": {
+          "source": "Filter events to a specific campaign",
+          "message": "Filtra gli eventi per una campagna specifica"
+        },
+        "app.TGVtbGlzdA.action.bGVhZC1pbnRlcmVzdGVk.short_desc": {
+          "source": "Trigger when a lead is marked as interested",
+          "message": "Attiva quando un lead viene contrassegnato come interessato"
+        },
+        "app.TGVtbGlzdA.action.bGVhZC1ub3QtaW50ZXJlc3RlZA.desc": {
+          "source": "Fires when a lead is marked as not interested in Lemlist. Use to suppress future outreach or update CRM records.",
+          "message": "Si attiva quando un lead viene contrassegnato come non interessato in Lemlist. Utilizzare per sopprimere contatti futuri o aggiornare i record CRM."
+        },
+        "app.TGVtbGlzdA.action.bGVhZC1ub3QtaW50ZXJlc3RlZA.display_name": {
+          "source": "Lead Marked Not Interested",
+          "message": "Lead contrassegnato come non interessato"
+        },
+        "app.TGVtbGlzdA.action.bGVhZC1ub3QtaW50ZXJlc3RlZA.option.Y2FtcGFpZ25JZA.desc": {
+          "source": "Optionally filter events to a specific Lemlist campaign",
+          "message": "Filtra facoltativamente gli eventi per una campagna Lemlist specifica"
+        },
+        "app.TGVtbGlzdA.action.bGVhZC1ub3QtaW50ZXJlc3RlZA.option.Y2FtcGFpZ25JZA.display_name": {
+          "source": "Campaign ID",
+          "message": "ID campagna"
+        },
+        "app.TGVtbGlzdA.action.bGVhZC1ub3QtaW50ZXJlc3RlZA.option.Y2FtcGFpZ25JZA.short_desc": {
+          "source": "Filter events to a specific campaign",
+          "message": "Filtra gli eventi per una campagna specifica"
+        },
+        "app.TGVtbGlzdA.action.bGVhZC1ub3QtaW50ZXJlc3RlZA.short_desc": {
+          "source": "Trigger when a lead is marked as not interested",
+          "message": "Attiva quando un lead viene contrassegnato come non interessato"
+        },
+        "app.TGVtbGlzdA.action.bGlzdC10YXNrcw.desc": {
+          "source": "Retrieve a list of Lemlist manual tasks.",
+          "message": "Recupera un elenco di attività manuali di Lemlist."
+        },
+        "app.TGVtbGlzdA.action.bGlzdC10YXNrcw.display_name": {
+          "source": "List Tasks",
+          "message": "Elenca attività"
+        },
+        "app.TGVtbGlzdA.action.bGlzdC10YXNrcw.option.bGltaXQ.desc": {
+          "source": "Maximum number of tasks to return (max 100)",
+          "message": "Numero massimo di attività da restituire (max 100)"
+        },
+        "app.TGVtbGlzdA.action.bGlzdC10YXNrcw.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "Limite"
+        },
+        "app.TGVtbGlzdA.action.bGlzdC10YXNrcw.option.bGltaXQ.short_desc": {
+          "source": "Maximum number of results",
+          "message": "Numero massimo di risultati"
+        },
+        "app.TGVtbGlzdA.action.bGlzdC10YXNrcw.short_desc": {
+          "source": "List manual tasks",
+          "message": "Elenca attività manuali"
+        },
+        "app.TGVtbGlzdA.action.bGlzdC1hY3Rpdml0aWVz.desc": {
+          "source": "Retrieve a list of Lemlist activities with optional filtering by type, campaign, or lead.",
+          "message": "Recupera un elenco di attività Lemlist con filtro facoltativo per tipo, campagna o lead."
+        },
+        "app.TGVtbGlzdA.action.bGlzdC1hY3Rpdml0aWVz.display_name": {
+          "source": "List Activities",
+          "message": "Elenca attività"
+        },
+        "app.TGVtbGlzdA.action.bGlzdC1hY3Rpdml0aWVz.option.Y2FtcGFpZ25JZA.desc": {
+          "source": "Filter activities by campaign identifier",
+          "message": "Filtra le attività per identificatore della campagna"
+        },
+        "app.TGVtbGlzdA.action.bGlzdC1hY3Rpdml0aWVz.option.Y2FtcGFpZ25JZA.display_name": {
+          "source": "Campaign ID",
+          "message": "ID campagna"
+        },
+        "app.TGVtbGlzdA.action.bGlzdC1hY3Rpdml0aWVz.option.Y2FtcGFpZ25JZA.short_desc": {
+          "source": "Filter by campaign",
+          "message": "Filtra per campagna"
+        },
+        "app.TGVtbGlzdA.action.bGlzdC1hY3Rpdml0aWVz.option.aXNGaXJzdA.desc": {
+          "source": "If `True`, only returns the first occurrence of each activity type per lead per campaign",
+          "message": "Se `True`, restituisce solo la prima occorrenza di ciascun tipo di attività per lead per campagna"
+        },
+        "app.TGVtbGlzdA.action.bGlzdC1hY3Rpdml0aWVz.option.aXNGaXJzdA.display_name": {
+          "source": "First Occurrence Only",
+          "message": "Solo prima occorrenza"
+        },
+        "app.TGVtbGlzdA.action.bGlzdC1hY3Rpdml0aWVz.option.aXNGaXJzdA.short_desc": {
+          "source": "Only return first occurrences",
+          "message": "Restituisci solo le prime occorrenze"
+        },
+        "app.TGVtbGlzdA.action.bGlzdC1hY3Rpdml0aWVz.option.bGVhZElk.desc": {
+          "source": "Filter activities by lead identifier",
+          "message": "Filtra le attività per identificatore del lead"
+        },
+        "app.TGVtbGlzdA.action.bGlzdC1hY3Rpdml0aWVz.option.bGVhZElk.display_name": {
+          "source": "Lead ID",
+          "message": "ID lead"
+        },
+        "app.TGVtbGlzdA.action.bGlzdC1hY3Rpdml0aWVz.option.bGVhZElk.short_desc": {
+          "source": "Filter by lead",
+          "message": "Filtra per lead"
+        },
+        "app.TGVtbGlzdA.action.bGlzdC1hY3Rpdml0aWVz.option.dHlwZQ.allowed-value.c3RyaW5nOm5vdEludGVyZXN0ZWQ.desc": {
+          "source": "Lead not interested",
+          "message": "Lead non interessato"
+        },
+        "app.TGVtbGlzdA.action.bGlzdC1hY3Rpdml0aWVz.option.dHlwZQ.allowed-value.c3RyaW5nOmVtYWlsc09wZW5lZA.desc": {
+          "source": "Emails opened",
+          "message": "Email aperte"
+        },
+        "app.TGVtbGlzdA.action.bGlzdC1hY3Rpdml0aWVz.option.dHlwZQ.allowed-value.c3RyaW5nOmVtYWlsc0JvdW5jZWQ.desc": {
+          "source": "Emails bounced",
+          "message": "Email rimbalzate"
+        },
+        "app.TGVtbGlzdA.action.bGlzdC1hY3Rpdml0aWVz.option.dHlwZQ.allowed-value.c3RyaW5nOmVtYWlsc0NsaWNrZWQ.desc": {
+          "source": "Emails clicked",
+          "message": "Email con clic"
+        },
+        "app.TGVtbGlzdA.action.bGlzdC1hY3Rpdml0aWVz.option.dHlwZQ.allowed-value.c3RyaW5nOmVtYWlsc1JlcGxpZWQ.desc": {
+          "source": "Emails replied",
+          "message": "Email con risposta"
+        },
+        "app.TGVtbGlzdA.action.bGlzdC1hY3Rpdml0aWVz.option.dHlwZQ.allowed-value.c3RyaW5nOmVtYWlsc1NlbnQ.desc": {
+          "source": "Emails sent",
+          "message": "Email inviate"
+        },
+        "app.TGVtbGlzdA.action.bGlzdC1hY3Rpdml0aWVz.option.dHlwZQ.allowed-value.c3RyaW5nOmludGVyZXN0ZWQ.desc": {
+          "source": "Lead interested",
+          "message": "Lead interessato"
+        },
+        "app.TGVtbGlzdA.action.bGlzdC1hY3Rpdml0aWVz.option.dHlwZQ.desc": {
+          "source": "Filter activities by their type",
+          "message": "Filtra le attività per tipo"
+        },
+        "app.TGVtbGlzdA.action.bGlzdC1hY3Rpdml0aWVz.option.dHlwZQ.display_name": {
+          "source": "Activity Type",
+          "message": "Tipo di attività"
+        },
+        "app.TGVtbGlzdA.action.bGlzdC1hY3Rpdml0aWVz.option.dHlwZQ.short_desc": {
+          "source": "Filter by activity type",
+          "message": "Filtra per tipo di attività"
+        },
+        "app.TGVtbGlzdA.action.bGlzdC1hY3Rpdml0aWVz.short_desc": {
+          "source": "List email and engagement activities",
+          "message": "Elenca le attività relative a email e interazioni"
+        },
+        "app.TGVtbGlzdA.action.bGlzdC1jYW1wYWlnbnM.desc": {
+          "source": "Retrieve a list of Lemlist campaigns with optional filtering by status.",
+          "message": "Recupera un elenco di campagne Lemlist con filtro facoltativo per stato."
+        },
+        "app.TGVtbGlzdA.action.bGlzdC1jYW1wYWlnbnM.display_name": {
+          "source": "List Campaigns",
+          "message": "Elenca campagne"
+        },
+        "app.TGVtbGlzdA.action.bGlzdC1jYW1wYWlnbnM.option.c3RhdHVz.allowed-value.c3RyaW5nOmFyY2hpdmVk.desc": {
+          "source": "Archived campaigns",
+          "message": "Campagne archiviate"
+        },
+        "app.TGVtbGlzdA.action.bGlzdC1jYW1wYWlnbnM.option.c3RhdHVz.allowed-value.c3RyaW5nOmRyYWZ0.desc": {
+          "source": "Draft campaigns",
+          "message": "Campagne in bozza"
+        },
+        "app.TGVtbGlzdA.action.bGlzdC1jYW1wYWlnbnM.option.c3RhdHVz.allowed-value.c3RyaW5nOmVuZGVk.desc": {
+          "source": "Ended campaigns",
+          "message": "Campagne terminate"
+        },
+        "app.TGVtbGlzdA.action.bGlzdC1jYW1wYWlnbnM.option.c3RhdHVz.allowed-value.c3RyaW5nOmVycm9ycw.desc": {
+          "source": "Campaigns with errors",
+          "message": "Campagne con errori"
+        },
+        "app.TGVtbGlzdA.action.bGlzdC1jYW1wYWlnbnM.option.c3RhdHVz.allowed-value.c3RyaW5nOnBhdXNlZA.desc": {
+          "source": "Paused campaigns",
+          "message": "Campagne in pausa"
+        },
+        "app.TGVtbGlzdA.action.bGlzdC1jYW1wYWlnbnM.option.c3RhdHVz.allowed-value.c3RyaW5nOnJ1bm5pbmc.desc": {
+          "source": "Running campaigns",
+          "message": "Campagne in esecuzione"
+        },
+        "app.TGVtbGlzdA.action.bGlzdC1jYW1wYWlnbnM.option.c3RhdHVz.desc": {
+          "source": "Filter campaigns by their current status",
+          "message": "Filtra le campagne per stato corrente"
+        },
+        "app.TGVtbGlzdA.action.bGlzdC1jYW1wYWlnbnM.option.c3RhdHVz.display_name": {
+          "source": "Status",
+          "message": "Stato"
+        },
+        "app.TGVtbGlzdA.action.bGlzdC1jYW1wYWlnbnM.option.c3RhdHVz.short_desc": {
+          "source": "Filter by campaign status",
+          "message": "Filtra per stato della campagna"
+        },
+        "app.TGVtbGlzdA.action.bGlzdC1jYW1wYWlnbnM.short_desc": {
+          "source": "List and search campaigns",
+          "message": "Elenca e cerca campagne"
+        },
+        "app.TGVtbGlzdA.action.bGlzdC1jb250YWN0cw.desc": {
+          "source": "Retrieve a list of Lemlist contacts. Optionally filter by email to get a specific contact.",
+          "message": "Recupera un elenco di contatti Lemlist. Filtra facoltativamente per email per ottenere un contatto specifico."
+        },
+        "app.TGVtbGlzdA.action.bGlzdC1jb250YWN0cw.display_name": {
+          "source": "List Contacts",
+          "message": "Elenca contatti"
+        },
+        "app.TGVtbGlzdA.action.bGlzdC1jb250YWN0cw.option.ZW1haWw.desc": {
+          "source": "The email address of the contact to retrieve. The Lemlist v2 API requires a specific email address to look up contacts.",
+          "message": "L'indirizzo email del contatto da recuperare. L'API Lemlist v2 richiede un indirizzo email specifico per cercare i contatti."
+        },
+        "app.TGVtbGlzdA.action.bGlzdC1jb250YWN0cw.option.ZW1haWw.display_name": {
+          "source": "Email",
+          "message": "E-mail"
+        },
+        "app.TGVtbGlzdA.action.bGlzdC1jb250YWN0cw.option.ZW1haWw.short_desc": {
+          "source": "Email address of the contact to retrieve",
+          "message": "Indirizzo email del contatto da recuperare"
+        },
+        "app.TGVtbGlzdA.action.bGlzdC1jb250YWN0cw.short_desc": {
+          "source": "List contacts",
+          "message": "Elenca contatti"
+        },
+        "app.TGVtbGlzdA.action.bGlzdC1sZWFkcw.desc": {
+          "source": "Retrieve a list of leads enrolled in a specific Lemlist campaign.",
+          "message": "Recupera un elenco di lead iscritti a una campagna Lemlist specifica."
+        },
+        "app.TGVtbGlzdA.action.bGlzdC1sZWFkcw.display_name": {
+          "source": "List Leads",
+          "message": "Elenca lead"
+        },
+        "app.TGVtbGlzdA.action.bGlzdC1sZWFkcw.option.Y2FtcGFpZ25JZA.desc": {
+          "source": "The identifier of the campaign to retrieve leads from",
+          "message": "L'identificatore della campagna da cui recuperare i lead"
+        },
+        "app.TGVtbGlzdA.action.bGlzdC1sZWFkcw.option.Y2FtcGFpZ25JZA.display_name": {
+          "source": "Campaign ID",
+          "message": "ID campagna"
+        },
+        "app.TGVtbGlzdA.action.bGlzdC1sZWFkcw.option.Y2FtcGFpZ25JZA.short_desc": {
+          "source": "Campaign to list leads from",
+          "message": "Campagna da cui elencare i lead"
+        },
+        "app.TGVtbGlzdA.action.bGlzdC1sZWFkcw.short_desc": {
+          "source": "List leads in a campaign",
+          "message": "Elenca lead in una campagna"
+        },
+        "app.TGVtbGlzdA.action.bWFrZS1hcGktY2FsbA.desc": {
+          "source": "Make a custom HTTP / REST API call to **Lemlist** using the configured connection's authentication.\n\nSpecify the HTTP method, the URI path (relative to the connection's API base URL), optional query parameters, headers, and request body. The response is returned as a hash containing the status code, response headers, and response body.\n\nUse this action for endpoints that are not yet exposed as first-class actions on this app.",
+          "message": "Esegui una chiamata API HTTP / REST personalizzata a **Lemlist** utilizzando l'autenticazione della connessione configurata.\n\nSpecifica il metodo HTTP, il percorso URI (relativo all'URL di base dell'API della connessione), i parametri di query opzionali, le intestazioni e il corpo della richiesta. La risposta viene restituita come hash contenente il codice di stato, le intestazioni di risposta e il corpo della risposta.\n\nUtilizza questa azione per gli endpoint che non sono ancora esposti come azioni di prim'ordine in questa app."
+        },
+        "app.TGVtbGlzdA.action.bWFrZS1hcGktY2FsbA.display_name": {
+          "source": "Make an API call",
+          "message": "Esegui una chiamata API"
+        },
+        "app.TGVtbGlzdA.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.desc": {
+          "source": "The request body. The effective type depends on `body_type`: JSON/form/YAML expect a hash, XML/text expect a string, multipart expects a file structure, binary expects raw bytes.",
+          "message": "Il corpo della richiesta. Il tipo effettivo dipende da `body_type`: JSON/form/YAML richiedono un hash, XML/testo richiedono una stringa, multipart richiede una struttura di file, binario richiede byte grezzi."
+        },
+        "app.TGVtbGlzdA.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.display_name": {
+          "source": "Body",
+          "message": "Corpo"
+        },
+        "app.TGVtbGlzdA.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.short_desc": {
+          "source": "The request body",
+          "message": "Il corpo della richiesta"
+        },
+        "app.TGVtbGlzdA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.desc": {
+          "source": "Upload a file using `multipart/form-data`. The body must be a @ref DataProvider::FileDataType \"FileDataType\" structure (filename + content + mime_type). The framework builds the multipart envelope and sets the boundary header.",
+          "message": "Carica un file utilizzando `multipart/form-data`. Il corpo deve essere una struttura @ref DataProvider::FileDataType \"FileDataType\" (nome file + contenuto + mime_type). Il framework costruisce l'inviluppo multipart e imposta l'intestazione del boundary."
+        },
+        "app.TGVtbGlzdA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.display_name": {
+          "source": "Multipart Form",
+          "message": "Modulo Multipart"
+        },
+        "app.TGVtbGlzdA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.short_desc": {
+          "source": "Upload a file using multipart/form-data",
+          "message": "Carica un file utilizzando multipart/form-data"
+        },
+        "app.TGVtbGlzdA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.desc": {
+          "source": "Pass the body to the REST client unchanged; the client decides serialization based on its configured `data` option and the value type",
+          "message": "Passa il corpo al client REST inalterato; il client decide la serializzazione in base alla sua opzione `data` configurata e al tipo di valore"
+        },
+        "app.TGVtbGlzdA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.display_name": {
+          "source": "Auto",
+          "message": "Auto"
+        },
+        "app.TGVtbGlzdA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.short_desc": {
+          "source": "Pass-through; use connection serialization and let the REST client decide",
+          "message": "Pass-through; usa la serializzazione della connessione e lascia decidere al client REST"
+        },
+        "app.TGVtbGlzdA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.desc": {
+          "source": "Send the body as raw bytes. The body must be a binary value. Sets `Content-Type: application/octet-stream` unless overridden by `hdr`.",
+          "message": "Invia il corpo come byte grezzi. Il corpo deve essere un valore binario. Imposta `Content-Type: application/octet-stream` a meno che non sia sovrascritto da `hdr`."
+        },
+        "app.TGVtbGlzdA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.display_name": {
+          "source": "Raw Binary",
+          "message": "Binario grezzo"
+        },
+        "app.TGVtbGlzdA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.short_desc": {
+          "source": "Send body as raw bytes",
+          "message": "Invia il corpo come byte grezzi"
+        },
+        "app.TGVtbGlzdA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.desc": {
+          "source": "Serialize a hash of form fields as `application/x-www-form-urlencoded`. The body must be a hash whose values are scalars (strings/numbers/booleans).",
+          "message": "Serializza un hash di campi modulo come `application/x-www-form-urlencoded`. Il corpo deve essere un hash i cui valori sono scalari (stringhe/numeri/booleani)."
+        },
+        "app.TGVtbGlzdA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.display_name": {
+          "source": "Form (URL-encoded)",
+          "message": "Form (URL-encoded)"
+        },
+        "app.TGVtbGlzdA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.short_desc": {
+          "source": "Serialize body as application/x-www-form-urlencoded form fields",
+          "message": "Serializza il corpo come campi del modulo application/x-www-form-urlencoded"
+        },
+        "app.TGVtbGlzdA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.desc": {
+          "source": "Serialize the body as JSON; sets `Content-Type: application/json`. The body should be a hash, list, or scalar value.",
+          "message": "Serializza il corpo come JSON; imposta `Content-Type: application/json`. Il corpo deve essere un hash, un elenco o un valore scalare."
+        },
+        "app.TGVtbGlzdA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.display_name": {
+          "source": "JSON",
+          "message": "JSON"
+        },
+        "app.TGVtbGlzdA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.short_desc": {
+          "source": "Serialize body as JSON",
+          "message": "Serializza il corpo come JSON"
+        },
+        "app.TGVtbGlzdA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.desc": {
+          "source": "Send the body as plain text. The body must be a string. Sets `Content-Type: text/plain`.",
+          "message": "Invia il corpo come testo semplice. Il corpo deve essere una stringa. Imposta `Content-Type: text/plain`."
+        },
+        "app.TGVtbGlzdA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.display_name": {
+          "source": "Plain Text",
+          "message": "Testo normale"
+        },
+        "app.TGVtbGlzdA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.short_desc": {
+          "source": "Send body as text/plain",
+          "message": "Invia il corpo come text/plain"
+        },
+        "app.TGVtbGlzdA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.desc": {
+          "source": "Send the body as XML. If the body is a hash it is serialized to XML; if it is a string it is sent verbatim. Sets `Content-Type: application/xml`.",
+          "message": "Invia il corpo come XML. Se il corpo è un hash viene serializzato in XML; se è una stringa viene inviato testualmente. Imposta `Content-Type: application/xml`."
+        },
+        "app.TGVtbGlzdA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.display_name": {
+          "source": "XML",
+          "message": "XML"
+        },
+        "app.TGVtbGlzdA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.short_desc": {
+          "source": "Send body as XML",
+          "message": "Invia il corpo come XML"
+        },
+        "app.TGVtbGlzdA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.desc": {
+          "source": "Send the body as YAML. If the body is a hash it is serialized to YAML; if it is a string it is sent verbatim. Sets `Content-Type: application/x-yaml`.",
+          "message": "Invia il corpo come YAML. Se il corpo è un hash viene serializzato in YAML; se è una stringa viene inviato testualmente. Imposta `Content-Type: application/x-yaml`."
+        },
+        "app.TGVtbGlzdA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.display_name": {
+          "source": "YAML",
+          "message": "YAML"
+        },
+        "app.TGVtbGlzdA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.short_desc": {
+          "source": "Send body as YAML",
+          "message": "Invia il corpo come YAML"
+        },
+        "app.TGVtbGlzdA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.desc": {
+          "source": "Selects the body serialization mode and the corresponding `Content-Type` header. Changing this field reshapes the `body` editor - selecting JSON exposes a JSON editor, selecting Multipart Form exposes a file picker, and so on.",
+          "message": "Seleziona la modalità di serializzazione del corpo e la corrispondente intestazione `Content-Type`. La modifica di questo campo riorganizza l'editor `body`: selezionando JSON viene mostrato un editor JSON, selezionando Modulo Multipart viene mostrato un selettore di file e così via."
+        },
+        "app.TGVtbGlzdA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.display_name": {
+          "source": "Body Type",
+          "message": "Tipo di corpo"
+        },
+        "app.TGVtbGlzdA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.short_desc": {
+          "source": "How the body is serialized and what Content-Type is sent",
+          "message": "Come viene serializzato il corpo e quale Content-Type viene inviato"
+        },
+        "app.TGVtbGlzdA.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.desc": {
+          "source": "If `True`, non-2xx HTTP responses return as the normal response hash (with the actual status code) instead of raising `REST-RESPONSE-ERROR`. Useful for handling 4xx/5xx as data - e.g. checking whether a resource exists. Overrides the connection's `error_passthru` setting for this call only.",
+          "message": "Se `True`, le risposte HTTP diverse da 2xx ritornano come normale hash di risposta (con il codice di stato effettivo) invece di sollevare `REST-RESPONSE-ERROR`. Utile per gestire 4xx/5xx come dati, ad es. per verificare se una risorsa esiste. Sovrascrive l'impostazione `error_passthru` della connessione solo per questa chiamata."
+        },
+        "app.TGVtbGlzdA.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.display_name": {
+          "source": "Return Errors as Data",
+          "message": "Restituisci errori come dati"
+        },
+        "app.TGVtbGlzdA.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.short_desc": {
+          "source": "Return non-2xx responses normally instead of throwing",
+          "message": "Restituisci normalmente le risposte non 2xx invece di generare un'eccezione"
+        },
+        "app.TGVtbGlzdA.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.desc": {
+          "source": "Optional list of HTTP status codes treated as success. If set and the response status is not in this list, the action throws `REST-STATUS-ERROR`. When unset, the REST client's default behavior applies (typically: 2xx is success, non-2xx throws).",
+          "message": "Elenco opzionale di codici di stato HTTP trattati come successo. Se impostato e lo stato della risposta non è in questo elenco, l'azione genera `REST-STATUS-ERROR`. Quando non è impostato, si applica il comportamento predefinito del client REST (in genere: 2xx è successo, non-2xx genera un'eccezione)."
+        },
+        "app.TGVtbGlzdA.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.display_name": {
+          "source": "Expected Status Codes",
+          "message": "Codici di stato previsti"
+        },
+        "app.TGVtbGlzdA.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.short_desc": {
+          "source": "Response status codes treated as success",
+          "message": "Codici di stato della risposta trattati come successo"
+        },
+        "app.TGVtbGlzdA.action.bWFrZS1hcGktY2FsbA.option.aGRy.desc": {
+          "source": "Hash of custom headers added to the request. These override any default headers set by `body_type` (e.g. supplying `Content-Type` here wins over the body-type default).",
+          "message": "Hash di intestazioni personalizzate aggiunte alla richiesta. Queste sovrascrivono qualsiasi intestazione predefinita impostata da `body_type` (ad es. fornire `Content-Type` qui ha la precedenza sul valore predefinito del tipo di corpo)."
+        },
+        "app.TGVtbGlzdA.action.bWFrZS1hcGktY2FsbA.option.aGRy.display_name": {
+          "source": "Custom Headers",
+          "message": "Intestazioni personalizzate"
+        },
+        "app.TGVtbGlzdA.action.bWFrZS1hcGktY2FsbA.option.aGRy.short_desc": {
+          "source": "Extra request headers",
+          "message": "Intestazioni della richiesta aggiuntive"
+        },
+        "app.TGVtbGlzdA.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.desc": {
+          "source": "If `True`, the response hash includes a `debug` sub-hash containing the request method/URL/headers (with sensitive values redacted), request and response sizes, and round-trip duration. Useful when investigating slow or failing calls. Off by default to keep responses lean.",
+          "message": "Se `True`, l'hash della risposta include un sotto-hash `debug` contenente il metodo/URL/intestazioni della richiesta (con i valori sensibili oscurati), le dimensioni della richiesta e della risposta e la durata di andata e ritorno. Utile quando si indagano chiamate lente o con errori. Disattivato per impostazione predefinita per mantenere le risposte snelle."
+        },
+        "app.TGVtbGlzdA.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.display_name": {
+          "source": "Include Debug Info",
+          "message": "Includi informazioni di debug"
+        },
+        "app.TGVtbGlzdA.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.short_desc": {
+          "source": "Include request/timing/size debug info in the response",
+          "message": "Includi le informazioni di debug relative a richiesta/tempi/dimensioni nella risposta"
+        },
+        "app.TGVtbGlzdA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.desc": {
+          "source": "HTTP `OPTIONS`",
+          "message": "HTTP `OPTIONS`"
+        },
+        "app.TGVtbGlzdA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.display_name": {
+          "source": "OPTIONS",
+          "message": "OPTIONS"
+        },
+        "app.TGVtbGlzdA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.short_desc": {
+          "source": "HTTP OPTIONS",
+          "message": "HTTP OPTIONS"
+        },
+        "app.TGVtbGlzdA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.desc": {
+          "source": "HTTP `DELETE`",
+          "message": "HTTP `DELETE`"
+        },
+        "app.TGVtbGlzdA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.display_name": {
+          "source": "DELETE",
+          "message": "DELETE"
+        },
+        "app.TGVtbGlzdA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.short_desc": {
+          "source": "HTTP DELETE",
+          "message": "HTTP DELETE"
+        },
+        "app.TGVtbGlzdA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.desc": {
+          "source": "HTTP `GET`",
+          "message": "HTTP `GET`"
+        },
+        "app.TGVtbGlzdA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.display_name": {
+          "source": "GET",
+          "message": "GET"
+        },
+        "app.TGVtbGlzdA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.short_desc": {
+          "source": "HTTP GET",
+          "message": "HTTP GET"
+        },
+        "app.TGVtbGlzdA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.desc": {
+          "source": "HTTP `HEAD`",
+          "message": "HTTP `HEAD`"
+        },
+        "app.TGVtbGlzdA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.display_name": {
+          "source": "HEAD",
+          "message": "HEAD"
+        },
+        "app.TGVtbGlzdA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.short_desc": {
+          "source": "HTTP HEAD",
+          "message": "HTTP HEAD"
+        },
+        "app.TGVtbGlzdA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.desc": {
+          "source": "HTTP `PATCH`",
+          "message": "HTTP `PATCH`"
+        },
+        "app.TGVtbGlzdA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.display_name": {
+          "source": "PATCH",
+          "message": "PATCH"
+        },
+        "app.TGVtbGlzdA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.short_desc": {
+          "source": "HTTP PATCH",
+          "message": "HTTP PATCH"
+        },
+        "app.TGVtbGlzdA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.desc": {
+          "source": "HTTP `POST`",
+          "message": "HTTP `POST`"
+        },
+        "app.TGVtbGlzdA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.display_name": {
+          "source": "POST",
+          "message": "POST"
+        },
+        "app.TGVtbGlzdA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.short_desc": {
+          "source": "HTTP POST",
+          "message": "HTTP POST"
+        },
+        "app.TGVtbGlzdA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.desc": {
+          "source": "HTTP `PUT`",
+          "message": "HTTP `PUT`"
+        },
+        "app.TGVtbGlzdA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.display_name": {
+          "source": "PUT",
+          "message": "PUT"
+        },
+        "app.TGVtbGlzdA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.short_desc": {
+          "source": "HTTP PUT",
+          "message": "HTTP PUT"
+        },
+        "app.TGVtbGlzdA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.desc": {
+          "source": "HTTP `TRACE`",
+          "message": "HTTP `TRACE`"
+        },
+        "app.TGVtbGlzdA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.display_name": {
+          "source": "TRACE",
+          "message": "TRACE"
+        },
+        "app.TGVtbGlzdA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.short_desc": {
+          "source": "HTTP TRACE",
+          "message": "HTTP TRACE"
+        },
+        "app.TGVtbGlzdA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "Il metodo HTTP da utilizzare per la richiesta"
+        },
+        "app.TGVtbGlzdA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.display_name": {
+          "source": "HTTP Method",
+          "message": "Metodo HTTP"
+        },
+        "app.TGVtbGlzdA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.short_desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "Il metodo HTTP da utilizzare per la richiesta"
+        },
+        "app.TGVtbGlzdA.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain `{name}` placeholders that are replaced from `path_vars`. Example: `/users/{id}/comments`.",
+          "message": "Il percorso URI relativo all'URL di base dell'API della connessione. Può contenere segnaposto `{name}` che vengono sostituiti da `path_vars`. Esempio: `/users/{id}/comments`."
+        },
+        "app.TGVtbGlzdA.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.display_name": {
+          "source": "URI Path",
+          "message": "Percorso URI"
+        },
+        "app.TGVtbGlzdA.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.short_desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain '{name}' placeholders that are replaced from 'path_vars'. Example: '/users/{id}/comments'",
+          "message": "Il percorso URI relativo all'URL di base dell'API della connessione. Può contenere segnaposto '{name}' che vengono sostituiti da 'path_vars'. Esempio: '/users/{id}/comments'"
+        },
+        "app.TGVtbGlzdA.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.desc": {
+          "source": "Hash of values substituted into `{name}` placeholders in the URI path. Example: with `path = /users/{id}` and `path_vars = {id: 123}` the framework sends `/users/123`. Values are URL-encoded.",
+          "message": "Hash dei valori sostituiti nei segnaposto `{name}` nel percorso URI. Esempio: con `path = /users/{id}` e `path_vars = {id: 123}` il framework invia `/users/123`. I valori sono codificati in URL."
+        },
+        "app.TGVtbGlzdA.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.display_name": {
+          "source": "Path Variables",
+          "message": "Variabili del percorso"
+        },
+        "app.TGVtbGlzdA.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.short_desc": {
+          "source": "Values for {name} placeholders in path",
+          "message": "Valori per i segnaposto {name} nel percorso"
+        },
+        "app.TGVtbGlzdA.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.desc": {
+          "source": "Hash of query string parameters to append to the URI path. Values are URL-encoded; list values are joined with `,`.",
+          "message": "Hash dei parametri della stringa di query da aggiungere al percorso URI. I valori sono codificati in URL; i valori dell'elenco sono uniti con `,`."
+        },
+        "app.TGVtbGlzdA.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.display_name": {
+          "source": "Query Arguments",
+          "message": "Argomenti della query"
+        },
+        "app.TGVtbGlzdA.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.short_desc": {
+          "source": "Query string parameters",
+          "message": "Parametri della stringa di query"
+        },
+        "app.TGVtbGlzdA.action.bWFrZS1hcGktY2FsbA.short_desc": {
+          "source": "Make a custom API call to Lemlist",
+          "message": "Esegui una chiamata API personalizzata a Lemlist"
+        },
+        "app.TGVtbGlzdA.action.c3RhcnQtY2FtcGFpZ24.desc": {
+          "source": "Start or resume a paused Lemlist campaign to begin or continue sending emails.",
+          "message": "Avvia o riprendi una campagna Lemlist in pausa per iniziare o continuare a inviare email."
+        },
+        "app.TGVtbGlzdA.action.c3RhcnQtY2FtcGFpZ24.display_name": {
+          "source": "Start Campaign",
+          "message": "Avvia campagna"
+        },
+        "app.TGVtbGlzdA.action.c3RhcnQtY2FtcGFpZ24.option.Y2FtcGFpZ25JZA.desc": {
+          "source": "The unique identifier of the campaign to start",
+          "message": "L'identificatore univoco della campagna da avviare"
+        },
+        "app.TGVtbGlzdA.action.c3RhcnQtY2FtcGFpZ24.option.Y2FtcGFpZ25JZA.display_name": {
+          "source": "Campaign ID",
+          "message": "ID campagna"
+        },
+        "app.TGVtbGlzdA.action.c3RhcnQtY2FtcGFpZ24.option.Y2FtcGFpZ25JZA.short_desc": {
+          "source": "ID of the campaign to start",
+          "message": "ID della campagna da avviare"
+        },
+        "app.TGVtbGlzdA.action.c3RhcnQtY2FtcGFpZ24.short_desc": {
+          "source": "Start or resume a campaign",
+          "message": "Avvia o riprendi una campagna"
+        },
+        "app.TGVtbGlzdA.action.cGF1c2UtY2FtcGFpZ24.desc": {
+          "source": "Pause an active Lemlist campaign to temporarily stop sending emails.",
+          "message": "Metti in pausa una campagna Lemlist attiva per interrompere temporaneamente l'invio delle email."
+        },
+        "app.TGVtbGlzdA.action.cGF1c2UtY2FtcGFpZ24.display_name": {
+          "source": "Pause Campaign",
+          "message": "Sospendi campagna"
+        },
+        "app.TGVtbGlzdA.action.cGF1c2UtY2FtcGFpZ24.option.Y2FtcGFpZ25JZA.desc": {
+          "source": "The unique identifier of the campaign to pause",
+          "message": "L'identificatore univoco della campagna da mettere in pausa"
+        },
+        "app.TGVtbGlzdA.action.cGF1c2UtY2FtcGFpZ24.option.Y2FtcGFpZ25JZA.display_name": {
+          "source": "Campaign ID",
+          "message": "ID campagna"
+        },
+        "app.TGVtbGlzdA.action.cGF1c2UtY2FtcGFpZ24.option.Y2FtcGFpZ25JZA.short_desc": {
+          "source": "ID of the campaign to pause",
+          "message": "ID della campagna da mettere in pausa"
+        },
+        "app.TGVtbGlzdA.action.cGF1c2UtY2FtcGFpZ24.short_desc": {
+          "source": "Pause a running campaign",
+          "message": "Metti in pausa una campagna in esecuzione"
+        },
+        "app.TGVtbGlzdA.action.dXBkYXRlLWNvbnRhY3Q.desc": {
+          "source": "Update the properties of an existing Lemlist contact by email address.",
+          "message": "Aggiorna le proprietà di un contatto Lemlist esistente tramite indirizzo email."
+        },
+        "app.TGVtbGlzdA.action.dXBkYXRlLWNvbnRhY3Q.display_name": {
+          "source": "Update Contact",
+          "message": "Aggiorna contatto"
+        },
+        "app.TGVtbGlzdA.action.dXBkYXRlLWNvbnRhY3Q.option.Y29tcGFueU5hbWU.desc": {
+          "source": "Updated company name for the contact",
+          "message": "Nome dell'azienda aggiornato per il contatto"
+        },
+        "app.TGVtbGlzdA.action.dXBkYXRlLWNvbnRhY3Q.option.Y29tcGFueU5hbWU.display_name": {
+          "source": "Company Name",
+          "message": "Nome azienda"
+        },
+        "app.TGVtbGlzdA.action.dXBkYXRlLWNvbnRhY3Q.option.Y29tcGFueU5hbWU.short_desc": {
+          "source": "Contact company name",
+          "message": "Nome dell'azienda del contatto"
+        },
+        "app.TGVtbGlzdA.action.dXBkYXRlLWNvbnRhY3Q.option.ZW1haWw.desc": {
+          "source": "The email address of the contact to update (used as the unique identifier)",
+          "message": "L'indirizzo email del contatto da aggiornare (usato come identificatore univoco)"
+        },
+        "app.TGVtbGlzdA.action.dXBkYXRlLWNvbnRhY3Q.option.ZW1haWw.display_name": {
+          "source": "Email",
+          "message": "E-mail"
+        },
+        "app.TGVtbGlzdA.action.dXBkYXRlLWNvbnRhY3Q.option.ZW1haWw.short_desc": {
+          "source": "Contact email address to update",
+          "message": "Indirizzo email del contatto da aggiornare"
+        },
+        "app.TGVtbGlzdA.action.dXBkYXRlLWNvbnRhY3Q.option.Zmlyc3ROYW1l.desc": {
+          "source": "Updated first name for the contact",
+          "message": "Nome aggiornato per il contatto"
+        },
+        "app.TGVtbGlzdA.action.dXBkYXRlLWNvbnRhY3Q.option.Zmlyc3ROYW1l.display_name": {
+          "source": "First Name",
+          "message": "Nome"
+        },
+        "app.TGVtbGlzdA.action.dXBkYXRlLWNvbnRhY3Q.option.Zmlyc3ROYW1l.short_desc": {
+          "source": "Contact first name",
+          "message": "Nome del contatto"
+        },
+        "app.TGVtbGlzdA.action.dXBkYXRlLWNvbnRhY3Q.option.bGFzdE5hbWU.desc": {
+          "source": "Updated last name for the contact",
+          "message": "Cognome aggiornato per il contatto"
+        },
+        "app.TGVtbGlzdA.action.dXBkYXRlLWNvbnRhY3Q.option.bGFzdE5hbWU.display_name": {
+          "source": "Last Name",
+          "message": "Cognome"
+        },
+        "app.TGVtbGlzdA.action.dXBkYXRlLWNvbnRhY3Q.option.bGFzdE5hbWU.short_desc": {
+          "source": "Contact last name",
+          "message": "Cognome del contatto"
+        },
+        "app.TGVtbGlzdA.action.dXBkYXRlLWNvbnRhY3Q.option.bGlua2VkaW5Vcmw.desc": {
+          "source": "Updated LinkedIn profile URL for the contact",
+          "message": "URL del profilo LinkedIn aggiornato per il contatto"
+        },
+        "app.TGVtbGlzdA.action.dXBkYXRlLWNvbnRhY3Q.option.bGlua2VkaW5Vcmw.display_name": {
+          "source": "LinkedIn URL",
+          "message": "URL LinkedIn"
+        },
+        "app.TGVtbGlzdA.action.dXBkYXRlLWNvbnRhY3Q.option.bGlua2VkaW5Vcmw.short_desc": {
+          "source": "Contact LinkedIn profile URL",
+          "message": "URL del profilo LinkedIn del contatto"
+        },
+        "app.TGVtbGlzdA.action.dXBkYXRlLWNvbnRhY3Q.option.cGhvbmU.desc": {
+          "source": "Updated phone number for the contact",
+          "message": "Numero di telefono aggiornato per il contatto"
+        },
+        "app.TGVtbGlzdA.action.dXBkYXRlLWNvbnRhY3Q.option.cGhvbmU.display_name": {
+          "source": "Phone",
+          "message": "Telefono"
+        },
+        "app.TGVtbGlzdA.action.dXBkYXRlLWNvbnRhY3Q.option.cGhvbmU.short_desc": {
+          "source": "Contact phone number",
+          "message": "Numero di telefono del contatto"
+        },
+        "app.TGVtbGlzdA.action.dXBkYXRlLWNvbnRhY3Q.option.d2Vic2l0ZQ.desc": {
+          "source": "Updated website URL for the contact",
+          "message": "URL del sito web aggiornato per il contatto"
+        },
+        "app.TGVtbGlzdA.action.dXBkYXRlLWNvbnRhY3Q.option.d2Vic2l0ZQ.display_name": {
+          "source": "Website",
+          "message": "Sito web"
+        },
+        "app.TGVtbGlzdA.action.dXBkYXRlLWNvbnRhY3Q.option.d2Vic2l0ZQ.short_desc": {
+          "source": "Contact or company website",
+          "message": "Sito web del contatto o dell'azienda"
+        },
+        "app.TGVtbGlzdA.action.dXBkYXRlLWNvbnRhY3Q.short_desc": {
+          "source": "Update an existing contact",
+          "message": "Aggiorna un contatto esistente"
+        },
+        "app.TGVtbGlzdA.action.dXBkYXRlLWxlYWQ.desc": {
+          "source": "Update the properties of an existing Lemlist lead by email address.",
+          "message": "Aggiorna le proprietà di un lead Lemlist esistente tramite indirizzo email."
+        },
+        "app.TGVtbGlzdA.action.dXBkYXRlLWxlYWQ.display_name": {
+          "source": "Update Lead",
+          "message": "Aggiorna lead"
+        },
+        "app.TGVtbGlzdA.action.dXBkYXRlLWxlYWQ.option.Y29tcGFueU5hbWU.desc": {
+          "source": "Updated company name for the lead",
+          "message": "Nome dell'azienda aggiornato per il lead"
+        },
+        "app.TGVtbGlzdA.action.dXBkYXRlLWxlYWQ.option.Y29tcGFueU5hbWU.display_name": {
+          "source": "Company Name",
+          "message": "Nome azienda"
+        },
+        "app.TGVtbGlzdA.action.dXBkYXRlLWxlYWQ.option.Y29tcGFueU5hbWU.short_desc": {
+          "source": "Lead company name",
+          "message": "Nome dell'azienda del lead"
+        },
+        "app.TGVtbGlzdA.action.dXBkYXRlLWxlYWQ.option.ZW1haWw.desc": {
+          "source": "The email address of the lead to update (used as identifier)",
+          "message": "L'indirizzo email del lead da aggiornare (usato come identificatore)"
+        },
+        "app.TGVtbGlzdA.action.dXBkYXRlLWxlYWQ.option.ZW1haWw.display_name": {
+          "source": "Email",
+          "message": "E-mail"
+        },
+        "app.TGVtbGlzdA.action.dXBkYXRlLWxlYWQ.option.ZW1haWw.short_desc": {
+          "source": "Lead email address to update",
+          "message": "Indirizzo email del lead da aggiornare"
+        },
+        "app.TGVtbGlzdA.action.dXBkYXRlLWxlYWQ.option.Zmlyc3ROYW1l.desc": {
+          "source": "Updated first name for the lead",
+          "message": "Nome aggiornato per il lead"
+        },
+        "app.TGVtbGlzdA.action.dXBkYXRlLWxlYWQ.option.Zmlyc3ROYW1l.display_name": {
+          "source": "First Name",
+          "message": "Nome"
+        },
+        "app.TGVtbGlzdA.action.dXBkYXRlLWxlYWQ.option.Zmlyc3ROYW1l.short_desc": {
+          "source": "Lead first name",
+          "message": "Nome del lead"
+        },
+        "app.TGVtbGlzdA.action.dXBkYXRlLWxlYWQ.option.aXNJbnRlcmVzdGVk.desc": {
+          "source": "Set to `True` to mark this lead as interested in your offer",
+          "message": "Imposta su `True` per contrassegnare questo lead come interessato alla tua offerta"
+        },
+        "app.TGVtbGlzdA.action.dXBkYXRlLWxlYWQ.option.aXNJbnRlcmVzdGVk.display_name": {
+          "source": "Is Interested",
+          "message": "È interessato"
+        },
+        "app.TGVtbGlzdA.action.dXBkYXRlLWxlYWQ.option.aXNJbnRlcmVzdGVk.short_desc": {
+          "source": "Mark the lead as interested or not",
+          "message": "Contrassegna il lead come interessato o meno"
+        },
+        "app.TGVtbGlzdA.action.dXBkYXRlLWxlYWQ.option.aXNQYXVzZWQ.desc": {
+          "source": "Set to `True` to pause outreach to this lead, `False` to resume",
+          "message": "Imposta su `True` per sospendere i contatti verso questo lead, `False` per riprenderli"
+        },
+        "app.TGVtbGlzdA.action.dXBkYXRlLWxlYWQ.option.aXNQYXVzZWQ.display_name": {
+          "source": "Is Paused",
+          "message": "È in pausa"
+        },
+        "app.TGVtbGlzdA.action.dXBkYXRlLWxlYWQ.option.aXNQYXVzZWQ.short_desc": {
+          "source": "Pause or resume outreach to this lead",
+          "message": "Sospendi o riprendi i contatti verso questo lead"
+        },
+        "app.TGVtbGlzdA.action.dXBkYXRlLWxlYWQ.option.bGFzdE5hbWU.desc": {
+          "source": "Updated last name for the lead",
+          "message": "Cognome aggiornato per il lead"
+        },
+        "app.TGVtbGlzdA.action.dXBkYXRlLWxlYWQ.option.bGFzdE5hbWU.display_name": {
+          "source": "Last Name",
+          "message": "Cognome"
+        },
+        "app.TGVtbGlzdA.action.dXBkYXRlLWxlYWQ.option.bGFzdE5hbWU.short_desc": {
+          "source": "Lead last name",
+          "message": "Cognome del lead"
+        },
+        "app.TGVtbGlzdA.action.dXBkYXRlLWxlYWQ.option.bGlua2VkaW5Vcmw.desc": {
+          "source": "Updated LinkedIn profile URL for the lead",
+          "message": "URL del profilo LinkedIn aggiornato per il lead"
+        },
+        "app.TGVtbGlzdA.action.dXBkYXRlLWxlYWQ.option.bGlua2VkaW5Vcmw.display_name": {
+          "source": "LinkedIn URL",
+          "message": "URL LinkedIn"
+        },
+        "app.TGVtbGlzdA.action.dXBkYXRlLWxlYWQ.option.bGlua2VkaW5Vcmw.short_desc": {
+          "source": "Lead LinkedIn profile URL",
+          "message": "URL del profilo LinkedIn del lead"
+        },
+        "app.TGVtbGlzdA.action.dXBkYXRlLWxlYWQ.option.cGhvbmU.desc": {
+          "source": "Updated phone number for the lead",
+          "message": "Numero di telefono aggiornato per il lead"
+        },
+        "app.TGVtbGlzdA.action.dXBkYXRlLWxlYWQ.option.cGhvbmU.display_name": {
+          "source": "Phone",
+          "message": "Telefono"
+        },
+        "app.TGVtbGlzdA.action.dXBkYXRlLWxlYWQ.option.cGhvbmU.short_desc": {
+          "source": "Lead phone number",
+          "message": "Numero di telefono del lead"
+        },
+        "app.TGVtbGlzdA.action.dXBkYXRlLWxlYWQ.option.d2Vic2l0ZQ.desc": {
+          "source": "Updated website URL for the lead",
+          "message": "URL del sito web aggiornato per il lead"
+        },
+        "app.TGVtbGlzdA.action.dXBkYXRlLWxlYWQ.option.d2Vic2l0ZQ.display_name": {
+          "source": "Website",
+          "message": "Sito web"
+        },
+        "app.TGVtbGlzdA.action.dXBkYXRlLWxlYWQ.option.d2Vic2l0ZQ.short_desc": {
+          "source": "Lead or company website",
+          "message": "Sito web del lead o dell'azienda"
+        },
+        "app.TGVtbGlzdA.action.dXBkYXRlLWxlYWQ.short_desc": {
+          "source": "Update an existing lead",
+          "message": "Aggiorna un lead esistente"
+        },
+        "app.TGVtbGlzdA.action.dXBkYXRlLXRhc2s.desc": {
+          "source": "Update a Lemlist manual task, such as marking it as done or changing the assignee.",
+          "message": "Aggiorna un'attività manuale di Lemlist, ad esempio contrassegnandola come completata o modificandone l'assegnatario."
+        },
+        "app.TGVtbGlzdA.action.dXBkYXRlLXRhc2s.display_name": {
+          "source": "Update Task",
+          "message": "Aggiorna attività"
+        },
+        "app.TGVtbGlzdA.action.dXBkYXRlLXRhc2s.option.YXNzaWduZWRUbw.desc": {
+          "source": "Updated assignee for the task",
+          "message": "Assegnatario aggiornato per l'attività"
+        },
+        "app.TGVtbGlzdA.action.dXBkYXRlLXRhc2s.option.YXNzaWduZWRUbw.display_name": {
+          "source": "Assigned To",
+          "message": "Assegnato a"
+        },
+        "app.TGVtbGlzdA.action.dXBkYXRlLXRhc2s.option.YXNzaWduZWRUbw.short_desc": {
+          "source": "User to assign the task to",
+          "message": "Utente a cui assegnare l'attività"
+        },
+        "app.TGVtbGlzdA.action.dXBkYXRlLXRhc2s.option.ZHVlRGF0ZQ.desc": {
+          "source": "Updated date and time when this task is due",
+          "message": "Data e ora di scadenza aggiornate per questa attività"
+        },
+        "app.TGVtbGlzdA.action.dXBkYXRlLXRhc2s.option.ZHVlRGF0ZQ.display_name": {
+          "source": "Due Date",
+          "message": "Data di scadenza"
+        },
+        "app.TGVtbGlzdA.action.dXBkYXRlLXRhc2s.option.ZHVlRGF0ZQ.short_desc": {
+          "source": "Updated task due date",
+          "message": "Data di scadenza aggiornata dell'attività"
+        },
+        "app.TGVtbGlzdA.action.dXBkYXRlLXRhc2s.option.c3RhdHVz.allowed-value.c3RyaW5nOmRvbmU.desc": {
+          "source": "Task completed",
+          "message": "Attività completata"
+        },
+        "app.TGVtbGlzdA.action.dXBkYXRlLXRhc2s.option.c3RhdHVz.allowed-value.c3RyaW5nOmlnbm9yZWQ.desc": {
+          "source": "Task ignored",
+          "message": "Attività ignorata"
+        },
+        "app.TGVtbGlzdA.action.dXBkYXRlLXRhc2s.option.c3RhdHVz.desc": {
+          "source": "The updated status of the task",
+          "message": "Lo stato aggiornato dell'attività"
+        },
+        "app.TGVtbGlzdA.action.dXBkYXRlLXRhc2s.option.c3RhdHVz.display_name": {
+          "source": "Status",
+          "message": "Stato"
+        },
+        "app.TGVtbGlzdA.action.dXBkYXRlLXRhc2s.option.c3RhdHVz.short_desc": {
+          "source": "New task status",
+          "message": "Nuovo stato dell'attività"
+        },
+        "app.TGVtbGlzdA.action.dXBkYXRlLXRhc2s.option.dGFza0lk.desc": {
+          "source": "The unique identifier of the task to update",
+          "message": "L'identificatore univoco dell'attività da aggiornare"
+        },
+        "app.TGVtbGlzdA.action.dXBkYXRlLXRhc2s.option.dGFza0lk.display_name": {
+          "source": "Task ID",
+          "message": "ID attività"
+        },
+        "app.TGVtbGlzdA.action.dXBkYXRlLXRhc2s.option.dGFza0lk.short_desc": {
+          "source": "ID of the task to update",
+          "message": "ID dell'attività da aggiornare"
+        },
+        "app.TGVtbGlzdA.action.dXBkYXRlLXRhc2s.short_desc": {
+          "source": "Update a task status",
+          "message": "Aggiorna lo stato di un'attività"
+        },
+        "app.TGVtbGlzdA.desc": {
+          "source": "Lemlist is a sales engagement platform enabling personalized outreach campaigns with email, LinkedIn, and multi-channel automation. This integration enables managing campaigns, leads, activities, tasks, and contacts, plus receiving real-time webhook notifications.\n\n**Features:**\n- Campaign management (create, pause, start)\n- Lead management (add, update, remove leads from campaigns)\n- Activity tracking (emails sent, opened, clicked, replied, bounced)\n- Task management (create and update manual tasks)\n- Contact management\n- Real-time webhooks for email and engagement events",
+          "message": "Lemlist è una piattaforma di sales engagement che consente campagne di sensibilizzazione personalizzate tramite email, LinkedIn e automazione multicanale. Questa integrazione consente di gestire campagne, lead, attività (activities e tasks) e contatti, oltre a ricevere notifiche webhook in tempo reale.\n\n**Funzionalità:**\n- Gestione delle campagne (creazione, sospensione, avvio)\n- Gestione dei lead (aggiunta, aggiornamento, rimozione dei lead dalle campagne)\n- Tracciamento delle attività (email inviate, aperte, cliccate, risposte, respinte)\n- Gestione delle attività manuali (creazione e aggiornamento dei task manuali)\n- Gestione dei contatti\n- Webhook in tempo reale per eventi di email ed engagement"
+        },
+        "app.TGVtbGlzdA.display_name": {
+          "source": "Lemlist",
+          "message": "Lemlist"
+        },
+        "app.TGVtbGlzdA.short_desc": {
+          "source": "Lemlist sales outreach and email automation platform",
+          "message": "Piattaforma di sales outreach e automazione email Lemlist"
+        }
+      }
+    }
+  }
+}

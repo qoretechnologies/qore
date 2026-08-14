@@ -1,0 +1,157 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "es": {
+      "messages": {
+        "app.U01UUA.action.c2VuZC1lbWFpbA.desc": {
+          "source": "Send an email through a generic SMTP server",
+          "message": "Enviar un correo electrónico a través de un servidor SMTP genérico"
+        },
+        "app.U01UUA.action.c2VuZC1lbWFpbA.display_name": {
+          "source": "Send an Email With SMTP",
+          "message": "Enviar un correo electrónico con SMTP"
+        },
+        "app.U01UUA.action.c2VuZC1lbWFpbA.option.Y2M.desc": {
+          "source": "One or more `Cc:` addresses for the email",
+          "message": "Una o más direcciones `Cc:` para el correo electrónico"
+        },
+        "app.U01UUA.action.c2VuZC1lbWFpbA.option.Y2M.display_name": {
+          "source": "CC",
+          "message": "CC"
+        },
+        "app.U01UUA.action.c2VuZC1lbWFpbA.option.Y2M.short_desc": {
+          "source": "Carbon copy addresses",
+          "message": "Direcciones en copia carbón (CC)"
+        },
+        "app.U01UUA.action.c2VuZC1lbWFpbA.option.YXR0YWNobWVudHM.desc": {
+          "source": "Any attachments for the message",
+          "message": "Cualquier archivo adjunto para el mensaje"
+        },
+        "app.U01UUA.action.c2VuZC1lbWFpbA.option.YXR0YWNobWVudHM.display_name": {
+          "source": "Attachments",
+          "message": "Archivos adjuntos"
+        },
+        "app.U01UUA.action.c2VuZC1lbWFpbA.option.YXR0YWNobWVudHM.short_desc": {
+          "source": "Message attachments",
+          "message": "Archivos adjuntos del mensaje"
+        },
+        "app.U01UUA.action.c2VuZC1lbWFpbA.option.Ym9keQ.desc": {
+          "source": "The message body",
+          "message": "El cuerpo del mensaje"
+        },
+        "app.U01UUA.action.c2VuZC1lbWFpbA.option.Ym9keQ.display_name": {
+          "source": "Message Body",
+          "message": "Cuerpo del mensaje"
+        },
+        "app.U01UUA.action.c2VuZC1lbWFpbA.option.Ym9keQ.short_desc": {
+          "source": "The message body",
+          "message": "El cuerpo del mensaje"
+        },
+        "app.U01UUA.action.c2VuZC1lbWFpbA.option.Ym9keS1lbmNvZGluZw.allowed-value.c3RyaW5nOm5vbmU.desc": {
+          "source": "No content encoding (not recommended)",
+          "message": "Sin codificación de contenido (no recomendado)"
+        },
+        "app.U01UUA.action.c2VuZC1lbWFpbA.option.Ym9keS1lbmNvZGluZw.allowed-value.c3RyaW5nOmJhc2U2NA.desc": {
+          "source": "Base64 encoding",
+          "message": "Codificación Base64"
+        },
+        "app.U01UUA.action.c2VuZC1lbWFpbA.option.Ym9keS1lbmNvZGluZw.allowed-value.c3RyaW5nOmRlZmF1bHQ.desc": {
+          "source": "`quoted-printable` for string data, `base64` for binary data",
+          "message": "`quoted-printable` para datos de cadena, `base64` para datos binarios"
+        },
+        "app.U01UUA.action.c2VuZC1lbWFpbA.option.Ym9keS1lbmNvZGluZw.allowed-value.c3RyaW5nOnF1b3RlZC1wcmludGFibGU.desc": {
+          "source": "Quoted printable encoding",
+          "message": "Codificación quoted-printable"
+        },
+        "app.U01UUA.action.c2VuZC1lbWFpbA.option.Ym9keS1lbmNvZGluZw.desc": {
+          "source": "The encoding to use for the message body",
+          "message": "La codificación que se usará para el cuerpo del mensaje"
+        },
+        "app.U01UUA.action.c2VuZC1lbWFpbA.option.Ym9keS1lbmNvZGluZw.display_name": {
+          "source": "Body Encoding",
+          "message": "Codificación del cuerpo"
+        },
+        "app.U01UUA.action.c2VuZC1lbWFpbA.option.Ym9keS1lbmNvZGluZw.short_desc": {
+          "source": "The encoding to use for the body",
+          "message": "La codificación que se usará para el cuerpo"
+        },
+        "app.U01UUA.action.c2VuZC1lbWFpbA.option.Ym9keS1taW1lLXR5cGU.desc": {
+          "source": "The MIME type of the message body",
+          "message": "El tipo MIME del cuerpo del mensaje"
+        },
+        "app.U01UUA.action.c2VuZC1lbWFpbA.option.Ym9keS1taW1lLXR5cGU.display_name": {
+          "source": "Body Mime Type",
+          "message": "Tipo MIME del cuerpo"
+        },
+        "app.U01UUA.action.c2VuZC1lbWFpbA.option.Ym9keS1taW1lLXR5cGU.short_desc": {
+          "source": "The MIME type of the message body",
+          "message": "El tipo MIME del cuerpo del mensaje"
+        },
+        "app.U01UUA.action.c2VuZC1lbWFpbA.option.YmNj.desc": {
+          "source": "One or more `Bcc:` addresses for the email",
+          "message": "Una o más direcciones `Bcc:` para el correo electrónico"
+        },
+        "app.U01UUA.action.c2VuZC1lbWFpbA.option.YmNj.display_name": {
+          "source": "BCC",
+          "message": "CCO"
+        },
+        "app.U01UUA.action.c2VuZC1lbWFpbA.option.YmNj.short_desc": {
+          "source": "Blind carbon copy addresses",
+          "message": "Direcciones de copia oculta"
+        },
+        "app.U01UUA.action.c2VuZC1lbWFpbA.option.c2VuZGVy.desc": {
+          "source": "The sender's address for the email",
+          "message": "La dirección del remitente del correo electrónico"
+        },
+        "app.U01UUA.action.c2VuZC1lbWFpbA.option.c2VuZGVy.display_name": {
+          "source": "Sender",
+          "message": "Remitente"
+        },
+        "app.U01UUA.action.c2VuZC1lbWFpbA.option.c2VuZGVy.short_desc": {
+          "source": "The sender's address for the email",
+          "message": "La dirección del remitente del correo electrónico"
+        },
+        "app.U01UUA.action.c2VuZC1lbWFpbA.option.c3ViamVjdA.desc": {
+          "source": "The subject for the email",
+          "message": "El asunto del correo electrónico"
+        },
+        "app.U01UUA.action.c2VuZC1lbWFpbA.option.c3ViamVjdA.display_name": {
+          "source": "Subject",
+          "message": "Asunto"
+        },
+        "app.U01UUA.action.c2VuZC1lbWFpbA.option.c3ViamVjdA.short_desc": {
+          "source": "The subject for the email",
+          "message": "El asunto del correo electrónico"
+        },
+        "app.U01UUA.action.c2VuZC1lbWFpbA.option.dG8.desc": {
+          "source": "One or more `To:` addresses for the email",
+          "message": "Una o más direcciones `To:` para el correo electrónico"
+        },
+        "app.U01UUA.action.c2VuZC1lbWFpbA.option.dG8.display_name": {
+          "source": "To",
+          "message": "Para"
+        },
+        "app.U01UUA.action.c2VuZC1lbWFpbA.option.dG8.short_desc": {
+          "source": "Message recipient addresses",
+          "message": "Direcciones de destinatarios del mensaje"
+        },
+        "app.U01UUA.action.c2VuZC1lbWFpbA.short_desc": {
+          "source": "Send an email through a generic SMTP server",
+          "message": "Enviar un correo electrónico a través de un servidor SMTP genérico"
+        },
+        "app.U01UUA.desc": {
+          "source": "Generic SMTP server for sending emails",
+          "message": "Servidor SMTP genérico para enviar correos electrónicos"
+        },
+        "app.U01UUA.display_name": {
+          "source": "SMTP Server",
+          "message": "Servidor SMTP"
+        },
+        "app.U01UUA.short_desc": {
+          "source": "Generic SMTP server for sending emails",
+          "message": "Servidor SMTP genérico para enviar correos electrónicos"
+        }
+      }
+    }
+  }
+}

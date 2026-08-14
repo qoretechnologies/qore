@@ -1,0 +1,1417 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "it": {
+      "messages": {
+        "app.U3lzdGVtZUlv.action.Y2FuY2VsLXN1YnNjcmlwdGlvbg.desc": {
+          "source": "Cancel a subscription in Systeme.io",
+          "message": "Annulla un abbonamento in Systeme.io"
+        },
+        "app.U3lzdGVtZUlv.action.Y2FuY2VsLXN1YnNjcmlwdGlvbg.display_name": {
+          "source": "Cancel Subscription",
+          "message": "Annulla abbonamento"
+        },
+        "app.U3lzdGVtZUlv.action.Y2FuY2VsLXN1YnNjcmlwdGlvbg.option.aWQ.desc": {
+          "source": "The unique identifier of the subscription to cancel",
+          "message": "L'identificatore univoco dell'abbonamento da annullare"
+        },
+        "app.U3lzdGVtZUlv.action.Y2FuY2VsLXN1YnNjcmlwdGlvbg.option.aWQ.display_name": {
+          "source": "Subscription ID",
+          "message": "ID abbonamento"
+        },
+        "app.U3lzdGVtZUlv.action.Y2FuY2VsLXN1YnNjcmlwdGlvbg.option.aWQ.short_desc": {
+          "source": "The subscription ID to cancel",
+          "message": "L'ID dell'abbonamento da annullare"
+        },
+        "app.U3lzdGVtZUlv.action.Y2FuY2VsLXN1YnNjcmlwdGlvbg.short_desc": {
+          "source": "Cancel a subscription",
+          "message": "Annulla un abbonamento"
+        },
+        "app.U3lzdGVtZUlv.action.Y3JlYXRlLW1lbWJlcnNoaXA.desc": {
+          "source": "Add a contact as a member of a community in Systeme.io",
+          "message": "Aggiungi un contatto come membro di una community in Systeme.io"
+        },
+        "app.U3lzdGVtZUlv.action.Y3JlYXRlLW1lbWJlcnNoaXA.display_name": {
+          "source": "Create Membership",
+          "message": "Crea iscrizione"
+        },
+        "app.U3lzdGVtZUlv.action.Y3JlYXRlLW1lbWJlcnNoaXA.option.Y29tbXVuaXR5SWQ.desc": {
+          "source": "The unique identifier of the community to add the contact to",
+          "message": "L'identificatore univoco della community a cui aggiungere il contatto"
+        },
+        "app.U3lzdGVtZUlv.action.Y3JlYXRlLW1lbWJlcnNoaXA.option.Y29tbXVuaXR5SWQ.display_name": {
+          "source": "Community ID",
+          "message": "ID community"
+        },
+        "app.U3lzdGVtZUlv.action.Y3JlYXRlLW1lbWJlcnNoaXA.option.Y29tbXVuaXR5SWQ.short_desc": {
+          "source": "The community to join",
+          "message": "La community a cui iscriversi"
+        },
+        "app.U3lzdGVtZUlv.action.Y3JlYXRlLW1lbWJlcnNoaXA.option.Y29udGFjdElk.desc": {
+          "source": "The unique identifier of the contact to add as a member",
+          "message": "L'identificatore univoco del contatto da aggiungere come membro"
+        },
+        "app.U3lzdGVtZUlv.action.Y3JlYXRlLW1lbWJlcnNoaXA.option.Y29udGFjdElk.display_name": {
+          "source": "Contact ID",
+          "message": "ID contatto"
+        },
+        "app.U3lzdGVtZUlv.action.Y3JlYXRlLW1lbWJlcnNoaXA.option.Y29udGFjdElk.short_desc": {
+          "source": "The contact to add",
+          "message": "Il contatto da aggiungere"
+        },
+        "app.U3lzdGVtZUlv.action.Y3JlYXRlLW1lbWJlcnNoaXA.short_desc": {
+          "source": "Add a contact to a community",
+          "message": "Aggiungi un contatto a una community"
+        },
+        "app.U3lzdGVtZUlv.action.Y3JlYXRlLWNvbnRhY3Q.desc": {
+          "source": "Create a new contact in Systeme.io",
+          "message": "Crea un nuovo contatto in Systeme.io"
+        },
+        "app.U3lzdGVtZUlv.action.Y3JlYXRlLWNvbnRhY3Q.display_name": {
+          "source": "Create Contact",
+          "message": "Crea contatto"
+        },
+        "app.U3lzdGVtZUlv.action.Y3JlYXRlLWNvbnRhY3Q.option.ZW1haWw.desc": {
+          "source": "The email address of the contact to create",
+          "message": "L'indirizzo email del contatto da creare"
+        },
+        "app.U3lzdGVtZUlv.action.Y3JlYXRlLWNvbnRhY3Q.option.ZW1haWw.display_name": {
+          "source": "Email",
+          "message": "E-mail"
+        },
+        "app.U3lzdGVtZUlv.action.Y3JlYXRlLWNvbnRhY3Q.option.ZW1haWw.short_desc": {
+          "source": "Email address",
+          "message": "Indirizzo e-mail"
+        },
+        "app.U3lzdGVtZUlv.action.Y3JlYXRlLWNvbnRhY3Q.option.ZmllbGRz.desc": {
+          "source": "List of custom field values to set on the contact. Each entry should be a hash with `slug` and `value` properties.\n\n**Example:**\n```\n[{\"slug\": \"company\", \"value\": \"Acme Corp\"}]\n```",
+          "message": "Elenco di valori dei campi personalizzati da impostare sul contatto. Ogni voce deve essere un hash con le proprietà `slug` e `value`.\n\n**Esempio:**\n```\n[{\"slug\": \"company\", \"value\": \"Acme Corp\"}]\n```"
+        },
+        "app.U3lzdGVtZUlv.action.Y3JlYXRlLWNvbnRhY3Q.option.ZmllbGRz.display_name": {
+          "source": "Custom Fields",
+          "message": "Campi personalizzati"
+        },
+        "app.U3lzdGVtZUlv.action.Y3JlYXRlLWNvbnRhY3Q.option.ZmllbGRz.short_desc": {
+          "source": "Custom field values",
+          "message": "Valori dei campi personalizzati"
+        },
+        "app.U3lzdGVtZUlv.action.Y3JlYXRlLWNvbnRhY3Q.option.Zmlyc3ROYW1l.desc": {
+          "source": "The first name of the contact",
+          "message": "Il nome del contatto"
+        },
+        "app.U3lzdGVtZUlv.action.Y3JlYXRlLWNvbnRhY3Q.option.Zmlyc3ROYW1l.display_name": {
+          "source": "First Name",
+          "message": "Nome"
+        },
+        "app.U3lzdGVtZUlv.action.Y3JlYXRlLWNvbnRhY3Q.option.Zmlyc3ROYW1l.short_desc": {
+          "source": "Contact's first name",
+          "message": "Nome del contatto"
+        },
+        "app.U3lzdGVtZUlv.action.Y3JlYXRlLWNvbnRhY3Q.option.bG9jYWxl.desc": {
+          "source": "The locale of the contact (e.g., `en` for English, `fr` for French)",
+          "message": "Le impostazioni locali del contatto (es. `en` per l'inglese, `fr` per il francese)"
+        },
+        "app.U3lzdGVtZUlv.action.Y3JlYXRlLWNvbnRhY3Q.option.bG9jYWxl.display_name": {
+          "source": "Locale",
+          "message": "Impostazioni internazionali"
+        },
+        "app.U3lzdGVtZUlv.action.Y3JlYXRlLWNvbnRhY3Q.option.bG9jYWxl.short_desc": {
+          "source": "Contact locale",
+          "message": "Impostazioni locali contatto"
+        },
+        "app.U3lzdGVtZUlv.action.Y3JlYXRlLWNvbnRhY3Q.option.bGFzdE5hbWU.desc": {
+          "source": "The last name of the contact",
+          "message": "Il cognome del contatto"
+        },
+        "app.U3lzdGVtZUlv.action.Y3JlYXRlLWNvbnRhY3Q.option.bGFzdE5hbWU.display_name": {
+          "source": "Last Name",
+          "message": "Cognome"
+        },
+        "app.U3lzdGVtZUlv.action.Y3JlYXRlLWNvbnRhY3Q.option.bGFzdE5hbWU.short_desc": {
+          "source": "Contact's last name",
+          "message": "Cognome del contatto"
+        },
+        "app.U3lzdGVtZUlv.action.Y3JlYXRlLWNvbnRhY3Q.option.cGhvbmVOdW1iZXI.desc": {
+          "source": "The phone number of the contact",
+          "message": "Il numero di telefono del contatto"
+        },
+        "app.U3lzdGVtZUlv.action.Y3JlYXRlLWNvbnRhY3Q.option.cGhvbmVOdW1iZXI.display_name": {
+          "source": "Phone Number",
+          "message": "Numero di telefono"
+        },
+        "app.U3lzdGVtZUlv.action.Y3JlYXRlLWNvbnRhY3Q.option.cGhvbmVOdW1iZXI.short_desc": {
+          "source": "Phone number",
+          "message": "Numero di telefono"
+        },
+        "app.U3lzdGVtZUlv.action.Y3JlYXRlLWNvbnRhY3Q.short_desc": {
+          "source": "Create a new contact",
+          "message": "Crea un nuovo contatto"
+        },
+        "app.U3lzdGVtZUlv.action.Y3JlYXRlLWNvbnRhY3QtZmllbGQ.desc": {
+          "source": "Create a new custom contact field in Systeme.io",
+          "message": "Crea un nuovo campo contatto personalizzato in Systeme.io"
+        },
+        "app.U3lzdGVtZUlv.action.Y3JlYXRlLWNvbnRhY3QtZmllbGQ.display_name": {
+          "source": "Create Contact Field",
+          "message": "Crea campo contatto"
+        },
+        "app.U3lzdGVtZUlv.action.Y3JlYXRlLWNvbnRhY3QtZmllbGQ.option.bmFtZQ.desc": {
+          "source": "The display name of the custom contact field to create",
+          "message": "Il nome visualizzato del campo contatto personalizzato da creare"
+        },
+        "app.U3lzdGVtZUlv.action.Y3JlYXRlLWNvbnRhY3QtZmllbGQ.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "Nome"
+        },
+        "app.U3lzdGVtZUlv.action.Y3JlYXRlLWNvbnRhY3QtZmllbGQ.option.bmFtZQ.short_desc": {
+          "source": "Field display name",
+          "message": "Nome visualizzato del campo"
+        },
+        "app.U3lzdGVtZUlv.action.Y3JlYXRlLWNvbnRhY3QtZmllbGQ.option.c2x1Zw.desc": {
+          "source": "The unique slug identifier for the custom contact field",
+          "message": "L'identificatore slug univoco per il campo contatto personalizzato"
+        },
+        "app.U3lzdGVtZUlv.action.Y3JlYXRlLWNvbnRhY3QtZmllbGQ.option.c2x1Zw.display_name": {
+          "source": "Slug",
+          "message": "Slug"
+        },
+        "app.U3lzdGVtZUlv.action.Y3JlYXRlLWNvbnRhY3QtZmllbGQ.option.c2x1Zw.short_desc": {
+          "source": "Field slug identifier",
+          "message": "Identificatore slug del campo"
+        },
+        "app.U3lzdGVtZUlv.action.Y3JlYXRlLWNvbnRhY3QtZmllbGQ.short_desc": {
+          "source": "Create a custom contact field",
+          "message": "Crea un campo contatto personalizzato"
+        },
+        "app.U3lzdGVtZUlv.action.Y3JlYXRlLWVucm9sbG1lbnQ.desc": {
+          "source": "Enroll a contact in a course in Systeme.io",
+          "message": "Iscrivi un contatto a un corso in Systeme.io"
+        },
+        "app.U3lzdGVtZUlv.action.Y3JlYXRlLWVucm9sbG1lbnQ.display_name": {
+          "source": "Create Enrollment",
+          "message": "Crea iscrizione"
+        },
+        "app.U3lzdGVtZUlv.action.Y3JlYXRlLWVucm9sbG1lbnQ.option.Y291cnNlSWQ.desc": {
+          "source": "The unique identifier of the course to enroll the contact in",
+          "message": "L'identificatore univoco del corso a cui iscrivere il contatto"
+        },
+        "app.U3lzdGVtZUlv.action.Y3JlYXRlLWVucm9sbG1lbnQ.option.Y291cnNlSWQ.display_name": {
+          "source": "Course ID",
+          "message": "ID corso"
+        },
+        "app.U3lzdGVtZUlv.action.Y3JlYXRlLWVucm9sbG1lbnQ.option.Y291cnNlSWQ.short_desc": {
+          "source": "The course to enroll in",
+          "message": "Il corso a cui effettuare l'iscrizione"
+        },
+        "app.U3lzdGVtZUlv.action.Y3JlYXRlLWVucm9sbG1lbnQ.option.Y29udGFjdElk.desc": {
+          "source": "The unique identifier of the contact to enroll",
+          "message": "L'identificatore univoco del contatto da iscrivere"
+        },
+        "app.U3lzdGVtZUlv.action.Y3JlYXRlLWVucm9sbG1lbnQ.option.Y29udGFjdElk.display_name": {
+          "source": "Contact ID",
+          "message": "ID contatto"
+        },
+        "app.U3lzdGVtZUlv.action.Y3JlYXRlLWVucm9sbG1lbnQ.option.Y29udGFjdElk.short_desc": {
+          "source": "The contact to enroll",
+          "message": "Il contatto da iscrivere"
+        },
+        "app.U3lzdGVtZUlv.action.Y3JlYXRlLWVucm9sbG1lbnQ.option.YWNjZXNzVHlwZQ.allowed-value.c3RyaW5nOmRyaXBwaW5nX2NvbnRlbnQ.display_name": {
+          "source": "Dripping Content",
+          "message": "Contenuto a rilascio programmato"
+        },
+        "app.U3lzdGVtZUlv.action.Y3JlYXRlLWVucm9sbG1lbnQ.option.YWNjZXNzVHlwZQ.allowed-value.c3RyaW5nOmZ1bGxfYWNjZXNz.display_name": {
+          "source": "Full Access",
+          "message": "Accesso completo"
+        },
+        "app.U3lzdGVtZUlv.action.Y3JlYXRlLWVucm9sbG1lbnQ.option.YWNjZXNzVHlwZQ.allowed-value.c3RyaW5nOnBhcnRpYWxfYWNjZXNz.display_name": {
+          "source": "Partial Access",
+          "message": "Accesso parziale"
+        },
+        "app.U3lzdGVtZUlv.action.Y3JlYXRlLWVucm9sbG1lbnQ.option.YWNjZXNzVHlwZQ.desc": {
+          "source": "The type of access to grant the contact",
+          "message": "Il tipo di accesso da concedere al contatto"
+        },
+        "app.U3lzdGVtZUlv.action.Y3JlYXRlLWVucm9sbG1lbnQ.option.YWNjZXNzVHlwZQ.display_name": {
+          "source": "Access Type",
+          "message": "Tipo di accesso"
+        },
+        "app.U3lzdGVtZUlv.action.Y3JlYXRlLWVucm9sbG1lbnQ.option.YWNjZXNzVHlwZQ.short_desc": {
+          "source": "Type of course access",
+          "message": "Tipo di accesso al corso"
+        },
+        "app.U3lzdGVtZUlv.action.Y3JlYXRlLWVucm9sbG1lbnQ.option.bW9kdWxlcw.desc": {
+          "source": "List of module IDs to grant access to. Required when `accessType` is `partial_access`",
+          "message": "Elenco di ID dei moduli a cui concedere l'accesso. Obbligatorio quando `accessType` è `partial_access`"
+        },
+        "app.U3lzdGVtZUlv.action.Y3JlYXRlLWVucm9sbG1lbnQ.option.bW9kdWxlcw.display_name": {
+          "source": "Modules",
+          "message": "Moduli"
+        },
+        "app.U3lzdGVtZUlv.action.Y3JlYXRlLWVucm9sbG1lbnQ.option.bW9kdWxlcw.short_desc": {
+          "source": "Module IDs for partial access",
+          "message": "ID dei moduli per l'accesso parziale"
+        },
+        "app.U3lzdGVtZUlv.action.Y3JlYXRlLWVucm9sbG1lbnQ.short_desc": {
+          "source": "Enroll a contact in a course",
+          "message": "Iscrivi un contatto a un corso"
+        },
+        "app.U3lzdGVtZUlv.action.Y3JlYXRlLXRhZw.desc": {
+          "source": "Create a new tag in Systeme.io",
+          "message": "Crea un nuovo tag in Systeme.io"
+        },
+        "app.U3lzdGVtZUlv.action.Y3JlYXRlLXRhZw.display_name": {
+          "source": "Create Tag",
+          "message": "Crea tag"
+        },
+        "app.U3lzdGVtZUlv.action.Y3JlYXRlLXRhZw.option.bmFtZQ.desc": {
+          "source": "The name of the tag to create",
+          "message": "Il nome del tag da creare"
+        },
+        "app.U3lzdGVtZUlv.action.Y3JlYXRlLXRhZw.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "Nome"
+        },
+        "app.U3lzdGVtZUlv.action.Y3JlYXRlLXRhZw.option.bmFtZQ.short_desc": {
+          "source": "Tag name",
+          "message": "Nome del tag"
+        },
+        "app.U3lzdGVtZUlv.action.Y3JlYXRlLXRhZw.short_desc": {
+          "source": "Create a new tag",
+          "message": "Crea un nuovo tag"
+        },
+        "app.U3lzdGVtZUlv.action.YXNzaWduLWNvbnRhY3QtdGFn.desc": {
+          "source": "Assign a tag to a contact in Systeme.io",
+          "message": "Assegna un tag a un contatto in Systeme.io"
+        },
+        "app.U3lzdGVtZUlv.action.YXNzaWduLWNvbnRhY3QtdGFn.display_name": {
+          "source": "Assign Tag to Contact",
+          "message": "Assegna tag al contatto"
+        },
+        "app.U3lzdGVtZUlv.action.YXNzaWduLWNvbnRhY3QtdGFn.option.aWQ.desc": {
+          "source": "The unique identifier of the contact to assign the tag to",
+          "message": "L'identificatore univoco del contatto a cui assegnare il tag"
+        },
+        "app.U3lzdGVtZUlv.action.YXNzaWduLWNvbnRhY3QtdGFn.option.aWQ.display_name": {
+          "source": "Contact ID",
+          "message": "ID contatto"
+        },
+        "app.U3lzdGVtZUlv.action.YXNzaWduLWNvbnRhY3QtdGFn.option.aWQ.short_desc": {
+          "source": "The contact ID",
+          "message": "L'ID del contatto"
+        },
+        "app.U3lzdGVtZUlv.action.YXNzaWduLWNvbnRhY3QtdGFn.option.dGFnSWQ.desc": {
+          "source": "The unique identifier of the tag to assign to the contact",
+          "message": "L'identificatore univoco del tag da assegnare al contatto"
+        },
+        "app.U3lzdGVtZUlv.action.YXNzaWduLWNvbnRhY3QtdGFn.option.dGFnSWQ.display_name": {
+          "source": "Tag ID",
+          "message": "ID tag"
+        },
+        "app.U3lzdGVtZUlv.action.YXNzaWduLWNvbnRhY3QtdGFn.option.dGFnSWQ.short_desc": {
+          "source": "The tag ID to assign",
+          "message": "L'ID del tag da assegnare"
+        },
+        "app.U3lzdGVtZUlv.action.YXNzaWduLWNvbnRhY3QtdGFn.short_desc": {
+          "source": "Assign a tag to a contact",
+          "message": "Assegna un tag a un contatto"
+        },
+        "app.U3lzdGVtZUlv.action.Z2V0LWNvbnRhY3Q.desc": {
+          "source": "Retrieve a single contact by its ID",
+          "message": "Recupera un singolo contatto tramite il suo ID"
+        },
+        "app.U3lzdGVtZUlv.action.Z2V0LWNvbnRhY3Q.display_name": {
+          "source": "Get Contact",
+          "message": "Ottieni contatto"
+        },
+        "app.U3lzdGVtZUlv.action.Z2V0LWNvbnRhY3Q.option.aWQ.display_name": {
+          "source": "Contact ID",
+          "message": "ID contatto"
+        },
+        "app.U3lzdGVtZUlv.action.Z2V0LWNvbnRhY3Q.option.aWQ.short_desc": {
+          "source": "The contact ID",
+          "message": "L'ID del contatto"
+        },
+        "app.U3lzdGVtZUlv.action.Z2V0LWNvbnRhY3Q.short_desc": {
+          "source": "Get a single contact by ID",
+          "message": "Ottieni un singolo contatto tramite ID"
+        },
+        "app.U3lzdGVtZUlv.action.Z2V0LWNvbnRhY3QtZmllbGQ.desc": {
+          "source": "Retrieve a single custom contact field by its slug",
+          "message": "Recupera un singolo campo contatto personalizzato tramite il relativo slug"
+        },
+        "app.U3lzdGVtZUlv.action.Z2V0LWNvbnRhY3QtZmllbGQ.display_name": {
+          "source": "Get Contact Field",
+          "message": "Recupera campo contatto"
+        },
+        "app.U3lzdGVtZUlv.action.Z2V0LWNvbnRhY3QtZmllbGQ.option.c2x1Zw.display_name": {
+          "source": "Slug",
+          "message": "Slug"
+        },
+        "app.U3lzdGVtZUlv.action.Z2V0LWNvbnRhY3QtZmllbGQ.option.c2x1Zw.short_desc": {
+          "source": "The contact field slug",
+          "message": "Lo slug del campo contatto"
+        },
+        "app.U3lzdGVtZUlv.action.Z2V0LWNvbnRhY3QtZmllbGQ.short_desc": {
+          "source": "Get a single contact field by slug",
+          "message": "Recupera un singolo campo contatto tramite slug"
+        },
+        "app.U3lzdGVtZUlv.action.Z2V0LXRhZw.desc": {
+          "source": "Retrieve a single tag by its ID",
+          "message": "Recupera un singolo tag tramite il suo ID"
+        },
+        "app.U3lzdGVtZUlv.action.Z2V0LXRhZw.display_name": {
+          "source": "Get Tag",
+          "message": "Recupera tag"
+        },
+        "app.U3lzdGVtZUlv.action.Z2V0LXRhZw.option.aWQ.display_name": {
+          "source": "Tag ID",
+          "message": "ID tag"
+        },
+        "app.U3lzdGVtZUlv.action.Z2V0LXRhZw.option.aWQ.short_desc": {
+          "source": "The tag ID",
+          "message": "L'ID del tag"
+        },
+        "app.U3lzdGVtZUlv.action.Z2V0LXRhZw.short_desc": {
+          "source": "Get a single tag by ID",
+          "message": "Ottieni un singolo tag tramite ID"
+        },
+        "app.U3lzdGVtZUlv.action.ZGVsZXRlLW1lbWJlcnNoaXA.desc": {
+          "source": "Remove a contact's membership from a community in Systeme.io",
+          "message": "Rimuovi l'iscrizione di un contatto a una community in Systeme.io"
+        },
+        "app.U3lzdGVtZUlv.action.ZGVsZXRlLW1lbWJlcnNoaXA.display_name": {
+          "source": "Delete Membership",
+          "message": "Elimina iscrizione"
+        },
+        "app.U3lzdGVtZUlv.action.ZGVsZXRlLW1lbWJlcnNoaXA.option.aWQ.desc": {
+          "source": "The unique identifier of the membership to delete",
+          "message": "L'identificatore univoco dell'iscrizione da eliminare"
+        },
+        "app.U3lzdGVtZUlv.action.ZGVsZXRlLW1lbWJlcnNoaXA.option.aWQ.display_name": {
+          "source": "Membership ID",
+          "message": "ID iscrizione"
+        },
+        "app.U3lzdGVtZUlv.action.ZGVsZXRlLW1lbWJlcnNoaXA.option.aWQ.short_desc": {
+          "source": "The membership ID to delete",
+          "message": "L'ID dell'iscrizione da eliminare"
+        },
+        "app.U3lzdGVtZUlv.action.ZGVsZXRlLW1lbWJlcnNoaXA.short_desc": {
+          "source": "Remove a community membership",
+          "message": "Rimuovi un'iscrizione a una community"
+        },
+        "app.U3lzdGVtZUlv.action.ZGVsZXRlLWNvbnRhY3Q.desc": {
+          "source": "Delete a contact from Systeme.io",
+          "message": "Elimina un contatto da Systeme.io"
+        },
+        "app.U3lzdGVtZUlv.action.ZGVsZXRlLWNvbnRhY3Q.display_name": {
+          "source": "Delete Contact",
+          "message": "Elimina contatto"
+        },
+        "app.U3lzdGVtZUlv.action.ZGVsZXRlLWNvbnRhY3Q.option.aWQ.desc": {
+          "source": "The unique identifier of the contact to delete",
+          "message": "L'identificatore univoco del contatto da eliminare"
+        },
+        "app.U3lzdGVtZUlv.action.ZGVsZXRlLWNvbnRhY3Q.option.aWQ.display_name": {
+          "source": "Contact ID",
+          "message": "ID contatto"
+        },
+        "app.U3lzdGVtZUlv.action.ZGVsZXRlLWNvbnRhY3Q.option.aWQ.short_desc": {
+          "source": "The contact ID to delete",
+          "message": "L'ID del contatto da eliminare"
+        },
+        "app.U3lzdGVtZUlv.action.ZGVsZXRlLWNvbnRhY3Q.short_desc": {
+          "source": "Delete a contact",
+          "message": "Elimina un contatto"
+        },
+        "app.U3lzdGVtZUlv.action.ZGVsZXRlLWNvbnRhY3QtZmllbGQ.desc": {
+          "source": "Delete a custom contact field from Systeme.io",
+          "message": "Elimina un campo contatto personalizzato da Systeme.io"
+        },
+        "app.U3lzdGVtZUlv.action.ZGVsZXRlLWNvbnRhY3QtZmllbGQ.display_name": {
+          "source": "Delete Contact Field",
+          "message": "Elimina campo contatto"
+        },
+        "app.U3lzdGVtZUlv.action.ZGVsZXRlLWNvbnRhY3QtZmllbGQ.option.c2x1Zw.desc": {
+          "source": "The unique slug identifier of the custom contact field to delete",
+          "message": "L'identificatore slug univoco del campo contatto personalizzato da eliminare"
+        },
+        "app.U3lzdGVtZUlv.action.ZGVsZXRlLWNvbnRhY3QtZmllbGQ.option.c2x1Zw.display_name": {
+          "source": "Slug",
+          "message": "Slug"
+        },
+        "app.U3lzdGVtZUlv.action.ZGVsZXRlLWNvbnRhY3QtZmllbGQ.option.c2x1Zw.short_desc": {
+          "source": "Field slug to delete",
+          "message": "Slug del campo da eliminare"
+        },
+        "app.U3lzdGVtZUlv.action.ZGVsZXRlLWNvbnRhY3QtZmllbGQ.short_desc": {
+          "source": "Delete a custom contact field",
+          "message": "Elimina un campo contatto personalizzato"
+        },
+        "app.U3lzdGVtZUlv.action.ZGVsZXRlLWVucm9sbG1lbnQ.desc": {
+          "source": "Remove a contact's enrollment from a course in Systeme.io",
+          "message": "Rimuovi l'iscrizione di un contatto a un corso in Systeme.io"
+        },
+        "app.U3lzdGVtZUlv.action.ZGVsZXRlLWVucm9sbG1lbnQ.display_name": {
+          "source": "Delete Enrollment",
+          "message": "Elimina iscrizione al corso"
+        },
+        "app.U3lzdGVtZUlv.action.ZGVsZXRlLWVucm9sbG1lbnQ.option.aWQ.desc": {
+          "source": "The unique identifier of the enrollment to delete",
+          "message": "L'identificatore univoco dell'iscrizione al corso da eliminare"
+        },
+        "app.U3lzdGVtZUlv.action.ZGVsZXRlLWVucm9sbG1lbnQ.option.aWQ.display_name": {
+          "source": "Enrollment ID",
+          "message": "ID iscrizione"
+        },
+        "app.U3lzdGVtZUlv.action.ZGVsZXRlLWVucm9sbG1lbnQ.option.aWQ.short_desc": {
+          "source": "The enrollment ID to delete",
+          "message": "L'ID dell'iscrizione al corso da eliminare"
+        },
+        "app.U3lzdGVtZUlv.action.ZGVsZXRlLWVucm9sbG1lbnQ.short_desc": {
+          "source": "Remove a course enrollment",
+          "message": "Rimuovi un'iscrizione a un corso"
+        },
+        "app.U3lzdGVtZUlv.action.ZGVsZXRlLXRhZw.desc": {
+          "source": "Delete a tag from Systeme.io",
+          "message": "Elimina un tag da Systeme.io"
+        },
+        "app.U3lzdGVtZUlv.action.ZGVsZXRlLXRhZw.display_name": {
+          "source": "Delete Tag",
+          "message": "Elimina tag"
+        },
+        "app.U3lzdGVtZUlv.action.ZGVsZXRlLXRhZw.option.aWQ.desc": {
+          "source": "The unique identifier of the tag to delete",
+          "message": "L'identificatore univoco del tag da eliminare"
+        },
+        "app.U3lzdGVtZUlv.action.ZGVsZXRlLXRhZw.option.aWQ.display_name": {
+          "source": "Tag ID",
+          "message": "ID tag"
+        },
+        "app.U3lzdGVtZUlv.action.ZGVsZXRlLXRhZw.option.aWQ.short_desc": {
+          "source": "The tag ID to delete",
+          "message": "L'ID del tag da eliminare"
+        },
+        "app.U3lzdGVtZUlv.action.ZGVsZXRlLXRhZw.short_desc": {
+          "source": "Delete a tag",
+          "message": "Elimina un tag"
+        },
+        "app.U3lzdGVtZUlv.action.bGlzdC10YWdz.desc": {
+          "source": "List tags from Systeme.io with cursor-based pagination",
+          "message": "Elenca i tag da Systeme.io con paginazione basata su cursore"
+        },
+        "app.U3lzdGVtZUlv.action.bGlzdC10YWdz.display_name": {
+          "source": "List Tags",
+          "message": "Elenca tag"
+        },
+        "app.U3lzdGVtZUlv.action.bGlzdC10YWdz.option.aWQ.display_name": {
+          "source": "Tag ID",
+          "message": "ID tag"
+        },
+        "app.U3lzdGVtZUlv.action.bGlzdC10YWdz.option.aWQ.short_desc": {
+          "source": "Get a specific tag",
+          "message": "Ottieni un tag specifico"
+        },
+        "app.U3lzdGVtZUlv.action.bGlzdC10YWdz.option.b3JkZXI.allowed-value.c3RyaW5nOmFzYw.display_name": {
+          "source": "Ascending",
+          "message": "Crescente"
+        },
+        "app.U3lzdGVtZUlv.action.bGlzdC10YWdz.option.b3JkZXI.allowed-value.c3RyaW5nOmRlc2M.display_name": {
+          "source": "Descending",
+          "message": "Decrescente"
+        },
+        "app.U3lzdGVtZUlv.action.bGlzdC10YWdz.option.b3JkZXI.display_name": {
+          "source": "Order",
+          "message": "Ordine"
+        },
+        "app.U3lzdGVtZUlv.action.bGlzdC10YWdz.option.b3JkZXI.short_desc": {
+          "source": "Sort order",
+          "message": "Ordine di ordinamento"
+        },
+        "app.U3lzdGVtZUlv.action.bGlzdC10YWdz.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "Limite"
+        },
+        "app.U3lzdGVtZUlv.action.bGlzdC10YWdz.option.bGltaXQ.short_desc": {
+          "source": "Maximum results",
+          "message": "Risultati massimi"
+        },
+        "app.U3lzdGVtZUlv.action.bGlzdC10YWdz.short_desc": {
+          "source": "List tags with pagination",
+          "message": "Elenca tag con paginazione"
+        },
+        "app.U3lzdGVtZUlv.action.bGlzdC1jb21tdW5pdGllcw.desc": {
+          "source": "List communities from Systeme.io",
+          "message": "Elenca le community da Systeme.io"
+        },
+        "app.U3lzdGVtZUlv.action.bGlzdC1jb21tdW5pdGllcw.display_name": {
+          "source": "List Communities",
+          "message": "Elenca community"
+        },
+        "app.U3lzdGVtZUlv.action.bGlzdC1jb21tdW5pdGllcw.option.aWQ.display_name": {
+          "source": "Community ID",
+          "message": "ID community"
+        },
+        "app.U3lzdGVtZUlv.action.bGlzdC1jb21tdW5pdGllcw.option.aWQ.short_desc": {
+          "source": "Get a specific community",
+          "message": "Ottieni una community specifica"
+        },
+        "app.U3lzdGVtZUlv.action.bGlzdC1jb21tdW5pdGllcw.option.b3JkZXI.allowed-value.c3RyaW5nOmFzYw.display_name": {
+          "source": "Ascending",
+          "message": "Crescente"
+        },
+        "app.U3lzdGVtZUlv.action.bGlzdC1jb21tdW5pdGllcw.option.b3JkZXI.allowed-value.c3RyaW5nOmRlc2M.display_name": {
+          "source": "Descending",
+          "message": "Decrescente"
+        },
+        "app.U3lzdGVtZUlv.action.bGlzdC1jb21tdW5pdGllcw.option.b3JkZXI.display_name": {
+          "source": "Order",
+          "message": "Ordine"
+        },
+        "app.U3lzdGVtZUlv.action.bGlzdC1jb21tdW5pdGllcw.option.b3JkZXI.short_desc": {
+          "source": "Sort order",
+          "message": "Ordine di ordinamento"
+        },
+        "app.U3lzdGVtZUlv.action.bGlzdC1jb21tdW5pdGllcw.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "Limite"
+        },
+        "app.U3lzdGVtZUlv.action.bGlzdC1jb21tdW5pdGllcw.option.bGltaXQ.short_desc": {
+          "source": "Maximum results",
+          "message": "Risultati massimi"
+        },
+        "app.U3lzdGVtZUlv.action.bGlzdC1jb21tdW5pdGllcw.short_desc": {
+          "source": "List communities",
+          "message": "Elenca community"
+        },
+        "app.U3lzdGVtZUlv.action.bGlzdC1jb250YWN0LWZpZWxkcw.desc": {
+          "source": "List custom contact fields from Systeme.io",
+          "message": "Elenca i campi contatto personalizzati da Systeme.io"
+        },
+        "app.U3lzdGVtZUlv.action.bGlzdC1jb250YWN0LWZpZWxkcw.display_name": {
+          "source": "List Contact Fields",
+          "message": "Elenca campi contatto"
+        },
+        "app.U3lzdGVtZUlv.action.bGlzdC1jb250YWN0LWZpZWxkcw.option.b3JkZXI.allowed-value.c3RyaW5nOmFzYw.display_name": {
+          "source": "Ascending",
+          "message": "Crescente"
+        },
+        "app.U3lzdGVtZUlv.action.bGlzdC1jb250YWN0LWZpZWxkcw.option.b3JkZXI.allowed-value.c3RyaW5nOmRlc2M.display_name": {
+          "source": "Descending",
+          "message": "Decrescente"
+        },
+        "app.U3lzdGVtZUlv.action.bGlzdC1jb250YWN0LWZpZWxkcw.option.b3JkZXI.display_name": {
+          "source": "Order",
+          "message": "Ordine"
+        },
+        "app.U3lzdGVtZUlv.action.bGlzdC1jb250YWN0LWZpZWxkcw.option.b3JkZXI.short_desc": {
+          "source": "Sort order",
+          "message": "Ordine di ordinamento"
+        },
+        "app.U3lzdGVtZUlv.action.bGlzdC1jb250YWN0LWZpZWxkcw.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "Limite"
+        },
+        "app.U3lzdGVtZUlv.action.bGlzdC1jb250YWN0LWZpZWxkcw.option.bGltaXQ.short_desc": {
+          "source": "Maximum results",
+          "message": "Risultati massimi"
+        },
+        "app.U3lzdGVtZUlv.action.bGlzdC1jb250YWN0LWZpZWxkcw.option.c2x1Zw.display_name": {
+          "source": "Slug",
+          "message": "Slug"
+        },
+        "app.U3lzdGVtZUlv.action.bGlzdC1jb250YWN0LWZpZWxkcw.option.c2x1Zw.short_desc": {
+          "source": "Get a specific field by slug",
+          "message": "Recupera un campo specifico tramite slug"
+        },
+        "app.U3lzdGVtZUlv.action.bGlzdC1jb250YWN0LWZpZWxkcw.short_desc": {
+          "source": "List custom contact fields",
+          "message": "Elenca campi contatto personalizzati"
+        },
+        "app.U3lzdGVtZUlv.action.bGlzdC1jb250YWN0cw.desc": {
+          "source": "List contacts from Systeme.io with cursor-based pagination",
+          "message": "Elenca i contatti da Systeme.io con paginazione basata su cursore"
+        },
+        "app.U3lzdGVtZUlv.action.bGlzdC1jb250YWN0cw.display_name": {
+          "source": "List Contacts",
+          "message": "Elenca contatti"
+        },
+        "app.U3lzdGVtZUlv.action.bGlzdC1jb250YWN0cw.option.aWQ.display_name": {
+          "source": "Contact ID",
+          "message": "ID contatto"
+        },
+        "app.U3lzdGVtZUlv.action.bGlzdC1jb250YWN0cw.option.aWQ.short_desc": {
+          "source": "Get a specific contact",
+          "message": "Ottieni un contatto specifico"
+        },
+        "app.U3lzdGVtZUlv.action.bGlzdC1jb250YWN0cw.option.b3JkZXI.allowed-value.c3RyaW5nOmFzYw.display_name": {
+          "source": "Ascending",
+          "message": "Crescente"
+        },
+        "app.U3lzdGVtZUlv.action.bGlzdC1jb250YWN0cw.option.b3JkZXI.allowed-value.c3RyaW5nOmRlc2M.display_name": {
+          "source": "Descending",
+          "message": "Decrescente"
+        },
+        "app.U3lzdGVtZUlv.action.bGlzdC1jb250YWN0cw.option.b3JkZXI.display_name": {
+          "source": "Order",
+          "message": "Ordine"
+        },
+        "app.U3lzdGVtZUlv.action.bGlzdC1jb250YWN0cw.option.b3JkZXI.short_desc": {
+          "source": "Sort order",
+          "message": "Ordine di ordinamento"
+        },
+        "app.U3lzdGVtZUlv.action.bGlzdC1jb250YWN0cw.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "Limite"
+        },
+        "app.U3lzdGVtZUlv.action.bGlzdC1jb250YWN0cw.option.bGltaXQ.short_desc": {
+          "source": "Maximum results",
+          "message": "Risultati massimi"
+        },
+        "app.U3lzdGVtZUlv.action.bGlzdC1jb250YWN0cw.short_desc": {
+          "source": "List contacts with pagination",
+          "message": "Elenca contatti con paginazione"
+        },
+        "app.U3lzdGVtZUlv.action.bGlzdC1jb3Vyc2Vz.desc": {
+          "source": "List courses from Systeme.io",
+          "message": "Elenca i corsi da Systeme.io"
+        },
+        "app.U3lzdGVtZUlv.action.bGlzdC1jb3Vyc2Vz.display_name": {
+          "source": "List Courses",
+          "message": "Elenca corsi"
+        },
+        "app.U3lzdGVtZUlv.action.bGlzdC1jb3Vyc2Vz.option.aWQ.display_name": {
+          "source": "Course ID",
+          "message": "ID corso"
+        },
+        "app.U3lzdGVtZUlv.action.bGlzdC1jb3Vyc2Vz.option.aWQ.short_desc": {
+          "source": "Get a specific course",
+          "message": "Recupera un corso specifico"
+        },
+        "app.U3lzdGVtZUlv.action.bGlzdC1jb3Vyc2Vz.option.b3JkZXI.allowed-value.c3RyaW5nOmFzYw.display_name": {
+          "source": "Ascending",
+          "message": "Crescente"
+        },
+        "app.U3lzdGVtZUlv.action.bGlzdC1jb3Vyc2Vz.option.b3JkZXI.allowed-value.c3RyaW5nOmRlc2M.display_name": {
+          "source": "Descending",
+          "message": "Decrescente"
+        },
+        "app.U3lzdGVtZUlv.action.bGlzdC1jb3Vyc2Vz.option.b3JkZXI.display_name": {
+          "source": "Order",
+          "message": "Ordine"
+        },
+        "app.U3lzdGVtZUlv.action.bGlzdC1jb3Vyc2Vz.option.b3JkZXI.short_desc": {
+          "source": "Sort order",
+          "message": "Ordine di ordinamento"
+        },
+        "app.U3lzdGVtZUlv.action.bGlzdC1jb3Vyc2Vz.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "Limite"
+        },
+        "app.U3lzdGVtZUlv.action.bGlzdC1jb3Vyc2Vz.option.bGltaXQ.short_desc": {
+          "source": "Maximum results",
+          "message": "Risultati massimi"
+        },
+        "app.U3lzdGVtZUlv.action.bGlzdC1jb3Vyc2Vz.short_desc": {
+          "source": "List courses",
+          "message": "Elenca corsi"
+        },
+        "app.U3lzdGVtZUlv.action.bGlzdC1lbnJvbGxtZW50cw.desc": {
+          "source": "List course enrollments from Systeme.io",
+          "message": "Elenca le iscrizioni ai corsi da Systeme.io"
+        },
+        "app.U3lzdGVtZUlv.action.bGlzdC1lbnJvbGxtZW50cw.display_name": {
+          "source": "List Enrollments",
+          "message": "Elenca iscrizioni"
+        },
+        "app.U3lzdGVtZUlv.action.bGlzdC1lbnJvbGxtZW50cw.option.aWQ.display_name": {
+          "source": "Enrollment ID",
+          "message": "ID iscrizione"
+        },
+        "app.U3lzdGVtZUlv.action.bGlzdC1lbnJvbGxtZW50cw.option.aWQ.short_desc": {
+          "source": "Get a specific enrollment",
+          "message": "Recupera un'iscrizione al corso specifica"
+        },
+        "app.U3lzdGVtZUlv.action.bGlzdC1lbnJvbGxtZW50cw.option.b3JkZXI.allowed-value.c3RyaW5nOmFzYw.display_name": {
+          "source": "Ascending",
+          "message": "Crescente"
+        },
+        "app.U3lzdGVtZUlv.action.bGlzdC1lbnJvbGxtZW50cw.option.b3JkZXI.allowed-value.c3RyaW5nOmRlc2M.display_name": {
+          "source": "Descending",
+          "message": "Decrescente"
+        },
+        "app.U3lzdGVtZUlv.action.bGlzdC1lbnJvbGxtZW50cw.option.b3JkZXI.display_name": {
+          "source": "Order",
+          "message": "Ordine"
+        },
+        "app.U3lzdGVtZUlv.action.bGlzdC1lbnJvbGxtZW50cw.option.b3JkZXI.short_desc": {
+          "source": "Sort order",
+          "message": "Ordine di ordinamento"
+        },
+        "app.U3lzdGVtZUlv.action.bGlzdC1lbnJvbGxtZW50cw.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "Limite"
+        },
+        "app.U3lzdGVtZUlv.action.bGlzdC1lbnJvbGxtZW50cw.option.bGltaXQ.short_desc": {
+          "source": "Maximum results",
+          "message": "Risultati massimi"
+        },
+        "app.U3lzdGVtZUlv.action.bGlzdC1lbnJvbGxtZW50cw.short_desc": {
+          "source": "List course enrollments",
+          "message": "Elenca iscrizioni ai corsi"
+        },
+        "app.U3lzdGVtZUlv.action.bGlzdC1tZW1iZXJzaGlwcw.desc": {
+          "source": "List community memberships from Systeme.io",
+          "message": "Elenca le iscrizioni alle community da Systeme.io"
+        },
+        "app.U3lzdGVtZUlv.action.bGlzdC1tZW1iZXJzaGlwcw.display_name": {
+          "source": "List Memberships",
+          "message": "Appartenenze a elenchi"
+        },
+        "app.U3lzdGVtZUlv.action.bGlzdC1tZW1iZXJzaGlwcw.option.aWQ.display_name": {
+          "source": "Membership ID",
+          "message": "ID iscrizione"
+        },
+        "app.U3lzdGVtZUlv.action.bGlzdC1tZW1iZXJzaGlwcw.option.aWQ.short_desc": {
+          "source": "Get a specific membership",
+          "message": "Recupera un'iscrizione specifica"
+        },
+        "app.U3lzdGVtZUlv.action.bGlzdC1tZW1iZXJzaGlwcw.option.b3JkZXI.allowed-value.c3RyaW5nOmFzYw.display_name": {
+          "source": "Ascending",
+          "message": "Crescente"
+        },
+        "app.U3lzdGVtZUlv.action.bGlzdC1tZW1iZXJzaGlwcw.option.b3JkZXI.allowed-value.c3RyaW5nOmRlc2M.display_name": {
+          "source": "Descending",
+          "message": "Decrescente"
+        },
+        "app.U3lzdGVtZUlv.action.bGlzdC1tZW1iZXJzaGlwcw.option.b3JkZXI.display_name": {
+          "source": "Order",
+          "message": "Ordine"
+        },
+        "app.U3lzdGVtZUlv.action.bGlzdC1tZW1iZXJzaGlwcw.option.b3JkZXI.short_desc": {
+          "source": "Sort order",
+          "message": "Ordine di ordinamento"
+        },
+        "app.U3lzdGVtZUlv.action.bGlzdC1tZW1iZXJzaGlwcw.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "Limite"
+        },
+        "app.U3lzdGVtZUlv.action.bGlzdC1tZW1iZXJzaGlwcw.option.bGltaXQ.short_desc": {
+          "source": "Maximum results",
+          "message": "Risultati massimi"
+        },
+        "app.U3lzdGVtZUlv.action.bGlzdC1tZW1iZXJzaGlwcw.short_desc": {
+          "source": "List community memberships",
+          "message": "Elenca iscrizioni alle community"
+        },
+        "app.U3lzdGVtZUlv.action.bGlzdC1zdWJzY3JpcHRpb25z.desc": {
+          "source": "List subscriptions from Systeme.io",
+          "message": "Elenca gli abbonamenti da Systeme.io"
+        },
+        "app.U3lzdGVtZUlv.action.bGlzdC1zdWJzY3JpcHRpb25z.display_name": {
+          "source": "List Subscriptions",
+          "message": "Elenca abbonamenti"
+        },
+        "app.U3lzdGVtZUlv.action.bGlzdC1zdWJzY3JpcHRpb25z.option.aWQ.display_name": {
+          "source": "Subscription ID",
+          "message": "ID abbonamento"
+        },
+        "app.U3lzdGVtZUlv.action.bGlzdC1zdWJzY3JpcHRpb25z.option.aWQ.short_desc": {
+          "source": "Get a specific subscription",
+          "message": "Recupera un abbonamento specifico"
+        },
+        "app.U3lzdGVtZUlv.action.bGlzdC1zdWJzY3JpcHRpb25z.option.b3JkZXI.allowed-value.c3RyaW5nOmFzYw.display_name": {
+          "source": "Ascending",
+          "message": "Crescente"
+        },
+        "app.U3lzdGVtZUlv.action.bGlzdC1zdWJzY3JpcHRpb25z.option.b3JkZXI.allowed-value.c3RyaW5nOmRlc2M.display_name": {
+          "source": "Descending",
+          "message": "Decrescente"
+        },
+        "app.U3lzdGVtZUlv.action.bGlzdC1zdWJzY3JpcHRpb25z.option.b3JkZXI.display_name": {
+          "source": "Order",
+          "message": "Ordine"
+        },
+        "app.U3lzdGVtZUlv.action.bGlzdC1zdWJzY3JpcHRpb25z.option.b3JkZXI.short_desc": {
+          "source": "Sort order",
+          "message": "Ordine di ordinamento"
+        },
+        "app.U3lzdGVtZUlv.action.bGlzdC1zdWJzY3JpcHRpb25z.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "Limite"
+        },
+        "app.U3lzdGVtZUlv.action.bGlzdC1zdWJzY3JpcHRpb25z.option.bGltaXQ.short_desc": {
+          "source": "Maximum results",
+          "message": "Risultati massimi"
+        },
+        "app.U3lzdGVtZUlv.action.bGlzdC1zdWJzY3JpcHRpb25z.short_desc": {
+          "source": "List subscriptions",
+          "message": "Elenca abbonamenti"
+        },
+        "app.U3lzdGVtZUlv.action.bWFrZS1hcGktY2FsbA.desc": {
+          "source": "Make a custom HTTP / REST API call to **Systeme.io** using the configured connection's authentication.\n\nSpecify the HTTP method, the URI path (relative to the connection's API base URL), optional query parameters, headers, and request body. The response is returned as a hash containing the status code, response headers, and response body.\n\nUse this action for endpoints that are not yet exposed as first-class actions on this app.",
+          "message": "Esegui una chiamata API HTTP / REST personalizzata a **Systeme.io** utilizzando l'autenticazione della connessione configurata.\n\nSpecifica il metodo HTTP, il percorso URI (relativo all'URL di base dell'API della connessione), i parametri di query opzionali, gli header e il corpo della richiesta. La risposta viene restituita come hash contenente il codice di stato, gli header di risposta e il corpo della risposta.\n\nUsa questa azione per gli endpoint che non sono ancora esposti come azioni di prim'ordine su questa app."
+        },
+        "app.U3lzdGVtZUlv.action.bWFrZS1hcGktY2FsbA.display_name": {
+          "source": "Make an API call",
+          "message": "Esegui una chiamata API"
+        },
+        "app.U3lzdGVtZUlv.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.desc": {
+          "source": "The request body. The effective type depends on `body_type`: JSON/form/YAML expect a hash, XML/text expect a string, multipart expects a file structure, binary expects raw bytes.",
+          "message": "Il corpo della richiesta. Il tipo effettivo dipende da `body_type`: JSON/form/YAML richiedono un hash, XML/testo richiedono una stringa, multipart richiede una struttura di file, binario richiede byte grezzi."
+        },
+        "app.U3lzdGVtZUlv.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.display_name": {
+          "source": "Body",
+          "message": "Corpo"
+        },
+        "app.U3lzdGVtZUlv.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.short_desc": {
+          "source": "The request body",
+          "message": "Il corpo della richiesta"
+        },
+        "app.U3lzdGVtZUlv.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.desc": {
+          "source": "Upload a file using `multipart/form-data`. The body must be a @ref DataProvider::FileDataType \"FileDataType\" structure (filename + content + mime_type). The framework builds the multipart envelope and sets the boundary header.",
+          "message": "Carica un file utilizzando `multipart/form-data`. Il corpo deve essere una struttura @ref DataProvider::FileDataType \"FileDataType\" (nome file + contenuto + mime_type). Il framework costruisce l'inviluppo multipart e imposta l'intestazione del boundary."
+        },
+        "app.U3lzdGVtZUlv.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.display_name": {
+          "source": "Multipart Form",
+          "message": "Modulo Multipart"
+        },
+        "app.U3lzdGVtZUlv.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.short_desc": {
+          "source": "Upload a file using multipart/form-data",
+          "message": "Carica un file utilizzando multipart/form-data"
+        },
+        "app.U3lzdGVtZUlv.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.desc": {
+          "source": "Pass the body to the REST client unchanged; the client decides serialization based on its configured `data` option and the value type",
+          "message": "Passa il corpo al client REST inalterato; il client decide la serializzazione in base alla sua opzione `data` configurata e al tipo di valore"
+        },
+        "app.U3lzdGVtZUlv.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.display_name": {
+          "source": "Auto",
+          "message": "Auto"
+        },
+        "app.U3lzdGVtZUlv.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.short_desc": {
+          "source": "Pass-through; use connection serialization and let the REST client decide",
+          "message": "Pass-through; usa la serializzazione della connessione e lascia decidere al client REST"
+        },
+        "app.U3lzdGVtZUlv.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.desc": {
+          "source": "Send the body as raw bytes. The body must be a binary value. Sets `Content-Type: application/octet-stream` unless overridden by `hdr`.",
+          "message": "Invia il corpo come byte grezzi. Il corpo deve essere un valore binario. Imposta `Content-Type: application/octet-stream` a meno che non sia sovrascritto da `hdr`."
+        },
+        "app.U3lzdGVtZUlv.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.display_name": {
+          "source": "Raw Binary",
+          "message": "Binario grezzo"
+        },
+        "app.U3lzdGVtZUlv.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.short_desc": {
+          "source": "Send body as raw bytes",
+          "message": "Invia il corpo come byte grezzi"
+        },
+        "app.U3lzdGVtZUlv.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.desc": {
+          "source": "Serialize a hash of form fields as `application/x-www-form-urlencoded`. The body must be a hash whose values are scalars (strings/numbers/booleans).",
+          "message": "Serializza un hash di campi modulo come `application/x-www-form-urlencoded`. Il corpo deve essere un hash i cui valori sono scalari (stringhe/numeri/booleani)."
+        },
+        "app.U3lzdGVtZUlv.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.display_name": {
+          "source": "Form (URL-encoded)",
+          "message": "Form (URL-encoded)"
+        },
+        "app.U3lzdGVtZUlv.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.short_desc": {
+          "source": "Serialize body as application/x-www-form-urlencoded form fields",
+          "message": "Serializza il corpo come campi del modulo application/x-www-form-urlencoded"
+        },
+        "app.U3lzdGVtZUlv.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.desc": {
+          "source": "Serialize the body as JSON; sets `Content-Type: application/json`. The body should be a hash, list, or scalar value.",
+          "message": "Serializza il corpo come JSON; imposta `Content-Type: application/json`. Il corpo deve essere un hash, un elenco o un valore scalare."
+        },
+        "app.U3lzdGVtZUlv.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.display_name": {
+          "source": "JSON",
+          "message": "JSON"
+        },
+        "app.U3lzdGVtZUlv.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.short_desc": {
+          "source": "Serialize body as JSON",
+          "message": "Serializza il corpo come JSON"
+        },
+        "app.U3lzdGVtZUlv.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.desc": {
+          "source": "Send the body as plain text. The body must be a string. Sets `Content-Type: text/plain`.",
+          "message": "Invia il corpo come testo semplice. Il corpo deve essere una stringa. Imposta `Content-Type: text/plain`."
+        },
+        "app.U3lzdGVtZUlv.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.display_name": {
+          "source": "Plain Text",
+          "message": "Testo normale"
+        },
+        "app.U3lzdGVtZUlv.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.short_desc": {
+          "source": "Send body as text/plain",
+          "message": "Invia il corpo come text/plain"
+        },
+        "app.U3lzdGVtZUlv.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.desc": {
+          "source": "Send the body as XML. If the body is a hash it is serialized to XML; if it is a string it is sent verbatim. Sets `Content-Type: application/xml`.",
+          "message": "Invia il corpo come XML. Se il corpo è un hash viene serializzato in XML; se è una stringa viene inviato testualmente. Imposta `Content-Type: application/xml`."
+        },
+        "app.U3lzdGVtZUlv.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.display_name": {
+          "source": "XML",
+          "message": "XML"
+        },
+        "app.U3lzdGVtZUlv.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.short_desc": {
+          "source": "Send body as XML",
+          "message": "Invia il corpo come XML"
+        },
+        "app.U3lzdGVtZUlv.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.desc": {
+          "source": "Send the body as YAML. If the body is a hash it is serialized to YAML; if it is a string it is sent verbatim. Sets `Content-Type: application/x-yaml`.",
+          "message": "Invia il corpo come YAML. Se il corpo è un hash viene serializzato in YAML; se è una stringa viene inviato testualmente. Imposta `Content-Type: application/x-yaml`."
+        },
+        "app.U3lzdGVtZUlv.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.display_name": {
+          "source": "YAML",
+          "message": "YAML"
+        },
+        "app.U3lzdGVtZUlv.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.short_desc": {
+          "source": "Send body as YAML",
+          "message": "Invia il corpo come YAML"
+        },
+        "app.U3lzdGVtZUlv.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.desc": {
+          "source": "Selects the body serialization mode and the corresponding `Content-Type` header. Changing this field reshapes the `body` editor - selecting JSON exposes a JSON editor, selecting Multipart Form exposes a file picker, and so on.",
+          "message": "Seleziona la modalità di serializzazione del corpo e la corrispondente intestazione `Content-Type`. La modifica di questo campo riorganizza l'editor `body`: selezionando JSON viene mostrato un editor JSON, selezionando Modulo Multipart viene mostrato un selettore di file e così via."
+        },
+        "app.U3lzdGVtZUlv.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.display_name": {
+          "source": "Body Type",
+          "message": "Tipo di corpo"
+        },
+        "app.U3lzdGVtZUlv.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.short_desc": {
+          "source": "How the body is serialized and what Content-Type is sent",
+          "message": "Come viene serializzato il corpo e quale Content-Type viene inviato"
+        },
+        "app.U3lzdGVtZUlv.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.desc": {
+          "source": "If `True`, non-2xx HTTP responses return as the normal response hash (with the actual status code) instead of raising `REST-RESPONSE-ERROR`. Useful for handling 4xx/5xx as data - e.g. checking whether a resource exists. Overrides the connection's `error_passthru` setting for this call only.",
+          "message": "Se `True`, le risposte HTTP diverse da 2xx ritornano come normale hash di risposta (con il codice di stato effettivo) invece di sollevare `REST-RESPONSE-ERROR`. Utile per gestire 4xx/5xx come dati, ad es. per verificare se una risorsa esiste. Sovrascrive l'impostazione `error_passthru` della connessione solo per questa chiamata."
+        },
+        "app.U3lzdGVtZUlv.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.display_name": {
+          "source": "Return Errors as Data",
+          "message": "Restituisci errori come dati"
+        },
+        "app.U3lzdGVtZUlv.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.short_desc": {
+          "source": "Return non-2xx responses normally instead of throwing",
+          "message": "Restituisci normalmente le risposte non 2xx invece di generare un'eccezione"
+        },
+        "app.U3lzdGVtZUlv.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.desc": {
+          "source": "Optional list of HTTP status codes treated as success. If set and the response status is not in this list, the action throws `REST-STATUS-ERROR`. When unset, the REST client's default behavior applies (typically: 2xx is success, non-2xx throws).",
+          "message": "Elenco opzionale di codici di stato HTTP trattati come successo. Se impostato e lo stato della risposta non è in questo elenco, l'azione genera `REST-STATUS-ERROR`. Quando non è impostato, si applica il comportamento predefinito del client REST (in genere: 2xx è successo, non-2xx genera un'eccezione)."
+        },
+        "app.U3lzdGVtZUlv.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.display_name": {
+          "source": "Expected Status Codes",
+          "message": "Codici di stato previsti"
+        },
+        "app.U3lzdGVtZUlv.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.short_desc": {
+          "source": "Response status codes treated as success",
+          "message": "Codici di stato della risposta trattati come successo"
+        },
+        "app.U3lzdGVtZUlv.action.bWFrZS1hcGktY2FsbA.option.aGRy.desc": {
+          "source": "Hash of custom headers added to the request. These override any default headers set by `body_type` (e.g. supplying `Content-Type` here wins over the body-type default).",
+          "message": "Hash di intestazioni personalizzate aggiunte alla richiesta. Queste sovrascrivono qualsiasi intestazione predefinita impostata da `body_type` (ad es. fornire `Content-Type` qui ha la precedenza sul valore predefinito del tipo di corpo)."
+        },
+        "app.U3lzdGVtZUlv.action.bWFrZS1hcGktY2FsbA.option.aGRy.display_name": {
+          "source": "Custom Headers",
+          "message": "Intestazioni personalizzate"
+        },
+        "app.U3lzdGVtZUlv.action.bWFrZS1hcGktY2FsbA.option.aGRy.short_desc": {
+          "source": "Extra request headers",
+          "message": "Intestazioni della richiesta aggiuntive"
+        },
+        "app.U3lzdGVtZUlv.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.desc": {
+          "source": "If `True`, the response hash includes a `debug` sub-hash containing the request method/URL/headers (with sensitive values redacted), request and response sizes, and round-trip duration. Useful when investigating slow or failing calls. Off by default to keep responses lean.",
+          "message": "Se `True`, l'hash della risposta include un sotto-hash `debug` contenente il metodo/URL/intestazioni della richiesta (con i valori sensibili oscurati), le dimensioni della richiesta e della risposta e la durata di andata e ritorno. Utile quando si indagano chiamate lente o con errori. Disattivato per impostazione predefinita per mantenere le risposte snelle."
+        },
+        "app.U3lzdGVtZUlv.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.display_name": {
+          "source": "Include Debug Info",
+          "message": "Includi informazioni di debug"
+        },
+        "app.U3lzdGVtZUlv.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.short_desc": {
+          "source": "Include request/timing/size debug info in the response",
+          "message": "Includi le informazioni di debug relative a richiesta/tempi/dimensioni nella risposta"
+        },
+        "app.U3lzdGVtZUlv.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.desc": {
+          "source": "HTTP `OPTIONS`",
+          "message": "HTTP `OPTIONS`"
+        },
+        "app.U3lzdGVtZUlv.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.display_name": {
+          "source": "OPTIONS",
+          "message": "OPTIONS"
+        },
+        "app.U3lzdGVtZUlv.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.short_desc": {
+          "source": "HTTP OPTIONS",
+          "message": "HTTP OPTIONS"
+        },
+        "app.U3lzdGVtZUlv.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.desc": {
+          "source": "HTTP `DELETE`",
+          "message": "HTTP `DELETE`"
+        },
+        "app.U3lzdGVtZUlv.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.display_name": {
+          "source": "DELETE",
+          "message": "DELETE"
+        },
+        "app.U3lzdGVtZUlv.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.short_desc": {
+          "source": "HTTP DELETE",
+          "message": "HTTP DELETE"
+        },
+        "app.U3lzdGVtZUlv.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.desc": {
+          "source": "HTTP `GET`",
+          "message": "HTTP `GET`"
+        },
+        "app.U3lzdGVtZUlv.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.display_name": {
+          "source": "GET",
+          "message": "GET"
+        },
+        "app.U3lzdGVtZUlv.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.short_desc": {
+          "source": "HTTP GET",
+          "message": "HTTP GET"
+        },
+        "app.U3lzdGVtZUlv.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.desc": {
+          "source": "HTTP `HEAD`",
+          "message": "HTTP `HEAD`"
+        },
+        "app.U3lzdGVtZUlv.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.display_name": {
+          "source": "HEAD",
+          "message": "HEAD"
+        },
+        "app.U3lzdGVtZUlv.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.short_desc": {
+          "source": "HTTP HEAD",
+          "message": "HTTP HEAD"
+        },
+        "app.U3lzdGVtZUlv.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.desc": {
+          "source": "HTTP `PATCH`",
+          "message": "HTTP `PATCH`"
+        },
+        "app.U3lzdGVtZUlv.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.display_name": {
+          "source": "PATCH",
+          "message": "PATCH"
+        },
+        "app.U3lzdGVtZUlv.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.short_desc": {
+          "source": "HTTP PATCH",
+          "message": "HTTP PATCH"
+        },
+        "app.U3lzdGVtZUlv.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.desc": {
+          "source": "HTTP `POST`",
+          "message": "HTTP `POST`"
+        },
+        "app.U3lzdGVtZUlv.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.display_name": {
+          "source": "POST",
+          "message": "POST"
+        },
+        "app.U3lzdGVtZUlv.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.short_desc": {
+          "source": "HTTP POST",
+          "message": "HTTP POST"
+        },
+        "app.U3lzdGVtZUlv.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.desc": {
+          "source": "HTTP `PUT`",
+          "message": "HTTP `PUT`"
+        },
+        "app.U3lzdGVtZUlv.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.display_name": {
+          "source": "PUT",
+          "message": "PUT"
+        },
+        "app.U3lzdGVtZUlv.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.short_desc": {
+          "source": "HTTP PUT",
+          "message": "HTTP PUT"
+        },
+        "app.U3lzdGVtZUlv.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.desc": {
+          "source": "HTTP `TRACE`",
+          "message": "HTTP `TRACE`"
+        },
+        "app.U3lzdGVtZUlv.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.display_name": {
+          "source": "TRACE",
+          "message": "TRACE"
+        },
+        "app.U3lzdGVtZUlv.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.short_desc": {
+          "source": "HTTP TRACE",
+          "message": "HTTP TRACE"
+        },
+        "app.U3lzdGVtZUlv.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "Il metodo HTTP da utilizzare per la richiesta"
+        },
+        "app.U3lzdGVtZUlv.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.display_name": {
+          "source": "HTTP Method",
+          "message": "Metodo HTTP"
+        },
+        "app.U3lzdGVtZUlv.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.short_desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "Il metodo HTTP da utilizzare per la richiesta"
+        },
+        "app.U3lzdGVtZUlv.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain `{name}` placeholders that are replaced from `path_vars`. Example: `/users/{id}/comments`.",
+          "message": "Il percorso URI relativo all'URL di base dell'API della connessione. Può contenere segnaposto `{name}` che vengono sostituiti da `path_vars`. Esempio: `/users/{id}/comments`."
+        },
+        "app.U3lzdGVtZUlv.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.display_name": {
+          "source": "URI Path",
+          "message": "Percorso URI"
+        },
+        "app.U3lzdGVtZUlv.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.short_desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain '{name}' placeholders that are replaced from 'path_vars'. Example: '/users/{id}/comments'",
+          "message": "Il percorso URI relativo all'URL di base dell'API della connessione. Può contenere segnaposto '{name}' che vengono sostituiti da 'path_vars'. Esempio: '/users/{id}/comments'"
+        },
+        "app.U3lzdGVtZUlv.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.desc": {
+          "source": "Hash of values substituted into `{name}` placeholders in the URI path. Example: with `path = /users/{id}` and `path_vars = {id: 123}` the framework sends `/users/123`. Values are URL-encoded.",
+          "message": "Hash dei valori sostituiti nei segnaposto `{name}` nel percorso URI. Esempio: con `path = /users/{id}` e `path_vars = {id: 123}` il framework invia `/users/123`. I valori sono codificati in URL."
+        },
+        "app.U3lzdGVtZUlv.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.display_name": {
+          "source": "Path Variables",
+          "message": "Variabili del percorso"
+        },
+        "app.U3lzdGVtZUlv.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.short_desc": {
+          "source": "Values for {name} placeholders in path",
+          "message": "Valori per i segnaposto {name} nel percorso"
+        },
+        "app.U3lzdGVtZUlv.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.desc": {
+          "source": "Hash of query string parameters to append to the URI path. Values are URL-encoded; list values are joined with `,`.",
+          "message": "Hash dei parametri della stringa di query da aggiungere al percorso URI. I valori sono codificati in URL; i valori dell'elenco sono uniti con `,`."
+        },
+        "app.U3lzdGVtZUlv.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.display_name": {
+          "source": "Query Arguments",
+          "message": "Argomenti della query"
+        },
+        "app.U3lzdGVtZUlv.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.short_desc": {
+          "source": "Query string parameters",
+          "message": "Parametri della stringa di query"
+        },
+        "app.U3lzdGVtZUlv.action.bWFrZS1hcGktY2FsbA.short_desc": {
+          "source": "Make a custom API call to Systeme.io",
+          "message": "Esegui una chiamata API personalizzata a Systeme.io"
+        },
+        "app.U3lzdGVtZUlv.action.bmV3LWNvbnRhY3Q.desc": {
+          "source": "Fires when a new contact is created in Systeme.io",
+          "message": "Si attiva quando viene creato un nuovo contatto in Systeme.io"
+        },
+        "app.U3lzdGVtZUlv.action.bmV3LWNvbnRhY3Q.display_name": {
+          "source": "New Contact",
+          "message": "Nuovo contatto"
+        },
+        "app.U3lzdGVtZUlv.action.bmV3LWNvbnRhY3Q.short_desc": {
+          "source": "Trigger when a new contact is created",
+          "message": "Attiva quando viene creato un nuovo contatto"
+        },
+        "app.U3lzdGVtZUlv.action.bmV3LXRhZw.desc": {
+          "source": "Fires when a new tag is created in Systeme.io",
+          "message": "Si attiva quando viene creato un nuovo tag in Systeme.io"
+        },
+        "app.U3lzdGVtZUlv.action.bmV3LXRhZw.display_name": {
+          "source": "New Tag",
+          "message": "Nuovo tag"
+        },
+        "app.U3lzdGVtZUlv.action.bmV3LXRhZw.short_desc": {
+          "source": "Trigger when a new tag is created",
+          "message": "Attiva quando viene creato un nuovo tag"
+        },
+        "app.U3lzdGVtZUlv.action.cmVtb3ZlLWNvbnRhY3QtdGFn.desc": {
+          "source": "Remove a tag from a contact in Systeme.io",
+          "message": "Rimuovi un tag da un contatto in Systeme.io"
+        },
+        "app.U3lzdGVtZUlv.action.cmVtb3ZlLWNvbnRhY3QtdGFn.display_name": {
+          "source": "Remove Tag from Contact",
+          "message": "Rimuovi tag dal contatto"
+        },
+        "app.U3lzdGVtZUlv.action.cmVtb3ZlLWNvbnRhY3QtdGFn.option.aWQ.desc": {
+          "source": "The unique identifier of the contact to remove the tag from",
+          "message": "L'identificatore univoco del contatto da cui rimuovere il tag"
+        },
+        "app.U3lzdGVtZUlv.action.cmVtb3ZlLWNvbnRhY3QtdGFn.option.aWQ.display_name": {
+          "source": "Contact ID",
+          "message": "ID contatto"
+        },
+        "app.U3lzdGVtZUlv.action.cmVtb3ZlLWNvbnRhY3QtdGFn.option.aWQ.short_desc": {
+          "source": "The contact ID",
+          "message": "L'ID del contatto"
+        },
+        "app.U3lzdGVtZUlv.action.cmVtb3ZlLWNvbnRhY3QtdGFn.option.dGFnSWQ.desc": {
+          "source": "The unique identifier of the tag to remove from the contact",
+          "message": "L'identificatore univoco del tag da rimuovere dal contatto"
+        },
+        "app.U3lzdGVtZUlv.action.cmVtb3ZlLWNvbnRhY3QtdGFn.option.dGFnSWQ.display_name": {
+          "source": "Tag ID",
+          "message": "ID tag"
+        },
+        "app.U3lzdGVtZUlv.action.cmVtb3ZlLWNvbnRhY3QtdGFn.option.dGFnSWQ.short_desc": {
+          "source": "The tag ID to remove",
+          "message": "L'ID del tag da rimuovere"
+        },
+        "app.U3lzdGVtZUlv.action.cmVtb3ZlLWNvbnRhY3QtdGFn.short_desc": {
+          "source": "Remove a tag from a contact",
+          "message": "Rimuovi un tag da un contatto"
+        },
+        "app.U3lzdGVtZUlv.action.dXBkYXRlLWNvbnRhY3Q.desc": {
+          "source": "Update an existing contact in Systeme.io using merge-patch",
+          "message": "Aggiorna un contatto esistente in Systeme.io utilizzando merge-patch"
+        },
+        "app.U3lzdGVtZUlv.action.dXBkYXRlLWNvbnRhY3Q.display_name": {
+          "source": "Update Contact",
+          "message": "Aggiorna contatto"
+        },
+        "app.U3lzdGVtZUlv.action.dXBkYXRlLWNvbnRhY3Q.option.ZW1haWw.desc": {
+          "source": "The email address of the contact to create",
+          "message": "L'indirizzo email del contatto da creare"
+        },
+        "app.U3lzdGVtZUlv.action.dXBkYXRlLWNvbnRhY3Q.option.ZW1haWw.display_name": {
+          "source": "Email",
+          "message": "E-mail"
+        },
+        "app.U3lzdGVtZUlv.action.dXBkYXRlLWNvbnRhY3Q.option.ZW1haWw.short_desc": {
+          "source": "Email address",
+          "message": "Indirizzo e-mail"
+        },
+        "app.U3lzdGVtZUlv.action.dXBkYXRlLWNvbnRhY3Q.option.ZmllbGRz.desc": {
+          "source": "List of custom field values to set on the contact. Each entry should be a hash with `slug` and `value` properties.\n\n**Example:**\n```\n[{\"slug\": \"company\", \"value\": \"Acme Corp\"}]\n```",
+          "message": "Elenco di valori dei campi personalizzati da impostare sul contatto. Ogni voce deve essere un hash con le proprietà `slug` e `value`.\n\n**Esempio:**\n```\n[{\"slug\": \"company\", \"value\": \"Acme Corp\"}]\n```"
+        },
+        "app.U3lzdGVtZUlv.action.dXBkYXRlLWNvbnRhY3Q.option.ZmllbGRz.display_name": {
+          "source": "Custom Fields",
+          "message": "Campi personalizzati"
+        },
+        "app.U3lzdGVtZUlv.action.dXBkYXRlLWNvbnRhY3Q.option.ZmllbGRz.short_desc": {
+          "source": "Custom field values",
+          "message": "Valori dei campi personalizzati"
+        },
+        "app.U3lzdGVtZUlv.action.dXBkYXRlLWNvbnRhY3Q.option.Zmlyc3ROYW1l.desc": {
+          "source": "The first name of the contact",
+          "message": "Il nome del contatto"
+        },
+        "app.U3lzdGVtZUlv.action.dXBkYXRlLWNvbnRhY3Q.option.Zmlyc3ROYW1l.display_name": {
+          "source": "First Name",
+          "message": "Nome"
+        },
+        "app.U3lzdGVtZUlv.action.dXBkYXRlLWNvbnRhY3Q.option.Zmlyc3ROYW1l.short_desc": {
+          "source": "Contact's first name",
+          "message": "Nome del contatto"
+        },
+        "app.U3lzdGVtZUlv.action.dXBkYXRlLWNvbnRhY3Q.option.aWQ.desc": {
+          "source": "The unique identifier of the contact to update",
+          "message": "L'identificatore univoco del contatto da aggiornare"
+        },
+        "app.U3lzdGVtZUlv.action.dXBkYXRlLWNvbnRhY3Q.option.aWQ.display_name": {
+          "source": "Contact ID",
+          "message": "ID contatto"
+        },
+        "app.U3lzdGVtZUlv.action.dXBkYXRlLWNvbnRhY3Q.option.aWQ.short_desc": {
+          "source": "The contact ID to update",
+          "message": "L'ID del contatto da aggiornare"
+        },
+        "app.U3lzdGVtZUlv.action.dXBkYXRlLWNvbnRhY3Q.option.bG9jYWxl.desc": {
+          "source": "The locale of the contact (e.g., `en` for English, `fr` for French)",
+          "message": "Le impostazioni locali del contatto (es. `en` per l'inglese, `fr` per il francese)"
+        },
+        "app.U3lzdGVtZUlv.action.dXBkYXRlLWNvbnRhY3Q.option.bG9jYWxl.display_name": {
+          "source": "Locale",
+          "message": "Impostazioni internazionali"
+        },
+        "app.U3lzdGVtZUlv.action.dXBkYXRlLWNvbnRhY3Q.option.bG9jYWxl.short_desc": {
+          "source": "Contact locale",
+          "message": "Impostazioni locali contatto"
+        },
+        "app.U3lzdGVtZUlv.action.dXBkYXRlLWNvbnRhY3Q.option.bGFzdE5hbWU.desc": {
+          "source": "The last name of the contact",
+          "message": "Il cognome del contatto"
+        },
+        "app.U3lzdGVtZUlv.action.dXBkYXRlLWNvbnRhY3Q.option.bGFzdE5hbWU.display_name": {
+          "source": "Last Name",
+          "message": "Cognome"
+        },
+        "app.U3lzdGVtZUlv.action.dXBkYXRlLWNvbnRhY3Q.option.bGFzdE5hbWU.short_desc": {
+          "source": "Contact's last name",
+          "message": "Cognome del contatto"
+        },
+        "app.U3lzdGVtZUlv.action.dXBkYXRlLWNvbnRhY3Q.option.cGhvbmVOdW1iZXI.desc": {
+          "source": "The phone number of the contact",
+          "message": "Il numero di telefono del contatto"
+        },
+        "app.U3lzdGVtZUlv.action.dXBkYXRlLWNvbnRhY3Q.option.cGhvbmVOdW1iZXI.display_name": {
+          "source": "Phone Number",
+          "message": "Numero di telefono"
+        },
+        "app.U3lzdGVtZUlv.action.dXBkYXRlLWNvbnRhY3Q.option.cGhvbmVOdW1iZXI.short_desc": {
+          "source": "Phone number",
+          "message": "Numero di telefono"
+        },
+        "app.U3lzdGVtZUlv.action.dXBkYXRlLWNvbnRhY3Q.short_desc": {
+          "source": "Update an existing contact",
+          "message": "Aggiorna un contatto esistente"
+        },
+        "app.U3lzdGVtZUlv.action.dXBkYXRlLWNvbnRhY3QtZmllbGQ.desc": {
+          "source": "Update an existing custom contact field in Systeme.io",
+          "message": "Aggiorna un campo contatto personalizzato esistente in Systeme.io"
+        },
+        "app.U3lzdGVtZUlv.action.dXBkYXRlLWNvbnRhY3QtZmllbGQ.display_name": {
+          "source": "Update Contact Field",
+          "message": "Aggiorna campo contatto"
+        },
+        "app.U3lzdGVtZUlv.action.dXBkYXRlLWNvbnRhY3QtZmllbGQ.option.bmFtZQ.desc": {
+          "source": "The new display name for the custom contact field",
+          "message": "Il nuovo nome visualizzato per il campo contatto personalizzato"
+        },
+        "app.U3lzdGVtZUlv.action.dXBkYXRlLWNvbnRhY3QtZmllbGQ.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "Nome"
+        },
+        "app.U3lzdGVtZUlv.action.dXBkYXRlLWNvbnRhY3QtZmllbGQ.option.bmFtZQ.short_desc": {
+          "source": "New field display name",
+          "message": "Nuovo nome visualizzato del campo"
+        },
+        "app.U3lzdGVtZUlv.action.dXBkYXRlLWNvbnRhY3QtZmllbGQ.option.c2x1Zw.desc": {
+          "source": "The unique slug identifier of the custom contact field to update",
+          "message": "L'identificatore slug univoco del campo contatto personalizzato da aggiornare"
+        },
+        "app.U3lzdGVtZUlv.action.dXBkYXRlLWNvbnRhY3QtZmllbGQ.option.c2x1Zw.display_name": {
+          "source": "Slug",
+          "message": "Slug"
+        },
+        "app.U3lzdGVtZUlv.action.dXBkYXRlLWNvbnRhY3QtZmllbGQ.option.c2x1Zw.short_desc": {
+          "source": "Field slug to update",
+          "message": "Slug del campo da aggiornare"
+        },
+        "app.U3lzdGVtZUlv.action.dXBkYXRlLWNvbnRhY3QtZmllbGQ.short_desc": {
+          "source": "Update a custom contact field",
+          "message": "Aggiorna un campo contatto personalizzato"
+        },
+        "app.U3lzdGVtZUlv.action.dXBkYXRlLXRhZw.desc": {
+          "source": "Update an existing tag in Systeme.io",
+          "message": "Aggiorna un tag esistente in Systeme.io"
+        },
+        "app.U3lzdGVtZUlv.action.dXBkYXRlLXRhZw.display_name": {
+          "source": "Update Tag",
+          "message": "Aggiorna tag"
+        },
+        "app.U3lzdGVtZUlv.action.dXBkYXRlLXRhZw.option.aWQ.desc": {
+          "source": "The unique identifier of the tag to update",
+          "message": "L'identificatore univoco del tag da aggiornare"
+        },
+        "app.U3lzdGVtZUlv.action.dXBkYXRlLXRhZw.option.aWQ.display_name": {
+          "source": "Tag ID",
+          "message": "ID tag"
+        },
+        "app.U3lzdGVtZUlv.action.dXBkYXRlLXRhZw.option.aWQ.short_desc": {
+          "source": "The tag ID to update",
+          "message": "L'ID del tag da aggiornare"
+        },
+        "app.U3lzdGVtZUlv.action.dXBkYXRlLXRhZw.option.bmFtZQ.desc": {
+          "source": "The new name for the tag",
+          "message": "Il nuovo nome per il tag"
+        },
+        "app.U3lzdGVtZUlv.action.dXBkYXRlLXRhZw.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "Nome"
+        },
+        "app.U3lzdGVtZUlv.action.dXBkYXRlLXRhZw.option.bmFtZQ.short_desc": {
+          "source": "New tag name",
+          "message": "Nuovo nome del tag"
+        },
+        "app.U3lzdGVtZUlv.action.dXBkYXRlLXRhZw.short_desc": {
+          "source": "Update an existing tag",
+          "message": "Aggiorna un tag esistente"
+        },
+        "app.U3lzdGVtZUlv.desc": {
+          "source": "Systeme.io is an all-in-one online marketing platform for building sales funnels, running email campaigns, managing online courses and communities, and handling affiliate programs.\n\nThis integration supports managing contacts, tags, custom fields, course enrollments, community memberships, and subscriptions.",
+          "message": "Systeme.io è una piattaforma di marketing online multifunzione per la creazione di funnel di vendita, l'esecuzione di campagne e-mail, la gestione di corsi online e community e la gestione di programmi di affiliazione.\n\nQuesta integrazione supporta la gestione di contatti, tag, campi personalizzati, iscrizioni ai corsi, adesioni alle community e abbonamenti."
+        },
+        "app.U3lzdGVtZUlv.display_name": {
+          "source": "Systeme.io",
+          "message": "Systeme.io"
+        },
+        "app.U3lzdGVtZUlv.short_desc": {
+          "source": "Systeme.io all-in-one marketing platform",
+          "message": "Piattaforma di marketing multifunzione Systeme.io"
+        }
+      }
+    }
+  }
+}

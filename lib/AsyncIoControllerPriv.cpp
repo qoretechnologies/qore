@@ -5043,6 +5043,13 @@ void AsyncIoControllerPriv::ioThread(IoThreadContext& t, ExceptionSink* xsink) {
             break;
         }
 
+        // Phase 3's cache updates and result deliveries report failures through the iteration sink
+        // (event loop registration above all).  An exception left pending here would survive into
+        // the poll below, where the post-poll check cannot tell it apart from a poll failure and
+        // reports it as one - the "EventLoop::poll() error: ... epoll_ctl(DEL) failed"
+        // misattribution
+        logAndClearStrayException("a Phase 3 cache update or result delivery", xsink);
+
         // Calculate poll timeout
         int timeout_ms = -1;  // Wait indefinitely by default
         if (!ssl_deferred_hashes.empty() || !t.wake_socket_hashes.empty()) {

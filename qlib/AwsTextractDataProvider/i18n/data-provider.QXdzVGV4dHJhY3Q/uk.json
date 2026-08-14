@@ -1,0 +1,533 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "uk": {
+      "messages": {
+        "app.QXdzVGV4dHJhY3Q.action.YW5hbHl6ZS1kb2N1bWVudA.desc": {
+          "source": "Calls Textract's `AnalyzeDocument` API to extract text plus structural features.  `feature_types` selects which features to extract — pass at least one of `TABLES`, `FORMS`, `SIGNATURES`, `LAYOUT`, `QUERIES`.\n\nWhen `QUERIES` is included, also pass a `queries` list — each query has a `Text` field with the question to ask.",
+          "message": "Викликає API Textract `AnalyzeDocument` для вилучення тексту та структурних елементів. `feature_types` вибирає елементи для вилучення — передайте принаймні одне з таких значень: `TABLES`, `FORMS`, `SIGNATURES`, `LAYOUT`, `QUERIES`.\n\nЯкщо включено `QUERIES`, також передайте список `queries` — кожен запит має поле `Text` із запитанням."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.YW5hbHl6ZS1kb2N1bWVudA.display_name": {
+          "source": "Analyze Document",
+          "message": "Аналізувати документ"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.YW5hbHl6ZS1kb2N1bWVudA.option.ZG9jdW1lbnRfYnl0ZXM.desc": {
+          "source": "Raw bytes of the document.  See `AwsTextractDetectDocumentTextRequestDataType.document_bytes` for source-selection rules.",
+          "message": "Необроблені байти документа. Див. `AwsTextractDetectDocumentTextRequestDataType.document_bytes` для правил вибору джерела."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.YW5hbHl6ZS1kb2N1bWVudA.option.ZG9jdW1lbnRfYnl0ZXM.display_name": {
+          "source": "Document Bytes",
+          "message": "Байти документа"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.YW5hbHl6ZS1kb2N1bWVudA.option.ZG9jdW1lbnRfYnl0ZXM.short_desc": {
+          "source": "Raw bytes of the document (PNG / JPEG / PDF / TIFF)",
+          "message": "Необроблені байти документа (PNG / JPEG / PDF / TIFF)"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.YW5hbHl6ZS1kb2N1bWVudA.option.ZG9jdW1lbnRfcGF0aA.desc": {
+          "source": "Local file path.  The file is read and uploaded as `Bytes`.",
+          "message": "Шлях до локального файлу. Файл зчитується та вивантажується як `Bytes`."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.YW5hbHl6ZS1kb2N1bWVudA.option.ZG9jdW1lbnRfcGF0aA.display_name": {
+          "source": "Document Path",
+          "message": "Шлях до документа"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.YW5hbHl6ZS1kb2N1bWVudA.option.ZG9jdW1lbnRfcGF0aA.short_desc": {
+          "source": "Local file path to read and upload as bytes",
+          "message": "Шлях до локального файлу для зчитування та вивантаження у вигляді байтів"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.YW5hbHl6ZS1kb2N1bWVudA.option.ZmVhdHVyZV90eXBlcw.allowed-value.c3RyaW5nOkZPUk1T.display_name": {
+          "source": "Forms (key/value pairs)",
+          "message": "Форми (пари ключ/значення)"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.YW5hbHl6ZS1kb2N1bWVudA.option.ZmVhdHVyZV90eXBlcw.allowed-value.c3RyaW5nOkxBWU9VVA.display_name": {
+          "source": "Layout (titles, headers, paragraphs)",
+          "message": "Макет (заголовки, підзаголовки, абзаци)"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.YW5hbHl6ZS1kb2N1bWVudA.option.ZmVhdHVyZV90eXBlcw.allowed-value.c3RyaW5nOlFVRVJJRVM.display_name": {
+          "source": "Queries (ask questions of the document)",
+          "message": "Запити (поставити запитання до документа)"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.YW5hbHl6ZS1kb2N1bWVudA.option.ZmVhdHVyZV90eXBlcw.allowed-value.c3RyaW5nOlNJR05BVFVSRVM.display_name": {
+          "source": "Signatures",
+          "message": "Підписи"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.YW5hbHl6ZS1kb2N1bWVudA.option.ZmVhdHVyZV90eXBlcw.allowed-value.c3RyaW5nOlRBQkxFUw.display_name": {
+          "source": "Tables",
+          "message": "Таблиці"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.YW5hbHl6ZS1kb2N1bWVudA.option.ZmVhdHVyZV90eXBlcw.desc": {
+          "source": "Which structural features to extract.  Pass at least one.",
+          "message": "Які структурні елементи вилучати. Передайте принаймні один."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.YW5hbHl6ZS1kb2N1bWVudA.option.ZmVhdHVyZV90eXBlcw.display_name": {
+          "source": "Feature Types",
+          "message": "Типи елементів"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.YW5hbHl6ZS1kb2N1bWVudA.option.ZmVhdHVyZV90eXBlcw.short_desc": {
+          "source": "Which structural features to extract (list)",
+          "message": "Які структурні елементи вилучати (список)"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.YW5hbHl6ZS1kb2N1bWVudA.option.cXVlcmllcw.desc": {
+          "source": "List of query objects when `QUERIES` is in `feature_types`.  Each query has a `Text` field (the question to ask) plus an optional `Alias` and `Pages` filter.\n\n**Example**: `[{\"Text\": \"What is the invoice total?\", \"Alias\": \"total\"}]`",
+          "message": "Список об'єктів запитів, коли `QUERIES` є в `feature_types`. Кожен запит має поле `Text` (запитання, яке слід поставити), а також необов'язковий фільтр `Alias` та `Pages`.\n\n**Приклад**: `[{\"Text\": \"What is the invoice total?\", \"Alias\": \"total\"}]`"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.YW5hbHl6ZS1kb2N1bWVudA.option.cXVlcmllcw.display_name": {
+          "source": "Queries",
+          "message": "Запити"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.YW5hbHl6ZS1kb2N1bWVudA.option.cXVlcmllcw.short_desc": {
+          "source": "Custom queries to ask of the document (with `QUERIES` feature)",
+          "message": "Користувацькі запити до документа (з функцією `QUERIES`)"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.YW5hbHl6ZS1kb2N1bWVudA.option.czNfYnVja2V0.desc": {
+          "source": "Name of the S3 bucket containing the document.",
+          "message": "Ім'я бакета S3, що містить документ."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.YW5hbHl6ZS1kb2N1bWVudA.option.czNfYnVja2V0.display_name": {
+          "source": "S3 Bucket",
+          "message": "Бакет S3"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.YW5hbHl6ZS1kb2N1bWVudA.option.czNfYnVja2V0.short_desc": {
+          "source": "S3 bucket containing the document",
+          "message": "Бакет S3, що містить документ"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.YW5hbHl6ZS1kb2N1bWVudA.option.czNfbmFtZQ.desc": {
+          "source": "S3 object key (path within the bucket).",
+          "message": "Ключ об'єкта S3 (шлях усередині бакета)."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.YW5hbHl6ZS1kb2N1bWVudA.option.czNfbmFtZQ.display_name": {
+          "source": "S3 Object Name",
+          "message": "Ім'я об'єкта S3"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.YW5hbHl6ZS1kb2N1bWVudA.option.czNfbmFtZQ.short_desc": {
+          "source": "S3 object key",
+          "message": "Ключ об'єкта S3"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.YW5hbHl6ZS1kb2N1bWVudA.option.czNfdmVyc2lvbg.desc": {
+          "source": "Optional S3 object version ID for versioned buckets.",
+          "message": "Необов'язковий ідентифікатор версії об'єкта S3 для версіонованих бакетів."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.YW5hbHl6ZS1kb2N1bWVudA.option.czNfdmVyc2lvbg.display_name": {
+          "source": "S3 Object Version",
+          "message": "Версія об'єкта S3"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.YW5hbHl6ZS1kb2N1bWVudA.option.czNfdmVyc2lvbg.short_desc": {
+          "source": "Optional S3 object version ID",
+          "message": "Необов'язковий ідентифікатор версії об'єкта S3"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.YW5hbHl6ZS1kb2N1bWVudA.short_desc": {
+          "source": "Extract text + tables/forms/signatures/queries from a document",
+          "message": "Вилучити текст + таблиці/форми/підписи/запити з документа"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.ZGV0ZWN0LWRvY3VtZW50LXRleHQ.desc": {
+          "source": "Calls Textract's `DetectDocumentText` API to extract the text content of a single-page or multi-page document.  Returns a list of `Block` objects (`PAGE`, `LINE`, `WORD`) with text, confidence, and bounding-box geometry.\n\nPass the document via one of:\n- `document_bytes` — raw bytes (PNG / JPEG / PDF / TIFF, max 10 MB)\n- `document_path` — local file path (read and uploaded as bytes)\n- `s3_bucket` + `s3_name` — S3 object reference (no size limit)",
+          "message": "Викликає API Textract `DetectDocumentText` для вилучення текстового вмісту односторінкового або багатосторінкового документа. Повертає список об'єктів `Block` (`PAGE`, `LINE`, `WORD`) з текстом, достовірністю та геометрією обмежувальної рамки.\n\nПередайте документ одним із способів:\n- `document_bytes` — необроблені байти (PNG / JPEG / PDF / TIFF, макс. 10 МБ)\n- `document_path` — шлях до локального файлу (зчитується та вивантажується як байти)\n- `s3_bucket` + `s3_name` — посилання на об'єкт S3 (без обмеження розміру)"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.ZGV0ZWN0LWRvY3VtZW50LXRleHQ.display_name": {
+          "source": "Detect Document Text",
+          "message": "Виявити текст документа"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.ZGV0ZWN0LWRvY3VtZW50LXRleHQ.option.ZG9jdW1lbnRfYnl0ZXM.desc": {
+          "source": "Raw bytes of the document.  Supported formats: PNG, JPEG, PDF, TIFF.  Maximum 10 MB for sync calls.  Mutually exclusive with `document_path` and the `s3_*` fields.",
+          "message": "Необроблені байти документа. Підтримувані формати: PNG, JPEG, PDF, TIFF. Максимум 10 МБ для синхронних викликів. Взаємовиключно з полем `document_path` та полями `s3_*`."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.ZGV0ZWN0LWRvY3VtZW50LXRleHQ.option.ZG9jdW1lbnRfYnl0ZXM.display_name": {
+          "source": "Document Bytes",
+          "message": "Байти документа"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.ZGV0ZWN0LWRvY3VtZW50LXRleHQ.option.ZG9jdW1lbnRfYnl0ZXM.short_desc": {
+          "source": "Raw bytes of the document (PNG / JPEG / PDF / TIFF)",
+          "message": "Необроблені байти документа (PNG / JPEG / PDF / TIFF)"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.ZGV0ZWN0LWRvY3VtZW50LXRleHQ.option.ZG9jdW1lbnRfcGF0aA.desc": {
+          "source": "Local file path.  The file is read and uploaded as `Bytes`.  Mutually exclusive with `document_bytes` and the `s3_*` fields.",
+          "message": "Шлях до локального файлу. Файл зчитується та вивантажується як `Bytes`. Взаємовиключно з полем `document_bytes` та полями `s3_*`."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.ZGV0ZWN0LWRvY3VtZW50LXRleHQ.option.ZG9jdW1lbnRfcGF0aA.display_name": {
+          "source": "Document Path",
+          "message": "Шлях до документа"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.ZGV0ZWN0LWRvY3VtZW50LXRleHQ.option.ZG9jdW1lbnRfcGF0aA.short_desc": {
+          "source": "Local file path to read and upload as bytes",
+          "message": "Шлях до локального файлу для зчитування та вивантаження у вигляді байтів"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.ZGV0ZWN0LWRvY3VtZW50LXRleHQ.option.czNfYnVja2V0.desc": {
+          "source": "Name of the S3 bucket containing the document.  Use together with `s3_name`.  Mutually exclusive with `document_bytes` and `document_path`.",
+          "message": "Ім'я бакета S3, що містить документ. Використовуйте разом із `s3_name`. Взаємовиключно з `document_bytes` та `document_path`."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.ZGV0ZWN0LWRvY3VtZW50LXRleHQ.option.czNfYnVja2V0.display_name": {
+          "source": "S3 Bucket",
+          "message": "Бакет S3"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.ZGV0ZWN0LWRvY3VtZW50LXRleHQ.option.czNfYnVja2V0.short_desc": {
+          "source": "S3 bucket containing the document",
+          "message": "Бакет S3, що містить документ"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.ZGV0ZWN0LWRvY3VtZW50LXRleHQ.option.czNfbmFtZQ.desc": {
+          "source": "S3 object key (path within the bucket).",
+          "message": "Ключ об'єкта S3 (шлях усередині бакета)."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.ZGV0ZWN0LWRvY3VtZW50LXRleHQ.option.czNfbmFtZQ.display_name": {
+          "source": "S3 Object Name",
+          "message": "Ім'я об'єкта S3"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.ZGV0ZWN0LWRvY3VtZW50LXRleHQ.option.czNfbmFtZQ.short_desc": {
+          "source": "S3 object key (path within the bucket)",
+          "message": "Ключ об'єкта S3 (шлях у бакеті)"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.ZGV0ZWN0LWRvY3VtZW50LXRleHQ.option.czNfdmVyc2lvbg.desc": {
+          "source": "Optional S3 object version ID for versioned buckets.",
+          "message": "Необов'язковий ідентифікатор версії об'єкта S3 для версіонованих бакетів."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.ZGV0ZWN0LWRvY3VtZW50LXRleHQ.option.czNfdmVyc2lvbg.display_name": {
+          "source": "S3 Object Version",
+          "message": "Версія об'єкта S3"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.ZGV0ZWN0LWRvY3VtZW50LXRleHQ.option.czNfdmVyc2lvbg.short_desc": {
+          "source": "Optional S3 object version ID",
+          "message": "Необов'язковий ідентифікатор версії об'єкта S3"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.ZGV0ZWN0LWRvY3VtZW50LXRleHQ.short_desc": {
+          "source": "Extract raw text from a document (no structure)",
+          "message": "Видобути необроблений текст із документа (без структури)"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.bWFrZS1hcGktY2FsbA.desc": {
+          "source": "Make a custom HTTP / REST API call to **AWS Textract** using the configured connection's authentication.\n\nSpecify the HTTP method, the URI path (relative to the connection's API base URL), optional query parameters, headers, and request body. The response is returned as a hash containing the status code, response headers, and response body.\n\nUse this action for endpoints that are not yet exposed as first-class actions on this app.",
+          "message": "Зробити користувацький виклик HTTP / REST API до **AWS Textract**, використовуючи автентифікацію налаштованого з'єднання.\n\nУкажіть метод HTTP, шлях URI (відносно базового URL API з'єднання), необов'язкові параметри запиту, заголовки та тіло запиту. Відповідь повертається як хеш, що містить код стану, заголовки відповіді та тіло відповіді.\n\nВикористовуйте цю дію для кінцевих точок, які ще не представлені як першокласні дії в цій програмі."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.bWFrZS1hcGktY2FsbA.display_name": {
+          "source": "Make an API call",
+          "message": "Зробити виклик API"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.desc": {
+          "source": "The request body. The effective type depends on `body_type`: JSON/form/YAML expect a hash, XML/text expect a string, multipart expects a file structure, binary expects raw bytes.",
+          "message": "Тіло запиту. Ефективний тип залежить від `body_type`: JSON/form/YAML очікують хеш, XML/text очікують рядок, multipart очікує структуру файлу, binary очікує необроблені байти."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.display_name": {
+          "source": "Body",
+          "message": "Тіло"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.short_desc": {
+          "source": "The request body",
+          "message": "Тіло запиту"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.desc": {
+          "source": "Upload a file using `multipart/form-data`. The body must be a @ref DataProvider::FileDataType \"FileDataType\" structure (filename + content + mime_type). The framework builds the multipart envelope and sets the boundary header.",
+          "message": "Завантажити файл за допомогою `multipart/form-data`. Тіло має бути структурою @ref DataProvider::FileDataType \"FileDataType\" (filename + content + mime_type). Фреймворк створює конверт multipart і встановлює заголовок boundary."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.display_name": {
+          "source": "Multipart Form",
+          "message": "Форма Multipart"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.short_desc": {
+          "source": "Upload a file using multipart/form-data",
+          "message": "Завантажити файл за допомогою multipart/form-data"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.desc": {
+          "source": "Pass the body to the REST client unchanged; the client decides serialization based on its configured `data` option and the value type",
+          "message": "Передати тіло REST-клієнту без змін; клієнт визначає серіалізацію на основі налаштованого параметра `data` та типу значення"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.display_name": {
+          "source": "Auto",
+          "message": "Авто"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.short_desc": {
+          "source": "Pass-through; use connection serialization and let the REST client decide",
+          "message": "Пряма передача; використовувати серіалізацію з'єднання та дозволити REST-клієнту приймати рішення"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.desc": {
+          "source": "Send the body as raw bytes. The body must be a binary value. Sets `Content-Type: application/octet-stream` unless overridden by `hdr`.",
+          "message": "Надіслати тіло як необроблені байти. Тіло має бути бінарним значенням. Установлює `Content-Type: application/octet-stream`, якщо не перевизначено через `hdr`."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.display_name": {
+          "source": "Raw Binary",
+          "message": "Необроблені бінарні дані"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.short_desc": {
+          "source": "Send body as raw bytes",
+          "message": "Надіслати тіло як необроблені байти"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.desc": {
+          "source": "Serialize a hash of form fields as `application/x-www-form-urlencoded`. The body must be a hash whose values are scalars (strings/numbers/booleans).",
+          "message": "Серіалізувати хеш полів форми як `application/x-www-form-urlencoded`. Тіло має бути хешем, значеннями якого є скаляри (рядки/числа/булеві значення)."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.display_name": {
+          "source": "Form (URL-encoded)",
+          "message": "Форма (URL-encoded)"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.short_desc": {
+          "source": "Serialize body as application/x-www-form-urlencoded form fields",
+          "message": "Серіалізувати тіло як поля форми application/x-www-form-urlencoded"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.desc": {
+          "source": "Serialize the body as JSON; sets `Content-Type: application/json`. The body should be a hash, list, or scalar value.",
+          "message": "Серіалізувати тіло як JSON; встановлює `Content-Type: application/json`. Тіло має бути хешем, списком або скалярним значенням."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.display_name": {
+          "source": "JSON",
+          "message": "JSON"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.short_desc": {
+          "source": "Serialize body as JSON",
+          "message": "Серіалізувати тіло як JSON"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.desc": {
+          "source": "Send the body as plain text. The body must be a string. Sets `Content-Type: text/plain`.",
+          "message": "Надіслати тіло як простий текст. Тіло має бути рядком. Установлює `Content-Type: text/plain`."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.display_name": {
+          "source": "Plain Text",
+          "message": "Простий текст"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.short_desc": {
+          "source": "Send body as text/plain",
+          "message": "Надіслати тіло як text/plain"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.desc": {
+          "source": "Send the body as XML. If the body is a hash it is serialized to XML; if it is a string it is sent verbatim. Sets `Content-Type: application/xml`.",
+          "message": "Надіслати тіло як XML. Якщо тіло є хешем, воно серіалізується в XML; якщо це рядок, воно надсилається без змін. Установлює `Content-Type: application/xml`."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.display_name": {
+          "source": "XML",
+          "message": "XML"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.short_desc": {
+          "source": "Send body as XML",
+          "message": "Надіслати тіло як XML"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.desc": {
+          "source": "Send the body as YAML. If the body is a hash it is serialized to YAML; if it is a string it is sent verbatim. Sets `Content-Type: application/x-yaml`.",
+          "message": "Надіслати тіло як YAML. Якщо тіло є хешем, воно серіалізується в YAML; якщо це рядок, воно надсилається без змін. Установлює `Content-Type: application/x-yaml`."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.display_name": {
+          "source": "YAML",
+          "message": "YAML"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.short_desc": {
+          "source": "Send body as YAML",
+          "message": "Надіслати тіло як YAML"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.desc": {
+          "source": "Selects the body serialization mode and the corresponding `Content-Type` header. Changing this field reshapes the `body` editor - selecting JSON exposes a JSON editor, selecting Multipart Form exposes a file picker, and so on.",
+          "message": "Вибирає режим серіалізації тіла та відповідний заголовок `Content-Type`. Зміна цього поля змінює вигляд редактора `body` — вибір JSON відкриває редактор JSON, вибір Multipart Form відкриває вибір файлу тощо."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.display_name": {
+          "source": "Body Type",
+          "message": "Тип тіла"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.short_desc": {
+          "source": "How the body is serialized and what Content-Type is sent",
+          "message": "Як серіалізується тіло та який Content-Type надсилається"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.desc": {
+          "source": "If `True`, non-2xx HTTP responses return as the normal response hash (with the actual status code) instead of raising `REST-RESPONSE-ERROR`. Useful for handling 4xx/5xx as data - e.g. checking whether a resource exists. Overrides the connection's `error_passthru` setting for this call only.",
+          "message": "Якщо `True`, HTTP-відповіді з кодом, відмінним від 2xx, повертаються як звичайний хеш відповіді (з фактичним кодом стану) замість генерації `REST-RESPONSE-ERROR`. Корисно для обробки 4xx/5xx як даних — наприклад, перевірки існування ресурсу. Перевизначає налаштування `error_passthru` з'єднання лише для цього виклику."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.display_name": {
+          "source": "Return Errors as Data",
+          "message": "Повертати помилки як дані"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.short_desc": {
+          "source": "Return non-2xx responses normally instead of throwing",
+          "message": "Повертати відповіді з кодом, відмінним від 2xx, у звичайному режимі замість генерації помилки"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.desc": {
+          "source": "Optional list of HTTP status codes treated as success. If set and the response status is not in this list, the action throws `REST-STATUS-ERROR`. When unset, the REST client's default behavior applies (typically: 2xx is success, non-2xx throws).",
+          "message": "Необов'язковий список кодів стану HTTP, які вважаються успішними. Якщо задано і код стану відповіді відсутній у цьому списку, дія генерує `REST-STATUS-ERROR`. Якщо не задано, застосовується поведінка REST-клієнта за замовчуванням (зазвичай: 2xx — успіх, не-2xx генерує помилку)."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.display_name": {
+          "source": "Expected Status Codes",
+          "message": "Очікувані коди стану"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.short_desc": {
+          "source": "Response status codes treated as success",
+          "message": "Коди стану відповіді, які вважаються успішними"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.bWFrZS1hcGktY2FsbA.option.aGRy.desc": {
+          "source": "Hash of custom headers added to the request. These override any default headers set by `body_type` (e.g. supplying `Content-Type` here wins over the body-type default).",
+          "message": "Хеш користувацьких заголовків, доданих до запиту. Вони перевизначають будь-які заголовки за замовчуванням, встановлені `body_type` (наприклад, передання `Content-Type` тут має перевагу над замовчуваним значенням для типу тіла)."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.bWFrZS1hcGktY2FsbA.option.aGRy.display_name": {
+          "source": "Custom Headers",
+          "message": "Користувацькі заголовки"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.bWFrZS1hcGktY2FsbA.option.aGRy.short_desc": {
+          "source": "Extra request headers",
+          "message": "Додаткові заголовки запиту"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.desc": {
+          "source": "If `True`, the response hash includes a `debug` sub-hash containing the request method/URL/headers (with sensitive values redacted), request and response sizes, and round-trip duration. Useful when investigating slow or failing calls. Off by default to keep responses lean.",
+          "message": "Якщо `True`, хеш відповіді містить підхеш `debug`, що містить метод/URL/заголовки запиту (з відредагованими конфіденційними значеннями), розміри запиту та відповіді, а також тривалість виконання. Корисно під час дослідження повільних або невдалих викликів. Вимкнено за замовчуванням для зменшення обсягу відповідей."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.display_name": {
+          "source": "Include Debug Info",
+          "message": "Включати зневаджувальну інформацію"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.short_desc": {
+          "source": "Include request/timing/size debug info in the response",
+          "message": "Включати зневаджувальну інформацію про запит/час/розмір у відповідь"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.desc": {
+          "source": "HTTP `OPTIONS`",
+          "message": "HTTP `OPTIONS`"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.display_name": {
+          "source": "OPTIONS",
+          "message": "OPTIONS"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.short_desc": {
+          "source": "HTTP OPTIONS",
+          "message": "HTTP OPTIONS"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.desc": {
+          "source": "HTTP `DELETE`",
+          "message": "HTTP `DELETE`"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.display_name": {
+          "source": "DELETE",
+          "message": "DELETE"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.short_desc": {
+          "source": "HTTP DELETE",
+          "message": "HTTP DELETE"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.desc": {
+          "source": "HTTP `GET`",
+          "message": "HTTP `GET`"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.display_name": {
+          "source": "GET",
+          "message": "GET"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.short_desc": {
+          "source": "HTTP GET",
+          "message": "HTTP GET"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.desc": {
+          "source": "HTTP `HEAD`",
+          "message": "HTTP `HEAD`"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.display_name": {
+          "source": "HEAD",
+          "message": "HEAD"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.short_desc": {
+          "source": "HTTP HEAD",
+          "message": "HTTP HEAD"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.desc": {
+          "source": "HTTP `PATCH`",
+          "message": "HTTP `PATCH`"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.display_name": {
+          "source": "PATCH",
+          "message": "PATCH"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.short_desc": {
+          "source": "HTTP PATCH",
+          "message": "HTTP PATCH"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.desc": {
+          "source": "HTTP `POST`",
+          "message": "HTTP `POST`"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.display_name": {
+          "source": "POST",
+          "message": "POST"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.short_desc": {
+          "source": "HTTP POST",
+          "message": "HTTP POST"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.desc": {
+          "source": "HTTP `PUT`",
+          "message": "HTTP `PUT`"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.display_name": {
+          "source": "PUT",
+          "message": "PUT"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.short_desc": {
+          "source": "HTTP PUT",
+          "message": "HTTP PUT"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.desc": {
+          "source": "HTTP `TRACE`",
+          "message": "HTTP `TRACE`"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.display_name": {
+          "source": "TRACE",
+          "message": "TRACE"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.short_desc": {
+          "source": "HTTP TRACE",
+          "message": "HTTP TRACE"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "Метод HTTP для використання в запиті"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.display_name": {
+          "source": "HTTP Method",
+          "message": "Метод HTTP"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.short_desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "Метод HTTP для використання в запиті"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain `{name}` placeholders that are replaced from `path_vars`. Example: `/users/{id}/comments`.",
+          "message": "Шлях URI відносно базового URL API з'єднання. Може містити заповнювачі `{name}`, які замінюються з `path_vars`. Приклад: `/users/{id}/comments`."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.display_name": {
+          "source": "URI Path",
+          "message": "Шлях URI"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.short_desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain '{name}' placeholders that are replaced from 'path_vars'. Example: '/users/{id}/comments'",
+          "message": "Шлях URI відносно базового URL API підключення. Може містити заповнювачі '{name}', які замінюються з 'path_vars'. Приклад: '/users/{id}/comments'"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.desc": {
+          "source": "Hash of values substituted into `{name}` placeholders in the URI path. Example: with `path = /users/{id}` and `path_vars = {id: 123}` the framework sends `/users/123`. Values are URL-encoded.",
+          "message": "Хеш значень, що підставляються замість заповнювачів `{name}` у шляху URI. Приклад: із `path = /users/{id}` та `path_vars = {id: 123}` фреймворк надсилає `/users/123`. Значення кодуються у форматі URL."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.display_name": {
+          "source": "Path Variables",
+          "message": "Змінні шляху"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.short_desc": {
+          "source": "Values for {name} placeholders in path",
+          "message": "Значення для заповнювачів {name} у шляху"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.desc": {
+          "source": "Hash of query string parameters to append to the URI path. Values are URL-encoded; list values are joined with `,`.",
+          "message": "Хеш параметрів рядка запиту для додавання до шляху URI. Значення кодуються у форматі URL; значення списку об'єднуються за допомогою `,`."
+        },
+        "app.QXdzVGV4dHJhY3Q.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.display_name": {
+          "source": "Query Arguments",
+          "message": "Аргументи запиту"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.short_desc": {
+          "source": "Query string parameters",
+          "message": "Параметри рядка запиту"
+        },
+        "app.QXdzVGV4dHJhY3Q.action.bWFrZS1hcGktY2FsbA.short_desc": {
+          "source": "Make a custom API call to AWS Textract",
+          "message": "Зробити користувацький виклик API до AWS Textract"
+        },
+        "app.QXdzVGV4dHJhY3Q.desc": {
+          "source": "Provides access to [AWS Textract](https://aws.amazon.com/textract/) — a managed document-AI service for extracting text, structure, and answers from scanned documents and PDFs.\n\n**Common use cases**:\n- **Invoice and receipt parsing**: extract key/value pairs from forms with the `FORMS` feature\n- **Table extraction**: structured rows and columns from scanned tables with the `TABLES` feature\n- **Document Q&A**: ask specific questions of a document with the `QUERIES` feature (e.g., \"What is the total?\")\n- **Signature detection**: flag handwritten signatures in contracts with the `SIGNATURES` feature\n- **Layout-preserving OCR**: extract text grouped by paragraphs, titles, headers, footers with the `LAYOUT` feature",
+          "message": "Надає доступ до [AWS Textract](https://aws.amazon.com/textract/) — керованого AI-сервісу для роботи з документами, призначеного для видобування тексту, структури та відповідей зі сканованих документів і PDF-файлів.\n\n**Поширені випадки використання**:\n- **Розбір рахунків-фактур і чеків**: видобування пар ключ/значення з форм за допомогою функції `FORMS`\n- **Видобування таблиць**: структуровані рядки та стовпці зі сканованих таблиць за допомогою функції `TABLES`\n- **Питання та відповіді за документами**: ставте конкретні запитання до документа за допомогою функції `QUERIES` (наприклад, «Яка загальна сума?»)\n- **Виявлення підписів**: виявлення рукописних підписів у договорах за допомогою функції `SIGNATURES`\n- **OCR зі збереженням макета**: видобування тексту, згрупованого за абзацами, назвами, верхніми та нижніми колонтитулами за допомогою функції `LAYOUT`"
+        },
+        "app.QXdzVGV4dHJhY3Q.display_name": {
+          "source": "AWS Textract",
+          "message": "AWS Textract"
+        },
+        "app.QXdzVGV4dHJhY3Q.short_desc": {
+          "source": "AWS Textract document AI (OCR + layout + tables + forms + queries)",
+          "message": "AI для документів AWS Textract (OCR + макет + таблиці + форми + запити)"
+        }
+      }
+    }
+  }
+}

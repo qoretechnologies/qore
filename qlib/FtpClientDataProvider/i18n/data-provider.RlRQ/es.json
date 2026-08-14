@@ -1,0 +1,141 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "es": {
+      "messages": {
+        "app.RlRQ.action.Z2V0LWZpbGU.desc": {
+          "source": "Retrieve a file from an FTP server",
+          "message": "Recuperar un archivo de un servidor FTP"
+        },
+        "app.RlRQ.action.Z2V0LWZpbGU.display_name": {
+          "source": "Retrieve File With FTP",
+          "message": "Recuperar archivo con FTP"
+        },
+        "app.RlRQ.action.Z2V0LWZpbGU.option.ZW5jb2Rpbmc.desc": {
+          "source": "The string encoding to use if `text` = `True` (default: `UTF-8`)",
+          "message": "La codificación de cadenas que se usará si `text` = `True` (por defecto: `UTF-8`)"
+        },
+        "app.RlRQ.action.Z2V0LWZpbGU.option.ZW5jb2Rpbmc.display_name": {
+          "source": "Encoding",
+          "message": "Codificación"
+        },
+        "app.RlRQ.action.Z2V0LWZpbGU.option.ZW5jb2Rpbmc.short_desc": {
+          "source": "The string encoding to use if 'text' = 'True' (default: 'UTF-8')",
+          "message": "La codificación de caracteres a utilizar si 'text' = 'True' (por defecto: 'UTF-8')"
+        },
+        "app.RlRQ.action.Z2V0LWZpbGU.option.cGF0aA.desc": {
+          "source": "The path on the FTP server",
+          "message": "La ruta en el servidor FTP"
+        },
+        "app.RlRQ.action.Z2V0LWZpbGU.option.cGF0aA.display_name": {
+          "source": "Path",
+          "message": "Ruta"
+        },
+        "app.RlRQ.action.Z2V0LWZpbGU.option.cGF0aA.short_desc": {
+          "source": "The path on the FTP server",
+          "message": "La ruta en el servidor FTP"
+        },
+        "app.RlRQ.action.Z2V0LWZpbGU.option.dGV4dA.desc": {
+          "source": "If `True` the file will be returned as a string, `False` (the default) as binary data",
+          "message": "Si es `True`, el archivo se devolverá como una cadena; si es `False` (por defecto), como datos binarios"
+        },
+        "app.RlRQ.action.Z2V0LWZpbGU.option.dGV4dA.display_name": {
+          "source": "Text",
+          "message": "Texto"
+        },
+        "app.RlRQ.action.Z2V0LWZpbGU.option.dGV4dA.short_desc": {
+          "source": "If 'True' the file will be returned as a string, 'False' (the default) as binary data",
+          "message": "Si es 'True', el archivo se devolverá como una cadena; si es 'False' (el valor predeterminado), como datos binarios"
+        },
+        "app.RlRQ.action.Z2V0LWZpbGU.short_desc": {
+          "source": "Get a file from an FTP server",
+          "message": "Obtener un archivo de un servidor FTP"
+        },
+        "app.RlRQ.action.ZGVsZXRlLWZpbGU.desc": {
+          "source": "Deletes a file on an FTP server",
+          "message": "Elimina un archivo en un servidor FTP"
+        },
+        "app.RlRQ.action.ZGVsZXRlLWZpbGU.display_name": {
+          "source": "Delete File With FTP",
+          "message": "Eliminar archivo con FTP"
+        },
+        "app.RlRQ.action.ZGVsZXRlLWZpbGU.option.cGF0aA.desc": {
+          "source": "The path on the FTP server",
+          "message": "La ruta en el servidor FTP"
+        },
+        "app.RlRQ.action.ZGVsZXRlLWZpbGU.option.cGF0aA.display_name": {
+          "source": "Path",
+          "message": "Ruta"
+        },
+        "app.RlRQ.action.ZGVsZXRlLWZpbGU.option.cGF0aA.short_desc": {
+          "source": "The path on the FTP server",
+          "message": "La ruta en el servidor FTP"
+        },
+        "app.RlRQ.action.ZGVsZXRlLWZpbGU.short_desc": {
+          "source": "Deletes a file on an FTP server",
+          "message": "Elimina un archivo en un servidor FTP"
+        },
+        "app.RlRQ.action.c2VuZC1maWxl.desc": {
+          "source": "Sends a file to an FTP server",
+          "message": "Envía un archivo a un servidor FTP"
+        },
+        "app.RlRQ.action.c2VuZC1maWxl.display_name": {
+          "source": "Send File With FTP",
+          "message": "Enviar archivo con FTP"
+        },
+        "app.RlRQ.action.c2VuZC1maWxl.option.ZW5jb2Rpbmc.desc": {
+          "source": "The string encoding to use if `text` = `True` (default: `UTF-8`)",
+          "message": "La codificación de cadenas que se usará si `text` = `True` (por defecto: `UTF-8`)"
+        },
+        "app.RlRQ.action.c2VuZC1maWxl.option.ZW5jb2Rpbmc.display_name": {
+          "source": "Encoding",
+          "message": "Codificación"
+        },
+        "app.RlRQ.action.c2VuZC1maWxl.option.ZW5jb2Rpbmc.short_desc": {
+          "source": "The string encoding to use if 'text' = 'True' (default: 'UTF-8')",
+          "message": "La codificación de caracteres a utilizar si 'text' = 'True' (por defecto: 'UTF-8')"
+        },
+        "app.RlRQ.action.c2VuZC1maWxl.option.cGF0aA.desc": {
+          "source": "The path on the FTP server",
+          "message": "La ruta en el servidor FTP"
+        },
+        "app.RlRQ.action.c2VuZC1maWxl.option.cGF0aA.display_name": {
+          "source": "Path",
+          "message": "Ruta"
+        },
+        "app.RlRQ.action.c2VuZC1maWxl.option.cGF0aA.short_desc": {
+          "source": "The path on the FTP server",
+          "message": "La ruta en el servidor FTP"
+        },
+        "app.RlRQ.action.c2VuZC1maWxl.option.dGV4dA.desc": {
+          "source": "If `True` the file will be returned as a string, `False` (the default) as binary data",
+          "message": "Si es `True`, el archivo se devolverá como una cadena; si es `False` (por defecto), como datos binarios"
+        },
+        "app.RlRQ.action.c2VuZC1maWxl.option.dGV4dA.display_name": {
+          "source": "Text",
+          "message": "Texto"
+        },
+        "app.RlRQ.action.c2VuZC1maWxl.option.dGV4dA.short_desc": {
+          "source": "If 'True' the file will be returned as a string, 'False' (the default) as binary data",
+          "message": "Si es 'True', el archivo se devolverá como una cadena; si es 'False' (el valor predeterminado), como datos binarios"
+        },
+        "app.RlRQ.action.c2VuZC1maWxl.short_desc": {
+          "source": "Sends a file to an FTP server",
+          "message": "Envía un archivo a un servidor FTP"
+        },
+        "app.RlRQ.desc": {
+          "source": "Generic FTP server for exchanging files with FTP and FTPS",
+          "message": "Servidor FTP genérico para intercambiar archivos con FTP y FTPS"
+        },
+        "app.RlRQ.display_name": {
+          "source": "FTP Server",
+          "message": "Servidor FTP"
+        },
+        "app.RlRQ.short_desc": {
+          "source": "Generic FTP server for exchanging files with FTP and FTPS",
+          "message": "Servidor FTP genérico para intercambiar archivos con FTP y FTPS"
+        }
+      }
+    }
+  }
+}

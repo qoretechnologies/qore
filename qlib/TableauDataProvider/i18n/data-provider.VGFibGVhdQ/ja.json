@@ -1,0 +1,1465 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "ja": {
+      "messages": {
+        "app.VGFibGVhdQ.action.Y3JlYXRlLXByb2plY3Q.desc": {
+          "source": "Create a new project in Tableau",
+          "message": "Tableau に新しいプロジェクトを作成します"
+        },
+        "app.VGFibGVhdQ.action.Y3JlYXRlLXByb2plY3Q.display_name": {
+          "source": "Create a Project",
+          "message": "プロジェクトを作成"
+        },
+        "app.VGFibGVhdQ.action.Y3JlYXRlLXByb2plY3Q.option.Y29udGVudF9wZXJtaXNzaW9ucw.allowed-value.c3RyaW5nOk1hbmFnZWRCeU93bmVy.display_name": {
+          "source": "Managed By Owner",
+          "message": "所有者によって管理"
+        },
+        "app.VGFibGVhdQ.action.Y3JlYXRlLXByb2plY3Q.option.Y29udGVudF9wZXJtaXNzaW9ucw.allowed-value.c3RyaW5nOkxvY2tlZFRvUHJvamVjdA.display_name": {
+          "source": "Locked To Project",
+          "message": "プロジェクトにロック"
+        },
+        "app.VGFibGVhdQ.action.Y3JlYXRlLXByb2plY3Q.option.Y29udGVudF9wZXJtaXNzaW9ucw.allowed-value.c3RyaW5nOkxvY2tlZFRvUHJvamVjdFdpdGhvdXROZXN0ZWQ.display_name": {
+          "source": "Locked To Project Without Nested",
+          "message": "ネストなしでプロジェクトにロック"
+        },
+        "app.VGFibGVhdQ.action.Y3JlYXRlLXByb2plY3Q.option.Y29udGVudF9wZXJtaXNzaW9ucw.desc": {
+          "source": "The content permissions mode for the project",
+          "message": "プロジェクトのコンテンツパーミッションモード"
+        },
+        "app.VGFibGVhdQ.action.Y3JlYXRlLXByb2plY3Q.option.Y29udGVudF9wZXJtaXNzaW9ucw.display_name": {
+          "source": "Content Permissions",
+          "message": "コンテンツパーミッション"
+        },
+        "app.VGFibGVhdQ.action.Y3JlYXRlLXByb2plY3Q.option.Y29udGVudF9wZXJtaXNzaW9ucw.short_desc": {
+          "source": "The content permissions mode",
+          "message": "コンテンツパーミッションモード"
+        },
+        "app.VGFibGVhdQ.action.Y3JlYXRlLXByb2plY3Q.option.ZGVzY3JpcHRpb24.desc": {
+          "source": "A description of the project",
+          "message": "プロジェクトの説明"
+        },
+        "app.VGFibGVhdQ.action.Y3JlYXRlLXByb2plY3Q.option.ZGVzY3JpcHRpb24.display_name": {
+          "source": "Description",
+          "message": "説明"
+        },
+        "app.VGFibGVhdQ.action.Y3JlYXRlLXByb2plY3Q.option.ZGVzY3JpcHRpb24.short_desc": {
+          "source": "The project description",
+          "message": "プロジェクトの説明"
+        },
+        "app.VGFibGVhdQ.action.Y3JlYXRlLXByb2plY3Q.option.bmFtZQ.desc": {
+          "source": "The name of the project to create",
+          "message": "作成するプロジェクトの名前"
+        },
+        "app.VGFibGVhdQ.action.Y3JlYXRlLXByb2plY3Q.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "名前"
+        },
+        "app.VGFibGVhdQ.action.Y3JlYXRlLXByb2plY3Q.option.bmFtZQ.short_desc": {
+          "source": "The name of the project",
+          "message": "プロジェクト名"
+        },
+        "app.VGFibGVhdQ.action.Y3JlYXRlLXByb2plY3Q.option.cGFyZW50X3Byb2plY3RfaWQ.desc": {
+          "source": "The ID of the parent project, if creating a nested project",
+          "message": "ネストされたプロジェクトを作成する場合の親プロジェクトのID"
+        },
+        "app.VGFibGVhdQ.action.Y3JlYXRlLXByb2plY3Q.option.cGFyZW50X3Byb2plY3RfaWQ.display_name": {
+          "source": "Parent Project ID",
+          "message": "親プロジェクトID"
+        },
+        "app.VGFibGVhdQ.action.Y3JlYXRlLXByb2plY3Q.option.cGFyZW50X3Byb2plY3RfaWQ.short_desc": {
+          "source": "The parent project ID",
+          "message": "親プロジェクトID"
+        },
+        "app.VGFibGVhdQ.action.Y3JlYXRlLXByb2plY3Q.short_desc": {
+          "source": "Create a new project",
+          "message": "新しいプロジェクトを作成"
+        },
+        "app.VGFibGVhdQ.action.Y3JlYXRlLXVzZXI.desc": {
+          "source": "Create a new user in Tableau",
+          "message": "Tableauで新しいユーザーを作成します"
+        },
+        "app.VGFibGVhdQ.action.Y3JlYXRlLXVzZXI.display_name": {
+          "source": "Create a User",
+          "message": "ユーザーを作成"
+        },
+        "app.VGFibGVhdQ.action.Y3JlYXRlLXVzZXI.option.YXV0aF9zZXR0aW5n.allowed-value.c3RyaW5nOk9wZW5JRA.desc": {
+          "source": "OpenID Connect authentication",
+          "message": "OpenID Connect認証"
+        },
+        "app.VGFibGVhdQ.action.Y3JlYXRlLXVzZXI.option.YXV0aF9zZXR0aW5n.allowed-value.c3RyaW5nOlNBTUw.desc": {
+          "source": "SAML authentication",
+          "message": "SAML認証"
+        },
+        "app.VGFibGVhdQ.action.Y3JlYXRlLXVzZXI.option.YXV0aF9zZXR0aW5n.allowed-value.c3RyaW5nOlNlcnZlckRlZmF1bHQ.desc": {
+          "source": "Use server default authentication",
+          "message": "サーバーのデフォルト認証を使用"
+        },
+        "app.VGFibGVhdQ.action.Y3JlYXRlLXVzZXI.option.YXV0aF9zZXR0aW5n.allowed-value.c3RyaW5nOlRhYmxlYXVJRFdpdGhNRkE.desc": {
+          "source": "Tableau ID with multi-factor authentication",
+          "message": "多要素認証付きTableau ID"
+        },
+        "app.VGFibGVhdQ.action.Y3JlYXRlLXVzZXI.option.YXV0aF9zZXR0aW5n.desc": {
+          "source": "The authentication setting for the user",
+          "message": "ユーザーの認証設定"
+        },
+        "app.VGFibGVhdQ.action.Y3JlYXRlLXVzZXI.option.YXV0aF9zZXR0aW5n.display_name": {
+          "source": "Auth Setting",
+          "message": "認証設定"
+        },
+        "app.VGFibGVhdQ.action.Y3JlYXRlLXVzZXI.option.YXV0aF9zZXR0aW5n.short_desc": {
+          "source": "The authentication setting",
+          "message": "認証設定"
+        },
+        "app.VGFibGVhdQ.action.Y3JlYXRlLXVzZXI.option.bmFtZQ.desc": {
+          "source": "The username for the new user",
+          "message": "新しいユーザーのユーザー名"
+        },
+        "app.VGFibGVhdQ.action.Y3JlYXRlLXVzZXI.option.bmFtZQ.display_name": {
+          "source": "Username",
+          "message": "ユーザー名"
+        },
+        "app.VGFibGVhdQ.action.Y3JlYXRlLXVzZXI.option.bmFtZQ.short_desc": {
+          "source": "The username",
+          "message": "ユーザー名"
+        },
+        "app.VGFibGVhdQ.action.Y3JlYXRlLXVzZXI.option.c2l0ZV9yb2xl.allowed-value.c3RyaW5nOkNyZWF0b3I.display_name": {
+          "source": "Creator",
+          "message": "作成者"
+        },
+        "app.VGFibGVhdQ.action.Y3JlYXRlLXVzZXI.option.c2l0ZV9yb2xl.allowed-value.c3RyaW5nOkV4cGxvcmVy.display_name": {
+          "source": "Explorer",
+          "message": "Explorer"
+        },
+        "app.VGFibGVhdQ.action.Y3JlYXRlLXVzZXI.option.c2l0ZV9yb2xl.allowed-value.c3RyaW5nOkV4cGxvcmVyQ2FuUHVibGlzaA.display_name": {
+          "source": "Explorer (Can Publish)",
+          "message": "Explorer (パブリッシュ可能)"
+        },
+        "app.VGFibGVhdQ.action.Y3JlYXRlLXVzZXI.option.c2l0ZV9yb2xl.allowed-value.c3RyaW5nOlNpdGVBZG1pbmlzdHJhdG9yQ3JlYXRvcg.display_name": {
+          "source": "Site Administrator Creator",
+          "message": "サイト管理者 (Creator)"
+        },
+        "app.VGFibGVhdQ.action.Y3JlYXRlLXVzZXI.option.c2l0ZV9yb2xl.allowed-value.c3RyaW5nOlNpdGVBZG1pbmlzdHJhdG9yRXhwbG9yZXI.display_name": {
+          "source": "Site Administrator Explorer",
+          "message": "サイト管理者 (Explorer)"
+        },
+        "app.VGFibGVhdQ.action.Y3JlYXRlLXVzZXI.option.c2l0ZV9yb2xl.allowed-value.c3RyaW5nOlVubGljZW5zZWQ.display_name": {
+          "source": "Unlicensed",
+          "message": "ライセンスなし"
+        },
+        "app.VGFibGVhdQ.action.Y3JlYXRlLXVzZXI.option.c2l0ZV9yb2xl.allowed-value.c3RyaW5nOlZpZXdlcg.display_name": {
+          "source": "Viewer",
+          "message": "閲覧者"
+        },
+        "app.VGFibGVhdQ.action.Y3JlYXRlLXVzZXI.option.c2l0ZV9yb2xl.desc": {
+          "source": "The site role for the user",
+          "message": "ユーザーのサイトロール"
+        },
+        "app.VGFibGVhdQ.action.Y3JlYXRlLXVzZXI.option.c2l0ZV9yb2xl.display_name": {
+          "source": "Site Role",
+          "message": "サイトロール"
+        },
+        "app.VGFibGVhdQ.action.Y3JlYXRlLXVzZXI.option.c2l0ZV9yb2xl.short_desc": {
+          "source": "The site role for the user",
+          "message": "ユーザーのサイトロール"
+        },
+        "app.VGFibGVhdQ.action.Y3JlYXRlLXVzZXI.short_desc": {
+          "source": "Create a new user",
+          "message": "新しいユーザーを作成"
+        },
+        "app.VGFibGVhdQ.action.YWRkLXRhZy10by1kYXRhc291cmNl.desc": {
+          "source": "Add a tag to a datasource in Tableau",
+          "message": "Tableauのデータソースにタグを追加します"
+        },
+        "app.VGFibGVhdQ.action.YWRkLXRhZy10by1kYXRhc291cmNl.display_name": {
+          "source": "Add Tag to Datasource",
+          "message": "データソースにタグを追加"
+        },
+        "app.VGFibGVhdQ.action.YWRkLXRhZy10by1kYXRhc291cmNl.option.ZGF0YXNvdXJjZV9pZA.desc": {
+          "source": "The unique identifier of the datasource to add a tag to",
+          "message": "タグを追加するデータソースの一意の識別子"
+        },
+        "app.VGFibGVhdQ.action.YWRkLXRhZy10by1kYXRhc291cmNl.option.ZGF0YXNvdXJjZV9pZA.display_name": {
+          "source": "Datasource ID",
+          "message": "データソースID"
+        },
+        "app.VGFibGVhdQ.action.YWRkLXRhZy10by1kYXRhc291cmNl.option.ZGF0YXNvdXJjZV9pZA.short_desc": {
+          "source": "The datasource to tag",
+          "message": "タグ付けするデータソース"
+        },
+        "app.VGFibGVhdQ.action.YWRkLXRhZy10by1kYXRhc291cmNl.option.dGFnX25hbWU.desc": {
+          "source": "The name of the tag to add to the datasource",
+          "message": "データソースに追加するタグの名前"
+        },
+        "app.VGFibGVhdQ.action.YWRkLXRhZy10by1kYXRhc291cmNl.option.dGFnX25hbWU.display_name": {
+          "source": "Tag Name",
+          "message": "タグ名"
+        },
+        "app.VGFibGVhdQ.action.YWRkLXRhZy10by1kYXRhc291cmNl.option.dGFnX25hbWU.short_desc": {
+          "source": "The tag to add",
+          "message": "追加するタグ"
+        },
+        "app.VGFibGVhdQ.action.YWRkLXRhZy10by1kYXRhc291cmNl.short_desc": {
+          "source": "Add a tag to a datasource",
+          "message": "データソースにタグを追加"
+        },
+        "app.VGFibGVhdQ.action.Z2V0LWRhdGFzb3VyY2U.desc": {
+          "source": "Retrieve a single datasource by ID from Tableau",
+          "message": "TableauからIDによって単一のデータソースを取得します"
+        },
+        "app.VGFibGVhdQ.action.Z2V0LWRhdGFzb3VyY2U.display_name": {
+          "source": "Get a Datasource",
+          "message": "データソースを取得"
+        },
+        "app.VGFibGVhdQ.action.Z2V0LWRhdGFzb3VyY2U.option.ZGF0YXNvdXJjZV9pZA.display_name": {
+          "source": "Datasource ID",
+          "message": "データソースID"
+        },
+        "app.VGFibGVhdQ.action.Z2V0LWRhdGFzb3VyY2U.option.ZGF0YXNvdXJjZV9pZA.short_desc": {
+          "source": "The datasource ID",
+          "message": "データソースID"
+        },
+        "app.VGFibGVhdQ.action.Z2V0LWRhdGFzb3VyY2U.short_desc": {
+          "source": "Get a single datasource by ID",
+          "message": "IDで単一のデータソースを取得"
+        },
+        "app.VGFibGVhdQ.action.Z2V0LWV4dHJhY3QtcmVmcmVzaC10YXNr.desc": {
+          "source": "Retrieve a single extract refresh task by ID from Tableau",
+          "message": "TableauからIDによって単一の抽出更新タスクを取得します"
+        },
+        "app.VGFibGVhdQ.action.Z2V0LWV4dHJhY3QtcmVmcmVzaC10YXNr.display_name": {
+          "source": "Get an Extract Refresh Task",
+          "message": "抽出更新タスクを取得"
+        },
+        "app.VGFibGVhdQ.action.Z2V0LWV4dHJhY3QtcmVmcmVzaC10YXNr.option.dGFza19pZA.display_name": {
+          "source": "Task ID",
+          "message": "タスク ID"
+        },
+        "app.VGFibGVhdQ.action.Z2V0LWV4dHJhY3QtcmVmcmVzaC10YXNr.option.dGFza19pZA.short_desc": {
+          "source": "The task ID",
+          "message": "タスクID"
+        },
+        "app.VGFibGVhdQ.action.Z2V0LWV4dHJhY3QtcmVmcmVzaC10YXNr.short_desc": {
+          "source": "Get a single extract refresh task by ID",
+          "message": "IDで単一の抽出更新タスクを取得"
+        },
+        "app.VGFibGVhdQ.action.Z2V0LXByb2plY3Q.desc": {
+          "source": "Retrieve a single project by ID from Tableau",
+          "message": "TableauからIDによって単一のプロジェクトを取得します"
+        },
+        "app.VGFibGVhdQ.action.Z2V0LXByb2plY3Q.display_name": {
+          "source": "Get a Project",
+          "message": "プロジェクトを取得"
+        },
+        "app.VGFibGVhdQ.action.Z2V0LXByb2plY3Q.option.cHJvamVjdF9pZA.display_name": {
+          "source": "Project ID",
+          "message": "プロジェクト ID"
+        },
+        "app.VGFibGVhdQ.action.Z2V0LXByb2plY3Q.option.cHJvamVjdF9pZA.short_desc": {
+          "source": "The project ID",
+          "message": "プロジェクトID"
+        },
+        "app.VGFibGVhdQ.action.Z2V0LXByb2plY3Q.short_desc": {
+          "source": "Get a single project by ID",
+          "message": "IDでプロジェクトを1件取得"
+        },
+        "app.VGFibGVhdQ.action.Z2V0LXVzZXI.desc": {
+          "source": "Retrieve a single user by ID from Tableau",
+          "message": "TableauからIDによって単一のユーザーを取得します"
+        },
+        "app.VGFibGVhdQ.action.Z2V0LXVzZXI.display_name": {
+          "source": "Get a User",
+          "message": "ユーザーを取得"
+        },
+        "app.VGFibGVhdQ.action.Z2V0LXVzZXI.option.dXNlcl9pZA.display_name": {
+          "source": "User ID",
+          "message": "ユーザーID"
+        },
+        "app.VGFibGVhdQ.action.Z2V0LXVzZXI.option.dXNlcl9pZA.short_desc": {
+          "source": "The user ID",
+          "message": "ユーザーID"
+        },
+        "app.VGFibGVhdQ.action.Z2V0LXVzZXI.short_desc": {
+          "source": "Get a single user by ID",
+          "message": "IDで単一のユーザーを取得"
+        },
+        "app.VGFibGVhdQ.action.ZG93bmxvYWQtZGF0YXNvdXJjZQ.desc": {
+          "source": "Download the datasource file content from Tableau",
+          "message": "Tableauからデータソースファイルコンテンツをダウンロードします"
+        },
+        "app.VGFibGVhdQ.action.ZG93bmxvYWQtZGF0YXNvdXJjZQ.display_name": {
+          "source": "Download a Datasource",
+          "message": "データソースをダウンロード"
+        },
+        "app.VGFibGVhdQ.action.ZG93bmxvYWQtZGF0YXNvdXJjZQ.option.ZGF0YXNvdXJjZV9pZA.desc": {
+          "source": "The unique identifier of the datasource to download",
+          "message": "ダウンロードするデータソースの一意の識別子"
+        },
+        "app.VGFibGVhdQ.action.ZG93bmxvYWQtZGF0YXNvdXJjZQ.option.ZGF0YXNvdXJjZV9pZA.display_name": {
+          "source": "Datasource ID",
+          "message": "データソースID"
+        },
+        "app.VGFibGVhdQ.action.ZG93bmxvYWQtZGF0YXNvdXJjZQ.option.ZGF0YXNvdXJjZV9pZA.short_desc": {
+          "source": "The datasource to download",
+          "message": "ダウンロードするデータソース"
+        },
+        "app.VGFibGVhdQ.action.ZG93bmxvYWQtZGF0YXNvdXJjZQ.short_desc": {
+          "source": "Download a datasource file",
+          "message": "データソースファイルをダウンロード"
+        },
+        "app.VGFibGVhdQ.action.ZGF0YXNvdXJjZS11cGRhdGVk.desc": {
+          "source": "Fires when a datasource is updated in Tableau. Uses webhooks to detect events.",
+          "message": "Tableauでデータソースが更新されたときにトリガーされます。Webhookを使用してイベントを検出します。"
+        },
+        "app.VGFibGVhdQ.action.ZGF0YXNvdXJjZS11cGRhdGVk.display_name": {
+          "source": "Datasource Updated",
+          "message": "データソースが更新されました"
+        },
+        "app.VGFibGVhdQ.action.ZGF0YXNvdXJjZS11cGRhdGVk.option.cG9sbF9pbnRlcnZhbA.desc": {
+          "source": "How often to check for new events (minimum 30 seconds)",
+          "message": "新しいイベントをチェックする頻度（最小30秒）"
+        },
+        "app.VGFibGVhdQ.action.ZGF0YXNvdXJjZS11cGRhdGVk.option.cG9sbF9pbnRlcnZhbA.display_name": {
+          "source": "Poll Interval",
+          "message": "ポーリング間隔"
+        },
+        "app.VGFibGVhdQ.action.ZGF0YXNvdXJjZS11cGRhdGVk.option.cG9sbF9pbnRlcnZhbA.short_desc": {
+          "source": "Polling interval in seconds",
+          "message": "ポーリング間隔（秒）"
+        },
+        "app.VGFibGVhdQ.action.ZGF0YXNvdXJjZS11cGRhdGVk.short_desc": {
+          "source": "Trigger when a datasource is updated",
+          "message": "データソースが更新されたときにトリガー"
+        },
+        "app.VGFibGVhdQ.action.ZGF0YXNvdXJjZS1jcmVhdGVk.desc": {
+          "source": "Fires when a new datasource is created in Tableau. Uses webhooks to detect events.",
+          "message": "Tableauで新しいデータソースが作成されたときにトリガーされます。Webhookを使用してイベントを検出します。"
+        },
+        "app.VGFibGVhdQ.action.ZGF0YXNvdXJjZS1jcmVhdGVk.display_name": {
+          "source": "Datasource Created",
+          "message": "データソースが作成されました"
+        },
+        "app.VGFibGVhdQ.action.ZGF0YXNvdXJjZS1jcmVhdGVk.option.cG9sbF9pbnRlcnZhbA.desc": {
+          "source": "How often to check for new events (minimum 30 seconds)",
+          "message": "新しいイベントをチェックする頻度（最小30秒）"
+        },
+        "app.VGFibGVhdQ.action.ZGF0YXNvdXJjZS1jcmVhdGVk.option.cG9sbF9pbnRlcnZhbA.display_name": {
+          "source": "Poll Interval",
+          "message": "ポーリング間隔"
+        },
+        "app.VGFibGVhdQ.action.ZGF0YXNvdXJjZS1jcmVhdGVk.option.cG9sbF9pbnRlcnZhbA.short_desc": {
+          "source": "Polling interval in seconds",
+          "message": "ポーリング間隔（秒）"
+        },
+        "app.VGFibGVhdQ.action.ZGF0YXNvdXJjZS1jcmVhdGVk.short_desc": {
+          "source": "Trigger when a datasource is created",
+          "message": "データソースが作成されたときにトリガー"
+        },
+        "app.VGFibGVhdQ.action.ZGF0YXNvdXJjZS1kZWxldGVk.desc": {
+          "source": "Fires when a datasource is deleted in Tableau. Uses webhooks to detect events.",
+          "message": "Tableauでデータソースが削除されたときにトリガーされます。Webhookを使用してイベントを検出します。"
+        },
+        "app.VGFibGVhdQ.action.ZGF0YXNvdXJjZS1kZWxldGVk.display_name": {
+          "source": "Datasource Deleted",
+          "message": "データソースが削除されました"
+        },
+        "app.VGFibGVhdQ.action.ZGF0YXNvdXJjZS1kZWxldGVk.option.cG9sbF9pbnRlcnZhbA.desc": {
+          "source": "How often to check for new events (minimum 30 seconds)",
+          "message": "新しいイベントをチェックする頻度（最小30秒）"
+        },
+        "app.VGFibGVhdQ.action.ZGF0YXNvdXJjZS1kZWxldGVk.option.cG9sbF9pbnRlcnZhbA.display_name": {
+          "source": "Poll Interval",
+          "message": "ポーリング間隔"
+        },
+        "app.VGFibGVhdQ.action.ZGF0YXNvdXJjZS1kZWxldGVk.option.cG9sbF9pbnRlcnZhbA.short_desc": {
+          "source": "Polling interval in seconds",
+          "message": "ポーリング間隔（秒）"
+        },
+        "app.VGFibGVhdQ.action.ZGF0YXNvdXJjZS1kZWxldGVk.short_desc": {
+          "source": "Trigger when a datasource is deleted",
+          "message": "データソースが削除されたときにトリガー"
+        },
+        "app.VGFibGVhdQ.action.ZGF0YXNvdXJjZS1yZWZyZXNoLWZhaWxlZA.desc": {
+          "source": "Fires when a datasource extract refresh fails in Tableau. Uses webhooks to detect events.",
+          "message": "Tableauでデータソースの抽出更新が失敗したときにトリガーされます。Webhookを使用してイベントを検出します。"
+        },
+        "app.VGFibGVhdQ.action.ZGF0YXNvdXJjZS1yZWZyZXNoLWZhaWxlZA.display_name": {
+          "source": "Datasource Refresh Failed",
+          "message": "データソースの更新に失敗しました"
+        },
+        "app.VGFibGVhdQ.action.ZGF0YXNvdXJjZS1yZWZyZXNoLWZhaWxlZA.option.cG9sbF9pbnRlcnZhbA.desc": {
+          "source": "How often to check for new events (minimum 30 seconds)",
+          "message": "新しいイベントをチェックする頻度（最小30秒）"
+        },
+        "app.VGFibGVhdQ.action.ZGF0YXNvdXJjZS1yZWZyZXNoLWZhaWxlZA.option.cG9sbF9pbnRlcnZhbA.display_name": {
+          "source": "Poll Interval",
+          "message": "ポーリング間隔"
+        },
+        "app.VGFibGVhdQ.action.ZGF0YXNvdXJjZS1yZWZyZXNoLWZhaWxlZA.option.cG9sbF9pbnRlcnZhbA.short_desc": {
+          "source": "Polling interval in seconds",
+          "message": "ポーリング間隔（秒）"
+        },
+        "app.VGFibGVhdQ.action.ZGF0YXNvdXJjZS1yZWZyZXNoLWZhaWxlZA.short_desc": {
+          "source": "Trigger when a datasource refresh fails",
+          "message": "データソースの更新が失敗したときにトリガー"
+        },
+        "app.VGFibGVhdQ.action.ZGF0YXNvdXJjZS1yZWZyZXNoLXN0YXJ0ZWQ.desc": {
+          "source": "Fires when a datasource extract refresh starts in Tableau. Uses webhooks to detect events.",
+          "message": "Tableauでデータソースの抽出更新が開始されたときにトリガーされます。Webhookを使用してイベントを検出します。"
+        },
+        "app.VGFibGVhdQ.action.ZGF0YXNvdXJjZS1yZWZyZXNoLXN0YXJ0ZWQ.display_name": {
+          "source": "Datasource Refresh Started",
+          "message": "データソースの更新が開始されました"
+        },
+        "app.VGFibGVhdQ.action.ZGF0YXNvdXJjZS1yZWZyZXNoLXN0YXJ0ZWQ.option.cG9sbF9pbnRlcnZhbA.desc": {
+          "source": "How often to check for new events (minimum 30 seconds)",
+          "message": "新しいイベントをチェックする頻度（最小30秒）"
+        },
+        "app.VGFibGVhdQ.action.ZGF0YXNvdXJjZS1yZWZyZXNoLXN0YXJ0ZWQ.option.cG9sbF9pbnRlcnZhbA.display_name": {
+          "source": "Poll Interval",
+          "message": "ポーリング間隔"
+        },
+        "app.VGFibGVhdQ.action.ZGF0YXNvdXJjZS1yZWZyZXNoLXN0YXJ0ZWQ.option.cG9sbF9pbnRlcnZhbA.short_desc": {
+          "source": "Polling interval in seconds",
+          "message": "ポーリング間隔（秒）"
+        },
+        "app.VGFibGVhdQ.action.ZGF0YXNvdXJjZS1yZWZyZXNoLXN0YXJ0ZWQ.short_desc": {
+          "source": "Trigger when a datasource refresh starts",
+          "message": "データソースの更新が開始されたときにトリガー"
+        },
+        "app.VGFibGVhdQ.action.ZGF0YXNvdXJjZS1yZWZyZXNoLXN1Y2NlZWRlZA.desc": {
+          "source": "Fires when a datasource extract refresh succeeds in Tableau. Uses webhooks to detect events.",
+          "message": "Tableauでデータソースの抽出更新が成功したときにトリガーされます。Webhookを使用してイベントを検出します。"
+        },
+        "app.VGFibGVhdQ.action.ZGF0YXNvdXJjZS1yZWZyZXNoLXN1Y2NlZWRlZA.display_name": {
+          "source": "Datasource Refresh Succeeded",
+          "message": "データソースの更新に成功しました"
+        },
+        "app.VGFibGVhdQ.action.ZGF0YXNvdXJjZS1yZWZyZXNoLXN1Y2NlZWRlZA.option.cG9sbF9pbnRlcnZhbA.desc": {
+          "source": "How often to check for new events (minimum 30 seconds)",
+          "message": "新しいイベントをチェックする頻度（最小30秒）"
+        },
+        "app.VGFibGVhdQ.action.ZGF0YXNvdXJjZS1yZWZyZXNoLXN1Y2NlZWRlZA.option.cG9sbF9pbnRlcnZhbA.display_name": {
+          "source": "Poll Interval",
+          "message": "ポーリング間隔"
+        },
+        "app.VGFibGVhdQ.action.ZGF0YXNvdXJjZS1yZWZyZXNoLXN1Y2NlZWRlZA.option.cG9sbF9pbnRlcnZhbA.short_desc": {
+          "source": "Polling interval in seconds",
+          "message": "ポーリング間隔（秒）"
+        },
+        "app.VGFibGVhdQ.action.ZGF0YXNvdXJjZS1yZWZyZXNoLXN1Y2NlZWRlZA.short_desc": {
+          "source": "Trigger when a datasource refresh succeeds",
+          "message": "データソースの更新が成功したときにトリガー"
+        },
+        "app.VGFibGVhdQ.action.ZGVsZXRlLWRhdGFzb3VyY2U.desc": {
+          "source": "Delete a datasource from Tableau",
+          "message": "Tableauからデータソースを削除します"
+        },
+        "app.VGFibGVhdQ.action.ZGVsZXRlLWRhdGFzb3VyY2U.display_name": {
+          "source": "Delete a Datasource",
+          "message": "データソースを削除"
+        },
+        "app.VGFibGVhdQ.action.ZGVsZXRlLWRhdGFzb3VyY2U.option.ZGF0YXNvdXJjZV9pZA.desc": {
+          "source": "The unique identifier of the datasource to delete",
+          "message": "削除するデータソースの一意識別子"
+        },
+        "app.VGFibGVhdQ.action.ZGVsZXRlLWRhdGFzb3VyY2U.option.ZGF0YXNvdXJjZV9pZA.display_name": {
+          "source": "Datasource ID",
+          "message": "データソースID"
+        },
+        "app.VGFibGVhdQ.action.ZGVsZXRlLWRhdGFzb3VyY2U.option.ZGF0YXNvdXJjZV9pZA.short_desc": {
+          "source": "The datasource to delete",
+          "message": "削除するデータソース"
+        },
+        "app.VGFibGVhdQ.action.ZGVsZXRlLWRhdGFzb3VyY2U.short_desc": {
+          "source": "Delete a datasource",
+          "message": "データソースを削除"
+        },
+        "app.VGFibGVhdQ.action.ZGVsZXRlLWV4dHJhY3QtcmVmcmVzaC10YXNr.desc": {
+          "source": "Delete an extract refresh task from Tableau",
+          "message": "Tableauから抽出更新タスクを削除します"
+        },
+        "app.VGFibGVhdQ.action.ZGVsZXRlLWV4dHJhY3QtcmVmcmVzaC10YXNr.display_name": {
+          "source": "Delete an Extract Refresh Task",
+          "message": "抽出更新タスクを削除"
+        },
+        "app.VGFibGVhdQ.action.ZGVsZXRlLWV4dHJhY3QtcmVmcmVzaC10YXNr.option.dGFza19pZA.desc": {
+          "source": "The unique identifier of the extract refresh task to delete",
+          "message": "削除する抽出更新タスクの一意識別子"
+        },
+        "app.VGFibGVhdQ.action.ZGVsZXRlLWV4dHJhY3QtcmVmcmVzaC10YXNr.option.dGFza19pZA.display_name": {
+          "source": "Task ID",
+          "message": "タスク ID"
+        },
+        "app.VGFibGVhdQ.action.ZGVsZXRlLWV4dHJhY3QtcmVmcmVzaC10YXNr.option.dGFza19pZA.short_desc": {
+          "source": "The extract refresh task to delete",
+          "message": "削除する抽出更新タスク"
+        },
+        "app.VGFibGVhdQ.action.ZGVsZXRlLWV4dHJhY3QtcmVmcmVzaC10YXNr.short_desc": {
+          "source": "Delete an extract refresh task",
+          "message": "抽出更新タスクを削除"
+        },
+        "app.VGFibGVhdQ.action.ZGVsZXRlLXByb2plY3Q.desc": {
+          "source": "Delete a project from Tableau",
+          "message": "Tableauからプロジェクトを削除します"
+        },
+        "app.VGFibGVhdQ.action.ZGVsZXRlLXByb2plY3Q.display_name": {
+          "source": "Delete a Project",
+          "message": "プロジェクトの削除"
+        },
+        "app.VGFibGVhdQ.action.ZGVsZXRlLXByb2plY3Q.option.cHJvamVjdF9pZA.desc": {
+          "source": "The unique identifier of the project to delete",
+          "message": "削除するプロジェクトの一意の識別子"
+        },
+        "app.VGFibGVhdQ.action.ZGVsZXRlLXByb2plY3Q.option.cHJvamVjdF9pZA.display_name": {
+          "source": "Project ID",
+          "message": "プロジェクト ID"
+        },
+        "app.VGFibGVhdQ.action.ZGVsZXRlLXByb2plY3Q.option.cHJvamVjdF9pZA.short_desc": {
+          "source": "The project to delete",
+          "message": "削除するプロジェクト"
+        },
+        "app.VGFibGVhdQ.action.ZGVsZXRlLXByb2plY3Q.short_desc": {
+          "source": "Delete a project",
+          "message": "プロジェクトを削除"
+        },
+        "app.VGFibGVhdQ.action.ZGVsZXRlLXRhZy1mcm9tLWRhdGFzb3VyY2U.desc": {
+          "source": "Remove a tag from a datasource in Tableau",
+          "message": "Tableauのデータソースからタグを削除します"
+        },
+        "app.VGFibGVhdQ.action.ZGVsZXRlLXRhZy1mcm9tLWRhdGFzb3VyY2U.display_name": {
+          "source": "Delete Tag from Datasource",
+          "message": "データソースからタグを削除"
+        },
+        "app.VGFibGVhdQ.action.ZGVsZXRlLXRhZy1mcm9tLWRhdGFzb3VyY2U.option.ZGF0YXNvdXJjZV9pZA.desc": {
+          "source": "The unique identifier of the datasource to remove a tag from",
+          "message": "タグを削除するデータソースの一意識別子"
+        },
+        "app.VGFibGVhdQ.action.ZGVsZXRlLXRhZy1mcm9tLWRhdGFzb3VyY2U.option.ZGF0YXNvdXJjZV9pZA.display_name": {
+          "source": "Datasource ID",
+          "message": "データソースID"
+        },
+        "app.VGFibGVhdQ.action.ZGVsZXRlLXRhZy1mcm9tLWRhdGFzb3VyY2U.option.ZGF0YXNvdXJjZV9pZA.short_desc": {
+          "source": "The datasource to remove the tag from",
+          "message": "タグを削除するデータソース"
+        },
+        "app.VGFibGVhdQ.action.ZGVsZXRlLXRhZy1mcm9tLWRhdGFzb3VyY2U.option.dGFnX25hbWU.desc": {
+          "source": "The name of the tag to remove from the datasource",
+          "message": "データソースから削除するタグの名前"
+        },
+        "app.VGFibGVhdQ.action.ZGVsZXRlLXRhZy1mcm9tLWRhdGFzb3VyY2U.option.dGFnX25hbWU.display_name": {
+          "source": "Tag Name",
+          "message": "タグ名"
+        },
+        "app.VGFibGVhdQ.action.ZGVsZXRlLXRhZy1mcm9tLWRhdGFzb3VyY2U.option.dGFnX25hbWU.short_desc": {
+          "source": "The tag to remove",
+          "message": "削除するタグ"
+        },
+        "app.VGFibGVhdQ.action.ZGVsZXRlLXRhZy1mcm9tLWRhdGFzb3VyY2U.short_desc": {
+          "source": "Remove a tag from a datasource",
+          "message": "データソースからタグを削除"
+        },
+        "app.VGFibGVhdQ.action.ZGVsZXRlLXVzZXI.desc": {
+          "source": "Delete a user from Tableau",
+          "message": "Tableauからユーザーを削除します"
+        },
+        "app.VGFibGVhdQ.action.ZGVsZXRlLXVzZXI.display_name": {
+          "source": "Delete a User",
+          "message": "ユーザーを削除"
+        },
+        "app.VGFibGVhdQ.action.ZGVsZXRlLXVzZXI.option.dXNlcl9pZA.desc": {
+          "source": "The unique identifier of the user to delete",
+          "message": "削除するユーザーの一意の識別子"
+        },
+        "app.VGFibGVhdQ.action.ZGVsZXRlLXVzZXI.option.dXNlcl9pZA.display_name": {
+          "source": "User ID",
+          "message": "ユーザーID"
+        },
+        "app.VGFibGVhdQ.action.ZGVsZXRlLXVzZXI.option.dXNlcl9pZA.short_desc": {
+          "source": "The user to delete",
+          "message": "削除するユーザー"
+        },
+        "app.VGFibGVhdQ.action.ZGVsZXRlLXVzZXI.short_desc": {
+          "source": "Delete a user",
+          "message": "ユーザーを削除"
+        },
+        "app.VGFibGVhdQ.action.bGlzdC1leHRyYWN0LXJlZnJlc2gtdGFza3M.desc": {
+          "source": "List extract refresh tasks in Tableau with optional filtering",
+          "message": "Tableauの抽出更新タスクを任意のフィルタリングで一覧表示します"
+        },
+        "app.VGFibGVhdQ.action.bGlzdC1leHRyYWN0LXJlZnJlc2gtdGFza3M.display_name": {
+          "source": "List Extract Refresh Tasks",
+          "message": "抽出更新タスクを一覧表示"
+        },
+        "app.VGFibGVhdQ.action.bGlzdC1leHRyYWN0LXJlZnJlc2gtdGFza3M.option.bGltaXQ.desc": {
+          "source": "Maximum number of results to return",
+          "message": "返す結果の最大数"
+        },
+        "app.VGFibGVhdQ.action.bGlzdC1leHRyYWN0LXJlZnJlc2gtdGFza3M.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "上限"
+        },
+        "app.VGFibGVhdQ.action.bGlzdC1leHRyYWN0LXJlZnJlc2gtdGFza3M.option.bGltaXQ.short_desc": {
+          "source": "Maximum results",
+          "message": "最大結果数"
+        },
+        "app.VGFibGVhdQ.action.bGlzdC1leHRyYWN0LXJlZnJlc2gtdGFza3M.option.dGFza19pZA.desc": {
+          "source": "Filter by task ID for single record lookup",
+          "message": "単一レコード検索のためにタスクIDでフィルタリングします"
+        },
+        "app.VGFibGVhdQ.action.bGlzdC1leHRyYWN0LXJlZnJlc2gtdGFza3M.option.dGFza19pZA.display_name": {
+          "source": "Task ID",
+          "message": "タスク ID"
+        },
+        "app.VGFibGVhdQ.action.bGlzdC1leHRyYWN0LXJlZnJlc2gtdGFza3M.option.dGFza19pZA.short_desc": {
+          "source": "Filter by task ID",
+          "message": "タスクIDでフィルタリング"
+        },
+        "app.VGFibGVhdQ.action.bGlzdC1leHRyYWN0LXJlZnJlc2gtdGFza3M.short_desc": {
+          "source": "List extract refresh tasks",
+          "message": "抽出更新タスクを一覧表示"
+        },
+        "app.VGFibGVhdQ.action.bWFrZS1hcGktY2FsbA.desc": {
+          "source": "Make a custom HTTP / REST API call to **Tableau** using the configured connection's authentication.\n\nSpecify the HTTP method, the URI path (relative to the connection's API base URL), optional query parameters, headers, and request body. The response is returned as a hash containing the status code, response headers, and response body.\n\nUse this action for endpoints that are not yet exposed as first-class actions on this app.",
+          "message": "設定された接続の認証を使用して、**Tableau**へのカスタムHTTP / REST API呼び出しを実行します。\n\nHTTPメソッド、URIパス（接続のAPIベースURLに対する相対パス）、オプションのクエリパラメータ、ヘッダー、リクエスト本文を指定します。応答はステータスコード、レスポンスヘッダー、レスポンス本文を含むハッシュとして返されます。\n\nこのアプリでファーストクラスのアクションとしてまだ公開されていないエンドポイントに対してこのアクションを使用します。"
+        },
+        "app.VGFibGVhdQ.action.bWFrZS1hcGktY2FsbA.display_name": {
+          "source": "Make an API call",
+          "message": "API コールを実行"
+        },
+        "app.VGFibGVhdQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.desc": {
+          "source": "The request body. The effective type depends on `body_type`: JSON/form/YAML expect a hash, XML/text expect a string, multipart expects a file structure, binary expects raw bytes.",
+          "message": "リクエストボディ。有効な型は`body_type`に依存します。JSON/form/YAMLはハッシュを期待し、XML/textは文字列を期待し、multipartはファイル構造を期待し、binaryは生バイトを期待します。"
+        },
+        "app.VGFibGVhdQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.display_name": {
+          "source": "Body",
+          "message": "ボディ"
+        },
+        "app.VGFibGVhdQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.short_desc": {
+          "source": "The request body",
+          "message": "リクエストボディ"
+        },
+        "app.VGFibGVhdQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.desc": {
+          "source": "Upload a file using `multipart/form-data`. The body must be a @ref DataProvider::FileDataType \"FileDataType\" structure (filename + content + mime_type). The framework builds the multipart envelope and sets the boundary header.",
+          "message": "`multipart/form-data`を使用してファイルをアップロードします。ボディは@ref DataProvider::FileDataType \"FileDataType\"構造（filename + content + mime_type）である必要があります。フレームワークがmultipartエンベロープを構築し、boundaryヘッダーを設定します。"
+        },
+        "app.VGFibGVhdQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.display_name": {
+          "source": "Multipart Form",
+          "message": "マルチパートフォーム"
+        },
+        "app.VGFibGVhdQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.short_desc": {
+          "source": "Upload a file using multipart/form-data",
+          "message": "multipart/form-dataを使用してファイルをアップロード"
+        },
+        "app.VGFibGVhdQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.desc": {
+          "source": "Pass the body to the REST client unchanged; the client decides serialization based on its configured `data` option and the value type",
+          "message": "ボディを変更せずにRESTクライアントに渡します。クライアントは設定された`data`オプションと値の型に基づいてシリアライズを決定します"
+        },
+        "app.VGFibGVhdQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.display_name": {
+          "source": "Auto",
+          "message": "自動"
+        },
+        "app.VGFibGVhdQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.short_desc": {
+          "source": "Pass-through; use connection serialization and let the REST client decide",
+          "message": "パススルー。接続のシリアライズを使用し、RESTクライアントに決定させます"
+        },
+        "app.VGFibGVhdQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.desc": {
+          "source": "Send the body as raw bytes. The body must be a binary value. Sets `Content-Type: application/octet-stream` unless overridden by `hdr`.",
+          "message": "ボディを生バイトとして送信します。ボディはバイナリ値である必要があります。`hdr`によってオーバーライドされない限り、`Content-Type: application/octet-stream`を設定します。"
+        },
+        "app.VGFibGVhdQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.display_name": {
+          "source": "Raw Binary",
+          "message": "生バイナリ"
+        },
+        "app.VGFibGVhdQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.short_desc": {
+          "source": "Send body as raw bytes",
+          "message": "ボディを生バイトとして送信"
+        },
+        "app.VGFibGVhdQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.desc": {
+          "source": "Serialize a hash of form fields as `application/x-www-form-urlencoded`. The body must be a hash whose values are scalars (strings/numbers/booleans).",
+          "message": "フォームフィールドのハッシュを`application/x-www-form-urlencoded`としてシリアライズします。ボディは値がスカラー（文字列/数値/ブール値）のハッシュである必要があります。"
+        },
+        "app.VGFibGVhdQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.display_name": {
+          "source": "Form (URL-encoded)",
+          "message": "フォーム (URLエンコード)"
+        },
+        "app.VGFibGVhdQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.short_desc": {
+          "source": "Serialize body as application/x-www-form-urlencoded form fields",
+          "message": "ボディをapplication/x-www-form-urlencodedフォームフィールドとしてシリアライズ"
+        },
+        "app.VGFibGVhdQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.desc": {
+          "source": "Serialize the body as JSON; sets `Content-Type: application/json`. The body should be a hash, list, or scalar value.",
+          "message": "ボディをJSONとしてシリアライズします。`Content-Type: application/json`を設定します。ボディはハッシュ、リスト、またはスカラー値である必要があります。"
+        },
+        "app.VGFibGVhdQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.display_name": {
+          "source": "JSON",
+          "message": "JSON"
+        },
+        "app.VGFibGVhdQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.short_desc": {
+          "source": "Serialize body as JSON",
+          "message": "ボディをJSONとしてシリアライズ"
+        },
+        "app.VGFibGVhdQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.desc": {
+          "source": "Send the body as plain text. The body must be a string. Sets `Content-Type: text/plain`.",
+          "message": "ボディをプレーンテキストとして送信します。ボディは文字列である必要があります。`Content-Type: text/plain`を設定します。"
+        },
+        "app.VGFibGVhdQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.display_name": {
+          "source": "Plain Text",
+          "message": "プレーンテキスト"
+        },
+        "app.VGFibGVhdQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.short_desc": {
+          "source": "Send body as text/plain",
+          "message": "ボディをtext/plainとして送信"
+        },
+        "app.VGFibGVhdQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.desc": {
+          "source": "Send the body as XML. If the body is a hash it is serialized to XML; if it is a string it is sent verbatim. Sets `Content-Type: application/xml`.",
+          "message": "ボディをXMLとして送信します。ボディがハッシュの場合はXMLにシリアライズされ、文字列の場合はそのまま送信されます。`Content-Type: application/xml`を設定します。"
+        },
+        "app.VGFibGVhdQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.display_name": {
+          "source": "XML",
+          "message": "XML"
+        },
+        "app.VGFibGVhdQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.short_desc": {
+          "source": "Send body as XML",
+          "message": "ボディをXMLとして送信"
+        },
+        "app.VGFibGVhdQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.desc": {
+          "source": "Send the body as YAML. If the body is a hash it is serialized to YAML; if it is a string it is sent verbatim. Sets `Content-Type: application/x-yaml`.",
+          "message": "ボディをYAMLとして送信します。ボディがハッシュの場合はYAMLにシリアライズされ、文字列の場合はそのまま送信されます。`Content-Type: application/x-yaml`を設定します。"
+        },
+        "app.VGFibGVhdQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.display_name": {
+          "source": "YAML",
+          "message": "YAML"
+        },
+        "app.VGFibGVhdQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.short_desc": {
+          "source": "Send body as YAML",
+          "message": "ボディをYAMLとして送信"
+        },
+        "app.VGFibGVhdQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.desc": {
+          "source": "Selects the body serialization mode and the corresponding `Content-Type` header. Changing this field reshapes the `body` editor - selecting JSON exposes a JSON editor, selecting Multipart Form exposes a file picker, and so on.",
+          "message": "ボディのシリアライズモードと対応する`Content-Type`ヘッダーを選択します。このフィールドを変更すると`body`エディターの形状が変わります。JSONを選択するとJSONエディターが表示され、マルチパートフォームを選択するとファイルピッカーが表示される、などです。"
+        },
+        "app.VGFibGVhdQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.display_name": {
+          "source": "Body Type",
+          "message": "ボディタイプ"
+        },
+        "app.VGFibGVhdQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.short_desc": {
+          "source": "How the body is serialized and what Content-Type is sent",
+          "message": "ボディのシリアライズ方法および送信されるContent-Type"
+        },
+        "app.VGFibGVhdQ.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.desc": {
+          "source": "If `True`, non-2xx HTTP responses return as the normal response hash (with the actual status code) instead of raising `REST-RESPONSE-ERROR`. Useful for handling 4xx/5xx as data - e.g. checking whether a resource exists. Overrides the connection's `error_passthru` setting for this call only.",
+          "message": "`True`の場合、2xx以外のHTTPレスポンスは`REST-RESPONSE-ERROR`を発生させる代わりに（実際のステータスコードを含む）通常のレスポンスハッシュとして返されます。リソースが存在するかどうかの確認など、4xx/5xxをデータとして処理する場合に便利です。この呼び出しに限り、接続の`error_passthru`設定をオーバーライドします。"
+        },
+        "app.VGFibGVhdQ.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.display_name": {
+          "source": "Return Errors as Data",
+          "message": "エラーをデータとして返す"
+        },
+        "app.VGFibGVhdQ.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.short_desc": {
+          "source": "Return non-2xx responses normally instead of throwing",
+          "message": "例外をスローする代わりに2xx以外のレスポンスを通常通り返す"
+        },
+        "app.VGFibGVhdQ.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.desc": {
+          "source": "Optional list of HTTP status codes treated as success. If set and the response status is not in this list, the action throws `REST-STATUS-ERROR`. When unset, the REST client's default behavior applies (typically: 2xx is success, non-2xx throws).",
+          "message": "成功として扱われるHTTPステータスコードのオプションリスト。設定されていてレスポンスステータスがこのリストに含まれない場合、アクションは`REST-STATUS-ERROR`をスローします。未設定の場合、RESTクライアントのデフォルト動作が適用されます（通常：2xxは成功、2xx以外はスロー）。"
+        },
+        "app.VGFibGVhdQ.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.display_name": {
+          "source": "Expected Status Codes",
+          "message": "期待されるステータスコード"
+        },
+        "app.VGFibGVhdQ.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.short_desc": {
+          "source": "Response status codes treated as success",
+          "message": "成功として扱われるレスポンスステータスコード"
+        },
+        "app.VGFibGVhdQ.action.bWFrZS1hcGktY2FsbA.option.aGRy.desc": {
+          "source": "Hash of custom headers added to the request. These override any default headers set by `body_type` (e.g. supplying `Content-Type` here wins over the body-type default).",
+          "message": "リクエストに追加されるカスタムヘッダーのハッシュ。これらは`body_type`によって設定されたデフォルトヘッダーをオーバーライドします（例：ここで`Content-Type`を指定すると、ボディタイプのデフォルトより優先されます）。"
+        },
+        "app.VGFibGVhdQ.action.bWFrZS1hcGktY2FsbA.option.aGRy.display_name": {
+          "source": "Custom Headers",
+          "message": "カスタムヘッダー"
+        },
+        "app.VGFibGVhdQ.action.bWFrZS1hcGktY2FsbA.option.aGRy.short_desc": {
+          "source": "Extra request headers",
+          "message": "追加のリクエストヘッダー"
+        },
+        "app.VGFibGVhdQ.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.desc": {
+          "source": "If `True`, the response hash includes a `debug` sub-hash containing the request method/URL/headers (with sensitive values redacted), request and response sizes, and round-trip duration. Useful when investigating slow or failing calls. Off by default to keep responses lean.",
+          "message": "`True`の場合、レスポンスハッシュにはリクエストメソッド/URL/ヘッダー（機密値は伏字処理済み）、リクエストとレスポンスのサイズ、およびラウンドトリップ時間を含む`debug`サブハッシュが含まれます。遅い呼び出しや失敗した呼び出しを調査する際に便利です。レスポンスを軽量に保つため、デフォルトではオフになっています。"
+        },
+        "app.VGFibGVhdQ.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.display_name": {
+          "source": "Include Debug Info",
+          "message": "デバッグ情報を含める"
+        },
+        "app.VGFibGVhdQ.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.short_desc": {
+          "source": "Include request/timing/size debug info in the response",
+          "message": "レスポンスにリクエスト/タイミング/サイズのデバッグ情報を含める"
+        },
+        "app.VGFibGVhdQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.desc": {
+          "source": "HTTP `OPTIONS`",
+          "message": "HTTP `OPTIONS`"
+        },
+        "app.VGFibGVhdQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.display_name": {
+          "source": "OPTIONS",
+          "message": "OPTIONS"
+        },
+        "app.VGFibGVhdQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.short_desc": {
+          "source": "HTTP OPTIONS",
+          "message": "HTTP OPTIONS"
+        },
+        "app.VGFibGVhdQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.desc": {
+          "source": "HTTP `DELETE`",
+          "message": "HTTP `DELETE`"
+        },
+        "app.VGFibGVhdQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.display_name": {
+          "source": "DELETE",
+          "message": "DELETE"
+        },
+        "app.VGFibGVhdQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.short_desc": {
+          "source": "HTTP DELETE",
+          "message": "HTTP DELETE"
+        },
+        "app.VGFibGVhdQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.desc": {
+          "source": "HTTP `GET`",
+          "message": "HTTP `GET`"
+        },
+        "app.VGFibGVhdQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.display_name": {
+          "source": "GET",
+          "message": "GET"
+        },
+        "app.VGFibGVhdQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.short_desc": {
+          "source": "HTTP GET",
+          "message": "HTTP GET"
+        },
+        "app.VGFibGVhdQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.desc": {
+          "source": "HTTP `HEAD`",
+          "message": "HTTP `HEAD`"
+        },
+        "app.VGFibGVhdQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.display_name": {
+          "source": "HEAD",
+          "message": "HEAD"
+        },
+        "app.VGFibGVhdQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.short_desc": {
+          "source": "HTTP HEAD",
+          "message": "HTTP HEAD"
+        },
+        "app.VGFibGVhdQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.desc": {
+          "source": "HTTP `PATCH`",
+          "message": "HTTP `PATCH`"
+        },
+        "app.VGFibGVhdQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.display_name": {
+          "source": "PATCH",
+          "message": "PATCH"
+        },
+        "app.VGFibGVhdQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.short_desc": {
+          "source": "HTTP PATCH",
+          "message": "HTTP PATCH"
+        },
+        "app.VGFibGVhdQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.desc": {
+          "source": "HTTP `POST`",
+          "message": "HTTP `POST`"
+        },
+        "app.VGFibGVhdQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.display_name": {
+          "source": "POST",
+          "message": "POST"
+        },
+        "app.VGFibGVhdQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.short_desc": {
+          "source": "HTTP POST",
+          "message": "HTTP POST"
+        },
+        "app.VGFibGVhdQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.desc": {
+          "source": "HTTP `PUT`",
+          "message": "HTTP `PUT`"
+        },
+        "app.VGFibGVhdQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.display_name": {
+          "source": "PUT",
+          "message": "PUT"
+        },
+        "app.VGFibGVhdQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.short_desc": {
+          "source": "HTTP PUT",
+          "message": "HTTP PUT"
+        },
+        "app.VGFibGVhdQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.desc": {
+          "source": "HTTP `TRACE`",
+          "message": "HTTP `TRACE`"
+        },
+        "app.VGFibGVhdQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.display_name": {
+          "source": "TRACE",
+          "message": "TRACE"
+        },
+        "app.VGFibGVhdQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.short_desc": {
+          "source": "HTTP TRACE",
+          "message": "HTTP TRACE"
+        },
+        "app.VGFibGVhdQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "リクエストに使用するHTTPメソッド"
+        },
+        "app.VGFibGVhdQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.display_name": {
+          "source": "HTTP Method",
+          "message": "HTTPメソッド"
+        },
+        "app.VGFibGVhdQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.short_desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "リクエストに使用するHTTPメソッド"
+        },
+        "app.VGFibGVhdQ.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain `{name}` placeholders that are replaced from `path_vars`. Example: `/users/{id}/comments`.",
+          "message": "接続のAPIベースURLに対する相対URIパス。`path_vars`から置換される`{name}`プレースホルダーを含めることができます。例: `/users/{id}/comments`。"
+        },
+        "app.VGFibGVhdQ.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.display_name": {
+          "source": "URI Path",
+          "message": "URIパス"
+        },
+        "app.VGFibGVhdQ.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.short_desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain '{name}' placeholders that are replaced from 'path_vars'. Example: '/users/{id}/comments'",
+          "message": "接続のAPIベースURLに対する相対URIパス。'path_vars' から置換される '{name}' プレースホルダーを含めることができます。例: '/users/{id}/comments'"
+        },
+        "app.VGFibGVhdQ.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.desc": {
+          "source": "Hash of values substituted into `{name}` placeholders in the URI path. Example: with `path = /users/{id}` and `path_vars = {id: 123}` the framework sends `/users/123`. Values are URL-encoded.",
+          "message": "URIパス内の `{name}` プレースホルダーに置換される値のハッシュ。例: `path = /users/{id}` と `path_vars = {id: 123}` を指定すると、フレームワークは `/users/123` を送信します。値はURLエンコードされます。"
+        },
+        "app.VGFibGVhdQ.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.display_name": {
+          "source": "Path Variables",
+          "message": "パス変数"
+        },
+        "app.VGFibGVhdQ.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.short_desc": {
+          "source": "Values for {name} placeholders in path",
+          "message": "パス内の {name} プレースホルダーの値"
+        },
+        "app.VGFibGVhdQ.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.desc": {
+          "source": "Hash of query string parameters to append to the URI path. Values are URL-encoded; list values are joined with `,`.",
+          "message": "URIパスに追加するクエリ文字列パラメータのハッシュ。値はURLエンコードされます。リスト値は `,` で結合されます。"
+        },
+        "app.VGFibGVhdQ.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.display_name": {
+          "source": "Query Arguments",
+          "message": "クエリ引数"
+        },
+        "app.VGFibGVhdQ.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.short_desc": {
+          "source": "Query string parameters",
+          "message": "クエリ文字列パラメータ"
+        },
+        "app.VGFibGVhdQ.action.bWFrZS1hcGktY2FsbA.short_desc": {
+          "source": "Make a custom API call to Tableau",
+          "message": "TableauへのカスタムAPI呼び出しを実行"
+        },
+        "app.VGFibGVhdQ.action.c2VhcmNoLWRhdGFzb3VyY2Vz.desc": {
+          "source": "Search for datasources in Tableau with optional filtering",
+          "message": "Tableauのデータソースを任意のフィルタリングで検索します"
+        },
+        "app.VGFibGVhdQ.action.c2VhcmNoLWRhdGFzb3VyY2Vz.display_name": {
+          "source": "Search Datasources",
+          "message": "データソースを検索"
+        },
+        "app.VGFibGVhdQ.action.c2VhcmNoLWRhdGFzb3VyY2Vz.option.ZGF0YXNvdXJjZV9pZA.desc": {
+          "source": "Filter by datasource ID for single record lookup",
+          "message": "単一レコード検索のためにデータソースIDでフィルタリングします"
+        },
+        "app.VGFibGVhdQ.action.c2VhcmNoLWRhdGFzb3VyY2Vz.option.ZGF0YXNvdXJjZV9pZA.display_name": {
+          "source": "Datasource ID",
+          "message": "データソースID"
+        },
+        "app.VGFibGVhdQ.action.c2VhcmNoLWRhdGFzb3VyY2Vz.option.ZGF0YXNvdXJjZV9pZA.short_desc": {
+          "source": "Filter by datasource ID",
+          "message": "データソースIDでフィルタリング"
+        },
+        "app.VGFibGVhdQ.action.c2VhcmNoLWRhdGFzb3VyY2Vz.option.bGltaXQ.desc": {
+          "source": "Maximum number of results to return",
+          "message": "返す結果の最大数"
+        },
+        "app.VGFibGVhdQ.action.c2VhcmNoLWRhdGFzb3VyY2Vz.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "上限"
+        },
+        "app.VGFibGVhdQ.action.c2VhcmNoLWRhdGFzb3VyY2Vz.option.bGltaXQ.short_desc": {
+          "source": "Maximum results",
+          "message": "最大結果数"
+        },
+        "app.VGFibGVhdQ.action.c2VhcmNoLWRhdGFzb3VyY2Vz.option.bmFtZQ.desc": {
+          "source": "Filter datasources by name",
+          "message": "名前でデータソースをフィルタリング"
+        },
+        "app.VGFibGVhdQ.action.c2VhcmNoLWRhdGFzb3VyY2Vz.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "名前"
+        },
+        "app.VGFibGVhdQ.action.c2VhcmNoLWRhdGFzb3VyY2Vz.option.bmFtZQ.short_desc": {
+          "source": "Filter by name",
+          "message": "名前で絞り込み"
+        },
+        "app.VGFibGVhdQ.action.c2VhcmNoLWRhdGFzb3VyY2Vz.short_desc": {
+          "source": "Search for datasources",
+          "message": "データソースを検索"
+        },
+        "app.VGFibGVhdQ.action.c2VhcmNoLXByb2plY3Rz.desc": {
+          "source": "Search for projects in Tableau with optional filtering",
+          "message": "Tableauのプロジェクトを任意のフィルタリングで検索します"
+        },
+        "app.VGFibGVhdQ.action.c2VhcmNoLXByb2plY3Rz.display_name": {
+          "source": "Search Projects",
+          "message": "プロジェクトの検索"
+        },
+        "app.VGFibGVhdQ.action.c2VhcmNoLXByb2plY3Rz.option.bGltaXQ.desc": {
+          "source": "Maximum number of results to return",
+          "message": "返す結果の最大数"
+        },
+        "app.VGFibGVhdQ.action.c2VhcmNoLXByb2plY3Rz.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "上限"
+        },
+        "app.VGFibGVhdQ.action.c2VhcmNoLXByb2plY3Rz.option.bGltaXQ.short_desc": {
+          "source": "Maximum results",
+          "message": "最大結果数"
+        },
+        "app.VGFibGVhdQ.action.c2VhcmNoLXByb2plY3Rz.option.bmFtZQ.desc": {
+          "source": "Filter projects by name",
+          "message": "名前でプロジェクトをフィルタリング"
+        },
+        "app.VGFibGVhdQ.action.c2VhcmNoLXByb2plY3Rz.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "名前"
+        },
+        "app.VGFibGVhdQ.action.c2VhcmNoLXByb2plY3Rz.option.bmFtZQ.short_desc": {
+          "source": "Filter by name",
+          "message": "名前で絞り込み"
+        },
+        "app.VGFibGVhdQ.action.c2VhcmNoLXByb2plY3Rz.option.cHJvamVjdF9pZA.desc": {
+          "source": "Filter by project ID for single record lookup",
+          "message": "単一レコード検索のためにプロジェクトIDでフィルタリングします"
+        },
+        "app.VGFibGVhdQ.action.c2VhcmNoLXByb2plY3Rz.option.cHJvamVjdF9pZA.display_name": {
+          "source": "Project ID",
+          "message": "プロジェクト ID"
+        },
+        "app.VGFibGVhdQ.action.c2VhcmNoLXByb2plY3Rz.option.cHJvamVjdF9pZA.short_desc": {
+          "source": "Filter by project ID",
+          "message": "プロジェクトIDでフィルタリング"
+        },
+        "app.VGFibGVhdQ.action.c2VhcmNoLXByb2plY3Rz.short_desc": {
+          "source": "Search for projects",
+          "message": "プロジェクトを検索"
+        },
+        "app.VGFibGVhdQ.action.c2VhcmNoLXVzZXJz.desc": {
+          "source": "Search for users in Tableau with optional filtering",
+          "message": "Tableauのユーザーを任意のフィルタリングで検索します"
+        },
+        "app.VGFibGVhdQ.action.c2VhcmNoLXVzZXJz.display_name": {
+          "source": "Search Users",
+          "message": "ユーザーの検索"
+        },
+        "app.VGFibGVhdQ.action.c2VhcmNoLXVzZXJz.option.bGltaXQ.desc": {
+          "source": "Maximum number of results to return",
+          "message": "返す結果の最大数"
+        },
+        "app.VGFibGVhdQ.action.c2VhcmNoLXVzZXJz.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "上限"
+        },
+        "app.VGFibGVhdQ.action.c2VhcmNoLXVzZXJz.option.bGltaXQ.short_desc": {
+          "source": "Maximum results",
+          "message": "最大結果数"
+        },
+        "app.VGFibGVhdQ.action.c2VhcmNoLXVzZXJz.option.bmFtZQ.desc": {
+          "source": "Filter users by name",
+          "message": "名前でユーザーをフィルタリング"
+        },
+        "app.VGFibGVhdQ.action.c2VhcmNoLXVzZXJz.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "名前"
+        },
+        "app.VGFibGVhdQ.action.c2VhcmNoLXVzZXJz.option.bmFtZQ.short_desc": {
+          "source": "Filter by name",
+          "message": "名前で絞り込み"
+        },
+        "app.VGFibGVhdQ.action.c2VhcmNoLXVzZXJz.option.c2l0ZV9yb2xl.allowed-value.c3RyaW5nOkNyZWF0b3I.display_name": {
+          "source": "Creator",
+          "message": "作成者"
+        },
+        "app.VGFibGVhdQ.action.c2VhcmNoLXVzZXJz.option.c2l0ZV9yb2xl.allowed-value.c3RyaW5nOkV4cGxvcmVy.display_name": {
+          "source": "Explorer",
+          "message": "Explorer"
+        },
+        "app.VGFibGVhdQ.action.c2VhcmNoLXVzZXJz.option.c2l0ZV9yb2xl.allowed-value.c3RyaW5nOkV4cGxvcmVyQ2FuUHVibGlzaA.display_name": {
+          "source": "Explorer (Can Publish)",
+          "message": "Explorer (パブリッシュ可能)"
+        },
+        "app.VGFibGVhdQ.action.c2VhcmNoLXVzZXJz.option.c2l0ZV9yb2xl.allowed-value.c3RyaW5nOlNpdGVBZG1pbmlzdHJhdG9yQ3JlYXRvcg.display_name": {
+          "source": "Site Administrator Creator",
+          "message": "サイト管理者 (Creator)"
+        },
+        "app.VGFibGVhdQ.action.c2VhcmNoLXVzZXJz.option.c2l0ZV9yb2xl.allowed-value.c3RyaW5nOlNpdGVBZG1pbmlzdHJhdG9yRXhwbG9yZXI.display_name": {
+          "source": "Site Administrator Explorer",
+          "message": "サイト管理者 (Explorer)"
+        },
+        "app.VGFibGVhdQ.action.c2VhcmNoLXVzZXJz.option.c2l0ZV9yb2xl.allowed-value.c3RyaW5nOlVubGljZW5zZWQ.display_name": {
+          "source": "Unlicensed",
+          "message": "ライセンスなし"
+        },
+        "app.VGFibGVhdQ.action.c2VhcmNoLXVzZXJz.option.c2l0ZV9yb2xl.allowed-value.c3RyaW5nOlZpZXdlcg.display_name": {
+          "source": "Viewer",
+          "message": "閲覧者"
+        },
+        "app.VGFibGVhdQ.action.c2VhcmNoLXVzZXJz.option.c2l0ZV9yb2xl.desc": {
+          "source": "Filter users by site role",
+          "message": "サイトロールでユーザーをフィルタリング"
+        },
+        "app.VGFibGVhdQ.action.c2VhcmNoLXVzZXJz.option.c2l0ZV9yb2xl.display_name": {
+          "source": "Site Role",
+          "message": "サイトロール"
+        },
+        "app.VGFibGVhdQ.action.c2VhcmNoLXVzZXJz.option.c2l0ZV9yb2xl.short_desc": {
+          "source": "Filter by site role",
+          "message": "サイトロールでフィルタリング"
+        },
+        "app.VGFibGVhdQ.action.c2VhcmNoLXVzZXJz.option.dXNlcl9pZA.desc": {
+          "source": "Filter by user ID for single record lookup",
+          "message": "単一レコード検索のためにユーザーIDでフィルタリングします"
+        },
+        "app.VGFibGVhdQ.action.c2VhcmNoLXVzZXJz.option.dXNlcl9pZA.display_name": {
+          "source": "User ID",
+          "message": "ユーザーID"
+        },
+        "app.VGFibGVhdQ.action.c2VhcmNoLXVzZXJz.option.dXNlcl9pZA.short_desc": {
+          "source": "Filter by user ID",
+          "message": "ユーザーIDでフィルタリング"
+        },
+        "app.VGFibGVhdQ.action.c2VhcmNoLXVzZXJz.short_desc": {
+          "source": "Search for users",
+          "message": "ユーザーを検索"
+        },
+        "app.VGFibGVhdQ.action.d2F0Y2gtZGF0YXNvdXJjZXM.desc": {
+          "source": "Fires when new datasources are detected in Tableau. Uses polling to detect new records.",
+          "message": "Tableauで新しいデータソースが検出されたときにトリガーされます。ポーリングを使用して新しいレコードを検出します。"
+        },
+        "app.VGFibGVhdQ.action.d2F0Y2gtZGF0YXNvdXJjZXM.display_name": {
+          "source": "New Datasource",
+          "message": "新しいデータソース"
+        },
+        "app.VGFibGVhdQ.action.d2F0Y2gtZGF0YXNvdXJjZXM.option.cG9sbF9pbnRlcnZhbA.desc": {
+          "source": "How often to check for new records (minimum 30 seconds)",
+          "message": "新しいレコードを確認する頻度（最小30秒）"
+        },
+        "app.VGFibGVhdQ.action.d2F0Y2gtZGF0YXNvdXJjZXM.option.cG9sbF9pbnRlcnZhbA.display_name": {
+          "source": "Poll Interval",
+          "message": "ポーリング間隔"
+        },
+        "app.VGFibGVhdQ.action.d2F0Y2gtZGF0YXNvdXJjZXM.option.cG9sbF9pbnRlcnZhbA.short_desc": {
+          "source": "Polling interval in seconds",
+          "message": "ポーリング間隔（秒）"
+        },
+        "app.VGFibGVhdQ.action.d2F0Y2gtZGF0YXNvdXJjZXM.short_desc": {
+          "source": "Trigger when a new datasource appears",
+          "message": "新しいデータソースが表示されたときにトリガー"
+        },
+        "app.VGFibGVhdQ.action.d2F0Y2gtcHJvamVjdHM.desc": {
+          "source": "Fires when new projects are detected in Tableau. Uses polling to detect new records.",
+          "message": "Tableauで新しいプロジェクトが検出されたときにトリガーされます。ポーリングを使用して新しいレコードを検出します。"
+        },
+        "app.VGFibGVhdQ.action.d2F0Y2gtcHJvamVjdHM.display_name": {
+          "source": "New Project",
+          "message": "新しいプロジェクト"
+        },
+        "app.VGFibGVhdQ.action.d2F0Y2gtcHJvamVjdHM.option.cG9sbF9pbnRlcnZhbA.desc": {
+          "source": "How often to check for new records (minimum 30 seconds)",
+          "message": "新しいレコードを確認する頻度（最小30秒）"
+        },
+        "app.VGFibGVhdQ.action.d2F0Y2gtcHJvamVjdHM.option.cG9sbF9pbnRlcnZhbA.display_name": {
+          "source": "Poll Interval",
+          "message": "ポーリング間隔"
+        },
+        "app.VGFibGVhdQ.action.d2F0Y2gtcHJvamVjdHM.option.cG9sbF9pbnRlcnZhbA.short_desc": {
+          "source": "Polling interval in seconds",
+          "message": "ポーリング間隔（秒）"
+        },
+        "app.VGFibGVhdQ.action.d2F0Y2gtcHJvamVjdHM.short_desc": {
+          "source": "Trigger when a new project appears",
+          "message": "新しいプロジェクトが表示されたときにトリガー"
+        },
+        "app.VGFibGVhdQ.action.dXBkYXRlLWRhdGFzb3VyY2U.desc": {
+          "source": "Update an existing datasource in Tableau",
+          "message": "Tableauの既存のデータソースを更新します"
+        },
+        "app.VGFibGVhdQ.action.dXBkYXRlLWRhdGFzb3VyY2U.display_name": {
+          "source": "Update a Datasource",
+          "message": "データソースを更新"
+        },
+        "app.VGFibGVhdQ.action.dXBkYXRlLWRhdGFzb3VyY2U.option.Y2VydGlmaWNhdGlvbl9ub3Rl.desc": {
+          "source": "A note about the datasource certification",
+          "message": "データソースの認定に関するメモ"
+        },
+        "app.VGFibGVhdQ.action.dXBkYXRlLWRhdGFzb3VyY2U.option.Y2VydGlmaWNhdGlvbl9ub3Rl.display_name": {
+          "source": "Certification Note",
+          "message": "認定メモ"
+        },
+        "app.VGFibGVhdQ.action.dXBkYXRlLWRhdGFzb3VyY2U.option.Y2VydGlmaWNhdGlvbl9ub3Rl.short_desc": {
+          "source": "The certification note",
+          "message": "認定メモ"
+        },
+        "app.VGFibGVhdQ.action.dXBkYXRlLWRhdGFzb3VyY2U.option.ZGF0YXNvdXJjZV9pZA.desc": {
+          "source": "The unique identifier of the datasource to update",
+          "message": "更新するデータソースの一意識別子"
+        },
+        "app.VGFibGVhdQ.action.dXBkYXRlLWRhdGFzb3VyY2U.option.ZGF0YXNvdXJjZV9pZA.display_name": {
+          "source": "Datasource ID",
+          "message": "データソースID"
+        },
+        "app.VGFibGVhdQ.action.dXBkYXRlLWRhdGFzb3VyY2U.option.ZGF0YXNvdXJjZV9pZA.short_desc": {
+          "source": "The datasource ID to update",
+          "message": "更新するデータソースID"
+        },
+        "app.VGFibGVhdQ.action.dXBkYXRlLWRhdGFzb3VyY2U.option.aXNfY2VydGlmaWVk.desc": {
+          "source": "Whether the datasource is certified",
+          "message": "データソースが認定されているかどうか"
+        },
+        "app.VGFibGVhdQ.action.dXBkYXRlLWRhdGFzb3VyY2U.option.aXNfY2VydGlmaWVk.display_name": {
+          "source": "Is Certified",
+          "message": "認定済み"
+        },
+        "app.VGFibGVhdQ.action.dXBkYXRlLWRhdGFzb3VyY2U.option.aXNfY2VydGlmaWVk.short_desc": {
+          "source": "Whether the datasource is certified",
+          "message": "データソースが認定されているかどうか"
+        },
+        "app.VGFibGVhdQ.action.dXBkYXRlLWRhdGFzb3VyY2U.option.bmFtZQ.desc": {
+          "source": "The new name of the datasource",
+          "message": "データソースの新しい名前"
+        },
+        "app.VGFibGVhdQ.action.dXBkYXRlLWRhdGFzb3VyY2U.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "名前"
+        },
+        "app.VGFibGVhdQ.action.dXBkYXRlLWRhdGFzb3VyY2U.option.bmFtZQ.short_desc": {
+          "source": "The new datasource name",
+          "message": "新しいデータソース名"
+        },
+        "app.VGFibGVhdQ.action.dXBkYXRlLWRhdGFzb3VyY2U.option.cHJvamVjdF9pZA.desc": {
+          "source": "The ID of the project to move the datasource to",
+          "message": "データソースの移動先プロジェクトのID"
+        },
+        "app.VGFibGVhdQ.action.dXBkYXRlLWRhdGFzb3VyY2U.option.cHJvamVjdF9pZA.display_name": {
+          "source": "Project ID",
+          "message": "プロジェクト ID"
+        },
+        "app.VGFibGVhdQ.action.dXBkYXRlLWRhdGFzb3VyY2U.option.cHJvamVjdF9pZA.short_desc": {
+          "source": "The project to move the datasource to",
+          "message": "データソースの移動先プロジェクト"
+        },
+        "app.VGFibGVhdQ.action.dXBkYXRlLWRhdGFzb3VyY2U.short_desc": {
+          "source": "Update an existing datasource",
+          "message": "既存のデータソースを更新"
+        },
+        "app.VGFibGVhdQ.action.dXBkYXRlLXByb2plY3Q.desc": {
+          "source": "Update an existing project in Tableau",
+          "message": "Tableau の既存のプロジェクトを更新します"
+        },
+        "app.VGFibGVhdQ.action.dXBkYXRlLXByb2plY3Q.display_name": {
+          "source": "Update a Project",
+          "message": "プロジェクトを更新"
+        },
+        "app.VGFibGVhdQ.action.dXBkYXRlLXByb2plY3Q.option.Y29udGVudF9wZXJtaXNzaW9ucw.allowed-value.c3RyaW5nOk1hbmFnZWRCeU93bmVy.display_name": {
+          "source": "Managed By Owner",
+          "message": "所有者によって管理"
+        },
+        "app.VGFibGVhdQ.action.dXBkYXRlLXByb2plY3Q.option.Y29udGVudF9wZXJtaXNzaW9ucw.allowed-value.c3RyaW5nOkxvY2tlZFRvUHJvamVjdA.display_name": {
+          "source": "Locked To Project",
+          "message": "プロジェクトにロック"
+        },
+        "app.VGFibGVhdQ.action.dXBkYXRlLXByb2plY3Q.option.Y29udGVudF9wZXJtaXNzaW9ucw.allowed-value.c3RyaW5nOkxvY2tlZFRvUHJvamVjdFdpdGhvdXROZXN0ZWQ.display_name": {
+          "source": "Locked To Project Without Nested",
+          "message": "ネストなしでプロジェクトにロック"
+        },
+        "app.VGFibGVhdQ.action.dXBkYXRlLXByb2plY3Q.option.Y29udGVudF9wZXJtaXNzaW9ucw.desc": {
+          "source": "The content permissions mode for the project",
+          "message": "プロジェクトのコンテンツパーミッションモード"
+        },
+        "app.VGFibGVhdQ.action.dXBkYXRlLXByb2plY3Q.option.Y29udGVudF9wZXJtaXNzaW9ucw.display_name": {
+          "source": "Content Permissions",
+          "message": "コンテンツパーミッション"
+        },
+        "app.VGFibGVhdQ.action.dXBkYXRlLXByb2plY3Q.option.Y29udGVudF9wZXJtaXNzaW9ucw.short_desc": {
+          "source": "The content permissions mode",
+          "message": "コンテンツパーミッションモード"
+        },
+        "app.VGFibGVhdQ.action.dXBkYXRlLXByb2plY3Q.option.ZGVzY3JpcHRpb24.desc": {
+          "source": "The new description of the project",
+          "message": "プロジェクトの新しい説明"
+        },
+        "app.VGFibGVhdQ.action.dXBkYXRlLXByb2plY3Q.option.ZGVzY3JpcHRpb24.display_name": {
+          "source": "Description",
+          "message": "説明"
+        },
+        "app.VGFibGVhdQ.action.dXBkYXRlLXByb2plY3Q.option.ZGVzY3JpcHRpb24.short_desc": {
+          "source": "The new project description",
+          "message": "新しいプロジェクトの説明"
+        },
+        "app.VGFibGVhdQ.action.dXBkYXRlLXByb2plY3Q.option.bmFtZQ.desc": {
+          "source": "The new name of the project",
+          "message": "プロジェクトの新しい名前"
+        },
+        "app.VGFibGVhdQ.action.dXBkYXRlLXByb2plY3Q.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "名前"
+        },
+        "app.VGFibGVhdQ.action.dXBkYXRlLXByb2plY3Q.option.bmFtZQ.short_desc": {
+          "source": "The new project name",
+          "message": "新しいプロジェクト名"
+        },
+        "app.VGFibGVhdQ.action.dXBkYXRlLXByb2plY3Q.option.cGFyZW50X3Byb2plY3RfaWQ.desc": {
+          "source": "The new parent project ID for moving the project",
+          "message": "プロジェクト移動用の新しい親プロジェクトID"
+        },
+        "app.VGFibGVhdQ.action.dXBkYXRlLXByb2plY3Q.option.cGFyZW50X3Byb2plY3RfaWQ.display_name": {
+          "source": "Parent Project ID",
+          "message": "親プロジェクトID"
+        },
+        "app.VGFibGVhdQ.action.dXBkYXRlLXByb2plY3Q.option.cGFyZW50X3Byb2plY3RfaWQ.short_desc": {
+          "source": "The new parent project ID",
+          "message": "新しい親プロジェクトID"
+        },
+        "app.VGFibGVhdQ.action.dXBkYXRlLXByb2plY3Q.option.cHJvamVjdF9pZA.desc": {
+          "source": "The unique identifier of the project to update",
+          "message": "更新するプロジェクトの一意の識別子"
+        },
+        "app.VGFibGVhdQ.action.dXBkYXRlLXByb2plY3Q.option.cHJvamVjdF9pZA.display_name": {
+          "source": "Project ID",
+          "message": "プロジェクト ID"
+        },
+        "app.VGFibGVhdQ.action.dXBkYXRlLXByb2plY3Q.option.cHJvamVjdF9pZA.short_desc": {
+          "source": "The project ID to update",
+          "message": "更新するプロジェクト ID"
+        },
+        "app.VGFibGVhdQ.action.dXBkYXRlLXByb2plY3Q.short_desc": {
+          "source": "Update an existing project",
+          "message": "既存のプロジェクトを更新します"
+        },
+        "app.VGFibGVhdQ.action.dXBkYXRlLXVzZXI.desc": {
+          "source": "Update an existing user in Tableau",
+          "message": "Tableau の既存のユーザーを更新します"
+        },
+        "app.VGFibGVhdQ.action.dXBkYXRlLXVzZXI.display_name": {
+          "source": "Update a User",
+          "message": "ユーザーの更新"
+        },
+        "app.VGFibGVhdQ.action.dXBkYXRlLXVzZXI.option.YXV0aF9zZXR0aW5n.allowed-value.c3RyaW5nOk9wZW5JRA.desc": {
+          "source": "OpenID Connect authentication",
+          "message": "OpenID Connect認証"
+        },
+        "app.VGFibGVhdQ.action.dXBkYXRlLXVzZXI.option.YXV0aF9zZXR0aW5n.allowed-value.c3RyaW5nOlNBTUw.desc": {
+          "source": "SAML authentication",
+          "message": "SAML認証"
+        },
+        "app.VGFibGVhdQ.action.dXBkYXRlLXVzZXI.option.YXV0aF9zZXR0aW5n.allowed-value.c3RyaW5nOlNlcnZlckRlZmF1bHQ.desc": {
+          "source": "Use server default authentication",
+          "message": "サーバーのデフォルト認証を使用"
+        },
+        "app.VGFibGVhdQ.action.dXBkYXRlLXVzZXI.option.YXV0aF9zZXR0aW5n.allowed-value.c3RyaW5nOlRhYmxlYXVJRFdpdGhNRkE.desc": {
+          "source": "Tableau ID with multi-factor authentication",
+          "message": "多要素認証付きTableau ID"
+        },
+        "app.VGFibGVhdQ.action.dXBkYXRlLXVzZXI.option.YXV0aF9zZXR0aW5n.desc": {
+          "source": "The new authentication setting for the user",
+          "message": "ユーザーの新しい認証設定"
+        },
+        "app.VGFibGVhdQ.action.dXBkYXRlLXVzZXI.option.YXV0aF9zZXR0aW5n.display_name": {
+          "source": "Auth Setting",
+          "message": "認証設定"
+        },
+        "app.VGFibGVhdQ.action.dXBkYXRlLXVzZXI.option.YXV0aF9zZXR0aW5n.short_desc": {
+          "source": "The authentication setting",
+          "message": "認証設定"
+        },
+        "app.VGFibGVhdQ.action.dXBkYXRlLXVzZXI.option.ZW1haWw.desc": {
+          "source": "The new email address of the user",
+          "message": "ユーザーの新しいメールアドレス"
+        },
+        "app.VGFibGVhdQ.action.dXBkYXRlLXVzZXI.option.ZW1haWw.display_name": {
+          "source": "Email",
+          "message": "メール"
+        },
+        "app.VGFibGVhdQ.action.dXBkYXRlLXVzZXI.option.ZW1haWw.short_desc": {
+          "source": "The user's email address",
+          "message": "ユーザーのメールアドレス"
+        },
+        "app.VGFibGVhdQ.action.dXBkYXRlLXVzZXI.option.ZnVsbF9uYW1l.desc": {
+          "source": "The new full name of the user",
+          "message": "ユーザーの新しい氏名"
+        },
+        "app.VGFibGVhdQ.action.dXBkYXRlLXVzZXI.option.ZnVsbF9uYW1l.display_name": {
+          "source": "Full Name",
+          "message": "氏名"
+        },
+        "app.VGFibGVhdQ.action.dXBkYXRlLXVzZXI.option.ZnVsbF9uYW1l.short_desc": {
+          "source": "The user's full name",
+          "message": "ユーザーの氏名"
+        },
+        "app.VGFibGVhdQ.action.dXBkYXRlLXVzZXI.option.c2l0ZV9yb2xl.allowed-value.c3RyaW5nOkNyZWF0b3I.display_name": {
+          "source": "Creator",
+          "message": "作成者"
+        },
+        "app.VGFibGVhdQ.action.dXBkYXRlLXVzZXI.option.c2l0ZV9yb2xl.allowed-value.c3RyaW5nOkV4cGxvcmVy.display_name": {
+          "source": "Explorer",
+          "message": "Explorer"
+        },
+        "app.VGFibGVhdQ.action.dXBkYXRlLXVzZXI.option.c2l0ZV9yb2xl.allowed-value.c3RyaW5nOkV4cGxvcmVyQ2FuUHVibGlzaA.display_name": {
+          "source": "Explorer (Can Publish)",
+          "message": "Explorer (パブリッシュ可能)"
+        },
+        "app.VGFibGVhdQ.action.dXBkYXRlLXVzZXI.option.c2l0ZV9yb2xl.allowed-value.c3RyaW5nOlNpdGVBZG1pbmlzdHJhdG9yQ3JlYXRvcg.display_name": {
+          "source": "Site Administrator Creator",
+          "message": "サイト管理者 (Creator)"
+        },
+        "app.VGFibGVhdQ.action.dXBkYXRlLXVzZXI.option.c2l0ZV9yb2xl.allowed-value.c3RyaW5nOlNpdGVBZG1pbmlzdHJhdG9yRXhwbG9yZXI.display_name": {
+          "source": "Site Administrator Explorer",
+          "message": "サイト管理者 (Explorer)"
+        },
+        "app.VGFibGVhdQ.action.dXBkYXRlLXVzZXI.option.c2l0ZV9yb2xl.allowed-value.c3RyaW5nOlVubGljZW5zZWQ.display_name": {
+          "source": "Unlicensed",
+          "message": "ライセンスなし"
+        },
+        "app.VGFibGVhdQ.action.dXBkYXRlLXVzZXI.option.c2l0ZV9yb2xl.allowed-value.c3RyaW5nOlZpZXdlcg.display_name": {
+          "source": "Viewer",
+          "message": "閲覧者"
+        },
+        "app.VGFibGVhdQ.action.dXBkYXRlLXVzZXI.option.c2l0ZV9yb2xl.desc": {
+          "source": "The new site role for the user",
+          "message": "ユーザーの新しいサイトロール"
+        },
+        "app.VGFibGVhdQ.action.dXBkYXRlLXVzZXI.option.c2l0ZV9yb2xl.display_name": {
+          "source": "Site Role",
+          "message": "サイトロール"
+        },
+        "app.VGFibGVhdQ.action.dXBkYXRlLXVzZXI.option.c2l0ZV9yb2xl.short_desc": {
+          "source": "The user's site role",
+          "message": "ユーザーのサイトロール"
+        },
+        "app.VGFibGVhdQ.action.dXBkYXRlLXVzZXI.option.dXNlcl9pZA.desc": {
+          "source": "The unique identifier of the user to update",
+          "message": "更新するユーザーの一意の識別子"
+        },
+        "app.VGFibGVhdQ.action.dXBkYXRlLXVzZXI.option.dXNlcl9pZA.display_name": {
+          "source": "User ID",
+          "message": "ユーザーID"
+        },
+        "app.VGFibGVhdQ.action.dXBkYXRlLXVzZXI.option.dXNlcl9pZA.short_desc": {
+          "source": "The user ID to update",
+          "message": "更新するユーザーID"
+        },
+        "app.VGFibGVhdQ.action.dXBkYXRlLXVzZXI.short_desc": {
+          "source": "Update an existing user",
+          "message": "既存のユーザーを更新します"
+        },
+        "app.VGFibGVhdQ.desc": {
+          "source": "Tableau is a visual analytics and business intelligence platform for data exploration and dashboard creation.\n\nThis integration supports datasources, projects, users, extract refresh tasks, and event triggers.",
+          "message": "Tableau は、データ探索やダッシュボード作成のためのビジュアル分析およびビジネスインテリジェンスプラットフォームです。\n\nこの統合はデータソース、プロジェクト、ユーザー、抽出更新タスク、イベントトリガーをサポートします。"
+        },
+        "app.VGFibGVhdQ.display_name": {
+          "source": "Tableau",
+          "message": "Tableau"
+        },
+        "app.VGFibGVhdQ.short_desc": {
+          "source": "Tableau analytics and data visualization platform",
+          "message": "Tableau 分析およびデータ可視化プラットフォーム"
+        }
+      }
+    }
+  }
+}

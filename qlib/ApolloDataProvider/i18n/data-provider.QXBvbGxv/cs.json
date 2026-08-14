@@ -1,0 +1,1301 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "cs": {
+      "messages": {
+        "app.QXBvbGxv.action.Y29udGFjdC11cGRhdGVk.desc": {
+          "source": "Triggers when a contact is updated in Apollo",
+          "message": "Spustí se při aktualizaci kontaktu v Apollo"
+        },
+        "app.QXBvbGxv.action.Y29udGFjdC11cGRhdGVk.display_name": {
+          "source": "Contact Updated",
+          "message": "Kontakt aktualizován"
+        },
+        "app.QXBvbGxv.action.Y29udGFjdC11cGRhdGVk.short_desc": {
+          "source": "Watch for contact updates",
+          "message": "Sledovat aktualizace kontaktů"
+        },
+        "app.QXBvbGxv.action.Y29udGFjdC1jcmVhdGVk.desc": {
+          "source": "Triggers when a new contact is created in Apollo",
+          "message": "Spustí se při vytvoření nového kontaktu v Apollo"
+        },
+        "app.QXBvbGxv.action.Y29udGFjdC1jcmVhdGVk.display_name": {
+          "source": "Contact Created",
+          "message": "Kontakt vytvořen"
+        },
+        "app.QXBvbGxv.action.Y29udGFjdC1jcmVhdGVk.short_desc": {
+          "source": "Watch for new contacts",
+          "message": "Sledovat nové kontakty"
+        },
+        "app.QXBvbGxv.action.Y3JlYXRlLWFjY291bnQ.desc": {
+          "source": "Create a new account in Apollo",
+          "message": "Vytvořit nový účet v Apollo"
+        },
+        "app.QXBvbGxv.action.Y3JlYXRlLWFjY291bnQ.display_name": {
+          "source": "Create an Account",
+          "message": "Vytvořit účet"
+        },
+        "app.QXBvbGxv.action.Y3JlYXRlLWFjY291bnQ.option.ZG9tYWlu.display_name": {
+          "source": "Domain",
+          "message": "Doména"
+        },
+        "app.QXBvbGxv.action.Y3JlYXRlLWFjY291bnQ.option.ZG9tYWlu.short_desc": {
+          "source": "Company domain",
+          "message": "Doména společnosti"
+        },
+        "app.QXBvbGxv.action.Y3JlYXRlLWFjY291bnQ.option.b3duZXJfaWQ.display_name": {
+          "source": "Owner ID",
+          "message": "ID vlastníka"
+        },
+        "app.QXBvbGxv.action.Y3JlYXRlLWFjY291bnQ.option.b3duZXJfaWQ.short_desc": {
+          "source": "Owner user ID",
+          "message": "Uživatelské ID vlastníka"
+        },
+        "app.QXBvbGxv.action.Y3JlYXRlLWFjY291bnQ.option.bmFtZQ.desc": {
+          "source": "The name of the account",
+          "message": "Název účtu"
+        },
+        "app.QXBvbGxv.action.Y3JlYXRlLWFjY291bnQ.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "Název"
+        },
+        "app.QXBvbGxv.action.Y3JlYXRlLWFjY291bnQ.option.bmFtZQ.short_desc": {
+          "source": "Account name",
+          "message": "Název účtu"
+        },
+        "app.QXBvbGxv.action.Y3JlYXRlLWFjY291bnQ.option.cGhvbmU.display_name": {
+          "source": "Phone",
+          "message": "Telefon"
+        },
+        "app.QXBvbGxv.action.Y3JlYXRlLWFjY291bnQ.option.cGhvbmU.short_desc": {
+          "source": "Company phone number",
+          "message": "Telefonní číslo společnosti"
+        },
+        "app.QXBvbGxv.action.Y3JlYXRlLWFjY291bnQ.option.d2Vic2l0ZV91cmw.display_name": {
+          "source": "Website URL",
+          "message": "URL webové stránky"
+        },
+        "app.QXBvbGxv.action.Y3JlYXRlLWFjY291bnQ.option.d2Vic2l0ZV91cmw.short_desc": {
+          "source": "Company website URL",
+          "message": "URL webu společnosti"
+        },
+        "app.QXBvbGxv.action.Y3JlYXRlLWFjY291bnQ.short_desc": {
+          "source": "Create a new account",
+          "message": "Vytvořit nový účet"
+        },
+        "app.QXBvbGxv.action.Y3JlYXRlLWNvbnRhY3Q.desc": {
+          "source": "Create a new contact in Apollo",
+          "message": "Vytvořit nový kontakt v Apollo"
+        },
+        "app.QXBvbGxv.action.Y3JlYXRlLWNvbnRhY3Q.display_name": {
+          "source": "Create a Contact",
+          "message": "Vytvořit kontakt"
+        },
+        "app.QXBvbGxv.action.Y3JlYXRlLWNvbnRhY3Q.option.ZW1haWw.desc": {
+          "source": "The contact's email address",
+          "message": "E-mailová adresa kontaktu"
+        },
+        "app.QXBvbGxv.action.Y3JlYXRlLWNvbnRhY3Q.option.ZW1haWw.display_name": {
+          "source": "Email",
+          "message": "E-mail"
+        },
+        "app.QXBvbGxv.action.Y3JlYXRlLWNvbnRhY3Q.option.ZW1haWw.short_desc": {
+          "source": "Contact email address",
+          "message": "E-mailová adresa kontaktu"
+        },
+        "app.QXBvbGxv.action.Y3JlYXRlLWNvbnRhY3Q.option.Zmlyc3RfbmFtZQ.desc": {
+          "source": "The contact's first name",
+          "message": "Jméno kontaktu"
+        },
+        "app.QXBvbGxv.action.Y3JlYXRlLWNvbnRhY3Q.option.Zmlyc3RfbmFtZQ.display_name": {
+          "source": "First Name",
+          "message": "Křestní jméno"
+        },
+        "app.QXBvbGxv.action.Y3JlYXRlLWNvbnRhY3Q.option.Zmlyc3RfbmFtZQ.short_desc": {
+          "source": "Contact first name",
+          "message": "Křestní jméno kontaktu"
+        },
+        "app.QXBvbGxv.action.Y3JlYXRlLWNvbnRhY3Q.option.b3JnYW5pemF0aW9uX25hbWU.display_name": {
+          "source": "Organization Name",
+          "message": "Název organizace"
+        },
+        "app.QXBvbGxv.action.Y3JlYXRlLWNvbnRhY3Q.option.b3JnYW5pemF0aW9uX25hbWU.short_desc": {
+          "source": "The company name",
+          "message": "Název společnosti"
+        },
+        "app.QXBvbGxv.action.Y3JlYXRlLWNvbnRhY3Q.option.b3duZXJfaWQ.desc": {
+          "source": "The ID of the user who owns this contact",
+          "message": "ID uživatele, který vlastní tento kontakt"
+        },
+        "app.QXBvbGxv.action.Y3JlYXRlLWNvbnRhY3Q.option.b3duZXJfaWQ.display_name": {
+          "source": "Owner ID",
+          "message": "ID vlastníka"
+        },
+        "app.QXBvbGxv.action.Y3JlYXRlLWNvbnRhY3Q.option.b3duZXJfaWQ.short_desc": {
+          "source": "Owner user ID",
+          "message": "Uživatelské ID vlastníka"
+        },
+        "app.QXBvbGxv.action.Y3JlYXRlLWNvbnRhY3Q.option.bGFzdF9uYW1l.desc": {
+          "source": "The contact's last name",
+          "message": "Příjmení kontaktu"
+        },
+        "app.QXBvbGxv.action.Y3JlYXRlLWNvbnRhY3Q.option.bGFzdF9uYW1l.display_name": {
+          "source": "Last Name",
+          "message": "Příjmení"
+        },
+        "app.QXBvbGxv.action.Y3JlYXRlLWNvbnRhY3Q.option.bGFzdF9uYW1l.short_desc": {
+          "source": "Contact last name",
+          "message": "Příjmení kontaktu"
+        },
+        "app.QXBvbGxv.action.Y3JlYXRlLWNvbnRhY3Q.option.cGhvbmVfbnVtYmVy.display_name": {
+          "source": "Phone Number",
+          "message": "Telefonní číslo"
+        },
+        "app.QXBvbGxv.action.Y3JlYXRlLWNvbnRhY3Q.option.cGhvbmVfbnVtYmVy.short_desc": {
+          "source": "Contact phone number",
+          "message": "Telefonní číslo kontaktu"
+        },
+        "app.QXBvbGxv.action.Y3JlYXRlLWNvbnRhY3Q.option.cHJlc2VudF9yYXdfYWRkcmVzcw.display_name": {
+          "source": "Address",
+          "message": "Adresa"
+        },
+        "app.QXBvbGxv.action.Y3JlYXRlLWNvbnRhY3Q.option.cHJlc2VudF9yYXdfYWRkcmVzcw.short_desc": {
+          "source": "Contact address",
+          "message": "Kontaktní adresa"
+        },
+        "app.QXBvbGxv.action.Y3JlYXRlLWNvbnRhY3Q.option.dGl0bGU.display_name": {
+          "source": "Job Title",
+          "message": "Pracovní pozice"
+        },
+        "app.QXBvbGxv.action.Y3JlYXRlLWNvbnRhY3Q.option.dGl0bGU.short_desc": {
+          "source": "Contact job title",
+          "message": "Pracovní pozice kontaktu"
+        },
+        "app.QXBvbGxv.action.Y3JlYXRlLWNvbnRhY3Q.short_desc": {
+          "source": "Create a new contact",
+          "message": "Vytvořit nový kontakt"
+        },
+        "app.QXBvbGxv.action.Y3JlYXRlLWRlYWw.desc": {
+          "source": "Create a new deal (opportunity) in Apollo",
+          "message": "Vytvořit nový obchod (příležitost) v Apollo"
+        },
+        "app.QXBvbGxv.action.Y3JlYXRlLWRlYWw.display_name": {
+          "source": "Create a Deal",
+          "message": "Vytvořit obchod"
+        },
+        "app.QXBvbGxv.action.Y3JlYXRlLWRlYWw.option.Y2xvc2VkX2RhdGU.desc": {
+          "source": "Expected close date in ISO 8601 format",
+          "message": "Předpokládané datum uzavření ve formátu ISO 8601"
+        },
+        "app.QXBvbGxv.action.Y3JlYXRlLWRlYWw.option.Y2xvc2VkX2RhdGU.display_name": {
+          "source": "Close Date",
+          "message": "Datum uzavření"
+        },
+        "app.QXBvbGxv.action.Y3JlYXRlLWRlYWw.option.Y2xvc2VkX2RhdGU.short_desc": {
+          "source": "Expected close date",
+          "message": "Očekávané datum uzavření"
+        },
+        "app.QXBvbGxv.action.Y3JlYXRlLWRlYWw.option.YW1vdW50.display_name": {
+          "source": "Amount",
+          "message": "Množství"
+        },
+        "app.QXBvbGxv.action.Y3JlYXRlLWRlYWw.option.YW1vdW50.short_desc": {
+          "source": "Deal amount",
+          "message": "Částka obchodu"
+        },
+        "app.QXBvbGxv.action.Y3JlYXRlLWRlYWw.option.YWNjb3VudF9pZA.display_name": {
+          "source": "Account ID",
+          "message": "ID účtu"
+        },
+        "app.QXBvbGxv.action.Y3JlYXRlLWRlYWw.option.YWNjb3VudF9pZA.short_desc": {
+          "source": "Associated account ID",
+          "message": "ID přidruženého účtu"
+        },
+        "app.QXBvbGxv.action.Y3JlYXRlLWRlYWw.option.b3duZXJfaWQ.display_name": {
+          "source": "Owner ID",
+          "message": "ID vlastníka"
+        },
+        "app.QXBvbGxv.action.Y3JlYXRlLWRlYWw.option.b3duZXJfaWQ.short_desc": {
+          "source": "Owner user ID",
+          "message": "Uživatelské ID vlastníka"
+        },
+        "app.QXBvbGxv.action.Y3JlYXRlLWRlYWw.option.bmFtZQ.desc": {
+          "source": "The name of the deal",
+          "message": "Název obchodu"
+        },
+        "app.QXBvbGxv.action.Y3JlYXRlLWRlYWw.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "Název"
+        },
+        "app.QXBvbGxv.action.Y3JlYXRlLWRlYWw.option.bmFtZQ.short_desc": {
+          "source": "Deal name",
+          "message": "Název obchodu"
+        },
+        "app.QXBvbGxv.action.Y3JlYXRlLWRlYWw.option.c3RhZ2VfbmFtZQ.display_name": {
+          "source": "Stage",
+          "message": "Fáze"
+        },
+        "app.QXBvbGxv.action.Y3JlYXRlLWRlYWw.option.c3RhZ2VfbmFtZQ.short_desc": {
+          "source": "Deal stage name",
+          "message": "Název fáze obchodu"
+        },
+        "app.QXBvbGxv.action.Y3JlYXRlLWRlYWw.option.c3RhdHVz.desc": {
+          "source": "The deal status: `open`, `won`, or `lost`",
+          "message": "Stav obchodu: `open`, `won` nebo `lost`"
+        },
+        "app.QXBvbGxv.action.Y3JlYXRlLWRlYWw.option.c3RhdHVz.display_name": {
+          "source": "Status",
+          "message": "Stav"
+        },
+        "app.QXBvbGxv.action.Y3JlYXRlLWRlYWw.option.c3RhdHVz.short_desc": {
+          "source": "Deal status",
+          "message": "Stav obchodu"
+        },
+        "app.QXBvbGxv.action.Y3JlYXRlLWRlYWw.short_desc": {
+          "source": "Create a new deal",
+          "message": "Vytvořit nový obchod"
+        },
+        "app.QXBvbGxv.action.YWNjb3VudC1jcmVhdGVk.desc": {
+          "source": "Triggers when a new account is created in Apollo",
+          "message": "Spustí se při vytvoření nového účtu v Apollo"
+        },
+        "app.QXBvbGxv.action.YWNjb3VudC1jcmVhdGVk.display_name": {
+          "source": "Account Created",
+          "message": "Účet vytvořen"
+        },
+        "app.QXBvbGxv.action.YWNjb3VudC1jcmVhdGVk.short_desc": {
+          "source": "Watch for new accounts",
+          "message": "Sledovat nové účty"
+        },
+        "app.QXBvbGxv.action.YnVsay1lbnJpY2gtb3JnYW5pemF0aW9ucw.desc": {
+          "source": "Bulk enrich multiple organizations using Apollo",
+          "message": "Hromadně obohatit více organizací pomocí Apollo"
+        },
+        "app.QXBvbGxv.action.YnVsay1lbnJpY2gtb3JnYW5pemF0aW9ucw.display_name": {
+          "source": "Bulk Enrich Organizations",
+          "message": "Hromadně obohatit organizace"
+        },
+        "app.QXBvbGxv.action.YnVsay1lbnJpY2gtb3JnYW5pemF0aW9ucw.option.ZG9tYWlucw.desc": {
+          "source": "List of organization domains to enrich",
+          "message": "Seznam domén organizací k obohacení"
+        },
+        "app.QXBvbGxv.action.YnVsay1lbnJpY2gtb3JnYW5pemF0aW9ucw.option.ZG9tYWlucw.display_name": {
+          "source": "Domains",
+          "message": "Domény"
+        },
+        "app.QXBvbGxv.action.YnVsay1lbnJpY2gtb3JnYW5pemF0aW9ucw.option.ZG9tYWlucw.short_desc": {
+          "source": "List of domains to enrich",
+          "message": "Seznam domén k obohacení"
+        },
+        "app.QXBvbGxv.action.YnVsay1lbnJpY2gtb3JnYW5pemF0aW9ucw.short_desc": {
+          "source": "Bulk enrich organizations",
+          "message": "Hromadně obohatit organizace"
+        },
+        "app.QXBvbGxv.action.YnVsay1lbnJpY2gtcGVvcGxl.desc": {
+          "source": "Bulk enrich multiple people's data using Apollo",
+          "message": "Hromadně obohatit data více osob pomocí Apollo"
+        },
+        "app.QXBvbGxv.action.YnVsay1lbnJpY2gtcGVvcGxl.display_name": {
+          "source": "Bulk Enrich People",
+          "message": "Hromadně obohatit osoby"
+        },
+        "app.QXBvbGxv.action.YnVsay1lbnJpY2gtcGVvcGxl.option.ZGV0YWlscw.desc": {
+          "source": "List of person detail objects, each containing fields like `email`, `first_name`, `last_name`, `organization_name`, `domain`",
+          "message": "Seznam objektů s údaji o osobách, z nichž každý obsahuje pole jako `email`, `first_name`, `last_name`, `organization_name`, `domain`"
+        },
+        "app.QXBvbGxv.action.YnVsay1lbnJpY2gtcGVvcGxl.option.ZGV0YWlscw.display_name": {
+          "source": "Details",
+          "message": "Podrobnosti"
+        },
+        "app.QXBvbGxv.action.YnVsay1lbnJpY2gtcGVvcGxl.option.ZGV0YWlscw.short_desc": {
+          "source": "List of person details to enrich",
+          "message": "Seznam údajů o osobách k obohacení"
+        },
+        "app.QXBvbGxv.action.YnVsay1lbnJpY2gtcGVvcGxl.short_desc": {
+          "source": "Bulk enrich people data",
+          "message": "Hromadně obohatit data osob"
+        },
+        "app.QXBvbGxv.action.Z2V0LWFjY291bnQ.desc": {
+          "source": "Retrieve a single account by ID from Apollo",
+          "message": "Získat jeden účet podle ID z Apollo"
+        },
+        "app.QXBvbGxv.action.Z2V0LWFjY291bnQ.display_name": {
+          "source": "Get an Account",
+          "message": "Získat účet"
+        },
+        "app.QXBvbGxv.action.Z2V0LWFjY291bnQ.option.YWNjb3VudF9pZA.display_name": {
+          "source": "Account ID",
+          "message": "ID účtu"
+        },
+        "app.QXBvbGxv.action.Z2V0LWFjY291bnQ.option.YWNjb3VudF9pZA.short_desc": {
+          "source": "The account ID",
+          "message": "ID účtu"
+        },
+        "app.QXBvbGxv.action.Z2V0LWFjY291bnQ.short_desc": {
+          "source": "Get a single account by ID",
+          "message": "Získat jeden účet podle ID"
+        },
+        "app.QXBvbGxv.action.Z2V0LWNvbnRhY3Q.desc": {
+          "source": "Retrieve a single contact by ID from Apollo",
+          "message": "Získat jeden kontakt podle ID z Apollo"
+        },
+        "app.QXBvbGxv.action.Z2V0LWNvbnRhY3Q.display_name": {
+          "source": "Get a Contact",
+          "message": "Získat kontakt"
+        },
+        "app.QXBvbGxv.action.Z2V0LWNvbnRhY3Q.option.Y29udGFjdF9pZA.display_name": {
+          "source": "Contact ID",
+          "message": "ID kontaktu"
+        },
+        "app.QXBvbGxv.action.Z2V0LWNvbnRhY3Q.option.Y29udGFjdF9pZA.short_desc": {
+          "source": "The contact ID",
+          "message": "ID kontaktu"
+        },
+        "app.QXBvbGxv.action.Z2V0LWNvbnRhY3Q.short_desc": {
+          "source": "Get a single contact by ID",
+          "message": "Získat jeden kontakt podle ID"
+        },
+        "app.QXBvbGxv.action.Z2V0LWRlYWw.desc": {
+          "source": "Retrieve a single deal by ID from Apollo",
+          "message": "Získat jeden obchod podle ID z Apollo"
+        },
+        "app.QXBvbGxv.action.Z2V0LWRlYWw.display_name": {
+          "source": "Get a Deal",
+          "message": "Získat obchod"
+        },
+        "app.QXBvbGxv.action.Z2V0LWRlYWw.option.ZGVhbF9pZA.display_name": {
+          "source": "Deal ID",
+          "message": "ID obchodu"
+        },
+        "app.QXBvbGxv.action.Z2V0LWRlYWw.option.ZGVhbF9pZA.short_desc": {
+          "source": "The deal ID",
+          "message": "ID obchodu"
+        },
+        "app.QXBvbGxv.action.Z2V0LWRlYWw.short_desc": {
+          "source": "Get a single deal by ID",
+          "message": "Získat jeden obchod podle ID"
+        },
+        "app.QXBvbGxv.action.ZGVhbC1jcmVhdGVk.desc": {
+          "source": "Triggers when a new deal is created in Apollo",
+          "message": "Spustí se při vytvoření nového obchodu v Apollo"
+        },
+        "app.QXBvbGxv.action.ZGVhbC1jcmVhdGVk.display_name": {
+          "source": "Deal Created",
+          "message": "Obchod vytvořen"
+        },
+        "app.QXBvbGxv.action.ZGVhbC1jcmVhdGVk.short_desc": {
+          "source": "Watch for new deals",
+          "message": "Sledovat nové obchody"
+        },
+        "app.QXBvbGxv.action.ZW5yaWNoLW9yZ2FuaXphdGlvbg.desc": {
+          "source": "Enrich an organization's data using Apollo's database",
+          "message": "Obohatit data organizace pomocí databáze Apollo"
+        },
+        "app.QXBvbGxv.action.ZW5yaWNoLW9yZ2FuaXphdGlvbg.display_name": {
+          "source": "Enrich Organization",
+          "message": "Obohatit organizaci"
+        },
+        "app.QXBvbGxv.action.ZW5yaWNoLW9yZ2FuaXphdGlvbg.option.ZG9tYWlu.desc": {
+          "source": "The organization domain to enrich",
+          "message": "Doména organizace k obohacení"
+        },
+        "app.QXBvbGxv.action.ZW5yaWNoLW9yZ2FuaXphdGlvbg.option.ZG9tYWlu.display_name": {
+          "source": "Domain",
+          "message": "Doména"
+        },
+        "app.QXBvbGxv.action.ZW5yaWNoLW9yZ2FuaXphdGlvbg.option.ZG9tYWlu.short_desc": {
+          "source": "Organization domain",
+          "message": "Doména organizace"
+        },
+        "app.QXBvbGxv.action.ZW5yaWNoLW9yZ2FuaXphdGlvbg.short_desc": {
+          "source": "Enrich an organization's data",
+          "message": "Obohatit data organizace"
+        },
+        "app.QXBvbGxv.action.ZW5yaWNoLXBlcnNvbg.desc": {
+          "source": "Enrich a person's data using Apollo's database of 210M+ contacts",
+          "message": "Obohatit data osoby pomocí databáze Apollo s více než 210 miliony kontaktů"
+        },
+        "app.QXBvbGxv.action.ZW5yaWNoLXBlcnNvbg.display_name": {
+          "source": "Enrich Person",
+          "message": "Obohatit osobu"
+        },
+        "app.QXBvbGxv.action.ZW5yaWNoLXBlcnNvbg.option.ZG9tYWlu.display_name": {
+          "source": "Domain",
+          "message": "Doména"
+        },
+        "app.QXBvbGxv.action.ZW5yaWNoLXBlcnNvbg.option.ZG9tYWlu.short_desc": {
+          "source": "Person company domain",
+          "message": "Doména společnosti osoby"
+        },
+        "app.QXBvbGxv.action.ZW5yaWNoLXBlcnNvbg.option.ZW1haWw.desc": {
+          "source": "The person's email address for enrichment",
+          "message": "E-mailová adresa osoby k obohacení"
+        },
+        "app.QXBvbGxv.action.ZW5yaWNoLXBlcnNvbg.option.ZW1haWw.display_name": {
+          "source": "Email",
+          "message": "E-mail"
+        },
+        "app.QXBvbGxv.action.ZW5yaWNoLXBlcnNvbg.option.ZW1haWw.short_desc": {
+          "source": "Person email for enrichment",
+          "message": "E-mail osoby pro obohacení dat"
+        },
+        "app.QXBvbGxv.action.ZW5yaWNoLXBlcnNvbg.option.Zmlyc3RfbmFtZQ.display_name": {
+          "source": "First Name",
+          "message": "Křestní jméno"
+        },
+        "app.QXBvbGxv.action.ZW5yaWNoLXBlcnNvbg.option.Zmlyc3RfbmFtZQ.short_desc": {
+          "source": "Person first name",
+          "message": "Křestní jméno osoby"
+        },
+        "app.QXBvbGxv.action.ZW5yaWNoLXBlcnNvbg.option.b3JnYW5pemF0aW9uX25hbWU.display_name": {
+          "source": "Organization Name",
+          "message": "Název organizace"
+        },
+        "app.QXBvbGxv.action.ZW5yaWNoLXBlcnNvbg.option.b3JnYW5pemF0aW9uX25hbWU.short_desc": {
+          "source": "Person company name",
+          "message": "Název společnosti osoby"
+        },
+        "app.QXBvbGxv.action.ZW5yaWNoLXBlcnNvbg.option.bGFzdF9uYW1l.display_name": {
+          "source": "Last Name",
+          "message": "Příjmení"
+        },
+        "app.QXBvbGxv.action.ZW5yaWNoLXBlcnNvbg.option.bGFzdF9uYW1l.short_desc": {
+          "source": "Person last name",
+          "message": "Příjmení osoby"
+        },
+        "app.QXBvbGxv.action.ZW5yaWNoLXBlcnNvbg.option.bGlua2VkaW5fdXJs.display_name": {
+          "source": "LinkedIn URL",
+          "message": "URL profilu LinkedIn"
+        },
+        "app.QXBvbGxv.action.ZW5yaWNoLXBlcnNvbg.option.bGlua2VkaW5fdXJs.short_desc": {
+          "source": "Person LinkedIn URL",
+          "message": "URL profilu LinkedIn osoby"
+        },
+        "app.QXBvbGxv.action.ZW5yaWNoLXBlcnNvbg.short_desc": {
+          "source": "Enrich a person's data",
+          "message": "Obohatit data o osobě"
+        },
+        "app.QXBvbGxv.action.bGlzdC1kZWFscw.desc": {
+          "source": "List deals (opportunities) in Apollo",
+          "message": "Zobrazit seznam obchodů (příležitostí) v Apollu"
+        },
+        "app.QXBvbGxv.action.bGlzdC1kZWFscw.display_name": {
+          "source": "List Deals",
+          "message": "Seznam obchodních příležitostí"
+        },
+        "app.QXBvbGxv.action.bGlzdC1kZWFscw.option.ZGVhbF9pZA.display_name": {
+          "source": "Deal ID",
+          "message": "ID obchodu"
+        },
+        "app.QXBvbGxv.action.bGlzdC1kZWFscw.option.ZGVhbF9pZA.short_desc": {
+          "source": "Filter by deal ID",
+          "message": "Filtrovat podle ID obchodu"
+        },
+        "app.QXBvbGxv.action.bGlzdC1kZWFscw.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "Limit"
+        },
+        "app.QXBvbGxv.action.bGlzdC1kZWFscw.option.bGltaXQ.short_desc": {
+          "source": "Maximum results",
+          "message": "Maximální počet výsledků"
+        },
+        "app.QXBvbGxv.action.bGlzdC1kZWFscw.short_desc": {
+          "source": "List deals",
+          "message": "Zobrazit seznam obchodů"
+        },
+        "app.QXBvbGxv.action.bWFrZS1hcGktY2FsbA.desc": {
+          "source": "Make a custom HTTP / REST API call to **Apollo** using the configured connection's authentication.\n\nSpecify the HTTP method, the URI path (relative to the connection's API base URL), optional query parameters, headers, and request body. The response is returned as a hash containing the status code, response headers, and response body.\n\nUse this action for endpoints that are not yet exposed as first-class actions on this app.",
+          "message": "Provede vlastní volání HTTP / REST API do **Apollo** pomocí autentizace nakonfigurovaného připojení.\n\nZadejte metodu HTTP, cestu URI (relativní k základní adrese API daného připojení), volitelné parametry dotazu, záhlaví a tělo požadavku. Odpověď je vrácena jako hash obsahující stavový kód, záhlaví odpovědi a tělo odpovědi.\n\nTuto akci použijte pro koncové body, které v této aplikaci ještě nejsou k dispozici jako samostatné akce."
+        },
+        "app.QXBvbGxv.action.bWFrZS1hcGktY2FsbA.display_name": {
+          "source": "Make an API call",
+          "message": "Provést volání API"
+        },
+        "app.QXBvbGxv.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.desc": {
+          "source": "The request body. The effective type depends on `body_type`: JSON/form/YAML expect a hash, XML/text expect a string, multipart expects a file structure, binary expects raw bytes.",
+          "message": "Tělo požadavku. Efektivní typ závisí na `body_type`: JSON/form/YAML očekávají hash, XML/text očekávají řetězec, multipart očekává strukturu souboru, binary očekává surové bajty."
+        },
+        "app.QXBvbGxv.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.display_name": {
+          "source": "Body",
+          "message": "Tělo"
+        },
+        "app.QXBvbGxv.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.short_desc": {
+          "source": "The request body",
+          "message": "Tělo požadavku"
+        },
+        "app.QXBvbGxv.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.desc": {
+          "source": "Upload a file using `multipart/form-data`. The body must be a @ref DataProvider::FileDataType \"FileDataType\" structure (filename + content + mime_type). The framework builds the multipart envelope and sets the boundary header.",
+          "message": "Nahrát soubor pomocí `multipart/form-data`. Tělo musí být struktura @ref DataProvider::FileDataType \"FileDataType\" (filename + content + mime_type). Framework vytvoří obálku multipart a nastaví záhlaví boundary."
+        },
+        "app.QXBvbGxv.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.display_name": {
+          "source": "Multipart Form",
+          "message": "Multipart Form"
+        },
+        "app.QXBvbGxv.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.short_desc": {
+          "source": "Upload a file using multipart/form-data",
+          "message": "Nahrát soubor pomocí multipart/form-data"
+        },
+        "app.QXBvbGxv.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.desc": {
+          "source": "Pass the body to the REST client unchanged; the client decides serialization based on its configured `data` option and the value type",
+          "message": "Předat tělo klientovi REST beze změny; klient rozhodne o serializaci na základě své nakonfigurované možnosti `data` a typu hodnoty"
+        },
+        "app.QXBvbGxv.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.display_name": {
+          "source": "Auto",
+          "message": "Automaticky"
+        },
+        "app.QXBvbGxv.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.short_desc": {
+          "source": "Pass-through; use connection serialization and let the REST client decide",
+          "message": "Předání bez změn; použít serializaci připojení a nechat rozhodnutí na klientovi REST"
+        },
+        "app.QXBvbGxv.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.desc": {
+          "source": "Send the body as raw bytes. The body must be a binary value. Sets `Content-Type: application/octet-stream` unless overridden by `hdr`.",
+          "message": "Odeslat tělo jako surové bajty. Tělo musí být binární hodnota. Nastavuje `Content-Type: application/octet-stream`, pokud není přepsáno `hdr`."
+        },
+        "app.QXBvbGxv.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.display_name": {
+          "source": "Raw Binary",
+          "message": "Surová binární data"
+        },
+        "app.QXBvbGxv.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.short_desc": {
+          "source": "Send body as raw bytes",
+          "message": "Odeslat tělo jako surové bajty"
+        },
+        "app.QXBvbGxv.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.desc": {
+          "source": "Serialize a hash of form fields as `application/x-www-form-urlencoded`. The body must be a hash whose values are scalars (strings/numbers/booleans).",
+          "message": "Serializovat hash formulářových polí jako `application/x-www-form-urlencoded`. Tělo musí být hash, jehož hodnotami jsou skaláry (řetězce/čísla/booleovské hodnoty)."
+        },
+        "app.QXBvbGxv.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.display_name": {
+          "source": "Form (URL-encoded)",
+          "message": "Formulář (URL-encoded)"
+        },
+        "app.QXBvbGxv.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.short_desc": {
+          "source": "Serialize body as application/x-www-form-urlencoded form fields",
+          "message": "Serializovat tělo jako formulářová pole application/x-www-form-urlencoded"
+        },
+        "app.QXBvbGxv.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.desc": {
+          "source": "Serialize the body as JSON; sets `Content-Type: application/json`. The body should be a hash, list, or scalar value.",
+          "message": "Serializovat tělo jako JSON; nastavuje `Content-Type: application/json`. Tělo by mělo být hash, seznam nebo skalární hodnota."
+        },
+        "app.QXBvbGxv.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.display_name": {
+          "source": "JSON",
+          "message": "JSON"
+        },
+        "app.QXBvbGxv.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.short_desc": {
+          "source": "Serialize body as JSON",
+          "message": "Serializovat tělo jako JSON"
+        },
+        "app.QXBvbGxv.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.desc": {
+          "source": "Send the body as plain text. The body must be a string. Sets `Content-Type: text/plain`.",
+          "message": "Odeslat tělo jako prostý text. Tělo musí být řetězec. Nastavuje `Content-Type: text/plain`."
+        },
+        "app.QXBvbGxv.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.display_name": {
+          "source": "Plain Text",
+          "message": "Čistý text"
+        },
+        "app.QXBvbGxv.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.short_desc": {
+          "source": "Send body as text/plain",
+          "message": "Odeslat tělo jako text/plain"
+        },
+        "app.QXBvbGxv.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.desc": {
+          "source": "Send the body as XML. If the body is a hash it is serialized to XML; if it is a string it is sent verbatim. Sets `Content-Type: application/xml`.",
+          "message": "Odeslat tělo jako XML. Pokud je tělo hash, serializuje se do XML; pokud je to řetězec, odešle se doslovně. Nastavuje `Content-Type: application/xml`."
+        },
+        "app.QXBvbGxv.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.display_name": {
+          "source": "XML",
+          "message": "XML"
+        },
+        "app.QXBvbGxv.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.short_desc": {
+          "source": "Send body as XML",
+          "message": "Odeslat tělo jako XML"
+        },
+        "app.QXBvbGxv.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.desc": {
+          "source": "Send the body as YAML. If the body is a hash it is serialized to YAML; if it is a string it is sent verbatim. Sets `Content-Type: application/x-yaml`.",
+          "message": "Odeslat tělo jako YAML. Pokud je tělo hash, serializuje se do YAML; pokud je to řetězec, odešle se doslovně. Nastavuje `Content-Type: application/x-yaml`."
+        },
+        "app.QXBvbGxv.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.display_name": {
+          "source": "YAML",
+          "message": "YAML"
+        },
+        "app.QXBvbGxv.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.short_desc": {
+          "source": "Send body as YAML",
+          "message": "Odeslat tělo jako YAML"
+        },
+        "app.QXBvbGxv.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.desc": {
+          "source": "Selects the body serialization mode and the corresponding `Content-Type` header. Changing this field reshapes the `body` editor - selecting JSON exposes a JSON editor, selecting Multipart Form exposes a file picker, and so on.",
+          "message": "Vybírá režim serializace těla a odpovídající záhlaví `Content-Type`. Změna tohoto pole upraví editor `body` – výběrem JSON se zobrazí editor JSON, výběrem Multipart Form se zobrazí výběr souboru a podobně."
+        },
+        "app.QXBvbGxv.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.display_name": {
+          "source": "Body Type",
+          "message": "Typ těla"
+        },
+        "app.QXBvbGxv.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.short_desc": {
+          "source": "How the body is serialized and what Content-Type is sent",
+          "message": "Jak je tělo serializováno a jaký Content-Type je odeslán"
+        },
+        "app.QXBvbGxv.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.desc": {
+          "source": "If `True`, non-2xx HTTP responses return as the normal response hash (with the actual status code) instead of raising `REST-RESPONSE-ERROR`. Useful for handling 4xx/5xx as data - e.g. checking whether a resource exists. Overrides the connection's `error_passthru` setting for this call only.",
+          "message": "Pokud je `True`, odpovědi HTTP jiné než 2xx se vrátí jako běžný hash odpovědi (s reálným stavovým kódem) namísto vyvolání `REST-RESPONSE-ERROR`. Užitečné pro zpracování 4xx/5xx jako dat – např. kontrola, zda prostředek existuje. Přepisuje nastavení `error_passthru` připojení pouze pro toto volání."
+        },
+        "app.QXBvbGxv.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.display_name": {
+          "source": "Return Errors as Data",
+          "message": "Vracet chyby jako data"
+        },
+        "app.QXBvbGxv.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.short_desc": {
+          "source": "Return non-2xx responses normally instead of throwing",
+          "message": "Vracet odpovědi jiné než 2xx normálně namísto vyvolání výjimky"
+        },
+        "app.QXBvbGxv.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.desc": {
+          "source": "Optional list of HTTP status codes treated as success. If set and the response status is not in this list, the action throws `REST-STATUS-ERROR`. When unset, the REST client's default behavior applies (typically: 2xx is success, non-2xx throws).",
+          "message": "Volitelný seznam stavových kódů HTTP považovaných za úspěch. Je-li nastaven a stav odpovědi není v tomto seznamu, akce vyvolá `REST-STATUS-ERROR`. Pokud není nastaven, uplatní se výchozí chování klienta REST (obvykle: 2xx je úspěch, jiné než 2xx vyvolá výjimku)."
+        },
+        "app.QXBvbGxv.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.display_name": {
+          "source": "Expected Status Codes",
+          "message": "Očekávané stavové kódy"
+        },
+        "app.QXBvbGxv.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.short_desc": {
+          "source": "Response status codes treated as success",
+          "message": "Stavové kódy odpovědi považované za úspěch"
+        },
+        "app.QXBvbGxv.action.bWFrZS1hcGktY2FsbA.option.aGRy.desc": {
+          "source": "Hash of custom headers added to the request. These override any default headers set by `body_type` (e.g. supplying `Content-Type` here wins over the body-type default).",
+          "message": "Hash vlastních záhlaví přidaných k požadavku. Tyto přepisují jakákoli výchozí záhlaví nastavená `body_type` (např. zadání `Content-Type` zde má přednost před výchozím nastavením typu těla)."
+        },
+        "app.QXBvbGxv.action.bWFrZS1hcGktY2FsbA.option.aGRy.display_name": {
+          "source": "Custom Headers",
+          "message": "Vlastní záhlaví"
+        },
+        "app.QXBvbGxv.action.bWFrZS1hcGktY2FsbA.option.aGRy.short_desc": {
+          "source": "Extra request headers",
+          "message": "Dodatečná záhlaví požadavku"
+        },
+        "app.QXBvbGxv.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.desc": {
+          "source": "If `True`, the response hash includes a `debug` sub-hash containing the request method/URL/headers (with sensitive values redacted), request and response sizes, and round-trip duration. Useful when investigating slow or failing calls. Off by default to keep responses lean.",
+          "message": "Pokud je `True`, hash odpovědi obsahuje pod-hash `debug` obsahující metodu/URL/záhlaví požadavku (s cenzurovanými citlivými hodnotami), velikosti požadavku a odpovědi a dobu trvání. Užitečné při zkoumání pomalých nebo selhávajících volání. Ve výchozím nastavení vypnuto pro zachování kompaktních odpovědí."
+        },
+        "app.QXBvbGxv.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.display_name": {
+          "source": "Include Debug Info",
+          "message": "Zahrnout ladicí informace"
+        },
+        "app.QXBvbGxv.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.short_desc": {
+          "source": "Include request/timing/size debug info in the response",
+          "message": "Zahrnout do odpovědi ladicí informace o požadavku/časování/velikosti"
+        },
+        "app.QXBvbGxv.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.desc": {
+          "source": "HTTP `OPTIONS`",
+          "message": "HTTP `OPTIONS`"
+        },
+        "app.QXBvbGxv.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.display_name": {
+          "source": "OPTIONS",
+          "message": "OPTIONS"
+        },
+        "app.QXBvbGxv.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.short_desc": {
+          "source": "HTTP OPTIONS",
+          "message": "HTTP OPTIONS"
+        },
+        "app.QXBvbGxv.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.desc": {
+          "source": "HTTP `DELETE`",
+          "message": "HTTP `DELETE`"
+        },
+        "app.QXBvbGxv.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.display_name": {
+          "source": "DELETE",
+          "message": "DELETE"
+        },
+        "app.QXBvbGxv.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.short_desc": {
+          "source": "HTTP DELETE",
+          "message": "HTTP DELETE"
+        },
+        "app.QXBvbGxv.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.desc": {
+          "source": "HTTP `GET`",
+          "message": "HTTP `GET`"
+        },
+        "app.QXBvbGxv.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.display_name": {
+          "source": "GET",
+          "message": "GET"
+        },
+        "app.QXBvbGxv.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.short_desc": {
+          "source": "HTTP GET",
+          "message": "HTTP GET"
+        },
+        "app.QXBvbGxv.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.desc": {
+          "source": "HTTP `HEAD`",
+          "message": "HTTP `HEAD`"
+        },
+        "app.QXBvbGxv.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.display_name": {
+          "source": "HEAD",
+          "message": "HEAD"
+        },
+        "app.QXBvbGxv.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.short_desc": {
+          "source": "HTTP HEAD",
+          "message": "HTTP HEAD"
+        },
+        "app.QXBvbGxv.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.desc": {
+          "source": "HTTP `PATCH`",
+          "message": "HTTP `PATCH`"
+        },
+        "app.QXBvbGxv.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.display_name": {
+          "source": "PATCH",
+          "message": "PATCH"
+        },
+        "app.QXBvbGxv.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.short_desc": {
+          "source": "HTTP PATCH",
+          "message": "HTTP PATCH"
+        },
+        "app.QXBvbGxv.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.desc": {
+          "source": "HTTP `POST`",
+          "message": "HTTP `POST`"
+        },
+        "app.QXBvbGxv.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.display_name": {
+          "source": "POST",
+          "message": "POST"
+        },
+        "app.QXBvbGxv.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.short_desc": {
+          "source": "HTTP POST",
+          "message": "HTTP POST"
+        },
+        "app.QXBvbGxv.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.desc": {
+          "source": "HTTP `PUT`",
+          "message": "HTTP `PUT`"
+        },
+        "app.QXBvbGxv.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.display_name": {
+          "source": "PUT",
+          "message": "PUT"
+        },
+        "app.QXBvbGxv.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.short_desc": {
+          "source": "HTTP PUT",
+          "message": "HTTP PUT"
+        },
+        "app.QXBvbGxv.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.desc": {
+          "source": "HTTP `TRACE`",
+          "message": "HTTP `TRACE`"
+        },
+        "app.QXBvbGxv.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.display_name": {
+          "source": "TRACE",
+          "message": "TRACE"
+        },
+        "app.QXBvbGxv.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.short_desc": {
+          "source": "HTTP TRACE",
+          "message": "HTTP TRACE"
+        },
+        "app.QXBvbGxv.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "Metoda HTTP, která se má použít pro požadavek"
+        },
+        "app.QXBvbGxv.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.display_name": {
+          "source": "HTTP Method",
+          "message": "Metoda HTTP"
+        },
+        "app.QXBvbGxv.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.short_desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "Metoda HTTP, která se má použít pro požadavek"
+        },
+        "app.QXBvbGxv.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain `{name}` placeholders that are replaced from `path_vars`. Example: `/users/{id}/comments`.",
+          "message": "Cesta URI relativní k základní adrese URL API připojení. Může obsahovat zástupné symboly `{name}`, které jsou nahrazeny z `path_vars`. Příklad: `/users/{id}/comments`."
+        },
+        "app.QXBvbGxv.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.display_name": {
+          "source": "URI Path",
+          "message": "Cesta URI"
+        },
+        "app.QXBvbGxv.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.short_desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain '{name}' placeholders that are replaced from 'path_vars'. Example: '/users/{id}/comments'",
+          "message": "Cesta URI relativní vůči základní URL API připojení. Může obsahovat zástupné symboly '{name}', které jsou nahrazeny z 'path_vars'. Příklad: '/users/{id}/comments'"
+        },
+        "app.QXBvbGxv.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.desc": {
+          "source": "Hash of values substituted into `{name}` placeholders in the URI path. Example: with `path = /users/{id}` and `path_vars = {id: 123}` the framework sends `/users/123`. Values are URL-encoded.",
+          "message": "Haš hodnot nahrazených za zástupné symboly `{name}` v cestě URI. Příklad: s `path = /users/{id}` a `path_vars = {id: 123}` rozhraní odesílá `/users/123`. Hodnoty jsou kódovány v URL."
+        },
+        "app.QXBvbGxv.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.display_name": {
+          "source": "Path Variables",
+          "message": "Proměnné cesty"
+        },
+        "app.QXBvbGxv.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.short_desc": {
+          "source": "Values for {name} placeholders in path",
+          "message": "Hodnoty pro zástupné symboly {name} v cestě"
+        },
+        "app.QXBvbGxv.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.desc": {
+          "source": "Hash of query string parameters to append to the URI path. Values are URL-encoded; list values are joined with `,`.",
+          "message": "Haš parametrů dotazovacího řetězce, které se připojí k cestě URI. Hodnoty jsou kódovány v URL; hodnoty seznamu jsou spojeny pomocí `,`."
+        },
+        "app.QXBvbGxv.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.display_name": {
+          "source": "Query Arguments",
+          "message": "Argumenty dotazu"
+        },
+        "app.QXBvbGxv.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.short_desc": {
+          "source": "Query string parameters",
+          "message": "Parametry dotazovacího řetězce"
+        },
+        "app.QXBvbGxv.action.bWFrZS1hcGktY2FsbA.short_desc": {
+          "source": "Make a custom API call to Apollo",
+          "message": "Provést vlastní volání API do Apollo"
+        },
+        "app.QXBvbGxv.action.c2VhcmNoLW9yZ2FuaXphdGlvbnM.desc": {
+          "source": "Search Apollo's global database of 35M+ companies",
+          "message": "Prohledávat globální databázi Apollo s více než 35 miliony společností"
+        },
+        "app.QXBvbGxv.action.c2VhcmNoLW9yZ2FuaXphdGlvbnM.display_name": {
+          "source": "Search Organizations",
+          "message": "Vyhledat organizace"
+        },
+        "app.QXBvbGxv.action.c2VhcmNoLW9yZ2FuaXphdGlvbnM.option.b3JnYW5pemF0aW9uX251bV9lbXBsb3llZXNfcmFuZ2Vz.desc": {
+          "source": "Employee count ranges (e.g., `1,10` or `1001,5000`)",
+          "message": "Rozsahy počtu zaměstnanců (např. `1,10` nebo `1001,5000`)"
+        },
+        "app.QXBvbGxv.action.c2VhcmNoLW9yZ2FuaXphdGlvbnM.option.b3JnYW5pemF0aW9uX251bV9lbXBsb3llZXNfcmFuZ2Vz.display_name": {
+          "source": "Employee Ranges",
+          "message": "Rozsahy zaměstnanců"
+        },
+        "app.QXBvbGxv.action.c2VhcmNoLW9yZ2FuaXphdGlvbnM.option.b3JnYW5pemF0aW9uX251bV9lbXBsb3llZXNfcmFuZ2Vz.short_desc": {
+          "source": "Filter by employee count",
+          "message": "Filtrovat podle počtu zaměstnanců"
+        },
+        "app.QXBvbGxv.action.c2VhcmNoLW9yZ2FuaXphdGlvbnM.option.b3JnYW5pemF0aW9uX2RvbWFpbnM.desc": {
+          "source": "List of company domains to search for",
+          "message": "Seznam domén společností k vyhledání"
+        },
+        "app.QXBvbGxv.action.c2VhcmNoLW9yZ2FuaXphdGlvbnM.option.b3JnYW5pemF0aW9uX2RvbWFpbnM.display_name": {
+          "source": "Domains",
+          "message": "Domény"
+        },
+        "app.QXBvbGxv.action.c2VhcmNoLW9yZ2FuaXphdGlvbnM.option.b3JnYW5pemF0aW9uX2RvbWFpbnM.short_desc": {
+          "source": "Filter by domains",
+          "message": "Filtrovat podle domén"
+        },
+        "app.QXBvbGxv.action.c2VhcmNoLW9yZ2FuaXphdGlvbnM.option.b3JnYW5pemF0aW9uX2xvY2F0aW9ucw.display_name": {
+          "source": "Locations",
+          "message": "Lokality"
+        },
+        "app.QXBvbGxv.action.c2VhcmNoLW9yZ2FuaXphdGlvbnM.option.b3JnYW5pemF0aW9uX2xvY2F0aW9ucw.short_desc": {
+          "source": "Filter by locations",
+          "message": "Filtrovat podle lokalit"
+        },
+        "app.QXBvbGxv.action.c2VhcmNoLW9yZ2FuaXphdGlvbnM.option.cGFnZQ.display_name": {
+          "source": "Page",
+          "message": "Stránka"
+        },
+        "app.QXBvbGxv.action.c2VhcmNoLW9yZ2FuaXphdGlvbnM.option.cGFnZQ.short_desc": {
+          "source": "Page number",
+          "message": "Číslo stránky"
+        },
+        "app.QXBvbGxv.action.c2VhcmNoLW9yZ2FuaXphdGlvbnM.option.cGVyX3BhZ2U.display_name": {
+          "source": "Per Page",
+          "message": "Na stránku"
+        },
+        "app.QXBvbGxv.action.c2VhcmNoLW9yZ2FuaXphdGlvbnM.option.cGVyX3BhZ2U.short_desc": {
+          "source": "Results per page (max 100)",
+          "message": "Výsledků na stránku (max. 100)"
+        },
+        "app.QXBvbGxv.action.c2VhcmNoLW9yZ2FuaXphdGlvbnM.option.cV9rZXl3b3Jkcw.display_name": {
+          "source": "Keywords",
+          "message": "Klíčová slova"
+        },
+        "app.QXBvbGxv.action.c2VhcmNoLW9yZ2FuaXphdGlvbnM.option.cV9rZXl3b3Jkcw.short_desc": {
+          "source": "Search keywords",
+          "message": "Klíčová slova pro vyhledávání"
+        },
+        "app.QXBvbGxv.action.c2VhcmNoLW9yZ2FuaXphdGlvbnM.short_desc": {
+          "source": "Search Apollo's organization database",
+          "message": "Prohledávat databázi organizací Apollo"
+        },
+        "app.QXBvbGxv.action.c2VhcmNoLWFjY291bnRz.desc": {
+          "source": "Search accounts in Apollo with optional filtering",
+          "message": "Vyhledávat účty v Apollu s volitelným filtrováním"
+        },
+        "app.QXBvbGxv.action.c2VhcmNoLWFjY291bnRz.display_name": {
+          "source": "Search Accounts",
+          "message": "Vyhledat účty"
+        },
+        "app.QXBvbGxv.action.c2VhcmNoLWFjY291bnRz.option.YWNjb3VudF9pZA.display_name": {
+          "source": "Account ID",
+          "message": "ID účtu"
+        },
+        "app.QXBvbGxv.action.c2VhcmNoLWFjY291bnRz.option.YWNjb3VudF9pZA.short_desc": {
+          "source": "Filter by account ID",
+          "message": "Filtrovat podle ID účtu"
+        },
+        "app.QXBvbGxv.action.c2VhcmNoLWFjY291bnRz.option.ZG9tYWlu.display_name": {
+          "source": "Domain",
+          "message": "Doména"
+        },
+        "app.QXBvbGxv.action.c2VhcmNoLWFjY291bnRz.option.ZG9tYWlu.short_desc": {
+          "source": "Filter by domain",
+          "message": "Filtrovat podle domény"
+        },
+        "app.QXBvbGxv.action.c2VhcmNoLWFjY291bnRz.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "Limit"
+        },
+        "app.QXBvbGxv.action.c2VhcmNoLWFjY291bnRz.option.bGltaXQ.short_desc": {
+          "source": "Maximum results",
+          "message": "Maximální počet výsledků"
+        },
+        "app.QXBvbGxv.action.c2VhcmNoLWFjY291bnRz.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "Název"
+        },
+        "app.QXBvbGxv.action.c2VhcmNoLWFjY291bnRz.option.bmFtZQ.short_desc": {
+          "source": "Filter by account name",
+          "message": "Filtrovat podle názvu účtu"
+        },
+        "app.QXBvbGxv.action.c2VhcmNoLWFjY291bnRz.short_desc": {
+          "source": "Search accounts",
+          "message": "Vyhledat účty"
+        },
+        "app.QXBvbGxv.action.c2VhcmNoLWNvbnRhY3Rz.desc": {
+          "source": "Search contacts in Apollo with optional filtering",
+          "message": "Vyhledávat kontakty v Apollu s volitelným filtrováním"
+        },
+        "app.QXBvbGxv.action.c2VhcmNoLWNvbnRhY3Rz.display_name": {
+          "source": "Search Contacts",
+          "message": "Vyhledat kontakty"
+        },
+        "app.QXBvbGxv.action.c2VhcmNoLWNvbnRhY3Rz.option.Y29udGFjdF9pZA.display_name": {
+          "source": "Contact ID",
+          "message": "ID kontaktu"
+        },
+        "app.QXBvbGxv.action.c2VhcmNoLWNvbnRhY3Rz.option.Y29udGFjdF9pZA.short_desc": {
+          "source": "Filter by contact ID",
+          "message": "Filtrovat podle ID kontaktu"
+        },
+        "app.QXBvbGxv.action.c2VhcmNoLWNvbnRhY3Rz.option.ZW1haWw.display_name": {
+          "source": "Email",
+          "message": "E-mail"
+        },
+        "app.QXBvbGxv.action.c2VhcmNoLWNvbnRhY3Rz.option.ZW1haWw.short_desc": {
+          "source": "Filter by email",
+          "message": "Filtrovat podle e-mailu"
+        },
+        "app.QXBvbGxv.action.c2VhcmNoLWNvbnRhY3Rz.option.Zmlyc3RfbmFtZQ.display_name": {
+          "source": "First Name",
+          "message": "Křestní jméno"
+        },
+        "app.QXBvbGxv.action.c2VhcmNoLWNvbnRhY3Rz.option.Zmlyc3RfbmFtZQ.short_desc": {
+          "source": "Filter by first name",
+          "message": "Filtrovat podle křestního jména"
+        },
+        "app.QXBvbGxv.action.c2VhcmNoLWNvbnRhY3Rz.option.bGFzdF9uYW1l.display_name": {
+          "source": "Last Name",
+          "message": "Příjmení"
+        },
+        "app.QXBvbGxv.action.c2VhcmNoLWNvbnRhY3Rz.option.bGFzdF9uYW1l.short_desc": {
+          "source": "Filter by last name",
+          "message": "Filtrovat podle příjmení"
+        },
+        "app.QXBvbGxv.action.c2VhcmNoLWNvbnRhY3Rz.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "Limit"
+        },
+        "app.QXBvbGxv.action.c2VhcmNoLWNvbnRhY3Rz.option.bGltaXQ.short_desc": {
+          "source": "Maximum results",
+          "message": "Maximální počet výsledků"
+        },
+        "app.QXBvbGxv.action.c2VhcmNoLWNvbnRhY3Rz.short_desc": {
+          "source": "Search contacts",
+          "message": "Vyhledat kontakty"
+        },
+        "app.QXBvbGxv.action.c2VhcmNoLXBlb3BsZQ.desc": {
+          "source": "Search Apollo's global database of 210M+ people",
+          "message": "Prohledávat globální databázi Apollo s více než 210 miliony lidí"
+        },
+        "app.QXBvbGxv.action.c2VhcmNoLXBlb3BsZQ.display_name": {
+          "source": "Search People",
+          "message": "Vyhledat osoby"
+        },
+        "app.QXBvbGxv.action.c2VhcmNoLXBlb3BsZQ.option.b3JnYW5pemF0aW9uX2RvbWFpbnM.display_name": {
+          "source": "Organization Domains",
+          "message": "Domény organizací"
+        },
+        "app.QXBvbGxv.action.c2VhcmNoLXBlb3BsZQ.option.b3JnYW5pemF0aW9uX2RvbWFpbnM.short_desc": {
+          "source": "Filter by company domains",
+          "message": "Filtrovat podle domén společností"
+        },
+        "app.QXBvbGxv.action.c2VhcmNoLXBlb3BsZQ.option.cGFnZQ.display_name": {
+          "source": "Page",
+          "message": "Stránka"
+        },
+        "app.QXBvbGxv.action.c2VhcmNoLXBlb3BsZQ.option.cGFnZQ.short_desc": {
+          "source": "Page number",
+          "message": "Číslo stránky"
+        },
+        "app.QXBvbGxv.action.c2VhcmNoLXBlb3BsZQ.option.cGVyX3BhZ2U.display_name": {
+          "source": "Per Page",
+          "message": "Na stránku"
+        },
+        "app.QXBvbGxv.action.c2VhcmNoLXBlb3BsZQ.option.cGVyX3BhZ2U.short_desc": {
+          "source": "Results per page (max 100)",
+          "message": "Výsledků na stránku (max. 100)"
+        },
+        "app.QXBvbGxv.action.c2VhcmNoLXBlb3BsZQ.option.cGVyc29uX2xvY2F0aW9ucw.desc": {
+          "source": "List of locations to filter by",
+          "message": "Seznam lokalit k filtrování"
+        },
+        "app.QXBvbGxv.action.c2VhcmNoLXBlb3BsZQ.option.cGVyc29uX2xvY2F0aW9ucw.display_name": {
+          "source": "Locations",
+          "message": "Lokality"
+        },
+        "app.QXBvbGxv.action.c2VhcmNoLXBlb3BsZQ.option.cGVyc29uX2xvY2F0aW9ucw.short_desc": {
+          "source": "Filter by locations",
+          "message": "Filtrovat podle lokalit"
+        },
+        "app.QXBvbGxv.action.c2VhcmNoLXBlb3BsZQ.option.cGVyc29uX3Nlbmlvcml0aWVz.desc": {
+          "source": "List of seniority levels (e.g., `senior`, `manager`)",
+          "message": "Seznam úrovní seniority (např. `senior`, `manager`)"
+        },
+        "app.QXBvbGxv.action.c2VhcmNoLXBlb3BsZQ.option.cGVyc29uX3Nlbmlvcml0aWVz.display_name": {
+          "source": "Seniorities",
+          "message": "Seniorita"
+        },
+        "app.QXBvbGxv.action.c2VhcmNoLXBlb3BsZQ.option.cGVyc29uX3Nlbmlvcml0aWVz.short_desc": {
+          "source": "Filter by seniority levels",
+          "message": "Filtrovat podle úrovní seniority"
+        },
+        "app.QXBvbGxv.action.c2VhcmNoLXBlb3BsZQ.option.cGVyc29uX3RpdGxlcw.desc": {
+          "source": "List of job titles to search for",
+          "message": "Seznam pracovních pozic k vyhledání"
+        },
+        "app.QXBvbGxv.action.c2VhcmNoLXBlb3BsZQ.option.cGVyc29uX3RpdGxlcw.display_name": {
+          "source": "Job Titles",
+          "message": "Pracovní pozice"
+        },
+        "app.QXBvbGxv.action.c2VhcmNoLXBlb3BsZQ.option.cGVyc29uX3RpdGxlcw.short_desc": {
+          "source": "Filter by job titles",
+          "message": "Filtrovat podle pracovních pozic"
+        },
+        "app.QXBvbGxv.action.c2VhcmNoLXBlb3BsZQ.option.cV9rZXl3b3Jkcw.display_name": {
+          "source": "Keywords",
+          "message": "Klíčová slova"
+        },
+        "app.QXBvbGxv.action.c2VhcmNoLXBlb3BsZQ.option.cV9rZXl3b3Jkcw.short_desc": {
+          "source": "Search keywords",
+          "message": "Klíčová slova pro vyhledávání"
+        },
+        "app.QXBvbGxv.action.c2VhcmNoLXBlb3BsZQ.short_desc": {
+          "source": "Search Apollo's people database",
+          "message": "Prohledávat databázi lidí Apollo"
+        },
+        "app.QXBvbGxv.action.dXBkYXRlLWFjY291bnQ.desc": {
+          "source": "Update an existing account in Apollo",
+          "message": "Aktualizovat existující účet v Apollu"
+        },
+        "app.QXBvbGxv.action.dXBkYXRlLWFjY291bnQ.display_name": {
+          "source": "Update an Account",
+          "message": "Aktualizovat účet"
+        },
+        "app.QXBvbGxv.action.dXBkYXRlLWFjY291bnQ.option.YWNjb3VudF9pZA.display_name": {
+          "source": "Account ID",
+          "message": "ID účtu"
+        },
+        "app.QXBvbGxv.action.dXBkYXRlLWFjY291bnQ.option.YWNjb3VudF9pZA.short_desc": {
+          "source": "The account to update",
+          "message": "Účet k aktualizaci"
+        },
+        "app.QXBvbGxv.action.dXBkYXRlLWFjY291bnQ.option.ZG9tYWlu.display_name": {
+          "source": "Domain",
+          "message": "Doména"
+        },
+        "app.QXBvbGxv.action.dXBkYXRlLWFjY291bnQ.option.ZG9tYWlu.short_desc": {
+          "source": "Company domain",
+          "message": "Doména společnosti"
+        },
+        "app.QXBvbGxv.action.dXBkYXRlLWFjY291bnQ.option.b3duZXJfaWQ.display_name": {
+          "source": "Owner ID",
+          "message": "ID vlastníka"
+        },
+        "app.QXBvbGxv.action.dXBkYXRlLWFjY291bnQ.option.b3duZXJfaWQ.short_desc": {
+          "source": "Owner user ID",
+          "message": "Uživatelské ID vlastníka"
+        },
+        "app.QXBvbGxv.action.dXBkYXRlLWFjY291bnQ.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "Název"
+        },
+        "app.QXBvbGxv.action.dXBkYXRlLWFjY291bnQ.option.bmFtZQ.short_desc": {
+          "source": "Account name",
+          "message": "Název účtu"
+        },
+        "app.QXBvbGxv.action.dXBkYXRlLWFjY291bnQ.option.cGhvbmU.display_name": {
+          "source": "Phone",
+          "message": "Telefon"
+        },
+        "app.QXBvbGxv.action.dXBkYXRlLWFjY291bnQ.option.cGhvbmU.short_desc": {
+          "source": "Company phone number",
+          "message": "Telefonní číslo společnosti"
+        },
+        "app.QXBvbGxv.action.dXBkYXRlLWFjY291bnQ.option.d2Vic2l0ZV91cmw.display_name": {
+          "source": "Website URL",
+          "message": "URL webové stránky"
+        },
+        "app.QXBvbGxv.action.dXBkYXRlLWFjY291bnQ.option.d2Vic2l0ZV91cmw.short_desc": {
+          "source": "Company website URL",
+          "message": "URL webu společnosti"
+        },
+        "app.QXBvbGxv.action.dXBkYXRlLWFjY291bnQ.short_desc": {
+          "source": "Update an existing account",
+          "message": "Aktualizovat stávající účet"
+        },
+        "app.QXBvbGxv.action.dXBkYXRlLWNvbnRhY3Q.desc": {
+          "source": "Update an existing contact in Apollo",
+          "message": "Aktualizovat existující kontakt v Apollu"
+        },
+        "app.QXBvbGxv.action.dXBkYXRlLWNvbnRhY3Q.display_name": {
+          "source": "Update a Contact",
+          "message": "Aktualizovat kontakt"
+        },
+        "app.QXBvbGxv.action.dXBkYXRlLWNvbnRhY3Q.option.Y29udGFjdF9pZA.display_name": {
+          "source": "Contact ID",
+          "message": "ID kontaktu"
+        },
+        "app.QXBvbGxv.action.dXBkYXRlLWNvbnRhY3Q.option.Y29udGFjdF9pZA.short_desc": {
+          "source": "The contact to update",
+          "message": "Kontakt k aktualizaci"
+        },
+        "app.QXBvbGxv.action.dXBkYXRlLWNvbnRhY3Q.option.ZW1haWw.display_name": {
+          "source": "Email",
+          "message": "E-mail"
+        },
+        "app.QXBvbGxv.action.dXBkYXRlLWNvbnRhY3Q.option.ZW1haWw.short_desc": {
+          "source": "Contact email address",
+          "message": "E-mailová adresa kontaktu"
+        },
+        "app.QXBvbGxv.action.dXBkYXRlLWNvbnRhY3Q.option.Zmlyc3RfbmFtZQ.display_name": {
+          "source": "First Name",
+          "message": "Křestní jméno"
+        },
+        "app.QXBvbGxv.action.dXBkYXRlLWNvbnRhY3Q.option.Zmlyc3RfbmFtZQ.short_desc": {
+          "source": "Contact first name",
+          "message": "Křestní jméno kontaktu"
+        },
+        "app.QXBvbGxv.action.dXBkYXRlLWNvbnRhY3Q.option.b3JnYW5pemF0aW9uX25hbWU.display_name": {
+          "source": "Organization Name",
+          "message": "Název organizace"
+        },
+        "app.QXBvbGxv.action.dXBkYXRlLWNvbnRhY3Q.option.b3JnYW5pemF0aW9uX25hbWU.short_desc": {
+          "source": "The company name",
+          "message": "Název společnosti"
+        },
+        "app.QXBvbGxv.action.dXBkYXRlLWNvbnRhY3Q.option.b3duZXJfaWQ.display_name": {
+          "source": "Owner ID",
+          "message": "ID vlastníka"
+        },
+        "app.QXBvbGxv.action.dXBkYXRlLWNvbnRhY3Q.option.b3duZXJfaWQ.short_desc": {
+          "source": "Owner user ID",
+          "message": "Uživatelské ID vlastníka"
+        },
+        "app.QXBvbGxv.action.dXBkYXRlLWNvbnRhY3Q.option.bGFzdF9uYW1l.display_name": {
+          "source": "Last Name",
+          "message": "Příjmení"
+        },
+        "app.QXBvbGxv.action.dXBkYXRlLWNvbnRhY3Q.option.bGFzdF9uYW1l.short_desc": {
+          "source": "Contact last name",
+          "message": "Příjmení kontaktu"
+        },
+        "app.QXBvbGxv.action.dXBkYXRlLWNvbnRhY3Q.option.cGhvbmVfbnVtYmVy.display_name": {
+          "source": "Phone Number",
+          "message": "Telefonní číslo"
+        },
+        "app.QXBvbGxv.action.dXBkYXRlLWNvbnRhY3Q.option.cGhvbmVfbnVtYmVy.short_desc": {
+          "source": "Contact phone number",
+          "message": "Telefonní číslo kontaktu"
+        },
+        "app.QXBvbGxv.action.dXBkYXRlLWNvbnRhY3Q.option.cHJlc2VudF9yYXdfYWRkcmVzcw.display_name": {
+          "source": "Present Address",
+          "message": "Současná adresa"
+        },
+        "app.QXBvbGxv.action.dXBkYXRlLWNvbnRhY3Q.option.cHJlc2VudF9yYXdfYWRkcmVzcw.short_desc": {
+          "source": "Contact current location",
+          "message": "Současná lokalita kontaktu"
+        },
+        "app.QXBvbGxv.action.dXBkYXRlLWNvbnRhY3Q.option.dGl0bGU.display_name": {
+          "source": "Job Title",
+          "message": "Pracovní pozice"
+        },
+        "app.QXBvbGxv.action.dXBkYXRlLWNvbnRhY3Q.option.dGl0bGU.short_desc": {
+          "source": "Contact job title",
+          "message": "Pracovní pozice kontaktu"
+        },
+        "app.QXBvbGxv.action.dXBkYXRlLWNvbnRhY3Q.short_desc": {
+          "source": "Update an existing contact",
+          "message": "Aktualizovat stávající kontakt"
+        },
+        "app.QXBvbGxv.action.dXBkYXRlLWRlYWw.desc": {
+          "source": "Update an existing deal (opportunity) in Apollo",
+          "message": "Aktualizovat existující obchod (příležitost) v Apollu"
+        },
+        "app.QXBvbGxv.action.dXBkYXRlLWRlYWw.display_name": {
+          "source": "Update a Deal",
+          "message": "Aktualizovat obchod"
+        },
+        "app.QXBvbGxv.action.dXBkYXRlLWRlYWw.option.Y2xvc2VkX2RhdGU.display_name": {
+          "source": "Close Date",
+          "message": "Datum uzavření"
+        },
+        "app.QXBvbGxv.action.dXBkYXRlLWRlYWw.option.Y2xvc2VkX2RhdGU.short_desc": {
+          "source": "Expected close date",
+          "message": "Očekávané datum uzavření"
+        },
+        "app.QXBvbGxv.action.dXBkYXRlLWRlYWw.option.YW1vdW50.display_name": {
+          "source": "Amount",
+          "message": "Množství"
+        },
+        "app.QXBvbGxv.action.dXBkYXRlLWRlYWw.option.YW1vdW50.short_desc": {
+          "source": "Deal amount",
+          "message": "Částka obchodu"
+        },
+        "app.QXBvbGxv.action.dXBkYXRlLWRlYWw.option.ZGVhbF9pZA.display_name": {
+          "source": "Deal ID",
+          "message": "ID obchodu"
+        },
+        "app.QXBvbGxv.action.dXBkYXRlLWRlYWw.option.ZGVhbF9pZA.short_desc": {
+          "source": "The deal to update",
+          "message": "Obchod k aktualizaci"
+        },
+        "app.QXBvbGxv.action.dXBkYXRlLWRlYWw.option.b3duZXJfaWQ.display_name": {
+          "source": "Owner ID",
+          "message": "ID vlastníka"
+        },
+        "app.QXBvbGxv.action.dXBkYXRlLWRlYWw.option.b3duZXJfaWQ.short_desc": {
+          "source": "Owner user ID",
+          "message": "Uživatelské ID vlastníka"
+        },
+        "app.QXBvbGxv.action.dXBkYXRlLWRlYWw.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "Název"
+        },
+        "app.QXBvbGxv.action.dXBkYXRlLWRlYWw.option.bmFtZQ.short_desc": {
+          "source": "Deal name",
+          "message": "Název obchodu"
+        },
+        "app.QXBvbGxv.action.dXBkYXRlLWRlYWw.option.c3RhZ2VfbmFtZQ.display_name": {
+          "source": "Stage",
+          "message": "Fáze"
+        },
+        "app.QXBvbGxv.action.dXBkYXRlLWRlYWw.option.c3RhZ2VfbmFtZQ.short_desc": {
+          "source": "Deal stage name",
+          "message": "Název fáze obchodu"
+        },
+        "app.QXBvbGxv.action.dXBkYXRlLWRlYWw.option.c3RhdHVz.display_name": {
+          "source": "Status",
+          "message": "Stav"
+        },
+        "app.QXBvbGxv.action.dXBkYXRlLWRlYWw.option.c3RhdHVz.short_desc": {
+          "source": "Deal status",
+          "message": "Stav obchodu"
+        },
+        "app.QXBvbGxv.action.dXBkYXRlLWRlYWw.short_desc": {
+          "source": "Update an existing deal",
+          "message": "Aktualizovat stávající obchodní případ"
+        },
+        "app.QXBvbGxv.desc": {
+          "source": "Apollo is a B2B sales intelligence and engagement platform providing access to 210M+ contacts and 35M+ companies for prospecting, enrichment, and deal management.\n\nThis integration supports CRUD operations on contacts, accounts, and deals, plus people and organization enrichment and search.",
+          "message": "Apollo je B2B platforma pro prodejní informace a zapojení, která poskytuje přístup k více než 210 milionům kontaktů a 35 milionům společností pro vyhledávání potenciálních zákazníků, obohacování dat a správu obchodů.\n\nTato integrace podporuje operace CRUD nad kontakty, účty a obchody, a navíc obohacování dat a vyhledávání lidí a organizací."
+        },
+        "app.QXBvbGxv.display_name": {
+          "source": "Apollo",
+          "message": "Apollo"
+        },
+        "app.QXBvbGxv.short_desc": {
+          "source": "Apollo B2B sales intelligence and engagement platform",
+          "message": "B2B platforma pro prodejní informace a zapojení Apollo"
+        }
+      }
+    }
+  }
+}

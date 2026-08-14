@@ -1,0 +1,2577 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "ja": {
+      "messages": {
+        "app.Qml0YnVja2V0.action.Y3JlYXRl.desc": {
+          "source": "Creates new records in the given table",
+          "message": "指定されたテーブルに新しいレコードを作成します"
+        },
+        "app.Qml0YnVja2V0.action.Y3JlYXRl.display_name": {
+          "source": "Create Records",
+          "message": "レコードを作成"
+        },
+        "app.Qml0YnVja2V0.action.Y3JlYXRl.option.dGFibGU.desc": {
+          "source": "The table to work with: `repositories`, `pullrequests`, `pullrequest-comments`, `commit-comments`, `workspaces`, `workspace-members`, `commits` or `branches`",
+          "message": "操作対象のテーブル: `repositories`、`pullrequests`、`pullrequest-comments`、`commit-comments`、`workspaces`、`workspace-members`、`commits`、または`branches`"
+        },
+        "app.Qml0YnVja2V0.action.Y3JlYXRl.option.dGFibGU.display_name": {
+          "source": "Table",
+          "message": "表"
+        },
+        "app.Qml0YnVja2V0.action.Y3JlYXRl.option.dGFibGU.short_desc": {
+          "source": "The name of the table to work with",
+          "message": "操作対象のテーブル名"
+        },
+        "app.Qml0YnVja2V0.action.Y3JlYXRl.short_desc": {
+          "source": "Create new records in the given table",
+          "message": "指定されたテーブルに新しいレコードを作成"
+        },
+        "app.Qml0YnVja2V0.action.Z2V0RGVwbG95bWVudHNGb3JSZXBvc2l0b3J5.desc": {
+          "source": "Lists deployments, newest first, with the environment each went to, the state it reached and the commit it deployed.",
+          "message": "デプロイを新しい順に一覧表示します。各デプロイの対象環境、到達ステータス、デプロイされたコミットが含まれます。"
+        },
+        "app.Qml0YnVja2V0.action.Z2V0RGVwbG95bWVudHNGb3JSZXBvc2l0b3J5.display_name": {
+          "source": "List Deployments",
+          "message": "デプロイの一覧表示"
+        },
+        "app.Qml0YnVja2V0.action.Z2V0RGVwbG95bWVudHNGb3JSZXBvc2l0b3J5.option.cGFnZQ.desc": {
+          "source": "Which page of results to return, starting at 1. Bitbucket documents this for every collection but declares it on almost none of them.",
+          "message": "返す結果のページ番号（1から開始）。Bitbucketはすべてのコレクションでこれをドキュメントに記載していますが、ほぼすべてで宣言していません。"
+        },
+        "app.Qml0YnVja2V0.action.Z2V0RGVwbG95bWVudHNGb3JSZXBvc2l0b3J5.option.cGFnZQ.display_name": {
+          "source": "Page",
+          "message": "ページ"
+        },
+        "app.Qml0YnVja2V0.action.Z2V0RGVwbG95bWVudHNGb3JSZXBvc2l0b3J5.option.cGFnZQ.short_desc": {
+          "source": "Which page of results to return, starting at 1",
+          "message": "返す結果のページ番号（1から開始）"
+        },
+        "app.Qml0YnVja2V0.action.Z2V0RGVwbG95bWVudHNGb3JSZXBvc2l0b3J5.option.cGFnZWxlbg.desc": {
+          "source": "How many records to return in one request, up to Bitbucket's maximum of `100`.\n\n`next` in the response is the URL of the following page; page on its presence rather than on `size`, which Bitbucket does not report for every collection.",
+          "message": "1回のリクエストで返すレコード数（Bitbucketの最大値`100`まで）。\n\nレスポンス内の`next`は次のページのURLです。Bitbucketがすべてのコレクションで報告するわけではない`size`ではなく、その存在に基づいてページネーションしてください。"
+        },
+        "app.Qml0YnVja2V0.action.Z2V0RGVwbG95bWVudHNGb3JSZXBvc2l0b3J5.option.cGFnZWxlbg.display_name": {
+          "source": "Page Length",
+          "message": "ページ長"
+        },
+        "app.Qml0YnVja2V0.action.Z2V0RGVwbG95bWVudHNGb3JSZXBvc2l0b3J5.option.cGFnZWxlbg.short_desc": {
+          "source": "How many records to return, up to 100",
+          "message": "返すレコード数（最大100件）"
+        },
+        "app.Qml0YnVja2V0.action.Z2V0RGVwbG95bWVudHNGb3JSZXBvc2l0b3J5.option.cmVwb19zbHVn.desc": {
+          "source": "The repository to work on, given as its slug or as its UUID in braces.\n\nEverything else scoped by a repository - commits, branches, pull requests - is listed from this repository, so changing it re-reads them.",
+          "message": "操作対象のリポジトリ（スラッグまたは中括弧付きのUUIDで指定）。\n\nコミット、ブランチ、プルリクエストなど、リポジトリをスコープとするその他のすべての項目はこのリポジトリから一覧表示されるため、変更すると再読み込みされます。"
+        },
+        "app.Qml0YnVja2V0.action.Z2V0RGVwbG95bWVudHNGb3JSZXBvc2l0b3J5.option.cmVwb19zbHVn.display_name": {
+          "source": "Repository",
+          "message": "リポジトリ"
+        },
+        "app.Qml0YnVja2V0.action.Z2V0RGVwbG95bWVudHNGb3JSZXBvc2l0b3J5.option.cmVwb19zbHVn.short_desc": {
+          "source": "The repository to work on",
+          "message": "操作対象のリポジトリ"
+        },
+        "app.Qml0YnVja2V0.action.Z2V0RGVwbG95bWVudHNGb3JSZXBvc2l0b3J5.option.d29ya3NwYWNl.desc": {
+          "source": "The workspace to work in, given as its slug or as its UUID in braces.\n\nEverything else scoped by a workspace - repositories, members - is listed from this workspace, so changing it re-reads them.",
+          "message": "操作対象のワークスペース（スラッグまたは中括弧付きのUUIDで指定）。\n\nリポジトリ、メンバーなど、ワークスペースをスコープとするその他のすべての項目はこのワークスペースから一覧表示されるため、変更すると再読み込みされます。"
+        },
+        "app.Qml0YnVja2V0.action.Z2V0RGVwbG95bWVudHNGb3JSZXBvc2l0b3J5.option.d29ya3NwYWNl.display_name": {
+          "source": "Workspace",
+          "message": "ワークスペース"
+        },
+        "app.Qml0YnVja2V0.action.Z2V0RGVwbG95bWVudHNGb3JSZXBvc2l0b3J5.option.d29ya3NwYWNl.short_desc": {
+          "source": "The workspace to work in",
+          "message": "操作対象のワークスペース"
+        },
+        "app.Qml0YnVja2V0.action.Z2V0RGVwbG95bWVudHNGb3JSZXBvc2l0b3J5.short_desc": {
+          "source": "List a repository's deployments",
+          "message": "リポジトリのデプロイを一覧表示"
+        },
+        "app.Qml0YnVja2V0.action.Z2V0UmVwb3J0c0ZvckNvbW1pdA.desc": {
+          "source": "Lists the Code Insights reports attached to a commit - the results a linter, a test run or a security scan posted against it.",
+          "message": "コミットに添付されたCode Insightsレポート（リンター、テスト実行、セキュリティスキャンから投稿された結果）を一覧表示します。"
+        },
+        "app.Qml0YnVja2V0.action.Z2V0UmVwb3J0c0ZvckNvbW1pdA.display_name": {
+          "source": "List Commit Reports",
+          "message": "コミットレポートの一覧表示"
+        },
+        "app.Qml0YnVja2V0.action.Z2V0UmVwb3J0c0ZvckNvbW1pdA.option.Y29tbWl0.desc": {
+          "source": "The commit's SHA1.",
+          "message": "コミットのSHA1。"
+        },
+        "app.Qml0YnVja2V0.action.Z2V0UmVwb3J0c0ZvckNvbW1pdA.option.Y29tbWl0.display_name": {
+          "source": "Commit",
+          "message": "コミット"
+        },
+        "app.Qml0YnVja2V0.action.Z2V0UmVwb3J0c0ZvckNvbW1pdA.option.Y29tbWl0.short_desc": {
+          "source": "A commit hash, a branch name or a tag",
+          "message": "コミットハッシュ、ブランチ名、またはタグ"
+        },
+        "app.Qml0YnVja2V0.action.Z2V0UmVwb3J0c0ZvckNvbW1pdA.option.cGFnZQ.desc": {
+          "source": "Which page of results to return, starting at 1. Bitbucket documents this for every collection but declares it on almost none of them.",
+          "message": "返す結果のページ番号（1から開始）。Bitbucketはすべてのコレクションでこれをドキュメントに記載していますが、ほぼすべてで宣言していません。"
+        },
+        "app.Qml0YnVja2V0.action.Z2V0UmVwb3J0c0ZvckNvbW1pdA.option.cGFnZQ.display_name": {
+          "source": "Page",
+          "message": "ページ"
+        },
+        "app.Qml0YnVja2V0.action.Z2V0UmVwb3J0c0ZvckNvbW1pdA.option.cGFnZQ.short_desc": {
+          "source": "Which page of results to return, starting at 1",
+          "message": "返す結果のページ番号（1から開始）"
+        },
+        "app.Qml0YnVja2V0.action.Z2V0UmVwb3J0c0ZvckNvbW1pdA.option.cGFnZWxlbg.desc": {
+          "source": "How many records to return in one request, up to Bitbucket's maximum of `100`.\n\n`next` in the response is the URL of the following page; page on its presence rather than on `size`, which Bitbucket does not report for every collection.",
+          "message": "1回のリクエストで返すレコード数（Bitbucketの最大値`100`まで）。\n\nレスポンス内の`next`は次のページのURLです。Bitbucketがすべてのコレクションで報告するわけではない`size`ではなく、その存在に基づいてページネーションしてください。"
+        },
+        "app.Qml0YnVja2V0.action.Z2V0UmVwb3J0c0ZvckNvbW1pdA.option.cGFnZWxlbg.display_name": {
+          "source": "Page Length",
+          "message": "ページ長"
+        },
+        "app.Qml0YnVja2V0.action.Z2V0UmVwb3J0c0ZvckNvbW1pdA.option.cGFnZWxlbg.short_desc": {
+          "source": "How many records to return, up to 100",
+          "message": "返すレコード数（最大100件）"
+        },
+        "app.Qml0YnVja2V0.action.Z2V0UmVwb3J0c0ZvckNvbW1pdA.option.cmVwb19zbHVn.desc": {
+          "source": "The repository to work on, given as its slug or as its UUID in braces.\n\nEverything else scoped by a repository - commits, branches, pull requests - is listed from this repository, so changing it re-reads them.",
+          "message": "操作対象のリポジトリ（スラッグまたは中括弧付きのUUIDで指定）。\n\nコミット、ブランチ、プルリクエストなど、リポジトリをスコープとするその他のすべての項目はこのリポジトリから一覧表示されるため、変更すると再読み込みされます。"
+        },
+        "app.Qml0YnVja2V0.action.Z2V0UmVwb3J0c0ZvckNvbW1pdA.option.cmVwb19zbHVn.display_name": {
+          "source": "Repository",
+          "message": "リポジトリ"
+        },
+        "app.Qml0YnVja2V0.action.Z2V0UmVwb3J0c0ZvckNvbW1pdA.option.cmVwb19zbHVn.short_desc": {
+          "source": "The repository to work on",
+          "message": "操作対象のリポジトリ"
+        },
+        "app.Qml0YnVja2V0.action.Z2V0UmVwb3J0c0ZvckNvbW1pdA.option.d29ya3NwYWNl.desc": {
+          "source": "The workspace to work in, given as its slug or as its UUID in braces.\n\nEverything else scoped by a workspace - repositories, members - is listed from this workspace, so changing it re-reads them.",
+          "message": "操作対象のワークスペース（スラッグまたは中括弧付きのUUIDで指定）。\n\nリポジトリ、メンバーなど、ワークスペースをスコープとするその他のすべての項目はこのワークスペースから一覧表示されるため、変更すると再読み込みされます。"
+        },
+        "app.Qml0YnVja2V0.action.Z2V0UmVwb3J0c0ZvckNvbW1pdA.option.d29ya3NwYWNl.display_name": {
+          "source": "Workspace",
+          "message": "ワークスペース"
+        },
+        "app.Qml0YnVja2V0.action.Z2V0UmVwb3J0c0ZvckNvbW1pdA.option.d29ya3NwYWNl.short_desc": {
+          "source": "The workspace to work in",
+          "message": "操作対象のワークスペース"
+        },
+        "app.Qml0YnVja2V0.action.Z2V0UmVwb3J0c0ZvckNvbW1pdA.short_desc": {
+          "source": "List the code insights reports on a commit",
+          "message": "コミットのコードインサイトレポートを一覧表示"
+        },
+        "app.Qml0YnVja2V0.action.ZGVsZXRl.desc": {
+          "source": "Deletes every record in the given table matching the search criteria",
+          "message": "検索条件に一致する指定テーブルのすべてのレコードを削除します"
+        },
+        "app.Qml0YnVja2V0.action.ZGVsZXRl.display_name": {
+          "source": "Delete Records",
+          "message": "レコードを削除"
+        },
+        "app.Qml0YnVja2V0.action.ZGVsZXRl.option.dGFibGU.desc": {
+          "source": "The table to work with: `repositories`, `pullrequests`, `pullrequest-comments`, `commit-comments`, `workspaces`, `workspace-members`, `commits` or `branches`",
+          "message": "操作対象のテーブル: `repositories`、`pullrequests`、`pullrequest-comments`、`commit-comments`、`workspaces`、`workspace-members`、`commits`、または`branches`"
+        },
+        "app.Qml0YnVja2V0.action.ZGVsZXRl.option.dGFibGU.display_name": {
+          "source": "Table",
+          "message": "表"
+        },
+        "app.Qml0YnVja2V0.action.ZGVsZXRl.option.dGFibGU.short_desc": {
+          "source": "The name of the table to work with",
+          "message": "操作対象のテーブル名"
+        },
+        "app.Qml0YnVja2V0.action.ZGVsZXRl.short_desc": {
+          "source": "Delete the records matching the search criteria",
+          "message": "検索条件に一致するレコードを削除"
+        },
+        "app.Qml0YnVja2V0.action.bWFrZS1hcGktY2FsbA.desc": {
+          "source": "Make a custom HTTP / REST API call to **Bitbucket** using the configured connection's authentication.\n\nSpecify the HTTP method, the URI path (relative to the connection's API base URL), optional query parameters, headers, and request body. The response is returned as a hash containing the status code, response headers, and response body.\n\nUse this action for endpoints that are not yet exposed as first-class actions on this app.",
+          "message": "設定された接続の認証を使用して**Bitbucket**へのカスタムHTTP / REST API呼び出しを実行します。\n\nHTTPメソッド、URIパス（接続のAPIベースURLに対する相対パス）、任意のクエリパラメータ、ヘッダー、リクエスト本文を指定します。レスポンスはステータスコード、レスポンスヘッダー、レスポンス本文を含むハッシュとして返されます。\n\nこのアプリでファーストクラスのアクションとしてまだ公開されていないエンドポイントにはこのアクションを使用してください。"
+        },
+        "app.Qml0YnVja2V0.action.bWFrZS1hcGktY2FsbA.display_name": {
+          "source": "Make an API call",
+          "message": "API コールを実行"
+        },
+        "app.Qml0YnVja2V0.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.desc": {
+          "source": "The request body. The effective type depends on `body_type`: JSON/form/YAML expect a hash, XML/text expect a string, multipart expects a file structure, binary expects raw bytes.",
+          "message": "リクエストボディ。有効な型は`body_type`に依存します。JSON/form/YAMLはハッシュを期待し、XML/textは文字列を期待し、multipartはファイル構造を期待し、binaryは生バイトを期待します。"
+        },
+        "app.Qml0YnVja2V0.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.display_name": {
+          "source": "Body",
+          "message": "ボディ"
+        },
+        "app.Qml0YnVja2V0.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.short_desc": {
+          "source": "The request body",
+          "message": "リクエストボディ"
+        },
+        "app.Qml0YnVja2V0.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.desc": {
+          "source": "Upload a file using `multipart/form-data`. The body must be a @ref DataProvider::FileDataType \"FileDataType\" structure (filename + content + mime_type). The framework builds the multipart envelope and sets the boundary header.",
+          "message": "`multipart/form-data`を使用してファイルをアップロードします。ボディは@ref DataProvider::FileDataType \"FileDataType\"構造（filename + content + mime_type）である必要があります。フレームワークがmultipartエンベロープを構築し、boundaryヘッダーを設定します。"
+        },
+        "app.Qml0YnVja2V0.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.display_name": {
+          "source": "Multipart Form",
+          "message": "マルチパートフォーム"
+        },
+        "app.Qml0YnVja2V0.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.short_desc": {
+          "source": "Upload a file using multipart/form-data",
+          "message": "multipart/form-dataを使用してファイルをアップロード"
+        },
+        "app.Qml0YnVja2V0.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.desc": {
+          "source": "Pass the body to the REST client unchanged; the client decides serialization based on its configured `data` option and the value type",
+          "message": "ボディを変更せずにRESTクライアントに渡します。クライアントは設定された`data`オプションと値の型に基づいてシリアライズを決定します"
+        },
+        "app.Qml0YnVja2V0.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.display_name": {
+          "source": "Auto",
+          "message": "自動"
+        },
+        "app.Qml0YnVja2V0.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.short_desc": {
+          "source": "Pass-through; use connection serialization and let the REST client decide",
+          "message": "パススルー。接続のシリアライズを使用し、RESTクライアントに決定させます"
+        },
+        "app.Qml0YnVja2V0.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.desc": {
+          "source": "Send the body as raw bytes. The body must be a binary value. Sets `Content-Type: application/octet-stream` unless overridden by `hdr`.",
+          "message": "ボディを生バイトとして送信します。ボディはバイナリ値である必要があります。`hdr`によってオーバーライドされない限り、`Content-Type: application/octet-stream`を設定します。"
+        },
+        "app.Qml0YnVja2V0.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.display_name": {
+          "source": "Raw Binary",
+          "message": "生バイナリ"
+        },
+        "app.Qml0YnVja2V0.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.short_desc": {
+          "source": "Send body as raw bytes",
+          "message": "ボディを生バイトとして送信"
+        },
+        "app.Qml0YnVja2V0.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.desc": {
+          "source": "Serialize a hash of form fields as `application/x-www-form-urlencoded`. The body must be a hash whose values are scalars (strings/numbers/booleans).",
+          "message": "フォームフィールドのハッシュを`application/x-www-form-urlencoded`としてシリアライズします。ボディは値がスカラー（文字列/数値/ブール値）のハッシュである必要があります。"
+        },
+        "app.Qml0YnVja2V0.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.display_name": {
+          "source": "Form (URL-encoded)",
+          "message": "フォーム (URLエンコード)"
+        },
+        "app.Qml0YnVja2V0.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.short_desc": {
+          "source": "Serialize body as application/x-www-form-urlencoded form fields",
+          "message": "ボディをapplication/x-www-form-urlencodedフォームフィールドとしてシリアライズ"
+        },
+        "app.Qml0YnVja2V0.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.desc": {
+          "source": "Serialize the body as JSON; sets `Content-Type: application/json`. The body should be a hash, list, or scalar value.",
+          "message": "ボディをJSONとしてシリアライズします。`Content-Type: application/json`を設定します。ボディはハッシュ、リスト、またはスカラー値である必要があります。"
+        },
+        "app.Qml0YnVja2V0.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.display_name": {
+          "source": "JSON",
+          "message": "JSON"
+        },
+        "app.Qml0YnVja2V0.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.short_desc": {
+          "source": "Serialize body as JSON",
+          "message": "ボディをJSONとしてシリアライズ"
+        },
+        "app.Qml0YnVja2V0.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.desc": {
+          "source": "Send the body as plain text. The body must be a string. Sets `Content-Type: text/plain`.",
+          "message": "ボディをプレーンテキストとして送信します。ボディは文字列である必要があります。`Content-Type: text/plain`を設定します。"
+        },
+        "app.Qml0YnVja2V0.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.display_name": {
+          "source": "Plain Text",
+          "message": "プレーンテキスト"
+        },
+        "app.Qml0YnVja2V0.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.short_desc": {
+          "source": "Send body as text/plain",
+          "message": "ボディをtext/plainとして送信"
+        },
+        "app.Qml0YnVja2V0.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.desc": {
+          "source": "Send the body as XML. If the body is a hash it is serialized to XML; if it is a string it is sent verbatim. Sets `Content-Type: application/xml`.",
+          "message": "ボディをXMLとして送信します。ボディがハッシュの場合はXMLにシリアライズされ、文字列の場合はそのまま送信されます。`Content-Type: application/xml`を設定します。"
+        },
+        "app.Qml0YnVja2V0.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.display_name": {
+          "source": "XML",
+          "message": "XML"
+        },
+        "app.Qml0YnVja2V0.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.short_desc": {
+          "source": "Send body as XML",
+          "message": "ボディをXMLとして送信"
+        },
+        "app.Qml0YnVja2V0.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.desc": {
+          "source": "Send the body as YAML. If the body is a hash it is serialized to YAML; if it is a string it is sent verbatim. Sets `Content-Type: application/x-yaml`.",
+          "message": "ボディをYAMLとして送信します。ボディがハッシュの場合はYAMLにシリアライズされ、文字列の場合はそのまま送信されます。`Content-Type: application/x-yaml`を設定します。"
+        },
+        "app.Qml0YnVja2V0.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.display_name": {
+          "source": "YAML",
+          "message": "YAML"
+        },
+        "app.Qml0YnVja2V0.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.short_desc": {
+          "source": "Send body as YAML",
+          "message": "ボディをYAMLとして送信"
+        },
+        "app.Qml0YnVja2V0.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.desc": {
+          "source": "Selects the body serialization mode and the corresponding `Content-Type` header. Changing this field reshapes the `body` editor - selecting JSON exposes a JSON editor, selecting Multipart Form exposes a file picker, and so on.",
+          "message": "ボディのシリアライズモードと対応する`Content-Type`ヘッダーを選択します。このフィールドを変更すると`body`エディターの形状が変わります。JSONを選択するとJSONエディターが表示され、マルチパートフォームを選択するとファイルピッカーが表示される、などです。"
+        },
+        "app.Qml0YnVja2V0.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.display_name": {
+          "source": "Body Type",
+          "message": "ボディタイプ"
+        },
+        "app.Qml0YnVja2V0.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.short_desc": {
+          "source": "How the body is serialized and what Content-Type is sent",
+          "message": "ボディのシリアライズ方法および送信されるContent-Type"
+        },
+        "app.Qml0YnVja2V0.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.desc": {
+          "source": "If `True`, non-2xx HTTP responses return as the normal response hash (with the actual status code) instead of raising `REST-RESPONSE-ERROR`. Useful for handling 4xx/5xx as data - e.g. checking whether a resource exists. Overrides the connection's `error_passthru` setting for this call only.",
+          "message": "`True`の場合、2xx以外のHTTPレスポンスは`REST-RESPONSE-ERROR`を発生させる代わりに（実際のステータスコードを含む）通常のレスポンスハッシュとして返されます。リソースが存在するかどうかの確認など、4xx/5xxをデータとして処理する場合に便利です。この呼び出しに限り、接続の`error_passthru`設定をオーバーライドします。"
+        },
+        "app.Qml0YnVja2V0.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.display_name": {
+          "source": "Return Errors as Data",
+          "message": "エラーをデータとして返す"
+        },
+        "app.Qml0YnVja2V0.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.short_desc": {
+          "source": "Return non-2xx responses normally instead of throwing",
+          "message": "例外をスローする代わりに2xx以外のレスポンスを通常通り返す"
+        },
+        "app.Qml0YnVja2V0.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.desc": {
+          "source": "Optional list of HTTP status codes treated as success. If set and the response status is not in this list, the action throws `REST-STATUS-ERROR`. When unset, the REST client's default behavior applies (typically: 2xx is success, non-2xx throws).",
+          "message": "成功として扱われるHTTPステータスコードのオプションリスト。設定されていてレスポンスステータスがこのリストに含まれない場合、アクションは`REST-STATUS-ERROR`をスローします。未設定の場合、RESTクライアントのデフォルト動作が適用されます（通常：2xxは成功、2xx以外はスロー）。"
+        },
+        "app.Qml0YnVja2V0.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.display_name": {
+          "source": "Expected Status Codes",
+          "message": "期待されるステータスコード"
+        },
+        "app.Qml0YnVja2V0.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.short_desc": {
+          "source": "Response status codes treated as success",
+          "message": "成功として扱われるレスポンスステータスコード"
+        },
+        "app.Qml0YnVja2V0.action.bWFrZS1hcGktY2FsbA.option.aGRy.desc": {
+          "source": "Hash of custom headers added to the request. These override any default headers set by `body_type` (e.g. supplying `Content-Type` here wins over the body-type default).",
+          "message": "リクエストに追加されるカスタムヘッダーのハッシュ。これらは`body_type`によって設定されたデフォルトヘッダーをオーバーライドします（例：ここで`Content-Type`を指定すると、ボディタイプのデフォルトより優先されます）。"
+        },
+        "app.Qml0YnVja2V0.action.bWFrZS1hcGktY2FsbA.option.aGRy.display_name": {
+          "source": "Custom Headers",
+          "message": "カスタムヘッダー"
+        },
+        "app.Qml0YnVja2V0.action.bWFrZS1hcGktY2FsbA.option.aGRy.short_desc": {
+          "source": "Extra request headers",
+          "message": "追加のリクエストヘッダー"
+        },
+        "app.Qml0YnVja2V0.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.desc": {
+          "source": "If `True`, the response hash includes a `debug` sub-hash containing the request method/URL/headers (with sensitive values redacted), request and response sizes, and round-trip duration. Useful when investigating slow or failing calls. Off by default to keep responses lean.",
+          "message": "`True`の場合、レスポンスハッシュにはリクエストメソッド/URL/ヘッダー（機密値は伏字処理済み）、リクエストとレスポンスのサイズ、およびラウンドトリップ時間を含む`debug`サブハッシュが含まれます。遅い呼び出しや失敗した呼び出しを調査する際に便利です。レスポンスを軽量に保つため、デフォルトではオフになっています。"
+        },
+        "app.Qml0YnVja2V0.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.display_name": {
+          "source": "Include Debug Info",
+          "message": "デバッグ情報を含める"
+        },
+        "app.Qml0YnVja2V0.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.short_desc": {
+          "source": "Include request/timing/size debug info in the response",
+          "message": "レスポンスにリクエスト/タイミング/サイズのデバッグ情報を含める"
+        },
+        "app.Qml0YnVja2V0.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.desc": {
+          "source": "HTTP `OPTIONS`",
+          "message": "HTTP `OPTIONS`"
+        },
+        "app.Qml0YnVja2V0.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.display_name": {
+          "source": "OPTIONS",
+          "message": "OPTIONS"
+        },
+        "app.Qml0YnVja2V0.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.short_desc": {
+          "source": "HTTP OPTIONS",
+          "message": "HTTP OPTIONS"
+        },
+        "app.Qml0YnVja2V0.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.desc": {
+          "source": "HTTP `DELETE`",
+          "message": "HTTP `DELETE`"
+        },
+        "app.Qml0YnVja2V0.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.display_name": {
+          "source": "DELETE",
+          "message": "DELETE"
+        },
+        "app.Qml0YnVja2V0.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.short_desc": {
+          "source": "HTTP DELETE",
+          "message": "HTTP DELETE"
+        },
+        "app.Qml0YnVja2V0.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.desc": {
+          "source": "HTTP `GET`",
+          "message": "HTTP `GET`"
+        },
+        "app.Qml0YnVja2V0.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.display_name": {
+          "source": "GET",
+          "message": "GET"
+        },
+        "app.Qml0YnVja2V0.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.short_desc": {
+          "source": "HTTP GET",
+          "message": "HTTP GET"
+        },
+        "app.Qml0YnVja2V0.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.desc": {
+          "source": "HTTP `HEAD`",
+          "message": "HTTP `HEAD`"
+        },
+        "app.Qml0YnVja2V0.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.display_name": {
+          "source": "HEAD",
+          "message": "HEAD"
+        },
+        "app.Qml0YnVja2V0.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.short_desc": {
+          "source": "HTTP HEAD",
+          "message": "HTTP HEAD"
+        },
+        "app.Qml0YnVja2V0.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.desc": {
+          "source": "HTTP `PATCH`",
+          "message": "HTTP `PATCH`"
+        },
+        "app.Qml0YnVja2V0.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.display_name": {
+          "source": "PATCH",
+          "message": "PATCH"
+        },
+        "app.Qml0YnVja2V0.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.short_desc": {
+          "source": "HTTP PATCH",
+          "message": "HTTP PATCH"
+        },
+        "app.Qml0YnVja2V0.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.desc": {
+          "source": "HTTP `POST`",
+          "message": "HTTP `POST`"
+        },
+        "app.Qml0YnVja2V0.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.display_name": {
+          "source": "POST",
+          "message": "POST"
+        },
+        "app.Qml0YnVja2V0.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.short_desc": {
+          "source": "HTTP POST",
+          "message": "HTTP POST"
+        },
+        "app.Qml0YnVja2V0.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.desc": {
+          "source": "HTTP `PUT`",
+          "message": "HTTP `PUT`"
+        },
+        "app.Qml0YnVja2V0.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.display_name": {
+          "source": "PUT",
+          "message": "PUT"
+        },
+        "app.Qml0YnVja2V0.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.short_desc": {
+          "source": "HTTP PUT",
+          "message": "HTTP PUT"
+        },
+        "app.Qml0YnVja2V0.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.desc": {
+          "source": "HTTP `TRACE`",
+          "message": "HTTP `TRACE`"
+        },
+        "app.Qml0YnVja2V0.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.display_name": {
+          "source": "TRACE",
+          "message": "TRACE"
+        },
+        "app.Qml0YnVja2V0.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.short_desc": {
+          "source": "HTTP TRACE",
+          "message": "HTTP TRACE"
+        },
+        "app.Qml0YnVja2V0.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "リクエストに使用するHTTPメソッド"
+        },
+        "app.Qml0YnVja2V0.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.display_name": {
+          "source": "HTTP Method",
+          "message": "HTTPメソッド"
+        },
+        "app.Qml0YnVja2V0.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.short_desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "リクエストに使用するHTTPメソッド"
+        },
+        "app.Qml0YnVja2V0.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain `{name}` placeholders that are replaced from `path_vars`. Example: `/users/{id}/comments`.",
+          "message": "接続のAPIベースURLに対する相対URIパス。`path_vars`から置換される`{name}`プレースホルダーを含めることができます。例: `/users/{id}/comments`。"
+        },
+        "app.Qml0YnVja2V0.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.display_name": {
+          "source": "URI Path",
+          "message": "URIパス"
+        },
+        "app.Qml0YnVja2V0.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.short_desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain '{name}' placeholders that are replaced from 'path_vars'. Example: '/users/{id}/comments'",
+          "message": "接続のAPIベースURLに対する相対URIパス。'path_vars' から置換される '{name}' プレースホルダーを含めることができます。例: '/users/{id}/comments'"
+        },
+        "app.Qml0YnVja2V0.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.desc": {
+          "source": "Hash of values substituted into `{name}` placeholders in the URI path. Example: with `path = /users/{id}` and `path_vars = {id: 123}` the framework sends `/users/123`. Values are URL-encoded.",
+          "message": "URIパス内の `{name}` プレースホルダーに置換される値のハッシュ。例: `path = /users/{id}` と `path_vars = {id: 123}` を指定すると、フレームワークは `/users/123` を送信します。値はURLエンコードされます。"
+        },
+        "app.Qml0YnVja2V0.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.display_name": {
+          "source": "Path Variables",
+          "message": "パス変数"
+        },
+        "app.Qml0YnVja2V0.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.short_desc": {
+          "source": "Values for {name} placeholders in path",
+          "message": "パス内の {name} プレースホルダーの値"
+        },
+        "app.Qml0YnVja2V0.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.desc": {
+          "source": "Hash of query string parameters to append to the URI path. Values are URL-encoded; list values are joined with `,`.",
+          "message": "URIパスに追加するクエリ文字列パラメータのハッシュ。値はURLエンコードされます。リスト値は `,` で結合されます。"
+        },
+        "app.Qml0YnVja2V0.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.display_name": {
+          "source": "Query Arguments",
+          "message": "クエリ引数"
+        },
+        "app.Qml0YnVja2V0.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.short_desc": {
+          "source": "Query string parameters",
+          "message": "クエリ文字列パラメータ"
+        },
+        "app.Qml0YnVja2V0.action.bWFrZS1hcGktY2FsbA.short_desc": {
+          "source": "Make a custom API call to Bitbucket",
+          "message": "BitbucketへのカスタムAPI呼び出しを実行"
+        },
+        "app.Qml0YnVja2V0.action.bmV3X2NvbW1pdA.desc": {
+          "source": "Fires for each new commit in the watched repository, across every branch.\n\nThe event carries the commit record Bitbucket returns, including its hash, message, author and date.",
+          "message": "監視対象リポジトリ内のすべてのブランチにわたって新しいコミットごとにトリガーされます。\n\nイベントには、ハッシュ、メッセージ、作成者、日付など、Bitbucketが返すコミットレコードが含まれます。"
+        },
+        "app.Qml0YnVja2V0.action.bmV3X2NvbW1pdA.display_name": {
+          "source": "New Commit",
+          "message": "新規コミット"
+        },
+        "app.Qml0YnVja2V0.action.bmV3X2NvbW1pdA.short_desc": {
+          "source": "Fires when a commit is pushed to the watched repository",
+          "message": "監視対象リポジトリにコミットがプッシュされたときにトリガーされます"
+        },
+        "app.Qml0YnVja2V0.action.bmV3X2RlcGxveW1lbnQ.desc": {
+          "source": "Fires for each new deployment in the watched repository.\n\nThe event carries the deployment record Bitbucket returns, including the environment it went to, the state it reached and the release it deployed.",
+          "message": "監視対象リポジトリ内の新しいデプロイごとにトリガーされます。\n\nイベントには、デプロイ先環境、到達した状態、デプロイされたリリースなど、Bitbucketが返すデプロイレコードが含まれます。"
+        },
+        "app.Qml0YnVja2V0.action.bmV3X2RlcGxveW1lbnQ.display_name": {
+          "source": "New Deployment",
+          "message": "新規デプロイ"
+        },
+        "app.Qml0YnVja2V0.action.bmV3X2RlcGxveW1lbnQ.short_desc": {
+          "source": "Fires when a deployment is created for the watched repository",
+          "message": "監視対象リポジトリ用にデプロイが作成されたときにトリガーされます"
+        },
+        "app.Qml0YnVja2V0.action.bmV3X3B1bGxfcmVxdWVzdA.desc": {
+          "source": "Fires for each new pull request in the watched repository.\n\n`state` restricts which pull requests are watched, and defaults to `OPEN`. The event carries the pull request record Bitbucket returns, including its source and destination branches, author and reviewers.",
+          "message": "監視対象リポジトリ内の新しいプルリクエストごとにトリガーされます。\n\n`state` は監視するプルリクエストを制限し、デフォルトは `OPEN` です。イベントには、作成元および宛先ブランチ、作成者、レビュアーなど、Bitbucketが返すプルリクエストレコードが含まれます。"
+        },
+        "app.Qml0YnVja2V0.action.bmV3X3B1bGxfcmVxdWVzdA.display_name": {
+          "source": "New Pull Request",
+          "message": "新規プルリクエスト"
+        },
+        "app.Qml0YnVja2V0.action.bmV3X3B1bGxfcmVxdWVzdA.short_desc": {
+          "source": "Fires when a pull request is opened in the watched repository",
+          "message": "監視対象リポジトリでプルリクエストがオープンされたときにトリガーされます"
+        },
+        "app.Qml0YnVja2V0.action.c2VhcmNo.desc": {
+          "source": "Returns every record in the given table matching the search criteria",
+          "message": "検索条件に一致する指定テーブルのすべてのレコードを返します"
+        },
+        "app.Qml0YnVja2V0.action.c2VhcmNo.display_name": {
+          "source": "Search Records",
+          "message": "レコードの検索"
+        },
+        "app.Qml0YnVja2V0.action.c2VhcmNo.option.dGFibGU.desc": {
+          "source": "The table to work with: `repositories`, `pullrequests`, `pullrequest-comments`, `commit-comments`, `workspaces`, `workspace-members`, `commits` or `branches`",
+          "message": "操作対象のテーブル: `repositories`、`pullrequests`、`pullrequest-comments`、`commit-comments`、`workspaces`、`workspace-members`、`commits`、または`branches`"
+        },
+        "app.Qml0YnVja2V0.action.c2VhcmNo.option.dGFibGU.display_name": {
+          "source": "Table",
+          "message": "表"
+        },
+        "app.Qml0YnVja2V0.action.c2VhcmNo.option.dGFibGU.short_desc": {
+          "source": "The name of the table to work with",
+          "message": "操作対象のテーブル名"
+        },
+        "app.Qml0YnVja2V0.action.c2VhcmNo.short_desc": {
+          "source": "Search for matching records in the given table",
+          "message": "指定テーブル内の一致するレコードを検索"
+        },
+        "app.Qml0YnVja2V0.action.c2VhcmNoLXNpbmdsZQ.desc": {
+          "source": "Returns the one record in the given table matching the search criteria; it is an error if more than one matches",
+          "message": "検索条件に一致する指定テーブルの1件のレコードを返します。複数一致した場合はエラーになります"
+        },
+        "app.Qml0YnVja2V0.action.c2VhcmNoLXNpbmdsZQ.display_name": {
+          "source": "Find a Single Record",
+          "message": "単一レコードの検索"
+        },
+        "app.Qml0YnVja2V0.action.c2VhcmNoLXNpbmdsZQ.option.dGFibGU.desc": {
+          "source": "The table to work with: `repositories`, `pullrequests`, `pullrequest-comments`, `commit-comments`, `workspaces`, `workspace-members`, `commits` or `branches`",
+          "message": "操作対象のテーブル: `repositories`、`pullrequests`、`pullrequest-comments`、`commit-comments`、`workspaces`、`workspace-members`、`commits`、または`branches`"
+        },
+        "app.Qml0YnVja2V0.action.c2VhcmNoLXNpbmdsZQ.option.dGFibGU.display_name": {
+          "source": "Table",
+          "message": "表"
+        },
+        "app.Qml0YnVja2V0.action.c2VhcmNoLXNpbmdsZQ.option.dGFibGU.short_desc": {
+          "source": "The name of the table to work with",
+          "message": "操作対象のテーブル名"
+        },
+        "app.Qml0YnVja2V0.action.c2VhcmNoLXNpbmdsZQ.short_desc": {
+          "source": "Search for a single matching record in the given table",
+          "message": "指定テーブル内の一致する単一レコードを検索"
+        },
+        "app.Qml0YnVja2V0.action.c2VhcmNoQWNjb3VudA.desc": {
+          "source": "Searches the code in the repositories of one user account.",
+          "message": "1つのユーザーアカウントのリポジトリ内のコードを検索します。"
+        },
+        "app.Qml0YnVja2V0.action.c2VhcmNoQWNjb3VudA.display_name": {
+          "source": "Search Code in a User's Repositories",
+          "message": "ユーザーのリポジトリ内のコードを検索"
+        },
+        "app.Qml0YnVja2V0.action.c2VhcmNoQWNjb3VudA.option.c2VhcmNoX3F1ZXJ5.desc": {
+          "source": "The search query",
+          "message": "検索クエリ"
+        },
+        "app.Qml0YnVja2V0.action.c2VhcmNoQWNjb3VudA.option.c2VhcmNoX3F1ZXJ5.display_name": {
+          "source": "Search Query",
+          "message": "検索クエリ"
+        },
+        "app.Qml0YnVja2V0.action.c2VhcmNoQWNjb3VudA.option.c2VhcmNoX3F1ZXJ5.short_desc": {
+          "source": "The search query",
+          "message": "検索クエリ"
+        },
+        "app.Qml0YnVja2V0.action.c2VhcmNoQWNjb3VudA.option.c2VsZWN0ZWRfdXNlcg.desc": {
+          "source": "Either the UUID of the account surrounded by curly-braces, for example `{account UUID}`, OR an Atlassian Account ID.",
+          "message": "波括弧で囲まれたアカウントのUUID（例: `{account UUID}`）、またはAtlassianアカウントIDのいずれか。"
+        },
+        "app.Qml0YnVja2V0.action.c2VhcmNoQWNjb3VudA.option.c2VsZWN0ZWRfdXNlcg.display_name": {
+          "source": "User",
+          "message": "ユーザー"
+        },
+        "app.Qml0YnVja2V0.action.c2VhcmNoQWNjb3VudA.option.c2VsZWN0ZWRfdXNlcg.short_desc": {
+          "source": "The account UUID in braces, or the account ID",
+          "message": "波括弧で囲まれたアカウントUUID、またはアカウントID"
+        },
+        "app.Qml0YnVja2V0.action.c2VhcmNoQWNjb3VudA.option.cGFnZQ.desc": {
+          "source": "Which page of the search results to retrieve",
+          "message": "取得する検索結果のページ番号"
+        },
+        "app.Qml0YnVja2V0.action.c2VhcmNoQWNjb3VudA.option.cGFnZQ.display_name": {
+          "source": "Page",
+          "message": "ページ"
+        },
+        "app.Qml0YnVja2V0.action.c2VhcmNoQWNjb3VudA.option.cGFnZQ.short_desc": {
+          "source": "Which page of results to return, starting at 1",
+          "message": "返す結果のページ番号（1から開始）"
+        },
+        "app.Qml0YnVja2V0.action.c2VhcmNoQWNjb3VudA.option.cGFnZWxlbg.desc": {
+          "source": "How many records to return in one request, up to Bitbucket's maximum of `100`.\n\n`next` in the response is the URL of the following page; page on its presence rather than on `size`, which Bitbucket does not report for every collection.",
+          "message": "1回のリクエストで返すレコード数（Bitbucketの最大値`100`まで）。\n\nレスポンス内の`next`は次のページのURLです。Bitbucketがすべてのコレクションで報告するわけではない`size`ではなく、その存在に基づいてページネーションしてください。"
+        },
+        "app.Qml0YnVja2V0.action.c2VhcmNoQWNjb3VudA.option.cGFnZWxlbg.display_name": {
+          "source": "Page Length",
+          "message": "ページ長"
+        },
+        "app.Qml0YnVja2V0.action.c2VhcmNoQWNjb3VudA.option.cGFnZWxlbg.short_desc": {
+          "source": "How many records to return, up to 100",
+          "message": "返すレコード数（最大100件）"
+        },
+        "app.Qml0YnVja2V0.action.c2VhcmNoQWNjb3VudA.short_desc": {
+          "source": "Search the code in one user's repositories",
+          "message": "1つのユーザーのリポジトリ内のコードを検索"
+        },
+        "app.Qml0YnVja2V0.action.c2VhcmNoV29ya3NwYWNl.desc": {
+          "source": "Searches the code in every repository of a workspace.\n\n`search_query` takes Bitbucket's code search syntax, ex: `foo lang:python` or `\"exact phrase\" repo:my-repo`.",
+          "message": "ワークスペースのすべてのリポジトリ内のコードを検索します。\n\n`search_query` はBitbucketのコード検索構文を受け取ります（例: `foo lang:python` または `\"exact phrase\" repo:my-repo`）。"
+        },
+        "app.Qml0YnVja2V0.action.c2VhcmNoV29ya3NwYWNl.display_name": {
+          "source": "Search Code in a Workspace",
+          "message": "ワークスペース内のコードを検索"
+        },
+        "app.Qml0YnVja2V0.action.c2VhcmNoV29ya3NwYWNl.option.c2VhcmNoX3F1ZXJ5.desc": {
+          "source": "The search query",
+          "message": "検索クエリ"
+        },
+        "app.Qml0YnVja2V0.action.c2VhcmNoV29ya3NwYWNl.option.c2VhcmNoX3F1ZXJ5.display_name": {
+          "source": "Search Query",
+          "message": "検索クエリ"
+        },
+        "app.Qml0YnVja2V0.action.c2VhcmNoV29ya3NwYWNl.option.c2VhcmNoX3F1ZXJ5.short_desc": {
+          "source": "Bitbucket code search syntax, ex: \"foo lang:python\"",
+          "message": "Bitbucketコード検索構文（例: \"foo lang:python\"）"
+        },
+        "app.Qml0YnVja2V0.action.c2VhcmNoV29ya3NwYWNl.option.cGFnZQ.desc": {
+          "source": "Which page of the search results to retrieve",
+          "message": "取得する検索結果のページ番号"
+        },
+        "app.Qml0YnVja2V0.action.c2VhcmNoV29ya3NwYWNl.option.cGFnZQ.display_name": {
+          "source": "Page",
+          "message": "ページ"
+        },
+        "app.Qml0YnVja2V0.action.c2VhcmNoV29ya3NwYWNl.option.cGFnZQ.short_desc": {
+          "source": "Which page of results to return, starting at 1",
+          "message": "返す結果のページ番号（1から開始）"
+        },
+        "app.Qml0YnVja2V0.action.c2VhcmNoV29ya3NwYWNl.option.cGFnZWxlbg.desc": {
+          "source": "How many records to return in one request, up to Bitbucket's maximum of `100`.\n\n`next` in the response is the URL of the following page; page on its presence rather than on `size`, which Bitbucket does not report for every collection.",
+          "message": "1回のリクエストで返すレコード数（Bitbucketの最大値`100`まで）。\n\nレスポンス内の`next`は次のページのURLです。Bitbucketがすべてのコレクションで報告するわけではない`size`ではなく、その存在に基づいてページネーションしてください。"
+        },
+        "app.Qml0YnVja2V0.action.c2VhcmNoV29ya3NwYWNl.option.cGFnZWxlbg.display_name": {
+          "source": "Page Length",
+          "message": "ページ長"
+        },
+        "app.Qml0YnVja2V0.action.c2VhcmNoV29ya3NwYWNl.option.cGFnZWxlbg.short_desc": {
+          "source": "How many records to return, up to 100",
+          "message": "返すレコード数（最大100件）"
+        },
+        "app.Qml0YnVja2V0.action.c2VhcmNoV29ya3NwYWNl.option.d29ya3NwYWNl.desc": {
+          "source": "The workspace to work in, given as its slug or as its UUID in braces.\n\nEverything else scoped by a workspace - repositories, members - is listed from this workspace, so changing it re-reads them.",
+          "message": "操作対象のワークスペース（スラッグまたは中括弧付きのUUIDで指定）。\n\nリポジトリ、メンバーなど、ワークスペースをスコープとするその他のすべての項目はこのワークスペースから一覧表示されるため、変更すると再読み込みされます。"
+        },
+        "app.Qml0YnVja2V0.action.c2VhcmNoV29ya3NwYWNl.option.d29ya3NwYWNl.display_name": {
+          "source": "Workspace",
+          "message": "ワークスペース"
+        },
+        "app.Qml0YnVja2V0.action.c2VhcmNoV29ya3NwYWNl.option.d29ya3NwYWNl.short_desc": {
+          "source": "The workspace to work in",
+          "message": "操作対象のワークスペース"
+        },
+        "app.Qml0YnVja2V0.action.c2VhcmNoV29ya3NwYWNl.short_desc": {
+          "source": "Search the code in a workspace's repositories",
+          "message": "ワークスペースのリポジトリ内のコードを検索"
+        },
+        "app.Qml0YnVja2V0.action.c2VhcmNoVGVhbQ.desc": {
+          "source": "Searches the code in a team's repositories.\n\n**Bitbucket has replaced teams with workspaces**, and this endpoint is deprecated; use **Search Code in a Workspace** instead. It is exported because the application this module replaces exported it, and removing an action silently breaks whatever still calls it.",
+          "message": "チームのリポジトリ内のコードを検索します。\n\n**Bitbucketではチームがワークスペースに置き換えられた**ため、このエンドポイントは非推奨です。代わりに**ワークスペース内のコードを検索**を使用してください。このモジュールが置き換えるアプリケーションがこれをエクスポートしていたため提供されています。アクションを削除すると、まだそれを呼び出している処理がサイレントに破損します。"
+        },
+        "app.Qml0YnVja2V0.action.c2VhcmNoVGVhbQ.display_name": {
+          "source": "Search Code in a Team's Repositories",
+          "message": "チームのリポジトリ内のコードを検索"
+        },
+        "app.Qml0YnVja2V0.action.c2VhcmNoVGVhbQ.option.c2VhcmNoX3F1ZXJ5.desc": {
+          "source": "The search query",
+          "message": "検索クエリ"
+        },
+        "app.Qml0YnVja2V0.action.c2VhcmNoVGVhbQ.option.c2VhcmNoX3F1ZXJ5.display_name": {
+          "source": "Search Query",
+          "message": "検索クエリ"
+        },
+        "app.Qml0YnVja2V0.action.c2VhcmNoVGVhbQ.option.c2VhcmNoX3F1ZXJ5.short_desc": {
+          "source": "The search query",
+          "message": "検索クエリ"
+        },
+        "app.Qml0YnVja2V0.action.c2VhcmNoVGVhbQ.option.cGFnZQ.desc": {
+          "source": "Which page of the search results to retrieve",
+          "message": "取得する検索結果のページ番号"
+        },
+        "app.Qml0YnVja2V0.action.c2VhcmNoVGVhbQ.option.cGFnZQ.display_name": {
+          "source": "Page",
+          "message": "ページ"
+        },
+        "app.Qml0YnVja2V0.action.c2VhcmNoVGVhbQ.option.cGFnZQ.short_desc": {
+          "source": "Which page of results to return, starting at 1",
+          "message": "返す結果のページ番号（1から開始）"
+        },
+        "app.Qml0YnVja2V0.action.c2VhcmNoVGVhbQ.option.cGFnZWxlbg.desc": {
+          "source": "How many records to return in one request, up to Bitbucket's maximum of `100`.\n\n`next` in the response is the URL of the following page; page on its presence rather than on `size`, which Bitbucket does not report for every collection.",
+          "message": "1回のリクエストで返すレコード数（Bitbucketの最大値`100`まで）。\n\nレスポンス内の`next`は次のページのURLです。Bitbucketがすべてのコレクションで報告するわけではない`size`ではなく、その存在に基づいてページネーションしてください。"
+        },
+        "app.Qml0YnVja2V0.action.c2VhcmNoVGVhbQ.option.cGFnZWxlbg.display_name": {
+          "source": "Page Length",
+          "message": "ページ長"
+        },
+        "app.Qml0YnVja2V0.action.c2VhcmNoVGVhbQ.option.cGFnZWxlbg.short_desc": {
+          "source": "How many records to return, up to 100",
+          "message": "返すレコード数（最大100件）"
+        },
+        "app.Qml0YnVja2V0.action.c2VhcmNoVGVhbQ.option.dXNlcm5hbWU.desc": {
+          "source": "The account to search in; either the username or the UUID in curly braces",
+          "message": "検索対象のアカウント。ユーザー名または波括弧で囲まれたUUIDのいずれか"
+        },
+        "app.Qml0YnVja2V0.action.c2VhcmNoVGVhbQ.option.dXNlcm5hbWU.display_name": {
+          "source": "Team",
+          "message": "チーム"
+        },
+        "app.Qml0YnVja2V0.action.c2VhcmNoVGVhbQ.option.dXNlcm5hbWU.short_desc": {
+          "source": "The team name; teams are Bitbucket's superseded name for workspaces",
+          "message": "チーム名。チームはBitbucketにおけるワークスペースの旧名称です"
+        },
+        "app.Qml0YnVja2V0.action.c2VhcmNoVGVhbQ.short_desc": {
+          "source": "Search the code in a team's repositories (deprecated by Bitbucket)",
+          "message": "チームのリポジトリ内のコードを検索（Bitbucketにより非推奨）"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9nZXQ.desc": {
+          "source": "Lists the repositories in a workspace.\n\n`role` restricts the listing to repositories the credential has a given relationship with - `member`, `contributor`, `admin` or `owner` - which is how a listing is kept to what the user actually works on.",
+          "message": "ワークスペース内のリポジトリを一覧表示します。\n\n`role` は、認証情報が特定のリレーション（`member`、`contributor`、`admin`、または `owner`）を持つリポジトリにリストを制限し、ユーザーが実際に作業しているリポジトリのみに絞り込みます。"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9nZXQ.display_name": {
+          "source": "List Workspace Repositories",
+          "message": "ワークスペースリポジトリの一覧表示"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9nZXQ.option.c29ydA.desc": {
+          "source": "\nField by which the results should be sorted as per [filtering and sorting](/cloud/bitbucket/rest/intro/#filtering).\n        ",
+          "message": "\n[フィルタリングとソート](/cloud/bitbucket/rest/intro/#filtering)に従って結果をソートするフィールド。\n        "
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9nZXQ.option.c29ydA.display_name": {
+          "source": "Sort By",
+          "message": "並べ替え順"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9nZXQ.option.c29ydA.short_desc": {
+          "source": "A field to sort by; prefix with \"-\" to reverse",
+          "message": "ソート対象のフィールド。逆順にするには先頭に「-」を付けます"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9nZXQ.option.cGFnZQ.desc": {
+          "source": "Which page of results to return, starting at 1. Bitbucket documents this for every collection but declares it on almost none of them.",
+          "message": "返す結果のページ番号（1から開始）。Bitbucketはすべてのコレクションでこれをドキュメントに記載していますが、ほぼすべてで宣言していません。"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9nZXQ.option.cGFnZQ.display_name": {
+          "source": "Page",
+          "message": "ページ"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9nZXQ.option.cGFnZQ.short_desc": {
+          "source": "Which page of results to return, starting at 1",
+          "message": "返す結果のページ番号（1から開始）"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9nZXQ.option.cGFnZWxlbg.desc": {
+          "source": "How many records to return in one request, up to Bitbucket's maximum of `100`.\n\n`next` in the response is the URL of the following page; page on its presence rather than on `size`, which Bitbucket does not report for every collection.",
+          "message": "1回のリクエストで返すレコード数（Bitbucketの最大値`100`まで）。\n\nレスポンス内の`next`は次のページのURLです。Bitbucketがすべてのコレクションで報告するわけではない`size`ではなく、その存在に基づいてページネーションしてください。"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9nZXQ.option.cGFnZWxlbg.display_name": {
+          "source": "Page Length",
+          "message": "ページ長"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9nZXQ.option.cGFnZWxlbg.short_desc": {
+          "source": "How many records to return, up to 100",
+          "message": "返すレコード数（最大100件）"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9nZXQ.option.cQ.desc": {
+          "source": "A Bitbucket [filter expression](https://developer.atlassian.com/cloud/bitbucket/rest/intro/#filtering), ex: `state = \"OPEN\"` or `updated_on > 2026-01-01`.\n\nThe fields a filter may name differ per collection and are documented with the endpoint.",
+          "message": "Bitbucketの[フィルタ式](https://developer.atlassian.com/cloud/bitbucket/rest/intro/#filtering)（例: `state = \"OPEN\"` または `updated_on > 2026-01-01`）。\n\nフィルタで指定可能なフィールドはコレクションごとに異なり、エンドポイントに記載されています。"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9nZXQ.option.cQ.display_name": {
+          "source": "Filter",
+          "message": "フィルター"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9nZXQ.option.cQ.short_desc": {
+          "source": "A Bitbucket filter expression, ex: 'state = \"OPEN\"'",
+          "message": "Bitbucketのフィルタ式（例: 'state = \"OPEN\"'）"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9nZXQ.option.cm9sZQ.allowed-value.c3RyaW5nOm1lbWJlcg.display_name": {
+          "source": "member",
+          "message": "メンバー"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9nZXQ.option.cm9sZQ.allowed-value.c3RyaW5nOm93bmVy.display_name": {
+          "source": "owner",
+          "message": "オーナー"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9nZXQ.option.cm9sZQ.allowed-value.c3RyaW5nOmFkbWlu.display_name": {
+          "source": "admin",
+          "message": "管理者"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9nZXQ.option.cm9sZQ.allowed-value.c3RyaW5nOmNvbnRyaWJ1dG9y.display_name": {
+          "source": "contributor",
+          "message": "コントリビューター"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9nZXQ.option.cm9sZQ.desc": {
+          "source": "\nFilters the result based on the authenticated user's role on each repository.\n\n* **member**: returns repositories to which the user has explicit read access\n* **contributor**: returns repositories to which the user has explicit write access\n* **admin**: returns repositories to which the user has explicit administrator access\n* **owner**: returns all repositories owned by the current user\n",
+          "message": "\n各リポジトリに対する認証済みユーザーのロールに基づいて結果をフィルタリングします。\n\n* **member**: ユーザーが明示的な読み取りアクセス権を持つリポジトリを返します\n* **contributor**: ユーザーが明示的な書き込みアクセス権を持つリポジトリを返します\n* **admin**: ユーザーが明示的な管理者アクセス権を持つリポジトリを返します\n* **owner**: 現在のユーザーが所有するすべてのリポジトリを返します\n"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9nZXQ.option.cm9sZQ.display_name": {
+          "source": "Role",
+          "message": "役割"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9nZXQ.option.d29ya3NwYWNl.desc": {
+          "source": "The workspace to work in, given as its slug or as its UUID in braces.\n\nEverything else scoped by a workspace - repositories, members - is listed from this workspace, so changing it re-reads them.",
+          "message": "操作対象のワークスペース（スラッグまたは中括弧付きのUUIDで指定）。\n\nリポジトリ、メンバーなど、ワークスペースをスコープとするその他のすべての項目はこのワークスペースから一覧表示されるため、変更すると再読み込みされます。"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9nZXQ.option.d29ya3NwYWNl.display_name": {
+          "source": "Workspace",
+          "message": "ワークスペース"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9nZXQ.option.d29ya3NwYWNl.short_desc": {
+          "source": "The workspace to work in",
+          "message": "操作対象のワークスペース"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9nZXQ.short_desc": {
+          "source": "List the repositories in a workspace",
+          "message": "ワークスペース内のリポジトリを一覧表示"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfY29tbWl0X2NvbW1pdF9hcHByb3ZlX2RlbGV0ZQ.desc": {
+          "source": "Withdraws the authenticated user's approval of a commit. Another user's approval is untouched.",
+          "message": "コミットに対する認証済みユーザーの承認を取り消します。他のユーザーの承認は変更されません。"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfY29tbWl0X2NvbW1pdF9hcHByb3ZlX2RlbGV0ZQ.display_name": {
+          "source": "Unapprove Commit",
+          "message": "コミットの承認を取り消し"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfY29tbWl0X2NvbW1pdF9hcHByb3ZlX2RlbGV0ZQ.option.Y29tbWl0.desc": {
+          "source": "The commit's SHA1.",
+          "message": "コミットのSHA1。"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfY29tbWl0X2NvbW1pdF9hcHByb3ZlX2RlbGV0ZQ.option.Y29tbWl0.display_name": {
+          "source": "Commit",
+          "message": "コミット"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfY29tbWl0X2NvbW1pdF9hcHByb3ZlX2RlbGV0ZQ.option.Y29tbWl0.short_desc": {
+          "source": "A commit hash, a branch name or a tag",
+          "message": "コミットハッシュ、ブランチ名、またはタグ"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfY29tbWl0X2NvbW1pdF9hcHByb3ZlX2RlbGV0ZQ.option.cmVwb19zbHVn.desc": {
+          "source": "The repository to work on, given as its slug or as its UUID in braces.\n\nEverything else scoped by a repository - commits, branches, pull requests - is listed from this repository, so changing it re-reads them.",
+          "message": "操作対象のリポジトリ（スラッグまたは中括弧付きのUUIDで指定）。\n\nコミット、ブランチ、プルリクエストなど、リポジトリをスコープとするその他のすべての項目はこのリポジトリから一覧表示されるため、変更すると再読み込みされます。"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfY29tbWl0X2NvbW1pdF9hcHByb3ZlX2RlbGV0ZQ.option.cmVwb19zbHVn.display_name": {
+          "source": "Repository",
+          "message": "リポジトリ"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfY29tbWl0X2NvbW1pdF9hcHByb3ZlX2RlbGV0ZQ.option.cmVwb19zbHVn.short_desc": {
+          "source": "The repository to work on",
+          "message": "操作対象のリポジトリ"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfY29tbWl0X2NvbW1pdF9hcHByb3ZlX2RlbGV0ZQ.option.d29ya3NwYWNl.desc": {
+          "source": "The workspace to work in, given as its slug or as its UUID in braces.\n\nEverything else scoped by a workspace - repositories, members - is listed from this workspace, so changing it re-reads them.",
+          "message": "操作対象のワークスペース（スラッグまたは中括弧付きのUUIDで指定）。\n\nリポジトリ、メンバーなど、ワークスペースをスコープとするその他のすべての項目はこのワークスペースから一覧表示されるため、変更すると再読み込みされます。"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfY29tbWl0X2NvbW1pdF9hcHByb3ZlX2RlbGV0ZQ.option.d29ya3NwYWNl.display_name": {
+          "source": "Workspace",
+          "message": "ワークスペース"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfY29tbWl0X2NvbW1pdF9hcHByb3ZlX2RlbGV0ZQ.option.d29ya3NwYWNl.short_desc": {
+          "source": "The workspace to work in",
+          "message": "操作対象のワークスペース"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfY29tbWl0X2NvbW1pdF9hcHByb3ZlX2RlbGV0ZQ.short_desc": {
+          "source": "Withdraw the authenticated user's approval of a commit",
+          "message": "コミットに対する認証済みユーザーの承認を取り消す"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfY29tbWl0X2NvbW1pdF9hcHByb3ZlX3Bvc3Q.desc": {
+          "source": "Records the authenticated user's approval of a commit.",
+          "message": "コミットに対する認証済みユーザーの承認を記録します。"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfY29tbWl0X2NvbW1pdF9hcHByb3ZlX3Bvc3Q.display_name": {
+          "source": "Approve Commit",
+          "message": "コミットを承認"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfY29tbWl0X2NvbW1pdF9hcHByb3ZlX3Bvc3Q.option.Y29tbWl0.desc": {
+          "source": "The commit's SHA1.",
+          "message": "コミットのSHA1。"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfY29tbWl0X2NvbW1pdF9hcHByb3ZlX3Bvc3Q.option.Y29tbWl0.display_name": {
+          "source": "Commit",
+          "message": "コミット"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfY29tbWl0X2NvbW1pdF9hcHByb3ZlX3Bvc3Q.option.Y29tbWl0.short_desc": {
+          "source": "A commit hash, a branch name or a tag",
+          "message": "コミットハッシュ、ブランチ名、またはタグ"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfY29tbWl0X2NvbW1pdF9hcHByb3ZlX3Bvc3Q.option.cmVwb19zbHVn.desc": {
+          "source": "The repository to work on, given as its slug or as its UUID in braces.\n\nEverything else scoped by a repository - commits, branches, pull requests - is listed from this repository, so changing it re-reads them.",
+          "message": "操作対象のリポジトリ（スラッグまたは中括弧付きのUUIDで指定）。\n\nコミット、ブランチ、プルリクエストなど、リポジトリをスコープとするその他のすべての項目はこのリポジトリから一覧表示されるため、変更すると再読み込みされます。"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfY29tbWl0X2NvbW1pdF9hcHByb3ZlX3Bvc3Q.option.cmVwb19zbHVn.display_name": {
+          "source": "Repository",
+          "message": "リポジトリ"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfY29tbWl0X2NvbW1pdF9hcHByb3ZlX3Bvc3Q.option.cmVwb19zbHVn.short_desc": {
+          "source": "The repository to work on",
+          "message": "操作対象のリポジトリ"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfY29tbWl0X2NvbW1pdF9hcHByb3ZlX3Bvc3Q.option.d29ya3NwYWNl.desc": {
+          "source": "The workspace to work in, given as its slug or as its UUID in braces.\n\nEverything else scoped by a workspace - repositories, members - is listed from this workspace, so changing it re-reads them.",
+          "message": "操作対象のワークスペース（スラッグまたは中括弧付きのUUIDで指定）。\n\nリポジトリ、メンバーなど、ワークスペースをスコープとするその他のすべての項目はこのワークスペースから一覧表示されるため、変更すると再読み込みされます。"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfY29tbWl0X2NvbW1pdF9hcHByb3ZlX3Bvc3Q.option.d29ya3NwYWNl.display_name": {
+          "source": "Workspace",
+          "message": "ワークスペース"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfY29tbWl0X2NvbW1pdF9hcHByb3ZlX3Bvc3Q.option.d29ya3NwYWNl.short_desc": {
+          "source": "The workspace to work in",
+          "message": "操作対象のワークスペース"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfY29tbWl0X2NvbW1pdF9hcHByb3ZlX3Bvc3Q.short_desc": {
+          "source": "Approve a commit as the authenticated user",
+          "message": "認証済みユーザーとしてコミットを承認"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfY29tbWl0X2NvbW1pdF9jb21tZW50c19nZXQ.desc": {
+          "source": "Lists the comments made on a commit, both standalone notes and those attached to a line of a diff.",
+          "message": "スタンドアロンのメモと差分の行に付けられたコメントの両方を含む、コミットに対するコメントを一覧表示します。"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfY29tbWl0X2NvbW1pdF9jb21tZW50c19nZXQ.display_name": {
+          "source": "List Commit Comments",
+          "message": "コミットコメントの一覧表示"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfY29tbWl0X2NvbW1pdF9jb21tZW50c19nZXQ.option.Y29tbWl0.desc": {
+          "source": "The commit's SHA1.",
+          "message": "コミットのSHA1。"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfY29tbWl0X2NvbW1pdF9jb21tZW50c19nZXQ.option.Y29tbWl0.display_name": {
+          "source": "Commit",
+          "message": "コミット"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfY29tbWl0X2NvbW1pdF9jb21tZW50c19nZXQ.option.Y29tbWl0.short_desc": {
+          "source": "A commit hash, a branch name or a tag",
+          "message": "コミットハッシュ、ブランチ名、またはタグ"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfY29tbWl0X2NvbW1pdF9jb21tZW50c19nZXQ.option.c29ydA.desc": {
+          "source": "\nField by which the results should be sorted as per [filtering and sorting](/cloud/bitbucket/rest/intro/#filtering).\n        ",
+          "message": "\n[フィルタリングとソート](/cloud/bitbucket/rest/intro/#filtering)に従って結果をソートするフィールド。\n        "
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfY29tbWl0X2NvbW1pdF9jb21tZW50c19nZXQ.option.c29ydA.display_name": {
+          "source": "Sort By",
+          "message": "並べ替え順"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfY29tbWl0X2NvbW1pdF9jb21tZW50c19nZXQ.option.c29ydA.short_desc": {
+          "source": "A field to sort by; prefix with \"-\" to reverse",
+          "message": "ソート対象のフィールド。逆順にするには先頭に「-」を付けます"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfY29tbWl0X2NvbW1pdF9jb21tZW50c19nZXQ.option.cGFnZQ.desc": {
+          "source": "Which page of results to return, starting at 1. Bitbucket documents this for every collection but declares it on almost none of them.",
+          "message": "返す結果のページ番号（1から開始）。Bitbucketはすべてのコレクションでこれをドキュメントに記載していますが、ほぼすべてで宣言していません。"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfY29tbWl0X2NvbW1pdF9jb21tZW50c19nZXQ.option.cGFnZQ.display_name": {
+          "source": "Page",
+          "message": "ページ"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfY29tbWl0X2NvbW1pdF9jb21tZW50c19nZXQ.option.cGFnZQ.short_desc": {
+          "source": "Which page of results to return, starting at 1",
+          "message": "返す結果のページ番号（1から開始）"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfY29tbWl0X2NvbW1pdF9jb21tZW50c19nZXQ.option.cGFnZWxlbg.desc": {
+          "source": "How many records to return in one request, up to Bitbucket's maximum of `100`.\n\n`next` in the response is the URL of the following page; page on its presence rather than on `size`, which Bitbucket does not report for every collection.",
+          "message": "1回のリクエストで返すレコード数（Bitbucketの最大値`100`まで）。\n\nレスポンス内の`next`は次のページのURLです。Bitbucketがすべてのコレクションで報告するわけではない`size`ではなく、その存在に基づいてページネーションしてください。"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfY29tbWl0X2NvbW1pdF9jb21tZW50c19nZXQ.option.cGFnZWxlbg.display_name": {
+          "source": "Page Length",
+          "message": "ページ長"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfY29tbWl0X2NvbW1pdF9jb21tZW50c19nZXQ.option.cGFnZWxlbg.short_desc": {
+          "source": "How many records to return, up to 100",
+          "message": "返すレコード数（最大100件）"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfY29tbWl0X2NvbW1pdF9jb21tZW50c19nZXQ.option.cQ.desc": {
+          "source": "A Bitbucket [filter expression](https://developer.atlassian.com/cloud/bitbucket/rest/intro/#filtering), ex: `state = \"OPEN\"` or `updated_on > 2026-01-01`.\n\nThe fields a filter may name differ per collection and are documented with the endpoint.",
+          "message": "Bitbucketの[フィルタ式](https://developer.atlassian.com/cloud/bitbucket/rest/intro/#filtering)（例: `state = \"OPEN\"` または `updated_on > 2026-01-01`）。\n\nフィルタで指定可能なフィールドはコレクションごとに異なり、エンドポイントに記載されています。"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfY29tbWl0X2NvbW1pdF9jb21tZW50c19nZXQ.option.cQ.display_name": {
+          "source": "Filter",
+          "message": "フィルター"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfY29tbWl0X2NvbW1pdF9jb21tZW50c19nZXQ.option.cQ.short_desc": {
+          "source": "A Bitbucket filter expression, ex: 'state = \"OPEN\"'",
+          "message": "Bitbucketのフィルタ式（例: 'state = \"OPEN\"'）"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfY29tbWl0X2NvbW1pdF9jb21tZW50c19nZXQ.option.cmVwb19zbHVn.desc": {
+          "source": "The repository to work on, given as its slug or as its UUID in braces.\n\nEverything else scoped by a repository - commits, branches, pull requests - is listed from this repository, so changing it re-reads them.",
+          "message": "操作対象のリポジトリ（スラッグまたは中括弧付きのUUIDで指定）。\n\nコミット、ブランチ、プルリクエストなど、リポジトリをスコープとするその他のすべての項目はこのリポジトリから一覧表示されるため、変更すると再読み込みされます。"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfY29tbWl0X2NvbW1pdF9jb21tZW50c19nZXQ.option.cmVwb19zbHVn.display_name": {
+          "source": "Repository",
+          "message": "リポジトリ"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfY29tbWl0X2NvbW1pdF9jb21tZW50c19nZXQ.option.cmVwb19zbHVn.short_desc": {
+          "source": "The repository to work on",
+          "message": "操作対象のリポジトリ"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfY29tbWl0X2NvbW1pdF9jb21tZW50c19nZXQ.option.d29ya3NwYWNl.desc": {
+          "source": "The workspace to work in, given as its slug or as its UUID in braces.\n\nEverything else scoped by a workspace - repositories, members - is listed from this workspace, so changing it re-reads them.",
+          "message": "操作対象のワークスペース（スラッグまたは中括弧付きのUUIDで指定）。\n\nリポジトリ、メンバーなど、ワークスペースをスコープとするその他のすべての項目はこのワークスペースから一覧表示されるため、変更すると再読み込みされます。"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfY29tbWl0X2NvbW1pdF9jb21tZW50c19nZXQ.option.d29ya3NwYWNl.display_name": {
+          "source": "Workspace",
+          "message": "ワークスペース"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfY29tbWl0X2NvbW1pdF9jb21tZW50c19nZXQ.option.d29ya3NwYWNl.short_desc": {
+          "source": "The workspace to work in",
+          "message": "操作対象のワークスペース"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfY29tbWl0X2NvbW1pdF9jb21tZW50c19nZXQ.short_desc": {
+          "source": "List the comments on a commit",
+          "message": "コミットに対するコメントを一覧表示"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfY29tbWl0X2NvbW1pdF9jb21tZW50c19wb3N0.desc": {
+          "source": "Adds a comment to a commit.\n\n`content.raw` is the comment text in Bitbucket-flavored Markdown. Supplying `inline` attaches the comment to a line of the diff instead of the commit as a whole.",
+          "message": "コミットにコメントを追加します。\n\n`content.raw` はBitbucket仕様のMarkdown形式のコメント本文です。`inline` を指定すると、コミット全体ではなく差分の行にコメントが添付されます。"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfY29tbWl0X2NvbW1pdF9jb21tZW50c19wb3N0.display_name": {
+          "source": "Comment on Commit",
+          "message": "コミットにコメント"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfY29tbWl0X2NvbW1pdF9jb21tZW50c19wb3N0.option.Y29tbWl0.desc": {
+          "source": "The commit's SHA1.",
+          "message": "コミットのSHA1。"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfY29tbWl0X2NvbW1pdF9jb21tZW50c19wb3N0.option.Y29tbWl0.display_name": {
+          "source": "Commit",
+          "message": "コミット"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfY29tbWl0X2NvbW1pdF9jb21tZW50c19wb3N0.option.Y29tbWl0.short_desc": {
+          "source": "A commit hash, a branch name or a tag",
+          "message": "コミットハッシュ、ブランチ名、またはタグ"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfY29tbWl0X2NvbW1pdF9jb21tZW50c19wb3N0.option.Y29udGVudA.display_name": {
+          "source": "Comment",
+          "message": "コメント"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfY29tbWl0X2NvbW1pdF9jb21tZW50c19wb3N0.option.Y29udGVudA.short_desc": {
+          "source": "The comment; put the text in \"raw\"",
+          "message": "コメント。テキストは「raw」に設定します"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfY29tbWl0X2NvbW1pdF9jb21tZW50c19wb3N0.option.aW5saW5l.display_name": {
+          "source": "Inline",
+          "message": "インライン"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfY29tbWl0X2NvbW1pdF9jb21tZW50c19wb3N0.option.cmVwb19zbHVn.desc": {
+          "source": "The repository to work on, given as its slug or as its UUID in braces.\n\nEverything else scoped by a repository - commits, branches, pull requests - is listed from this repository, so changing it re-reads them.",
+          "message": "操作対象のリポジトリ（スラッグまたは中括弧付きのUUIDで指定）。\n\nコミット、ブランチ、プルリクエストなど、リポジトリをスコープとするその他のすべての項目はこのリポジトリから一覧表示されるため、変更すると再読み込みされます。"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfY29tbWl0X2NvbW1pdF9jb21tZW50c19wb3N0.option.cmVwb19zbHVn.display_name": {
+          "source": "Repository",
+          "message": "リポジトリ"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfY29tbWl0X2NvbW1pdF9jb21tZW50c19wb3N0.option.cmVwb19zbHVn.short_desc": {
+          "source": "The repository to work on",
+          "message": "操作対象のリポジトリ"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfY29tbWl0X2NvbW1pdF9jb21tZW50c19wb3N0.option.d29ya3NwYWNl.desc": {
+          "source": "The workspace to work in, given as its slug or as its UUID in braces.\n\nEverything else scoped by a workspace - repositories, members - is listed from this workspace, so changing it re-reads them.",
+          "message": "操作対象のワークスペース（スラッグまたは中括弧付きのUUIDで指定）。\n\nリポジトリ、メンバーなど、ワークスペースをスコープとするその他のすべての項目はこのワークスペースから一覧表示されるため、変更すると再読み込みされます。"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfY29tbWl0X2NvbW1pdF9jb21tZW50c19wb3N0.option.d29ya3NwYWNl.display_name": {
+          "source": "Workspace",
+          "message": "ワークスペース"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfY29tbWl0X2NvbW1pdF9jb21tZW50c19wb3N0.option.d29ya3NwYWNl.short_desc": {
+          "source": "The workspace to work in",
+          "message": "操作対象のワークスペース"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfY29tbWl0X2NvbW1pdF9jb21tZW50c19wb3N0.option.dHlwZQ.allowed-value.c3RyaW5nOmNvbW1pdF9jb21tZW50.display_name": {
+          "source": "commit_comment",
+          "message": "commit_comment"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfY29tbWl0X2NvbW1pdF9jb21tZW50c19wb3N0.option.dHlwZQ.display_name": {
+          "source": "Type",
+          "message": "タイプ"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfY29tbWl0X2NvbW1pdF9jb21tZW50c19wb3N0.option.dHlwZQ.short_desc": {
+          "source": "Bitbucket's object discriminator; always \"commit_comment\"",
+          "message": "Bitbucketのオブジェクト識別子。常に「commit_comment」"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfY29tbWl0X2NvbW1pdF9jb21tZW50c19wb3N0.short_desc": {
+          "source": "Add a comment to a commit",
+          "message": "コミットにコメントを追加"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfY29tbWl0X2NvbW1pdF9nZXQ.desc": {
+          "source": "Retrieves a commit by hash, with its message, author, parents and participants.",
+          "message": "ハッシュによってコミットを取得し、そのメッセージ、作成者、親コミット、参加者を返します。"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfY29tbWl0X2NvbW1pdF9nZXQ.display_name": {
+          "source": "Get Commit",
+          "message": "コミットを取得"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfY29tbWl0X2NvbW1pdF9nZXQ.option.Y29tbWl0.desc": {
+          "source": "The commit's SHA1.",
+          "message": "コミットのSHA1。"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfY29tbWl0X2NvbW1pdF9nZXQ.option.Y29tbWl0.display_name": {
+          "source": "Commit",
+          "message": "コミット"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfY29tbWl0X2NvbW1pdF9nZXQ.option.Y29tbWl0.short_desc": {
+          "source": "A commit hash, a branch name or a tag",
+          "message": "コミットハッシュ、ブランチ名、またはタグ"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfY29tbWl0X2NvbW1pdF9nZXQ.option.cmVwb19zbHVn.desc": {
+          "source": "The repository to work on, given as its slug or as its UUID in braces.\n\nEverything else scoped by a repository - commits, branches, pull requests - is listed from this repository, so changing it re-reads them.",
+          "message": "操作対象のリポジトリ（スラッグまたは中括弧付きのUUIDで指定）。\n\nコミット、ブランチ、プルリクエストなど、リポジトリをスコープとするその他のすべての項目はこのリポジトリから一覧表示されるため、変更すると再読み込みされます。"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfY29tbWl0X2NvbW1pdF9nZXQ.option.cmVwb19zbHVn.display_name": {
+          "source": "Repository",
+          "message": "リポジトリ"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfY29tbWl0X2NvbW1pdF9nZXQ.option.cmVwb19zbHVn.short_desc": {
+          "source": "The repository to work on",
+          "message": "操作対象のリポジトリ"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfY29tbWl0X2NvbW1pdF9nZXQ.option.d29ya3NwYWNl.desc": {
+          "source": "The workspace to work in, given as its slug or as its UUID in braces.\n\nEverything else scoped by a workspace - repositories, members - is listed from this workspace, so changing it re-reads them.",
+          "message": "操作対象のワークスペース（スラッグまたは中括弧付きのUUIDで指定）。\n\nリポジトリ、メンバーなど、ワークスペースをスコープとするその他のすべての項目はこのワークスペースから一覧表示されるため、変更すると再読み込みされます。"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfY29tbWl0X2NvbW1pdF9nZXQ.option.d29ya3NwYWNl.display_name": {
+          "source": "Workspace",
+          "message": "ワークスペース"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfY29tbWl0X2NvbW1pdF9nZXQ.option.d29ya3NwYWNl.short_desc": {
+          "source": "The workspace to work in",
+          "message": "操作対象のワークスペース"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfY29tbWl0X2NvbW1pdF9nZXQ.short_desc": {
+          "source": "Retrieve one commit",
+          "message": "1件のコミットを取得"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfY29tbWl0c19nZXQ.desc": {
+          "source": "Lists commits, newest first, across every branch of the repository.",
+          "message": "リポジトリのすべてのブランチにわたって、新しい順にコミットを一覧表示します。"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfY29tbWl0c19nZXQ.display_name": {
+          "source": "List Commits",
+          "message": "コミット一覧の取得"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfY29tbWl0c19nZXQ.option.cGFnZQ.desc": {
+          "source": "Which page of results to return, starting at 1. Bitbucket documents this for every collection but declares it on almost none of them.",
+          "message": "返す結果のページ番号（1から開始）。Bitbucketはすべてのコレクションでこれをドキュメントに記載していますが、ほぼすべてで宣言していません。"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfY29tbWl0c19nZXQ.option.cGFnZQ.display_name": {
+          "source": "Page",
+          "message": "ページ"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfY29tbWl0c19nZXQ.option.cGFnZQ.short_desc": {
+          "source": "Which page of results to return, starting at 1",
+          "message": "返す結果のページ番号（1から開始）"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfY29tbWl0c19nZXQ.option.cGFnZWxlbg.desc": {
+          "source": "How many records to return in one request, up to Bitbucket's maximum of `100`.\n\n`next` in the response is the URL of the following page; page on its presence rather than on `size`, which Bitbucket does not report for every collection.",
+          "message": "1回のリクエストで返すレコード数（Bitbucketの最大値`100`まで）。\n\nレスポンス内の`next`は次のページのURLです。Bitbucketがすべてのコレクションで報告するわけではない`size`ではなく、その存在に基づいてページネーションしてください。"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfY29tbWl0c19nZXQ.option.cGFnZWxlbg.display_name": {
+          "source": "Page Length",
+          "message": "ページ長"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfY29tbWl0c19nZXQ.option.cGFnZWxlbg.short_desc": {
+          "source": "How many records to return, up to 100",
+          "message": "返すレコード数（最大100件）"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfY29tbWl0c19nZXQ.option.cmVwb19zbHVn.desc": {
+          "source": "The repository to work on, given as its slug or as its UUID in braces.\n\nEverything else scoped by a repository - commits, branches, pull requests - is listed from this repository, so changing it re-reads them.",
+          "message": "操作対象のリポジトリ（スラッグまたは中括弧付きのUUIDで指定）。\n\nコミット、ブランチ、プルリクエストなど、リポジトリをスコープとするその他のすべての項目はこのリポジトリから一覧表示されるため、変更すると再読み込みされます。"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfY29tbWl0c19nZXQ.option.cmVwb19zbHVn.display_name": {
+          "source": "Repository",
+          "message": "リポジトリ"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfY29tbWl0c19nZXQ.option.cmVwb19zbHVn.short_desc": {
+          "source": "The repository to work on",
+          "message": "操作対象のリポジトリ"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfY29tbWl0c19nZXQ.option.d29ya3NwYWNl.desc": {
+          "source": "The workspace to work in, given as its slug or as its UUID in braces.\n\nEverything else scoped by a workspace - repositories, members - is listed from this workspace, so changing it re-reads them.",
+          "message": "操作対象のワークスペース（スラッグまたは中括弧付きのUUIDで指定）。\n\nリポジトリ、メンバーなど、ワークスペースをスコープとするその他のすべての項目はこのワークスペースから一覧表示されるため、変更すると再読み込みされます。"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfY29tbWl0c19nZXQ.option.d29ya3NwYWNl.display_name": {
+          "source": "Workspace",
+          "message": "ワークスペース"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfY29tbWl0c19nZXQ.option.d29ya3NwYWNl.short_desc": {
+          "source": "The workspace to work in",
+          "message": "操作対象のワークスペース"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfY29tbWl0c19nZXQ.short_desc": {
+          "source": "List a repository's commits",
+          "message": "リポジトリのコミットを一覧表示"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfZ2V0.desc": {
+          "source": "Retrieves a repository, including its main branch, project, size and visibility.",
+          "message": "メインブランチ、プロジェクト、サイズ、公開設定を含むリポジトリ情報を取得します。"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfZ2V0.display_name": {
+          "source": "Get Repository",
+          "message": "リポジトリの取得"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfZ2V0.option.cmVwb19zbHVn.desc": {
+          "source": "The repository to work on, given as its slug or as its UUID in braces.\n\nEverything else scoped by a repository - commits, branches, pull requests - is listed from this repository, so changing it re-reads them.",
+          "message": "操作対象のリポジトリ（スラッグまたは中括弧付きのUUIDで指定）。\n\nコミット、ブランチ、プルリクエストなど、リポジトリをスコープとするその他のすべての項目はこのリポジトリから一覧表示されるため、変更すると再読み込みされます。"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfZ2V0.option.cmVwb19zbHVn.display_name": {
+          "source": "Repository",
+          "message": "リポジトリ"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfZ2V0.option.cmVwb19zbHVn.short_desc": {
+          "source": "The repository to work on",
+          "message": "操作対象のリポジトリ"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfZ2V0.option.d29ya3NwYWNl.desc": {
+          "source": "The workspace to work in, given as its slug or as its UUID in braces.\n\nEverything else scoped by a workspace - repositories, members - is listed from this workspace, so changing it re-reads them.",
+          "message": "操作対象のワークスペース（スラッグまたは中括弧付きのUUIDで指定）。\n\nリポジトリ、メンバーなど、ワークスペースをスコープとするその他のすべての項目はこのワークスペースから一覧表示されるため、変更すると再読み込みされます。"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfZ2V0.option.d29ya3NwYWNl.display_name": {
+          "source": "Workspace",
+          "message": "ワークスペース"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfZ2V0.option.d29ya3NwYWNl.short_desc": {
+          "source": "The workspace to work in",
+          "message": "操作対象のワークスペース"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfZ2V0.short_desc": {
+          "source": "Retrieve one repository",
+          "message": "リポジトリを1件取得"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfZGVsZXRl.desc": {
+          "source": "Deletes a repository, its pull requests and its issues.\n\n**This is immediate and permanent**; Bitbucket has no retention window for a deleted repository. `redirect_to` names a repository to redirect the old URL to.",
+          "message": "リポジトリ、そのプルリクエスト、および課題を削除します。\n\n**この操作は即時かつ永続的です**。Bitbucketには削除されたリポジトリの保持期間はありません。`redirect_to` には古いURLのリダイレクト先となるリポジトリを指定します。"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfZGVsZXRl.display_name": {
+          "source": "Delete Repository",
+          "message": "リポジトリの削除"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfZGVsZXRl.option.cmVkaXJlY3RfdG8.desc": {
+          "source": "If a repository has been moved to a new location, use this parameter to\nshow users a friendly message in the Bitbucket UI that the repository\nhas moved to a new location. However, a GET to this endpoint will still\nreturn a 404.\n",
+          "message": "リポジトリが新しい場所に移動された場合、Bitbucket UI上でユーザーにリポジトリが新しい場所に移動したことを示すメッセージを表示するためにこのパラメーターを使用します。ただし、このエンドポイントへのGETは引き続き404を返します。\n"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfZGVsZXRl.option.cmVkaXJlY3RfdG8.display_name": {
+          "source": "Redirect To",
+          "message": "リダイレクト先"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfZGVsZXRl.option.cmVkaXJlY3RfdG8.short_desc": {
+          "source": "If a repository has been moved to a new location, use this parameter to",
+          "message": "リポジトリが新しい場所に移動された場合、このパラメーターを使用して"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfZGVsZXRl.option.cmVwb19zbHVn.desc": {
+          "source": "The repository to work on, given as its slug or as its UUID in braces.\n\nEverything else scoped by a repository - commits, branches, pull requests - is listed from this repository, so changing it re-reads them.",
+          "message": "操作対象のリポジトリ（スラッグまたは中括弧付きのUUIDで指定）。\n\nコミット、ブランチ、プルリクエストなど、リポジトリをスコープとするその他のすべての項目はこのリポジトリから一覧表示されるため、変更すると再読み込みされます。"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfZGVsZXRl.option.cmVwb19zbHVn.display_name": {
+          "source": "Repository",
+          "message": "リポジトリ"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfZGVsZXRl.option.cmVwb19zbHVn.short_desc": {
+          "source": "The repository to work on",
+          "message": "操作対象のリポジトリ"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfZGVsZXRl.option.d29ya3NwYWNl.desc": {
+          "source": "The workspace to work in, given as its slug or as its UUID in braces.\n\nEverything else scoped by a workspace - repositories, members - is listed from this workspace, so changing it re-reads them.",
+          "message": "操作対象のワークスペース（スラッグまたは中括弧付きのUUIDで指定）。\n\nリポジトリ、メンバーなど、ワークスペースをスコープとするその他のすべての項目はこのワークスペースから一覧表示されるため、変更すると再読み込みされます。"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfZGVsZXRl.option.d29ya3NwYWNl.display_name": {
+          "source": "Workspace",
+          "message": "ワークスペース"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfZGVsZXRl.option.d29ya3NwYWNl.short_desc": {
+          "source": "The workspace to work in",
+          "message": "操作対象のワークスペース"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfZGVsZXRl.short_desc": {
+          "source": "Delete a repository permanently",
+          "message": "リポジトリを完全に削除"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcG9zdA.desc": {
+          "source": "Creates a repository at the given workspace and slug.\n\nUnusually, the **URL decides the name**: the repository is created at the slug in the path, so there is no name to supply in the body. It is private unless `is_private` says otherwise.",
+          "message": "指定されたワークスペースとスラッグにリポジトリを作成します。\n\n通常と異なり、**URLによって名前が決定されます**。リポジトリはパス内のスラッグに作成されるため、リクエスト本文で名前を指定する必要はありません。`is_private` で特に指定しない限り、非公開になります。"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcG9zdA.display_name": {
+          "source": "Create Repository",
+          "message": "リポジトリの作成"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcG9zdA.option.ZGVzY3JpcHRpb24.display_name": {
+          "source": "Description",
+          "message": "説明"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcG9zdA.option.Zm9ya19wb2xpY3k.allowed-value.c3RyaW5nOm5vX2Zvcmtz.display_name": {
+          "source": "no_forks",
+          "message": "no_forks"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcG9zdA.option.Zm9ya19wb2xpY3k.allowed-value.c3RyaW5nOm5vX3B1YmxpY19mb3Jrcw.display_name": {
+          "source": "no_public_forks",
+          "message": "no_public_forks"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcG9zdA.option.Zm9ya19wb2xpY3k.allowed-value.c3RyaW5nOmFsbG93X2Zvcmtz.display_name": {
+          "source": "allow_forks",
+          "message": "allow_forks"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcG9zdA.option.Zm9ya19wb2xpY3k.desc": {
+          "source": "\nControls the rules for forking this repository.\n\n* **allow_forks**: unrestricted forking\n* **no_public_forks**: restrict forking to private forks (forks cannot\n  be made public later)\n* **no_forks**: deny all forking\n",
+          "message": "\nこのリポジトリのフォークに関するルールを制御します。\n\n* **allow_forks**: 無制限のフォークを許可\n* **no_public_forks**: プライベートフォークのみに制限（フォークを後から公開することは不可）\n* **no_forks**: すべてのフォークを拒否\n"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcG9zdA.option.Zm9ya19wb2xpY3k.display_name": {
+          "source": "Fork Policy",
+          "message": "フォークポリシー"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcG9zdA.option.aGFzX2lzc3Vlcw.desc": {
+          "source": "\nThe issue tracker for this repository is enabled. Issue Tracker\nfeatures are not supported for repositories in workspaces\nadministered through admin.atlassian.com.\n",
+          "message": "\nこのリポジトリの課題トラッカーを有効にします。admin.atlassian.com 経由で管理されているワークスペース内のリポジトリでは、課題トラッカー機能はサポートされていません。\n"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcG9zdA.option.aGFzX2lzc3Vlcw.display_name": {
+          "source": "Has Issues",
+          "message": "課題トラッカーの有無"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcG9zdA.option.aGFzX3dpa2k.desc": {
+          "source": "\nThe wiki for this repository is enabled. Wiki\nfeatures are not supported for repositories in workspaces\nadministered through admin.atlassian.com.\n",
+          "message": "\nこのリポジトリのWikiを有効にします。admin.atlassian.com 経由で管理されているワークスペース内のリポジトリでは、Wiki機能はサポートされていません。\n"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcG9zdA.option.aGFzX3dpa2k.display_name": {
+          "source": "Has Wiki",
+          "message": "Wikiの有無"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcG9zdA.option.aXNfcHJpdmF0ZQ.display_name": {
+          "source": "Private",
+          "message": "プライベート"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcG9zdA.option.bGFuZ3VhZ2U.display_name": {
+          "source": "Language",
+          "message": "言語"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcG9zdA.option.cHJvamVjdA.display_name": {
+          "source": "Project",
+          "message": "プロジェクト"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcG9zdA.option.cmVwb19zbHVn.desc": {
+          "source": "The slug the repository is created at, which also decides its name",
+          "message": "リポジトリが作成されるスラッグ（名前も決定します）"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcG9zdA.option.cmVwb19zbHVn.display_name": {
+          "source": "Repository Slug",
+          "message": "リポジトリスラッグ"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcG9zdA.option.cmVwb19zbHVn.short_desc": {
+          "source": "The slug to create the repository at",
+          "message": "リポジトリを作成するスラッグ"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcG9zdA.option.d29ya3NwYWNl.desc": {
+          "source": "The workspace to work in, given as its slug or as its UUID in braces.\n\nEverything else scoped by a workspace - repositories, members - is listed from this workspace, so changing it re-reads them.",
+          "message": "操作対象のワークスペース（スラッグまたは中括弧付きのUUIDで指定）。\n\nリポジトリ、メンバーなど、ワークスペースをスコープとするその他のすべての項目はこのワークスペースから一覧表示されるため、変更すると再読み込みされます。"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcG9zdA.option.d29ya3NwYWNl.display_name": {
+          "source": "Workspace",
+          "message": "ワークスペース"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcG9zdA.option.d29ya3NwYWNl.short_desc": {
+          "source": "The workspace to work in",
+          "message": "操作対象のワークスペース"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcG9zdA.option.dHlwZQ.allowed-value.c3RyaW5nOnJlcG9zaXRvcnk.display_name": {
+          "source": "repository",
+          "message": "repository"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcG9zdA.option.dHlwZQ.display_name": {
+          "source": "Type",
+          "message": "タイプ"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcG9zdA.option.dHlwZQ.short_desc": {
+          "source": "Bitbucket's object discriminator; always \"repository\"",
+          "message": "Bitbucketのオブジェクト識別子。常に「repository」"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcG9zdA.short_desc": {
+          "source": "Create a repository",
+          "message": "リポジトリを作成"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHV0.desc": {
+          "source": "Updates a repository's description, visibility, fork policy, language and the features it has enabled.\n\nOnly the fields supplied are changed.",
+          "message": "リポジトリの説明、公開設定、フォークポリシー、言語、および有効化されている機能を更新します。\n\n指定されたフィールドのみが変更されます。"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHV0.display_name": {
+          "source": "Update Repository",
+          "message": "リポジトリの更新"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHV0.option.ZGVzY3JpcHRpb24.display_name": {
+          "source": "Description",
+          "message": "説明"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHV0.option.Zm9ya19wb2xpY3k.allowed-value.c3RyaW5nOm5vX2Zvcmtz.display_name": {
+          "source": "no_forks",
+          "message": "no_forks"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHV0.option.Zm9ya19wb2xpY3k.allowed-value.c3RyaW5nOm5vX3B1YmxpY19mb3Jrcw.display_name": {
+          "source": "no_public_forks",
+          "message": "no_public_forks"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHV0.option.Zm9ya19wb2xpY3k.allowed-value.c3RyaW5nOmFsbG93X2Zvcmtz.display_name": {
+          "source": "allow_forks",
+          "message": "allow_forks"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHV0.option.Zm9ya19wb2xpY3k.desc": {
+          "source": "\nControls the rules for forking this repository.\n\n* **allow_forks**: unrestricted forking\n* **no_public_forks**: restrict forking to private forks (forks cannot\n  be made public later)\n* **no_forks**: deny all forking\n",
+          "message": "\nこのリポジトリのフォークに関するルールを制御します。\n\n* **allow_forks**: 無制限のフォークを許可\n* **no_public_forks**: プライベートフォークのみに制限（フォークを後から公開することは不可）\n* **no_forks**: すべてのフォークを拒否\n"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHV0.option.Zm9ya19wb2xpY3k.display_name": {
+          "source": "Fork Policy",
+          "message": "フォークポリシー"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHV0.option.aGFzX2lzc3Vlcw.desc": {
+          "source": "\nThe issue tracker for this repository is enabled. Issue Tracker\nfeatures are not supported for repositories in workspaces\nadministered through admin.atlassian.com.\n",
+          "message": "\nこのリポジトリの課題トラッカーを有効にします。admin.atlassian.com 経由で管理されているワークスペース内のリポジトリでは、課題トラッカー機能はサポートされていません。\n"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHV0.option.aGFzX2lzc3Vlcw.display_name": {
+          "source": "Has Issues",
+          "message": "課題トラッカーの有無"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHV0.option.aGFzX3dpa2k.desc": {
+          "source": "\nThe wiki for this repository is enabled. Wiki\nfeatures are not supported for repositories in workspaces\nadministered through admin.atlassian.com.\n",
+          "message": "\nこのリポジトリのWikiを有効にします。admin.atlassian.com 経由で管理されているワークスペース内のリポジトリでは、Wiki機能はサポートされていません。\n"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHV0.option.aGFzX3dpa2k.display_name": {
+          "source": "Has Wiki",
+          "message": "Wikiの有無"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHV0.option.aXNfcHJpdmF0ZQ.display_name": {
+          "source": "Is Private",
+          "message": "非公開設定"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHV0.option.bGFuZ3VhZ2U.display_name": {
+          "source": "Language",
+          "message": "言語"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHV0.option.bWFpbmJyYW5jaA.display_name": {
+          "source": "Mainbranch",
+          "message": "Mainbranch"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHV0.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "名前"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHV0.option.cHJvamVjdA.display_name": {
+          "source": "Project",
+          "message": "プロジェクト"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHV0.option.cmVwb19zbHVn.desc": {
+          "source": "The repository to work on, given as its slug or as its UUID in braces.\n\nEverything else scoped by a repository - commits, branches, pull requests - is listed from this repository, so changing it re-reads them.",
+          "message": "操作対象のリポジトリ（スラッグまたは中括弧付きのUUIDで指定）。\n\nコミット、ブランチ、プルリクエストなど、リポジトリをスコープとするその他のすべての項目はこのリポジトリから一覧表示されるため、変更すると再読み込みされます。"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHV0.option.cmVwb19zbHVn.display_name": {
+          "source": "Repository",
+          "message": "リポジトリ"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHV0.option.cmVwb19zbHVn.short_desc": {
+          "source": "The repository to work on",
+          "message": "操作対象のリポジトリ"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHV0.option.d29ya3NwYWNl.desc": {
+          "source": "The workspace to work in, given as its slug or as its UUID in braces.\n\nEverything else scoped by a workspace - repositories, members - is listed from this workspace, so changing it re-reads them.",
+          "message": "操作対象のワークスペース（スラッグまたは中括弧付きのUUIDで指定）。\n\nリポジトリ、メンバーなど、ワークスペースをスコープとするその他のすべての項目はこのワークスペースから一覧表示されるため、変更すると再読み込みされます。"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHV0.option.d29ya3NwYWNl.display_name": {
+          "source": "Workspace",
+          "message": "ワークスペース"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHV0.option.d29ya3NwYWNl.short_desc": {
+          "source": "The workspace to work in",
+          "message": "操作対象のワークスペース"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHV0.option.dHlwZQ.allowed-value.c3RyaW5nOnJlcG9zaXRvcnk.display_name": {
+          "source": "repository",
+          "message": "repository"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHV0.option.dHlwZQ.display_name": {
+          "source": "Type",
+          "message": "タイプ"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHV0.option.dHlwZQ.short_desc": {
+          "source": "Bitbucket's object discriminator; always \"repository\"",
+          "message": "Bitbucketのオブジェクト識別子。常に「repository」"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHV0.short_desc": {
+          "source": "Update a repository's settings",
+          "message": "リポジトリの設定を更新"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX2dldA.desc": {
+          "source": "Lists pull requests.\n\n`state` selects which - `OPEN`, `MERGED`, `DECLINED` or `SUPERSEDED` - and defaults to `OPEN`. It may be given more than once to include several states.",
+          "message": "プルリクエストを一覧表示します。\n\n`state` で対象（`OPEN`、`MERGED`、`DECLINED`、または `SUPERSEDED`）を選択します（デフォルトは `OPEN`）。複数の状態を含めるために複数回指定することもできます。"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX2dldA.display_name": {
+          "source": "List Pull Requests",
+          "message": "プルリクエスト一覧の取得"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX2dldA.option.c3RhdGU.allowed-value.c3RyaW5nOk1FUkdFRA.display_name": {
+          "source": "MERGED",
+          "message": "MERGED"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX2dldA.option.c3RhdGU.allowed-value.c3RyaW5nOk9QRU4.display_name": {
+          "source": "OPEN",
+          "message": "OPEN"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX2dldA.option.c3RhdGU.allowed-value.c3RyaW5nOkRFQ0xJTkVE.display_name": {
+          "source": "DECLINED",
+          "message": "DECLINED"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX2dldA.option.c3RhdGU.allowed-value.c3RyaW5nOlNVUEVSU0VERUQ.display_name": {
+          "source": "SUPERSEDED",
+          "message": "SUPERSEDED"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX2dldA.option.c3RhdGU.desc": {
+          "source": "Only return pull requests that are in this state. This parameter can be repeated.",
+          "message": "この状態のプルリクエストのみを返します。このパラメーターは複数回指定できます。"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX2dldA.option.c3RhdGU.display_name": {
+          "source": "State",
+          "message": "都道府県・州"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX2dldA.option.c3RhdGU.short_desc": {
+          "source": "Only return pull requests that are in this state",
+          "message": "この状態のプルリクエストのみを返す"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX2dldA.option.cGFnZQ.desc": {
+          "source": "Which page of results to return, starting at 1. Bitbucket documents this for every collection but declares it on almost none of them.",
+          "message": "返す結果のページ番号（1から開始）。Bitbucketはすべてのコレクションでこれをドキュメントに記載していますが、ほぼすべてで宣言していません。"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX2dldA.option.cGFnZQ.display_name": {
+          "source": "Page",
+          "message": "ページ"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX2dldA.option.cGFnZQ.short_desc": {
+          "source": "Which page of results to return, starting at 1",
+          "message": "返す結果のページ番号（1から開始）"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX2dldA.option.cGFnZWxlbg.desc": {
+          "source": "How many records to return in one request, up to Bitbucket's maximum of `100`.\n\n`next` in the response is the URL of the following page; page on its presence rather than on `size`, which Bitbucket does not report for every collection.",
+          "message": "1回のリクエストで返すレコード数（Bitbucketの最大値`100`まで）。\n\nレスポンス内の`next`は次のページのURLです。Bitbucketがすべてのコレクションで報告するわけではない`size`ではなく、その存在に基づいてページネーションしてください。"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX2dldA.option.cGFnZWxlbg.display_name": {
+          "source": "Page Length",
+          "message": "ページ長"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX2dldA.option.cGFnZWxlbg.short_desc": {
+          "source": "How many records to return, up to 100",
+          "message": "返すレコード数（最大100件）"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX2dldA.option.cmVwb19zbHVn.desc": {
+          "source": "The repository to work on, given as its slug or as its UUID in braces.\n\nEverything else scoped by a repository - commits, branches, pull requests - is listed from this repository, so changing it re-reads them.",
+          "message": "操作対象のリポジトリ（スラッグまたは中括弧付きのUUIDで指定）。\n\nコミット、ブランチ、プルリクエストなど、リポジトリをスコープとするその他のすべての項目はこのリポジトリから一覧表示されるため、変更すると再読み込みされます。"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX2dldA.option.cmVwb19zbHVn.display_name": {
+          "source": "Repository",
+          "message": "リポジトリ"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX2dldA.option.cmVwb19zbHVn.short_desc": {
+          "source": "The repository to work on",
+          "message": "操作対象のリポジトリ"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX2dldA.option.d29ya3NwYWNl.desc": {
+          "source": "The workspace to work in, given as its slug or as its UUID in braces.\n\nEverything else scoped by a workspace - repositories, members - is listed from this workspace, so changing it re-reads them.",
+          "message": "操作対象のワークスペース（スラッグまたは中括弧付きのUUIDで指定）。\n\nリポジトリ、メンバーなど、ワークスペースをスコープとするその他のすべての項目はこのワークスペースから一覧表示されるため、変更すると再読み込みされます。"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX2dldA.option.d29ya3NwYWNl.display_name": {
+          "source": "Workspace",
+          "message": "ワークスペース"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX2dldA.option.d29ya3NwYWNl.short_desc": {
+          "source": "The workspace to work in",
+          "message": "操作対象のワークスペース"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX2dldA.short_desc": {
+          "source": "List a repository's pull requests",
+          "message": "リポジトリのプルリクエストを一覧表示"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9jb21tZW50c19jb21tZW50X2lkX2RlbGV0ZQ.desc": {
+          "source": "Deletes a comment. Bitbucket keeps the comment and marks it deleted rather than removing it, so it still appears in a listing with `deleted` set.",
+          "message": "コメントを削除します。Bitbucketはコメントを完全に削除するのではなく保持して削除済みとしてマークするため、`deleted` が設定された一覧には引き続き表示されます。"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9jb21tZW50c19jb21tZW50X2lkX2RlbGV0ZQ.display_name": {
+          "source": "Delete Pull Request Comment",
+          "message": "プルリクエストコメントの削除"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9jb21tZW50c19jb21tZW50X2lkX2RlbGV0ZQ.option.Y29tbWVudF9pZA.desc": {
+          "source": "The id of the comment.",
+          "message": "コメントのID。"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9jb21tZW50c19jb21tZW50X2lkX2RlbGV0ZQ.option.Y29tbWVudF9pZA.display_name": {
+          "source": "Comment",
+          "message": "コメント"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9jb21tZW50c19jb21tZW50X2lkX2RlbGV0ZQ.option.Y29tbWVudF9pZA.short_desc": {
+          "source": "The id of the comment",
+          "message": "コメントのID"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9jb21tZW50c19jb21tZW50X2lkX2RlbGV0ZQ.option.cHVsbF9yZXF1ZXN0X2lk.desc": {
+          "source": "The id of the pull request.",
+          "message": "プルリクエストのID。"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9jb21tZW50c19jb21tZW50X2lkX2RlbGV0ZQ.option.cHVsbF9yZXF1ZXN0X2lk.display_name": {
+          "source": "Pull Request",
+          "message": "プルリクエスト"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9jb21tZW50c19jb21tZW50X2lkX2RlbGV0ZQ.option.cHVsbF9yZXF1ZXN0X2lk.short_desc": {
+          "source": "The pull request ID, as shown in the web UI",
+          "message": "Web UIに表示されるプルリクエストID"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9jb21tZW50c19jb21tZW50X2lkX2RlbGV0ZQ.option.cmVwb19zbHVn.desc": {
+          "source": "The repository to work on, given as its slug or as its UUID in braces.\n\nEverything else scoped by a repository - commits, branches, pull requests - is listed from this repository, so changing it re-reads them.",
+          "message": "操作対象のリポジトリ（スラッグまたは中括弧付きのUUIDで指定）。\n\nコミット、ブランチ、プルリクエストなど、リポジトリをスコープとするその他のすべての項目はこのリポジトリから一覧表示されるため、変更すると再読み込みされます。"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9jb21tZW50c19jb21tZW50X2lkX2RlbGV0ZQ.option.cmVwb19zbHVn.display_name": {
+          "source": "Repository",
+          "message": "リポジトリ"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9jb21tZW50c19jb21tZW50X2lkX2RlbGV0ZQ.option.cmVwb19zbHVn.short_desc": {
+          "source": "The repository to work on",
+          "message": "操作対象のリポジトリ"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9jb21tZW50c19jb21tZW50X2lkX2RlbGV0ZQ.option.d29ya3NwYWNl.desc": {
+          "source": "The workspace to work in, given as its slug or as its UUID in braces.\n\nEverything else scoped by a workspace - repositories, members - is listed from this workspace, so changing it re-reads them.",
+          "message": "操作対象のワークスペース（スラッグまたは中括弧付きのUUIDで指定）。\n\nリポジトリ、メンバーなど、ワークスペースをスコープとするその他のすべての項目はこのワークスペースから一覧表示されるため、変更すると再読み込みされます。"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9jb21tZW50c19jb21tZW50X2lkX2RlbGV0ZQ.option.d29ya3NwYWNl.display_name": {
+          "source": "Workspace",
+          "message": "ワークスペース"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9jb21tZW50c19jb21tZW50X2lkX2RlbGV0ZQ.option.d29ya3NwYWNl.short_desc": {
+          "source": "The workspace to work in",
+          "message": "操作対象のワークスペース"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9jb21tZW50c19jb21tZW50X2lkX2RlbGV0ZQ.short_desc": {
+          "source": "Delete a comment on a pull request",
+          "message": "プルリクエストのコメントを削除"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9jb21tZW50c19jb21tZW50X2lkX2dldA.desc": {
+          "source": "Retrieves a single comment on a pull request.",
+          "message": "プルリクエストの単一コメントを取得します。"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9jb21tZW50c19jb21tZW50X2lkX2dldA.display_name": {
+          "source": "Get Pull Request Comment",
+          "message": "プルリクエストコメントの取得"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9jb21tZW50c19jb21tZW50X2lkX2dldA.option.Y29tbWVudF9pZA.desc": {
+          "source": "The id of the comment.",
+          "message": "コメントのID。"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9jb21tZW50c19jb21tZW50X2lkX2dldA.option.Y29tbWVudF9pZA.display_name": {
+          "source": "Comment",
+          "message": "コメント"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9jb21tZW50c19jb21tZW50X2lkX2dldA.option.Y29tbWVudF9pZA.short_desc": {
+          "source": "The id of the comment",
+          "message": "コメントのID"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9jb21tZW50c19jb21tZW50X2lkX2dldA.option.cHVsbF9yZXF1ZXN0X2lk.desc": {
+          "source": "The id of the pull request.",
+          "message": "プルリクエストのID。"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9jb21tZW50c19jb21tZW50X2lkX2dldA.option.cHVsbF9yZXF1ZXN0X2lk.display_name": {
+          "source": "Pull Request",
+          "message": "プルリクエスト"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9jb21tZW50c19jb21tZW50X2lkX2dldA.option.cHVsbF9yZXF1ZXN0X2lk.short_desc": {
+          "source": "The pull request ID, as shown in the web UI",
+          "message": "Web UIに表示されるプルリクエストID"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9jb21tZW50c19jb21tZW50X2lkX2dldA.option.cmVwb19zbHVn.desc": {
+          "source": "The repository to work on, given as its slug or as its UUID in braces.\n\nEverything else scoped by a repository - commits, branches, pull requests - is listed from this repository, so changing it re-reads them.",
+          "message": "操作対象のリポジトリ（スラッグまたは中括弧付きのUUIDで指定）。\n\nコミット、ブランチ、プルリクエストなど、リポジトリをスコープとするその他のすべての項目はこのリポジトリから一覧表示されるため、変更すると再読み込みされます。"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9jb21tZW50c19jb21tZW50X2lkX2dldA.option.cmVwb19zbHVn.display_name": {
+          "source": "Repository",
+          "message": "リポジトリ"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9jb21tZW50c19jb21tZW50X2lkX2dldA.option.cmVwb19zbHVn.short_desc": {
+          "source": "The repository to work on",
+          "message": "操作対象のリポジトリ"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9jb21tZW50c19jb21tZW50X2lkX2dldA.option.d29ya3NwYWNl.desc": {
+          "source": "The workspace to work in, given as its slug or as its UUID in braces.\n\nEverything else scoped by a workspace - repositories, members - is listed from this workspace, so changing it re-reads them.",
+          "message": "操作対象のワークスペース（スラッグまたは中括弧付きのUUIDで指定）。\n\nリポジトリ、メンバーなど、ワークスペースをスコープとするその他のすべての項目はこのワークスペースから一覧表示されるため、変更すると再読み込みされます。"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9jb21tZW50c19jb21tZW50X2lkX2dldA.option.d29ya3NwYWNl.display_name": {
+          "source": "Workspace",
+          "message": "ワークスペース"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9jb21tZW50c19jb21tZW50X2lkX2dldA.option.d29ya3NwYWNl.short_desc": {
+          "source": "The workspace to work in",
+          "message": "操作対象のワークスペース"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9jb21tZW50c19jb21tZW50X2lkX2dldA.short_desc": {
+          "source": "Retrieve one comment on a pull request",
+          "message": "プルリクエストのコメントを1件取得"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9jb21tZW50c19jb21tZW50X2lkX3B1dA.desc": {
+          "source": "Replaces the text of a comment. Only the comment's author may change it.",
+          "message": "コメントの本文を置換します。コメントの作成者のみが変更できます。"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9jb21tZW50c19jb21tZW50X2lkX3B1dA.display_name": {
+          "source": "Update Pull Request Comment",
+          "message": "プルリクエストコメントの更新"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9jb21tZW50c19jb21tZW50X2lkX3B1dA.option.Y29tbWVudF9pZA.desc": {
+          "source": "The id of the comment.",
+          "message": "コメントのID。"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9jb21tZW50c19jb21tZW50X2lkX3B1dA.option.Y29tbWVudF9pZA.display_name": {
+          "source": "Comment",
+          "message": "コメント"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9jb21tZW50c19jb21tZW50X2lkX3B1dA.option.Y29tbWVudF9pZA.short_desc": {
+          "source": "The id of the comment",
+          "message": "コメントのID"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9jb21tZW50c19jb21tZW50X2lkX3B1dA.option.Y29udGVudA.display_name": {
+          "source": "Comment",
+          "message": "コメント"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9jb21tZW50c19jb21tZW50X2lkX3B1dA.option.Y29udGVudA.short_desc": {
+          "source": "The replacement comment; put the text in \"raw\"",
+          "message": "置換用コメント。「raw」にテキストを入力してください"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9jb21tZW50c19jb21tZW50X2lkX3B1dA.option.aW5saW5l.display_name": {
+          "source": "Inline",
+          "message": "インライン"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9jb21tZW50c19jb21tZW50X2lkX3B1dA.option.cHVsbF9yZXF1ZXN0X2lk.desc": {
+          "source": "The id of the pull request.",
+          "message": "プルリクエストのID。"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9jb21tZW50c19jb21tZW50X2lkX3B1dA.option.cHVsbF9yZXF1ZXN0X2lk.display_name": {
+          "source": "Pull Request",
+          "message": "プルリクエスト"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9jb21tZW50c19jb21tZW50X2lkX3B1dA.option.cHVsbF9yZXF1ZXN0X2lk.short_desc": {
+          "source": "The pull request ID, as shown in the web UI",
+          "message": "Web UIに表示されるプルリクエストID"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9jb21tZW50c19jb21tZW50X2lkX3B1dA.option.cmVwb19zbHVn.desc": {
+          "source": "The repository to work on, given as its slug or as its UUID in braces.\n\nEverything else scoped by a repository - commits, branches, pull requests - is listed from this repository, so changing it re-reads them.",
+          "message": "操作対象のリポジトリ（スラッグまたは中括弧付きのUUIDで指定）。\n\nコミット、ブランチ、プルリクエストなど、リポジトリをスコープとするその他のすべての項目はこのリポジトリから一覧表示されるため、変更すると再読み込みされます。"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9jb21tZW50c19jb21tZW50X2lkX3B1dA.option.cmVwb19zbHVn.display_name": {
+          "source": "Repository",
+          "message": "リポジトリ"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9jb21tZW50c19jb21tZW50X2lkX3B1dA.option.cmVwb19zbHVn.short_desc": {
+          "source": "The repository to work on",
+          "message": "操作対象のリポジトリ"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9jb21tZW50c19jb21tZW50X2lkX3B1dA.option.d29ya3NwYWNl.desc": {
+          "source": "The workspace to work in, given as its slug or as its UUID in braces.\n\nEverything else scoped by a workspace - repositories, members - is listed from this workspace, so changing it re-reads them.",
+          "message": "操作対象のワークスペース（スラッグまたは中括弧付きのUUIDで指定）。\n\nリポジトリ、メンバーなど、ワークスペースをスコープとするその他のすべての項目はこのワークスペースから一覧表示されるため、変更すると再読み込みされます。"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9jb21tZW50c19jb21tZW50X2lkX3B1dA.option.d29ya3NwYWNl.display_name": {
+          "source": "Workspace",
+          "message": "ワークスペース"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9jb21tZW50c19jb21tZW50X2lkX3B1dA.option.d29ya3NwYWNl.short_desc": {
+          "source": "The workspace to work in",
+          "message": "操作対象のワークスペース"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9jb21tZW50c19jb21tZW50X2lkX3B1dA.option.dHlwZQ.allowed-value.c3RyaW5nOnB1bGxyZXF1ZXN0X2NvbW1lbnQ.display_name": {
+          "source": "pullrequest_comment",
+          "message": "pullrequest_comment"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9jb21tZW50c19jb21tZW50X2lkX3B1dA.option.dHlwZQ.display_name": {
+          "source": "Type",
+          "message": "タイプ"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9jb21tZW50c19jb21tZW50X2lkX3B1dA.option.dHlwZQ.short_desc": {
+          "source": "Bitbucket's object discriminator; always \"pullrequest_comment\"",
+          "message": "Bitbucketのオブジェクト識別子。常に「pullrequest_comment」"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9jb21tZW50c19jb21tZW50X2lkX3B1dA.short_desc": {
+          "source": "Update a comment on a pull request",
+          "message": "プルリクエストのコメントを更新"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9jb21tZW50c19nZXQ.desc": {
+          "source": "Lists the comments on a pull request, including the ones attached to a line of the diff and the ones Bitbucket marks as deleted.",
+          "message": "差分の行に添付されたコメントや、Bitbucketが削除済みとしてマークしたコメントを含め、プルリクエストのコメントを一覧表示します。"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9jb21tZW50c19nZXQ.display_name": {
+          "source": "List Pull Request Comments",
+          "message": "プルリクエストコメント一覧の取得"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9jb21tZW50c19nZXQ.option.cGFnZQ.desc": {
+          "source": "Which page of results to return, starting at 1. Bitbucket documents this for every collection but declares it on almost none of them.",
+          "message": "返す結果のページ番号（1から開始）。Bitbucketはすべてのコレクションでこれをドキュメントに記載していますが、ほぼすべてで宣言していません。"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9jb21tZW50c19nZXQ.option.cGFnZQ.display_name": {
+          "source": "Page",
+          "message": "ページ"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9jb21tZW50c19nZXQ.option.cGFnZQ.short_desc": {
+          "source": "Which page of results to return, starting at 1",
+          "message": "返す結果のページ番号（1から開始）"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9jb21tZW50c19nZXQ.option.cGFnZWxlbg.desc": {
+          "source": "How many records to return in one request, up to Bitbucket's maximum of `100`.\n\n`next` in the response is the URL of the following page; page on its presence rather than on `size`, which Bitbucket does not report for every collection.",
+          "message": "1回のリクエストで返すレコード数（Bitbucketの最大値`100`まで）。\n\nレスポンス内の`next`は次のページのURLです。Bitbucketがすべてのコレクションで報告するわけではない`size`ではなく、その存在に基づいてページネーションしてください。"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9jb21tZW50c19nZXQ.option.cGFnZWxlbg.display_name": {
+          "source": "Page Length",
+          "message": "ページ長"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9jb21tZW50c19nZXQ.option.cGFnZWxlbg.short_desc": {
+          "source": "How many records to return, up to 100",
+          "message": "返すレコード数（最大100件）"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9jb21tZW50c19nZXQ.option.cHVsbF9yZXF1ZXN0X2lk.desc": {
+          "source": "The id of the pull request.",
+          "message": "プルリクエストのID。"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9jb21tZW50c19nZXQ.option.cHVsbF9yZXF1ZXN0X2lk.display_name": {
+          "source": "Pull Request",
+          "message": "プルリクエスト"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9jb21tZW50c19nZXQ.option.cHVsbF9yZXF1ZXN0X2lk.short_desc": {
+          "source": "The pull request ID, as shown in the web UI",
+          "message": "Web UIに表示されるプルリクエストID"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9jb21tZW50c19nZXQ.option.cmVwb19zbHVn.desc": {
+          "source": "The repository to work on, given as its slug or as its UUID in braces.\n\nEverything else scoped by a repository - commits, branches, pull requests - is listed from this repository, so changing it re-reads them.",
+          "message": "操作対象のリポジトリ（スラッグまたは中括弧付きのUUIDで指定）。\n\nコミット、ブランチ、プルリクエストなど、リポジトリをスコープとするその他のすべての項目はこのリポジトリから一覧表示されるため、変更すると再読み込みされます。"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9jb21tZW50c19nZXQ.option.cmVwb19zbHVn.display_name": {
+          "source": "Repository",
+          "message": "リポジトリ"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9jb21tZW50c19nZXQ.option.cmVwb19zbHVn.short_desc": {
+          "source": "The repository to work on",
+          "message": "操作対象のリポジトリ"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9jb21tZW50c19nZXQ.option.d29ya3NwYWNl.desc": {
+          "source": "The workspace to work in, given as its slug or as its UUID in braces.\n\nEverything else scoped by a workspace - repositories, members - is listed from this workspace, so changing it re-reads them.",
+          "message": "操作対象のワークスペース（スラッグまたは中括弧付きのUUIDで指定）。\n\nリポジトリ、メンバーなど、ワークスペースをスコープとするその他のすべての項目はこのワークスペースから一覧表示されるため、変更すると再読み込みされます。"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9jb21tZW50c19nZXQ.option.d29ya3NwYWNl.display_name": {
+          "source": "Workspace",
+          "message": "ワークスペース"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9jb21tZW50c19nZXQ.option.d29ya3NwYWNl.short_desc": {
+          "source": "The workspace to work in",
+          "message": "操作対象のワークスペース"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9jb21tZW50c19nZXQ.short_desc": {
+          "source": "List the comments on a pull request",
+          "message": "プルリクエストのコメントを一覧表示"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9jb21tZW50c19wb3N0.desc": {
+          "source": "Adds a comment to a pull request.\n\n`content.raw` is the comment text. Supplying `inline` with a `path` and a line number attaches it to that line of the diff; supplying `parent` makes it a reply.",
+          "message": "プルリクエストにコメントを追加します。\n\n`content.raw` はコメント本文です。`inline` に `path` と行番号を指定すると差分のその行にコメントが添付され、`parent` を指定すると返信になります。"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9jb21tZW50c19wb3N0.display_name": {
+          "source": "Comment on Pull Request",
+          "message": "プルリクエストにコメント"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9jb21tZW50c19wb3N0.option.Y29udGVudA.display_name": {
+          "source": "Comment",
+          "message": "コメント"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9jb21tZW50c19wb3N0.option.Y29udGVudA.short_desc": {
+          "source": "The comment; put the text in \"raw\"",
+          "message": "コメント。テキストは「raw」に設定します"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9jb21tZW50c19wb3N0.option.aW5saW5l.display_name": {
+          "source": "Inline",
+          "message": "インライン"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9jb21tZW50c19wb3N0.option.cGFyZW50.display_name": {
+          "source": "Parent",
+          "message": "親"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9jb21tZW50c19wb3N0.option.cHVsbF9yZXF1ZXN0X2lk.desc": {
+          "source": "The id of the pull request.",
+          "message": "プルリクエストのID。"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9jb21tZW50c19wb3N0.option.cHVsbF9yZXF1ZXN0X2lk.display_name": {
+          "source": "Pull Request",
+          "message": "プルリクエスト"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9jb21tZW50c19wb3N0.option.cHVsbF9yZXF1ZXN0X2lk.short_desc": {
+          "source": "The pull request ID, as shown in the web UI",
+          "message": "Web UIに表示されるプルリクエストID"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9jb21tZW50c19wb3N0.option.cmVwb19zbHVn.desc": {
+          "source": "The repository to work on, given as its slug or as its UUID in braces.\n\nEverything else scoped by a repository - commits, branches, pull requests - is listed from this repository, so changing it re-reads them.",
+          "message": "操作対象のリポジトリ（スラッグまたは中括弧付きのUUIDで指定）。\n\nコミット、ブランチ、プルリクエストなど、リポジトリをスコープとするその他のすべての項目はこのリポジトリから一覧表示されるため、変更すると再読み込みされます。"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9jb21tZW50c19wb3N0.option.cmVwb19zbHVn.display_name": {
+          "source": "Repository",
+          "message": "リポジトリ"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9jb21tZW50c19wb3N0.option.cmVwb19zbHVn.short_desc": {
+          "source": "The repository to work on",
+          "message": "操作対象のリポジトリ"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9jb21tZW50c19wb3N0.option.d29ya3NwYWNl.desc": {
+          "source": "The workspace to work in, given as its slug or as its UUID in braces.\n\nEverything else scoped by a workspace - repositories, members - is listed from this workspace, so changing it re-reads them.",
+          "message": "操作対象のワークスペース（スラッグまたは中括弧付きのUUIDで指定）。\n\nリポジトリ、メンバーなど、ワークスペースをスコープとするその他のすべての項目はこのワークスペースから一覧表示されるため、変更すると再読み込みされます。"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9jb21tZW50c19wb3N0.option.d29ya3NwYWNl.display_name": {
+          "source": "Workspace",
+          "message": "ワークスペース"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9jb21tZW50c19wb3N0.option.d29ya3NwYWNl.short_desc": {
+          "source": "The workspace to work in",
+          "message": "操作対象のワークスペース"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9jb21tZW50c19wb3N0.option.dHlwZQ.allowed-value.c3RyaW5nOnB1bGxyZXF1ZXN0X2NvbW1lbnQ.display_name": {
+          "source": "pullrequest_comment",
+          "message": "pullrequest_comment"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9jb21tZW50c19wb3N0.option.dHlwZQ.display_name": {
+          "source": "Type",
+          "message": "タイプ"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9jb21tZW50c19wb3N0.option.dHlwZQ.short_desc": {
+          "source": "Bitbucket's object discriminator; always \"pullrequest_comment\"",
+          "message": "Bitbucketのオブジェクト識別子。常に「pullrequest_comment」"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9jb21tZW50c19wb3N0.short_desc": {
+          "source": "Add a comment to a pull request",
+          "message": "プルリクエストにコメントを追加"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9nZXQ.desc": {
+          "source": "Retrieves a pull request with its state, participants and merge commit.",
+          "message": "プルリクエストをその状態、参加者、マージコミットとともに取得します。"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9nZXQ.display_name": {
+          "source": "Get Pull Request",
+          "message": "プルリクエストの取得"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9nZXQ.option.cHVsbF9yZXF1ZXN0X2lk.desc": {
+          "source": "The id of the pull request.",
+          "message": "プルリクエストのID。"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9nZXQ.option.cHVsbF9yZXF1ZXN0X2lk.display_name": {
+          "source": "Pull Request",
+          "message": "プルリクエスト"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9nZXQ.option.cHVsbF9yZXF1ZXN0X2lk.short_desc": {
+          "source": "The pull request ID, as shown in the web UI",
+          "message": "Web UIに表示されるプルリクエストID"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9nZXQ.option.cmVwb19zbHVn.desc": {
+          "source": "The repository to work on, given as its slug or as its UUID in braces.\n\nEverything else scoped by a repository - commits, branches, pull requests - is listed from this repository, so changing it re-reads them.",
+          "message": "操作対象のリポジトリ（スラッグまたは中括弧付きのUUIDで指定）。\n\nコミット、ブランチ、プルリクエストなど、リポジトリをスコープとするその他のすべての項目はこのリポジトリから一覧表示されるため、変更すると再読み込みされます。"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9nZXQ.option.cmVwb19zbHVn.display_name": {
+          "source": "Repository",
+          "message": "リポジトリ"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9nZXQ.option.cmVwb19zbHVn.short_desc": {
+          "source": "The repository to work on",
+          "message": "操作対象のリポジトリ"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9nZXQ.option.d29ya3NwYWNl.desc": {
+          "source": "The workspace to work in, given as its slug or as its UUID in braces.\n\nEverything else scoped by a workspace - repositories, members - is listed from this workspace, so changing it re-reads them.",
+          "message": "操作対象のワークスペース（スラッグまたは中括弧付きのUUIDで指定）。\n\nリポジトリ、メンバーなど、ワークスペースをスコープとするその他のすべての項目はこのワークスペースから一覧表示されるため、変更すると再読み込みされます。"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9nZXQ.option.d29ya3NwYWNl.display_name": {
+          "source": "Workspace",
+          "message": "ワークスペース"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9nZXQ.option.d29ya3NwYWNl.short_desc": {
+          "source": "The workspace to work in",
+          "message": "操作対象のワークスペース"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9nZXQ.short_desc": {
+          "source": "Retrieve one pull request",
+          "message": "プルリクエストを1件取得"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9wdXQ.desc": {
+          "source": "Updates a pull request's title, description, destination branch or reviewers.\n\nOnly the fields supplied are changed. This does not merge, decline or approve the pull request; those are separate operations.",
+          "message": "プルリクエストのタイトル、説明、マージ先ブランチ、またはレビュアーを更新します。\n\n指定されたフィールドのみが変更されます。これによりプルリクエストがマージ、却下、承認されることはありません（これらは別の操作です）。"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9wdXQ.display_name": {
+          "source": "Update Pull Request",
+          "message": "プルリクエストの更新"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9wdXQ.option.Y2xvc2Vfc291cmNlX2JyYW5jaA.desc": {
+          "source": "A boolean flag indicating if merging the pull request closes the source branch.",
+          "message": "プルリクエストのマージ時にマージ元ブランチを削除するかどうかを示すブール値フラグ。"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9wdXQ.option.Y2xvc2Vfc291cmNlX2JyYW5jaA.display_name": {
+          "source": "Close Source Branch",
+          "message": "マージ元ブランチを削除"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9wdXQ.option.Y2xvc2Vfc291cmNlX2JyYW5jaA.short_desc": {
+          "source": "A boolean flag indicating if merging the pull request closes the source branch",
+          "message": "プルリクエストのマージ時にマージ元ブランチを削除するかどうかを示すブール値フラグ"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9wdXQ.option.ZGVzdGluYXRpb24.desc": {
+          "source": "The branch the changes are merged into; the repository's main branch when unset.\n\nBitbucket declares this as a nested object; it is presented here as the branch name alone and sent in the shape the API expects.\n\nThis value is sent as Bitbucket's nested branch reference, `{\"branch\": {\"name\": …}}`.",
+          "message": "変更がマージされるブランチ。未設定の場合はリポジトリのメインブランチになります。\n\nBitbucketではネストされたオブジェクトとして宣言されていますが、ここではブランチ名単体として提示され、APIが期待する形式で送信されます。\n\nこの値はBitbucketのネストされたブランチ参照 `{\"branch\": {\"name\": …}}` として送信されます。"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9wdXQ.option.ZGVzdGluYXRpb24.display_name": {
+          "source": "Destination Branch",
+          "message": "マージ先ブランチ"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9wdXQ.option.ZGVzdGluYXRpb24.short_desc": {
+          "source": "The branch the changes are merged into",
+          "message": "変更がマージされるブランチ"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9wdXQ.option.ZHJhZnQ.desc": {
+          "source": "A boolean flag indicating whether the pull request is a draft.",
+          "message": "プルリクエストがドラフトかどうかを示すブール値フラグ。"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9wdXQ.option.ZHJhZnQ.display_name": {
+          "source": "Draft",
+          "message": "下書き"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9wdXQ.option.ZHJhZnQ.short_desc": {
+          "source": "A boolean flag indicating whether the pull request is a draft",
+          "message": "プルリクエストがドラフトかどうかを示すブール値フラグ"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9wdXQ.option.c291cmNl.desc": {
+          "source": "The branch holding the changes to merge.\n\nBitbucket declares this as a nested object; it is presented here as the branch name alone and sent in the shape the API expects.\n\nThis value is sent as Bitbucket's nested branch reference, `{\"branch\": {\"name\": …}}`.",
+          "message": "マージ対象の変更を含むブランチ。\n\nBitbucketではネストされたオブジェクトとして宣言されていますが、ここではブランチ名単体として提示され、APIが期待する形式で送信されます。\n\nこの値はBitbucketのネストされたブランチ参照 `{\"branch\": {\"name\": …}}` として送信されます。"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9wdXQ.option.c291cmNl.display_name": {
+          "source": "Source Branch",
+          "message": "マージ元ブランチ"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9wdXQ.option.c291cmNl.short_desc": {
+          "source": "The branch holding the changes",
+          "message": "変更を含むブランチ"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9wdXQ.option.cHVsbF9yZXF1ZXN0X2lk.desc": {
+          "source": "The id of the pull request.",
+          "message": "プルリクエストのID。"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9wdXQ.option.cHVsbF9yZXF1ZXN0X2lk.display_name": {
+          "source": "Pull Request",
+          "message": "プルリクエスト"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9wdXQ.option.cHVsbF9yZXF1ZXN0X2lk.short_desc": {
+          "source": "The pull request ID, as shown in the web UI",
+          "message": "Web UIに表示されるプルリクエストID"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9wdXQ.option.cmV2aWV3ZXJz.desc": {
+          "source": "The members to request a review from, as their account UUIDs.\n\nBitbucket declares this as a list of user objects; it is presented here as a list of IDs and sent in the shape the API expects.\n\nThis value is sent as Bitbucket's list of user objects, `[{\"type\": \"user\", \"uuid\": …}]`.",
+          "message": "レビューを依頼するメンバーのアカウントUUID一覧。\n\nBitbucketではユーザーオブジェクトのリストとして宣言されていますが、ここではIDのリストとして提示され、APIが期待する形式で送信されます。\n\nこの値はBitbucketのユーザーオブジェクトのリスト `[{\"type\": \"user\", \"uuid\": …}]` として送信されます。"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9wdXQ.option.cmV2aWV3ZXJz.display_name": {
+          "source": "Reviewers",
+          "message": "レビュアー"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9wdXQ.option.cmV2aWV3ZXJz.short_desc": {
+          "source": "The workspace members to request a review from",
+          "message": "レビューを依頼するワークスペースメンバー"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9wdXQ.option.cmVwb19zbHVn.desc": {
+          "source": "The repository to work on, given as its slug or as its UUID in braces.\n\nEverything else scoped by a repository - commits, branches, pull requests - is listed from this repository, so changing it re-reads them.",
+          "message": "操作対象のリポジトリ（スラッグまたは中括弧付きのUUIDで指定）。\n\nコミット、ブランチ、プルリクエストなど、リポジトリをスコープとするその他のすべての項目はこのリポジトリから一覧表示されるため、変更すると再読み込みされます。"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9wdXQ.option.cmVwb19zbHVn.display_name": {
+          "source": "Repository",
+          "message": "リポジトリ"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9wdXQ.option.cmVwb19zbHVn.short_desc": {
+          "source": "The repository to work on",
+          "message": "操作対象のリポジトリ"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9wdXQ.option.d29ya3NwYWNl.desc": {
+          "source": "The workspace to work in, given as its slug or as its UUID in braces.\n\nEverything else scoped by a workspace - repositories, members - is listed from this workspace, so changing it re-reads them.",
+          "message": "操作対象のワークスペース（スラッグまたは中括弧付きのUUIDで指定）。\n\nリポジトリ、メンバーなど、ワークスペースをスコープとするその他のすべての項目はこのワークスペースから一覧表示されるため、変更すると再読み込みされます。"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9wdXQ.option.d29ya3NwYWNl.display_name": {
+          "source": "Workspace",
+          "message": "ワークスペース"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9wdXQ.option.d29ya3NwYWNl.short_desc": {
+          "source": "The workspace to work in",
+          "message": "操作対象のワークスペース"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9wdXQ.option.dGl0bGU.desc": {
+          "source": "Title of the pull request.",
+          "message": "プルリクエストのタイトル。"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9wdXQ.option.dGl0bGU.display_name": {
+          "source": "Title",
+          "message": "タイトル"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9wdXQ.option.dGl0bGU.short_desc": {
+          "source": "Title of the pull request",
+          "message": "プルリクエストのタイトル"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9wdXQ.option.dHlwZQ.allowed-value.c3RyaW5nOnB1bGxyZXF1ZXN0.display_name": {
+          "source": "pullrequest",
+          "message": "pullrequest"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9wdXQ.option.dHlwZQ.display_name": {
+          "source": "Type",
+          "message": "タイプ"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9wdXQ.option.dHlwZQ.short_desc": {
+          "source": "Bitbucket's object discriminator; always \"pullrequest\"",
+          "message": "Bitbucketのオブジェクト識別子。常に \"pullrequest\" です"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9wdXQ.short_desc": {
+          "source": "Update a pull request",
+          "message": "プルリクエストを更新"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3Bvc3Q.desc": {
+          "source": "Opens a pull request from one branch into another.\n\nThe repository in the URL is the **destination**. `destination` defaults to the repository's main branch when unset. Setting `close_source_branch` deletes the source branch when the pull request is merged.",
+          "message": "あるブランチから別のブランチへのプルリクエストを作成します。\n\nURL内のリポジトリは**マージ先**です。`destination` が未設定の場合、リポジトリのメインブランチがデフォルトになります。`close_source_branch` を設定すると、プルリクエストのマージ時にマージ元ブランチが削除されます。"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3Bvc3Q.display_name": {
+          "source": "Create Pull Request",
+          "message": "プルリクエストの作成"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3Bvc3Q.option.Y2xvc2Vfc291cmNlX2JyYW5jaA.desc": {
+          "source": "A boolean flag indicating if merging the pull request closes the source branch.",
+          "message": "プルリクエストのマージ時にマージ元ブランチを削除するかどうかを示すブール値フラグ。"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3Bvc3Q.option.Y2xvc2Vfc291cmNlX2JyYW5jaA.display_name": {
+          "source": "Close Source Branch",
+          "message": "マージ元ブランチを削除"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3Bvc3Q.option.Y2xvc2Vfc291cmNlX2JyYW5jaA.short_desc": {
+          "source": "A boolean flag indicating if merging the pull request closes the source branch",
+          "message": "プルリクエストのマージ時にマージ元ブランチを削除するかどうかを示すブール値フラグ"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3Bvc3Q.option.ZGVzdGluYXRpb24.desc": {
+          "source": "The branch the changes are merged into; the repository's main branch when unset.\n\nBitbucket declares this as a nested object; it is presented here as the branch name alone and sent in the shape the API expects.\n\nThis value is sent as Bitbucket's nested branch reference, `{\"branch\": {\"name\": …}}`.",
+          "message": "変更がマージされるブランチ。未設定の場合はリポジトリのメインブランチになります。\n\nBitbucketではネストされたオブジェクトとして宣言されていますが、ここではブランチ名単体として提示され、APIが期待する形式で送信されます。\n\nこの値はBitbucketのネストされたブランチ参照 `{\"branch\": {\"name\": …}}` として送信されます。"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3Bvc3Q.option.ZGVzdGluYXRpb24.display_name": {
+          "source": "Destination Branch",
+          "message": "マージ先ブランチ"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3Bvc3Q.option.ZGVzdGluYXRpb24.short_desc": {
+          "source": "The branch the changes are merged into",
+          "message": "変更がマージされるブランチ"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3Bvc3Q.option.ZHJhZnQ.desc": {
+          "source": "A boolean flag indicating whether the pull request is a draft.",
+          "message": "プルリクエストがドラフトかどうかを示すブール値フラグ。"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3Bvc3Q.option.ZHJhZnQ.display_name": {
+          "source": "Draft",
+          "message": "下書き"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3Bvc3Q.option.ZHJhZnQ.short_desc": {
+          "source": "A boolean flag indicating whether the pull request is a draft",
+          "message": "プルリクエストがドラフトかどうかを示すブール値フラグ"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3Bvc3Q.option.c291cmNl.desc": {
+          "source": "The branch holding the changes to merge.\n\nBitbucket declares this as a nested object; it is presented here as the branch name alone and sent in the shape the API expects.\n\nThis value is sent as Bitbucket's nested branch reference, `{\"branch\": {\"name\": …}}`.",
+          "message": "マージ対象の変更を含むブランチ。\n\nBitbucketではネストされたオブジェクトとして宣言されていますが、ここではブランチ名単体として提示され、APIが期待する形式で送信されます。\n\nこの値はBitbucketのネストされたブランチ参照 `{\"branch\": {\"name\": …}}` として送信されます。"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3Bvc3Q.option.c291cmNl.display_name": {
+          "source": "Source Branch",
+          "message": "マージ元ブランチ"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3Bvc3Q.option.c291cmNl.short_desc": {
+          "source": "The branch holding the changes",
+          "message": "変更を含むブランチ"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3Bvc3Q.option.cmV2aWV3ZXJz.desc": {
+          "source": "The members to request a review from, as their account UUIDs.\n\nBitbucket declares this as a list of user objects; it is presented here as a list of IDs and sent in the shape the API expects.\n\nThis value is sent as Bitbucket's list of user objects, `[{\"type\": \"user\", \"uuid\": …}]`.",
+          "message": "レビューを依頼するメンバーのアカウントUUID一覧。\n\nBitbucketではユーザーオブジェクトのリストとして宣言されていますが、ここではIDのリストとして提示され、APIが期待する形式で送信されます。\n\nこの値はBitbucketのユーザーオブジェクトのリスト `[{\"type\": \"user\", \"uuid\": …}]` として送信されます。"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3Bvc3Q.option.cmV2aWV3ZXJz.display_name": {
+          "source": "Reviewers",
+          "message": "レビュアー"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3Bvc3Q.option.cmV2aWV3ZXJz.short_desc": {
+          "source": "The workspace members to request a review from",
+          "message": "レビューを依頼するワークスペースメンバー"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3Bvc3Q.option.cmVwb19zbHVn.desc": {
+          "source": "The repository to work on, given as its slug or as its UUID in braces.\n\nEverything else scoped by a repository - commits, branches, pull requests - is listed from this repository, so changing it re-reads them.",
+          "message": "操作対象のリポジトリ（スラッグまたは中括弧付きのUUIDで指定）。\n\nコミット、ブランチ、プルリクエストなど、リポジトリをスコープとするその他のすべての項目はこのリポジトリから一覧表示されるため、変更すると再読み込みされます。"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3Bvc3Q.option.cmVwb19zbHVn.display_name": {
+          "source": "Repository",
+          "message": "リポジトリ"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3Bvc3Q.option.cmVwb19zbHVn.short_desc": {
+          "source": "The repository to work on",
+          "message": "操作対象のリポジトリ"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3Bvc3Q.option.d29ya3NwYWNl.desc": {
+          "source": "The workspace to work in, given as its slug or as its UUID in braces.\n\nEverything else scoped by a workspace - repositories, members - is listed from this workspace, so changing it re-reads them.",
+          "message": "操作対象のワークスペース（スラッグまたは中括弧付きのUUIDで指定）。\n\nリポジトリ、メンバーなど、ワークスペースをスコープとするその他のすべての項目はこのワークスペースから一覧表示されるため、変更すると再読み込みされます。"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3Bvc3Q.option.d29ya3NwYWNl.display_name": {
+          "source": "Workspace",
+          "message": "ワークスペース"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3Bvc3Q.option.d29ya3NwYWNl.short_desc": {
+          "source": "The workspace to work in",
+          "message": "操作対象のワークスペース"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3Bvc3Q.option.dGl0bGU.desc": {
+          "source": "Title of the pull request.",
+          "message": "プルリクエストのタイトル。"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3Bvc3Q.option.dGl0bGU.display_name": {
+          "source": "Title",
+          "message": "タイトル"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3Bvc3Q.option.dGl0bGU.short_desc": {
+          "source": "Title of the pull request",
+          "message": "プルリクエストのタイトル"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3Bvc3Q.option.dHlwZQ.allowed-value.c3RyaW5nOnB1bGxyZXF1ZXN0.display_name": {
+          "source": "pullrequest",
+          "message": "pullrequest"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3Bvc3Q.option.dHlwZQ.display_name": {
+          "source": "Type",
+          "message": "タイプ"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3Bvc3Q.option.dHlwZQ.short_desc": {
+          "source": "Bitbucket's object discriminator; always \"pullrequest\"",
+          "message": "Bitbucketのオブジェクト識別子。常に \"pullrequest\" です"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3Bvc3Q.short_desc": {
+          "source": "Open a pull request",
+          "message": "プルリクエストを作成"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcmVmc19icmFuY2hlc19nZXQ.desc": {
+          "source": "Lists the branches of a repository with the commit each one points at.\n\nThis is what backs the branch dropdowns on the pull request actions; the application this module replaces offered those dropdowns without exporting the endpoint that fills them.",
+          "message": "リポジトリのブランチと、各ブランチが指すコミットを一覧表示します。\n\nこれはプルリクエストアクションのブランチドロップダウンを支えるものです。このモジュールが置き換えるアプリケーションでは、ドロップダウンを提供しつつも、それにデータを読み込むエンドポイントはエクスポートしていませんでした。"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcmVmc19icmFuY2hlc19nZXQ.display_name": {
+          "source": "List Branches",
+          "message": "ブランチの一覧取得"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcmVmc19icmFuY2hlc19nZXQ.option.c29ydA.desc": {
+          "source": "\nField by which the results should be sorted as per [filtering and sorting](/cloud/bitbucket/rest/intro/#filtering).\n        ",
+          "message": "\n[フィルタリングとソート](/cloud/bitbucket/rest/intro/#filtering)に従って結果をソートするフィールド。\n        "
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcmVmc19icmFuY2hlc19nZXQ.option.c29ydA.display_name": {
+          "source": "Sort By",
+          "message": "並べ替え順"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcmVmc19icmFuY2hlc19nZXQ.option.c29ydA.short_desc": {
+          "source": "A field to sort by; prefix with \"-\" to reverse",
+          "message": "ソート対象のフィールド。逆順にするには先頭に「-」を付けます"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcmVmc19icmFuY2hlc19nZXQ.option.cGFnZQ.desc": {
+          "source": "Which page of results to return, starting at 1. Bitbucket documents this for every collection but declares it on almost none of them.",
+          "message": "返す結果のページ番号（1から開始）。Bitbucketはすべてのコレクションでこれをドキュメントに記載していますが、ほぼすべてで宣言していません。"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcmVmc19icmFuY2hlc19nZXQ.option.cGFnZQ.display_name": {
+          "source": "Page",
+          "message": "ページ"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcmVmc19icmFuY2hlc19nZXQ.option.cGFnZQ.short_desc": {
+          "source": "Which page of results to return, starting at 1",
+          "message": "返す結果のページ番号（1から開始）"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcmVmc19icmFuY2hlc19nZXQ.option.cGFnZWxlbg.desc": {
+          "source": "How many records to return in one request, up to Bitbucket's maximum of `100`.\n\n`next` in the response is the URL of the following page; page on its presence rather than on `size`, which Bitbucket does not report for every collection.",
+          "message": "1回のリクエストで返すレコード数（Bitbucketの最大値`100`まで）。\n\nレスポンス内の`next`は次のページのURLです。Bitbucketがすべてのコレクションで報告するわけではない`size`ではなく、その存在に基づいてページネーションしてください。"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcmVmc19icmFuY2hlc19nZXQ.option.cGFnZWxlbg.display_name": {
+          "source": "Page Length",
+          "message": "ページ長"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcmVmc19icmFuY2hlc19nZXQ.option.cGFnZWxlbg.short_desc": {
+          "source": "How many records to return, up to 100",
+          "message": "返すレコード数（最大100件）"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcmVmc19icmFuY2hlc19nZXQ.option.cQ.desc": {
+          "source": "A Bitbucket [filter expression](https://developer.atlassian.com/cloud/bitbucket/rest/intro/#filtering), ex: `state = \"OPEN\"` or `updated_on > 2026-01-01`.\n\nThe fields a filter may name differ per collection and are documented with the endpoint.",
+          "message": "Bitbucketの[フィルタ式](https://developer.atlassian.com/cloud/bitbucket/rest/intro/#filtering)（例: `state = \"OPEN\"` または `updated_on > 2026-01-01`）。\n\nフィルタで指定可能なフィールドはコレクションごとに異なり、エンドポイントに記載されています。"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcmVmc19icmFuY2hlc19nZXQ.option.cQ.display_name": {
+          "source": "Filter",
+          "message": "フィルター"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcmVmc19icmFuY2hlc19nZXQ.option.cQ.short_desc": {
+          "source": "A Bitbucket filter expression, ex: 'state = \"OPEN\"'",
+          "message": "Bitbucketのフィルタ式（例: 'state = \"OPEN\"'）"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcmVmc19icmFuY2hlc19nZXQ.option.cmVwb19zbHVn.desc": {
+          "source": "The repository to work on, given as its slug or as its UUID in braces.\n\nEverything else scoped by a repository - commits, branches, pull requests - is listed from this repository, so changing it re-reads them.",
+          "message": "操作対象のリポジトリ（スラッグまたは中括弧付きのUUIDで指定）。\n\nコミット、ブランチ、プルリクエストなど、リポジトリをスコープとするその他のすべての項目はこのリポジトリから一覧表示されるため、変更すると再読み込みされます。"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcmVmc19icmFuY2hlc19nZXQ.option.cmVwb19zbHVn.display_name": {
+          "source": "Repository",
+          "message": "リポジトリ"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcmVmc19icmFuY2hlc19nZXQ.option.cmVwb19zbHVn.short_desc": {
+          "source": "The repository to work on",
+          "message": "操作対象のリポジトリ"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcmVmc19icmFuY2hlc19nZXQ.option.d29ya3NwYWNl.desc": {
+          "source": "The workspace to work in, given as its slug or as its UUID in braces.\n\nEverything else scoped by a workspace - repositories, members - is listed from this workspace, so changing it re-reads them.",
+          "message": "操作対象のワークスペース（スラッグまたは中括弧付きのUUIDで指定）。\n\nリポジトリ、メンバーなど、ワークスペースをスコープとするその他のすべての項目はこのワークスペースから一覧表示されるため、変更すると再読み込みされます。"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcmVmc19icmFuY2hlc19nZXQ.option.d29ya3NwYWNl.display_name": {
+          "source": "Workspace",
+          "message": "ワークスペース"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcmVmc19icmFuY2hlc19nZXQ.option.d29ya3NwYWNl.short_desc": {
+          "source": "The workspace to work in",
+          "message": "操作対象のワークスペース"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcmVmc19icmFuY2hlc19nZXQ.short_desc": {
+          "source": "List a repository's branches",
+          "message": "リポジトリのブランチを一覧表示"
+        },
+        "app.Qml0YnVja2V0.action.d29ya3NwYWNlc193b3Jrc3BhY2VfZ2V0.desc": {
+          "source": "Retrieves a workspace with its slug, name and whether it is private.",
+          "message": "ワークスペースをスラッグ、名前、非公開設定とともに取得します。"
+        },
+        "app.Qml0YnVja2V0.action.d29ya3NwYWNlc193b3Jrc3BhY2VfZ2V0.display_name": {
+          "source": "Get Workspace",
+          "message": "ワークスペースを取得"
+        },
+        "app.Qml0YnVja2V0.action.d29ya3NwYWNlc193b3Jrc3BhY2VfZ2V0.option.d29ya3NwYWNl.desc": {
+          "source": "The workspace to work in, given as its slug or as its UUID in braces.\n\nEverything else scoped by a workspace - repositories, members - is listed from this workspace, so changing it re-reads them.",
+          "message": "操作対象のワークスペース（スラッグまたは中括弧付きのUUIDで指定）。\n\nリポジトリ、メンバーなど、ワークスペースをスコープとするその他のすべての項目はこのワークスペースから一覧表示されるため、変更すると再読み込みされます。"
+        },
+        "app.Qml0YnVja2V0.action.d29ya3NwYWNlc193b3Jrc3BhY2VfZ2V0.option.d29ya3NwYWNl.display_name": {
+          "source": "Workspace",
+          "message": "ワークスペース"
+        },
+        "app.Qml0YnVja2V0.action.d29ya3NwYWNlc193b3Jrc3BhY2VfZ2V0.option.d29ya3NwYWNl.short_desc": {
+          "source": "The workspace to work in",
+          "message": "操作対象のワークスペース"
+        },
+        "app.Qml0YnVja2V0.action.d29ya3NwYWNlc193b3Jrc3BhY2VfZ2V0.short_desc": {
+          "source": "Retrieve one workspace",
+          "message": "ワークスペースを1件取得"
+        },
+        "app.Qml0YnVja2V0.action.d29ya3NwYWNlc193b3Jrc3BhY2VfbWVtYmVyc19nZXQ.desc": {
+          "source": "Lists the members of a workspace.\n\nEach record is a **membership**, so the member is under `user` rather than at the top level: the account UUID is `user.uuid`.",
+          "message": "ワークスペースのメンバーを一覧表示します。\n\n各レコードは**メンバーシップ**であるため、メンバー情報はトップレベルではなく `user` 配下にあります。アカウントUUIDは `user.uuid` です。"
+        },
+        "app.Qml0YnVja2V0.action.d29ya3NwYWNlc193b3Jrc3BhY2VfbWVtYmVyc19nZXQ.display_name": {
+          "source": "List Workspace Members",
+          "message": "ワークスペースメンバーの一覧取得"
+        },
+        "app.Qml0YnVja2V0.action.d29ya3NwYWNlc193b3Jrc3BhY2VfbWVtYmVyc19nZXQ.option.cGFnZQ.desc": {
+          "source": "Which page of results to return, starting at 1. Bitbucket documents this for every collection but declares it on almost none of them.",
+          "message": "返す結果のページ番号（1から開始）。Bitbucketはすべてのコレクションでこれをドキュメントに記載していますが、ほぼすべてで宣言していません。"
+        },
+        "app.Qml0YnVja2V0.action.d29ya3NwYWNlc193b3Jrc3BhY2VfbWVtYmVyc19nZXQ.option.cGFnZQ.display_name": {
+          "source": "Page",
+          "message": "ページ"
+        },
+        "app.Qml0YnVja2V0.action.d29ya3NwYWNlc193b3Jrc3BhY2VfbWVtYmVyc19nZXQ.option.cGFnZQ.short_desc": {
+          "source": "Which page of results to return, starting at 1",
+          "message": "返す結果のページ番号（1から開始）"
+        },
+        "app.Qml0YnVja2V0.action.d29ya3NwYWNlc193b3Jrc3BhY2VfbWVtYmVyc19nZXQ.option.cGFnZWxlbg.desc": {
+          "source": "How many records to return in one request, up to Bitbucket's maximum of `100`.\n\n`next` in the response is the URL of the following page; page on its presence rather than on `size`, which Bitbucket does not report for every collection.",
+          "message": "1回のリクエストで返すレコード数（Bitbucketの最大値`100`まで）。\n\nレスポンス内の`next`は次のページのURLです。Bitbucketがすべてのコレクションで報告するわけではない`size`ではなく、その存在に基づいてページネーションしてください。"
+        },
+        "app.Qml0YnVja2V0.action.d29ya3NwYWNlc193b3Jrc3BhY2VfbWVtYmVyc19nZXQ.option.cGFnZWxlbg.display_name": {
+          "source": "Page Length",
+          "message": "ページ長"
+        },
+        "app.Qml0YnVja2V0.action.d29ya3NwYWNlc193b3Jrc3BhY2VfbWVtYmVyc19nZXQ.option.cGFnZWxlbg.short_desc": {
+          "source": "How many records to return, up to 100",
+          "message": "返すレコード数（最大100件）"
+        },
+        "app.Qml0YnVja2V0.action.d29ya3NwYWNlc193b3Jrc3BhY2VfbWVtYmVyc19nZXQ.option.d29ya3NwYWNl.desc": {
+          "source": "The workspace to work in, given as its slug or as its UUID in braces.\n\nEverything else scoped by a workspace - repositories, members - is listed from this workspace, so changing it re-reads them.",
+          "message": "操作対象のワークスペース（スラッグまたは中括弧付きのUUIDで指定）。\n\nリポジトリ、メンバーなど、ワークスペースをスコープとするその他のすべての項目はこのワークスペースから一覧表示されるため、変更すると再読み込みされます。"
+        },
+        "app.Qml0YnVja2V0.action.d29ya3NwYWNlc193b3Jrc3BhY2VfbWVtYmVyc19nZXQ.option.d29ya3NwYWNl.display_name": {
+          "source": "Workspace",
+          "message": "ワークスペース"
+        },
+        "app.Qml0YnVja2V0.action.d29ya3NwYWNlc193b3Jrc3BhY2VfbWVtYmVyc19nZXQ.option.d29ya3NwYWNl.short_desc": {
+          "source": "The workspace to work in",
+          "message": "操作対象のワークスペース"
+        },
+        "app.Qml0YnVja2V0.action.d29ya3NwYWNlc193b3Jrc3BhY2VfbWVtYmVyc19nZXQ.short_desc": {
+          "source": "List the members of a workspace",
+          "message": "ワークスペースのメンバーを一覧表示"
+        },
+        "app.Qml0YnVja2V0.action.d29ya3NwYWNlc193b3Jrc3BhY2VfcHJvamVjdHNfZ2V0.desc": {
+          "source": "Lists the projects in a workspace. A project groups repositories; it is not a Jira project.",
+          "message": "ワークスペース内のプロジェクトを一覧表示します。プロジェクトはリポジトリをグループ化するものであり、Jiraプロジェクトではありません。"
+        },
+        "app.Qml0YnVja2V0.action.d29ya3NwYWNlc193b3Jrc3BhY2VfcHJvamVjdHNfZ2V0.display_name": {
+          "source": "List Workspace Projects",
+          "message": "ワークスペースプロジェクトの一覧取得"
+        },
+        "app.Qml0YnVja2V0.action.d29ya3NwYWNlc193b3Jrc3BhY2VfcHJvamVjdHNfZ2V0.option.cGFnZQ.desc": {
+          "source": "Which page of results to return, starting at 1. Bitbucket documents this for every collection but declares it on almost none of them.",
+          "message": "返す結果のページ番号（1から開始）。Bitbucketはすべてのコレクションでこれをドキュメントに記載していますが、ほぼすべてで宣言していません。"
+        },
+        "app.Qml0YnVja2V0.action.d29ya3NwYWNlc193b3Jrc3BhY2VfcHJvamVjdHNfZ2V0.option.cGFnZQ.display_name": {
+          "source": "Page",
+          "message": "ページ"
+        },
+        "app.Qml0YnVja2V0.action.d29ya3NwYWNlc193b3Jrc3BhY2VfcHJvamVjdHNfZ2V0.option.cGFnZQ.short_desc": {
+          "source": "Which page of results to return, starting at 1",
+          "message": "返す結果のページ番号（1から開始）"
+        },
+        "app.Qml0YnVja2V0.action.d29ya3NwYWNlc193b3Jrc3BhY2VfcHJvamVjdHNfZ2V0.option.cGFnZWxlbg.desc": {
+          "source": "How many records to return in one request, up to Bitbucket's maximum of `100`.\n\n`next` in the response is the URL of the following page; page on its presence rather than on `size`, which Bitbucket does not report for every collection.",
+          "message": "1回のリクエストで返すレコード数（Bitbucketの最大値`100`まで）。\n\nレスポンス内の`next`は次のページのURLです。Bitbucketがすべてのコレクションで報告するわけではない`size`ではなく、その存在に基づいてページネーションしてください。"
+        },
+        "app.Qml0YnVja2V0.action.d29ya3NwYWNlc193b3Jrc3BhY2VfcHJvamVjdHNfZ2V0.option.cGFnZWxlbg.display_name": {
+          "source": "Page Length",
+          "message": "ページ長"
+        },
+        "app.Qml0YnVja2V0.action.d29ya3NwYWNlc193b3Jrc3BhY2VfcHJvamVjdHNfZ2V0.option.cGFnZWxlbg.short_desc": {
+          "source": "How many records to return, up to 100",
+          "message": "返すレコード数（最大100件）"
+        },
+        "app.Qml0YnVja2V0.action.d29ya3NwYWNlc193b3Jrc3BhY2VfcHJvamVjdHNfZ2V0.option.d29ya3NwYWNl.desc": {
+          "source": "The workspace to work in, given as its slug or as its UUID in braces.\n\nEverything else scoped by a workspace - repositories, members - is listed from this workspace, so changing it re-reads them.",
+          "message": "操作対象のワークスペース（スラッグまたは中括弧付きのUUIDで指定）。\n\nリポジトリ、メンバーなど、ワークスペースをスコープとするその他のすべての項目はこのワークスペースから一覧表示されるため、変更すると再読み込みされます。"
+        },
+        "app.Qml0YnVja2V0.action.d29ya3NwYWNlc193b3Jrc3BhY2VfcHJvamVjdHNfZ2V0.option.d29ya3NwYWNl.display_name": {
+          "source": "Workspace",
+          "message": "ワークスペース"
+        },
+        "app.Qml0YnVja2V0.action.d29ya3NwYWNlc193b3Jrc3BhY2VfcHJvamVjdHNfZ2V0.option.d29ya3NwYWNl.short_desc": {
+          "source": "The workspace to work in",
+          "message": "操作対象のワークスペース"
+        },
+        "app.Qml0YnVja2V0.action.d29ya3NwYWNlc193b3Jrc3BhY2VfcHJvamVjdHNfZ2V0.short_desc": {
+          "source": "List the projects in a workspace",
+          "message": "ワークスペース内のプロジェクトを一覧表示"
+        },
+        "app.Qml0YnVja2V0.action.d29ya3NwYWNlc19nZXQ.desc": {
+          "source": "Lists the workspaces the authenticated user can reach.\n\n`administrator` narrows the listing to the ones they administer.\n\nThis is the **only** listing Bitbucket still serves across workspaces, and it is what fills the workspace dropdown every other Bitbucket dropdown is scoped by. A record wraps its workspace - `{administrator, workspace: {slug, uuid, links}}` - and carries no display name, so a workspace is identified by its slug.",
+          "message": "認証済みユーザーがアクセス可能なワークスペースを一覧表示します。\n\n`administrator` により、ユーザーが管理しているワークスペースに絞り込みます。\n\nこれはBitbucketがワークスペース横断で提供している**唯一**の一覧取得機能であり、他のすべてのBitbucketドロップダウンのスコープとなるワークスペースドロップダウンにデータを供給します。レコードはワークスペース（`{administrator, workspace: {slug, uuid, links}}`）をラップしており、表示名を持たないため、ワークスペースはそのスラッグによって識別されます。"
+        },
+        "app.Qml0YnVja2V0.action.d29ya3NwYWNlc19nZXQ.display_name": {
+          "source": "List Workspaces",
+          "message": "ワークスペース一覧"
+        },
+        "app.Qml0YnVja2V0.action.d29ya3NwYWNlc19nZXQ.option.YWRtaW5pc3RyYXRvcg.desc": {
+          "source": "Filter workspaces based on which ones the caller has admin permissions or not.",
+          "message": "呼び出し元が管理者権限を持っているかどうかに基づいてワークスペースをフィルタリングします。"
+        },
+        "app.Qml0YnVja2V0.action.d29ya3NwYWNlc19nZXQ.option.YWRtaW5pc3RyYXRvcg.display_name": {
+          "source": "Administrator Only",
+          "message": "管理者のみ"
+        },
+        "app.Qml0YnVja2V0.action.d29ya3NwYWNlc19nZXQ.option.YWRtaW5pc3RyYXRvcg.short_desc": {
+          "source": "Return only workspaces the credential administers",
+          "message": "資格情報が管理者権限を持つワークスペースのみを返す"
+        },
+        "app.Qml0YnVja2V0.action.d29ya3NwYWNlc19nZXQ.option.c29ydA.desc": {
+          "source": "\nField by which the results should be sorted as per [filtering and sorting](/cloud/bitbucket/rest/intro/#filtering).\n        ",
+          "message": "\n[フィルタリングとソート](/cloud/bitbucket/rest/intro/#filtering)に従って結果をソートするフィールド。\n        "
+        },
+        "app.Qml0YnVja2V0.action.d29ya3NwYWNlc19nZXQ.option.c29ydA.display_name": {
+          "source": "Sort By",
+          "message": "並べ替え順"
+        },
+        "app.Qml0YnVja2V0.action.d29ya3NwYWNlc19nZXQ.option.c29ydA.short_desc": {
+          "source": "A field to sort by; prefix with \"-\" to reverse",
+          "message": "ソート対象のフィールド。逆順にするには先頭に「-」を付けます"
+        },
+        "app.Qml0YnVja2V0.action.d29ya3NwYWNlc19nZXQ.option.cGFnZQ.desc": {
+          "source": "Which page of results to return, starting at 1. Bitbucket documents this for every collection but declares it on almost none of them.",
+          "message": "返す結果のページ番号（1から開始）。Bitbucketはすべてのコレクションでこれをドキュメントに記載していますが、ほぼすべてで宣言していません。"
+        },
+        "app.Qml0YnVja2V0.action.d29ya3NwYWNlc19nZXQ.option.cGFnZQ.display_name": {
+          "source": "Page",
+          "message": "ページ"
+        },
+        "app.Qml0YnVja2V0.action.d29ya3NwYWNlc19nZXQ.option.cGFnZQ.short_desc": {
+          "source": "Which page of results to return, starting at 1",
+          "message": "返す結果のページ番号（1から開始）"
+        },
+        "app.Qml0YnVja2V0.action.d29ya3NwYWNlc19nZXQ.option.cGFnZWxlbg.desc": {
+          "source": "How many records to return in one page, up to 100. Bitbucket documents this for every collection but declares it on almost none of them.",
+          "message": "1ページあたりに返すレコード数（最大100件）。Bitbucketはすべてのコレクションでこれについてドキュメント化していますが、ほぼすべてのコレクションで宣言していません。"
+        },
+        "app.Qml0YnVja2V0.action.d29ya3NwYWNlc19nZXQ.option.cGFnZWxlbg.display_name": {
+          "source": "Pagelen",
+          "message": "ページ長"
+        },
+        "app.Qml0YnVja2V0.action.d29ya3NwYWNlc19nZXQ.option.cGFnZWxlbg.short_desc": {
+          "source": "How many records to return in one page, up to 100",
+          "message": "1ページあたりに返すレコード数（最大100件）"
+        },
+        "app.Qml0YnVja2V0.action.d29ya3NwYWNlc19nZXQ.short_desc": {
+          "source": "List the workspaces the credential can see",
+          "message": "資格情報で参照可能なワークスペースを一覧表示"
+        },
+        "app.Qml0YnVja2V0.action.dXBkYXRl.desc": {
+          "source": "Updates every record in the given table matching the search criteria",
+          "message": "指定されたテーブル内で検索条件に一致するすべてのレコードを更新します"
+        },
+        "app.Qml0YnVja2V0.action.dXBkYXRl.display_name": {
+          "source": "Update Records",
+          "message": "レコードを更新"
+        },
+        "app.Qml0YnVja2V0.action.dXBkYXRl.option.dGFibGU.desc": {
+          "source": "The table to work with: `repositories`, `pullrequests`, `pullrequest-comments`, `commit-comments`, `workspaces`, `workspace-members`, `commits` or `branches`",
+          "message": "操作対象のテーブル: `repositories`、`pullrequests`、`pullrequest-comments`、`commit-comments`、`workspaces`、`workspace-members`、`commits`、または`branches`"
+        },
+        "app.Qml0YnVja2V0.action.dXBkYXRl.option.dGFibGU.display_name": {
+          "source": "Table",
+          "message": "表"
+        },
+        "app.Qml0YnVja2V0.action.dXBkYXRl.option.dGFibGU.short_desc": {
+          "source": "The name of the table to work with",
+          "message": "操作対象のテーブル名"
+        },
+        "app.Qml0YnVja2V0.action.dXBkYXRl.short_desc": {
+          "source": "Update the records matching the search criteria",
+          "message": "検索条件に一致するレコードを更新"
+        },
+        "app.Qml0YnVja2V0.desc": {
+          "source": "Provides access to [Bitbucket Cloud](https://bitbucket.org), Atlassian's Git repository hosting.\n\n**Common use cases**:\n- **Repositories**: create, read, update and delete repositories, and list branches\n- **Pull requests**: open, update and comment on pull requests\n- **Commits**: read commits, approve them, and comment on them\n- **Deployments**: read what was deployed, where, and in what state\n- **Workspaces**: read workspaces, their members and their projects\n- **Search**: search code across a workspace's repositories\n\n**Authentication** is a repository, project or workspace access token, an app password, or the OAuth2 authorization code flow - the first two of which need no OAuth consumer and so no workspace administrator.\n\nThis application targets Bitbucket **Cloud**; Bitbucket Data Center is a different product with a different API.\n\nBitbucket is a trademark of Atlassian Pty Ltd.",
+          "message": "AtlassianのGitリポジトリホスティングである[Bitbucket Cloud](https://bitbucket.org)へのアクセスを提供します。\n\n**一般的なユースケース**:\n- **リポジトリ**: リポジトリの作成、読み取り、更新、削除、およびブランチの一覧表示\n- **プルリクエスト**: プルリクエストの作成、更新、コメント\n- **コミット**: コミットの読み取り、承認、コメント\n- **デプロイ**: デプロイされた内容、場所、状態の確認\n- **ワークスペース**: ワークスペース、そのメンバー、プロジェクトの参照\n- **検索**: ワークスペースのリポジトリ全体のコード検索\n\n**認証**には、リポジトリ、プロジェクト、またはワークスペースのアクセストークン、アプリパスワード、OAuth2認可コードフローが使用できます。前の2つはOAuthコンシューマーを必要としないため、ワークスペース管理者は不要です。\n\nこのアプリケーションはBitbucket **Cloud**を対象としています。Bitbucket Data CenterはAPIが異なる別製品です。\n\nBitbucketはAtlassian Pty Ltd.の商標です。"
+        },
+        "app.Qml0YnVja2V0.display_name": {
+          "source": "Bitbucket",
+          "message": "Bitbucket"
+        },
+        "app.Qml0YnVja2V0.short_desc": {
+          "source": "Work with Bitbucket Cloud repositories, pull requests and deployments",
+          "message": "Bitbucket Cloudのリポジトリ、プルリクエスト、デプロイを操作"
+        }
+      }
+    }
+  }
+}

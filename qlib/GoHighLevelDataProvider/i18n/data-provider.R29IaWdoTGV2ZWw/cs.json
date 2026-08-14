@@ -1,0 +1,1753 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "cs": {
+      "messages": {
+        "app.R29IaWdoTGV2ZWw.action.Y3JlYXRlLW9wcG9ydHVuaXR5.desc": {
+          "source": "Create a new opportunity in GoHighLevel",
+          "message": "Vytvořit novou příležitost v GoHighLevel"
+        },
+        "app.R29IaWdoTGV2ZWw.action.Y3JlYXRlLW9wcG9ydHVuaXR5.display_name": {
+          "source": "Create an Opportunity",
+          "message": "Vytvořit příležitost"
+        },
+        "app.R29IaWdoTGV2ZWw.action.Y3JlYXRlLW9wcG9ydHVuaXR5.option.Y29udGFjdElk.desc": {
+          "source": "The ID of the contact for this opportunity",
+          "message": "ID kontaktu pro tuto příležitost"
+        },
+        "app.R29IaWdoTGV2ZWw.action.Y3JlYXRlLW9wcG9ydHVuaXR5.option.Y29udGFjdElk.display_name": {
+          "source": "Contact ID",
+          "message": "ID kontaktu"
+        },
+        "app.R29IaWdoTGV2ZWw.action.Y3JlYXRlLW9wcG9ydHVuaXR5.option.Y29udGFjdElk.short_desc": {
+          "source": "The contact",
+          "message": "Kontakt"
+        },
+        "app.R29IaWdoTGV2ZWw.action.Y3JlYXRlLW9wcG9ydHVuaXR5.option.YXNzaWduZWRUbw.desc": {
+          "source": "User ID to assign the opportunity to",
+          "message": "ID uživatele, kterému má být příležitost přiřazena"
+        },
+        "app.R29IaWdoTGV2ZWw.action.Y3JlYXRlLW9wcG9ydHVuaXR5.option.YXNzaWduZWRUbw.display_name": {
+          "source": "Assigned To",
+          "message": "Přiřazeno uživateli"
+        },
+        "app.R29IaWdoTGV2ZWw.action.Y3JlYXRlLW9wcG9ydHVuaXR5.option.YXNzaWduZWRUbw.short_desc": {
+          "source": "Assigned user",
+          "message": "Přiřazený uživatel"
+        },
+        "app.R29IaWdoTGV2ZWw.action.Y3JlYXRlLW9wcG9ydHVuaXR5.option.bW9uZXRhcnlWYWx1ZQ.desc": {
+          "source": "Monetary value of the opportunity",
+          "message": "Peněžní hodnota příležitosti"
+        },
+        "app.R29IaWdoTGV2ZWw.action.Y3JlYXRlLW9wcG9ydHVuaXR5.option.bW9uZXRhcnlWYWx1ZQ.display_name": {
+          "source": "Monetary Value",
+          "message": "Finanční hodnota"
+        },
+        "app.R29IaWdoTGV2ZWw.action.Y3JlYXRlLW9wcG9ydHVuaXR5.option.bW9uZXRhcnlWYWx1ZQ.short_desc": {
+          "source": "Deal value",
+          "message": "Hodnota obchodu"
+        },
+        "app.R29IaWdoTGV2ZWw.action.Y3JlYXRlLW9wcG9ydHVuaXR5.option.bmFtZQ.desc": {
+          "source": "Name of the opportunity",
+          "message": "Název příležitosti"
+        },
+        "app.R29IaWdoTGV2ZWw.action.Y3JlYXRlLW9wcG9ydHVuaXR5.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "Název"
+        },
+        "app.R29IaWdoTGV2ZWw.action.Y3JlYXRlLW9wcG9ydHVuaXR5.option.bmFtZQ.short_desc": {
+          "source": "Opportunity name",
+          "message": "Název příležitosti"
+        },
+        "app.R29IaWdoTGV2ZWw.action.Y3JlYXRlLW9wcG9ydHVuaXR5.option.c3RhdHVz.allowed-value.c3RyaW5nOm9wZW4.display_name": {
+          "source": "Open",
+          "message": "Otevřeno"
+        },
+        "app.R29IaWdoTGV2ZWw.action.Y3JlYXRlLW9wcG9ydHVuaXR5.option.c3RhdHVz.allowed-value.c3RyaW5nOmFiYW5kb25lZA.display_name": {
+          "source": "Abandoned",
+          "message": "Opuštěno"
+        },
+        "app.R29IaWdoTGV2ZWw.action.Y3JlYXRlLW9wcG9ydHVuaXR5.option.c3RhdHVz.allowed-value.c3RyaW5nOmxvc3Q.display_name": {
+          "source": "Lost",
+          "message": "Ztraceno"
+        },
+        "app.R29IaWdoTGV2ZWw.action.Y3JlYXRlLW9wcG9ydHVuaXR5.option.c3RhdHVz.allowed-value.c3RyaW5nOndvbg.display_name": {
+          "source": "Won",
+          "message": "Získáno"
+        },
+        "app.R29IaWdoTGV2ZWw.action.Y3JlYXRlLW9wcG9ydHVuaXR5.option.c3RhdHVz.desc": {
+          "source": "Status of the opportunity",
+          "message": "Stav příležitosti"
+        },
+        "app.R29IaWdoTGV2ZWw.action.Y3JlYXRlLW9wcG9ydHVuaXR5.option.c3RhdHVz.display_name": {
+          "source": "Status",
+          "message": "Stav"
+        },
+        "app.R29IaWdoTGV2ZWw.action.Y3JlYXRlLW9wcG9ydHVuaXR5.option.c3RhdHVz.short_desc": {
+          "source": "Opportunity status",
+          "message": "Stav příležitosti"
+        },
+        "app.R29IaWdoTGV2ZWw.action.Y3JlYXRlLW9wcG9ydHVuaXR5.option.cGlwZWxpbmVJZA.desc": {
+          "source": "The ID of the pipeline for this opportunity",
+          "message": "ID pipeline pro tuto příležitost"
+        },
+        "app.R29IaWdoTGV2ZWw.action.Y3JlYXRlLW9wcG9ydHVuaXR5.option.cGlwZWxpbmVJZA.display_name": {
+          "source": "Pipeline ID",
+          "message": "ID pipeline"
+        },
+        "app.R29IaWdoTGV2ZWw.action.Y3JlYXRlLW9wcG9ydHVuaXR5.option.cGlwZWxpbmVJZA.short_desc": {
+          "source": "The pipeline",
+          "message": "Pipeline"
+        },
+        "app.R29IaWdoTGV2ZWw.action.Y3JlYXRlLW9wcG9ydHVuaXR5.option.cGlwZWxpbmVTdGFnZUlk.desc": {
+          "source": "The ID of the pipeline stage",
+          "message": "ID fáze pipeline"
+        },
+        "app.R29IaWdoTGV2ZWw.action.Y3JlYXRlLW9wcG9ydHVuaXR5.option.cGlwZWxpbmVTdGFnZUlk.display_name": {
+          "source": "Pipeline Stage ID",
+          "message": "ID fáze pipeline"
+        },
+        "app.R29IaWdoTGV2ZWw.action.Y3JlYXRlLW9wcG9ydHVuaXR5.option.cGlwZWxpbmVTdGFnZUlk.short_desc": {
+          "source": "Pipeline stage",
+          "message": "Fáze pipeline"
+        },
+        "app.R29IaWdoTGV2ZWw.action.Y3JlYXRlLW9wcG9ydHVuaXR5.short_desc": {
+          "source": "Create a new opportunity",
+          "message": "Vytvořit novou příležitost"
+        },
+        "app.R29IaWdoTGV2ZWw.action.Y3JlYXRlLWNvbnRhY3Q.desc": {
+          "source": "Create a new contact in GoHighLevel",
+          "message": "Vytvořit nový kontakt v GoHighLevel"
+        },
+        "app.R29IaWdoTGV2ZWw.action.Y3JlYXRlLWNvbnRhY3Q.display_name": {
+          "source": "Create a Contact",
+          "message": "Vytvořit kontakt"
+        },
+        "app.R29IaWdoTGV2ZWw.action.Y3JlYXRlLWNvbnRhY3Q.option.Y291bnRyeQ.desc": {
+          "source": "Country of the contact",
+          "message": "Země kontaktu"
+        },
+        "app.R29IaWdoTGV2ZWw.action.Y3JlYXRlLWNvbnRhY3Q.option.Y291bnRyeQ.display_name": {
+          "source": "Country",
+          "message": "Země"
+        },
+        "app.R29IaWdoTGV2ZWw.action.Y3JlYXRlLWNvbnRhY3Q.option.Y291bnRyeQ.short_desc": {
+          "source": "Country",
+          "message": "Země"
+        },
+        "app.R29IaWdoTGV2ZWw.action.Y3JlYXRlLWNvbnRhY3Q.option.Y29tcGFueU5hbWU.desc": {
+          "source": "Company name of the contact",
+          "message": "Název společnosti kontaktu"
+        },
+        "app.R29IaWdoTGV2ZWw.action.Y3JlYXRlLWNvbnRhY3Q.option.Y29tcGFueU5hbWU.display_name": {
+          "source": "Company Name",
+          "message": "Název společnosti"
+        },
+        "app.R29IaWdoTGV2ZWw.action.Y3JlYXRlLWNvbnRhY3Q.option.Y29tcGFueU5hbWU.short_desc": {
+          "source": "Company name",
+          "message": "Název společnosti"
+        },
+        "app.R29IaWdoTGV2ZWw.action.Y3JlYXRlLWNvbnRhY3Q.option.Y2l0eQ.desc": {
+          "source": "City of the contact",
+          "message": "Město kontaktu"
+        },
+        "app.R29IaWdoTGV2ZWw.action.Y3JlYXRlLWNvbnRhY3Q.option.Y2l0eQ.display_name": {
+          "source": "City",
+          "message": "Město"
+        },
+        "app.R29IaWdoTGV2ZWw.action.Y3JlYXRlLWNvbnRhY3Q.option.Y2l0eQ.short_desc": {
+          "source": "City",
+          "message": "Město"
+        },
+        "app.R29IaWdoTGV2ZWw.action.Y3JlYXRlLWNvbnRhY3Q.option.Y3VzdG9tRmllbGRz.desc": {
+          "source": "Custom field values for the contact; each entry has an `id` (custom field ID) and `field_value`",
+          "message": "Hodnoty vlastních polí kontaktu; každá položka obsahuje `id` (ID vlastního pole) a `field_value`"
+        },
+        "app.R29IaWdoTGV2ZWw.action.Y3JlYXRlLWNvbnRhY3Q.option.Y3VzdG9tRmllbGRz.display_name": {
+          "source": "Custom Fields",
+          "message": "Vlastní pole"
+        },
+        "app.R29IaWdoTGV2ZWw.action.Y3JlYXRlLWNvbnRhY3Q.option.Y3VzdG9tRmllbGRz.short_desc": {
+          "source": "Custom field values for the contact",
+          "message": "Hodnoty vlastních polí kontaktu"
+        },
+        "app.R29IaWdoTGV2ZWw.action.Y3JlYXRlLWNvbnRhY3Q.option.YWRkcmVzczE.desc": {
+          "source": "Street address of the contact",
+          "message": "Ulice kontaktu"
+        },
+        "app.R29IaWdoTGV2ZWw.action.Y3JlYXRlLWNvbnRhY3Q.option.YWRkcmVzczE.display_name": {
+          "source": "Address",
+          "message": "Adresa"
+        },
+        "app.R29IaWdoTGV2ZWw.action.Y3JlYXRlLWNvbnRhY3Q.option.YWRkcmVzczE.short_desc": {
+          "source": "Street address",
+          "message": "Uliční adresa"
+        },
+        "app.R29IaWdoTGV2ZWw.action.Y3JlYXRlLWNvbnRhY3Q.option.YXNzaWduZWRUbw.desc": {
+          "source": "User ID to assign the contact to",
+          "message": "ID uživatele, kterému má být kontakt přiřazen"
+        },
+        "app.R29IaWdoTGV2ZWw.action.Y3JlYXRlLWNvbnRhY3Q.option.YXNzaWduZWRUbw.display_name": {
+          "source": "Assigned To",
+          "message": "Přiřazeno uživateli"
+        },
+        "app.R29IaWdoTGV2ZWw.action.Y3JlYXRlLWNvbnRhY3Q.option.YXNzaWduZWRUbw.short_desc": {
+          "source": "Assigned user",
+          "message": "Přiřazený uživatel"
+        },
+        "app.R29IaWdoTGV2ZWw.action.Y3JlYXRlLWNvbnRhY3Q.option.ZG5k.desc": {
+          "source": "Whether the contact is on Do Not Disturb (`True` or `False`)",
+          "message": "Zda má kontakt nastaveno Nerušit (`True` nebo `False`)"
+        },
+        "app.R29IaWdoTGV2ZWw.action.Y3JlYXRlLWNvbnRhY3Q.option.ZG5k.display_name": {
+          "source": "Do Not Disturb",
+          "message": "Nerušit"
+        },
+        "app.R29IaWdoTGV2ZWw.action.Y3JlYXRlLWNvbnRhY3Q.option.ZG5k.short_desc": {
+          "source": "DND status",
+          "message": "Stav DND"
+        },
+        "app.R29IaWdoTGV2ZWw.action.Y3JlYXRlLWNvbnRhY3Q.option.ZW1haWw.desc": {
+          "source": "Email address of the contact",
+          "message": "E-mailová adresa kontaktu"
+        },
+        "app.R29IaWdoTGV2ZWw.action.Y3JlYXRlLWNvbnRhY3Q.option.ZW1haWw.display_name": {
+          "source": "Email",
+          "message": "E-mail"
+        },
+        "app.R29IaWdoTGV2ZWw.action.Y3JlYXRlLWNvbnRhY3Q.option.ZW1haWw.short_desc": {
+          "source": "Contact email",
+          "message": "E-mail kontaktu"
+        },
+        "app.R29IaWdoTGV2ZWw.action.Y3JlYXRlLWNvbnRhY3Q.option.Zmlyc3ROYW1l.desc": {
+          "source": "First name of the contact",
+          "message": "Křestní jméno kontaktu"
+        },
+        "app.R29IaWdoTGV2ZWw.action.Y3JlYXRlLWNvbnRhY3Q.option.Zmlyc3ROYW1l.display_name": {
+          "source": "First Name",
+          "message": "Křestní jméno"
+        },
+        "app.R29IaWdoTGV2ZWw.action.Y3JlYXRlLWNvbnRhY3Q.option.Zmlyc3ROYW1l.short_desc": {
+          "source": "Contact first name",
+          "message": "Křestní jméno kontaktu"
+        },
+        "app.R29IaWdoTGV2ZWw.action.Y3JlYXRlLWNvbnRhY3Q.option.bGFzdE5hbWU.desc": {
+          "source": "Last name of the contact",
+          "message": "Příjmení kontaktu"
+        },
+        "app.R29IaWdoTGV2ZWw.action.Y3JlYXRlLWNvbnRhY3Q.option.bGFzdE5hbWU.display_name": {
+          "source": "Last Name",
+          "message": "Příjmení"
+        },
+        "app.R29IaWdoTGV2ZWw.action.Y3JlYXRlLWNvbnRhY3Q.option.bGFzdE5hbWU.short_desc": {
+          "source": "Contact last name",
+          "message": "Příjmení kontaktu"
+        },
+        "app.R29IaWdoTGV2ZWw.action.Y3JlYXRlLWNvbnRhY3Q.option.bmFtZQ.desc": {
+          "source": "Full name of the contact",
+          "message": "Celé jméno kontaktu"
+        },
+        "app.R29IaWdoTGV2ZWw.action.Y3JlYXRlLWNvbnRhY3Q.option.bmFtZQ.display_name": {
+          "source": "Full Name",
+          "message": "Celé jméno"
+        },
+        "app.R29IaWdoTGV2ZWw.action.Y3JlYXRlLWNvbnRhY3Q.option.bmFtZQ.short_desc": {
+          "source": "Contact full name",
+          "message": "Celé jméno kontaktu"
+        },
+        "app.R29IaWdoTGV2ZWw.action.Y3JlYXRlLWNvbnRhY3Q.option.c291cmNl.desc": {
+          "source": "Source of the contact (e.g. `website`, `referral`)",
+          "message": "Zdroj kontaktu (např. `website`, `referral`)"
+        },
+        "app.R29IaWdoTGV2ZWw.action.Y3JlYXRlLWNvbnRhY3Q.option.c291cmNl.display_name": {
+          "source": "Source",
+          "message": "Zdroj"
+        },
+        "app.R29IaWdoTGV2ZWw.action.Y3JlYXRlLWNvbnRhY3Q.option.c291cmNl.short_desc": {
+          "source": "Lead source",
+          "message": "Zdroj leada"
+        },
+        "app.R29IaWdoTGV2ZWw.action.Y3JlYXRlLWNvbnRhY3Q.option.c3RhdGU.desc": {
+          "source": "State or province of the contact",
+          "message": "Stát nebo provincie kontaktu"
+        },
+        "app.R29IaWdoTGV2ZWw.action.Y3JlYXRlLWNvbnRhY3Q.option.c3RhdGU.display_name": {
+          "source": "State",
+          "message": "Stát"
+        },
+        "app.R29IaWdoTGV2ZWw.action.Y3JlYXRlLWNvbnRhY3Q.option.c3RhdGU.short_desc": {
+          "source": "State or province",
+          "message": "Stát nebo provincie"
+        },
+        "app.R29IaWdoTGV2ZWw.action.Y3JlYXRlLWNvbnRhY3Q.option.cG9zdGFsQ29kZQ.desc": {
+          "source": "Postal or ZIP code of the contact",
+          "message": "PSČ kontaktu"
+        },
+        "app.R29IaWdoTGV2ZWw.action.Y3JlYXRlLWNvbnRhY3Q.option.cG9zdGFsQ29kZQ.display_name": {
+          "source": "Postal Code",
+          "message": "Poštovní směrovací číslo"
+        },
+        "app.R29IaWdoTGV2ZWw.action.Y3JlYXRlLWNvbnRhY3Q.option.cG9zdGFsQ29kZQ.short_desc": {
+          "source": "Postal/ZIP code",
+          "message": "PSČ"
+        },
+        "app.R29IaWdoTGV2ZWw.action.Y3JlYXRlLWNvbnRhY3Q.option.cGhvbmU.desc": {
+          "source": "Phone number of the contact",
+          "message": "Telefonní číslo kontaktu"
+        },
+        "app.R29IaWdoTGV2ZWw.action.Y3JlYXRlLWNvbnRhY3Q.option.cGhvbmU.display_name": {
+          "source": "Phone",
+          "message": "Telefon"
+        },
+        "app.R29IaWdoTGV2ZWw.action.Y3JlYXRlLWNvbnRhY3Q.option.cGhvbmU.short_desc": {
+          "source": "Phone number",
+          "message": "Telefonní číslo"
+        },
+        "app.R29IaWdoTGV2ZWw.action.Y3JlYXRlLWNvbnRhY3Q.option.d2Vic2l0ZQ.desc": {
+          "source": "Website URL of the contact",
+          "message": "URL webu kontaktu"
+        },
+        "app.R29IaWdoTGV2ZWw.action.Y3JlYXRlLWNvbnRhY3Q.option.d2Vic2l0ZQ.display_name": {
+          "source": "Website",
+          "message": "Webová stránka"
+        },
+        "app.R29IaWdoTGV2ZWw.action.Y3JlYXRlLWNvbnRhY3Q.option.d2Vic2l0ZQ.short_desc": {
+          "source": "Website URL",
+          "message": "URL webové stránky"
+        },
+        "app.R29IaWdoTGV2ZWw.action.Y3JlYXRlLWNvbnRhY3Q.option.dGFncw.desc": {
+          "source": "List of tags to assign to the contact",
+          "message": "Seznam štítků k přiřazení ke kontaktu"
+        },
+        "app.R29IaWdoTGV2ZWw.action.Y3JlYXRlLWNvbnRhY3Q.option.dGFncw.display_name": {
+          "source": "Tags",
+          "message": "Štítky"
+        },
+        "app.R29IaWdoTGV2ZWw.action.Y3JlYXRlLWNvbnRhY3Q.option.dGFncw.short_desc": {
+          "source": "Contact tags",
+          "message": "Štítky kontaktu"
+        },
+        "app.R29IaWdoTGV2ZWw.action.Y3JlYXRlLWNvbnRhY3Q.option.dGltZXpvbmU.desc": {
+          "source": "Timezone of the contact (e.g. `America/New_York`)",
+          "message": "Časové pásmo kontaktu (např. `America/New_York`)"
+        },
+        "app.R29IaWdoTGV2ZWw.action.Y3JlYXRlLWNvbnRhY3Q.option.dGltZXpvbmU.display_name": {
+          "source": "Timezone",
+          "message": "Časové pásmo"
+        },
+        "app.R29IaWdoTGV2ZWw.action.Y3JlYXRlLWNvbnRhY3Q.option.dGltZXpvbmU.short_desc": {
+          "source": "Timezone",
+          "message": "Časové pásmo"
+        },
+        "app.R29IaWdoTGV2ZWw.action.Y3JlYXRlLWNvbnRhY3Q.short_desc": {
+          "source": "Create a new contact",
+          "message": "Vytvořit nový kontakt"
+        },
+        "app.R29IaWdoTGV2ZWw.action.Y3JlYXRlLXRhc2s.desc": {
+          "source": "Create a new task for a contact in GoHighLevel",
+          "message": "Vytvořit nový úkol pro kontakt v GoHighLevel"
+        },
+        "app.R29IaWdoTGV2ZWw.action.Y3JlYXRlLXRhc2s.display_name": {
+          "source": "Create a Task",
+          "message": "Vytvořit úkol"
+        },
+        "app.R29IaWdoTGV2ZWw.action.Y3JlYXRlLXRhc2s.option.Y29tcGxldGVk.desc": {
+          "source": "Whether the task is completed (`True` or `False`)",
+          "message": "Zda je úkol dokončen (`True` nebo `False`)"
+        },
+        "app.R29IaWdoTGV2ZWw.action.Y3JlYXRlLXRhc2s.option.Y29tcGxldGVk.display_name": {
+          "source": "Completed",
+          "message": "Dokončeno"
+        },
+        "app.R29IaWdoTGV2ZWw.action.Y3JlYXRlLXRhc2s.option.Y29tcGxldGVk.short_desc": {
+          "source": "Completion status",
+          "message": "Stav dokončení"
+        },
+        "app.R29IaWdoTGV2ZWw.action.Y3JlYXRlLXRhc2s.option.Y29udGFjdF9pZA.desc": {
+          "source": "The contact ID to create the task for",
+          "message": "ID kontaktu, pro který se má úkol vytvořit"
+        },
+        "app.R29IaWdoTGV2ZWw.action.Y3JlYXRlLXRhc2s.option.Y29udGFjdF9pZA.display_name": {
+          "source": "Contact ID",
+          "message": "ID kontaktu"
+        },
+        "app.R29IaWdoTGV2ZWw.action.Y3JlYXRlLXRhc2s.option.Y29udGFjdF9pZA.short_desc": {
+          "source": "The contact",
+          "message": "Kontakt"
+        },
+        "app.R29IaWdoTGV2ZWw.action.Y3JlYXRlLXRhc2s.option.YXNzaWduZWRUbw.desc": {
+          "source": "User ID to assign the task to",
+          "message": "ID uživatele, kterému má být úkol přiřazen"
+        },
+        "app.R29IaWdoTGV2ZWw.action.Y3JlYXRlLXRhc2s.option.YXNzaWduZWRUbw.display_name": {
+          "source": "Assigned To",
+          "message": "Přiřazeno uživateli"
+        },
+        "app.R29IaWdoTGV2ZWw.action.Y3JlYXRlLXRhc2s.option.YXNzaWduZWRUbw.short_desc": {
+          "source": "Assigned user",
+          "message": "Přiřazený uživatel"
+        },
+        "app.R29IaWdoTGV2ZWw.action.Y3JlYXRlLXRhc2s.option.Ym9keQ.desc": {
+          "source": "Description or body text of the task",
+          "message": "Popis nebo text těla úkolu"
+        },
+        "app.R29IaWdoTGV2ZWw.action.Y3JlYXRlLXRhc2s.option.Ym9keQ.display_name": {
+          "source": "Body",
+          "message": "Tělo"
+        },
+        "app.R29IaWdoTGV2ZWw.action.Y3JlYXRlLXRhc2s.option.Ym9keQ.short_desc": {
+          "source": "Task description",
+          "message": "Popis úkolu"
+        },
+        "app.R29IaWdoTGV2ZWw.action.Y3JlYXRlLXRhc2s.option.ZHVlRGF0ZQ.desc": {
+          "source": "Due date for the task (ISO 8601 format)",
+          "message": "Termín splnění úkolu (formát ISO 8601)"
+        },
+        "app.R29IaWdoTGV2ZWw.action.Y3JlYXRlLXRhc2s.option.ZHVlRGF0ZQ.display_name": {
+          "source": "Due Date",
+          "message": "Datum splnění"
+        },
+        "app.R29IaWdoTGV2ZWw.action.Y3JlYXRlLXRhc2s.option.ZHVlRGF0ZQ.short_desc": {
+          "source": "Due date",
+          "message": "Termín splnění"
+        },
+        "app.R29IaWdoTGV2ZWw.action.Y3JlYXRlLXRhc2s.option.dGl0bGU.desc": {
+          "source": "Title of the task",
+          "message": "Název úkolu"
+        },
+        "app.R29IaWdoTGV2ZWw.action.Y3JlYXRlLXRhc2s.option.dGl0bGU.display_name": {
+          "source": "Title",
+          "message": "Název"
+        },
+        "app.R29IaWdoTGV2ZWw.action.Y3JlYXRlLXRhc2s.option.dGl0bGU.short_desc": {
+          "source": "Task title",
+          "message": "Název úkolu"
+        },
+        "app.R29IaWdoTGV2ZWw.action.Y3JlYXRlLXRhc2s.short_desc": {
+          "source": "Create a new task",
+          "message": "Vytvořit nový úkol"
+        },
+        "app.R29IaWdoTGV2ZWw.action.YWRkLW5vdGU.desc": {
+          "source": "Add a note to a contact in GoHighLevel",
+          "message": "Přidat poznámku ke kontaktu v GoHighLevel"
+        },
+        "app.R29IaWdoTGV2ZWw.action.YWRkLW5vdGU.display_name": {
+          "source": "Add a Note to the Contact",
+          "message": "Přidat poznámku ke kontaktu"
+        },
+        "app.R29IaWdoTGV2ZWw.action.YWRkLW5vdGU.option.Y29udGFjdF9pZA.display_name": {
+          "source": "Contact ID",
+          "message": "ID kontaktu"
+        },
+        "app.R29IaWdoTGV2ZWw.action.YWRkLW5vdGU.option.Y29udGFjdF9pZA.short_desc": {
+          "source": "The contact",
+          "message": "Kontakt"
+        },
+        "app.R29IaWdoTGV2ZWw.action.YWRkLW5vdGU.option.Ym9keQ.desc": {
+          "source": "The body text of the note",
+          "message": "Text těla poznámky"
+        },
+        "app.R29IaWdoTGV2ZWw.action.YWRkLW5vdGU.option.Ym9keQ.display_name": {
+          "source": "Note Body",
+          "message": "Text poznámky"
+        },
+        "app.R29IaWdoTGV2ZWw.action.YWRkLW5vdGU.option.Ym9keQ.short_desc": {
+          "source": "Note content",
+          "message": "Obsah poznámky"
+        },
+        "app.R29IaWdoTGV2ZWw.action.YWRkLW5vdGU.option.dXNlcklk.desc": {
+          "source": "The user ID of the note author",
+          "message": "ID uživatele autora poznámky"
+        },
+        "app.R29IaWdoTGV2ZWw.action.YWRkLW5vdGU.option.dXNlcklk.display_name": {
+          "source": "User ID",
+          "message": "ID uživatele"
+        },
+        "app.R29IaWdoTGV2ZWw.action.YWRkLW5vdGU.option.dXNlcklk.short_desc": {
+          "source": "Note author",
+          "message": "Autor poznámky"
+        },
+        "app.R29IaWdoTGV2ZWw.action.YWRkLW5vdGU.short_desc": {
+          "source": "Add a note to a contact",
+          "message": "Přidat poznámku ke kontaktu"
+        },
+        "app.R29IaWdoTGV2ZWw.action.YWRkLWNvbnRhY3QtdG8tY2FtcGFpZ24.desc": {
+          "source": "Add a contact to a campaign in GoHighLevel",
+          "message": "Přidat kontakt do kampaně v GoHighLevel"
+        },
+        "app.R29IaWdoTGV2ZWw.action.YWRkLWNvbnRhY3QtdG8tY2FtcGFpZ24.display_name": {
+          "source": "Add a Contact to a Campaign",
+          "message": "Přidat kontakt do kampaně"
+        },
+        "app.R29IaWdoTGV2ZWw.action.YWRkLWNvbnRhY3QtdG8tY2FtcGFpZ24.option.Y29udGFjdF9pZA.display_name": {
+          "source": "Contact ID",
+          "message": "ID kontaktu"
+        },
+        "app.R29IaWdoTGV2ZWw.action.YWRkLWNvbnRhY3QtdG8tY2FtcGFpZ24.option.Y29udGFjdF9pZA.short_desc": {
+          "source": "The contact",
+          "message": "Kontakt"
+        },
+        "app.R29IaWdoTGV2ZWw.action.YWRkLWNvbnRhY3QtdG8tY2FtcGFpZ24.option.Y2FtcGFpZ25faWQ.desc": {
+          "source": "The ID of the campaign to add the contact to",
+          "message": "ID kampaně, do které má být kontakt přidán"
+        },
+        "app.R29IaWdoTGV2ZWw.action.YWRkLWNvbnRhY3QtdG8tY2FtcGFpZ24.option.Y2FtcGFpZ25faWQ.display_name": {
+          "source": "Campaign ID",
+          "message": "ID kampaně"
+        },
+        "app.R29IaWdoTGV2ZWw.action.YWRkLWNvbnRhY3QtdG8tY2FtcGFpZ24.option.Y2FtcGFpZ25faWQ.short_desc": {
+          "source": "The campaign",
+          "message": "Kampaň"
+        },
+        "app.R29IaWdoTGV2ZWw.action.YWRkLWNvbnRhY3QtdG8tY2FtcGFpZ24.short_desc": {
+          "source": "Add a contact to a campaign",
+          "message": "Přidat kontakt do kampaně"
+        },
+        "app.R29IaWdoTGV2ZWw.action.Z2V0LW9wcG9ydHVuaXR5.desc": {
+          "source": "Retrieve a single opportunity by ID from GoHighLevel",
+          "message": "Získat jednu příležitost podle ID z GoHighLevel"
+        },
+        "app.R29IaWdoTGV2ZWw.action.Z2V0LW9wcG9ydHVuaXR5.display_name": {
+          "source": "Get an Opportunity",
+          "message": "Získat příležitost"
+        },
+        "app.R29IaWdoTGV2ZWw.action.Z2V0LW9wcG9ydHVuaXR5.option.b3Bwb3J0dW5pdHlfaWQ.display_name": {
+          "source": "Opportunity ID",
+          "message": "ID příležitosti"
+        },
+        "app.R29IaWdoTGV2ZWw.action.Z2V0LW9wcG9ydHVuaXR5.option.b3Bwb3J0dW5pdHlfaWQ.short_desc": {
+          "source": "The opportunity ID",
+          "message": "ID příležitosti"
+        },
+        "app.R29IaWdoTGV2ZWw.action.Z2V0LW9wcG9ydHVuaXR5.short_desc": {
+          "source": "Get a single opportunity by ID",
+          "message": "Získat příležitost podle ID"
+        },
+        "app.R29IaWdoTGV2ZWw.action.Z2V0LWNvbnRhY3Q.desc": {
+          "source": "Retrieve a single contact by ID from GoHighLevel",
+          "message": "Načíst jeden kontakt podle ID z GoHighLevel"
+        },
+        "app.R29IaWdoTGV2ZWw.action.Z2V0LWNvbnRhY3Q.display_name": {
+          "source": "Get a Contact",
+          "message": "Získat kontakt"
+        },
+        "app.R29IaWdoTGV2ZWw.action.Z2V0LWNvbnRhY3Q.option.Y29udGFjdF9pZA.display_name": {
+          "source": "Contact ID",
+          "message": "ID kontaktu"
+        },
+        "app.R29IaWdoTGV2ZWw.action.Z2V0LWNvbnRhY3Q.option.Y29udGFjdF9pZA.short_desc": {
+          "source": "The contact ID",
+          "message": "ID kontaktu"
+        },
+        "app.R29IaWdoTGV2ZWw.action.Z2V0LWNvbnRhY3Q.short_desc": {
+          "source": "Get a single contact by ID",
+          "message": "Získat jeden kontakt podle ID"
+        },
+        "app.R29IaWdoTGV2ZWw.action.Z2V0LXRhc2s.desc": {
+          "source": "Retrieve a single task by ID from GoHighLevel",
+          "message": "Načíst jeden úkol podle ID z GoHighLevel"
+        },
+        "app.R29IaWdoTGV2ZWw.action.Z2V0LXRhc2s.display_name": {
+          "source": "Get a Task",
+          "message": "Získat úkol"
+        },
+        "app.R29IaWdoTGV2ZWw.action.Z2V0LXRhc2s.option.Y29udGFjdF9pZA.desc": {
+          "source": "The contact ID the task belongs to",
+          "message": "ID kontaktu, ke kterému úkol patří"
+        },
+        "app.R29IaWdoTGV2ZWw.action.Z2V0LXRhc2s.option.Y29udGFjdF9pZA.display_name": {
+          "source": "Contact ID",
+          "message": "ID kontaktu"
+        },
+        "app.R29IaWdoTGV2ZWw.action.Z2V0LXRhc2s.option.Y29udGFjdF9pZA.short_desc": {
+          "source": "The contact",
+          "message": "Kontakt"
+        },
+        "app.R29IaWdoTGV2ZWw.action.Z2V0LXRhc2s.option.dGFza19pZA.desc": {
+          "source": "The ID of the task to retrieve",
+          "message": "ID úkolu, který má být získán"
+        },
+        "app.R29IaWdoTGV2ZWw.action.Z2V0LXRhc2s.option.dGFza19pZA.display_name": {
+          "source": "Task ID",
+          "message": "ID úlohy"
+        },
+        "app.R29IaWdoTGV2ZWw.action.Z2V0LXRhc2s.option.dGFza19pZA.short_desc": {
+          "source": "The task ID",
+          "message": "ID úkolu"
+        },
+        "app.R29IaWdoTGV2ZWw.action.Z2V0LXRhc2s.short_desc": {
+          "source": "Get a single task by ID",
+          "message": "Získat jeden úkol podle ID"
+        },
+        "app.R29IaWdoTGV2ZWw.action.ZGVsZXRlLW9wcG9ydHVuaXR5.desc": {
+          "source": "Delete an opportunity from GoHighLevel",
+          "message": "Smazat obchodní příležitost z GoHighLevel"
+        },
+        "app.R29IaWdoTGV2ZWw.action.ZGVsZXRlLW9wcG9ydHVuaXR5.display_name": {
+          "source": "Delete an Opportunity",
+          "message": "Smazat obchodní příležitost"
+        },
+        "app.R29IaWdoTGV2ZWw.action.ZGVsZXRlLW9wcG9ydHVuaXR5.option.b3Bwb3J0dW5pdHlfaWQ.display_name": {
+          "source": "Opportunity ID",
+          "message": "ID příležitosti"
+        },
+        "app.R29IaWdoTGV2ZWw.action.ZGVsZXRlLW9wcG9ydHVuaXR5.option.b3Bwb3J0dW5pdHlfaWQ.short_desc": {
+          "source": "The opportunity to delete",
+          "message": "Obchodní příležitost ke smazání"
+        },
+        "app.R29IaWdoTGV2ZWw.action.ZGVsZXRlLW9wcG9ydHVuaXR5.short_desc": {
+          "source": "Delete an opportunity",
+          "message": "Smazat obchodní příležitost"
+        },
+        "app.R29IaWdoTGV2ZWw.action.ZGVsZXRlLWNvbnRhY3Q.desc": {
+          "source": "Delete a contact from GoHighLevel",
+          "message": "Smazat kontakt z GoHighLevel"
+        },
+        "app.R29IaWdoTGV2ZWw.action.ZGVsZXRlLWNvbnRhY3Q.display_name": {
+          "source": "Delete a Contact",
+          "message": "Odstranit kontakt"
+        },
+        "app.R29IaWdoTGV2ZWw.action.ZGVsZXRlLWNvbnRhY3Q.option.Y29udGFjdF9pZA.display_name": {
+          "source": "Contact ID",
+          "message": "ID kontaktu"
+        },
+        "app.R29IaWdoTGV2ZWw.action.ZGVsZXRlLWNvbnRhY3Q.option.Y29udGFjdF9pZA.short_desc": {
+          "source": "The contact to delete",
+          "message": "Kontakt k odstranění"
+        },
+        "app.R29IaWdoTGV2ZWw.action.ZGVsZXRlLWNvbnRhY3Q.short_desc": {
+          "source": "Delete a contact",
+          "message": "Odstranit kontakt"
+        },
+        "app.R29IaWdoTGV2ZWw.action.ZGVsZXRlLXRhc2s.desc": {
+          "source": "Delete a task from GoHighLevel",
+          "message": "Smazat úkol z GoHighLevel"
+        },
+        "app.R29IaWdoTGV2ZWw.action.ZGVsZXRlLXRhc2s.display_name": {
+          "source": "Delete a Task",
+          "message": "Smazat úkol"
+        },
+        "app.R29IaWdoTGV2ZWw.action.ZGVsZXRlLXRhc2s.option.Y29udGFjdF9pZA.desc": {
+          "source": "The contact ID the task belongs to",
+          "message": "ID kontaktu, ke kterému úkol patří"
+        },
+        "app.R29IaWdoTGV2ZWw.action.ZGVsZXRlLXRhc2s.option.Y29udGFjdF9pZA.display_name": {
+          "source": "Contact ID",
+          "message": "ID kontaktu"
+        },
+        "app.R29IaWdoTGV2ZWw.action.ZGVsZXRlLXRhc2s.option.Y29udGFjdF9pZA.short_desc": {
+          "source": "The contact",
+          "message": "Kontakt"
+        },
+        "app.R29IaWdoTGV2ZWw.action.ZGVsZXRlLXRhc2s.option.dGFza19pZA.desc": {
+          "source": "The ID of the task to delete",
+          "message": "ID úkolu ke smazání"
+        },
+        "app.R29IaWdoTGV2ZWw.action.ZGVsZXRlLXRhc2s.option.dGFza19pZA.display_name": {
+          "source": "Task ID",
+          "message": "ID úlohy"
+        },
+        "app.R29IaWdoTGV2ZWw.action.ZGVsZXRlLXRhc2s.option.dGFza19pZA.short_desc": {
+          "source": "The task to delete",
+          "message": "Úkol ke smazání"
+        },
+        "app.R29IaWdoTGV2ZWw.action.ZGVsZXRlLXRhc2s.short_desc": {
+          "source": "Delete a task",
+          "message": "Smazat úkol"
+        },
+        "app.R29IaWdoTGV2ZWw.action.bGlzdC10YXNrcw.desc": {
+          "source": "List tasks for a contact in GoHighLevel",
+          "message": "Zobrazit seznam úkolů kontaktu v GoHighLevel"
+        },
+        "app.R29IaWdoTGV2ZWw.action.bGlzdC10YXNrcw.display_name": {
+          "source": "List Tasks",
+          "message": "Seznam úloh"
+        },
+        "app.R29IaWdoTGV2ZWw.action.bGlzdC10YXNrcw.option.Y29udGFjdF9pZA.desc": {
+          "source": "The contact ID to list tasks for",
+          "message": "ID kontaktu, pro který se mají vypsat úkoly"
+        },
+        "app.R29IaWdoTGV2ZWw.action.bGlzdC10YXNrcw.option.Y29udGFjdF9pZA.display_name": {
+          "source": "Contact ID",
+          "message": "ID kontaktu"
+        },
+        "app.R29IaWdoTGV2ZWw.action.bGlzdC10YXNrcw.option.Y29udGFjdF9pZA.short_desc": {
+          "source": "The contact",
+          "message": "Kontakt"
+        },
+        "app.R29IaWdoTGV2ZWw.action.bGlzdC10YXNrcw.option.bGltaXQ.desc": {
+          "source": "Maximum number of results to return",
+          "message": "Maximální počet výsledků k vrácení"
+        },
+        "app.R29IaWdoTGV2ZWw.action.bGlzdC10YXNrcw.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "Limit"
+        },
+        "app.R29IaWdoTGV2ZWw.action.bGlzdC10YXNrcw.option.bGltaXQ.short_desc": {
+          "source": "Maximum results",
+          "message": "Maximální počet výsledků"
+        },
+        "app.R29IaWdoTGV2ZWw.action.bGlzdC10YXNrcw.option.dGFza19pZA.desc": {
+          "source": "Filter results by a specific task ID",
+          "message": "Filtrovat výsledky podle konkrétního ID úkolu"
+        },
+        "app.R29IaWdoTGV2ZWw.action.bGlzdC10YXNrcw.option.dGFza19pZA.display_name": {
+          "source": "Task ID",
+          "message": "ID úlohy"
+        },
+        "app.R29IaWdoTGV2ZWw.action.bGlzdC10YXNrcw.option.dGFza19pZA.short_desc": {
+          "source": "Filter by task ID",
+          "message": "Filtrovat podle ID úkolu"
+        },
+        "app.R29IaWdoTGV2ZWw.action.bGlzdC10YXNrcw.short_desc": {
+          "source": "List tasks for a contact",
+          "message": "Zobrazit seznam úkolů kontaktu"
+        },
+        "app.R29IaWdoTGV2ZWw.action.bWFrZS1hcGktY2FsbA.desc": {
+          "source": "Make a custom HTTP / REST API call to **GoHighLevel** using the configured connection's authentication.\n\nSpecify the HTTP method, the URI path (relative to the connection's API base URL), optional query parameters, headers, and request body. The response is returned as a hash containing the status code, response headers, and response body.\n\nUse this action for endpoints that are not yet exposed as first-class actions on this app.",
+          "message": "Provést vlastní volání HTTP / REST API do **GoHighLevel** pomocí autentizace nakonfigurovaného připojení.\n\nZadejte metodu HTTP, cestu URI (relativní k základní adrese URL rozhraní API připojení), volitelné parametry dotazu, záhlaví a tělo požadavku. Odpověď je vrácena jako hash obsahující stavový kód, záhlaví odpovědi a tělo odpovědi.\n\nTuto akci použijte pro koncové body, které ještě nejsou v této aplikaci vystaveny jako plnohodnotné akce."
+        },
+        "app.R29IaWdoTGV2ZWw.action.bWFrZS1hcGktY2FsbA.display_name": {
+          "source": "Make an API call",
+          "message": "Provést volání API"
+        },
+        "app.R29IaWdoTGV2ZWw.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.desc": {
+          "source": "The request body. The effective type depends on `body_type`: JSON/form/YAML expect a hash, XML/text expect a string, multipart expects a file structure, binary expects raw bytes.",
+          "message": "Tělo požadavku. Efektivní typ závisí na `body_type`: JSON/form/YAML očekávají hash, XML/text očekávají řetězec, multipart očekává strukturu souboru, binary očekává surové bajty."
+        },
+        "app.R29IaWdoTGV2ZWw.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.display_name": {
+          "source": "Body",
+          "message": "Tělo"
+        },
+        "app.R29IaWdoTGV2ZWw.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.short_desc": {
+          "source": "The request body",
+          "message": "Tělo požadavku"
+        },
+        "app.R29IaWdoTGV2ZWw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.desc": {
+          "source": "Upload a file using `multipart/form-data`. The body must be a @ref DataProvider::FileDataType \"FileDataType\" structure (filename + content + mime_type). The framework builds the multipart envelope and sets the boundary header.",
+          "message": "Nahrát soubor pomocí `multipart/form-data`. Tělo musí být struktura @ref DataProvider::FileDataType \"FileDataType\" (filename + content + mime_type). Framework vytvoří obálku multipart a nastaví záhlaví boundary."
+        },
+        "app.R29IaWdoTGV2ZWw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.display_name": {
+          "source": "Multipart Form",
+          "message": "Multipart Form"
+        },
+        "app.R29IaWdoTGV2ZWw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.short_desc": {
+          "source": "Upload a file using multipart/form-data",
+          "message": "Nahrát soubor pomocí multipart/form-data"
+        },
+        "app.R29IaWdoTGV2ZWw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.desc": {
+          "source": "Pass the body to the REST client unchanged; the client decides serialization based on its configured `data` option and the value type",
+          "message": "Předat tělo klientovi REST beze změny; klient rozhodne o serializaci na základě své nakonfigurované možnosti `data` a typu hodnoty"
+        },
+        "app.R29IaWdoTGV2ZWw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.display_name": {
+          "source": "Auto",
+          "message": "Automaticky"
+        },
+        "app.R29IaWdoTGV2ZWw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.short_desc": {
+          "source": "Pass-through; use connection serialization and let the REST client decide",
+          "message": "Předání bez změn; použít serializaci připojení a nechat rozhodnutí na klientovi REST"
+        },
+        "app.R29IaWdoTGV2ZWw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.desc": {
+          "source": "Send the body as raw bytes. The body must be a binary value. Sets `Content-Type: application/octet-stream` unless overridden by `hdr`.",
+          "message": "Odeslat tělo jako surové bajty. Tělo musí být binární hodnota. Nastavuje `Content-Type: application/octet-stream`, pokud není přepsáno `hdr`."
+        },
+        "app.R29IaWdoTGV2ZWw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.display_name": {
+          "source": "Raw Binary",
+          "message": "Surová binární data"
+        },
+        "app.R29IaWdoTGV2ZWw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.short_desc": {
+          "source": "Send body as raw bytes",
+          "message": "Odeslat tělo jako surové bajty"
+        },
+        "app.R29IaWdoTGV2ZWw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.desc": {
+          "source": "Serialize a hash of form fields as `application/x-www-form-urlencoded`. The body must be a hash whose values are scalars (strings/numbers/booleans).",
+          "message": "Serializovat hash formulářových polí jako `application/x-www-form-urlencoded`. Tělo musí být hash, jehož hodnotami jsou skaláry (řetězce/čísla/booleovské hodnoty)."
+        },
+        "app.R29IaWdoTGV2ZWw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.display_name": {
+          "source": "Form (URL-encoded)",
+          "message": "Formulář (URL-encoded)"
+        },
+        "app.R29IaWdoTGV2ZWw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.short_desc": {
+          "source": "Serialize body as application/x-www-form-urlencoded form fields",
+          "message": "Serializovat tělo jako formulářová pole application/x-www-form-urlencoded"
+        },
+        "app.R29IaWdoTGV2ZWw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.desc": {
+          "source": "Serialize the body as JSON; sets `Content-Type: application/json`. The body should be a hash, list, or scalar value.",
+          "message": "Serializovat tělo jako JSON; nastavuje `Content-Type: application/json`. Tělo by mělo být hash, seznam nebo skalární hodnota."
+        },
+        "app.R29IaWdoTGV2ZWw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.display_name": {
+          "source": "JSON",
+          "message": "JSON"
+        },
+        "app.R29IaWdoTGV2ZWw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.short_desc": {
+          "source": "Serialize body as JSON",
+          "message": "Serializovat tělo jako JSON"
+        },
+        "app.R29IaWdoTGV2ZWw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.desc": {
+          "source": "Send the body as plain text. The body must be a string. Sets `Content-Type: text/plain`.",
+          "message": "Odeslat tělo jako prostý text. Tělo musí být řetězec. Nastavuje `Content-Type: text/plain`."
+        },
+        "app.R29IaWdoTGV2ZWw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.display_name": {
+          "source": "Plain Text",
+          "message": "Čistý text"
+        },
+        "app.R29IaWdoTGV2ZWw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.short_desc": {
+          "source": "Send body as text/plain",
+          "message": "Odeslat tělo jako text/plain"
+        },
+        "app.R29IaWdoTGV2ZWw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.desc": {
+          "source": "Send the body as XML. If the body is a hash it is serialized to XML; if it is a string it is sent verbatim. Sets `Content-Type: application/xml`.",
+          "message": "Odeslat tělo jako XML. Pokud je tělo hash, serializuje se do XML; pokud je to řetězec, odešle se doslovně. Nastavuje `Content-Type: application/xml`."
+        },
+        "app.R29IaWdoTGV2ZWw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.display_name": {
+          "source": "XML",
+          "message": "XML"
+        },
+        "app.R29IaWdoTGV2ZWw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.short_desc": {
+          "source": "Send body as XML",
+          "message": "Odeslat tělo jako XML"
+        },
+        "app.R29IaWdoTGV2ZWw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.desc": {
+          "source": "Send the body as YAML. If the body is a hash it is serialized to YAML; if it is a string it is sent verbatim. Sets `Content-Type: application/x-yaml`.",
+          "message": "Odeslat tělo jako YAML. Pokud je tělo hash, serializuje se do YAML; pokud je to řetězec, odešle se doslovně. Nastavuje `Content-Type: application/x-yaml`."
+        },
+        "app.R29IaWdoTGV2ZWw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.display_name": {
+          "source": "YAML",
+          "message": "YAML"
+        },
+        "app.R29IaWdoTGV2ZWw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.short_desc": {
+          "source": "Send body as YAML",
+          "message": "Odeslat tělo jako YAML"
+        },
+        "app.R29IaWdoTGV2ZWw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.desc": {
+          "source": "Selects the body serialization mode and the corresponding `Content-Type` header. Changing this field reshapes the `body` editor - selecting JSON exposes a JSON editor, selecting Multipart Form exposes a file picker, and so on.",
+          "message": "Vybírá režim serializace těla a odpovídající záhlaví `Content-Type`. Změna tohoto pole upraví editor `body` – výběrem JSON se zobrazí editor JSON, výběrem Multipart Form se zobrazí výběr souboru a podobně."
+        },
+        "app.R29IaWdoTGV2ZWw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.display_name": {
+          "source": "Body Type",
+          "message": "Typ těla"
+        },
+        "app.R29IaWdoTGV2ZWw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.short_desc": {
+          "source": "How the body is serialized and what Content-Type is sent",
+          "message": "Jak je tělo serializováno a jaký Content-Type je odeslán"
+        },
+        "app.R29IaWdoTGV2ZWw.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.desc": {
+          "source": "If `True`, non-2xx HTTP responses return as the normal response hash (with the actual status code) instead of raising `REST-RESPONSE-ERROR`. Useful for handling 4xx/5xx as data - e.g. checking whether a resource exists. Overrides the connection's `error_passthru` setting for this call only.",
+          "message": "Pokud je `True`, odpovědi HTTP jiné než 2xx se vrátí jako běžný hash odpovědi (s reálným stavovým kódem) namísto vyvolání `REST-RESPONSE-ERROR`. Užitečné pro zpracování 4xx/5xx jako dat – např. kontrola, zda prostředek existuje. Přepisuje nastavení `error_passthru` připojení pouze pro toto volání."
+        },
+        "app.R29IaWdoTGV2ZWw.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.display_name": {
+          "source": "Return Errors as Data",
+          "message": "Vracet chyby jako data"
+        },
+        "app.R29IaWdoTGV2ZWw.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.short_desc": {
+          "source": "Return non-2xx responses normally instead of throwing",
+          "message": "Vracet odpovědi jiné než 2xx normálně namísto vyvolání výjimky"
+        },
+        "app.R29IaWdoTGV2ZWw.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.desc": {
+          "source": "Optional list of HTTP status codes treated as success. If set and the response status is not in this list, the action throws `REST-STATUS-ERROR`. When unset, the REST client's default behavior applies (typically: 2xx is success, non-2xx throws).",
+          "message": "Volitelný seznam stavových kódů HTTP považovaných za úspěch. Je-li nastaven a stav odpovědi není v tomto seznamu, akce vyvolá `REST-STATUS-ERROR`. Pokud není nastaven, uplatní se výchozí chování klienta REST (obvykle: 2xx je úspěch, jiné než 2xx vyvolá výjimku)."
+        },
+        "app.R29IaWdoTGV2ZWw.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.display_name": {
+          "source": "Expected Status Codes",
+          "message": "Očekávané stavové kódy"
+        },
+        "app.R29IaWdoTGV2ZWw.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.short_desc": {
+          "source": "Response status codes treated as success",
+          "message": "Stavové kódy odpovědi považované za úspěch"
+        },
+        "app.R29IaWdoTGV2ZWw.action.bWFrZS1hcGktY2FsbA.option.aGRy.desc": {
+          "source": "Hash of custom headers added to the request. These override any default headers set by `body_type` (e.g. supplying `Content-Type` here wins over the body-type default).",
+          "message": "Hash vlastních záhlaví přidaných k požadavku. Tyto přepisují jakákoli výchozí záhlaví nastavená `body_type` (např. zadání `Content-Type` zde má přednost před výchozím nastavením typu těla)."
+        },
+        "app.R29IaWdoTGV2ZWw.action.bWFrZS1hcGktY2FsbA.option.aGRy.display_name": {
+          "source": "Custom Headers",
+          "message": "Vlastní záhlaví"
+        },
+        "app.R29IaWdoTGV2ZWw.action.bWFrZS1hcGktY2FsbA.option.aGRy.short_desc": {
+          "source": "Extra request headers",
+          "message": "Dodatečná záhlaví požadavku"
+        },
+        "app.R29IaWdoTGV2ZWw.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.desc": {
+          "source": "If `True`, the response hash includes a `debug` sub-hash containing the request method/URL/headers (with sensitive values redacted), request and response sizes, and round-trip duration. Useful when investigating slow or failing calls. Off by default to keep responses lean.",
+          "message": "Pokud je `True`, hash odpovědi obsahuje pod-hash `debug` obsahující metodu/URL/záhlaví požadavku (s cenzurovanými citlivými hodnotami), velikosti požadavku a odpovědi a dobu trvání. Užitečné při zkoumání pomalých nebo selhávajících volání. Ve výchozím nastavení vypnuto pro zachování kompaktních odpovědí."
+        },
+        "app.R29IaWdoTGV2ZWw.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.display_name": {
+          "source": "Include Debug Info",
+          "message": "Zahrnout ladicí informace"
+        },
+        "app.R29IaWdoTGV2ZWw.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.short_desc": {
+          "source": "Include request/timing/size debug info in the response",
+          "message": "Zahrnout do odpovědi ladicí informace o požadavku/časování/velikosti"
+        },
+        "app.R29IaWdoTGV2ZWw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.desc": {
+          "source": "HTTP `OPTIONS`",
+          "message": "HTTP `OPTIONS`"
+        },
+        "app.R29IaWdoTGV2ZWw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.display_name": {
+          "source": "OPTIONS",
+          "message": "OPTIONS"
+        },
+        "app.R29IaWdoTGV2ZWw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.short_desc": {
+          "source": "HTTP OPTIONS",
+          "message": "HTTP OPTIONS"
+        },
+        "app.R29IaWdoTGV2ZWw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.desc": {
+          "source": "HTTP `DELETE`",
+          "message": "HTTP `DELETE`"
+        },
+        "app.R29IaWdoTGV2ZWw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.display_name": {
+          "source": "DELETE",
+          "message": "DELETE"
+        },
+        "app.R29IaWdoTGV2ZWw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.short_desc": {
+          "source": "HTTP DELETE",
+          "message": "HTTP DELETE"
+        },
+        "app.R29IaWdoTGV2ZWw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.desc": {
+          "source": "HTTP `GET`",
+          "message": "HTTP `GET`"
+        },
+        "app.R29IaWdoTGV2ZWw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.display_name": {
+          "source": "GET",
+          "message": "GET"
+        },
+        "app.R29IaWdoTGV2ZWw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.short_desc": {
+          "source": "HTTP GET",
+          "message": "HTTP GET"
+        },
+        "app.R29IaWdoTGV2ZWw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.desc": {
+          "source": "HTTP `HEAD`",
+          "message": "HTTP `HEAD`"
+        },
+        "app.R29IaWdoTGV2ZWw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.display_name": {
+          "source": "HEAD",
+          "message": "HEAD"
+        },
+        "app.R29IaWdoTGV2ZWw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.short_desc": {
+          "source": "HTTP HEAD",
+          "message": "HTTP HEAD"
+        },
+        "app.R29IaWdoTGV2ZWw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.desc": {
+          "source": "HTTP `PATCH`",
+          "message": "HTTP `PATCH`"
+        },
+        "app.R29IaWdoTGV2ZWw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.display_name": {
+          "source": "PATCH",
+          "message": "PATCH"
+        },
+        "app.R29IaWdoTGV2ZWw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.short_desc": {
+          "source": "HTTP PATCH",
+          "message": "HTTP PATCH"
+        },
+        "app.R29IaWdoTGV2ZWw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.desc": {
+          "source": "HTTP `POST`",
+          "message": "HTTP `POST`"
+        },
+        "app.R29IaWdoTGV2ZWw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.display_name": {
+          "source": "POST",
+          "message": "POST"
+        },
+        "app.R29IaWdoTGV2ZWw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.short_desc": {
+          "source": "HTTP POST",
+          "message": "HTTP POST"
+        },
+        "app.R29IaWdoTGV2ZWw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.desc": {
+          "source": "HTTP `PUT`",
+          "message": "HTTP `PUT`"
+        },
+        "app.R29IaWdoTGV2ZWw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.display_name": {
+          "source": "PUT",
+          "message": "PUT"
+        },
+        "app.R29IaWdoTGV2ZWw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.short_desc": {
+          "source": "HTTP PUT",
+          "message": "HTTP PUT"
+        },
+        "app.R29IaWdoTGV2ZWw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.desc": {
+          "source": "HTTP `TRACE`",
+          "message": "HTTP `TRACE`"
+        },
+        "app.R29IaWdoTGV2ZWw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.display_name": {
+          "source": "TRACE",
+          "message": "TRACE"
+        },
+        "app.R29IaWdoTGV2ZWw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.short_desc": {
+          "source": "HTTP TRACE",
+          "message": "HTTP TRACE"
+        },
+        "app.R29IaWdoTGV2ZWw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "Metoda HTTP, která se má použít pro požadavek"
+        },
+        "app.R29IaWdoTGV2ZWw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.display_name": {
+          "source": "HTTP Method",
+          "message": "Metoda HTTP"
+        },
+        "app.R29IaWdoTGV2ZWw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.short_desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "Metoda HTTP, která se má použít pro požadavek"
+        },
+        "app.R29IaWdoTGV2ZWw.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain `{name}` placeholders that are replaced from `path_vars`. Example: `/users/{id}/comments`.",
+          "message": "Cesta URI relativní k základní adrese URL API připojení. Může obsahovat zástupné symboly `{name}`, které jsou nahrazeny z `path_vars`. Příklad: `/users/{id}/comments`."
+        },
+        "app.R29IaWdoTGV2ZWw.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.display_name": {
+          "source": "URI Path",
+          "message": "Cesta URI"
+        },
+        "app.R29IaWdoTGV2ZWw.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.short_desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain '{name}' placeholders that are replaced from 'path_vars'. Example: '/users/{id}/comments'",
+          "message": "Cesta URI relativní vůči základní URL API připojení. Může obsahovat zástupné symboly '{name}', které jsou nahrazeny z 'path_vars'. Příklad: '/users/{id}/comments'"
+        },
+        "app.R29IaWdoTGV2ZWw.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.desc": {
+          "source": "Hash of values substituted into `{name}` placeholders in the URI path. Example: with `path = /users/{id}` and `path_vars = {id: 123}` the framework sends `/users/123`. Values are URL-encoded.",
+          "message": "Haš hodnot nahrazených za zástupné symboly `{name}` v cestě URI. Příklad: s `path = /users/{id}` a `path_vars = {id: 123}` rozhraní odesílá `/users/123`. Hodnoty jsou kódovány v URL."
+        },
+        "app.R29IaWdoTGV2ZWw.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.display_name": {
+          "source": "Path Variables",
+          "message": "Proměnné cesty"
+        },
+        "app.R29IaWdoTGV2ZWw.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.short_desc": {
+          "source": "Values for {name} placeholders in path",
+          "message": "Hodnoty pro zástupné symboly {name} v cestě"
+        },
+        "app.R29IaWdoTGV2ZWw.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.desc": {
+          "source": "Hash of query string parameters to append to the URI path. Values are URL-encoded; list values are joined with `,`.",
+          "message": "Haš parametrů dotazovacího řetězce, které se připojí k cestě URI. Hodnoty jsou kódovány v URL; hodnoty seznamu jsou spojeny pomocí `,`."
+        },
+        "app.R29IaWdoTGV2ZWw.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.display_name": {
+          "source": "Query Arguments",
+          "message": "Argumenty dotazu"
+        },
+        "app.R29IaWdoTGV2ZWw.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.short_desc": {
+          "source": "Query string parameters",
+          "message": "Parametry dotazovacího řetězce"
+        },
+        "app.R29IaWdoTGV2ZWw.action.bWFrZS1hcGktY2FsbA.short_desc": {
+          "source": "Make a custom API call to GoHighLevel",
+          "message": "Provést vlastní volání rozhraní API do GoHighLevel"
+        },
+        "app.R29IaWdoTGV2ZWw.action.bmV3LW1lc3NhZ2U.desc": {
+          "source": "Fires when a new message is received in GoHighLevel. Uses polling to detect new records.",
+          "message": "Spustí se při přijetí nové zprávy v GoHighLevel. Pro zjišťování nových záznamů používá polling."
+        },
+        "app.R29IaWdoTGV2ZWw.action.bmV3LW1lc3NhZ2U.display_name": {
+          "source": "New Message",
+          "message": "Nová zpráva"
+        },
+        "app.R29IaWdoTGV2ZWw.action.bmV3LW1lc3NhZ2U.option.cG9sbF9pbnRlcnZhbA.desc": {
+          "source": "How often to check for new records (minimum 30 seconds)",
+          "message": "Jak často kontrolovat nové záznamy (minimálně 30 sekund)"
+        },
+        "app.R29IaWdoTGV2ZWw.action.bmV3LW1lc3NhZ2U.option.cG9sbF9pbnRlcnZhbA.display_name": {
+          "source": "Poll Interval",
+          "message": "Interval sledování"
+        },
+        "app.R29IaWdoTGV2ZWw.action.bmV3LW1lc3NhZ2U.option.cG9sbF9pbnRlcnZhbA.short_desc": {
+          "source": "Polling interval in seconds",
+          "message": "Interval dotazování v sekundách"
+        },
+        "app.R29IaWdoTGV2ZWw.action.bmV3LW1lc3NhZ2U.short_desc": {
+          "source": "Trigger when a new message is received",
+          "message": "Spustit při přijetí nové zprávy"
+        },
+        "app.R29IaWdoTGV2ZWw.action.bmV3LWFwcG9pbnRtZW50.desc": {
+          "source": "Fires when a new appointment is created in GoHighLevel. Uses polling to detect new records.",
+          "message": "Spustí se při vytvoření nové schůzky v GoHighLevel. Pro zjišťování nových záznamů používá polling."
+        },
+        "app.R29IaWdoTGV2ZWw.action.bmV3LWFwcG9pbnRtZW50.display_name": {
+          "source": "New Appointment",
+          "message": "Nová schůzka"
+        },
+        "app.R29IaWdoTGV2ZWw.action.bmV3LWFwcG9pbnRtZW50.option.cG9sbF9pbnRlcnZhbA.desc": {
+          "source": "How often to check for new records (minimum 30 seconds)",
+          "message": "Jak často kontrolovat nové záznamy (minimálně 30 sekund)"
+        },
+        "app.R29IaWdoTGV2ZWw.action.bmV3LWFwcG9pbnRtZW50.option.cG9sbF9pbnRlcnZhbA.display_name": {
+          "source": "Poll Interval",
+          "message": "Interval sledování"
+        },
+        "app.R29IaWdoTGV2ZWw.action.bmV3LWFwcG9pbnRtZW50.option.cG9sbF9pbnRlcnZhbA.short_desc": {
+          "source": "Polling interval in seconds",
+          "message": "Interval dotazování v sekundách"
+        },
+        "app.R29IaWdoTGV2ZWw.action.bmV3LWFwcG9pbnRtZW50.short_desc": {
+          "source": "Trigger when a new appointment is created",
+          "message": "Spustit při vytvoření nové schůzky"
+        },
+        "app.R29IaWdoTGV2ZWw.action.bmV3LWNvbnRhY3Q.desc": {
+          "source": "Fires when a new contact is created in GoHighLevel. Uses polling to detect new records.",
+          "message": "Spustit při vytvoření nového kontaktu v GoHighLevel. Pro zjišťování nových záznamů používá polling."
+        },
+        "app.R29IaWdoTGV2ZWw.action.bmV3LWNvbnRhY3Q.display_name": {
+          "source": "New Contact",
+          "message": "Nový kontakt"
+        },
+        "app.R29IaWdoTGV2ZWw.action.bmV3LWNvbnRhY3Q.option.cG9sbF9pbnRlcnZhbA.desc": {
+          "source": "How often to check for new records (minimum 30 seconds)",
+          "message": "Jak často kontrolovat nové záznamy (minimálně 30 sekund)"
+        },
+        "app.R29IaWdoTGV2ZWw.action.bmV3LWNvbnRhY3Q.option.cG9sbF9pbnRlcnZhbA.display_name": {
+          "source": "Poll Interval",
+          "message": "Interval sledování"
+        },
+        "app.R29IaWdoTGV2ZWw.action.bmV3LWNvbnRhY3Q.option.cG9sbF9pbnRlcnZhbA.short_desc": {
+          "source": "Polling interval in seconds",
+          "message": "Interval dotazování v sekundách"
+        },
+        "app.R29IaWdoTGV2ZWw.action.bmV3LWNvbnRhY3Q.short_desc": {
+          "source": "Trigger when a new contact is created",
+          "message": "Spustit při vytvoření nového kontaktu"
+        },
+        "app.R29IaWdoTGV2ZWw.action.c2VhcmNoLW9wcG9ydHVuaXRpZXM.desc": {
+          "source": "Search for opportunities in GoHighLevel with optional filtering",
+          "message": "Vyhledat obchodní příležitosti v GoHighLevel s volitelným filtrováním"
+        },
+        "app.R29IaWdoTGV2ZWw.action.c2VhcmNoLW9wcG9ydHVuaXRpZXM.display_name": {
+          "source": "Search Opportunities",
+          "message": "Vyhledat příležitosti"
+        },
+        "app.R29IaWdoTGV2ZWw.action.c2VhcmNoLW9wcG9ydHVuaXRpZXM.option.Y29udGFjdF9pZA.desc": {
+          "source": "Filter by contact ID",
+          "message": "Filtrovat podle ID kontaktu"
+        },
+        "app.R29IaWdoTGV2ZWw.action.c2VhcmNoLW9wcG9ydHVuaXRpZXM.option.Y29udGFjdF9pZA.display_name": {
+          "source": "Contact ID",
+          "message": "ID kontaktu"
+        },
+        "app.R29IaWdoTGV2ZWw.action.c2VhcmNoLW9wcG9ydHVuaXRpZXM.option.Y29udGFjdF9pZA.short_desc": {
+          "source": "Filter by contact",
+          "message": "Filtrovat podle kontaktu"
+        },
+        "app.R29IaWdoTGV2ZWw.action.c2VhcmNoLW9wcG9ydHVuaXRpZXM.option.YXNzaWduZWRfdG8.desc": {
+          "source": "Filter by assigned user ID",
+          "message": "Filtrovat podle ID přiřazeného uživatele"
+        },
+        "app.R29IaWdoTGV2ZWw.action.c2VhcmNoLW9wcG9ydHVuaXRpZXM.option.YXNzaWduZWRfdG8.display_name": {
+          "source": "Assigned To",
+          "message": "Přiřazeno uživateli"
+        },
+        "app.R29IaWdoTGV2ZWw.action.c2VhcmNoLW9wcG9ydHVuaXRpZXM.option.YXNzaWduZWRfdG8.short_desc": {
+          "source": "Filter by assignee",
+          "message": "Filtrovat podle přiřazeného uživatele"
+        },
+        "app.R29IaWdoTGV2ZWw.action.c2VhcmNoLW9wcG9ydHVuaXRpZXM.option.b3Bwb3J0dW5pdHlfaWQ.desc": {
+          "source": "Filter results by a specific opportunity ID",
+          "message": "Filtrovat výsledky podle konkrétního ID příležitosti"
+        },
+        "app.R29IaWdoTGV2ZWw.action.c2VhcmNoLW9wcG9ydHVuaXRpZXM.option.b3Bwb3J0dW5pdHlfaWQ.display_name": {
+          "source": "Opportunity ID",
+          "message": "ID příležitosti"
+        },
+        "app.R29IaWdoTGV2ZWw.action.c2VhcmNoLW9wcG9ydHVuaXRpZXM.option.b3Bwb3J0dW5pdHlfaWQ.short_desc": {
+          "source": "Filter by opportunity ID",
+          "message": "Filtrovat podle ID příležitosti"
+        },
+        "app.R29IaWdoTGV2ZWw.action.c2VhcmNoLW9wcG9ydHVuaXRpZXM.option.bGltaXQ.desc": {
+          "source": "Maximum number of results to return",
+          "message": "Maximální počet výsledků k vrácení"
+        },
+        "app.R29IaWdoTGV2ZWw.action.c2VhcmNoLW9wcG9ydHVuaXRpZXM.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "Limit"
+        },
+        "app.R29IaWdoTGV2ZWw.action.c2VhcmNoLW9wcG9ydHVuaXRpZXM.option.bGltaXQ.short_desc": {
+          "source": "Maximum results",
+          "message": "Maximální počet výsledků"
+        },
+        "app.R29IaWdoTGV2ZWw.action.c2VhcmNoLW9wcG9ydHVuaXRpZXM.option.c3RhdHVz.allowed-value.c3RyaW5nOm9wZW4.display_name": {
+          "source": "Open",
+          "message": "Otevřeno"
+        },
+        "app.R29IaWdoTGV2ZWw.action.c2VhcmNoLW9wcG9ydHVuaXRpZXM.option.c3RhdHVz.allowed-value.c3RyaW5nOmFiYW5kb25lZA.display_name": {
+          "source": "Abandoned",
+          "message": "Opuštěno"
+        },
+        "app.R29IaWdoTGV2ZWw.action.c2VhcmNoLW9wcG9ydHVuaXRpZXM.option.c3RhdHVz.allowed-value.c3RyaW5nOmFsbA.display_name": {
+          "source": "All",
+          "message": "Vše"
+        },
+        "app.R29IaWdoTGV2ZWw.action.c2VhcmNoLW9wcG9ydHVuaXRpZXM.option.c3RhdHVz.allowed-value.c3RyaW5nOmxvc3Q.display_name": {
+          "source": "Lost",
+          "message": "Ztraceno"
+        },
+        "app.R29IaWdoTGV2ZWw.action.c2VhcmNoLW9wcG9ydHVuaXRpZXM.option.c3RhdHVz.allowed-value.c3RyaW5nOndvbg.display_name": {
+          "source": "Won",
+          "message": "Získáno"
+        },
+        "app.R29IaWdoTGV2ZWw.action.c2VhcmNoLW9wcG9ydHVuaXRpZXM.option.c3RhdHVz.desc": {
+          "source": "Filter by opportunity status",
+          "message": "Filtrovat podle stavu příležitosti"
+        },
+        "app.R29IaWdoTGV2ZWw.action.c2VhcmNoLW9wcG9ydHVuaXRpZXM.option.c3RhdHVz.display_name": {
+          "source": "Status",
+          "message": "Stav"
+        },
+        "app.R29IaWdoTGV2ZWw.action.c2VhcmNoLW9wcG9ydHVuaXRpZXM.option.c3RhdHVz.short_desc": {
+          "source": "Filter by status",
+          "message": "Filtrovat podle stavu"
+        },
+        "app.R29IaWdoTGV2ZWw.action.c2VhcmNoLW9wcG9ydHVuaXRpZXM.option.cGlwZWxpbmVfaWQ.desc": {
+          "source": "Filter by pipeline ID",
+          "message": "Filtrovat podle ID pipeline"
+        },
+        "app.R29IaWdoTGV2ZWw.action.c2VhcmNoLW9wcG9ydHVuaXRpZXM.option.cGlwZWxpbmVfaWQ.display_name": {
+          "source": "Pipeline ID",
+          "message": "ID pipeline"
+        },
+        "app.R29IaWdoTGV2ZWw.action.c2VhcmNoLW9wcG9ydHVuaXRpZXM.option.cGlwZWxpbmVfaWQ.short_desc": {
+          "source": "Filter by pipeline",
+          "message": "Filtrovat podle pipeline"
+        },
+        "app.R29IaWdoTGV2ZWw.action.c2VhcmNoLW9wcG9ydHVuaXRpZXM.option.cGlwZWxpbmVfc3RhZ2VfaWQ.desc": {
+          "source": "Filter by pipeline stage ID",
+          "message": "Filtrovat podle ID fáze pipeline"
+        },
+        "app.R29IaWdoTGV2ZWw.action.c2VhcmNoLW9wcG9ydHVuaXRpZXM.option.cGlwZWxpbmVfc3RhZ2VfaWQ.display_name": {
+          "source": "Pipeline Stage ID",
+          "message": "ID fáze pipeline"
+        },
+        "app.R29IaWdoTGV2ZWw.action.c2VhcmNoLW9wcG9ydHVuaXRpZXM.option.cGlwZWxpbmVfc3RhZ2VfaWQ.short_desc": {
+          "source": "Filter by pipeline stage",
+          "message": "Filtrovat podle fáze pipeline"
+        },
+        "app.R29IaWdoTGV2ZWw.action.c2VhcmNoLW9wcG9ydHVuaXRpZXM.option.cQ.desc": {
+          "source": "Search query to filter opportunities",
+          "message": "Vyhledávací dotaz pro filtrování obchodních příležitostí"
+        },
+        "app.R29IaWdoTGV2ZWw.action.c2VhcmNoLW9wcG9ydHVuaXRpZXM.option.cQ.display_name": {
+          "source": "Search Query",
+          "message": "Vyhledávací dotaz"
+        },
+        "app.R29IaWdoTGV2ZWw.action.c2VhcmNoLW9wcG9ydHVuaXRpZXM.option.cQ.short_desc": {
+          "source": "Search query",
+          "message": "Vyhledávací dotaz"
+        },
+        "app.R29IaWdoTGV2ZWw.action.c2VhcmNoLW9wcG9ydHVuaXRpZXM.short_desc": {
+          "source": "Search for opportunities",
+          "message": "Vyhledat obchodní příležitosti"
+        },
+        "app.R29IaWdoTGV2ZWw.action.c2VhcmNoLWNvbnRhY3Rz.desc": {
+          "source": "Search for contacts in GoHighLevel with optional filtering",
+          "message": "Vyhledat kontakty v GoHighLevel s volitelným filtrováním"
+        },
+        "app.R29IaWdoTGV2ZWw.action.c2VhcmNoLWNvbnRhY3Rz.display_name": {
+          "source": "Search Contacts",
+          "message": "Vyhledat kontakty"
+        },
+        "app.R29IaWdoTGV2ZWw.action.c2VhcmNoLWNvbnRhY3Rz.option.Y29udGFjdF9pZA.desc": {
+          "source": "Filter results by a specific contact ID",
+          "message": "Filtrovat výsledky podle konkrétního ID kontaktu"
+        },
+        "app.R29IaWdoTGV2ZWw.action.c2VhcmNoLWNvbnRhY3Rz.option.Y29udGFjdF9pZA.display_name": {
+          "source": "Contact ID",
+          "message": "ID kontaktu"
+        },
+        "app.R29IaWdoTGV2ZWw.action.c2VhcmNoLWNvbnRhY3Rz.option.Y29udGFjdF9pZA.short_desc": {
+          "source": "Filter by contact ID",
+          "message": "Filtrovat podle ID kontaktu"
+        },
+        "app.R29IaWdoTGV2ZWw.action.c2VhcmNoLWNvbnRhY3Rz.option.bGltaXQ.desc": {
+          "source": "Maximum number of results to return",
+          "message": "Maximální počet výsledků k vrácení"
+        },
+        "app.R29IaWdoTGV2ZWw.action.c2VhcmNoLWNvbnRhY3Rz.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "Limit"
+        },
+        "app.R29IaWdoTGV2ZWw.action.c2VhcmNoLWNvbnRhY3Rz.option.bGltaXQ.short_desc": {
+          "source": "Maximum results",
+          "message": "Maximální počet výsledků"
+        },
+        "app.R29IaWdoTGV2ZWw.action.c2VhcmNoLWNvbnRhY3Rz.option.cXVlcnk.desc": {
+          "source": "Search query to filter contacts by name, email, or phone",
+          "message": "Vyhledávací dotaz pro filtrování kontaktů podle jména, e-mailu nebo telefonu"
+        },
+        "app.R29IaWdoTGV2ZWw.action.c2VhcmNoLWNvbnRhY3Rz.option.cXVlcnk.display_name": {
+          "source": "Search Query",
+          "message": "Vyhledávací dotaz"
+        },
+        "app.R29IaWdoTGV2ZWw.action.c2VhcmNoLWNvbnRhY3Rz.option.cXVlcnk.short_desc": {
+          "source": "Search query string",
+          "message": "Řetězec vyhledávacího dotazu"
+        },
+        "app.R29IaWdoTGV2ZWw.action.c2VhcmNoLWNvbnRhY3Rz.short_desc": {
+          "source": "Search for contacts",
+          "message": "Vyhledat kontakty"
+        },
+        "app.R29IaWdoTGV2ZWw.action.cmVtb3ZlLWNvbnRhY3QtZnJvbS1jYW1wYWlnbg.desc": {
+          "source": "Remove a contact from a campaign in GoHighLevel",
+          "message": "Odebrat kontakt z kampaně v GoHighLevel"
+        },
+        "app.R29IaWdoTGV2ZWw.action.cmVtb3ZlLWNvbnRhY3QtZnJvbS1jYW1wYWlnbg.display_name": {
+          "source": "Remove a Contact from a Campaign",
+          "message": "Odebrat kontakt z kampaně"
+        },
+        "app.R29IaWdoTGV2ZWw.action.cmVtb3ZlLWNvbnRhY3QtZnJvbS1jYW1wYWlnbg.option.Y29udGFjdF9pZA.display_name": {
+          "source": "Contact ID",
+          "message": "ID kontaktu"
+        },
+        "app.R29IaWdoTGV2ZWw.action.cmVtb3ZlLWNvbnRhY3QtZnJvbS1jYW1wYWlnbg.option.Y29udGFjdF9pZA.short_desc": {
+          "source": "The contact",
+          "message": "Kontakt"
+        },
+        "app.R29IaWdoTGV2ZWw.action.cmVtb3ZlLWNvbnRhY3QtZnJvbS1jYW1wYWlnbg.option.Y2FtcGFpZ25faWQ.desc": {
+          "source": "The ID of the campaign to remove the contact from",
+          "message": "ID kampaně, ze které se má kontakt odebrat"
+        },
+        "app.R29IaWdoTGV2ZWw.action.cmVtb3ZlLWNvbnRhY3QtZnJvbS1jYW1wYWlnbg.option.Y2FtcGFpZ25faWQ.display_name": {
+          "source": "Campaign ID",
+          "message": "ID kampaně"
+        },
+        "app.R29IaWdoTGV2ZWw.action.cmVtb3ZlLWNvbnRhY3QtZnJvbS1jYW1wYWlnbg.option.Y2FtcGFpZ25faWQ.short_desc": {
+          "source": "The campaign",
+          "message": "Kampaň"
+        },
+        "app.R29IaWdoTGV2ZWw.action.cmVtb3ZlLWNvbnRhY3QtZnJvbS1jYW1wYWlnbg.short_desc": {
+          "source": "Remove a contact from a campaign",
+          "message": "Odebrat kontakt z kampaně"
+        },
+        "app.R29IaWdoTGV2ZWw.action.dXBkYXRlLW9wcG9ydHVuaXR5.desc": {
+          "source": "Update an existing opportunity in GoHighLevel",
+          "message": "Aktualizovat existující obchodní příležitost v GoHighLevel"
+        },
+        "app.R29IaWdoTGV2ZWw.action.dXBkYXRlLW9wcG9ydHVuaXR5.display_name": {
+          "source": "Update an Opportunity",
+          "message": "Aktualizovat příležitost"
+        },
+        "app.R29IaWdoTGV2ZWw.action.dXBkYXRlLW9wcG9ydHVuaXR5.option.YXNzaWduZWRUbw.desc": {
+          "source": "User ID to assign the opportunity to",
+          "message": "ID uživatele, kterému má být příležitost přiřazena"
+        },
+        "app.R29IaWdoTGV2ZWw.action.dXBkYXRlLW9wcG9ydHVuaXR5.option.YXNzaWduZWRUbw.display_name": {
+          "source": "Assigned To",
+          "message": "Přiřazeno uživateli"
+        },
+        "app.R29IaWdoTGV2ZWw.action.dXBkYXRlLW9wcG9ydHVuaXR5.option.YXNzaWduZWRUbw.short_desc": {
+          "source": "Assigned user",
+          "message": "Přiřazený uživatel"
+        },
+        "app.R29IaWdoTGV2ZWw.action.dXBkYXRlLW9wcG9ydHVuaXR5.option.b3Bwb3J0dW5pdHlfaWQ.display_name": {
+          "source": "Opportunity ID",
+          "message": "ID příležitosti"
+        },
+        "app.R29IaWdoTGV2ZWw.action.dXBkYXRlLW9wcG9ydHVuaXR5.option.b3Bwb3J0dW5pdHlfaWQ.short_desc": {
+          "source": "The opportunity to update",
+          "message": "Příležitost k aktualizaci"
+        },
+        "app.R29IaWdoTGV2ZWw.action.dXBkYXRlLW9wcG9ydHVuaXR5.option.bW9uZXRhcnlWYWx1ZQ.desc": {
+          "source": "Monetary value of the opportunity",
+          "message": "Peněžní hodnota příležitosti"
+        },
+        "app.R29IaWdoTGV2ZWw.action.dXBkYXRlLW9wcG9ydHVuaXR5.option.bW9uZXRhcnlWYWx1ZQ.display_name": {
+          "source": "Monetary Value",
+          "message": "Finanční hodnota"
+        },
+        "app.R29IaWdoTGV2ZWw.action.dXBkYXRlLW9wcG9ydHVuaXR5.option.bW9uZXRhcnlWYWx1ZQ.short_desc": {
+          "source": "Deal value",
+          "message": "Hodnota obchodu"
+        },
+        "app.R29IaWdoTGV2ZWw.action.dXBkYXRlLW9wcG9ydHVuaXR5.option.bmFtZQ.desc": {
+          "source": "Name of the opportunity",
+          "message": "Název příležitosti"
+        },
+        "app.R29IaWdoTGV2ZWw.action.dXBkYXRlLW9wcG9ydHVuaXR5.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "Název"
+        },
+        "app.R29IaWdoTGV2ZWw.action.dXBkYXRlLW9wcG9ydHVuaXR5.option.bmFtZQ.short_desc": {
+          "source": "Opportunity name",
+          "message": "Název příležitosti"
+        },
+        "app.R29IaWdoTGV2ZWw.action.dXBkYXRlLW9wcG9ydHVuaXR5.option.c3RhdHVz.allowed-value.c3RyaW5nOm9wZW4.display_name": {
+          "source": "Open",
+          "message": "Otevřeno"
+        },
+        "app.R29IaWdoTGV2ZWw.action.dXBkYXRlLW9wcG9ydHVuaXR5.option.c3RhdHVz.allowed-value.c3RyaW5nOmFiYW5kb25lZA.display_name": {
+          "source": "Abandoned",
+          "message": "Opuštěno"
+        },
+        "app.R29IaWdoTGV2ZWw.action.dXBkYXRlLW9wcG9ydHVuaXR5.option.c3RhdHVz.allowed-value.c3RyaW5nOmxvc3Q.display_name": {
+          "source": "Lost",
+          "message": "Ztraceno"
+        },
+        "app.R29IaWdoTGV2ZWw.action.dXBkYXRlLW9wcG9ydHVuaXR5.option.c3RhdHVz.allowed-value.c3RyaW5nOndvbg.display_name": {
+          "source": "Won",
+          "message": "Získáno"
+        },
+        "app.R29IaWdoTGV2ZWw.action.dXBkYXRlLW9wcG9ydHVuaXR5.option.c3RhdHVz.desc": {
+          "source": "Status of the opportunity",
+          "message": "Stav příležitosti"
+        },
+        "app.R29IaWdoTGV2ZWw.action.dXBkYXRlLW9wcG9ydHVuaXR5.option.c3RhdHVz.display_name": {
+          "source": "Status",
+          "message": "Stav"
+        },
+        "app.R29IaWdoTGV2ZWw.action.dXBkYXRlLW9wcG9ydHVuaXR5.option.c3RhdHVz.short_desc": {
+          "source": "Opportunity status",
+          "message": "Stav příležitosti"
+        },
+        "app.R29IaWdoTGV2ZWw.action.dXBkYXRlLW9wcG9ydHVuaXR5.option.cGlwZWxpbmVTdGFnZUlk.desc": {
+          "source": "The ID of the pipeline stage",
+          "message": "ID fáze pipeline"
+        },
+        "app.R29IaWdoTGV2ZWw.action.dXBkYXRlLW9wcG9ydHVuaXR5.option.cGlwZWxpbmVTdGFnZUlk.display_name": {
+          "source": "Pipeline Stage ID",
+          "message": "ID fáze pipeline"
+        },
+        "app.R29IaWdoTGV2ZWw.action.dXBkYXRlLW9wcG9ydHVuaXR5.option.cGlwZWxpbmVTdGFnZUlk.short_desc": {
+          "source": "Pipeline stage",
+          "message": "Fáze pipeline"
+        },
+        "app.R29IaWdoTGV2ZWw.action.dXBkYXRlLW9wcG9ydHVuaXR5.short_desc": {
+          "source": "Update an existing opportunity",
+          "message": "Aktualizovat existující příležitost"
+        },
+        "app.R29IaWdoTGV2ZWw.action.dXBkYXRlLWNvbnRhY3Q.desc": {
+          "source": "Update an existing contact in GoHighLevel",
+          "message": "Aktualizovat existující kontakt v GoHighLevel"
+        },
+        "app.R29IaWdoTGV2ZWw.action.dXBkYXRlLWNvbnRhY3Q.display_name": {
+          "source": "Update a Contact",
+          "message": "Aktualizovat kontakt"
+        },
+        "app.R29IaWdoTGV2ZWw.action.dXBkYXRlLWNvbnRhY3Q.option.Y291bnRyeQ.desc": {
+          "source": "Country of the contact",
+          "message": "Země kontaktu"
+        },
+        "app.R29IaWdoTGV2ZWw.action.dXBkYXRlLWNvbnRhY3Q.option.Y291bnRyeQ.display_name": {
+          "source": "Country",
+          "message": "Země"
+        },
+        "app.R29IaWdoTGV2ZWw.action.dXBkYXRlLWNvbnRhY3Q.option.Y291bnRyeQ.short_desc": {
+          "source": "Country",
+          "message": "Země"
+        },
+        "app.R29IaWdoTGV2ZWw.action.dXBkYXRlLWNvbnRhY3Q.option.Y29tcGFueU5hbWU.desc": {
+          "source": "Company name of the contact",
+          "message": "Název společnosti kontaktu"
+        },
+        "app.R29IaWdoTGV2ZWw.action.dXBkYXRlLWNvbnRhY3Q.option.Y29tcGFueU5hbWU.display_name": {
+          "source": "Company Name",
+          "message": "Název společnosti"
+        },
+        "app.R29IaWdoTGV2ZWw.action.dXBkYXRlLWNvbnRhY3Q.option.Y29tcGFueU5hbWU.short_desc": {
+          "source": "Company name",
+          "message": "Název společnosti"
+        },
+        "app.R29IaWdoTGV2ZWw.action.dXBkYXRlLWNvbnRhY3Q.option.Y29udGFjdF9pZA.display_name": {
+          "source": "Contact ID",
+          "message": "ID kontaktu"
+        },
+        "app.R29IaWdoTGV2ZWw.action.dXBkYXRlLWNvbnRhY3Q.option.Y29udGFjdF9pZA.short_desc": {
+          "source": "The contact to update",
+          "message": "Kontakt k aktualizaci"
+        },
+        "app.R29IaWdoTGV2ZWw.action.dXBkYXRlLWNvbnRhY3Q.option.Y2l0eQ.desc": {
+          "source": "City of the contact",
+          "message": "Město kontaktu"
+        },
+        "app.R29IaWdoTGV2ZWw.action.dXBkYXRlLWNvbnRhY3Q.option.Y2l0eQ.display_name": {
+          "source": "City",
+          "message": "Město"
+        },
+        "app.R29IaWdoTGV2ZWw.action.dXBkYXRlLWNvbnRhY3Q.option.Y2l0eQ.short_desc": {
+          "source": "City",
+          "message": "Město"
+        },
+        "app.R29IaWdoTGV2ZWw.action.dXBkYXRlLWNvbnRhY3Q.option.Y3VzdG9tRmllbGRz.desc": {
+          "source": "Custom field values for the contact; each entry has an `id` (custom field ID) and `field_value`",
+          "message": "Hodnoty vlastních polí kontaktu; každá položka obsahuje `id` (ID vlastního pole) a `field_value`"
+        },
+        "app.R29IaWdoTGV2ZWw.action.dXBkYXRlLWNvbnRhY3Q.option.Y3VzdG9tRmllbGRz.display_name": {
+          "source": "Custom Fields",
+          "message": "Vlastní pole"
+        },
+        "app.R29IaWdoTGV2ZWw.action.dXBkYXRlLWNvbnRhY3Q.option.Y3VzdG9tRmllbGRz.short_desc": {
+          "source": "Custom field values for the contact",
+          "message": "Hodnoty vlastních polí kontaktu"
+        },
+        "app.R29IaWdoTGV2ZWw.action.dXBkYXRlLWNvbnRhY3Q.option.YWRkcmVzczE.desc": {
+          "source": "Street address of the contact",
+          "message": "Ulice kontaktu"
+        },
+        "app.R29IaWdoTGV2ZWw.action.dXBkYXRlLWNvbnRhY3Q.option.YWRkcmVzczE.display_name": {
+          "source": "Address",
+          "message": "Adresa"
+        },
+        "app.R29IaWdoTGV2ZWw.action.dXBkYXRlLWNvbnRhY3Q.option.YWRkcmVzczE.short_desc": {
+          "source": "Street address",
+          "message": "Uliční adresa"
+        },
+        "app.R29IaWdoTGV2ZWw.action.dXBkYXRlLWNvbnRhY3Q.option.YXNzaWduZWRUbw.desc": {
+          "source": "User ID to assign the contact to",
+          "message": "ID uživatele, kterému má být kontakt přiřazen"
+        },
+        "app.R29IaWdoTGV2ZWw.action.dXBkYXRlLWNvbnRhY3Q.option.YXNzaWduZWRUbw.display_name": {
+          "source": "Assigned To",
+          "message": "Přiřazeno uživateli"
+        },
+        "app.R29IaWdoTGV2ZWw.action.dXBkYXRlLWNvbnRhY3Q.option.YXNzaWduZWRUbw.short_desc": {
+          "source": "Assigned user",
+          "message": "Přiřazený uživatel"
+        },
+        "app.R29IaWdoTGV2ZWw.action.dXBkYXRlLWNvbnRhY3Q.option.ZG5k.desc": {
+          "source": "Whether the contact is on Do Not Disturb (`True` or `False`)",
+          "message": "Zda má kontakt nastaveno Nerušit (`True` nebo `False`)"
+        },
+        "app.R29IaWdoTGV2ZWw.action.dXBkYXRlLWNvbnRhY3Q.option.ZG5k.display_name": {
+          "source": "Do Not Disturb",
+          "message": "Nerušit"
+        },
+        "app.R29IaWdoTGV2ZWw.action.dXBkYXRlLWNvbnRhY3Q.option.ZG5k.short_desc": {
+          "source": "DND status",
+          "message": "Stav DND"
+        },
+        "app.R29IaWdoTGV2ZWw.action.dXBkYXRlLWNvbnRhY3Q.option.ZW1haWw.desc": {
+          "source": "Email address of the contact",
+          "message": "E-mailová adresa kontaktu"
+        },
+        "app.R29IaWdoTGV2ZWw.action.dXBkYXRlLWNvbnRhY3Q.option.ZW1haWw.display_name": {
+          "source": "Email",
+          "message": "E-mail"
+        },
+        "app.R29IaWdoTGV2ZWw.action.dXBkYXRlLWNvbnRhY3Q.option.ZW1haWw.short_desc": {
+          "source": "Contact email",
+          "message": "E-mail kontaktu"
+        },
+        "app.R29IaWdoTGV2ZWw.action.dXBkYXRlLWNvbnRhY3Q.option.Zmlyc3ROYW1l.desc": {
+          "source": "First name of the contact",
+          "message": "Křestní jméno kontaktu"
+        },
+        "app.R29IaWdoTGV2ZWw.action.dXBkYXRlLWNvbnRhY3Q.option.Zmlyc3ROYW1l.display_name": {
+          "source": "First Name",
+          "message": "Křestní jméno"
+        },
+        "app.R29IaWdoTGV2ZWw.action.dXBkYXRlLWNvbnRhY3Q.option.Zmlyc3ROYW1l.short_desc": {
+          "source": "Contact first name",
+          "message": "Křestní jméno kontaktu"
+        },
+        "app.R29IaWdoTGV2ZWw.action.dXBkYXRlLWNvbnRhY3Q.option.bGFzdE5hbWU.desc": {
+          "source": "Last name of the contact",
+          "message": "Příjmení kontaktu"
+        },
+        "app.R29IaWdoTGV2ZWw.action.dXBkYXRlLWNvbnRhY3Q.option.bGFzdE5hbWU.display_name": {
+          "source": "Last Name",
+          "message": "Příjmení"
+        },
+        "app.R29IaWdoTGV2ZWw.action.dXBkYXRlLWNvbnRhY3Q.option.bGFzdE5hbWU.short_desc": {
+          "source": "Contact last name",
+          "message": "Příjmení kontaktu"
+        },
+        "app.R29IaWdoTGV2ZWw.action.dXBkYXRlLWNvbnRhY3Q.option.bmFtZQ.desc": {
+          "source": "Full name of the contact",
+          "message": "Celé jméno kontaktu"
+        },
+        "app.R29IaWdoTGV2ZWw.action.dXBkYXRlLWNvbnRhY3Q.option.bmFtZQ.display_name": {
+          "source": "Full Name",
+          "message": "Celé jméno"
+        },
+        "app.R29IaWdoTGV2ZWw.action.dXBkYXRlLWNvbnRhY3Q.option.bmFtZQ.short_desc": {
+          "source": "Contact full name",
+          "message": "Celé jméno kontaktu"
+        },
+        "app.R29IaWdoTGV2ZWw.action.dXBkYXRlLWNvbnRhY3Q.option.c291cmNl.desc": {
+          "source": "Source of the contact",
+          "message": "Zdroj kontaktu"
+        },
+        "app.R29IaWdoTGV2ZWw.action.dXBkYXRlLWNvbnRhY3Q.option.c291cmNl.display_name": {
+          "source": "Source",
+          "message": "Zdroj"
+        },
+        "app.R29IaWdoTGV2ZWw.action.dXBkYXRlLWNvbnRhY3Q.option.c291cmNl.short_desc": {
+          "source": "Lead source",
+          "message": "Zdroj leada"
+        },
+        "app.R29IaWdoTGV2ZWw.action.dXBkYXRlLWNvbnRhY3Q.option.c3RhdGU.desc": {
+          "source": "State or province of the contact",
+          "message": "Stát nebo provincie kontaktu"
+        },
+        "app.R29IaWdoTGV2ZWw.action.dXBkYXRlLWNvbnRhY3Q.option.c3RhdGU.display_name": {
+          "source": "State",
+          "message": "Stát"
+        },
+        "app.R29IaWdoTGV2ZWw.action.dXBkYXRlLWNvbnRhY3Q.option.c3RhdGU.short_desc": {
+          "source": "State or province",
+          "message": "Stát nebo provincie"
+        },
+        "app.R29IaWdoTGV2ZWw.action.dXBkYXRlLWNvbnRhY3Q.option.cG9zdGFsQ29kZQ.desc": {
+          "source": "Postal or ZIP code of the contact",
+          "message": "PSČ kontaktu"
+        },
+        "app.R29IaWdoTGV2ZWw.action.dXBkYXRlLWNvbnRhY3Q.option.cG9zdGFsQ29kZQ.display_name": {
+          "source": "Postal Code",
+          "message": "Poštovní směrovací číslo"
+        },
+        "app.R29IaWdoTGV2ZWw.action.dXBkYXRlLWNvbnRhY3Q.option.cG9zdGFsQ29kZQ.short_desc": {
+          "source": "Postal/ZIP code",
+          "message": "PSČ"
+        },
+        "app.R29IaWdoTGV2ZWw.action.dXBkYXRlLWNvbnRhY3Q.option.cGhvbmU.desc": {
+          "source": "Phone number of the contact",
+          "message": "Telefonní číslo kontaktu"
+        },
+        "app.R29IaWdoTGV2ZWw.action.dXBkYXRlLWNvbnRhY3Q.option.cGhvbmU.display_name": {
+          "source": "Phone",
+          "message": "Telefon"
+        },
+        "app.R29IaWdoTGV2ZWw.action.dXBkYXRlLWNvbnRhY3Q.option.cGhvbmU.short_desc": {
+          "source": "Phone number",
+          "message": "Telefonní číslo"
+        },
+        "app.R29IaWdoTGV2ZWw.action.dXBkYXRlLWNvbnRhY3Q.option.d2Vic2l0ZQ.desc": {
+          "source": "Website URL of the contact",
+          "message": "URL webu kontaktu"
+        },
+        "app.R29IaWdoTGV2ZWw.action.dXBkYXRlLWNvbnRhY3Q.option.d2Vic2l0ZQ.display_name": {
+          "source": "Website",
+          "message": "Webová stránka"
+        },
+        "app.R29IaWdoTGV2ZWw.action.dXBkYXRlLWNvbnRhY3Q.option.d2Vic2l0ZQ.short_desc": {
+          "source": "Website URL",
+          "message": "URL webové stránky"
+        },
+        "app.R29IaWdoTGV2ZWw.action.dXBkYXRlLWNvbnRhY3Q.option.dGFncw.desc": {
+          "source": "List of tags to assign to the contact",
+          "message": "Seznam štítků k přiřazení ke kontaktu"
+        },
+        "app.R29IaWdoTGV2ZWw.action.dXBkYXRlLWNvbnRhY3Q.option.dGFncw.display_name": {
+          "source": "Tags",
+          "message": "Štítky"
+        },
+        "app.R29IaWdoTGV2ZWw.action.dXBkYXRlLWNvbnRhY3Q.option.dGFncw.short_desc": {
+          "source": "Contact tags",
+          "message": "Štítky kontaktu"
+        },
+        "app.R29IaWdoTGV2ZWw.action.dXBkYXRlLWNvbnRhY3Q.option.dGltZXpvbmU.desc": {
+          "source": "Timezone of the contact (e.g. `America/New_York`)",
+          "message": "Časové pásmo kontaktu (např. `America/New_York`)"
+        },
+        "app.R29IaWdoTGV2ZWw.action.dXBkYXRlLWNvbnRhY3Q.option.dGltZXpvbmU.display_name": {
+          "source": "Timezone",
+          "message": "Časové pásmo"
+        },
+        "app.R29IaWdoTGV2ZWw.action.dXBkYXRlLWNvbnRhY3Q.option.dGltZXpvbmU.short_desc": {
+          "source": "Timezone",
+          "message": "Časové pásmo"
+        },
+        "app.R29IaWdoTGV2ZWw.action.dXBkYXRlLWNvbnRhY3Q.short_desc": {
+          "source": "Update an existing contact",
+          "message": "Aktualizovat stávající kontakt"
+        },
+        "app.R29IaWdoTGV2ZWw.action.dXBkYXRlLXRhc2s.desc": {
+          "source": "Update an existing task in GoHighLevel",
+          "message": "Aktualizovat existující úkol v GoHighLevel"
+        },
+        "app.R29IaWdoTGV2ZWw.action.dXBkYXRlLXRhc2s.display_name": {
+          "source": "Update a Task",
+          "message": "Aktualizovat úkol"
+        },
+        "app.R29IaWdoTGV2ZWw.action.dXBkYXRlLXRhc2s.option.Y29tcGxldGVk.desc": {
+          "source": "Whether the task is completed (`True` or `False`)",
+          "message": "Zda je úkol dokončen (`True` nebo `False`)"
+        },
+        "app.R29IaWdoTGV2ZWw.action.dXBkYXRlLXRhc2s.option.Y29tcGxldGVk.display_name": {
+          "source": "Completed",
+          "message": "Dokončeno"
+        },
+        "app.R29IaWdoTGV2ZWw.action.dXBkYXRlLXRhc2s.option.Y29tcGxldGVk.short_desc": {
+          "source": "Completion status",
+          "message": "Stav dokončení"
+        },
+        "app.R29IaWdoTGV2ZWw.action.dXBkYXRlLXRhc2s.option.Y29udGFjdF9pZA.desc": {
+          "source": "The contact ID the task belongs to",
+          "message": "ID kontaktu, ke kterému úkol patří"
+        },
+        "app.R29IaWdoTGV2ZWw.action.dXBkYXRlLXRhc2s.option.Y29udGFjdF9pZA.display_name": {
+          "source": "Contact ID",
+          "message": "ID kontaktu"
+        },
+        "app.R29IaWdoTGV2ZWw.action.dXBkYXRlLXRhc2s.option.Y29udGFjdF9pZA.short_desc": {
+          "source": "The contact",
+          "message": "Kontakt"
+        },
+        "app.R29IaWdoTGV2ZWw.action.dXBkYXRlLXRhc2s.option.YXNzaWduZWRUbw.desc": {
+          "source": "User ID to assign the task to",
+          "message": "ID uživatele, kterému má být úkol přiřazen"
+        },
+        "app.R29IaWdoTGV2ZWw.action.dXBkYXRlLXRhc2s.option.YXNzaWduZWRUbw.display_name": {
+          "source": "Assigned To",
+          "message": "Přiřazeno uživateli"
+        },
+        "app.R29IaWdoTGV2ZWw.action.dXBkYXRlLXRhc2s.option.YXNzaWduZWRUbw.short_desc": {
+          "source": "Assigned user",
+          "message": "Přiřazený uživatel"
+        },
+        "app.R29IaWdoTGV2ZWw.action.dXBkYXRlLXRhc2s.option.Ym9keQ.desc": {
+          "source": "Description or body text of the task",
+          "message": "Popis nebo text těla úkolu"
+        },
+        "app.R29IaWdoTGV2ZWw.action.dXBkYXRlLXRhc2s.option.Ym9keQ.display_name": {
+          "source": "Body",
+          "message": "Tělo"
+        },
+        "app.R29IaWdoTGV2ZWw.action.dXBkYXRlLXRhc2s.option.Ym9keQ.short_desc": {
+          "source": "Task description",
+          "message": "Popis úkolu"
+        },
+        "app.R29IaWdoTGV2ZWw.action.dXBkYXRlLXRhc2s.option.ZHVlRGF0ZQ.desc": {
+          "source": "Due date for the task (ISO 8601 format)",
+          "message": "Termín splnění úkolu (formát ISO 8601)"
+        },
+        "app.R29IaWdoTGV2ZWw.action.dXBkYXRlLXRhc2s.option.ZHVlRGF0ZQ.display_name": {
+          "source": "Due Date",
+          "message": "Datum splnění"
+        },
+        "app.R29IaWdoTGV2ZWw.action.dXBkYXRlLXRhc2s.option.ZHVlRGF0ZQ.short_desc": {
+          "source": "Due date",
+          "message": "Termín splnění"
+        },
+        "app.R29IaWdoTGV2ZWw.action.dXBkYXRlLXRhc2s.option.dGFza19pZA.desc": {
+          "source": "The ID of the task to update",
+          "message": "ID úkolu k aktualizaci"
+        },
+        "app.R29IaWdoTGV2ZWw.action.dXBkYXRlLXRhc2s.option.dGFza19pZA.display_name": {
+          "source": "Task ID",
+          "message": "ID úlohy"
+        },
+        "app.R29IaWdoTGV2ZWw.action.dXBkYXRlLXRhc2s.option.dGFza19pZA.short_desc": {
+          "source": "The task to update",
+          "message": "Úkol k aktualizaci"
+        },
+        "app.R29IaWdoTGV2ZWw.action.dXBkYXRlLXRhc2s.option.dGl0bGU.desc": {
+          "source": "Title of the task",
+          "message": "Název úkolu"
+        },
+        "app.R29IaWdoTGV2ZWw.action.dXBkYXRlLXRhc2s.option.dGl0bGU.display_name": {
+          "source": "Title",
+          "message": "Název"
+        },
+        "app.R29IaWdoTGV2ZWw.action.dXBkYXRlLXRhc2s.option.dGl0bGU.short_desc": {
+          "source": "Task title",
+          "message": "Název úkolu"
+        },
+        "app.R29IaWdoTGV2ZWw.action.dXBkYXRlLXRhc2s.short_desc": {
+          "source": "Update an existing task",
+          "message": "Aktualizovat existující úkol"
+        },
+        "app.R29IaWdoTGV2ZWw.desc": {
+          "source": "GoHighLevel is a comprehensive CRM and marketing automation platform for contacts, opportunities, tasks, calendars, conversations, and campaigns.\n\nThis integration supports contact management, opportunity tracking, task management, campaign automation, and event triggers.",
+          "message": "GoHighLevel je komplexní CRM a platforma pro automatizaci marketingu pro kontakty, obchodní příležitosti, úkoly, kalendáře, konverzace a kampaně.\n\nTato integrace podporuje správu kontaktů, sledování obchodních příležitostí, správu úkolů, automatizaci kampaní a triggery událostí."
+        },
+        "app.R29IaWdoTGV2ZWw.display_name": {
+          "source": "GoHighLevel",
+          "message": "GoHighLevel"
+        },
+        "app.R29IaWdoTGV2ZWw.short_desc": {
+          "source": "GoHighLevel CRM and marketing automation platform",
+          "message": "GoHighLevel CRM a platforma pro automatizaci marketingu"
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,357 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "zh-TW": {
+      "messages": {
+        "app.RmlsZXN5c3RlbQ.action.Y29weQ.desc": {
+          "source": "Copy a file on the server filesystem",
+          "message": "複製伺服器檔案系統上的檔案"
+        },
+        "app.RmlsZXN5c3RlbQ.action.Y29weQ.display_name": {
+          "source": "Copy File",
+          "message": "複製檔案"
+        },
+        "app.RmlsZXN5c3RlbQ.action.Y29weQ.option.Zm9sbG93X3N5bWxpbmtz.desc": {
+          "source": "Should symbolic links be followed?",
+          "message": "是否應追蹤符號連結？"
+        },
+        "app.RmlsZXN5c3RlbQ.action.Y29weQ.option.Zm9sbG93X3N5bWxpbmtz.display_name": {
+          "source": "Follow Symlinks",
+          "message": "追蹤符號連結"
+        },
+        "app.RmlsZXN5c3RlbQ.action.Y29weQ.option.Zm9sbG93X3N5bWxpbmtz.short_desc": {
+          "source": "Should symbolic links be followed?",
+          "message": "是否應追蹤符號連結？"
+        },
+        "app.RmlsZXN5c3RlbQ.action.Y29weQ.option.b3ZlcndyaXRl.desc": {
+          "source": "Should existing target files be overwritten?",
+          "message": "是否應覆寫已存在的目標檔案？"
+        },
+        "app.RmlsZXN5c3RlbQ.action.Y29weQ.option.b3ZlcndyaXRl.display_name": {
+          "source": "Overwrite",
+          "message": "覆寫"
+        },
+        "app.RmlsZXN5c3RlbQ.action.Y29weQ.option.b3ZlcndyaXRl.short_desc": {
+          "source": "Should existing target files be overwritten?",
+          "message": "是否應覆寫已存在的目標檔案？"
+        },
+        "app.RmlsZXN5c3RlbQ.action.Y29weQ.option.c291cmNl.desc": {
+          "source": "The source file path",
+          "message": "來源檔案路徑"
+        },
+        "app.RmlsZXN5c3RlbQ.action.Y29weQ.option.c291cmNl.display_name": {
+          "source": "Source",
+          "message": "來源"
+        },
+        "app.RmlsZXN5c3RlbQ.action.Y29weQ.option.c291cmNl.short_desc": {
+          "source": "The source file path",
+          "message": "來源檔案路徑"
+        },
+        "app.RmlsZXN5c3RlbQ.action.Y29weQ.option.dGFyZ2V0.desc": {
+          "source": "The target file path",
+          "message": "目標檔案路徑"
+        },
+        "app.RmlsZXN5c3RlbQ.action.Y29weQ.option.dGFyZ2V0.display_name": {
+          "source": "Target",
+          "message": "目標"
+        },
+        "app.RmlsZXN5c3RlbQ.action.Y29weQ.option.dGFyZ2V0.short_desc": {
+          "source": "The target file path",
+          "message": "目標檔案路徑"
+        },
+        "app.RmlsZXN5c3RlbQ.action.Y29weQ.short_desc": {
+          "source": "Copy a file on the server filesystem",
+          "message": "複製伺服器檔案系統上的檔案"
+        },
+        "app.RmlsZXN5c3RlbQ.action.Y3JlYXRl.desc": {
+          "source": "Create a file on the server filesystem",
+          "message": "在伺服器檔案系統上建立檔案"
+        },
+        "app.RmlsZXN5c3RlbQ.action.Y3JlYXRl.display_name": {
+          "source": "Create File",
+          "message": "建立檔案"
+        },
+        "app.RmlsZXN5c3RlbQ.action.Y3JlYXRl.option.ZGF0YQ.desc": {
+          "source": "The string or binary data for the file",
+          "message": "檔案的字串或二進位資料"
+        },
+        "app.RmlsZXN5c3RlbQ.action.Y3JlYXRl.option.ZGF0YQ.display_name": {
+          "source": "Data",
+          "message": "資料"
+        },
+        "app.RmlsZXN5c3RlbQ.action.Y3JlYXRl.option.ZGF0YQ.short_desc": {
+          "source": "The string or binary data for the file",
+          "message": "檔案的字串或二進位資料"
+        },
+        "app.RmlsZXN5c3RlbQ.action.Y3JlYXRl.option.bW9kZQ.desc": {
+          "source": "The mode for the new file (default `0664`)",
+          "message": "新檔案的模式 (預設為 `0664`)"
+        },
+        "app.RmlsZXN5c3RlbQ.action.Y3JlYXRl.option.bW9kZQ.display_name": {
+          "source": "Mode",
+          "message": "模式"
+        },
+        "app.RmlsZXN5c3RlbQ.action.Y3JlYXRl.option.bW9kZQ.short_desc": {
+          "source": "The mode for the new file (default '0664')",
+          "message": "新檔案的模式 (預設為 '0664')"
+        },
+        "app.RmlsZXN5c3RlbQ.action.Y3JlYXRl.option.cGF0aA.desc": {
+          "source": "The file path",
+          "message": "檔案路徑"
+        },
+        "app.RmlsZXN5c3RlbQ.action.Y3JlYXRl.option.cGF0aA.display_name": {
+          "source": "Path",
+          "message": "路徑"
+        },
+        "app.RmlsZXN5c3RlbQ.action.Y3JlYXRl.option.cGF0aA.short_desc": {
+          "source": "The file path",
+          "message": "檔案路徑"
+        },
+        "app.RmlsZXN5c3RlbQ.action.Y3JlYXRl.short_desc": {
+          "source": "Create a file on the server filesystem",
+          "message": "在伺服器檔案系統上建立檔案"
+        },
+        "app.RmlsZXN5c3RlbQ.action.Z2V0.desc": {
+          "source": "Get a file on the server filesystem",
+          "message": "取得伺服器檔案系統上的檔案"
+        },
+        "app.RmlsZXN5c3RlbQ.action.Z2V0.display_name": {
+          "source": "Get File",
+          "message": "取得檔案"
+        },
+        "app.RmlsZXN5c3RlbQ.action.Z2V0.option.ZW5jb2Rpbmc.desc": {
+          "source": "The string encoding to use if `text` = `True` (default: `UTF-8`)",
+          "message": "當 `text` = `True` 時要使用的字串編碼（預設：`UTF-8`）"
+        },
+        "app.RmlsZXN5c3RlbQ.action.Z2V0.option.ZW5jb2Rpbmc.display_name": {
+          "source": "Encoding",
+          "message": "編碼"
+        },
+        "app.RmlsZXN5c3RlbQ.action.Z2V0.option.ZW5jb2Rpbmc.short_desc": {
+          "source": "The string encoding to use if 'text' = 'True' (default: 'UTF-8')",
+          "message": "當 'text' = 'True' 時要使用的字串編碼 (預設：'UTF-8')"
+        },
+        "app.RmlsZXN5c3RlbQ.action.Z2V0.option.bWF4X2xlbg.desc": {
+          "source": "The maximum length of the data returned in bytes",
+          "message": "傳回資料的最大長度 (以位元組為單位)"
+        },
+        "app.RmlsZXN5c3RlbQ.action.Z2V0.option.bWF4X2xlbg.display_name": {
+          "source": "Max Len",
+          "message": "最大長度"
+        },
+        "app.RmlsZXN5c3RlbQ.action.Z2V0.option.bWF4X2xlbg.short_desc": {
+          "source": "The maximum length of the data returned in bytes",
+          "message": "傳回資料的最大長度 (以位元組為單位)"
+        },
+        "app.RmlsZXN5c3RlbQ.action.Z2V0.option.cGF0aA.desc": {
+          "source": "The path to the file",
+          "message": "檔案的路徑"
+        },
+        "app.RmlsZXN5c3RlbQ.action.Z2V0.option.cGF0aA.display_name": {
+          "source": "Path",
+          "message": "路徑"
+        },
+        "app.RmlsZXN5c3RlbQ.action.Z2V0.option.cGF0aA.short_desc": {
+          "source": "The path to the file",
+          "message": "檔案的路徑"
+        },
+        "app.RmlsZXN5c3RlbQ.action.Z2V0.option.dGV4dA.desc": {
+          "source": "If `True` the file will be returned as a string, `False` (the default) as binary data",
+          "message": "若為 `True`，檔案將作為字串傳回；若為 `False`（預設），將作為二進位資料傳回"
+        },
+        "app.RmlsZXN5c3RlbQ.action.Z2V0.option.dGV4dA.display_name": {
+          "source": "Text",
+          "message": "文字"
+        },
+        "app.RmlsZXN5c3RlbQ.action.Z2V0.option.dGV4dA.short_desc": {
+          "source": "If 'True' the file will be returned as a string, 'False' (the default) as binary data",
+          "message": "若為 'True'，檔案將以字串形式傳回；若為 'False' (預設值)，則以二進位資料傳回"
+        },
+        "app.RmlsZXN5c3RlbQ.action.Z2V0.short_desc": {
+          "source": "Get a file on the server filesystem",
+          "message": "取得伺服器檔案系統上的檔案"
+        },
+        "app.RmlsZXN5c3RlbQ.action.ZGVsZXRl.desc": {
+          "source": "Delete a file on the server filesystem",
+          "message": "刪除伺服器檔案系統上的檔案"
+        },
+        "app.RmlsZXN5c3RlbQ.action.ZGVsZXRl.display_name": {
+          "source": "Delete File",
+          "message": "刪除檔案"
+        },
+        "app.RmlsZXN5c3RlbQ.action.ZGVsZXRl.option.cGF0aA.desc": {
+          "source": "The file path",
+          "message": "檔案路徑"
+        },
+        "app.RmlsZXN5c3RlbQ.action.ZGVsZXRl.option.cGF0aA.display_name": {
+          "source": "Path",
+          "message": "路徑"
+        },
+        "app.RmlsZXN5c3RlbQ.action.ZGVsZXRl.option.cGF0aA.short_desc": {
+          "source": "The file path",
+          "message": "檔案路徑"
+        },
+        "app.RmlsZXN5c3RlbQ.action.ZGVsZXRl.short_desc": {
+          "source": "Delete a file on the server filesystem",
+          "message": "刪除伺服器檔案系統上的檔案"
+        },
+        "app.RmlsZXN5c3RlbQ.action.bGlzdA.desc": {
+          "source": "List files and subdirectories in a folder on the server filesystem",
+          "message": "列出伺服器檔案系統資料夾中的檔案與子目錄"
+        },
+        "app.RmlsZXN5c3RlbQ.action.bGlzdA.display_name": {
+          "source": "List Files",
+          "message": "列出檔案"
+        },
+        "app.RmlsZXN5c3RlbQ.action.bGlzdA.option.cGF0aA.desc": {
+          "source": "The file path",
+          "message": "檔案路徑"
+        },
+        "app.RmlsZXN5c3RlbQ.action.bGlzdA.option.cGF0aA.display_name": {
+          "source": "Path",
+          "message": "路徑"
+        },
+        "app.RmlsZXN5c3RlbQ.action.bGlzdA.option.cGF0aA.short_desc": {
+          "source": "The file path",
+          "message": "檔案路徑"
+        },
+        "app.RmlsZXN5c3RlbQ.action.bGlzdA.short_desc": {
+          "source": "List files and subdirectories in a folder on the server filesystem",
+          "message": "列出伺服器檔案系統資料夾中的檔案與子目錄"
+        },
+        "app.RmlsZXN5c3RlbQ.action.bW92ZQ.desc": {
+          "source": "Move a file or directory on the server filesystem",
+          "message": "移動伺服器檔案系統上的檔案或目錄"
+        },
+        "app.RmlsZXN5c3RlbQ.action.bW92ZQ.display_name": {
+          "source": "Move File",
+          "message": "移動檔案"
+        },
+        "app.RmlsZXN5c3RlbQ.action.bW92ZQ.option.b3ZlcndyaXRl.desc": {
+          "source": "Should existing target files be overwritten?",
+          "message": "是否應覆寫已存在的目標檔案？"
+        },
+        "app.RmlsZXN5c3RlbQ.action.bW92ZQ.option.b3ZlcndyaXRl.display_name": {
+          "source": "Overwrite",
+          "message": "覆寫"
+        },
+        "app.RmlsZXN5c3RlbQ.action.bW92ZQ.option.b3ZlcndyaXRl.short_desc": {
+          "source": "Should existing target files be overwritten?",
+          "message": "是否應覆寫已存在的目標檔案？"
+        },
+        "app.RmlsZXN5c3RlbQ.action.bW92ZQ.option.c291cmNl.desc": {
+          "source": "The source file path",
+          "message": "來源檔案路徑"
+        },
+        "app.RmlsZXN5c3RlbQ.action.bW92ZQ.option.c291cmNl.display_name": {
+          "source": "Source",
+          "message": "來源"
+        },
+        "app.RmlsZXN5c3RlbQ.action.bW92ZQ.option.c291cmNl.short_desc": {
+          "source": "The source file path",
+          "message": "來源檔案路徑"
+        },
+        "app.RmlsZXN5c3RlbQ.action.bW92ZQ.option.dGFyZ2V0.desc": {
+          "source": "The target file path",
+          "message": "目標檔案路徑"
+        },
+        "app.RmlsZXN5c3RlbQ.action.bW92ZQ.option.dGFyZ2V0.display_name": {
+          "source": "Target",
+          "message": "目標"
+        },
+        "app.RmlsZXN5c3RlbQ.action.bW92ZQ.option.dGFyZ2V0.short_desc": {
+          "source": "The target file path",
+          "message": "目標檔案路徑"
+        },
+        "app.RmlsZXN5c3RlbQ.action.bW92ZQ.short_desc": {
+          "source": "Move a file or directory on the server filesystem",
+          "message": "移動伺服器檔案系統上的檔案或目錄"
+        },
+        "app.RmlsZXN5c3RlbQ.action.bWtkaXI.desc": {
+          "source": "Create a directory on the server filesystem",
+          "message": "在伺服器檔案系統上建立目錄"
+        },
+        "app.RmlsZXN5c3RlbQ.action.bWtkaXI.display_name": {
+          "source": "Create Directory",
+          "message": "建立目錄"
+        },
+        "app.RmlsZXN5c3RlbQ.action.bWtkaXI.option.bW9kZQ.desc": {
+          "source": "The mode for the new file (default `0775`)",
+          "message": "新檔案的權限模式（預設為 `0775`）"
+        },
+        "app.RmlsZXN5c3RlbQ.action.bWtkaXI.option.bW9kZQ.display_name": {
+          "source": "Mode",
+          "message": "模式"
+        },
+        "app.RmlsZXN5c3RlbQ.action.bWtkaXI.option.bW9kZQ.short_desc": {
+          "source": "The mode for the new file (default '0775')",
+          "message": "新檔案的權限模式（預設為 '0775'）"
+        },
+        "app.RmlsZXN5c3RlbQ.action.bWtkaXI.option.cGF0aA.desc": {
+          "source": "The file path",
+          "message": "檔案路徑"
+        },
+        "app.RmlsZXN5c3RlbQ.action.bWtkaXI.option.cGF0aA.display_name": {
+          "source": "Path",
+          "message": "路徑"
+        },
+        "app.RmlsZXN5c3RlbQ.action.bWtkaXI.option.cGF0aA.short_desc": {
+          "source": "The file path",
+          "message": "檔案路徑"
+        },
+        "app.RmlsZXN5c3RlbQ.action.bWtkaXI.short_desc": {
+          "source": "Create a directory on the server filesystem",
+          "message": "在伺服器檔案系統上建立目錄"
+        },
+        "app.RmlsZXN5c3RlbQ.action.c3RhdA.desc": {
+          "source": "Get details about a file or directory on the server filesystem",
+          "message": "取得伺服器檔案系統上檔案或目錄的詳細資訊"
+        },
+        "app.RmlsZXN5c3RlbQ.action.c3RhdA.display_name": {
+          "source": "Get Info",
+          "message": "取得資訊"
+        },
+        "app.RmlsZXN5c3RlbQ.action.c3RhdA.option.c3ltbGluaw.desc": {
+          "source": "If `True`, then if the target path is a symbolic link, information about the link itself will be returned instead of the target",
+          "message": "若為 `True`，當目標路徑為符號連結時，將會傳回連結本身的資訊而非目標的資訊"
+        },
+        "app.RmlsZXN5c3RlbQ.action.c3RhdA.option.c3ltbGluaw.display_name": {
+          "source": "Symlink",
+          "message": "符號連結"
+        },
+        "app.RmlsZXN5c3RlbQ.action.c3RhdA.option.c3ltbGluaw.short_desc": {
+          "source": "If 'True', then if the target path is a symbolic link, information about the link itself will be returned instead of the target",
+          "message": "若為 'True'，當目標路徑為符號連結時，將會傳回連結本身的資訊而非目標的資訊"
+        },
+        "app.RmlsZXN5c3RlbQ.action.c3RhdA.option.cGF0aA.desc": {
+          "source": "The file path",
+          "message": "檔案路徑"
+        },
+        "app.RmlsZXN5c3RlbQ.action.c3RhdA.option.cGF0aA.display_name": {
+          "source": "Path",
+          "message": "路徑"
+        },
+        "app.RmlsZXN5c3RlbQ.action.c3RhdA.option.cGF0aA.short_desc": {
+          "source": "The file path",
+          "message": "檔案路徑"
+        },
+        "app.RmlsZXN5c3RlbQ.action.c3RhdA.short_desc": {
+          "source": "Get details about a file or directory on the server filesystem",
+          "message": "取得伺服器檔案系統上檔案或目錄的詳細資訊"
+        },
+        "app.RmlsZXN5c3RlbQ.desc": {
+          "source": "Access to the server filesystem",
+          "message": "存取伺服器檔案系統"
+        },
+        "app.RmlsZXN5c3RlbQ.display_name": {
+          "source": "Server Filesystem",
+          "message": "伺服器檔案系統"
+        },
+        "app.RmlsZXN5c3RlbQ.short_desc": {
+          "source": "Access to the server filesystem",
+          "message": "存取伺服器檔案系統"
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,2337 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "zh-TW": {
+      "messages": {
+        "app.WGVybw.action.Y3JlYXRl.desc": {
+          "source": "Creates new records in the given table",
+          "message": "在指定的資料表中建立新記錄"
+        },
+        "app.WGVybw.action.Y3JlYXRl.display_name": {
+          "source": "Create Records",
+          "message": "建立記錄"
+        },
+        "app.WGVybw.action.Y3JlYXRl.option.dGFibGU.desc": {
+          "source": "The table to work with: `invoices`, `contacts`, `bank-transactions`, `items`, `payments`, `invoice-history`, `accounts`, `tax-rates`, `purchase-orders`, `projects` or `project-tasks`",
+          "message": "要操作的資料表：`invoices`、`contacts`、`bank-transactions`、`items`、`payments`、`invoice-history`、`accounts`、`tax-rates`、`purchase-orders`、`projects` 或 `project-tasks`"
+        },
+        "app.WGVybw.action.Y3JlYXRl.option.dGFibGU.display_name": {
+          "source": "Table",
+          "message": "表格"
+        },
+        "app.WGVybw.action.Y3JlYXRl.option.dGFibGU.short_desc": {
+          "source": "The name of the table to work with",
+          "message": "要操作的資料表名稱"
+        },
+        "app.WGVybw.action.Y3JlYXRl.short_desc": {
+          "source": "Create new records in the given table",
+          "message": "在指定的資料表中建立新記錄"
+        },
+        "app.WGVybw.action.Y3JlYXRlQ3JlZGl0Tm90ZUFsbG9jYXRpb24.desc": {
+          "source": "Applies a credit note to one or more invoices.\n\n`Allocations` is an **array** even for one allocation, and each names the `Invoice` it applies to and the `Amount` applied. The credit note has to have enough remaining credit, and the invoice has to be `AUTHORISED`.",
+          "message": "將折讓單套用至一張或多張發票。\n\n即使只有一筆分配，`Allocations` 也是一個**陣列**，且每筆都會指定其適用的 `Invoice` 與套用的 `Amount`。折讓單必須有足夠的剩餘額度，且發票狀態必須為 `AUTHORISED`。"
+        },
+        "app.WGVybw.action.Y3JlYXRlQ3JlZGl0Tm90ZUFsbG9jYXRpb24.display_name": {
+          "source": "Allocate Credit Note",
+          "message": "分配折讓單"
+        },
+        "app.WGVybw.action.Y3JlYXRlQ3JlZGl0Tm90ZUFsbG9jYXRpb24.option.Q3JlZGl0Tm90ZUlE.desc": {
+          "source": "Unique identifier for a Credit Note",
+          "message": "折讓單的唯一識別碼"
+        },
+        "app.WGVybw.action.Y3JlYXRlQ3JlZGl0Tm90ZUFsbG9jYXRpb24.option.Q3JlZGl0Tm90ZUlE.display_name": {
+          "source": "Credit Note",
+          "message": "折讓單"
+        },
+        "app.WGVybw.action.Y3JlYXRlQ3JlZGl0Tm90ZUFsbG9jYXRpb24.option.Q3JlZGl0Tm90ZUlE.short_desc": {
+          "source": "Unique identifier for a Credit Note",
+          "message": "折讓單的唯一識別碼"
+        },
+        "app.WGVybw.action.Y3JlYXRlQ3JlZGl0Tm90ZUFsbG9jYXRpb24.option.QWxsb2NhdGlvbnM.display_name": {
+          "source": "Allocations",
+          "message": "分配"
+        },
+        "app.WGVybw.action.Y3JlYXRlQ3JlZGl0Tm90ZUFsbG9jYXRpb24.option.QWxsb2NhdGlvbnM.short_desc": {
+          "source": "The invoices to apply the credit to, and how much to each",
+          "message": "要套用折讓額度的發票以及分配給各發票的金額"
+        },
+        "app.WGVybw.action.Y3JlYXRlQ3JlZGl0Tm90ZUFsbG9jYXRpb24.option.c3VtbWFyaXplRXJyb3Jz.desc": {
+          "source": "If false return 200 OK and mix of successfully created objects and any with validation errors",
+          "message": "若為 false，則傳回 200 OK 以及成功建立之物件與驗證錯誤物件的混合清單"
+        },
+        "app.WGVybw.action.Y3JlYXRlQ3JlZGl0Tm90ZUFsbG9jYXRpb24.option.c3VtbWFyaXplRXJyb3Jz.display_name": {
+          "source": "Summarize Errors",
+          "message": "彙總錯誤"
+        },
+        "app.WGVybw.action.Y3JlYXRlQ3JlZGl0Tm90ZUFsbG9jYXRpb24.option.c3VtbWFyaXplRXJyb3Jz.short_desc": {
+          "source": "If false return 200 OK and mix of successfully created objects and any with validation errors",
+          "message": "若為 false，則傳回 200 OK 以及成功建立之物件與驗證錯誤物件的混合清單"
+        },
+        "app.WGVybw.action.Y3JlYXRlQ3JlZGl0Tm90ZUFsbG9jYXRpb24.short_desc": {
+          "source": "Apply a credit note to an invoice",
+          "message": "將折讓單套用至發票"
+        },
+        "app.WGVybw.action.Y3JlYXRlSW52b2ljZUhpc3Rvcnk.desc": {
+          "source": "Adds a note to an invoice's history.\n\n`HistoryRecords` is an **array** even for one note, and the note itself is its `Details` property.",
+          "message": "新增備註至發票歷程記錄。\n\n即使只有一筆備註，`HistoryRecords` 也是一個**陣列**，而備註本身為其 `Details` 屬性。"
+        },
+        "app.WGVybw.action.Y3JlYXRlSW52b2ljZUhpc3Rvcnk.display_name": {
+          "source": "Add Note to Invoice",
+          "message": "新增備註至發票"
+        },
+        "app.WGVybw.action.Y3JlYXRlSW52b2ljZUhpc3Rvcnk.option.SGlzdG9yeVJlY29yZHM.display_name": {
+          "source": "Notes",
+          "message": "備忘錄"
+        },
+        "app.WGVybw.action.Y3JlYXRlSW52b2ljZUhpc3Rvcnk.option.SGlzdG9yeVJlY29yZHM.short_desc": {
+          "source": "The notes to record; each one's text is its \"Details\"",
+          "message": "要記錄的備註；每則備註的文字為其 \"Details\""
+        },
+        "app.WGVybw.action.Y3JlYXRlSW52b2ljZUhpc3Rvcnk.option.SW52b2ljZUlE.desc": {
+          "source": "Unique identifier for an Invoice",
+          "message": "發票的唯一識別碼"
+        },
+        "app.WGVybw.action.Y3JlYXRlSW52b2ljZUhpc3Rvcnk.option.SW52b2ljZUlE.display_name": {
+          "source": "Invoice",
+          "message": "發票"
+        },
+        "app.WGVybw.action.Y3JlYXRlSW52b2ljZUhpc3Rvcnk.option.SW52b2ljZUlE.short_desc": {
+          "source": "The invoice this applies to",
+          "message": "此操作適用的發票"
+        },
+        "app.WGVybw.action.Y3JlYXRlSW52b2ljZUhpc3Rvcnk.short_desc": {
+          "source": "Record a note against an invoice",
+          "message": "針對發票記錄備註"
+        },
+        "app.WGVybw.action.Y3JlYXRlUGF5bWVudA.desc": {
+          "source": "Records a payment.\n\nUnlike most of the accounting API this takes **one** payment rather than an envelope of them. It needs the `Invoice` it pays, the `Account` it is paid from or into, an `Amount` and a `Date`.\n\nThe account has to be one that allows payments - a bank account, in practice - and the invoice has to be `AUTHORISED`.",
+          "message": "記錄一筆付款。\n\n與大部分會計 API 不同，此處接受**單筆**付款而非付款封包。它需要支付的 `Invoice`、付款來源或匯入的 `Account`、`Amount` 以及 `Date`。\n\n帳戶必須是允許付款的帳戶（實務上為銀行帳戶），且發票狀態必須為 `AUTHORISED`。"
+        },
+        "app.WGVybw.action.Y3JlYXRlUGF5bWVudA.display_name": {
+          "source": "Create Payment",
+          "message": "建立付款"
+        },
+        "app.WGVybw.action.Y3JlYXRlUGF5bWVudA.option.Q29kZQ.desc": {
+          "source": "Code of account you are using to make the payment e.g. 001 (note- not all accounts have a code value)",
+          "message": "您用來付款的帳戶代碼，例如 001（注意：並非所有帳戶都有代碼值）"
+        },
+        "app.WGVybw.action.Y3JlYXRlUGF5bWVudA.option.Q29kZQ.display_name": {
+          "source": "Code",
+          "message": "程式碼"
+        },
+        "app.WGVybw.action.Y3JlYXRlUGF5bWVudA.option.Q29kZQ.short_desc": {
+          "source": "Code of account you are using to make the payment e",
+          "message": "您用來付款的帳戶代碼（例"
+        },
+        "app.WGVybw.action.Y3JlYXRlUGF5bWVudA.option.Q3JlZGl0Tm90ZQ.display_name": {
+          "source": "Credit Note",
+          "message": "折讓單"
+        },
+        "app.WGVybw.action.Y3JlYXRlUGF5bWVudA.option.Q3JlZGl0Tm90ZQ.short_desc": {
+          "source": "The credit note being paid, instead of an invoice",
+          "message": "要付款的折讓單（而非發票）"
+        },
+        "app.WGVybw.action.Y3JlYXRlUGF5bWVudA.option.Q3JlZGl0Tm90ZU51bWJlcg.desc": {
+          "source": "Number of invoice or credit note you are applying payment to e.g. INV-4003",
+          "message": "您要套用付款的發票或折讓單編號，例如 INV-4003"
+        },
+        "app.WGVybw.action.Y3JlYXRlUGF5bWVudA.option.Q3JlZGl0Tm90ZU51bWJlcg.display_name": {
+          "source": "Credit Note Number",
+          "message": "貸項通知單編號"
+        },
+        "app.WGVybw.action.Y3JlYXRlUGF5bWVudA.option.Q3JlZGl0Tm90ZU51bWJlcg.short_desc": {
+          "source": "Number of invoice or credit note you are applying payment to e",
+          "message": "您要套用付款的發票或折讓單編號（例"
+        },
+        "app.WGVybw.action.Y3JlYXRlUGF5bWVudA.option.Q3VycmVuY3lSYXRl.desc": {
+          "source": "Exchange rate when payment is received. Only used for non base currency invoices and credit notes e.g. 0.7500",
+          "message": "收到付款時的匯率。僅用於非基準貨幣的發票與折讓單，例如 0.7500"
+        },
+        "app.WGVybw.action.Y3JlYXRlUGF5bWVudA.option.Q3VycmVuY3lSYXRl.display_name": {
+          "source": "Currency Rate",
+          "message": "匯率"
+        },
+        "app.WGVybw.action.Y3JlYXRlUGF5bWVudA.option.Q3VycmVuY3lSYXRl.short_desc": {
+          "source": "Exchange rate when payment is received",
+          "message": "收到付款時的匯率"
+        },
+        "app.WGVybw.action.Y3JlYXRlUGF5bWVudA.option.QW1vdW50.desc": {
+          "source": "The amount of the payment. Must be less than or equal to the outstanding amount owing on the invoice e.g. 200.00",
+          "message": "付款金額。必須小於或等於發票上的未付餘額，例如 200.00"
+        },
+        "app.WGVybw.action.Y3JlYXRlUGF5bWVudA.option.QW1vdW50.display_name": {
+          "source": "Amount",
+          "message": "數量"
+        },
+        "app.WGVybw.action.Y3JlYXRlUGF5bWVudA.option.QW1vdW50.short_desc": {
+          "source": "The amount of the payment",
+          "message": "付款金額"
+        },
+        "app.WGVybw.action.Y3JlYXRlUGF5bWVudA.option.QWNjb3VudA.display_name": {
+          "source": "Account",
+          "message": "帳戶"
+        },
+        "app.WGVybw.action.Y3JlYXRlUGF5bWVudA.option.QWNjb3VudA.short_desc": {
+          "source": "The account the payment is made from or into",
+          "message": "付款來源或匯入的帳戶"
+        },
+        "app.WGVybw.action.Y3JlYXRlUGF5bWVudA.option.QmF0Y2hQYXltZW50.display_name": {
+          "source": "Batch Payment",
+          "message": "批次付款"
+        },
+        "app.WGVybw.action.Y3JlYXRlUGF5bWVudA.option.QmF0Y2hQYXltZW50SUQ.desc": {
+          "source": "Present if the payment was created as part of a batch.",
+          "message": "如果付款是作為批次的一部分建立，則會顯示。"
+        },
+        "app.WGVybw.action.Y3JlYXRlUGF5bWVudA.option.QmF0Y2hQYXltZW50SUQ.display_name": {
+          "source": "Batch Payment ID",
+          "message": "批次付款 ID"
+        },
+        "app.WGVybw.action.Y3JlYXRlUGF5bWVudA.option.QmF0Y2hQYXltZW50SUQ.short_desc": {
+          "source": "Present if the payment was created as part of a batch",
+          "message": "如果付款是作為批次的一部分建立，則會顯示"
+        },
+        "app.WGVybw.action.Y3JlYXRlUGF5bWVudA.option.QmFua0FjY291bnROdW1iZXI.desc": {
+          "source": "The suppliers bank account number the payment is being made to",
+          "message": "付款受款供應商的銀行帳號"
+        },
+        "app.WGVybw.action.Y3JlYXRlUGF5bWVudA.option.QmFua0FjY291bnROdW1iZXI.display_name": {
+          "source": "Bank Account Number",
+          "message": "銀行帳號"
+        },
+        "app.WGVybw.action.Y3JlYXRlUGF5bWVudA.option.QmFua0FjY291bnROdW1iZXI.short_desc": {
+          "source": "The suppliers bank account number the payment is being made to",
+          "message": "付款受款供應商的銀行帳號"
+        },
+        "app.WGVybw.action.Y3JlYXRlUGF5bWVudA.option.QmFua0Ftb3VudA.desc": {
+          "source": "The amount of the payment in the currency of the bank account.",
+          "message": "以銀行帳戶貨幣計的付款金額。"
+        },
+        "app.WGVybw.action.Y3JlYXRlUGF5bWVudA.option.QmFua0Ftb3VudA.display_name": {
+          "source": "Bank Amount",
+          "message": "銀行金額"
+        },
+        "app.WGVybw.action.Y3JlYXRlUGF5bWVudA.option.QmFua0Ftb3VudA.short_desc": {
+          "source": "The amount of the payment in the currency of the bank account",
+          "message": "以銀行帳戶貨幣計的付款金額"
+        },
+        "app.WGVybw.action.Y3JlYXRlUGF5bWVudA.option.RGF0ZQ.desc": {
+          "source": "Date the payment is being made (YYYY-MM-DD) e.g. 2009-09-06",
+          "message": "進行付款的日期 (YYYY-MM-DD)，例如 2009-09-06"
+        },
+        "app.WGVybw.action.Y3JlYXRlUGF5bWVudA.option.RGF0ZQ.display_name": {
+          "source": "Date",
+          "message": "日期"
+        },
+        "app.WGVybw.action.Y3JlYXRlUGF5bWVudA.option.RGF0ZQ.short_desc": {
+          "source": "Date the payment is being made (YYYY-MM-DD) e",
+          "message": "進行付款的日期 (YYYY-MM-DD) 例"
+        },
+        "app.WGVybw.action.Y3JlYXRlUGF5bWVudA.option.RGV0YWlscw.desc": {
+          "source": "The information to appear on the supplier's bank account",
+          "message": "要顯示在供應商銀行帳戶上的資訊"
+        },
+        "app.WGVybw.action.Y3JlYXRlUGF5bWVudA.option.RGV0YWlscw.display_name": {
+          "source": "Details",
+          "message": "詳細資訊"
+        },
+        "app.WGVybw.action.Y3JlYXRlUGF5bWVudA.option.RGV0YWlscw.short_desc": {
+          "source": "The information to appear on the supplier's bank account",
+          "message": "要顯示在供應商銀行帳戶上的資訊"
+        },
+        "app.WGVybw.action.Y3JlYXRlUGF5bWVudA.option.SW52b2ljZQ.display_name": {
+          "source": "Invoice",
+          "message": "發票"
+        },
+        "app.WGVybw.action.Y3JlYXRlUGF5bWVudA.option.SW52b2ljZQ.short_desc": {
+          "source": "The invoice being paid",
+          "message": "正在支付的發票"
+        },
+        "app.WGVybw.action.Y3JlYXRlUGF5bWVudA.option.SW52b2ljZU51bWJlcg.desc": {
+          "source": "Number of invoice or credit note you are applying payment to e.g.INV-4003",
+          "message": "要套用付款的發票或折讓單號碼，例如 INV-4003"
+        },
+        "app.WGVybw.action.Y3JlYXRlUGF5bWVudA.option.SW52b2ljZU51bWJlcg.display_name": {
+          "source": "Invoice Number",
+          "message": "發票號碼"
+        },
+        "app.WGVybw.action.Y3JlYXRlUGF5bWVudA.option.SW52b2ljZU51bWJlcg.short_desc": {
+          "source": "Number of invoice or credit note you are applying payment to e",
+          "message": "您要套用付款的發票或折讓單編號（例"
+        },
+        "app.WGVybw.action.Y3JlYXRlUGF5bWVudA.option.SXNSZWNvbmNpbGVk.desc": {
+          "source": "An optional parameter for the payment. A boolean indicating whether you would like the payment to be created as reconciled when using PUT, or whether a payment has been reconciled when using GET",
+          "message": "付款的可選參數。布林值，表示使用 PUT 時是否將付款建立為已核對狀態，或使用 GET 時付款是否已核對"
+        },
+        "app.WGVybw.action.Y3JlYXRlUGF5bWVudA.option.SXNSZWNvbmNpbGVk.display_name": {
+          "source": "Is Reconciled",
+          "message": "已核對"
+        },
+        "app.WGVybw.action.Y3JlYXRlUGF5bWVudA.option.SXNSZWNvbmNpbGVk.short_desc": {
+          "source": "An optional parameter for the payment",
+          "message": "付款的可選參數"
+        },
+        "app.WGVybw.action.Y3JlYXRlUGF5bWVudA.option.T3ZlcnBheW1lbnQ.display_name": {
+          "source": "Overpayment",
+          "message": "超額付款"
+        },
+        "app.WGVybw.action.Y3JlYXRlUGF5bWVudA.option.U3RhdHVz.allowed-value.c3RyaW5nOkFVVEhPUklTRUQ.display_name": {
+          "source": "AUTHORISED",
+          "message": "AUTHORISED"
+        },
+        "app.WGVybw.action.Y3JlYXRlUGF5bWVudA.option.U3RhdHVz.allowed-value.c3RyaW5nOkRFTEVURUQ.display_name": {
+          "source": "DELETED",
+          "message": "DELETED"
+        },
+        "app.WGVybw.action.Y3JlYXRlUGF5bWVudA.option.U3RhdHVz.desc": {
+          "source": "The status of the payment.",
+          "message": "付款的狀態。"
+        },
+        "app.WGVybw.action.Y3JlYXRlUGF5bWVudA.option.U3RhdHVz.display_name": {
+          "source": "Status",
+          "message": "狀態"
+        },
+        "app.WGVybw.action.Y3JlYXRlUGF5bWVudA.option.U3RhdHVz.short_desc": {
+          "source": "The status of the payment",
+          "message": "付款的狀態"
+        },
+        "app.WGVybw.action.Y3JlYXRlUGF5bWVudA.option.UGF5bWVudElE.desc": {
+          "source": "The Xero identifier for an Payment e.g. 297c2dc5-cc47-4afd-8ec8-74990b8761e9",
+          "message": "付款的 Xero 識別碼，例如 297c2dc5-cc47-4afd-8ec8-74990b8761e9"
+        },
+        "app.WGVybw.action.Y3JlYXRlUGF5bWVudA.option.UGF5bWVudElE.display_name": {
+          "source": "Payment ID",
+          "message": "付款 ID"
+        },
+        "app.WGVybw.action.Y3JlYXRlUGF5bWVudA.option.UGF5bWVudElE.short_desc": {
+          "source": "The Xero identifier for an Payment e",
+          "message": "付款的 Xero 識別碼 例"
+        },
+        "app.WGVybw.action.Y3JlYXRlUGF5bWVudA.option.UGF5bWVudFR5cGU.allowed-value.c3RyaW5nOkFDQ1BBWVBBWU1FTlQ.display_name": {
+          "source": "ACCPAYPAYMENT",
+          "message": "ACCPAYPAYMENT"
+        },
+        "app.WGVybw.action.Y3JlYXRlUGF5bWVudA.option.UGF5bWVudFR5cGU.allowed-value.c3RyaW5nOkFDQ1JFQ1BBWU1FTlQ.display_name": {
+          "source": "ACCRECPAYMENT",
+          "message": "ACCRECPAYMENT"
+        },
+        "app.WGVybw.action.Y3JlYXRlUGF5bWVudA.option.UGF5bWVudFR5cGU.allowed-value.c3RyaW5nOkFQQ1JFRElUUEFZTUVOVA.display_name": {
+          "source": "APCREDITPAYMENT",
+          "message": "APCREDITPAYMENT"
+        },
+        "app.WGVybw.action.Y3JlYXRlUGF5bWVudA.option.UGF5bWVudFR5cGU.allowed-value.c3RyaW5nOkFQT1ZFUlBBWU1FTlRQQVlNRU5U.display_name": {
+          "source": "APOVERPAYMENTPAYMENT",
+          "message": "APOVERPAYMENTPAYMENT"
+        },
+        "app.WGVybw.action.Y3JlYXRlUGF5bWVudA.option.UGF5bWVudFR5cGU.allowed-value.c3RyaW5nOkFQUFJFUEFZTUVOVFBBWU1FTlQ.display_name": {
+          "source": "APPREPAYMENTPAYMENT",
+          "message": "APPREPAYMENTPAYMENT"
+        },
+        "app.WGVybw.action.Y3JlYXRlUGF5bWVudA.option.UGF5bWVudFR5cGU.allowed-value.c3RyaW5nOkFSQ1JFRElUUEFZTUVOVA.display_name": {
+          "source": "ARCREDITPAYMENT",
+          "message": "ARCREDITPAYMENT"
+        },
+        "app.WGVybw.action.Y3JlYXRlUGF5bWVudA.option.UGF5bWVudFR5cGU.allowed-value.c3RyaW5nOkFST1ZFUlBBWU1FTlRQQVlNRU5U.display_name": {
+          "source": "AROVERPAYMENTPAYMENT",
+          "message": "AROVERPAYMENTPAYMENT"
+        },
+        "app.WGVybw.action.Y3JlYXRlUGF5bWVudA.option.UGF5bWVudFR5cGU.allowed-value.c3RyaW5nOkFSUFJFUEFZTUVOVFBBWU1FTlQ.display_name": {
+          "source": "ARPREPAYMENTPAYMENT",
+          "message": "ARPREPAYMENTPAYMENT"
+        },
+        "app.WGVybw.action.Y3JlYXRlUGF5bWVudA.option.UGF5bWVudFR5cGU.desc": {
+          "source": "See Payment Types.",
+          "message": "請參閱付款類型。"
+        },
+        "app.WGVybw.action.Y3JlYXRlUGF5bWVudA.option.UGF5bWVudFR5cGU.display_name": {
+          "source": "Payment Type",
+          "message": "付款類型"
+        },
+        "app.WGVybw.action.Y3JlYXRlUGF5bWVudA.option.UGF5bWVudFR5cGU.short_desc": {
+          "source": "See Payment Types",
+          "message": "請參閱付款類型"
+        },
+        "app.WGVybw.action.Y3JlYXRlUGF5bWVudA.option.UGFydGljdWxhcnM.desc": {
+          "source": "The suppliers bank account number the payment is being made to",
+          "message": "付款受款供應商的銀行帳號"
+        },
+        "app.WGVybw.action.Y3JlYXRlUGF5bWVudA.option.UGFydGljdWxhcnM.display_name": {
+          "source": "Particulars",
+          "message": "明細"
+        },
+        "app.WGVybw.action.Y3JlYXRlUGF5bWVudA.option.UGFydGljdWxhcnM.short_desc": {
+          "source": "The suppliers bank account number the payment is being made to",
+          "message": "付款受款供應商的銀行帳號"
+        },
+        "app.WGVybw.action.Y3JlYXRlUGF5bWVudA.option.UHJlcGF5bWVudA.display_name": {
+          "source": "Prepayment",
+          "message": "預付款"
+        },
+        "app.WGVybw.action.Y3JlYXRlUGF5bWVudA.option.UmVmZXJlbmNl.desc": {
+          "source": "An optional description for the payment e.g. Direct Debit",
+          "message": "付款的可選描述，例如 Direct Debit"
+        },
+        "app.WGVybw.action.Y3JlYXRlUGF5bWVudA.option.UmVmZXJlbmNl.display_name": {
+          "source": "Reference",
+          "message": "參考"
+        },
+        "app.WGVybw.action.Y3JlYXRlUGF5bWVudA.option.UmVmZXJlbmNl.short_desc": {
+          "source": "An optional description for the payment e",
+          "message": "付款的可選描述 例"
+        },
+        "app.WGVybw.action.Y3JlYXRlUGF5bWVudA.short_desc": {
+          "source": "Record a payment against an invoice",
+          "message": "針對發票記錄付款"
+        },
+        "app.WGVybw.action.Y3JlYXRlUHJvamVjdA.desc": {
+          "source": "Creates a project.\n\n`contactId` and `name` are required; `estimateAmount` and `deadlineUtc` are the budget and the due date.",
+          "message": "建立專案。\n\n`contactId` 與 `name` 為必填；`estimateAmount` 與 `deadlineUtc` 分別為預算和截止日期。"
+        },
+        "app.WGVybw.action.Y3JlYXRlUHJvamVjdA.display_name": {
+          "source": "Create Project",
+          "message": "建立專案"
+        },
+        "app.WGVybw.action.Y3JlYXRlUHJvamVjdA.option.Y29udGFjdElk.desc": {
+          "source": "Identifier of the contact this project was created for.",
+          "message": "為其建立此專案的聯絡人識別碼。"
+        },
+        "app.WGVybw.action.Y3JlYXRlUHJvamVjdA.option.Y29udGFjdElk.display_name": {
+          "source": "Contact",
+          "message": "聯絡人"
+        },
+        "app.WGVybw.action.Y3JlYXRlUHJvamVjdA.option.Y29udGFjdElk.short_desc": {
+          "source": "The contact the project is for",
+          "message": "專案所屬的聯絡人"
+        },
+        "app.WGVybw.action.Y3JlYXRlUHJvamVjdA.option.ZGVhZGxpbmVVdGM.desc": {
+          "source": "Deadline for the project. UTC Date Time in ISO-8601 format.",
+          "message": "專案截止日期。採用 ISO-8601 格式的 UTC 日期時間。"
+        },
+        "app.WGVybw.action.Y3JlYXRlUHJvamVjdA.option.ZGVhZGxpbmVVdGM.display_name": {
+          "source": "Deadline Utc",
+          "message": "截止日期 Utc"
+        },
+        "app.WGVybw.action.Y3JlYXRlUHJvamVjdA.option.ZGVhZGxpbmVVdGM.short_desc": {
+          "source": "Deadline for the project",
+          "message": "專案截止日期"
+        },
+        "app.WGVybw.action.Y3JlYXRlUHJvamVjdA.option.ZXN0aW1hdGVBbW91bnQ.display_name": {
+          "source": "Estimate Amount",
+          "message": "預估金額"
+        },
+        "app.WGVybw.action.Y3JlYXRlUHJvamVjdA.option.bmFtZQ.desc": {
+          "source": "Name of the project.",
+          "message": "專案名稱。"
+        },
+        "app.WGVybw.action.Y3JlYXRlUHJvamVjdA.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "名稱"
+        },
+        "app.WGVybw.action.Y3JlYXRlUHJvamVjdA.option.bmFtZQ.short_desc": {
+          "source": "Name of the project",
+          "message": "專案名稱"
+        },
+        "app.WGVybw.action.Y3JlYXRlUHJvamVjdA.short_desc": {
+          "source": "Create a project for a contact",
+          "message": "為聯絡人建立專案"
+        },
+        "app.WGVybw.action.Y3JlYXRlVGFzaw.desc": {
+          "source": "Creates a task in a project.\n\n`chargeType` decides how it is billed - `TIME`, `FIXED` or `NON_CHARGEABLE` - and a `TIME` task needs a `rate`.",
+          "message": "在專案中建立任務。\n\n`chargeType` 決定其計費方式（`TIME`、`FIXED` 或 `NON_CHARGEABLE`），而 `TIME` 任務需要 `rate`。"
+        },
+        "app.WGVybw.action.Y3JlYXRlVGFzaw.display_name": {
+          "source": "Create Task",
+          "message": "建立任務"
+        },
+        "app.WGVybw.action.Y3JlYXRlVGFzaw.option.Y2hhcmdlVHlwZQ.allowed-value.c3RyaW5nOk5PTl9DSEFSR0VBQkxF.display_name": {
+          "source": "NON_CHARGEABLE",
+          "message": "NON_CHARGEABLE"
+        },
+        "app.WGVybw.action.Y3JlYXRlVGFzaw.option.Y2hhcmdlVHlwZQ.allowed-value.c3RyaW5nOkZJWEVE.display_name": {
+          "source": "FIXED",
+          "message": "FIXED"
+        },
+        "app.WGVybw.action.Y3JlYXRlVGFzaw.option.Y2hhcmdlVHlwZQ.allowed-value.c3RyaW5nOlRJTUU.display_name": {
+          "source": "TIME",
+          "message": "TIME"
+        },
+        "app.WGVybw.action.Y3JlYXRlVGFzaw.option.Y2hhcmdlVHlwZQ.desc": {
+          "source": "Can be `TIME`, `FIXED` or `NON_CHARGEABLE`, defines how the task will be charged. Use `TIME` when you want to charge per hour and `FIXED` to charge as a fixed amount. If the task will not be charged use `NON_CHARGEABLE`.",
+          "message": "可為 `TIME`、`FIXED` 或 `NON_CHARGEABLE`，定義任務的計費方式。若要按小時收費請使用 `TIME`，若要收取固定金額請使用 `FIXED`。若任務不收費，請使用 `NON_CHARGEABLE`。"
+        },
+        "app.WGVybw.action.Y3JlYXRlVGFzaw.option.Y2hhcmdlVHlwZQ.display_name": {
+          "source": "Charge Type",
+          "message": "計費類型"
+        },
+        "app.WGVybw.action.Y3JlYXRlVGFzaw.option.Y2hhcmdlVHlwZQ.short_desc": {
+          "source": "Can be 'TIME', 'FIXED' or 'NON_CHARGEABLE', defines how the task will be charged",
+          "message": "可為 'TIME'、'FIXED' 或 'NON_CHARGEABLE'，定義任務的計費方式"
+        },
+        "app.WGVybw.action.Y3JlYXRlVGFzaw.option.ZXN0aW1hdGVNaW51dGVz.desc": {
+          "source": "An estimated time to perform the task",
+          "message": "執行任務的預估時間"
+        },
+        "app.WGVybw.action.Y3JlYXRlVGFzaw.option.ZXN0aW1hdGVNaW51dGVz.display_name": {
+          "source": "Estimate Minutes",
+          "message": "預估分鐘數"
+        },
+        "app.WGVybw.action.Y3JlYXRlVGFzaw.option.ZXN0aW1hdGVNaW51dGVz.short_desc": {
+          "source": "An estimated time to perform the task",
+          "message": "執行任務的預估時間"
+        },
+        "app.WGVybw.action.Y3JlYXRlVGFzaw.option.bmFtZQ.desc": {
+          "source": "Name of the task. Max length 100 characters.",
+          "message": "任務名稱。最大長度為 100 個字元。"
+        },
+        "app.WGVybw.action.Y3JlYXRlVGFzaw.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "名稱"
+        },
+        "app.WGVybw.action.Y3JlYXRlVGFzaw.option.bmFtZQ.short_desc": {
+          "source": "Name of the task",
+          "message": "任務名稱"
+        },
+        "app.WGVybw.action.Y3JlYXRlVGFzaw.option.cHJvamVjdElk.desc": {
+          "source": "You can specify an individual project by appending the projectId to the endpoint",
+          "message": "您可以透過在端點後附加 projectId 來指定單個專案"
+        },
+        "app.WGVybw.action.Y3JlYXRlVGFzaw.option.cHJvamVjdElk.display_name": {
+          "source": "Project",
+          "message": "專案"
+        },
+        "app.WGVybw.action.Y3JlYXRlVGFzaw.option.cHJvamVjdElk.short_desc": {
+          "source": "You can specify an individual project by appending the projectId to the endpoint",
+          "message": "您可以透過在端點後附加 projectId 來指定單個專案"
+        },
+        "app.WGVybw.action.Y3JlYXRlVGFzaw.option.cmF0ZQ.display_name": {
+          "source": "Rate",
+          "message": "費率"
+        },
+        "app.WGVybw.action.Y3JlYXRlVGFzaw.short_desc": {
+          "source": "Add a task to a project",
+          "message": "新增任務至專案"
+        },
+        "app.WGVybw.action.Z2V0Q29udGFjdHM.desc": {
+          "source": "Lists contacts - customers, suppliers and everyone else in the address book.\n\n`where` filters with Xero's expression language: `IsCustomer==true`, `Name.StartsWith(\"Acme\")`. `IDs` takes a **comma-separated** list of contact IDs rather than a list.\n\nThe response is `{Contacts: [...]}`.",
+          "message": "列出聯絡人——通訊錄中的客戶、供應商及其他所有人。\n\n`where` 使用 Xero 的運算式語言進行篩選：`IsCustomer==true`、`Name.StartsWith(\"Acme\")`。`IDs` 接受以**逗號分隔**的聯絡人識別碼清單，而非陣列清單。\n\n回應為 `{Contacts: [...]}`。"
+        },
+        "app.WGVybw.action.Z2V0Q29udGFjdHM.display_name": {
+          "source": "Find Contacts",
+          "message": "尋找聯絡人"
+        },
+        "app.WGVybw.action.Z2V0Q29udGFjdHM.option.SURz.desc": {
+          "source": "Filter by a comma separated list of ContactIDs. Allows you to retrieve a specific set of contacts in a single call.",
+          "message": "依逗號分隔的 ContactID 清單篩選。可讓您在單次呼叫中擷取特定的聯絡人群組。"
+        },
+        "app.WGVybw.action.Z2V0Q29udGFjdHM.option.SURz.display_name": {
+          "source": "Contact IDs",
+          "message": "聯絡人 ID"
+        },
+        "app.WGVybw.action.Z2V0Q29udGFjdHM.option.SURz.short_desc": {
+          "source": "A comma-separated list of contact IDs",
+          "message": "以逗號分隔的聯絡人識別碼清單"
+        },
+        "app.WGVybw.action.Z2V0Q29udGFjdHM.option.SWYtTW9kaWZpZWQtU2luY2U.desc": {
+          "source": "Return only records created or changed since this time.\n\nThis is what makes an incremental sweep possible: without it every call reads the whole collection.",
+          "message": "僅傳回自此時間以來建立或變更的記錄。\n\n這使增量掃描成為可能：若沒有此設定，每次呼叫都會讀取整個集合。"
+        },
+        "app.WGVybw.action.Z2V0Q29udGFjdHM.option.SWYtTW9kaWZpZWQtU2luY2U.display_name": {
+          "source": "Modified Since",
+          "message": "修改時間晚於"
+        },
+        "app.WGVybw.action.Z2V0Q29udGFjdHM.option.SWYtTW9kaWZpZWQtU2luY2U.short_desc": {
+          "source": "Return only records created or changed since this time",
+          "message": "僅傳回自此時間以來建立或變更的記錄"
+        },
+        "app.WGVybw.action.Z2V0Q29udGFjdHM.option.aW5jbHVkZUFyY2hpdmVk.desc": {
+          "source": "e.g. includeArchived=true - Contacts with a status of ARCHIVED will be included in the response",
+          "message": "例如 includeArchived=true - 狀態為 ARCHIVED 的聯絡人將包含在回應中"
+        },
+        "app.WGVybw.action.Z2V0Q29udGFjdHM.option.aW5jbHVkZUFyY2hpdmVk.display_name": {
+          "source": "Include Archived",
+          "message": "包含已封存"
+        },
+        "app.WGVybw.action.Z2V0Q29udGFjdHM.option.aW5jbHVkZUFyY2hpdmVk.short_desc": {
+          "source": "e",
+          "message": "例"
+        },
+        "app.WGVybw.action.Z2V0Q29udGFjdHM.option.b3JkZXI.desc": {
+          "source": "Order by an any element",
+          "message": "依任何元素排序"
+        },
+        "app.WGVybw.action.Z2V0Q29udGFjdHM.option.b3JkZXI.display_name": {
+          "source": "Order",
+          "message": "排序"
+        },
+        "app.WGVybw.action.Z2V0Q29udGFjdHM.option.b3JkZXI.short_desc": {
+          "source": "A field to sort by, ex: \"UpdatedDateUTC DESC\"",
+          "message": "要排序的欄位，例如：\"UpdatedDateUTC DESC\""
+        },
+        "app.WGVybw.action.Z2V0Q29udGFjdHM.option.c2VhcmNoVGVybQ.desc": {
+          "source": "Search parameter that performs a case-insensitive text search across the Name, FirstName, LastName, ContactNumber and EmailAddress fields.",
+          "message": "在 Name、FirstName、LastName、ContactNumber 和 EmailAddress 欄位中執行不分大小寫文字搜尋的搜尋參數。"
+        },
+        "app.WGVybw.action.Z2V0Q29udGFjdHM.option.c2VhcmNoVGVybQ.display_name": {
+          "source": "Search Term",
+          "message": "搜尋字詞"
+        },
+        "app.WGVybw.action.Z2V0Q29udGFjdHM.option.c2VhcmNoVGVybQ.short_desc": {
+          "source": "Search parameter that performs a case-insensitive text search across the Name, FirstName, LastName, ContactNumber and EmailAddress fields",
+          "message": "跨 Name、FirstName、LastName、ContactNumber 和 EmailAddress 欄位執行不分大小寫文字搜尋的搜尋參數"
+        },
+        "app.WGVybw.action.Z2V0Q29udGFjdHM.option.c3VtbWFyeU9ubHk.desc": {
+          "source": "Use summaryOnly=true in GET Contacts and Invoices endpoint to retrieve a smaller version of the response object. This returns only lightweight fields, excluding computation-heavy fields from the response, making the API calls quick and efficient.",
+          "message": "在 GET Contacts 和 Invoices 端點中使用 summaryOnly=true 以擷取較小版本的回應物件。這僅會傳回輕量欄位，並從回應中排除需要大量運算的欄位，從而使 API 呼叫快速且高效。"
+        },
+        "app.WGVybw.action.Z2V0Q29udGFjdHM.option.c3VtbWFyeU9ubHk.display_name": {
+          "source": "Summary Only",
+          "message": "僅摘要"
+        },
+        "app.WGVybw.action.Z2V0Q29udGFjdHM.option.c3VtbWFyeU9ubHk.short_desc": {
+          "source": "Use summaryOnly=true in GET Contacts and Invoices endpoint to retrieve a smaller version of the response object",
+          "message": "在 GET Contacts 和 Invoices 端點中使用 summaryOnly=true 以擷取較小版本的回應物件"
+        },
+        "app.WGVybw.action.Z2V0Q29udGFjdHM.option.cGFnZQ.desc": {
+          "source": "e.g. page=1 - Up to 100 contacts will be returned in a single API call.",
+          "message": "例如 page=1 - 單次 API 呼叫最多傳回 100 個聯絡人。"
+        },
+        "app.WGVybw.action.Z2V0Q29udGFjdHM.option.cGFnZQ.display_name": {
+          "source": "Page",
+          "message": "頁碼"
+        },
+        "app.WGVybw.action.Z2V0Q29udGFjdHM.option.cGFnZQ.short_desc": {
+          "source": "Which page to return, counting from 1",
+          "message": "要傳回哪一頁，從 1 開始計算"
+        },
+        "app.WGVybw.action.Z2V0Q29udGFjdHM.option.cGFnZVNpemU.desc": {
+          "source": "How many records to return in one page. Xero's default is 100 and its maximum is 1000.",
+          "message": "一頁傳回的記錄數量。Xero 的預設值為 100，最大值為 1000。"
+        },
+        "app.WGVybw.action.Z2V0Q29udGFjdHM.option.cGFnZVNpemU.display_name": {
+          "source": "Page Size",
+          "message": "頁面大小"
+        },
+        "app.WGVybw.action.Z2V0Q29udGFjdHM.option.cGFnZVNpemU.short_desc": {
+          "source": "How many records to return in one page",
+          "message": "一頁傳回的記錄筆數"
+        },
+        "app.WGVybw.action.Z2V0Q29udGFjdHM.option.d2hlcmU.desc": {
+          "source": "A filter in Xero's own expression language, ex: `Status==\"AUTHORISED\"`, `Contact.ContactID=guid(\"...\")`, `Type==\"ACCPAY\"`.\n\nThis is not SQL and not a query string: string values are double-quoted, a GUID is wrapped in `guid(...)`, and conditions are joined with `AND`.",
+          "message": "使用 Xero 專屬運算式語言的篩選條件，例如：`Status==\"AUTHORISED\"`、`Contact.ContactID=guid(\"...\")`、`Type==\"ACCPAY\"`。\n\n這不是 SQL 也不是查詢字串：字串值使用雙引號，GUID 包裹在 `guid(...)` 中，條件則使用 `AND` 連接。"
+        },
+        "app.WGVybw.action.Z2V0Q29udGFjdHM.option.d2hlcmU.display_name": {
+          "source": "Filter",
+          "message": "濾波器"
+        },
+        "app.WGVybw.action.Z2V0Q29udGFjdHM.option.d2hlcmU.short_desc": {
+          "source": "A Xero filter expression",
+          "message": "Xero 篩選運算式"
+        },
+        "app.WGVybw.action.Z2V0Q29udGFjdHM.short_desc": {
+          "source": "List the contacts in the organisation",
+          "message": "列出組織中的聯絡人"
+        },
+        "app.WGVybw.action.Z2V0Q3JlZGl0Tm90ZXM.desc": {
+          "source": "Lists credit notes.\n\nThis is exported so that the credit note dropdown and the **New Credit Note** event have something to read; the application this module replaces offered both without exporting the endpoint behind them.\n\nThe response is `{CreditNotes: [...]}`.",
+          "message": "列出折讓單。\n\n匯出此項是為了讓折讓單下拉式選單和 **New Credit Note** 事件有資料可讀取；此模組所取代的應用程式提供了這兩者，但未匯出背後的端點。\n\n回應為 `{CreditNotes: [...]}`。"
+        },
+        "app.WGVybw.action.Z2V0Q3JlZGl0Tm90ZXM.display_name": {
+          "source": "Find Credit Notes",
+          "message": "尋找折讓單"
+        },
+        "app.WGVybw.action.Z2V0Q3JlZGl0Tm90ZXM.option.SWYtTW9kaWZpZWQtU2luY2U.desc": {
+          "source": "Return only records created or changed since this time.\n\nThis is what makes an incremental sweep possible: without it every call reads the whole collection.",
+          "message": "僅傳回自此時間以來建立或變更的記錄。\n\n這使增量掃描成為可能：若沒有此設定，每次呼叫都會讀取整個集合。"
+        },
+        "app.WGVybw.action.Z2V0Q3JlZGl0Tm90ZXM.option.SWYtTW9kaWZpZWQtU2luY2U.display_name": {
+          "source": "Modified Since",
+          "message": "修改時間晚於"
+        },
+        "app.WGVybw.action.Z2V0Q3JlZGl0Tm90ZXM.option.SWYtTW9kaWZpZWQtU2luY2U.short_desc": {
+          "source": "Return only records created or changed since this time",
+          "message": "僅傳回自此時間以來建立或變更的記錄"
+        },
+        "app.WGVybw.action.Z2V0Q3JlZGl0Tm90ZXM.option.b3JkZXI.desc": {
+          "source": "Order by an any element",
+          "message": "依任何元素排序"
+        },
+        "app.WGVybw.action.Z2V0Q3JlZGl0Tm90ZXM.option.b3JkZXI.display_name": {
+          "source": "Order",
+          "message": "排序"
+        },
+        "app.WGVybw.action.Z2V0Q3JlZGl0Tm90ZXM.option.b3JkZXI.short_desc": {
+          "source": "A field to sort by, ex: \"UpdatedDateUTC DESC\"",
+          "message": "要排序的欄位，例如：\"UpdatedDateUTC DESC\""
+        },
+        "app.WGVybw.action.Z2V0Q3JlZGl0Tm90ZXM.option.cGFnZQ.desc": {
+          "source": "e.g. page=1 - Up to 100 contacts will be returned in a single API call.",
+          "message": "例如 page=1 - 單次 API 呼叫最多傳回 100 個聯絡人。"
+        },
+        "app.WGVybw.action.Z2V0Q3JlZGl0Tm90ZXM.option.cGFnZQ.display_name": {
+          "source": "Page",
+          "message": "頁碼"
+        },
+        "app.WGVybw.action.Z2V0Q3JlZGl0Tm90ZXM.option.cGFnZQ.short_desc": {
+          "source": "Which page to return, counting from 1",
+          "message": "要傳回哪一頁，從 1 開始計算"
+        },
+        "app.WGVybw.action.Z2V0Q3JlZGl0Tm90ZXM.option.cGFnZVNpemU.desc": {
+          "source": "How many records to return in one page. Xero's default is 100 and its maximum is 1000.",
+          "message": "一頁傳回的記錄數量。Xero 的預設值為 100，最大值為 1000。"
+        },
+        "app.WGVybw.action.Z2V0Q3JlZGl0Tm90ZXM.option.cGFnZVNpemU.display_name": {
+          "source": "Page Size",
+          "message": "頁面大小"
+        },
+        "app.WGVybw.action.Z2V0Q3JlZGl0Tm90ZXM.option.cGFnZVNpemU.short_desc": {
+          "source": "How many records to return in one page",
+          "message": "一頁傳回的記錄筆數"
+        },
+        "app.WGVybw.action.Z2V0Q3JlZGl0Tm90ZXM.option.d2hlcmU.desc": {
+          "source": "A filter in Xero's own expression language, ex: `Status==\"AUTHORISED\"`, `Contact.ContactID=guid(\"...\")`, `Type==\"ACCPAY\"`.\n\nThis is not SQL and not a query string: string values are double-quoted, a GUID is wrapped in `guid(...)`, and conditions are joined with `AND`.",
+          "message": "使用 Xero 專屬運算式語言的篩選條件，例如：`Status==\"AUTHORISED\"`、`Contact.ContactID=guid(\"...\")`、`Type==\"ACCPAY\"`。\n\n這不是 SQL 也不是查詢字串：字串值使用雙引號，GUID 包裹在 `guid(...)` 中，條件則使用 `AND` 連接。"
+        },
+        "app.WGVybw.action.Z2V0Q3JlZGl0Tm90ZXM.option.d2hlcmU.display_name": {
+          "source": "Filter",
+          "message": "濾波器"
+        },
+        "app.WGVybw.action.Z2V0Q3JlZGl0Tm90ZXM.option.d2hlcmU.short_desc": {
+          "source": "A Xero filter expression",
+          "message": "Xero 篩選運算式"
+        },
+        "app.WGVybw.action.Z2V0Q3JlZGl0Tm90ZXM.option.dW5pdGRw.desc": {
+          "source": "e.g. unitdp=4 – (Unit Decimal Places) You can opt in to use four decimal places for unit amounts",
+          "message": "例如 unitdp=4 – (Unit Decimal Places) 您可以選擇在單價金額中使用四位小數位"
+        },
+        "app.WGVybw.action.Z2V0Q3JlZGl0Tm90ZXM.option.dW5pdGRw.display_name": {
+          "source": "Unitdp",
+          "message": "Unitdp"
+        },
+        "app.WGVybw.action.Z2V0Q3JlZGl0Tm90ZXM.option.dW5pdGRw.short_desc": {
+          "source": "e",
+          "message": "例"
+        },
+        "app.WGVybw.action.Z2V0Q3JlZGl0Tm90ZXM.short_desc": {
+          "source": "List the credit notes in the organisation",
+          "message": "列出組織中的折讓單"
+        },
+        "app.WGVybw.action.Z2V0QWNjb3VudHM.desc": {
+          "source": "Lists the chart of accounts with each account's code, name, type and tax type.\n\nThis is what backs the account, account-code and bank-account dropdowns; the application this module replaces offered all three without exporting the endpoint that fills them. `Type==\"BANK\"` narrows it to bank accounts.\n\nThe response is `{Accounts: [...]}`.",
+          "message": "列出會計科目表，包含每個帳戶的代碼、名稱、類型和稅務類型。\n\n這是帳戶、帳戶代碼和銀行帳戶下拉式選單的基礎；此模組所取代的應用程式提供了這三者，但未匯出填入資料的端點。`Type==\"BANK\"` 會將其縮小至銀行帳戶。\n\n回應為 `{Accounts: [...]}`。"
+        },
+        "app.WGVybw.action.Z2V0QWNjb3VudHM.display_name": {
+          "source": "Find Accounts",
+          "message": "尋找帳戶"
+        },
+        "app.WGVybw.action.Z2V0QWNjb3VudHM.option.SWYtTW9kaWZpZWQtU2luY2U.desc": {
+          "source": "Return only records created or changed since this time.\n\nThis is what makes an incremental sweep possible: without it every call reads the whole collection.",
+          "message": "僅傳回自此時間以來建立或變更的記錄。\n\n這使增量掃描成為可能：若沒有此設定，每次呼叫都會讀取整個集合。"
+        },
+        "app.WGVybw.action.Z2V0QWNjb3VudHM.option.SWYtTW9kaWZpZWQtU2luY2U.display_name": {
+          "source": "Modified Since",
+          "message": "修改時間晚於"
+        },
+        "app.WGVybw.action.Z2V0QWNjb3VudHM.option.SWYtTW9kaWZpZWQtU2luY2U.short_desc": {
+          "source": "Return only records created or changed since this time",
+          "message": "僅傳回自此時間以來建立或變更的記錄"
+        },
+        "app.WGVybw.action.Z2V0QWNjb3VudHM.option.b3JkZXI.desc": {
+          "source": "Order by an any element",
+          "message": "依任何元素排序"
+        },
+        "app.WGVybw.action.Z2V0QWNjb3VudHM.option.b3JkZXI.display_name": {
+          "source": "Order",
+          "message": "排序"
+        },
+        "app.WGVybw.action.Z2V0QWNjb3VudHM.option.b3JkZXI.short_desc": {
+          "source": "A field to sort by, ex: \"UpdatedDateUTC DESC\"",
+          "message": "要排序的欄位，例如：\"UpdatedDateUTC DESC\""
+        },
+        "app.WGVybw.action.Z2V0QWNjb3VudHM.option.d2hlcmU.desc": {
+          "source": "A filter in Xero's own expression language, ex: `Status==\"AUTHORISED\"`, `Contact.ContactID=guid(\"...\")`, `Type==\"ACCPAY\"`.\n\nThis is not SQL and not a query string: string values are double-quoted, a GUID is wrapped in `guid(...)`, and conditions are joined with `AND`.",
+          "message": "使用 Xero 專屬運算式語言的篩選條件，例如：`Status==\"AUTHORISED\"`、`Contact.ContactID=guid(\"...\")`、`Type==\"ACCPAY\"`。\n\n這不是 SQL 也不是查詢字串：字串值使用雙引號，GUID 包裹在 `guid(...)` 中，條件則使用 `AND` 連接。"
+        },
+        "app.WGVybw.action.Z2V0QWNjb3VudHM.option.d2hlcmU.display_name": {
+          "source": "Filter",
+          "message": "濾波器"
+        },
+        "app.WGVybw.action.Z2V0QWNjb3VudHM.option.d2hlcmU.short_desc": {
+          "source": "A Xero filter expression",
+          "message": "Xero 篩選運算式"
+        },
+        "app.WGVybw.action.Z2V0QWNjb3VudHM.short_desc": {
+          "source": "List the chart of accounts",
+          "message": "列出會計科目表"
+        },
+        "app.WGVybw.action.Z2V0QmFua1RyYW5zYWN0aW9ucw.desc": {
+          "source": "Lists bank transactions - spend and receive money entries against a bank account.\n\nThis is exported so that the bank transaction dropdown and the **New Bank Transaction** event have something to read.\n\nThe response is `{BankTransactions: [...]}`.",
+          "message": "列出銀行交易 - 針對銀行帳戶的支出與收款記錄。\n\n匯出此項是為了讓銀行交易下拉式選單和 **New Bank Transaction** 事件有資料可讀取。\n\n回應為 `{BankTransactions: [...]}`。"
+        },
+        "app.WGVybw.action.Z2V0QmFua1RyYW5zYWN0aW9ucw.display_name": {
+          "source": "Find Bank Transactions",
+          "message": "尋找銀行交易"
+        },
+        "app.WGVybw.action.Z2V0QmFua1RyYW5zYWN0aW9ucw.option.SWYtTW9kaWZpZWQtU2luY2U.desc": {
+          "source": "Return only records created or changed since this time.\n\nThis is what makes an incremental sweep possible: without it every call reads the whole collection.",
+          "message": "僅傳回自此時間以來建立或變更的記錄。\n\n這使增量掃描成為可能：若沒有此設定，每次呼叫都會讀取整個集合。"
+        },
+        "app.WGVybw.action.Z2V0QmFua1RyYW5zYWN0aW9ucw.option.SWYtTW9kaWZpZWQtU2luY2U.display_name": {
+          "source": "Modified Since",
+          "message": "修改時間晚於"
+        },
+        "app.WGVybw.action.Z2V0QmFua1RyYW5zYWN0aW9ucw.option.SWYtTW9kaWZpZWQtU2luY2U.short_desc": {
+          "source": "Return only records created or changed since this time",
+          "message": "僅傳回自此時間以來建立或變更的記錄"
+        },
+        "app.WGVybw.action.Z2V0QmFua1RyYW5zYWN0aW9ucw.option.UmVmZXJlbmNlcw.desc": {
+          "source": "Filter by a comma-separated list of References",
+          "message": "依逗號分隔的 References 清單進行篩選"
+        },
+        "app.WGVybw.action.Z2V0QmFua1RyYW5zYWN0aW9ucw.option.UmVmZXJlbmNlcw.display_name": {
+          "source": "References",
+          "message": "References"
+        },
+        "app.WGVybw.action.Z2V0QmFua1RyYW5zYWN0aW9ucw.option.UmVmZXJlbmNlcw.short_desc": {
+          "source": "Filter by a comma-separated list of References",
+          "message": "依逗號分隔的 References 清單進行篩選"
+        },
+        "app.WGVybw.action.Z2V0QmFua1RyYW5zYWN0aW9ucw.option.b3JkZXI.desc": {
+          "source": "Order by an any element",
+          "message": "依任何元素排序"
+        },
+        "app.WGVybw.action.Z2V0QmFua1RyYW5zYWN0aW9ucw.option.b3JkZXI.display_name": {
+          "source": "Order",
+          "message": "排序"
+        },
+        "app.WGVybw.action.Z2V0QmFua1RyYW5zYWN0aW9ucw.option.b3JkZXI.short_desc": {
+          "source": "A field to sort by, ex: \"UpdatedDateUTC DESC\"",
+          "message": "要排序的欄位，例如：\"UpdatedDateUTC DESC\""
+        },
+        "app.WGVybw.action.Z2V0QmFua1RyYW5zYWN0aW9ucw.option.cGFnZQ.desc": {
+          "source": "e.g. page=1 - Up to 100 contacts will be returned in a single API call.",
+          "message": "例如 page=1 - 單次 API 呼叫最多傳回 100 個聯絡人。"
+        },
+        "app.WGVybw.action.Z2V0QmFua1RyYW5zYWN0aW9ucw.option.cGFnZQ.display_name": {
+          "source": "Page",
+          "message": "頁碼"
+        },
+        "app.WGVybw.action.Z2V0QmFua1RyYW5zYWN0aW9ucw.option.cGFnZQ.short_desc": {
+          "source": "Which page to return, counting from 1",
+          "message": "要傳回哪一頁，從 1 開始計算"
+        },
+        "app.WGVybw.action.Z2V0QmFua1RyYW5zYWN0aW9ucw.option.cGFnZVNpemU.desc": {
+          "source": "How many records to return in one page. Xero's default is 100 and its maximum is 1000.",
+          "message": "一頁傳回的記錄數量。Xero 的預設值為 100，最大值為 1000。"
+        },
+        "app.WGVybw.action.Z2V0QmFua1RyYW5zYWN0aW9ucw.option.cGFnZVNpemU.display_name": {
+          "source": "Page Size",
+          "message": "頁面大小"
+        },
+        "app.WGVybw.action.Z2V0QmFua1RyYW5zYWN0aW9ucw.option.cGFnZVNpemU.short_desc": {
+          "source": "How many records to return in one page",
+          "message": "一頁傳回的記錄筆數"
+        },
+        "app.WGVybw.action.Z2V0QmFua1RyYW5zYWN0aW9ucw.option.d2hlcmU.desc": {
+          "source": "A filter in Xero's own expression language, ex: `Status==\"AUTHORISED\"`, `Contact.ContactID=guid(\"...\")`, `Type==\"ACCPAY\"`.\n\nThis is not SQL and not a query string: string values are double-quoted, a GUID is wrapped in `guid(...)`, and conditions are joined with `AND`.",
+          "message": "使用 Xero 專屬運算式語言的篩選條件，例如：`Status==\"AUTHORISED\"`、`Contact.ContactID=guid(\"...\")`、`Type==\"ACCPAY\"`。\n\n這不是 SQL 也不是查詢字串：字串值使用雙引號，GUID 包裹在 `guid(...)` 中，條件則使用 `AND` 連接。"
+        },
+        "app.WGVybw.action.Z2V0QmFua1RyYW5zYWN0aW9ucw.option.d2hlcmU.display_name": {
+          "source": "Filter",
+          "message": "濾波器"
+        },
+        "app.WGVybw.action.Z2V0QmFua1RyYW5zYWN0aW9ucw.option.d2hlcmU.short_desc": {
+          "source": "A Xero filter expression",
+          "message": "Xero 篩選運算式"
+        },
+        "app.WGVybw.action.Z2V0QmFua1RyYW5zYWN0aW9ucw.option.dW5pdGRw.desc": {
+          "source": "e.g. unitdp=4 – (Unit Decimal Places) You can opt in to use four decimal places for unit amounts",
+          "message": "例如 unitdp=4 – (Unit Decimal Places) 您可以選擇在單價金額中使用四位小數位"
+        },
+        "app.WGVybw.action.Z2V0QmFua1RyYW5zYWN0aW9ucw.option.dW5pdGRw.display_name": {
+          "source": "Unitdp",
+          "message": "Unitdp"
+        },
+        "app.WGVybw.action.Z2V0QmFua1RyYW5zYWN0aW9ucw.option.dW5pdGRw.short_desc": {
+          "source": "e",
+          "message": "例"
+        },
+        "app.WGVybw.action.Z2V0QmFua1RyYW5zYWN0aW9ucw.short_desc": {
+          "source": "List the bank transactions in the organisation",
+          "message": "列出組織中的銀行交易"
+        },
+        "app.WGVybw.action.Z2V0RW1wbG95ZWVz.desc": {
+          "source": "Lists the employees in the organisation's payroll.\n\n**Which payroll API is used comes from the connection's `payroll_region`**, because Xero has no single payroll API: Australia is served at `payroll.xro/1.0` and New Zealand and the United Kingdom at `payroll.xro/2.0`. A connection with no region set reports that rather than guessing one.\n\nThe regions wrap the result differently - `{Employees: [...]}` in Australia and `{employees: [...], pagination}` in the other two - and this action returns the employees as a plain list either way.\n\nThe application this module replaces read employees through the accounting API, where they do not exist, so this never returned anything at all.",
+          "message": "列出組織薪資單中的員工。\n\n**使用哪個薪資 API 取決於連線的 `payroll_region`**，因為 Xero 沒有單一的薪資 API：澳洲位於 `payroll.xro/1.0`，紐西蘭和英國則位於 `payroll.xro/2.0`。未設定地區的連線會回報此情況而不是猜測地區。\n\n各地區包裝結果的方式不同 - 澳洲使用 `{Employees: [...]}`，其他兩個地區使用 `{employees: [...], pagination}` - 而此動作在兩種情況下都會以純清單形式傳回員工。\n\n此模組所取代的應用程式曾透過會計 API 讀取員工資料，但員工資料並不存在於該處，因此從未傳回任何內容。"
+        },
+        "app.WGVybw.action.Z2V0RW1wbG95ZWVz.display_name": {
+          "source": "Find Employees",
+          "message": "尋找員工"
+        },
+        "app.WGVybw.action.Z2V0RW1wbG95ZWVz.short_desc": {
+          "source": "List the employees in the payroll organisation",
+          "message": "列出薪資組織中的員工"
+        },
+        "app.WGVybw.action.Z2V0SW52b2ljZUhpc3Rvcnk.desc": {
+          "source": "Reads the history of an invoice: who changed it, when, and any notes recorded against it.",
+          "message": "讀取發票的歷史記錄：誰在何時變更了發票，以及針對發票記錄的任何備註。"
+        },
+        "app.WGVybw.action.Z2V0SW52b2ljZUhpc3Rvcnk.display_name": {
+          "source": "Find Invoice History",
+          "message": "尋找發票歷史記錄"
+        },
+        "app.WGVybw.action.Z2V0SW52b2ljZUhpc3Rvcnk.option.SW52b2ljZUlE.desc": {
+          "source": "Unique identifier for an Invoice",
+          "message": "發票的唯一識別碼"
+        },
+        "app.WGVybw.action.Z2V0SW52b2ljZUhpc3Rvcnk.option.SW52b2ljZUlE.display_name": {
+          "source": "Invoice",
+          "message": "發票"
+        },
+        "app.WGVybw.action.Z2V0SW52b2ljZUhpc3Rvcnk.option.SW52b2ljZUlE.short_desc": {
+          "source": "The invoice this applies to",
+          "message": "此操作適用的發票"
+        },
+        "app.WGVybw.action.Z2V0SW52b2ljZUhpc3Rvcnk.short_desc": {
+          "source": "Read an invoice's history and notes",
+          "message": "讀取發票的歷史記錄與備註"
+        },
+        "app.WGVybw.action.Z2V0SW52b2ljZXM.desc": {
+          "source": "Lists invoices.\n\n**Bills are invoices here**: `Type==\"ACCPAY\"` selects what Xero's UI calls a bill and `Type==\"ACCREC\"` a sales invoice, and without a filter both are returned.\n\n`IDs`, `InvoiceNumbers`, `ContactIDs` and `Statuses` each take a **comma-separated** list. The response is `{Invoices: [...]}`.",
+          "message": "列出發票。\n\n**在此帳單也是發票**：`Type==\"ACCPAY\"` 選取 Xero 使用者介面中所稱的帳單，而 `Type==\"ACCREC\"` 選取銷售發票，若未設定篩選條件則兩者皆會傳回。\n\n`IDs`、`InvoiceNumbers`、`ContactIDs` 和 `Statuses` 各自接受**以逗號分隔**的清單。回應為 `{Invoices: [...]}`。"
+        },
+        "app.WGVybw.action.Z2V0SW52b2ljZXM.display_name": {
+          "source": "Find Invoices",
+          "message": "尋找發票"
+        },
+        "app.WGVybw.action.Z2V0SW52b2ljZXM.option.Q29udGFjdElEcw.desc": {
+          "source": "Filter by a comma-separated list of ContactIDs.",
+          "message": "依逗號分隔的 ContactIDs 清單進行篩選。"
+        },
+        "app.WGVybw.action.Z2V0SW52b2ljZXM.option.Q29udGFjdElEcw.display_name": {
+          "source": "Contact IDs",
+          "message": "聯絡人 ID"
+        },
+        "app.WGVybw.action.Z2V0SW52b2ljZXM.option.Q29udGFjdElEcw.short_desc": {
+          "source": "A comma-separated list of contact IDs",
+          "message": "以逗號分隔的聯絡人識別碼清單"
+        },
+        "app.WGVybw.action.Z2V0SW52b2ljZXM.option.SURz.desc": {
+          "source": "Filter by a comma separated list of ContactIDs. Allows you to retrieve a specific set of contacts in a single call.",
+          "message": "依逗號分隔的 ContactID 清單篩選。可讓您在單次呼叫中擷取特定的聯絡人群組。"
+        },
+        "app.WGVybw.action.Z2V0SW52b2ljZXM.option.SURz.display_name": {
+          "source": "Invoice IDs",
+          "message": "發票 ID"
+        },
+        "app.WGVybw.action.Z2V0SW52b2ljZXM.option.SURz.short_desc": {
+          "source": "A comma-separated list of invoice IDs",
+          "message": "以逗號分隔的發票 ID 清單"
+        },
+        "app.WGVybw.action.Z2V0SW52b2ljZXM.option.SW52b2ljZU51bWJlcnM.desc": {
+          "source": "Filter by a comma-separated list of InvoiceNumbers.",
+          "message": "依逗號分隔的 InvoiceNumbers 清單進行篩選。"
+        },
+        "app.WGVybw.action.Z2V0SW52b2ljZXM.option.SW52b2ljZU51bWJlcnM.display_name": {
+          "source": "Invoice Numbers",
+          "message": "發票號碼"
+        },
+        "app.WGVybw.action.Z2V0SW52b2ljZXM.option.SW52b2ljZU51bWJlcnM.short_desc": {
+          "source": "Filter by a comma-separated list of InvoiceNumbers",
+          "message": "依逗號分隔的 InvoiceNumbers 清單進行篩選"
+        },
+        "app.WGVybw.action.Z2V0SW52b2ljZXM.option.SWYtTW9kaWZpZWQtU2luY2U.desc": {
+          "source": "Return only records created or changed since this time.\n\nThis is what makes an incremental sweep possible: without it every call reads the whole collection.",
+          "message": "僅傳回自此時間以來建立或變更的記錄。\n\n這使增量掃描成為可能：若沒有此設定，每次呼叫都會讀取整個集合。"
+        },
+        "app.WGVybw.action.Z2V0SW52b2ljZXM.option.SWYtTW9kaWZpZWQtU2luY2U.display_name": {
+          "source": "Modified Since",
+          "message": "修改時間晚於"
+        },
+        "app.WGVybw.action.Z2V0SW52b2ljZXM.option.SWYtTW9kaWZpZWQtU2luY2U.short_desc": {
+          "source": "Return only records created or changed since this time",
+          "message": "僅傳回自此時間以來建立或變更的記錄"
+        },
+        "app.WGVybw.action.Z2V0SW52b2ljZXM.option.U3RhdHVzZXM.desc": {
+          "source": "Filter by a comma-separated list Statuses. For faster response times we recommend using these explicit parameters instead of passing OR conditions into the Where filter.",
+          "message": "依逗號分隔的 Statuses 清單進行篩選。為了加快回應時間，我們建議使用這些明確的參數，而不是將 OR 條件傳入 Where 篩選條件。"
+        },
+        "app.WGVybw.action.Z2V0SW52b2ljZXM.option.U3RhdHVzZXM.display_name": {
+          "source": "Statuses",
+          "message": "狀態"
+        },
+        "app.WGVybw.action.Z2V0SW52b2ljZXM.option.U3RhdHVzZXM.short_desc": {
+          "source": "Filter by a comma-separated list Statuses",
+          "message": "依逗號分隔的 Statuses 清單進行篩選"
+        },
+        "app.WGVybw.action.Z2V0SW52b2ljZXM.option.Y3JlYXRlZEJ5TXlBcHA.desc": {
+          "source": "When set to true you'll only retrieve Invoices created by your app",
+          "message": "設為 true 時，您將僅擷取由您的應用程式建立的發票"
+        },
+        "app.WGVybw.action.Z2V0SW52b2ljZXM.option.Y3JlYXRlZEJ5TXlBcHA.display_name": {
+          "source": "Created By My App",
+          "message": "由我的應用程式建立"
+        },
+        "app.WGVybw.action.Z2V0SW52b2ljZXM.option.Y3JlYXRlZEJ5TXlBcHA.short_desc": {
+          "source": "When set to true you'll only retrieve Invoices created by your app",
+          "message": "設為 true 時，您將僅擷取由您的應用程式建立的發票"
+        },
+        "app.WGVybw.action.Z2V0SW52b2ljZXM.option.aW5jbHVkZUFyY2hpdmVk.desc": {
+          "source": "e.g. includeArchived=true - Contacts with a status of ARCHIVED will be included in the response",
+          "message": "例如 includeArchived=true - 狀態為 ARCHIVED 的聯絡人將包含在回應中"
+        },
+        "app.WGVybw.action.Z2V0SW52b2ljZXM.option.aW5jbHVkZUFyY2hpdmVk.display_name": {
+          "source": "Include Archived",
+          "message": "包含已封存"
+        },
+        "app.WGVybw.action.Z2V0SW52b2ljZXM.option.aW5jbHVkZUFyY2hpdmVk.short_desc": {
+          "source": "e",
+          "message": "例"
+        },
+        "app.WGVybw.action.Z2V0SW52b2ljZXM.option.b3JkZXI.desc": {
+          "source": "Order by an any element",
+          "message": "依任何元素排序"
+        },
+        "app.WGVybw.action.Z2V0SW52b2ljZXM.option.b3JkZXI.display_name": {
+          "source": "Order",
+          "message": "排序"
+        },
+        "app.WGVybw.action.Z2V0SW52b2ljZXM.option.b3JkZXI.short_desc": {
+          "source": "A field to sort by, ex: \"UpdatedDateUTC DESC\"",
+          "message": "要排序的欄位，例如：\"UpdatedDateUTC DESC\""
+        },
+        "app.WGVybw.action.Z2V0SW52b2ljZXM.option.c2VhcmNoVGVybQ.desc": {
+          "source": "Search parameter that performs a case-insensitive text search across the Name, FirstName, LastName, ContactNumber and EmailAddress fields.",
+          "message": "在 Name、FirstName、LastName、ContactNumber 和 EmailAddress 欄位中執行不分大小寫文字搜尋的搜尋參數。"
+        },
+        "app.WGVybw.action.Z2V0SW52b2ljZXM.option.c2VhcmNoVGVybQ.display_name": {
+          "source": "Search Term",
+          "message": "搜尋字詞"
+        },
+        "app.WGVybw.action.Z2V0SW52b2ljZXM.option.c2VhcmNoVGVybQ.short_desc": {
+          "source": "Search parameter that performs a case-insensitive text search across the Name, FirstName, LastName, ContactNumber and EmailAddress fields",
+          "message": "跨 Name、FirstName、LastName、ContactNumber 和 EmailAddress 欄位執行不分大小寫文字搜尋的搜尋參數"
+        },
+        "app.WGVybw.action.Z2V0SW52b2ljZXM.option.c3VtbWFyeU9ubHk.desc": {
+          "source": "Use summaryOnly=true in GET Contacts and Invoices endpoint to retrieve a smaller version of the response object. This returns only lightweight fields, excluding computation-heavy fields from the response, making the API calls quick and efficient.",
+          "message": "在 GET Contacts 和 Invoices 端點中使用 summaryOnly=true 以擷取較小版本的回應物件。這僅會傳回輕量欄位，並從回應中排除需要大量運算的欄位，從而使 API 呼叫快速且高效。"
+        },
+        "app.WGVybw.action.Z2V0SW52b2ljZXM.option.c3VtbWFyeU9ubHk.display_name": {
+          "source": "Summary Only",
+          "message": "僅摘要"
+        },
+        "app.WGVybw.action.Z2V0SW52b2ljZXM.option.c3VtbWFyeU9ubHk.short_desc": {
+          "source": "Use summaryOnly=true in GET Contacts and Invoices endpoint to retrieve a smaller version of the response object",
+          "message": "在 GET Contacts 和 Invoices 端點中使用 summaryOnly=true 以擷取較小版本的回應物件"
+        },
+        "app.WGVybw.action.Z2V0SW52b2ljZXM.option.cGFnZQ.desc": {
+          "source": "e.g. page=1 - Up to 100 contacts will be returned in a single API call.",
+          "message": "例如 page=1 - 單次 API 呼叫最多傳回 100 個聯絡人。"
+        },
+        "app.WGVybw.action.Z2V0SW52b2ljZXM.option.cGFnZQ.display_name": {
+          "source": "Page",
+          "message": "頁碼"
+        },
+        "app.WGVybw.action.Z2V0SW52b2ljZXM.option.cGFnZQ.short_desc": {
+          "source": "Which page to return, counting from 1",
+          "message": "要傳回哪一頁，從 1 開始計算"
+        },
+        "app.WGVybw.action.Z2V0SW52b2ljZXM.option.cGFnZVNpemU.desc": {
+          "source": "How many records to return in one page. Xero's default is 100 and its maximum is 1000.",
+          "message": "一頁傳回的記錄數量。Xero 的預設值為 100，最大值為 1000。"
+        },
+        "app.WGVybw.action.Z2V0SW52b2ljZXM.option.cGFnZVNpemU.display_name": {
+          "source": "Page Size",
+          "message": "頁面大小"
+        },
+        "app.WGVybw.action.Z2V0SW52b2ljZXM.option.cGFnZVNpemU.short_desc": {
+          "source": "How many records to return in one page",
+          "message": "一頁傳回的記錄筆數"
+        },
+        "app.WGVybw.action.Z2V0SW52b2ljZXM.option.d2hlcmU.desc": {
+          "source": "A filter in Xero's own expression language, ex: `Status==\"AUTHORISED\"`, `Contact.ContactID=guid(\"...\")`, `Type==\"ACCPAY\"`.\n\nThis is not SQL and not a query string: string values are double-quoted, a GUID is wrapped in `guid(...)`, and conditions are joined with `AND`.",
+          "message": "使用 Xero 專屬運算式語言的篩選條件，例如：`Status==\"AUTHORISED\"`、`Contact.ContactID=guid(\"...\")`、`Type==\"ACCPAY\"`。\n\n這不是 SQL 也不是查詢字串：字串值使用雙引號，GUID 包裹在 `guid(...)` 中，條件則使用 `AND` 連接。"
+        },
+        "app.WGVybw.action.Z2V0SW52b2ljZXM.option.d2hlcmU.display_name": {
+          "source": "Filter",
+          "message": "濾波器"
+        },
+        "app.WGVybw.action.Z2V0SW52b2ljZXM.option.d2hlcmU.short_desc": {
+          "source": "A Xero filter expression",
+          "message": "Xero 篩選運算式"
+        },
+        "app.WGVybw.action.Z2V0SW52b2ljZXM.option.dW5pdGRw.desc": {
+          "source": "e.g. unitdp=4 – (Unit Decimal Places) You can opt in to use four decimal places for unit amounts",
+          "message": "例如 unitdp=4 – (Unit Decimal Places) 您可以選擇在單價金額中使用四位小數位"
+        },
+        "app.WGVybw.action.Z2V0SW52b2ljZXM.option.dW5pdGRw.display_name": {
+          "source": "Unitdp",
+          "message": "Unitdp"
+        },
+        "app.WGVybw.action.Z2V0SW52b2ljZXM.option.dW5pdGRw.short_desc": {
+          "source": "e",
+          "message": "例"
+        },
+        "app.WGVybw.action.Z2V0SW52b2ljZXM.short_desc": {
+          "source": "List invoices and bills",
+          "message": "列出發票與帳單"
+        },
+        "app.WGVybw.action.Z2V0SXRlbXM.desc": {
+          "source": "Lists inventory and service items with their codes, prices and accounts.\n\nThe response is `{Items: [...]}`.",
+          "message": "列出庫存與服務項目及其代碼、價格和帳戶。\n\n回應為 `{Items: [...]}`。"
+        },
+        "app.WGVybw.action.Z2V0SXRlbXM.display_name": {
+          "source": "Find Items",
+          "message": "尋找項目"
+        },
+        "app.WGVybw.action.Z2V0SXRlbXM.option.SWYtTW9kaWZpZWQtU2luY2U.desc": {
+          "source": "Return only records created or changed since this time.\n\nThis is what makes an incremental sweep possible: without it every call reads the whole collection.",
+          "message": "僅傳回自此時間以來建立或變更的記錄。\n\n這使增量掃描成為可能：若沒有此設定，每次呼叫都會讀取整個集合。"
+        },
+        "app.WGVybw.action.Z2V0SXRlbXM.option.SWYtTW9kaWZpZWQtU2luY2U.display_name": {
+          "source": "Modified Since",
+          "message": "修改時間晚於"
+        },
+        "app.WGVybw.action.Z2V0SXRlbXM.option.SWYtTW9kaWZpZWQtU2luY2U.short_desc": {
+          "source": "Return only records created or changed since this time",
+          "message": "僅傳回自此時間以來建立或變更的記錄"
+        },
+        "app.WGVybw.action.Z2V0SXRlbXM.option.b3JkZXI.desc": {
+          "source": "Order by an any element",
+          "message": "依任何元素排序"
+        },
+        "app.WGVybw.action.Z2V0SXRlbXM.option.b3JkZXI.display_name": {
+          "source": "Order",
+          "message": "排序"
+        },
+        "app.WGVybw.action.Z2V0SXRlbXM.option.b3JkZXI.short_desc": {
+          "source": "A field to sort by, ex: \"UpdatedDateUTC DESC\"",
+          "message": "要排序的欄位，例如：\"UpdatedDateUTC DESC\""
+        },
+        "app.WGVybw.action.Z2V0SXRlbXM.option.d2hlcmU.desc": {
+          "source": "A filter in Xero's own expression language, ex: `Status==\"AUTHORISED\"`, `Contact.ContactID=guid(\"...\")`, `Type==\"ACCPAY\"`.\n\nThis is not SQL and not a query string: string values are double-quoted, a GUID is wrapped in `guid(...)`, and conditions are joined with `AND`.",
+          "message": "使用 Xero 專屬運算式語言的篩選條件，例如：`Status==\"AUTHORISED\"`、`Contact.ContactID=guid(\"...\")`、`Type==\"ACCPAY\"`。\n\n這不是 SQL 也不是查詢字串：字串值使用雙引號，GUID 包裹在 `guid(...)` 中，條件則使用 `AND` 連接。"
+        },
+        "app.WGVybw.action.Z2V0SXRlbXM.option.d2hlcmU.display_name": {
+          "source": "Filter",
+          "message": "濾波器"
+        },
+        "app.WGVybw.action.Z2V0SXRlbXM.option.d2hlcmU.short_desc": {
+          "source": "A Xero filter expression",
+          "message": "Xero 篩選運算式"
+        },
+        "app.WGVybw.action.Z2V0SXRlbXM.option.dW5pdGRw.desc": {
+          "source": "e.g. unitdp=4 – (Unit Decimal Places) You can opt in to use four decimal places for unit amounts",
+          "message": "例如 unitdp=4 – (Unit Decimal Places) 您可以選擇在單價金額中使用四位小數位"
+        },
+        "app.WGVybw.action.Z2V0SXRlbXM.option.dW5pdGRw.display_name": {
+          "source": "Unitdp",
+          "message": "Unitdp"
+        },
+        "app.WGVybw.action.Z2V0SXRlbXM.option.dW5pdGRw.short_desc": {
+          "source": "e",
+          "message": "例"
+        },
+        "app.WGVybw.action.Z2V0SXRlbXM.short_desc": {
+          "source": "List the items in the organisation",
+          "message": "列出組織中的項目"
+        },
+        "app.WGVybw.action.Z2V0UGF5bWVudHM.desc": {
+          "source": "Lists payments made against invoices and credit notes.\n\nThis is exported so that the **New Payment** event has something to read: the application this module replaces polled payments without exporting any way to list one.\n\nThe response is `{Payments: [...]}`.",
+          "message": "列出針對發票和折讓單進行的付款。\n\n匯出此項是為了讓 **New Payment** 事件有資料可讀取：此模組所取代的應用程式輪詢了付款，但未匯出任何列出付款的方法。\n\n回應為 `{Payments: [...]}`。"
+        },
+        "app.WGVybw.action.Z2V0UGF5bWVudHM.display_name": {
+          "source": "Find Payments",
+          "message": "尋找付款"
+        },
+        "app.WGVybw.action.Z2V0UGF5bWVudHM.option.SWYtTW9kaWZpZWQtU2luY2U.desc": {
+          "source": "Return only records created or changed since this time.\n\nThis is what makes an incremental sweep possible: without it every call reads the whole collection.",
+          "message": "僅傳回自此時間以來建立或變更的記錄。\n\n這使增量掃描成為可能：若沒有此設定，每次呼叫都會讀取整個集合。"
+        },
+        "app.WGVybw.action.Z2V0UGF5bWVudHM.option.SWYtTW9kaWZpZWQtU2luY2U.display_name": {
+          "source": "Modified Since",
+          "message": "修改時間晚於"
+        },
+        "app.WGVybw.action.Z2V0UGF5bWVudHM.option.SWYtTW9kaWZpZWQtU2luY2U.short_desc": {
+          "source": "Return only records created or changed since this time",
+          "message": "僅傳回自此時間以來建立或變更的記錄"
+        },
+        "app.WGVybw.action.Z2V0UGF5bWVudHM.option.b3JkZXI.desc": {
+          "source": "Order by an any element",
+          "message": "依任何元素排序"
+        },
+        "app.WGVybw.action.Z2V0UGF5bWVudHM.option.b3JkZXI.display_name": {
+          "source": "Order",
+          "message": "排序"
+        },
+        "app.WGVybw.action.Z2V0UGF5bWVudHM.option.b3JkZXI.short_desc": {
+          "source": "A field to sort by, ex: \"UpdatedDateUTC DESC\"",
+          "message": "要排序的欄位，例如：\"UpdatedDateUTC DESC\""
+        },
+        "app.WGVybw.action.Z2V0UGF5bWVudHM.option.cGFnZQ.desc": {
+          "source": "e.g. page=1 - Up to 100 contacts will be returned in a single API call.",
+          "message": "例如 page=1 - 單次 API 呼叫最多傳回 100 個聯絡人。"
+        },
+        "app.WGVybw.action.Z2V0UGF5bWVudHM.option.cGFnZQ.display_name": {
+          "source": "Page",
+          "message": "頁碼"
+        },
+        "app.WGVybw.action.Z2V0UGF5bWVudHM.option.cGFnZQ.short_desc": {
+          "source": "Which page to return, counting from 1",
+          "message": "要傳回哪一頁，從 1 開始計算"
+        },
+        "app.WGVybw.action.Z2V0UGF5bWVudHM.option.cGFnZVNpemU.desc": {
+          "source": "How many records to return in one page. Xero's default is 100 and its maximum is 1000.",
+          "message": "一頁傳回的記錄數量。Xero 的預設值為 100，最大值為 1000。"
+        },
+        "app.WGVybw.action.Z2V0UGF5bWVudHM.option.cGFnZVNpemU.display_name": {
+          "source": "Page Size",
+          "message": "頁面大小"
+        },
+        "app.WGVybw.action.Z2V0UGF5bWVudHM.option.cGFnZVNpemU.short_desc": {
+          "source": "How many records to return in one page",
+          "message": "一頁傳回的記錄筆數"
+        },
+        "app.WGVybw.action.Z2V0UGF5bWVudHM.option.d2hlcmU.desc": {
+          "source": "A filter in Xero's own expression language, ex: `Status==\"AUTHORISED\"`, `Contact.ContactID=guid(\"...\")`, `Type==\"ACCPAY\"`.\n\nThis is not SQL and not a query string: string values are double-quoted, a GUID is wrapped in `guid(...)`, and conditions are joined with `AND`.",
+          "message": "使用 Xero 專屬運算式語言的篩選條件，例如：`Status==\"AUTHORISED\"`、`Contact.ContactID=guid(\"...\")`、`Type==\"ACCPAY\"`。\n\n這不是 SQL 也不是查詢字串：字串值使用雙引號，GUID 包裹在 `guid(...)` 中，條件則使用 `AND` 連接。"
+        },
+        "app.WGVybw.action.Z2V0UGF5bWVudHM.option.d2hlcmU.display_name": {
+          "source": "Filter",
+          "message": "濾波器"
+        },
+        "app.WGVybw.action.Z2V0UGF5bWVudHM.option.d2hlcmU.short_desc": {
+          "source": "A Xero filter expression",
+          "message": "Xero 篩選運算式"
+        },
+        "app.WGVybw.action.Z2V0UGF5bWVudHM.short_desc": {
+          "source": "List the payments in the organisation",
+          "message": "列出組織中的付款"
+        },
+        "app.WGVybw.action.Z2V0UHJvamVjdFVzZXJz.desc": {
+          "source": "Lists the users of the projects API - the people time can be recorded against.",
+          "message": "列出 Projects API 的使用者 - 可記錄工時的人員。"
+        },
+        "app.WGVybw.action.Z2V0UHJvamVjdFVzZXJz.display_name": {
+          "source": "Find Project Users",
+          "message": "尋找專案使用者"
+        },
+        "app.WGVybw.action.Z2V0UHJvamVjdFVzZXJz.option.cGFnZQ.desc": {
+          "source": "set to 1 by default. The requested number of the page in paged response - Must be a number greater than 0.",
+          "message": "預設值為 1。分頁回應中請求的頁碼 - 必須是大於 0 的數字。"
+        },
+        "app.WGVybw.action.Z2V0UHJvamVjdFVzZXJz.option.cGFnZQ.display_name": {
+          "source": "Page",
+          "message": "頁碼"
+        },
+        "app.WGVybw.action.Z2V0UHJvamVjdFVzZXJz.option.cGFnZQ.short_desc": {
+          "source": "Which page to return, counting from 1",
+          "message": "要傳回哪一頁，從 1 開始計算"
+        },
+        "app.WGVybw.action.Z2V0UHJvamVjdFVzZXJz.option.cGFnZVNpemU.desc": {
+          "source": "How many records to return in one page. Xero's default is 100 and its maximum is 1000.",
+          "message": "一頁傳回的記錄數量。Xero 的預設值為 100，最大值為 1000。"
+        },
+        "app.WGVybw.action.Z2V0UHJvamVjdFVzZXJz.option.cGFnZVNpemU.display_name": {
+          "source": "Page Size",
+          "message": "頁面大小"
+        },
+        "app.WGVybw.action.Z2V0UHJvamVjdFVzZXJz.option.cGFnZVNpemU.short_desc": {
+          "source": "How many records to return in one page",
+          "message": "一頁傳回的記錄筆數"
+        },
+        "app.WGVybw.action.Z2V0UHJvamVjdFVzZXJz.short_desc": {
+          "source": "List the users who can be assigned to project tasks",
+          "message": "列出可指派給專案任務的使用者"
+        },
+        "app.WGVybw.action.Z2V0UHJvamVjdHM.desc": {
+          "source": "Lists projects.\n\n`contactID` narrows the listing to one contact's projects and `states` to `INPROGRESS` or `CLOSED`.\n\nThe projects API answers `{items, pagination}` in `camelCase`, where the accounting API answers a `PascalCase` envelope named after the type.",
+          "message": "列出專案。\n\n`contactID` 會將清單範圍縮小至單一聯絡人的專案，而 `states` 會縮小至 `INPROGRESS` 或 `CLOSED`。\n\nProjects API 會在 `camelCase` 中回應 `{items, pagination}`，而 Accounting API 則回應以該類型命名的 `PascalCase` 封套。"
+        },
+        "app.WGVybw.action.Z2V0UHJvamVjdHM.display_name": {
+          "source": "Find Projects",
+          "message": "尋找專案"
+        },
+        "app.WGVybw.action.Z2V0UHJvamVjdHM.option.Y29udGFjdElE.desc": {
+          "source": "Filter for projects for a specific contact",
+          "message": "篩選特定聯絡人的專案"
+        },
+        "app.WGVybw.action.Z2V0UHJvamVjdHM.option.Y29udGFjdElE.display_name": {
+          "source": "Contact",
+          "message": "聯絡人"
+        },
+        "app.WGVybw.action.Z2V0UHJvamVjdHM.option.Y29udGFjdElE.short_desc": {
+          "source": "Return only this contact's projects",
+          "message": "僅傳回此聯絡人的專案"
+        },
+        "app.WGVybw.action.Z2V0UHJvamVjdHM.option.c3RhdGVz.desc": {
+          "source": "Filter for projects in a particular state (INPROGRESS or CLOSED)",
+          "message": "篩選特定狀態（INPROGRESS 或 CLOSED）的專案"
+        },
+        "app.WGVybw.action.Z2V0UHJvamVjdHM.option.c3RhdGVz.display_name": {
+          "source": "States",
+          "message": "狀態"
+        },
+        "app.WGVybw.action.Z2V0UHJvamVjdHM.option.c3RhdGVz.short_desc": {
+          "source": "Filter for projects in a particular state (INPROGRESS or CLOSED)",
+          "message": "篩選特定狀態（INPROGRESS 或 CLOSED）的專案"
+        },
+        "app.WGVybw.action.Z2V0UHJvamVjdHM.option.cGFnZQ.desc": {
+          "source": "set to 1 by default. The requested number of the page in paged response - Must be a number greater than 0.",
+          "message": "預設值為 1。分頁回應中請求的頁碼 - 必須是大於 0 的數字。"
+        },
+        "app.WGVybw.action.Z2V0UHJvamVjdHM.option.cGFnZQ.display_name": {
+          "source": "Page",
+          "message": "頁碼"
+        },
+        "app.WGVybw.action.Z2V0UHJvamVjdHM.option.cGFnZQ.short_desc": {
+          "source": "Which page to return, counting from 1",
+          "message": "要傳回哪一頁，從 1 開始計算"
+        },
+        "app.WGVybw.action.Z2V0UHJvamVjdHM.option.cGFnZVNpemU.desc": {
+          "source": "How many records to return in one page. Xero's default is 100 and its maximum is 1000.",
+          "message": "一頁傳回的記錄數量。Xero 的預設值為 100，最大值為 1000。"
+        },
+        "app.WGVybw.action.Z2V0UHJvamVjdHM.option.cGFnZVNpemU.display_name": {
+          "source": "Page Size",
+          "message": "頁面大小"
+        },
+        "app.WGVybw.action.Z2V0UHJvamVjdHM.option.cGFnZVNpemU.short_desc": {
+          "source": "How many records to return in one page",
+          "message": "一頁傳回的記錄筆數"
+        },
+        "app.WGVybw.action.Z2V0UHJvamVjdHM.option.cHJvamVjdElkcw.desc": {
+          "source": "Search for all projects that match a comma separated list of projectIds",
+          "message": "搜尋所有符合逗號分隔的 projectIds 清單的專案"
+        },
+        "app.WGVybw.action.Z2V0UHJvamVjdHM.option.cHJvamVjdElkcw.display_name": {
+          "source": "Projects",
+          "message": "專案"
+        },
+        "app.WGVybw.action.Z2V0UHJvamVjdHM.option.cHJvamVjdElkcw.short_desc": {
+          "source": "Return only these projects",
+          "message": "僅傳回這些專案"
+        },
+        "app.WGVybw.action.Z2V0UHJvamVjdHM.short_desc": {
+          "source": "List the projects in the organisation",
+          "message": "列出組織中的專案"
+        },
+        "app.WGVybw.action.Z2V0UHVyY2hhc2VPcmRlcnM.desc": {
+          "source": "Lists purchase orders.\n\n`Status` selects one state, and `DateFrom` and `DateTo` bound the listing by order date. Xero writes those two as calendar dates, so they take a date here and are sent as `YYYY-MM-DD`.\n\nThe response is `{PurchaseOrders: [...]}`.",
+          "message": "列出採購單。\n\n`Status` 選取一個狀態，`DateFrom` 和 `DateTo` 則以訂單日期限制清單範圍。Xero 將這兩者寫為日曆日期，因此此處接受日期並以 `YYYY-MM-DD` 傳送。\n\n回應為 `{PurchaseOrders: [...]}`。"
+        },
+        "app.WGVybw.action.Z2V0UHVyY2hhc2VPcmRlcnM.display_name": {
+          "source": "Find Purchase Orders",
+          "message": "尋找採購單"
+        },
+        "app.WGVybw.action.Z2V0UHVyY2hhc2VPcmRlcnM.option.RGF0ZUZyb20.desc": {
+          "source": "Filter by purchase order date (e.g. GET https://.../PurchaseOrders?DateFrom=2015-12-01&DateTo=2015-12-31\n\nThis value is sent as a calendar date written \"YYYY-MM-DD\".",
+          "message": "依採購單日期篩選（例如 GET https://.../PurchaseOrders?DateFrom=2015-12-01&DateTo=2015-12-31\n\n此值以格式為 \"YYYY-MM-DD\" 的日曆日期傳送。"
+        },
+        "app.WGVybw.action.Z2V0UHVyY2hhc2VPcmRlcnM.option.RGF0ZUZyb20.display_name": {
+          "source": "Date From",
+          "message": "開始日期"
+        },
+        "app.WGVybw.action.Z2V0UHVyY2hhc2VPcmRlcnM.option.RGF0ZUZyb20.short_desc": {
+          "source": "Return only orders dated on or after this day",
+          "message": "僅傳回日期在此日當天或之後的訂單"
+        },
+        "app.WGVybw.action.Z2V0UHVyY2hhc2VPcmRlcnM.option.RGF0ZVRv.desc": {
+          "source": "Filter by purchase order date (e.g. GET https://.../PurchaseOrders?DateFrom=2015-12-01&DateTo=2015-12-31\n\nThis value is sent as a calendar date written \"YYYY-MM-DD\".",
+          "message": "依採購單日期篩選（例如 GET https://.../PurchaseOrders?DateFrom=2015-12-01&DateTo=2015-12-31\n\n此值以格式為 \"YYYY-MM-DD\" 的日曆日期傳送。"
+        },
+        "app.WGVybw.action.Z2V0UHVyY2hhc2VPcmRlcnM.option.RGF0ZVRv.display_name": {
+          "source": "Date To",
+          "message": "結束日期"
+        },
+        "app.WGVybw.action.Z2V0UHVyY2hhc2VPcmRlcnM.option.RGF0ZVRv.short_desc": {
+          "source": "Return only orders dated on or before this day",
+          "message": "僅傳回日期在此日當天或之前的訂單"
+        },
+        "app.WGVybw.action.Z2V0UHVyY2hhc2VPcmRlcnM.option.SWYtTW9kaWZpZWQtU2luY2U.desc": {
+          "source": "Return only records created or changed since this time.\n\nThis is what makes an incremental sweep possible: without it every call reads the whole collection.",
+          "message": "僅傳回自此時間以來建立或變更的記錄。\n\n這使增量掃描成為可能：若沒有此設定，每次呼叫都會讀取整個集合。"
+        },
+        "app.WGVybw.action.Z2V0UHVyY2hhc2VPcmRlcnM.option.SWYtTW9kaWZpZWQtU2luY2U.display_name": {
+          "source": "Modified Since",
+          "message": "修改時間晚於"
+        },
+        "app.WGVybw.action.Z2V0UHVyY2hhc2VPcmRlcnM.option.SWYtTW9kaWZpZWQtU2luY2U.short_desc": {
+          "source": "Return only records created or changed since this time",
+          "message": "僅傳回自此時間以來建立或變更的記錄"
+        },
+        "app.WGVybw.action.Z2V0UHVyY2hhc2VPcmRlcnM.option.U3RhdHVz.allowed-value.c3RyaW5nOkFVVEhPUklTRUQ.display_name": {
+          "source": "AUTHORISED",
+          "message": "AUTHORISED"
+        },
+        "app.WGVybw.action.Z2V0UHVyY2hhc2VPcmRlcnM.option.U3RhdHVz.allowed-value.c3RyaW5nOkJJTExFRA.display_name": {
+          "source": "BILLED",
+          "message": "BILLED"
+        },
+        "app.WGVybw.action.Z2V0UHVyY2hhc2VPcmRlcnM.option.U3RhdHVz.allowed-value.c3RyaW5nOkRFTEVURUQ.display_name": {
+          "source": "DELETED",
+          "message": "DELETED"
+        },
+        "app.WGVybw.action.Z2V0UHVyY2hhc2VPcmRlcnM.option.U3RhdHVz.allowed-value.c3RyaW5nOkRSQUZU.display_name": {
+          "source": "DRAFT",
+          "message": "草稿"
+        },
+        "app.WGVybw.action.Z2V0UHVyY2hhc2VPcmRlcnM.option.U3RhdHVz.allowed-value.c3RyaW5nOlNVQk1JVFRFRA.display_name": {
+          "source": "SUBMITTED",
+          "message": "已提交"
+        },
+        "app.WGVybw.action.Z2V0UHVyY2hhc2VPcmRlcnM.option.U3RhdHVz.desc": {
+          "source": "Filter by purchase order status",
+          "message": "依採購單狀態篩選"
+        },
+        "app.WGVybw.action.Z2V0UHVyY2hhc2VPcmRlcnM.option.U3RhdHVz.display_name": {
+          "source": "Status",
+          "message": "狀態"
+        },
+        "app.WGVybw.action.Z2V0UHVyY2hhc2VPcmRlcnM.option.U3RhdHVz.short_desc": {
+          "source": "Filter by purchase order status",
+          "message": "依採購單狀態篩選"
+        },
+        "app.WGVybw.action.Z2V0UHVyY2hhc2VPcmRlcnM.option.b3JkZXI.desc": {
+          "source": "Order by an any element",
+          "message": "依任何元素排序"
+        },
+        "app.WGVybw.action.Z2V0UHVyY2hhc2VPcmRlcnM.option.b3JkZXI.display_name": {
+          "source": "Order",
+          "message": "排序"
+        },
+        "app.WGVybw.action.Z2V0UHVyY2hhc2VPcmRlcnM.option.b3JkZXI.short_desc": {
+          "source": "A field to sort by, ex: \"UpdatedDateUTC DESC\"",
+          "message": "要排序的欄位，例如：\"UpdatedDateUTC DESC\""
+        },
+        "app.WGVybw.action.Z2V0UHVyY2hhc2VPcmRlcnM.option.cGFnZQ.desc": {
+          "source": "e.g. page=1 - Up to 100 contacts will be returned in a single API call.",
+          "message": "例如 page=1 - 單次 API 呼叫最多傳回 100 個聯絡人。"
+        },
+        "app.WGVybw.action.Z2V0UHVyY2hhc2VPcmRlcnM.option.cGFnZQ.display_name": {
+          "source": "Page",
+          "message": "頁碼"
+        },
+        "app.WGVybw.action.Z2V0UHVyY2hhc2VPcmRlcnM.option.cGFnZQ.short_desc": {
+          "source": "Which page to return, counting from 1",
+          "message": "要傳回哪一頁，從 1 開始計算"
+        },
+        "app.WGVybw.action.Z2V0UHVyY2hhc2VPcmRlcnM.option.cGFnZVNpemU.desc": {
+          "source": "How many records to return in one page. Xero's default is 100 and its maximum is 1000.",
+          "message": "一頁傳回的記錄數量。Xero 的預設值為 100，最大值為 1000。"
+        },
+        "app.WGVybw.action.Z2V0UHVyY2hhc2VPcmRlcnM.option.cGFnZVNpemU.display_name": {
+          "source": "Page Size",
+          "message": "頁面大小"
+        },
+        "app.WGVybw.action.Z2V0UHVyY2hhc2VPcmRlcnM.option.cGFnZVNpemU.short_desc": {
+          "source": "How many records to return in one page",
+          "message": "一頁傳回的記錄筆數"
+        },
+        "app.WGVybw.action.Z2V0UHVyY2hhc2VPcmRlcnM.short_desc": {
+          "source": "List the purchase orders in the organisation",
+          "message": "列出組織中的採購單"
+        },
+        "app.WGVybw.action.Z2V0VGF4UmF0ZXM.desc": {
+          "source": "Lists tax rates with the `TaxType` code a line item uses to name one.\n\nThis is what backs the tax type dropdown; the application this module replaces offered it without exporting the endpoint that fills it.\n\nThe response is `{TaxRates: [...]}`.",
+          "message": "列出稅率以及明細行項目用來指定稅率的 `TaxType` 代碼。\n\n這是稅率類型下拉式選單背後使用的資料；此模組所取代的應用程式提供了此功能，但未匯出填入該內容的端點。\n\n回應為 `{TaxRates: [...]}`。"
+        },
+        "app.WGVybw.action.Z2V0VGF4UmF0ZXM.display_name": {
+          "source": "Find Tax Rates",
+          "message": "尋找稅率"
+        },
+        "app.WGVybw.action.Z2V0VGF4UmF0ZXM.option.b3JkZXI.desc": {
+          "source": "Order by an any element",
+          "message": "依任何元素排序"
+        },
+        "app.WGVybw.action.Z2V0VGF4UmF0ZXM.option.b3JkZXI.display_name": {
+          "source": "Order",
+          "message": "排序"
+        },
+        "app.WGVybw.action.Z2V0VGF4UmF0ZXM.option.b3JkZXI.short_desc": {
+          "source": "A field to sort by, ex: \"UpdatedDateUTC DESC\"",
+          "message": "要排序的欄位，例如：\"UpdatedDateUTC DESC\""
+        },
+        "app.WGVybw.action.Z2V0VGF4UmF0ZXM.option.d2hlcmU.desc": {
+          "source": "A filter in Xero's own expression language, ex: `Status==\"AUTHORISED\"`, `Contact.ContactID=guid(\"...\")`, `Type==\"ACCPAY\"`.\n\nThis is not SQL and not a query string: string values are double-quoted, a GUID is wrapped in `guid(...)`, and conditions are joined with `AND`.",
+          "message": "使用 Xero 專屬運算式語言的篩選條件，例如：`Status==\"AUTHORISED\"`、`Contact.ContactID=guid(\"...\")`、`Type==\"ACCPAY\"`。\n\n這不是 SQL 也不是查詢字串：字串值使用雙引號，GUID 包裹在 `guid(...)` 中，條件則使用 `AND` 連接。"
+        },
+        "app.WGVybw.action.Z2V0VGF4UmF0ZXM.option.d2hlcmU.display_name": {
+          "source": "Filter",
+          "message": "濾波器"
+        },
+        "app.WGVybw.action.Z2V0VGF4UmF0ZXM.option.d2hlcmU.short_desc": {
+          "source": "A Xero filter expression",
+          "message": "Xero 篩選運算式"
+        },
+        "app.WGVybw.action.Z2V0VGF4UmF0ZXM.short_desc": {
+          "source": "List the tax rates in the organisation",
+          "message": "列出組織中的稅率"
+        },
+        "app.WGVybw.action.Z2V0VGFza3M.desc": {
+          "source": "Lists a project's tasks with their rates, charge types and estimates.",
+          "message": "列出專案的任務及其費率、收費類型與預估。"
+        },
+        "app.WGVybw.action.Z2V0VGFza3M.display_name": {
+          "source": "Find Tasks",
+          "message": "尋找任務"
+        },
+        "app.WGVybw.action.Z2V0VGFza3M.option.Y2hhcmdlVHlwZQ.allowed-value.c3RyaW5nOk5PTl9DSEFSR0VBQkxF.display_name": {
+          "source": "NON_CHARGEABLE",
+          "message": "NON_CHARGEABLE"
+        },
+        "app.WGVybw.action.Z2V0VGFza3M.option.Y2hhcmdlVHlwZQ.allowed-value.c3RyaW5nOkZJWEVE.display_name": {
+          "source": "FIXED",
+          "message": "FIXED"
+        },
+        "app.WGVybw.action.Z2V0VGFza3M.option.Y2hhcmdlVHlwZQ.allowed-value.c3RyaW5nOlRJTUU.display_name": {
+          "source": "TIME",
+          "message": "TIME"
+        },
+        "app.WGVybw.action.Z2V0VGFza3M.option.Y2hhcmdlVHlwZQ.desc": {
+          "source": "Can be `TIME`, `FIXED` or `NON_CHARGEABLE`, defines how the task will be charged. Use `TIME` when you want to charge per hour and `FIXED` to charge as a fixed amount. If the task will not be charged use `NON_CHARGEABLE`.",
+          "message": "可為 `TIME`、`FIXED` 或 `NON_CHARGEABLE`，定義任務的計費方式。若要按小時收費請使用 `TIME`，若要收取固定金額請使用 `FIXED`。若任務不收費，請使用 `NON_CHARGEABLE`。"
+        },
+        "app.WGVybw.action.Z2V0VGFza3M.option.Y2hhcmdlVHlwZQ.display_name": {
+          "source": "Charge Type",
+          "message": "計費類型"
+        },
+        "app.WGVybw.action.Z2V0VGFza3M.option.Y2hhcmdlVHlwZQ.short_desc": {
+          "source": "Can be 'TIME', 'FIXED' or 'NON_CHARGEABLE', defines how the task will be charged",
+          "message": "可為 'TIME'、'FIXED' 或 'NON_CHARGEABLE'，定義任務的計費方式"
+        },
+        "app.WGVybw.action.Z2V0VGFza3M.option.cGFnZQ.desc": {
+          "source": "Set to 1 by default. The requested number of the page in paged response - Must be a number greater than 0.",
+          "message": "預設值為 1。分頁回應中請求的頁數 - 必須是大於 0 的數字。"
+        },
+        "app.WGVybw.action.Z2V0VGFza3M.option.cGFnZQ.display_name": {
+          "source": "Page",
+          "message": "頁碼"
+        },
+        "app.WGVybw.action.Z2V0VGFza3M.option.cGFnZQ.short_desc": {
+          "source": "Which page to return, counting from 1",
+          "message": "要傳回哪一頁，從 1 開始計算"
+        },
+        "app.WGVybw.action.Z2V0VGFza3M.option.cGFnZVNpemU.desc": {
+          "source": "How many records to return in one page. Xero's default is 100 and its maximum is 1000.",
+          "message": "一頁傳回的記錄數量。Xero 的預設值為 100，最大值為 1000。"
+        },
+        "app.WGVybw.action.Z2V0VGFza3M.option.cGFnZVNpemU.display_name": {
+          "source": "Page Size",
+          "message": "頁面大小"
+        },
+        "app.WGVybw.action.Z2V0VGFza3M.option.cGFnZVNpemU.short_desc": {
+          "source": "How many records to return in one page",
+          "message": "一頁傳回的記錄筆數"
+        },
+        "app.WGVybw.action.Z2V0VGFza3M.option.cHJvamVjdElk.desc": {
+          "source": "You can specify an individual project by appending the projectId to the endpoint",
+          "message": "您可以透過在端點後附加 projectId 來指定單個專案"
+        },
+        "app.WGVybw.action.Z2V0VGFza3M.option.cHJvamVjdElk.display_name": {
+          "source": "Project",
+          "message": "專案"
+        },
+        "app.WGVybw.action.Z2V0VGFza3M.option.cHJvamVjdElk.short_desc": {
+          "source": "You can specify an individual project by appending the projectId to the endpoint",
+          "message": "您可以透過在端點後附加 projectId 來指定單個專案"
+        },
+        "app.WGVybw.action.Z2V0VGFza3M.option.dGFza0lkcw.desc": {
+          "source": "Search for all tasks that match a comma separated list of taskIds, i.e. GET https://.../tasks?taskIds={taskID},{taskID}",
+          "message": "搜尋符合以逗號分隔之 taskIds 清單的所有任務，例如 GET https://.../tasks?taskIds={taskID},{taskID}"
+        },
+        "app.WGVybw.action.Z2V0VGFza3M.option.dGFza0lkcw.display_name": {
+          "source": "Task Ids",
+          "message": "任務 ID"
+        },
+        "app.WGVybw.action.Z2V0VGFza3M.option.dGFza0lkcw.short_desc": {
+          "source": "Search for all tasks that match a comma separated list of taskIds, i",
+          "message": "搜尋符合以逗號分隔之 taskIds 清單的所有任務，例"
+        },
+        "app.WGVybw.action.Z2V0VGFza3M.short_desc": {
+          "source": "List the tasks in a project",
+          "message": "列出專案中的任務"
+        },
+        "app.WGVybw.action.ZW1haWxJbnZvaWNl.desc": {
+          "source": "Sends an invoice to the email address on its contact.\n\nXero decides the recipient and the template; there is nothing to fill in but the invoice. The invoice has to be `AUTHORISED` - a draft cannot be sent.",
+          "message": "將發票傳送至其聯絡人的電子郵件地址。\n\nXero 會決定收件者與範本；除了發票之外不需要填寫任何內容。發票必須處於 `AUTHORISED` 狀態 - 無法傳送草稿。"
+        },
+        "app.WGVybw.action.ZW1haWxJbnZvaWNl.display_name": {
+          "source": "Email Invoice",
+          "message": "透過電子郵件寄送發票"
+        },
+        "app.WGVybw.action.ZW1haWxJbnZvaWNl.option.SW52b2ljZUlE.desc": {
+          "source": "Unique identifier for an Invoice",
+          "message": "發票的唯一識別碼"
+        },
+        "app.WGVybw.action.ZW1haWxJbnZvaWNl.option.SW52b2ljZUlE.display_name": {
+          "source": "Invoice",
+          "message": "發票"
+        },
+        "app.WGVybw.action.ZW1haWxJbnZvaWNl.option.SW52b2ljZUlE.short_desc": {
+          "source": "The invoice this applies to",
+          "message": "此操作適用的發票"
+        },
+        "app.WGVybw.action.ZW1haWxJbnZvaWNl.option.U3RhdHVz.desc": {
+          "source": "Need at least one field to create an empty JSON payload",
+          "message": "至少需要一個欄位以建立空的 JSON 承載資料"
+        },
+        "app.WGVybw.action.ZW1haWxJbnZvaWNl.option.U3RhdHVz.display_name": {
+          "source": "Status",
+          "message": "狀態"
+        },
+        "app.WGVybw.action.ZW1haWxJbnZvaWNl.option.U3RhdHVz.short_desc": {
+          "source": "Need at least one field to create an empty JSON payload",
+          "message": "至少需要一個欄位以建立空的 JSON 承載資料"
+        },
+        "app.WGVybw.action.ZW1haWxJbnZvaWNl.short_desc": {
+          "source": "Send an invoice to its contact by email",
+          "message": "透過電子郵件將發票寄送給其聯絡人"
+        },
+        "app.WGVybw.action.bWFrZS1hcGktY2FsbA.desc": {
+          "source": "Make a custom HTTP / REST API call to **Xero** using the configured connection's authentication.\n\nSpecify the HTTP method, the URI path (relative to the connection's API base URL), optional query parameters, headers, and request body. The response is returned as a hash containing the status code, response headers, and response body.\n\nUse this action for endpoints that are not yet exposed as first-class actions on this app.",
+          "message": "使用已設定連線的驗證向 **Xero** 發出自訂 HTTP / REST API 呼叫。\n\n指定 HTTP 方法、URI 路徑 (相對於連線的 API 基礎 URL)、選填的查詢參數、標頭以及請求內文。回應將以包含狀態碼、回應標頭與回應內文的雜湊形式傳回。\n\n針對此應用程式尚未公開為頂級動作的端點使用此動作。"
+        },
+        "app.WGVybw.action.bWFrZS1hcGktY2FsbA.display_name": {
+          "source": "Make an API call",
+          "message": "進行 API 呼叫"
+        },
+        "app.WGVybw.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.desc": {
+          "source": "The request body. The effective type depends on `body_type`: JSON/form/YAML expect a hash, XML/text expect a string, multipart expects a file structure, binary expects raw bytes.",
+          "message": "請求主體。有效類型取決於 `body_type`：JSON/表單/YAML 預期為雜湊，XML/文字預期為字串，multipart 預期為檔案結構，二進位預期為原始位元組。"
+        },
+        "app.WGVybw.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.display_name": {
+          "source": "Body",
+          "message": "內文"
+        },
+        "app.WGVybw.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.short_desc": {
+          "source": "The request body",
+          "message": "請求主體"
+        },
+        "app.WGVybw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.desc": {
+          "source": "Upload a file using `multipart/form-data`. The body must be a @ref DataProvider::FileDataType \"FileDataType\" structure (filename + content + mime_type). The framework builds the multipart envelope and sets the boundary header.",
+          "message": "使用 `multipart/form-data` 上傳檔案。主體必須是 @ref DataProvider::FileDataType \"FileDataType\" 結構 (filename + content + mime_type)。框架會建立 multipart 信封並設定 boundary 標頭。"
+        },
+        "app.WGVybw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.display_name": {
+          "source": "Multipart Form",
+          "message": "Multipart 表單"
+        },
+        "app.WGVybw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.short_desc": {
+          "source": "Upload a file using multipart/form-data",
+          "message": "使用 multipart/form-data 上傳檔案"
+        },
+        "app.WGVybw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.desc": {
+          "source": "Pass the body to the REST client unchanged; the client decides serialization based on its configured `data` option and the value type",
+          "message": "將主體原封不動地傳遞給 REST 用戶端；用戶端會根據其設定的 `data` 選項與數值類型來決定序列化方式"
+        },
+        "app.WGVybw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.display_name": {
+          "source": "Auto",
+          "message": "自動"
+        },
+        "app.WGVybw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.short_desc": {
+          "source": "Pass-through; use connection serialization and let the REST client decide",
+          "message": "透傳；使用連線序列化並由 REST 用戶端決定"
+        },
+        "app.WGVybw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.desc": {
+          "source": "Send the body as raw bytes. The body must be a binary value. Sets `Content-Type: application/octet-stream` unless overridden by `hdr`.",
+          "message": "將主體作為原始位元組傳送。主體必須是二進位值。除非被 `hdr` 覆寫，否則會設定 `Content-Type: application/octet-stream`。"
+        },
+        "app.WGVybw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.display_name": {
+          "source": "Raw Binary",
+          "message": "原始二進位"
+        },
+        "app.WGVybw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.short_desc": {
+          "source": "Send body as raw bytes",
+          "message": "將主體作為原始位元組傳送"
+        },
+        "app.WGVybw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.desc": {
+          "source": "Serialize a hash of form fields as `application/x-www-form-urlencoded`. The body must be a hash whose values are scalars (strings/numbers/booleans).",
+          "message": "將表單欄位的雜湊序列化為 `application/x-www-form-urlencoded`。主體必須是值為純量 (字串/數字/布林值) 的雜湊。"
+        },
+        "app.WGVybw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.display_name": {
+          "source": "Form (URL-encoded)",
+          "message": "表單 (URL 編碼)"
+        },
+        "app.WGVybw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.short_desc": {
+          "source": "Serialize body as application/x-www-form-urlencoded form fields",
+          "message": "將主體序列化為 application/x-www-form-urlencoded 表單欄位"
+        },
+        "app.WGVybw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.desc": {
+          "source": "Serialize the body as JSON; sets `Content-Type: application/json`. The body should be a hash, list, or scalar value.",
+          "message": "將主體序列化為 JSON；設定 `Content-Type: application/json`。主體應為雜湊、清單或純量值。"
+        },
+        "app.WGVybw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.display_name": {
+          "source": "JSON",
+          "message": "JSON"
+        },
+        "app.WGVybw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.short_desc": {
+          "source": "Serialize body as JSON",
+          "message": "將主體序列化為 JSON"
+        },
+        "app.WGVybw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.desc": {
+          "source": "Send the body as plain text. The body must be a string. Sets `Content-Type: text/plain`.",
+          "message": "將主體作為純文字傳送。主體必須是字串。設定 `Content-Type: text/plain`。"
+        },
+        "app.WGVybw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.display_name": {
+          "source": "Plain Text",
+          "message": "純文字"
+        },
+        "app.WGVybw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.short_desc": {
+          "source": "Send body as text/plain",
+          "message": "將主體作為 text/plain 傳送"
+        },
+        "app.WGVybw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.desc": {
+          "source": "Send the body as XML. If the body is a hash it is serialized to XML; if it is a string it is sent verbatim. Sets `Content-Type: application/xml`.",
+          "message": "將主體作為 XML 傳送。若主體為雜湊，則會序列化為 XML；若為字串，則原樣傳送。設定 `Content-Type: application/xml`。"
+        },
+        "app.WGVybw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.display_name": {
+          "source": "XML",
+          "message": "XML"
+        },
+        "app.WGVybw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.short_desc": {
+          "source": "Send body as XML",
+          "message": "將主體作為 XML 傳送"
+        },
+        "app.WGVybw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.desc": {
+          "source": "Send the body as YAML. If the body is a hash it is serialized to YAML; if it is a string it is sent verbatim. Sets `Content-Type: application/x-yaml`.",
+          "message": "將主體作為 YAML 傳送。若主體為雜湊，則會序列化為 YAML；若為字串，則原樣傳送。設定 `Content-Type: application/x-yaml`。"
+        },
+        "app.WGVybw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.display_name": {
+          "source": "YAML",
+          "message": "YAML"
+        },
+        "app.WGVybw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.short_desc": {
+          "source": "Send body as YAML",
+          "message": "將主體作為 YAML 傳送"
+        },
+        "app.WGVybw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.desc": {
+          "source": "Selects the body serialization mode and the corresponding `Content-Type` header. Changing this field reshapes the `body` editor - selecting JSON exposes a JSON editor, selecting Multipart Form exposes a file picker, and so on.",
+          "message": "選擇主體序列化模式與相應的 `Content-Type` 標頭。變更此欄位會重塑 `body` 編輯器 - 選擇 JSON 會顯示 JSON 編輯器，選擇 Multipart Form 會顯示檔案選擇器，依此類推。"
+        },
+        "app.WGVybw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.display_name": {
+          "source": "Body Type",
+          "message": "主體類型"
+        },
+        "app.WGVybw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.short_desc": {
+          "source": "How the body is serialized and what Content-Type is sent",
+          "message": "主體如何序列化以及傳送何種 Content-Type"
+        },
+        "app.WGVybw.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.desc": {
+          "source": "If `True`, non-2xx HTTP responses return as the normal response hash (with the actual status code) instead of raising `REST-RESPONSE-ERROR`. Useful for handling 4xx/5xx as data - e.g. checking whether a resource exists. Overrides the connection's `error_passthru` setting for this call only.",
+          "message": "若為 `True`，非 2xx 的 HTTP 回應將作為正常的回應雜湊 (包含實際狀態碼) 返回，而不是引發 `REST-RESPONSE-ERROR`。適用於將 4xx/5xx 作為資料處理 - 例如檢查資源是否存在。僅針對本次呼叫覆寫連線的 `error_passthru` 設定。"
+        },
+        "app.WGVybw.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.display_name": {
+          "source": "Return Errors as Data",
+          "message": "將錯誤作為資料返回"
+        },
+        "app.WGVybw.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.short_desc": {
+          "source": "Return non-2xx responses normally instead of throwing",
+          "message": "正常返回非 2xx 回應，而不是拋出例外"
+        },
+        "app.WGVybw.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.desc": {
+          "source": "Optional list of HTTP status codes treated as success. If set and the response status is not in this list, the action throws `REST-STATUS-ERROR`. When unset, the REST client's default behavior applies (typically: 2xx is success, non-2xx throws).",
+          "message": "視為成功的選擇性 HTTP 狀態碼清單。若已設定且回應狀態不在此清單中，該動作將拋出 `REST-STATUS-ERROR`。未設定時，套用 REST 用戶端的預設行為 (通常：2xx 代表成功，非 2xx 拋出例外)。"
+        },
+        "app.WGVybw.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.display_name": {
+          "source": "Expected Status Codes",
+          "message": "預期的狀態碼"
+        },
+        "app.WGVybw.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.short_desc": {
+          "source": "Response status codes treated as success",
+          "message": "視為成功的回應狀態碼"
+        },
+        "app.WGVybw.action.bWFrZS1hcGktY2FsbA.option.aGRy.desc": {
+          "source": "Hash of custom headers added to the request. These override any default headers set by `body_type` (e.g. supplying `Content-Type` here wins over the body-type default).",
+          "message": "新增至請求的自訂標頭雜湊。這些會覆寫由 `body_type` 設定的任何預設標頭 (例如：在此處提供 `Content-Type` 會優先於主體類型的預設值)。"
+        },
+        "app.WGVybw.action.bWFrZS1hcGktY2FsbA.option.aGRy.display_name": {
+          "source": "Custom Headers",
+          "message": "自訂標頭"
+        },
+        "app.WGVybw.action.bWFrZS1hcGktY2FsbA.option.aGRy.short_desc": {
+          "source": "Extra request headers",
+          "message": "額外的請求標頭"
+        },
+        "app.WGVybw.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.desc": {
+          "source": "If `True`, the response hash includes a `debug` sub-hash containing the request method/URL/headers (with sensitive values redacted), request and response sizes, and round-trip duration. Useful when investigating slow or failing calls. Off by default to keep responses lean.",
+          "message": "若為 `True`，回應雜湊包含一個 `debug` 子雜湊，其中包含請求方法/URL/標頭 (敏感值已遮蔽)、請求與回應大小以及來回時間。在調查過慢或失敗的呼叫時很有用。預設關閉以維持回應精簡。"
+        },
+        "app.WGVybw.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.display_name": {
+          "source": "Include Debug Info",
+          "message": "包含除錯資訊"
+        },
+        "app.WGVybw.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.short_desc": {
+          "source": "Include request/timing/size debug info in the response",
+          "message": "在回應中包含請求/時序/大小除錯資訊"
+        },
+        "app.WGVybw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.desc": {
+          "source": "HTTP `OPTIONS`",
+          "message": "HTTP `OPTIONS`"
+        },
+        "app.WGVybw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.display_name": {
+          "source": "OPTIONS",
+          "message": "OPTIONS"
+        },
+        "app.WGVybw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.short_desc": {
+          "source": "HTTP OPTIONS",
+          "message": "HTTP OPTIONS"
+        },
+        "app.WGVybw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.desc": {
+          "source": "HTTP `DELETE`",
+          "message": "HTTP `DELETE`"
+        },
+        "app.WGVybw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.display_name": {
+          "source": "DELETE",
+          "message": "DELETE"
+        },
+        "app.WGVybw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.short_desc": {
+          "source": "HTTP DELETE",
+          "message": "HTTP DELETE"
+        },
+        "app.WGVybw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.desc": {
+          "source": "HTTP `GET`",
+          "message": "HTTP `GET`"
+        },
+        "app.WGVybw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.display_name": {
+          "source": "GET",
+          "message": "GET"
+        },
+        "app.WGVybw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.short_desc": {
+          "source": "HTTP GET",
+          "message": "HTTP GET"
+        },
+        "app.WGVybw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.desc": {
+          "source": "HTTP `HEAD`",
+          "message": "HTTP `HEAD`"
+        },
+        "app.WGVybw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.display_name": {
+          "source": "HEAD",
+          "message": "HEAD"
+        },
+        "app.WGVybw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.short_desc": {
+          "source": "HTTP HEAD",
+          "message": "HTTP HEAD"
+        },
+        "app.WGVybw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.desc": {
+          "source": "HTTP `PATCH`",
+          "message": "HTTP `PATCH`"
+        },
+        "app.WGVybw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.display_name": {
+          "source": "PATCH",
+          "message": "PATCH"
+        },
+        "app.WGVybw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.short_desc": {
+          "source": "HTTP PATCH",
+          "message": "HTTP PATCH"
+        },
+        "app.WGVybw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.desc": {
+          "source": "HTTP `POST`",
+          "message": "HTTP `POST`"
+        },
+        "app.WGVybw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.display_name": {
+          "source": "POST",
+          "message": "POST"
+        },
+        "app.WGVybw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.short_desc": {
+          "source": "HTTP POST",
+          "message": "HTTP POST"
+        },
+        "app.WGVybw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.desc": {
+          "source": "HTTP `PUT`",
+          "message": "HTTP `PUT`"
+        },
+        "app.WGVybw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.display_name": {
+          "source": "PUT",
+          "message": "PUT"
+        },
+        "app.WGVybw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.short_desc": {
+          "source": "HTTP PUT",
+          "message": "HTTP PUT"
+        },
+        "app.WGVybw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.desc": {
+          "source": "HTTP `TRACE`",
+          "message": "HTTP `TRACE`"
+        },
+        "app.WGVybw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.display_name": {
+          "source": "TRACE",
+          "message": "TRACE"
+        },
+        "app.WGVybw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.short_desc": {
+          "source": "HTTP TRACE",
+          "message": "HTTP TRACE"
+        },
+        "app.WGVybw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "用於請求的 HTTP 方法"
+        },
+        "app.WGVybw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.display_name": {
+          "source": "HTTP Method",
+          "message": "HTTP 方法"
+        },
+        "app.WGVybw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.short_desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "用於請求的 HTTP 方法"
+        },
+        "app.WGVybw.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain `{name}` placeholders that are replaced from `path_vars`. Example: `/users/{id}/comments`.",
+          "message": "相於連線 API 基本 URL 的 URI 路徑。可能包含從 `path_vars` 替換的 `{name}` 預留位置。範例：`/users/{id}/comments`。"
+        },
+        "app.WGVybw.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.display_name": {
+          "source": "URI Path",
+          "message": "URI 路徑"
+        },
+        "app.WGVybw.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.short_desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain '{name}' placeholders that are replaced from 'path_vars'. Example: '/users/{id}/comments'",
+          "message": "相對於連線 API 基底 URL 的 URI 路徑。可能包含從 'path_vars' 替換的 '{name}' 預留位置。範例：'/users/{id}/comments'"
+        },
+        "app.WGVybw.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.desc": {
+          "source": "Hash of values substituted into `{name}` placeholders in the URI path. Example: with `path = /users/{id}` and `path_vars = {id: 123}` the framework sends `/users/123`. Values are URL-encoded.",
+          "message": "替換至 URI 路徑中 `{name}` 預留位置的值 Hash。範例：使用 `path = /users/{id}` 與 `path_vars = {id: 123}` 時，框架會傳送 `/users/123`。數值均經過 URL 編碼。"
+        },
+        "app.WGVybw.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.display_name": {
+          "source": "Path Variables",
+          "message": "路徑變數"
+        },
+        "app.WGVybw.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.short_desc": {
+          "source": "Values for {name} placeholders in path",
+          "message": "路徑中 {name} 預留位置的值"
+        },
+        "app.WGVybw.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.desc": {
+          "source": "Hash of query string parameters to append to the URI path. Values are URL-encoded; list values are joined with `,`.",
+          "message": "要附加至 URI 路徑的查詢字串參數 Hash。數值均經過 URL 編碼；清單值會使用 `,` 連接。"
+        },
+        "app.WGVybw.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.display_name": {
+          "source": "Query Arguments",
+          "message": "查詢引數"
+        },
+        "app.WGVybw.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.short_desc": {
+          "source": "Query string parameters",
+          "message": "查詢字串參數"
+        },
+        "app.WGVybw.action.bWFrZS1hcGktY2FsbA.short_desc": {
+          "source": "Make a custom API call to Xero",
+          "message": "向 Xero 發出自訂 API 呼叫"
+        },
+        "app.WGVybw.action.bmV3X2JhbmtfdHJhbnNhY3Rpb24.desc": {
+          "source": "Fires for each bank transaction created or changed - money spent or received against a bank account.\n\nThe event carries the bank transaction record Xero returns.",
+          "message": "在每筆銀行交易建立或變更時觸發 - 針對銀行帳戶支出或收取的款項。\n\n此事件會攜帶 Xero 傳回的銀行交易記錄。"
+        },
+        "app.WGVybw.action.bmV3X2JhbmtfdHJhbnNhY3Rpb24.display_name": {
+          "source": "New Bank Transaction",
+          "message": "新增銀行交易"
+        },
+        "app.WGVybw.action.bmV3X2JhbmtfdHJhbnNhY3Rpb24.short_desc": {
+          "source": "Fires when a bank transaction is created or changed",
+          "message": "在建立或變更銀行交易時觸發"
+        },
+        "app.WGVybw.action.bmV3X2JpbGw.desc": {
+          "source": "Fires for each bill created or changed.\n\nA bill is an invoice of type `ACCPAY`, which is the filter this event applies; a sales invoice (`ACCREC`) does not fire it. The event carries the invoice record Xero returns.",
+          "message": "在每筆帳單建立或變更時觸發。\n\n帳單是類型為 `ACCPAY` 的發票，這也是此事件所套用的篩選條件；銷售發票 (`ACCREC`) 則不會觸發此事件。此事件會攜帶 Xero 傳回的發票記錄。"
+        },
+        "app.WGVybw.action.bmV3X2JpbGw.display_name": {
+          "source": "New Bill",
+          "message": "新增帳單"
+        },
+        "app.WGVybw.action.bmV3X2JpbGw.short_desc": {
+          "source": "Fires when a bill is created or changed",
+          "message": "在建立或變更帳單時觸發"
+        },
+        "app.WGVybw.action.bmV3X2NvbnRhY3Q.desc": {
+          "source": "Fires for each contact created or changed in the organisation.\n\nXero positions a contact by `UpdatedDateUTC` and offers no \"created since\" filter, so a contact edited later fires this again. The event carries the contact record Xero returns.",
+          "message": "在組織中建立或變更每個聯絡人時觸發。\n\nXero 依據 `UpdatedDateUTC` 定位聯絡人，且不提供「建立時間晚於」的篩選條件，因此稍後編輯聯絡人會再次觸發此事件。此事件會攜帶 Xero 傳回的聯絡人記錄。"
+        },
+        "app.WGVybw.action.bmV3X2NvbnRhY3Q.display_name": {
+          "source": "New Contact",
+          "message": "新增聯絡人"
+        },
+        "app.WGVybw.action.bmV3X2NvbnRhY3Q.short_desc": {
+          "source": "Fires when a contact is created or changed",
+          "message": "在建立或變更聯絡人時觸發"
+        },
+        "app.WGVybw.action.bmV3X2NyZWRpdF9ub3Rl.desc": {
+          "source": "Fires for each credit note created or changed.\n\nThe event carries the credit note record Xero returns. The application this module replaces polled credit notes without exporting any way to list or read one; **Find Credit Notes** exists so that this event has a counterpart.",
+          "message": "在每筆貸項通知單建立或變更時觸發。\n\n此事件會攜帶 Xero 傳回的貸項通知單記錄。此模組所取代的應用程式會輪詢貸項通知單，但未匯出任何列出或讀取貸項通知單的方法；**Find Credit Notes** 的存在是為了讓此事件有對應動作。"
+        },
+        "app.WGVybw.action.bmV3X2NyZWRpdF9ub3Rl.display_name": {
+          "source": "New Credit Note",
+          "message": "新增貸項通知單"
+        },
+        "app.WGVybw.action.bmV3X2NyZWRpdF9ub3Rl.short_desc": {
+          "source": "Fires when a credit note is created or changed",
+          "message": "在建立或變更貸項通知單時觸發"
+        },
+        "app.WGVybw.action.bmV3X2VtcGxveWVl.desc": {
+          "source": "Fires for each employee added to the organisation's payroll or changed.\n\n**Which payroll API is polled comes from the connection's `payroll_region`**: Australia is served at `payroll.xro/1.0` and New Zealand and the United Kingdom at `payroll.xro/2.0`. A connection with no region set reports that rather than guessing one.\n\nThe application this module replaces polled employees through the **accounting** API, where they do not exist, so this event never fired at all.",
+          "message": "在將員工新增至組織的薪資單或變更員工時觸發。\n\n**輪詢哪個薪資 API 取決於連線的 `payroll_region`**：澳洲的服務端點為 `payroll.xro/1.0`，紐西蘭與英國則為 `payroll.xro/2.0`。未設定地區的連線會回報該情況，而非猜測地區。\n\n此模組所取代的應用程式透過 **accounting** API 輪詢員工（但在該處員工並不存在），因此該事件從未被觸發過。"
+        },
+        "app.WGVybw.action.bmV3X2VtcGxveWVl.display_name": {
+          "source": "New Employee",
+          "message": "新增員工"
+        },
+        "app.WGVybw.action.bmV3X2VtcGxveWVl.short_desc": {
+          "source": "Fires when an employee is added to payroll or changed",
+          "message": "在將員工新增至薪資單或變更員工時觸發"
+        },
+        "app.WGVybw.action.bmV3X3B1cmNoYXNlX29yZGVy.desc": {
+          "source": "Fires for each purchase order created or changed.\n\nThe event carries the purchase order record Xero returns.",
+          "message": "在每筆採購單建立或變更時觸發。\n\n此事件會攜帶 Xero 傳回的採購單記錄。"
+        },
+        "app.WGVybw.action.bmV3X3B1cmNoYXNlX29yZGVy.display_name": {
+          "source": "New Purchase Order",
+          "message": "新增採購單"
+        },
+        "app.WGVybw.action.bmV3X3B1cmNoYXNlX29yZGVy.short_desc": {
+          "source": "Fires when a purchase order is created or changed",
+          "message": "在建立或變更採購單時觸發"
+        },
+        "app.WGVybw.action.bmV3X3BheW1lbnQ.desc": {
+          "source": "Fires for each payment created or changed against an invoice or a credit note.\n\nThe event carries the payment record Xero returns.",
+          "message": "在針對發票或貸項通知單建立或變更每筆付款時觸發。\n\n此事件會攜帶 Xero 傳回的付款記錄。"
+        },
+        "app.WGVybw.action.bmV3X3BheW1lbnQ.display_name": {
+          "source": "New Payment",
+          "message": "新付款"
+        },
+        "app.WGVybw.action.bmV3X3BheW1lbnQ.short_desc": {
+          "source": "Fires when a payment is created or changed",
+          "message": "在建立或變更付款時觸發"
+        },
+        "app.WGVybw.action.c2VhcmNo.desc": {
+          "source": "Returns every record in the given table matching the search criteria",
+          "message": "返回給定資料表中符合搜尋條件的每筆記錄"
+        },
+        "app.WGVybw.action.c2VhcmNo.display_name": {
+          "source": "Search Records",
+          "message": "搜尋記錄"
+        },
+        "app.WGVybw.action.c2VhcmNo.option.dGFibGU.desc": {
+          "source": "The table to work with: `invoices`, `contacts`, `bank-transactions`, `items`, `payments`, `invoice-history`, `accounts`, `tax-rates`, `purchase-orders`, `projects` or `project-tasks`",
+          "message": "要操作的資料表：`invoices`、`contacts`、`bank-transactions`、`items`、`payments`、`invoice-history`、`accounts`、`tax-rates`、`purchase-orders`、`projects` 或 `project-tasks`"
+        },
+        "app.WGVybw.action.c2VhcmNo.option.dGFibGU.display_name": {
+          "source": "Table",
+          "message": "表格"
+        },
+        "app.WGVybw.action.c2VhcmNo.option.dGFibGU.short_desc": {
+          "source": "The name of the table to work with",
+          "message": "要操作的資料表名稱"
+        },
+        "app.WGVybw.action.c2VhcmNo.short_desc": {
+          "source": "Search for matching records in the given table",
+          "message": "在給定資料表中搜尋相符的記錄"
+        },
+        "app.WGVybw.action.c2VhcmNoLXNpbmdsZQ.desc": {
+          "source": "Returns the one record in the given table matching the search criteria; it is an error if more than one matches",
+          "message": "返回給定資料表中符合搜尋條件的一筆記錄；若有多筆符合則視為錯誤"
+        },
+        "app.WGVybw.action.c2VhcmNoLXNpbmdsZQ.display_name": {
+          "source": "Find a Single Record",
+          "message": "尋找單筆記錄"
+        },
+        "app.WGVybw.action.c2VhcmNoLXNpbmdsZQ.option.dGFibGU.desc": {
+          "source": "The table to work with: `invoices`, `contacts`, `bank-transactions`, `items`, `payments`, `invoice-history`, `accounts`, `tax-rates`, `purchase-orders`, `projects` or `project-tasks`",
+          "message": "要操作的資料表：`invoices`、`contacts`、`bank-transactions`、`items`、`payments`、`invoice-history`、`accounts`、`tax-rates`、`purchase-orders`、`projects` 或 `project-tasks`"
+        },
+        "app.WGVybw.action.c2VhcmNoLXNpbmdsZQ.option.dGFibGU.display_name": {
+          "source": "Table",
+          "message": "表格"
+        },
+        "app.WGVybw.action.c2VhcmNoLXNpbmdsZQ.option.dGFibGU.short_desc": {
+          "source": "The name of the table to work with",
+          "message": "要操作的資料表名稱"
+        },
+        "app.WGVybw.action.c2VhcmNoLXNpbmdsZQ.short_desc": {
+          "source": "Search for a single matching record in the given table",
+          "message": "在給定資料表中搜尋單筆相符記錄"
+        },
+        "app.WGVybw.action.dXBkYXRl.desc": {
+          "source": "Updates every record in the given table matching the search criteria",
+          "message": "更新指定資料表中符合搜尋條件的所有記錄"
+        },
+        "app.WGVybw.action.dXBkYXRl.display_name": {
+          "source": "Update Records",
+          "message": "更新記錄"
+        },
+        "app.WGVybw.action.dXBkYXRl.option.dGFibGU.desc": {
+          "source": "The table to work with: `invoices`, `contacts`, `bank-transactions`, `items`, `payments`, `invoice-history`, `accounts`, `tax-rates`, `purchase-orders`, `projects` or `project-tasks`",
+          "message": "要操作的資料表：`invoices`、`contacts`、`bank-transactions`、`items`、`payments`、`invoice-history`、`accounts`、`tax-rates`、`purchase-orders`、`projects` 或 `project-tasks`"
+        },
+        "app.WGVybw.action.dXBkYXRl.option.dGFibGU.display_name": {
+          "source": "Table",
+          "message": "表格"
+        },
+        "app.WGVybw.action.dXBkYXRl.option.dGFibGU.short_desc": {
+          "source": "The name of the table to work with",
+          "message": "要操作的資料表名稱"
+        },
+        "app.WGVybw.action.dXBkYXRl.short_desc": {
+          "source": "Update the records matching the search criteria",
+          "message": "更新符合搜尋條件的記錄"
+        },
+        "app.WGVybw.action.dXBkYXRlT3JDcmVhdGVCYW5rVHJhbnNhY3Rpb25z.desc": {
+          "source": "Creates or updates bank transactions.\n\n`BankTransactions` is an **array** even for one. Each needs a `Type` - `SPEND` or `RECEIVE` - a `Contact`, a `BankAccount` and `LineItems`.\n\nThe bank account must be an account of type `BANK`, which is what its dropdown offers; a line item needs `AccountCode` or `AccountID` to say which account it posts to.",
+          "message": "建立或更新銀行交易。\n\n`BankTransactions` 為**陣列**，即使只有一筆亦然。每筆都需要 `Type` - `SPEND` 或 `RECEIVE` - 一個 `Contact`、一個 `BankAccount` 及 `LineItems`。\n\n銀行帳戶必須是類型為 `BANK` 的帳戶，這也是其下拉式選單提供的內容；明細行項目需要 `AccountCode` 或 `AccountID` 來指定過帳至哪個帳戶。"
+        },
+        "app.WGVybw.action.dXBkYXRlT3JDcmVhdGVCYW5rVHJhbnNhY3Rpb25z.display_name": {
+          "source": "Create Bank Transaction",
+          "message": "建立銀行交易"
+        },
+        "app.WGVybw.action.dXBkYXRlT3JDcmVhdGVCYW5rVHJhbnNhY3Rpb25z.option.QmFua1RyYW5zYWN0aW9ucw.display_name": {
+          "source": "Bank Transactions",
+          "message": "銀行交易"
+        },
+        "app.WGVybw.action.dXBkYXRlT3JDcmVhdGVCYW5rVHJhbnNhY3Rpb25z.option.QmFua1RyYW5zYWN0aW9ucw.short_desc": {
+          "source": "The transactions to create or update; an array even for one",
+          "message": "要建立或更新的交易；即使只有一筆也是陣列"
+        },
+        "app.WGVybw.action.dXBkYXRlT3JDcmVhdGVCYW5rVHJhbnNhY3Rpb25z.option.c3VtbWFyaXplRXJyb3Jz.desc": {
+          "source": "If false return 200 OK and mix of successfully created objects and any with validation errors",
+          "message": "若為 false，則傳回 200 OK 以及成功建立之物件與驗證錯誤物件的混合清單"
+        },
+        "app.WGVybw.action.dXBkYXRlT3JDcmVhdGVCYW5rVHJhbnNhY3Rpb25z.option.c3VtbWFyaXplRXJyb3Jz.display_name": {
+          "source": "Summarize Errors",
+          "message": "彙總錯誤"
+        },
+        "app.WGVybw.action.dXBkYXRlT3JDcmVhdGVCYW5rVHJhbnNhY3Rpb25z.option.c3VtbWFyaXplRXJyb3Jz.short_desc": {
+          "source": "If false return 200 OK and mix of successfully created objects and any with validation errors",
+          "message": "若為 false，則傳回 200 OK 以及成功建立之物件與驗證錯誤物件的混合清單"
+        },
+        "app.WGVybw.action.dXBkYXRlT3JDcmVhdGVCYW5rVHJhbnNhY3Rpb25z.option.dW5pdGRw.desc": {
+          "source": "e.g. unitdp=4 – (Unit Decimal Places) You can opt in to use four decimal places for unit amounts",
+          "message": "例如 unitdp=4 – (Unit Decimal Places) 您可以選擇在單價金額中使用四位小數位"
+        },
+        "app.WGVybw.action.dXBkYXRlT3JDcmVhdGVCYW5rVHJhbnNhY3Rpb25z.option.dW5pdGRw.display_name": {
+          "source": "Unitdp",
+          "message": "Unitdp"
+        },
+        "app.WGVybw.action.dXBkYXRlT3JDcmVhdGVCYW5rVHJhbnNhY3Rpb25z.option.dW5pdGRw.short_desc": {
+          "source": "e",
+          "message": "例"
+        },
+        "app.WGVybw.action.dXBkYXRlT3JDcmVhdGVCYW5rVHJhbnNhY3Rpb25z.short_desc": {
+          "source": "Record money spent or received against a bank account",
+          "message": "記錄針對銀行帳戶支出或收取的款項"
+        },
+        "app.WGVybw.action.dXBkYXRlT3JDcmVhdGVDb250YWN0cw.desc": {
+          "source": "Creates or updates contacts.\n\n`Contacts` is an **array** even for one contact - that is Xero's envelope. A member carrying `ContactID` updates that contact; one without creates a new one.\n\n`summarizeErrors` set to `false` makes Xero accept the members it can and report the rest, instead of rejecting the whole batch.",
+          "message": "建立或更新聯絡人。\n\n`Contacts` 為**陣列**，即使只有一個聯絡人亦然 - 這是 Xero 的封裝結構。包含 `ContactID` 的成員會更新該聯絡人；沒有的則會建立新聯絡人。\n\n將 `summarizeErrors` 設定為 `false` 會讓 Xero 接受可處理的成員並回報其餘成員，而不是拒絕整個批次。"
+        },
+        "app.WGVybw.action.dXBkYXRlT3JDcmVhdGVDb250YWN0cw.display_name": {
+          "source": "Create or Update Contacts",
+          "message": "建立或更新聯絡人"
+        },
+        "app.WGVybw.action.dXBkYXRlT3JDcmVhdGVDb250YWN0cw.option.Q29udGFjdHM.display_name": {
+          "source": "Contacts",
+          "message": "聯絡人"
+        },
+        "app.WGVybw.action.dXBkYXRlT3JDcmVhdGVDb250YWN0cw.option.Q29udGFjdHM.short_desc": {
+          "source": "The contacts to create or update; an array even for one",
+          "message": "要建立或更新的聯絡人；即使只有一個也是陣列"
+        },
+        "app.WGVybw.action.dXBkYXRlT3JDcmVhdGVDb250YWN0cw.option.c3VtbWFyaXplRXJyb3Jz.desc": {
+          "source": "If false return 200 OK and mix of successfully created objects and any with validation errors",
+          "message": "若為 false，則傳回 200 OK 以及成功建立之物件與驗證錯誤物件的混合清單"
+        },
+        "app.WGVybw.action.dXBkYXRlT3JDcmVhdGVDb250YWN0cw.option.c3VtbWFyaXplRXJyb3Jz.display_name": {
+          "source": "Summarize Errors",
+          "message": "彙總錯誤"
+        },
+        "app.WGVybw.action.dXBkYXRlT3JDcmVhdGVDb250YWN0cw.option.c3VtbWFyaXplRXJyb3Jz.short_desc": {
+          "source": "If false return 200 OK and mix of successfully created objects and any with validation errors",
+          "message": "若為 false，則傳回 200 OK 以及成功建立之物件與驗證錯誤物件的混合清單"
+        },
+        "app.WGVybw.action.dXBkYXRlT3JDcmVhdGVDb250YWN0cw.short_desc": {
+          "source": "Create contacts, or update them by ID",
+          "message": "建立聯絡人，或依 ID 更新聯絡人"
+        },
+        "app.WGVybw.action.dXBkYXRlT3JDcmVhdGVFbXBsb3llZXM.desc": {
+          "source": "Creates employees in the organisation's payroll.\n\n`Employees` is a list even for one employee. Australia's payroll API takes a list directly; New Zealand's and the United Kingdom's take one employee per call, so a list of several is sent one at a time and the results collected.\n\n**Which payroll API is used comes from the connection's `payroll_region`.** The fields an employee needs differ by region - a United Kingdom employee has a National Insurance number where a New Zealand one has an IRD number - so this passes the employee through as given rather than declaring one region's shape for all of them.",
+          "message": "在組織的薪資單中建立員工。\n\n`Employees` 為清單，即使只有一位員工亦然。澳洲的薪資 API 直接接受清單；紐西蘭與英國的 API 每次呼叫僅接受一位員工，因此多位員工的清單會一次傳送一位並收集結果。\n\n**使用哪個薪資 API 取決於連線的 `payroll_region`。** 員工所需的欄位因地區而異 - 英國員工有國民保險號碼 (National Insurance number)，而紐西蘭員工有 IRD 號碼 - 因此此動作會按原樣傳遞員工資料，而不是為所有地區宣告單一格式。"
+        },
+        "app.WGVybw.action.dXBkYXRlT3JDcmVhdGVFbXBsb3llZXM.display_name": {
+          "source": "Create Employees",
+          "message": "建立員工"
+        },
+        "app.WGVybw.action.dXBkYXRlT3JDcmVhdGVFbXBsb3llZXM.short_desc": {
+          "source": "Create employees in the payroll organisation",
+          "message": "在薪資組織中建立員工"
+        },
+        "app.WGVybw.action.dXBkYXRlT3JDcmVhdGVJbnZvaWNlcw.desc": {
+          "source": "Creates or updates invoices.\n\n`Invoices` is an **array** even for one invoice. Each member needs `Type` - `ACCREC` for a sales invoice, `ACCPAY` for a bill - a `Contact`, and `LineItems`.\n\nA line item needs an amount and an account: give `AccountCode`, or an `ItemCode` whose item already carries one. `Status` decides whether it is a draft: leave it unset for `DRAFT`, or set `AUTHORISED` to approve it as it is created.",
+          "message": "建立或更新發票。\n\n`Invoices` 為**陣列**，即使只有一張發票亦然。每個成員都需要 `Type` - 銷售發票為 `ACCREC`，帳單為 `ACCPAY` - 一個 `Contact` 及 `LineItems`。\n\n明細行項目需要金額與帳戶：提供 `AccountCode`，或提供其項目已包含帳戶的 `ItemCode`。`Status` 決定其是否為草稿：保持未設定以維持 `DRAFT`，或設定 `AUTHORISED` 以在建立時進行核准。"
+        },
+        "app.WGVybw.action.dXBkYXRlT3JDcmVhdGVJbnZvaWNlcw.display_name": {
+          "source": "Create or Update Invoices",
+          "message": "建立或更新發票"
+        },
+        "app.WGVybw.action.dXBkYXRlT3JDcmVhdGVJbnZvaWNlcw.option.SW52b2ljZXM.display_name": {
+          "source": "Invoices",
+          "message": "發票"
+        },
+        "app.WGVybw.action.dXBkYXRlT3JDcmVhdGVJbnZvaWNlcw.option.SW52b2ljZXM.short_desc": {
+          "source": "The invoices to create or update; an array even for one",
+          "message": "要建立或更新的發票；即使只有一張也是陣列"
+        },
+        "app.WGVybw.action.dXBkYXRlT3JDcmVhdGVJbnZvaWNlcw.option.YWxsb3dCYWNrb3JkZXJz.desc": {
+          "source": "Allows an invoice to be created even when one or more line items contain tracked inventory where the invoice quantity would cause the available quantity to go negative",
+          "message": "允許建立發票，即使一或多個明細行項目包含追蹤庫存且發票數量會導致可用數量變為負數"
+        },
+        "app.WGVybw.action.dXBkYXRlT3JDcmVhdGVJbnZvaWNlcw.option.YWxsb3dCYWNrb3JkZXJz.display_name": {
+          "source": "Allow Backorders",
+          "message": "允許延期交貨"
+        },
+        "app.WGVybw.action.dXBkYXRlT3JDcmVhdGVJbnZvaWNlcw.option.YWxsb3dCYWNrb3JkZXJz.short_desc": {
+          "source": "Allows an invoice to be created even when one or more line items contain tracked inventory where the invoice quantity would cause the available quantity to go negative",
+          "message": "允許建立發票，即使一或多個明細行項目包含追蹤庫存且發票數量會導致可用數量變為負數"
+        },
+        "app.WGVybw.action.dXBkYXRlT3JDcmVhdGVJbnZvaWNlcw.option.c3VtbWFyaXplRXJyb3Jz.desc": {
+          "source": "If false return 200 OK and mix of successfully created objects and any with validation errors",
+          "message": "若為 false，則傳回 200 OK 以及成功建立之物件與驗證錯誤物件的混合清單"
+        },
+        "app.WGVybw.action.dXBkYXRlT3JDcmVhdGVJbnZvaWNlcw.option.c3VtbWFyaXplRXJyb3Jz.display_name": {
+          "source": "Summarize Errors",
+          "message": "彙總錯誤"
+        },
+        "app.WGVybw.action.dXBkYXRlT3JDcmVhdGVJbnZvaWNlcw.option.c3VtbWFyaXplRXJyb3Jz.short_desc": {
+          "source": "If false return 200 OK and mix of successfully created objects and any with validation errors",
+          "message": "若為 false，則傳回 200 OK 以及成功建立之物件與驗證錯誤物件的混合清單"
+        },
+        "app.WGVybw.action.dXBkYXRlT3JDcmVhdGVJbnZvaWNlcw.option.dW5pdGRw.desc": {
+          "source": "e.g. unitdp=4 – (Unit Decimal Places) You can opt in to use four decimal places for unit amounts",
+          "message": "例如 unitdp=4 – (Unit Decimal Places) 您可以選擇在單價金額中使用四位小數位"
+        },
+        "app.WGVybw.action.dXBkYXRlT3JDcmVhdGVJbnZvaWNlcw.option.dW5pdGRw.display_name": {
+          "source": "Unitdp",
+          "message": "Unitdp"
+        },
+        "app.WGVybw.action.dXBkYXRlT3JDcmVhdGVJbnZvaWNlcw.option.dW5pdGRw.short_desc": {
+          "source": "e",
+          "message": "例"
+        },
+        "app.WGVybw.action.dXBkYXRlT3JDcmVhdGVJbnZvaWNlcw.short_desc": {
+          "source": "Create invoices or bills, or update them by ID",
+          "message": "建立發票或帳單，或依 ID 更新"
+        },
+        "app.WGVybw.action.dXBkYXRlT3JDcmVhdGVJdGVtcw.desc": {
+          "source": "Creates or updates items.\n\n`Items` is an **array** even for one item, and `Code` is what identifies an item to a line item elsewhere.",
+          "message": "建立或更新項目。\n\n`Items` 為**陣列**，即使只有一個項目亦然，而 `Code` 是在其他地方為明細行項目識別項目的依據。"
+        },
+        "app.WGVybw.action.dXBkYXRlT3JDcmVhdGVJdGVtcw.display_name": {
+          "source": "Create or Update Items",
+          "message": "建立或更新項目"
+        },
+        "app.WGVybw.action.dXBkYXRlT3JDcmVhdGVJdGVtcw.option.SXRlbXM.display_name": {
+          "source": "Items",
+          "message": "項目"
+        },
+        "app.WGVybw.action.dXBkYXRlT3JDcmVhdGVJdGVtcw.option.SXRlbXM.short_desc": {
+          "source": "The items to create or update; an array even for one",
+          "message": "要建立或更新的項目；即使只有一個也是陣列"
+        },
+        "app.WGVybw.action.dXBkYXRlT3JDcmVhdGVJdGVtcw.option.c3VtbWFyaXplRXJyb3Jz.desc": {
+          "source": "If false return 200 OK and mix of successfully created objects and any with validation errors",
+          "message": "若為 false，則傳回 200 OK 以及成功建立之物件與驗證錯誤物件的混合清單"
+        },
+        "app.WGVybw.action.dXBkYXRlT3JDcmVhdGVJdGVtcw.option.c3VtbWFyaXplRXJyb3Jz.display_name": {
+          "source": "Summarize Errors",
+          "message": "彙總錯誤"
+        },
+        "app.WGVybw.action.dXBkYXRlT3JDcmVhdGVJdGVtcw.option.c3VtbWFyaXplRXJyb3Jz.short_desc": {
+          "source": "If false return 200 OK and mix of successfully created objects and any with validation errors",
+          "message": "若為 false，則傳回 200 OK 以及成功建立之物件與驗證錯誤物件的混合清單"
+        },
+        "app.WGVybw.action.dXBkYXRlT3JDcmVhdGVJdGVtcw.option.dW5pdGRw.desc": {
+          "source": "e.g. unitdp=4 – (Unit Decimal Places) You can opt in to use four decimal places for unit amounts",
+          "message": "例如 unitdp=4 – (Unit Decimal Places) 您可以選擇在單價金額中使用四位小數位"
+        },
+        "app.WGVybw.action.dXBkYXRlT3JDcmVhdGVJdGVtcw.option.dW5pdGRw.display_name": {
+          "source": "Unitdp",
+          "message": "Unitdp"
+        },
+        "app.WGVybw.action.dXBkYXRlT3JDcmVhdGVJdGVtcw.option.dW5pdGRw.short_desc": {
+          "source": "e",
+          "message": "例"
+        },
+        "app.WGVybw.action.dXBkYXRlT3JDcmVhdGVJdGVtcw.short_desc": {
+          "source": "Create items, or update them by ID",
+          "message": "建立項目，或依 ID 更新項目"
+        },
+        "app.WGVybw.action.dXBkYXRlT3JDcmVhdGVRdW90ZXM.desc": {
+          "source": "Creates or updates quotes.\n\n`Quotes` is an **array** even for one quote, and each needs a `Contact`, a `Date` and `LineItems`.",
+          "message": "建立或更新報價單。\n\n`Quotes` 為**陣列**，即使只有一份報價單亦然，且每份都需要一個 `Contact`、一個 `Date` 及 `LineItems`。"
+        },
+        "app.WGVybw.action.dXBkYXRlT3JDcmVhdGVRdW90ZXM.display_name": {
+          "source": "Create or Update Quotes",
+          "message": "建立或更新報價單"
+        },
+        "app.WGVybw.action.dXBkYXRlT3JDcmVhdGVRdW90ZXM.option.UXVvdGVz.display_name": {
+          "source": "Quotes",
+          "message": "報價單"
+        },
+        "app.WGVybw.action.dXBkYXRlT3JDcmVhdGVRdW90ZXM.option.UXVvdGVz.short_desc": {
+          "source": "The quotes to create or update; an array even for one",
+          "message": "要建立或更新的報價單；即使只有一筆也需使用陣列"
+        },
+        "app.WGVybw.action.dXBkYXRlT3JDcmVhdGVRdW90ZXM.option.c3VtbWFyaXplRXJyb3Jz.desc": {
+          "source": "If false return 200 OK and mix of successfully created objects and any with validation errors",
+          "message": "若為 false，則傳回 200 OK 以及成功建立之物件與驗證錯誤物件的混合清單"
+        },
+        "app.WGVybw.action.dXBkYXRlT3JDcmVhdGVRdW90ZXM.option.c3VtbWFyaXplRXJyb3Jz.display_name": {
+          "source": "Summarize Errors",
+          "message": "彙總錯誤"
+        },
+        "app.WGVybw.action.dXBkYXRlT3JDcmVhdGVRdW90ZXM.option.c3VtbWFyaXplRXJyb3Jz.short_desc": {
+          "source": "If false return 200 OK and mix of successfully created objects and any with validation errors",
+          "message": "若為 false，則傳回 200 OK 以及成功建立之物件與驗證錯誤物件的混合清單"
+        },
+        "app.WGVybw.action.dXBkYXRlT3JDcmVhdGVRdW90ZXM.short_desc": {
+          "source": "Create quotes, or update them by ID",
+          "message": "建立報價單，或依 ID 進行更新"
+        },
+        "app.WGVybw.action.dXBkYXRlT3JDcmVhdGVSZXBlYXRpbmdJbnZvaWNlcw.desc": {
+          "source": "Creates or updates repeating invoice templates.\n\n`Schedule` is what makes it repeat - its period, unit and next scheduled date - and `Status` decides whether Xero sends each occurrence (`AUTHORISED`) or leaves it as a draft (`DRAFT`).",
+          "message": "建立或更新定期發票範本。\n\n`Schedule` 用於設定重複週期（其週期、單位和下一個預定日期），而 `Status` 決定 Xero 是否傳送每次產生的發票 (`AUTHORISED`) 或保留為草稿 (`DRAFT`)。"
+        },
+        "app.WGVybw.action.dXBkYXRlT3JDcmVhdGVSZXBlYXRpbmdJbnZvaWNlcw.display_name": {
+          "source": "Create or Update Repeating Invoices",
+          "message": "建立或更新定期發票"
+        },
+        "app.WGVybw.action.dXBkYXRlT3JDcmVhdGVSZXBlYXRpbmdJbnZvaWNlcw.option.UmVwZWF0aW5nSW52b2ljZXM.display_name": {
+          "source": "Repeating Invoices",
+          "message": "定期發票"
+        },
+        "app.WGVybw.action.dXBkYXRlT3JDcmVhdGVSZXBlYXRpbmdJbnZvaWNlcw.option.UmVwZWF0aW5nSW52b2ljZXM.short_desc": {
+          "source": "The templates to create or update; an array even for one",
+          "message": "要建立或更新的範本；即使只有一筆也需使用陣列"
+        },
+        "app.WGVybw.action.dXBkYXRlT3JDcmVhdGVSZXBlYXRpbmdJbnZvaWNlcw.option.c3VtbWFyaXplRXJyb3Jz.desc": {
+          "source": "If false return 200 OK and mix of successfully created objects and any with validation errors",
+          "message": "若為 false，則傳回 200 OK 以及成功建立之物件與驗證錯誤物件的混合清單"
+        },
+        "app.WGVybw.action.dXBkYXRlT3JDcmVhdGVSZXBlYXRpbmdJbnZvaWNlcw.option.c3VtbWFyaXplRXJyb3Jz.display_name": {
+          "source": "Summarize Errors",
+          "message": "彙總錯誤"
+        },
+        "app.WGVybw.action.dXBkYXRlT3JDcmVhdGVSZXBlYXRpbmdJbnZvaWNlcw.option.c3VtbWFyaXplRXJyb3Jz.short_desc": {
+          "source": "If false return 200 OK and mix of successfully created objects and any with validation errors",
+          "message": "若為 false，則傳回 200 OK 以及成功建立之物件與驗證錯誤物件的混合清單"
+        },
+        "app.WGVybw.action.dXBkYXRlT3JDcmVhdGVSZXBlYXRpbmdJbnZvaWNlcw.short_desc": {
+          "source": "Set up an invoice that repeats on a schedule",
+          "message": "設定依排程定期產生的發票"
+        },
+        "app.WGVybw.desc": {
+          "source": "Provides access to [Xero](https://www.xero.com), the online accounting platform.\n\n**Common use cases**:\n- **Contacts**: find, create and update customers and suppliers\n- **Invoices**: find, create and update sales invoices and bills, add notes and email them\n- **Payments**: record payments, allocate credit notes and read bank transactions\n- **Items and accounts**: read the chart of accounts and tax rates, and manage items\n- **Projects**: find and create projects and their tasks\n- **Payroll**: find and create employees in the organisation's regional payroll\n\n**The organisation is the connection**: a Xero credential can reach several organisations and every call has to name one, so `tenant_id` belongs to the connection rather than to each action.\n\nXero is a trademark of Xero Limited.",
+          "message": "提供對線上會計平台 [Xero](https://www.xero.com) 的存取。\n\n**常見使用案例**：\n- **聯絡人**：尋找、建立和更新客戶及供應商\n- **發票與帳單**：尋找、建立和更新銷貨發票與進貨帳單、新增備註並透過電子郵件寄出\n- **付款**：記錄付款、分配折讓單並讀取銀行交易\n- **品項與帳戶**：讀取會計科目表與稅率，並管理品項\n- **專案**：尋找並建立專案及其任務\n- **薪資**：在組織的地區薪資系統中尋找並建立員工\n\n**組織即連線**：一組 Xero 憑證可存取多個組織，且每次呼叫都必須指定一個組織，因此 `tenant_id` 屬於連線而非各個動作。\n\nXero 是 Xero Limited 的商標。"
+        },
+        "app.WGVybw.display_name": {
+          "source": "Xero",
+          "message": "Xero"
+        },
+        "app.WGVybw.short_desc": {
+          "source": "Work with Xero contacts, invoices, payments, projects and payroll",
+          "message": "處理 Xero 聯絡人、發票、付款、專案與薪資"
+        }
+      }
+    }
+  }
+}

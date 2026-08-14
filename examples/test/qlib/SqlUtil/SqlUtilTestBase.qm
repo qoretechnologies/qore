@@ -138,6 +138,32 @@ public class SqlTestBase inherits QUnit::Test {
         }
     }
 
+    #! Drops a test schema left behind by an interrupted run, before the schema is aligned
+    /** globalTearDown() drops the test schema at the end of every run, so a run normally starts
+        against a database with no schema in it.  A run that is killed before its teardown - a test
+        timeout, a crash, an interrupt - leaves the schema and everything the tests wrote to it
+        behind, and the next run then fails in two ways that look nothing like each other:
+        - the alignment has nothing to create, so it does not report a creation
+        - tests that insert into a schema table see the previous run's rows as well as their own,
+          which shows up as duplicated key values in row-by-row comparisons
+
+        Dropping first makes the run independent of how the previous one ended.  Errors are ignored:
+        this is best-effort cleanup, and a schema that cannot be dropped is reported by the
+        alignment that follows.
+
+        @param schema the schema to drop
+        @param verbose the verbosity level
+    */
+    static clearSchemaLeftFromInterruptedRun(AbstractSchema schema, int verbose = 0) {
+        try {
+            schema.drop(True, verbose, verbose > 0);
+        } catch (hash<ExceptionInfo> ex) {
+            if (verbose) {
+                printf("ignoring error while dropping a leftover test schema: %s: %s\n", ex.err, ex.desc);
+            }
+        }
+    }
+
     driverNameTest() {
         assertEq(getExpectedDriverName(), table ? table.getDatasource().getDriverRealName() : "");
     }

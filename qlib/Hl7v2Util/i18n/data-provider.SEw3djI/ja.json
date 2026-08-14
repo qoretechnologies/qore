@@ -1,0 +1,225 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "ja": {
+      "messages": {
+        "app.SEw3djI.action.c2NoZW1h.desc": {
+          "source": "Load generated HL7 v2 schema metadata from a Qore value artifact. Use `path` for a specific artifact, or `version` with `schema_dir` when schemas are stored by version.",
+          "message": "Qore値アーティファクトから生成されたHL7 v2スキーマメタデータを読み込みます。特定のアーティファクトには`path`を使用し、スキーマがバージョンごとに保存されている場合は`version`を`schema_dir`とともに使用します。"
+        },
+        "app.SEw3djI.action.c2NoZW1h.display_name": {
+          "source": "Load HL7 v2 Schema",
+          "message": "HL7 v2スキーマの読み込み"
+        },
+        "app.SEw3djI.action.c2NoZW1h.option.c2NoZW1hX2Rpcg.desc": {
+          "source": "Root directory containing generated HL7 v2 schemas organized by version.",
+          "message": "バージョンごとに整理された生成済みHL7 v2スキーマを含むルートディレクトリ。"
+        },
+        "app.SEw3djI.action.c2NoZW1h.option.c2NoZW1hX2Rpcg.display_name": {
+          "source": "Schema Directory",
+          "message": "スキーマディレクトリ"
+        },
+        "app.SEw3djI.action.c2NoZW1h.option.c2NoZW1hX2Rpcg.short_desc": {
+          "source": "Root directory containing generated schemas",
+          "message": "生成されたスキーマを含むルートディレクトリ"
+        },
+        "app.SEw3djI.action.c2NoZW1h.option.c3VtbWFyeV9vbmx5.desc": {
+          "source": "If `True`, return schema metadata and counts without the full schema hash.",
+          "message": "`True`の場合、完全なスキーマハッシュを含めずにスキーマメタデータとカウントを返します。"
+        },
+        "app.SEw3djI.action.c2NoZW1h.option.c3VtbWFyeV9vbmx5.display_name": {
+          "source": "Summary Only",
+          "message": "サマリーのみ"
+        },
+        "app.SEw3djI.action.c2NoZW1h.option.c3VtbWFyeV9vbmx5.short_desc": {
+          "source": "Return summary only",
+          "message": "サマリーのみを返す"
+        },
+        "app.SEw3djI.action.c2NoZW1h.option.cGF0aA.desc": {
+          "source": "Path or FileLocationHandler-compatible location for a generated HL7 v2 schema artifact in Qore value format.",
+          "message": "Qore値形式の生成済みHL7 v2スキーマアーティファクトのパスまたはFileLocationHandler互換の場所。"
+        },
+        "app.SEw3djI.action.c2NoZW1h.option.cGF0aA.display_name": {
+          "source": "Schema Location",
+          "message": "スキーマの場所"
+        },
+        "app.SEw3djI.action.c2NoZW1h.option.cGF0aA.short_desc": {
+          "source": "Location of a generated HL7 v2 schema artifact",
+          "message": "生成されたHL7 v2スキーマアーティファクトの場所"
+        },
+        "app.SEw3djI.action.c2NoZW1h.option.cmVsb2Fk.desc": {
+          "source": "If `True`, ignore the in-memory schema cache and reload the schema artifact.",
+          "message": "`True`の場合、インメモリのスキーマキャッシュを無視してスキーマアーティファクトを再読み込みします。"
+        },
+        "app.SEw3djI.action.c2NoZW1h.option.cmVsb2Fk.display_name": {
+          "source": "Reload",
+          "message": "再読み込み"
+        },
+        "app.SEw3djI.action.c2NoZW1h.option.cmVsb2Fk.short_desc": {
+          "source": "Ignore in-memory schema cache",
+          "message": "インメモリスキーマキャッシュを無視"
+        },
+        "app.SEw3djI.action.c2NoZW1h.option.dmVyc2lvbg.desc": {
+          "source": "HL7 v2 version to load from `schema_dir`. Use this with `schema_dir` when schemas are stored as `<schema_dir>/<version>/schema.qv`.",
+          "message": "`schema_dir`から読み込むHL7 v2バージョン。スキーマが`<schema_dir>/<version>/schema.qv`として保存されている場合に、`schema_dir`とともに使用します。"
+        },
+        "app.SEw3djI.action.c2NoZW1h.option.dmVyc2lvbg.display_name": {
+          "source": "Schema Version",
+          "message": "スキーマバージョン"
+        },
+        "app.SEw3djI.action.c2NoZW1h.option.dmVyc2lvbg.short_desc": {
+          "source": "HL7 v2 version to load",
+          "message": "読み込むHL7 v2バージョン"
+        },
+        "app.SEw3djI.action.c2NoZW1h.short_desc": {
+          "source": "Load generated HL7 v2 schema metadata",
+          "message": "生成されたHL7 v2スキーマメタデータを読み込み"
+        },
+        "app.SEw3djI.action.c2NoZW1hLXN1bW1hcnk.desc": {
+          "source": "Load only generated HL7 v2 schema metadata, counts, and segment tags.",
+          "message": "生成されたHL7 v2スキーマメタデータ、カウント、セグメントタグのみを読み込みます。"
+        },
+        "app.SEw3djI.action.c2NoZW1hLXN1bW1hcnk.display_name": {
+          "source": "HL7 v2 Schema Summary",
+          "message": "HL7 v2スキーマサマリー"
+        },
+        "app.SEw3djI.action.c2NoZW1hLXN1bW1hcnk.option.c2NoZW1hX2Rpcg.desc": {
+          "source": "Root directory containing generated HL7 v2 schemas organized by version.",
+          "message": "バージョンごとに整理された生成済みHL7 v2スキーマを含むルートディレクトリ。"
+        },
+        "app.SEw3djI.action.c2NoZW1hLXN1bW1hcnk.option.c2NoZW1hX2Rpcg.display_name": {
+          "source": "Schema Directory",
+          "message": "スキーマディレクトリ"
+        },
+        "app.SEw3djI.action.c2NoZW1hLXN1bW1hcnk.option.c2NoZW1hX2Rpcg.short_desc": {
+          "source": "Root directory containing generated schemas",
+          "message": "生成されたスキーマを含むルートディレクトリ"
+        },
+        "app.SEw3djI.action.c2NoZW1hLXN1bW1hcnk.option.cGF0aA.desc": {
+          "source": "Path or FileLocationHandler-compatible location for a generated HL7 v2 schema artifact in Qore value format.",
+          "message": "Qore値形式の生成済みHL7 v2スキーマアーティファクトのパスまたはFileLocationHandler互換の場所。"
+        },
+        "app.SEw3djI.action.c2NoZW1hLXN1bW1hcnk.option.cGF0aA.display_name": {
+          "source": "Schema Location",
+          "message": "スキーマの場所"
+        },
+        "app.SEw3djI.action.c2NoZW1hLXN1bW1hcnk.option.cGF0aA.short_desc": {
+          "source": "Location of a generated HL7 v2 schema artifact",
+          "message": "生成されたHL7 v2スキーマアーティファクトの場所"
+        },
+        "app.SEw3djI.action.c2NoZW1hLXN1bW1hcnk.option.cmVsb2Fk.desc": {
+          "source": "If `True`, ignore the in-memory schema cache and reload the schema artifact.",
+          "message": "`True`の場合、インメモリのスキーマキャッシュを無視してスキーマアーティファクトを再読み込みします。"
+        },
+        "app.SEw3djI.action.c2NoZW1hLXN1bW1hcnk.option.cmVsb2Fk.display_name": {
+          "source": "Reload",
+          "message": "再読み込み"
+        },
+        "app.SEw3djI.action.c2NoZW1hLXN1bW1hcnk.option.cmVsb2Fk.short_desc": {
+          "source": "Ignore in-memory schema cache",
+          "message": "インメモリスキーマキャッシュを無視"
+        },
+        "app.SEw3djI.action.c2NoZW1hLXN1bW1hcnk.option.dmVyc2lvbg.desc": {
+          "source": "HL7 v2 version to load from `schema_dir`. Use this with `schema_dir` when schemas are stored as `<schema_dir>/<version>/schema.qv`.",
+          "message": "`schema_dir`から読み込むHL7 v2バージョン。スキーマが`<schema_dir>/<version>/schema.qv`として保存されている場合に、`schema_dir`とともに使用します。"
+        },
+        "app.SEw3djI.action.c2NoZW1hLXN1bW1hcnk.option.dmVyc2lvbg.display_name": {
+          "source": "Schema Version",
+          "message": "スキーマバージョン"
+        },
+        "app.SEw3djI.action.c2NoZW1hLXN1bW1hcnk.option.dmVyc2lvbg.short_desc": {
+          "source": "HL7 v2 version to load",
+          "message": "読み込むHL7 v2バージョン"
+        },
+        "app.SEw3djI.action.c2NoZW1hLXN1bW1hcnk.short_desc": {
+          "source": "Load a generated HL7 v2 schema summary",
+          "message": "生成されたHL7 v2スキーマサマリーを読み込み"
+        },
+        "app.SEw3djI.action.cmVhZA.desc": {
+          "source": "Read HL7 v2 message data from a file and return one typed record per segment.",
+          "message": "ファイルからHL7 v2メッセージデータを読み取り、セグメントごとに1つの型付きレコードを返します。"
+        },
+        "app.SEw3djI.action.cmVhZA.display_name": {
+          "source": "Read HL7 v2 Message",
+          "message": "HL7 v2メッセージの読み取り"
+        },
+        "app.SEw3djI.action.cmVhZA.option.cGF0aA.desc": {
+          "source": "Path to a file containing one HL7 v2 message.",
+          "message": "1つのHL7 v2メッセージを含むファイルへのパス。"
+        },
+        "app.SEw3djI.action.cmVhZA.option.cGF0aA.display_name": {
+          "source": "File Path",
+          "message": "ファイルパス"
+        },
+        "app.SEw3djI.action.cmVhZA.option.cGF0aA.short_desc": {
+          "source": "Path to the HL7 v2 message file",
+          "message": "HL7 v2メッセージファイルへのパス"
+        },
+        "app.SEw3djI.action.cmVhZA.short_desc": {
+          "source": "Read HL7 v2 message data from a file",
+          "message": "ファイルからHL7 v2メッセージデータを読み取り"
+        },
+        "app.SEw3djI.action.cmVhZC1kYXRh.desc": {
+          "source": "Read HL7 v2 message data from an inline string and return one typed record per segment.",
+          "message": "インライン文字列からHL7 v2メッセージデータを読み取り、セグメントごとに1つの型付きレコードを返します。"
+        },
+        "app.SEw3djI.action.cmVhZC1kYXRh.display_name": {
+          "source": "Read HL7 v2 Inline Data",
+          "message": "HL7 v2インラインデータの読み取り"
+        },
+        "app.SEw3djI.action.cmVhZC1kYXRh.option.ZGF0YQ.desc": {
+          "source": "Inline HL7 v2 message data. Use this option when the message is already in memory.",
+          "message": "インラインHL7 v2メッセージデータ。メッセージがすでにメモリ内にある場合にこのオプションを使用します。"
+        },
+        "app.SEw3djI.action.cmVhZC1kYXRh.option.ZGF0YQ.display_name": {
+          "source": "HL7 v2 Data",
+          "message": "HL7 v2データ"
+        },
+        "app.SEw3djI.action.cmVhZC1kYXRh.option.ZGF0YQ.short_desc": {
+          "source": "HL7 v2 message data as a string",
+          "message": "文字列としてのHL7 v2メッセージデータ"
+        },
+        "app.SEw3djI.action.cmVhZC1kYXRh.short_desc": {
+          "source": "Read HL7 v2 message data from an inline string",
+          "message": "インライン文字列からHL7 v2メッセージデータを読み取り"
+        },
+        "app.SEw3djI.action.d3JpdGU.desc": {
+          "source": "Write HL7 v2 message data to a file from parsed segments or simple segment records. The response includes the output `path`, serialized character count, and segment count.",
+          "message": "パースされたセグメントまたはシンプルなセグメントレコードからHL7 v2メッセージデータをファイルに書き込みます。レスポンスには出力`path`、シリアライズされた文字数、セグメント数が含まれます。"
+        },
+        "app.SEw3djI.action.d3JpdGU.display_name": {
+          "source": "Write HL7 v2 Message",
+          "message": "HL7 v2メッセージの書き込み"
+        },
+        "app.SEw3djI.action.d3JpdGU.option.cGF0aA.desc": {
+          "source": "Path to write the serialized HL7 v2 message.",
+          "message": "シリアライズされたHL7 v2メッセージを書き込むパス。"
+        },
+        "app.SEw3djI.action.d3JpdGU.option.cGF0aA.display_name": {
+          "source": "File Path",
+          "message": "ファイルパス"
+        },
+        "app.SEw3djI.action.d3JpdGU.option.cGF0aA.short_desc": {
+          "source": "Path to the HL7 v2 output file",
+          "message": "HL7 v2出力ファイルへのパス"
+        },
+        "app.SEw3djI.action.d3JpdGU.short_desc": {
+          "source": "Write HL7 v2 message data to a file",
+          "message": "HL7 v2 メッセージ データをファイルに書き込みます"
+        },
+        "app.SEw3djI.desc": {
+          "source": "Read and write [HL7 v2](https://www.hl7.org/implement/standards/product_brief.cfm?product_id=185) delimited healthcare messages for integration and transformation workflows.\n\n**Capabilities**:\n- Preserve message structure and custom `Z` segments without requiring a fixed schema\n- Read custom delimiters from `MSH` and handle HL7 escape sequences\n- Expose one parsed segment per record through the DataProvider API\n- Serialize parsed messages or simple segment records back to HL7 v2 text",
+          "message": "統合および変換ワークフロー向けに、区切り文字形式の [HL7 v2](https://www.hl7.org/implement/standards/product_brief.cfm?product_id=185) 医療メッセージを読み書きします。\n\n**機能**:\n- 固定スキーマを必要とせずにメッセージ構造とカスタム `Z` セグメントを保持\n- `MSH` からカスタム区切り文字を読み取り、HL7 エスケープ シーケンスを処理\n- DataProvider API を介してレコードごとに 1 つの解析済みセグメントを公開\n- 解析されたメッセージまたは単純なセグメント レコードを HL7 v2 テキストにシリアル化"
+        },
+        "app.SEw3djI.display_name": {
+          "source": "HL7 v2 Messages",
+          "message": "HL7 v2 メッセージ"
+        },
+        "app.SEw3djI.short_desc": {
+          "source": "Read and write HL7 v2 delimited messages",
+          "message": "HL7 v2 区切りメッセージの読み取りと書き込み"
+        }
+      }
+    }
+  }
+}

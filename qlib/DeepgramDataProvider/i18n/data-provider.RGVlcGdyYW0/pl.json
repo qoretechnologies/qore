@@ -1,0 +1,637 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "pl": {
+      "messages": {
+        "app.RGVlcGdyYW0.action.bWFrZS1hcGktY2FsbA.desc": {
+          "source": "Make a custom HTTP / REST API call to **Deepgram** using the configured connection's authentication.\n\nSpecify the HTTP method, the URI path (relative to the connection's API base URL), optional query parameters, headers, and request body. The response is returned as a hash containing the status code, response headers, and response body.\n\nUse this action for endpoints that are not yet exposed as first-class actions on this app.",
+          "message": "Wykonaj niestandardowe wywołanie HTTP / REST API do **Deepgram** przy użyciu uwierzytelniania skonfigurowanego połączenia.\n\nOkreśl metodę HTTP, ścieżkę URI (względną wobec bazowego adresu URL API połączenia), opcjonalne parametry zapytania, nagłówki i treść żądania. Odpowiedź jest zwracana jako hash zawierający kod statusu, nagłówki odpowiedzi i treść odpowiedzi.\n\nUżywaj tej akcji dla punktów końcowych, które nie są jeszcze udostępnione jako natywne akcje w tej aplikacji."
+        },
+        "app.RGVlcGdyYW0.action.bWFrZS1hcGktY2FsbA.display_name": {
+          "source": "Make an API call",
+          "message": "Wykonaj wywołanie API"
+        },
+        "app.RGVlcGdyYW0.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.desc": {
+          "source": "The request body. The effective type depends on `body_type`: JSON/form/YAML expect a hash, XML/text expect a string, multipart expects a file structure, binary expects raw bytes.",
+          "message": "Ciało żądania. Rzeczywisty typ zależy od `body_type`: JSON/form/YAML oczekują hasza, XML/text oczekują ciągu znaków, multipart oczekuje struktury pliku, binary oczekuje surowych bajtów."
+        },
+        "app.RGVlcGdyYW0.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.display_name": {
+          "source": "Body",
+          "message": "Treść"
+        },
+        "app.RGVlcGdyYW0.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.short_desc": {
+          "source": "The request body",
+          "message": "Ciało żądania"
+        },
+        "app.RGVlcGdyYW0.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.desc": {
+          "source": "Upload a file using `multipart/form-data`. The body must be a @ref DataProvider::FileDataType \"FileDataType\" structure (filename + content + mime_type). The framework builds the multipart envelope and sets the boundary header.",
+          "message": "Przesyłanie pliku za pomocą `multipart/form-data`. Ciało żądania musi być strukturą @ref DataProvider::FileDataType \"FileDataType\" (filename + content + mime_type). Szablon buduje kopertę multipart i ustawia nagłówek boundary."
+        },
+        "app.RGVlcGdyYW0.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.display_name": {
+          "source": "Multipart Form",
+          "message": "Formularz Multipart"
+        },
+        "app.RGVlcGdyYW0.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.short_desc": {
+          "source": "Upload a file using multipart/form-data",
+          "message": "Przesyłanie pliku za pomocą multipart/form-data"
+        },
+        "app.RGVlcGdyYW0.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.desc": {
+          "source": "Pass the body to the REST client unchanged; the client decides serialization based on its configured `data` option and the value type",
+          "message": "Przekaż ciało żądania do klienta REST bez zmian; klient decyduje o serializacji na podstawie skonfigurowanej opcji `data` i typu wartości"
+        },
+        "app.RGVlcGdyYW0.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.display_name": {
+          "source": "Auto",
+          "message": "Auto"
+        },
+        "app.RGVlcGdyYW0.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.short_desc": {
+          "source": "Pass-through; use connection serialization and let the REST client decide",
+          "message": "Przekazywanie bez zmian; użyj serializacji połączenia i pozwól klientowi REST zadecydować"
+        },
+        "app.RGVlcGdyYW0.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.desc": {
+          "source": "Send the body as raw bytes. The body must be a binary value. Sets `Content-Type: application/octet-stream` unless overridden by `hdr`.",
+          "message": "Wyślij ciało jako surowe bajty. Ciało musi być wartością binarną. Ustawia `Content-Type: application/octet-stream`, chyba że zostanie nadpisane przez `hdr`."
+        },
+        "app.RGVlcGdyYW0.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.display_name": {
+          "source": "Raw Binary",
+          "message": "Surowe dane binarne"
+        },
+        "app.RGVlcGdyYW0.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.short_desc": {
+          "source": "Send body as raw bytes",
+          "message": "Wyślij ciało jako surowe bajty"
+        },
+        "app.RGVlcGdyYW0.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.desc": {
+          "source": "Serialize a hash of form fields as `application/x-www-form-urlencoded`. The body must be a hash whose values are scalars (strings/numbers/booleans).",
+          "message": "Serializuj hasz pól formularza jako `application/x-www-form-urlencoded`. Ciało musi być haszem, którego wartości są skalarami (ciągi znaków/liczby/wartości logiczne)."
+        },
+        "app.RGVlcGdyYW0.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.display_name": {
+          "source": "Form (URL-encoded)",
+          "message": "Formularz (zakodowany w URL)"
+        },
+        "app.RGVlcGdyYW0.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.short_desc": {
+          "source": "Serialize body as application/x-www-form-urlencoded form fields",
+          "message": "Serializuj ciało jako pola formularza application/x-www-form-urlencoded"
+        },
+        "app.RGVlcGdyYW0.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.desc": {
+          "source": "Serialize the body as JSON; sets `Content-Type: application/json`. The body should be a hash, list, or scalar value.",
+          "message": "Serializuj ciało jako JSON; ustawia `Content-Type: application/json`. Ciało powinno być haszem, listą lub wartością skalarną."
+        },
+        "app.RGVlcGdyYW0.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.display_name": {
+          "source": "JSON",
+          "message": "JSON"
+        },
+        "app.RGVlcGdyYW0.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.short_desc": {
+          "source": "Serialize body as JSON",
+          "message": "Serializuj ciało jako JSON"
+        },
+        "app.RGVlcGdyYW0.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.desc": {
+          "source": "Send the body as plain text. The body must be a string. Sets `Content-Type: text/plain`.",
+          "message": "Wyślij ciało jako zwykły tekst. Ciało musi być ciągiem znaków. Ustawia `Content-Type: text/plain`."
+        },
+        "app.RGVlcGdyYW0.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.display_name": {
+          "source": "Plain Text",
+          "message": "Czysty tekst"
+        },
+        "app.RGVlcGdyYW0.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.short_desc": {
+          "source": "Send body as text/plain",
+          "message": "Wyślij ciało jako text/plain"
+        },
+        "app.RGVlcGdyYW0.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.desc": {
+          "source": "Send the body as XML. If the body is a hash it is serialized to XML; if it is a string it is sent verbatim. Sets `Content-Type: application/xml`.",
+          "message": "Wyślij ciało jako XML. Jeśli ciało jest haszem, jest serializowane do XML; jeśli jest ciągiem znaków, jest wysyłane bez zmian. Ustawia `Content-Type: application/xml`."
+        },
+        "app.RGVlcGdyYW0.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.display_name": {
+          "source": "XML",
+          "message": "XML"
+        },
+        "app.RGVlcGdyYW0.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.short_desc": {
+          "source": "Send body as XML",
+          "message": "Wyślij ciało jako XML"
+        },
+        "app.RGVlcGdyYW0.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.desc": {
+          "source": "Send the body as YAML. If the body is a hash it is serialized to YAML; if it is a string it is sent verbatim. Sets `Content-Type: application/x-yaml`.",
+          "message": "Wyślij ciało jako YAML. Jeśli ciało jest haszem, jest serializowane do YAML; jeśli jest ciągiem znaków, jest wysyłane bez zmian. Ustawia `Content-Type: application/x-yaml`."
+        },
+        "app.RGVlcGdyYW0.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.display_name": {
+          "source": "YAML",
+          "message": "YAML"
+        },
+        "app.RGVlcGdyYW0.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.short_desc": {
+          "source": "Send body as YAML",
+          "message": "Wyślij ciało jako YAML"
+        },
+        "app.RGVlcGdyYW0.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.desc": {
+          "source": "Selects the body serialization mode and the corresponding `Content-Type` header. Changing this field reshapes the `body` editor - selecting JSON exposes a JSON editor, selecting Multipart Form exposes a file picker, and so on.",
+          "message": "Wybiera tryb serializacji ciała i odpowiadający mu nagłówek `Content-Type`. Zmiana tego pola zmienia edytor `body` - wybór JSON udostępnia edytor JSON, wybór Multipart Form udostępnia okno wyboru pliku i tak dalej."
+        },
+        "app.RGVlcGdyYW0.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.display_name": {
+          "source": "Body Type",
+          "message": "Typ ciała"
+        },
+        "app.RGVlcGdyYW0.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.short_desc": {
+          "source": "How the body is serialized and what Content-Type is sent",
+          "message": "Sposób serializacji ciała i wysyłany Content-Type"
+        },
+        "app.RGVlcGdyYW0.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.desc": {
+          "source": "If `True`, non-2xx HTTP responses return as the normal response hash (with the actual status code) instead of raising `REST-RESPONSE-ERROR`. Useful for handling 4xx/5xx as data - e.g. checking whether a resource exists. Overrides the connection's `error_passthru` setting for this call only.",
+          "message": "Jeśli `True`, odpowiedzi HTTP inne niż 2xx są zwracane jako zwykły hasz odpowiedzi (z rzeczywistym kodem stanu) zamiast zgłaszania `REST-RESPONSE-ERROR`. Przydatne do obsługi 4xx/5xx jako danych - np. do sprawdzania, czy zasób istnieje. Nadpisuje ustawienie połączenia `error_passthru` tylko dla tego wywołania."
+        },
+        "app.RGVlcGdyYW0.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.display_name": {
+          "source": "Return Errors as Data",
+          "message": "Zwracaj błędy jako dane"
+        },
+        "app.RGVlcGdyYW0.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.short_desc": {
+          "source": "Return non-2xx responses normally instead of throwing",
+          "message": "Zwracaj odpowiedzi inne niż 2xx normalnie zamiast zgłaszać błąd"
+        },
+        "app.RGVlcGdyYW0.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.desc": {
+          "source": "Optional list of HTTP status codes treated as success. If set and the response status is not in this list, the action throws `REST-STATUS-ERROR`. When unset, the REST client's default behavior applies (typically: 2xx is success, non-2xx throws).",
+          "message": "Opcjonalna lista kodów stanu HTTP traktowanych jako sukces. Jeśli ustawiono, a kod stanu odpowiedzi nie znajduje się na tej liście, akcja zgłasza `REST-STATUS-ERROR`. Gdy pole nie jest ustawione, stosowane jest domyślne zachowanie klienta REST (zwykle: 2xx to sukces, inne niż 2xx zgłaszają błąd)."
+        },
+        "app.RGVlcGdyYW0.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.display_name": {
+          "source": "Expected Status Codes",
+          "message": "Oczekiwane kody stanu"
+        },
+        "app.RGVlcGdyYW0.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.short_desc": {
+          "source": "Response status codes treated as success",
+          "message": "Kody stanu odpowiedzi traktowane jako sukces"
+        },
+        "app.RGVlcGdyYW0.action.bWFrZS1hcGktY2FsbA.option.aGRy.desc": {
+          "source": "Hash of custom headers added to the request. These override any default headers set by `body_type` (e.g. supplying `Content-Type` here wins over the body-type default).",
+          "message": "Hasz niestandardowych nagłówków dodawanych do żądania. Nadpisują one wszelkie domyślne nagłówki ustawione przez `body_type` (np. podanie tutaj `Content-Type` zastępuje domyślną wartość dla typu ciała)."
+        },
+        "app.RGVlcGdyYW0.action.bWFrZS1hcGktY2FsbA.option.aGRy.display_name": {
+          "source": "Custom Headers",
+          "message": "Niestandardowe nagłówki"
+        },
+        "app.RGVlcGdyYW0.action.bWFrZS1hcGktY2FsbA.option.aGRy.short_desc": {
+          "source": "Extra request headers",
+          "message": "Dodatkowe nagłówki żądania"
+        },
+        "app.RGVlcGdyYW0.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.desc": {
+          "source": "If `True`, the response hash includes a `debug` sub-hash containing the request method/URL/headers (with sensitive values redacted), request and response sizes, and round-trip duration. Useful when investigating slow or failing calls. Off by default to keep responses lean.",
+          "message": "Jeśli `True`, hasz odpowiedzi zawiera pod-hasz `debug` zawierający metodę/URL/nagłówki żądania (z zredagowanymi poufnymi wartościami), rozmiary żądania i odpowiedzi oraz czas trwania w obie strony. Przydatne podczas badania wolnych lub nieudanych wywołań. Domyślnie wyłączone, aby odpowiedzi były lekkie."
+        },
+        "app.RGVlcGdyYW0.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.display_name": {
+          "source": "Include Debug Info",
+          "message": "Dołącz informacje diagnostyczne"
+        },
+        "app.RGVlcGdyYW0.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.short_desc": {
+          "source": "Include request/timing/size debug info in the response",
+          "message": "Dołącz informacje diagnostyczne dotyczące żądania/czasu/rozmiaru w odpowiedzi"
+        },
+        "app.RGVlcGdyYW0.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.desc": {
+          "source": "HTTP `OPTIONS`",
+          "message": "HTTP `OPTIONS`"
+        },
+        "app.RGVlcGdyYW0.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.display_name": {
+          "source": "OPTIONS",
+          "message": "OPTIONS"
+        },
+        "app.RGVlcGdyYW0.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.short_desc": {
+          "source": "HTTP OPTIONS",
+          "message": "HTTP OPTIONS"
+        },
+        "app.RGVlcGdyYW0.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.desc": {
+          "source": "HTTP `DELETE`",
+          "message": "HTTP `DELETE`"
+        },
+        "app.RGVlcGdyYW0.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.display_name": {
+          "source": "DELETE",
+          "message": "DELETE"
+        },
+        "app.RGVlcGdyYW0.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.short_desc": {
+          "source": "HTTP DELETE",
+          "message": "HTTP DELETE"
+        },
+        "app.RGVlcGdyYW0.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.desc": {
+          "source": "HTTP `GET`",
+          "message": "HTTP `GET`"
+        },
+        "app.RGVlcGdyYW0.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.display_name": {
+          "source": "GET",
+          "message": "GET"
+        },
+        "app.RGVlcGdyYW0.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.short_desc": {
+          "source": "HTTP GET",
+          "message": "HTTP GET"
+        },
+        "app.RGVlcGdyYW0.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.desc": {
+          "source": "HTTP `HEAD`",
+          "message": "HTTP `HEAD`"
+        },
+        "app.RGVlcGdyYW0.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.display_name": {
+          "source": "HEAD",
+          "message": "HEAD"
+        },
+        "app.RGVlcGdyYW0.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.short_desc": {
+          "source": "HTTP HEAD",
+          "message": "HTTP HEAD"
+        },
+        "app.RGVlcGdyYW0.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.desc": {
+          "source": "HTTP `PATCH`",
+          "message": "HTTP `PATCH`"
+        },
+        "app.RGVlcGdyYW0.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.display_name": {
+          "source": "PATCH",
+          "message": "PATCH"
+        },
+        "app.RGVlcGdyYW0.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.short_desc": {
+          "source": "HTTP PATCH",
+          "message": "HTTP PATCH"
+        },
+        "app.RGVlcGdyYW0.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.desc": {
+          "source": "HTTP `POST`",
+          "message": "HTTP `POST`"
+        },
+        "app.RGVlcGdyYW0.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.display_name": {
+          "source": "POST",
+          "message": "POST"
+        },
+        "app.RGVlcGdyYW0.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.short_desc": {
+          "source": "HTTP POST",
+          "message": "HTTP POST"
+        },
+        "app.RGVlcGdyYW0.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.desc": {
+          "source": "HTTP `PUT`",
+          "message": "HTTP `PUT`"
+        },
+        "app.RGVlcGdyYW0.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.display_name": {
+          "source": "PUT",
+          "message": "PUT"
+        },
+        "app.RGVlcGdyYW0.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.short_desc": {
+          "source": "HTTP PUT",
+          "message": "HTTP PUT"
+        },
+        "app.RGVlcGdyYW0.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.desc": {
+          "source": "HTTP `TRACE`",
+          "message": "HTTP `TRACE`"
+        },
+        "app.RGVlcGdyYW0.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.display_name": {
+          "source": "TRACE",
+          "message": "TRACE"
+        },
+        "app.RGVlcGdyYW0.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.short_desc": {
+          "source": "HTTP TRACE",
+          "message": "HTTP TRACE"
+        },
+        "app.RGVlcGdyYW0.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "Metoda HTTP do użycia w żądaniu"
+        },
+        "app.RGVlcGdyYW0.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.display_name": {
+          "source": "HTTP Method",
+          "message": "Metoda HTTP"
+        },
+        "app.RGVlcGdyYW0.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.short_desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "Metoda HTTP do użycia w żądaniu"
+        },
+        "app.RGVlcGdyYW0.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain `{name}` placeholders that are replaced from `path_vars`. Example: `/users/{id}/comments`.",
+          "message": "Ścieżka URI względna wobec bazowego URL API połączenia. Może zawierać symbole zastępcze `{name}`, które zostaną zastąpione z `path_vars`. Przykład: `/users/{id}/comments`."
+        },
+        "app.RGVlcGdyYW0.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.display_name": {
+          "source": "URI Path",
+          "message": "Ścieżka URI"
+        },
+        "app.RGVlcGdyYW0.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.short_desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain '{name}' placeholders that are replaced from 'path_vars'. Example: '/users/{id}/comments'",
+          "message": "Ścieżka URI względna wobec bazowego adresu URL API połączenia. Może zawierać symbole zastępcze '{name}', które są zastępowane z 'path_vars'. Przykład: '/users/{id}/comments'"
+        },
+        "app.RGVlcGdyYW0.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.desc": {
+          "source": "Hash of values substituted into `{name}` placeholders in the URI path. Example: with `path = /users/{id}` and `path_vars = {id: 123}` the framework sends `/users/123`. Values are URL-encoded.",
+          "message": "Hash wartości podstawianych w miejsce symboli zastępczych `{name}` w ścieżce URI. Przykład: dla `path = /users/{id}` i `path_vars = {id: 123}` framework wysyła `/users/123`. Wartości są kodowane w formacie URL."
+        },
+        "app.RGVlcGdyYW0.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.display_name": {
+          "source": "Path Variables",
+          "message": "Zmienne ścieżki"
+        },
+        "app.RGVlcGdyYW0.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.short_desc": {
+          "source": "Values for {name} placeholders in path",
+          "message": "Wartości dla symboli zastępczych {name} w ścieżce"
+        },
+        "app.RGVlcGdyYW0.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.desc": {
+          "source": "Hash of query string parameters to append to the URI path. Values are URL-encoded; list values are joined with `,`.",
+          "message": "Hash parametrów zapytania do dołączenia do ścieżki URI. Wartości są kodowane w formacie URL; wartości list są łączone za pomocą `,`."
+        },
+        "app.RGVlcGdyYW0.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.display_name": {
+          "source": "Query Arguments",
+          "message": "Argumenty zapytania"
+        },
+        "app.RGVlcGdyYW0.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.short_desc": {
+          "source": "Query string parameters",
+          "message": "Parametry zapytania"
+        },
+        "app.RGVlcGdyYW0.action.bWFrZS1hcGktY2FsbA.short_desc": {
+          "source": "Make a custom API call to Deepgram",
+          "message": "Wykonaj niestandardowe wywołanie API do Deepgram"
+        },
+        "app.RGVlcGdyYW0.action.c3ludGhlc2l6ZS1zcGVlY2g.desc": {
+          "source": "Posts text to Deepgram's `/v1/speak` endpoint and returns the audio bytes in the requested encoding.  Uses the Aura voice model family (12+ voices in English plus other languages).",
+          "message": "Wysyła tekst do punktu końcowego `/v1/speak` usługi Deepgram i zwraca bajty audio w żądanym kodowaniu. Korzysta z rodziny modeli głosowych Aura (ponad 12 głosów w języku angielskim oraz w innych językach)."
+        },
+        "app.RGVlcGdyYW0.action.c3ludGhlc2l6ZS1zcGVlY2g.display_name": {
+          "source": "Synthesize Speech",
+          "message": "Syntezuj mowę"
+        },
+        "app.RGVlcGdyYW0.action.c3ludGhlc2l6ZS1zcGVlY2g.option.Y29udGFpbmVy.allowed-value.c3RyaW5nOm5vbmU.display_name": {
+          "source": "None (raw)",
+          "message": "Brak (surowe)"
+        },
+        "app.RGVlcGdyYW0.action.c3ludGhlc2l6ZS1zcGVlY2g.option.Y29udGFpbmVy.allowed-value.c3RyaW5nOm9nZw.display_name": {
+          "source": "OGG",
+          "message": "OGG"
+        },
+        "app.RGVlcGdyYW0.action.c3ludGhlc2l6ZS1zcGVlY2g.option.Y29udGFpbmVy.allowed-value.c3RyaW5nOndhdg.display_name": {
+          "source": "WAV",
+          "message": "WAV"
+        },
+        "app.RGVlcGdyYW0.action.c3ludGhlc2l6ZS1zcGVlY2g.option.Y29udGFpbmVy.desc": {
+          "source": "Container format wrapping the audio (e.g., `wav`, `ogg`, `none`).  Defaults to a sensible value for each encoding.",
+          "message": "Format kontenera opakowującego dźwięk (np. `wav`, `ogg`, `none`). Domyślnie ustawiona jest odpowiednia wartość dla każdego kodowania."
+        },
+        "app.RGVlcGdyYW0.action.c3ludGhlc2l6ZS1zcGVlY2g.option.Y29udGFpbmVy.display_name": {
+          "source": "Container",
+          "message": "Kontener"
+        },
+        "app.RGVlcGdyYW0.action.c3ludGhlc2l6ZS1zcGVlY2g.option.Y29udGFpbmVy.short_desc": {
+          "source": "Container format wrapping the audio",
+          "message": "Format kontenera opakowującego dźwięk"
+        },
+        "app.RGVlcGdyYW0.action.c3ludGhlc2l6ZS1zcGVlY2g.option.Yml0X3JhdGU.desc": {
+          "source": "Output bit rate in bits/second.  Applies to compressed encodings (`mp3`, `opus`, `aac`).  Typical values: `32000`, `48000`, `64000`, `128000`.",
+          "message": "Wyjściowa przepływność w bitach na sekundę. Dotyczy skompresowanych kodowań (`mp3`, `opus`, `aac`). Typowe wartości: `32000`, `48000`, `64000`, `128000`."
+        },
+        "app.RGVlcGdyYW0.action.c3ludGhlc2l6ZS1zcGVlY2g.option.Yml0X3JhdGU.display_name": {
+          "source": "Bit Rate",
+          "message": "Przepływność bitowa"
+        },
+        "app.RGVlcGdyYW0.action.c3ludGhlc2l6ZS1zcGVlY2g.option.Yml0X3JhdGU.short_desc": {
+          "source": "Output bit rate (for compressed encodings)",
+          "message": "Wyjściowa przepływność bitowa (dla skompresowanych kodowań)"
+        },
+        "app.RGVlcGdyYW0.action.c3ludGhlc2l6ZS1zcGVlY2g.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOm11bGF3.display_name": {
+          "source": "Mu-law",
+          "message": "Mu-law"
+        },
+        "app.RGVlcGdyYW0.action.c3ludGhlc2l6ZS1zcGVlY2g.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOm1wMw.display_name": {
+          "source": "MP3",
+          "message": "MP3"
+        },
+        "app.RGVlcGdyYW0.action.c3ludGhlc2l6ZS1zcGVlY2g.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOm9wdXM.display_name": {
+          "source": "Opus",
+          "message": "Opus"
+        },
+        "app.RGVlcGdyYW0.action.c3ludGhlc2l6ZS1zcGVlY2g.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOmFhYw.display_name": {
+          "source": "AAC",
+          "message": "AAC"
+        },
+        "app.RGVlcGdyYW0.action.c3ludGhlc2l6ZS1zcGVlY2g.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOmFsYXc.display_name": {
+          "source": "A-law",
+          "message": "A-law"
+        },
+        "app.RGVlcGdyYW0.action.c3ludGhlc2l6ZS1zcGVlY2g.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOmZsYWM.display_name": {
+          "source": "FLAC",
+          "message": "FLAC"
+        },
+        "app.RGVlcGdyYW0.action.c3ludGhlc2l6ZS1zcGVlY2g.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOmxpbmVhcjE2.display_name": {
+          "source": "Linear 16 (PCM)",
+          "message": "Linear 16 (PCM)"
+        },
+        "app.RGVlcGdyYW0.action.c3ludGhlc2l6ZS1zcGVlY2g.option.ZW5jb2Rpbmc.desc": {
+          "source": "Output audio encoding.  `mp3` (default), `linear16` (16-bit PCM), `flac`, `mulaw`, `alaw`, `opus`, or `aac`.",
+          "message": "Kodowanie wyjściowego dźwięku. `mp3` (domyślne), `linear16` (16-bit PCM), `flac`, `mulaw`, `alaw`, `opus` lub `aac`."
+        },
+        "app.RGVlcGdyYW0.action.c3ludGhlc2l6ZS1zcGVlY2g.option.ZW5jb2Rpbmc.display_name": {
+          "source": "Audio Encoding",
+          "message": "Kodowanie dźwięku"
+        },
+        "app.RGVlcGdyYW0.action.c3ludGhlc2l6ZS1zcGVlY2g.option.ZW5jb2Rpbmc.short_desc": {
+          "source": "Output audio encoding",
+          "message": "Kodowanie wyjściowego dźwięku"
+        },
+        "app.RGVlcGdyYW0.action.c3ludGhlc2l6ZS1zcGVlY2g.option.bW9kZWw.desc": {
+          "source": "The Deepgram TTS voice model — e.g. `aura-asteria-en` (female, English), `aura-luna-en`, `aura-stella-en`, `aura-athena-en`, `aura-hera-en`, `aura-orion-en` (male), `aura-arcas-en`, `aura-perseus-en`, `aura-angus-en` (Irish English), `aura-orpheus-en`, `aura-helios-en`, `aura-zeus-en`.",
+          "message": "Model głosu Deepgram TTS — np. `aura-asteria-en` (żeński, angielski), `aura-luna-en`, `aura-stella-en`, `aura-athena-en`, `aura-hera-en`, `aura-orion-en` (męski), `aura-arcas-en`, `aura-perseus-en`, `aura-angus-en` (irlandzki angielski), `aura-orpheus-en`, `aura-helios-en`, `aura-zeus-en`."
+        },
+        "app.RGVlcGdyYW0.action.c3ludGhlc2l6ZS1zcGVlY2g.option.bW9kZWw.display_name": {
+          "source": "Voice Model",
+          "message": "Model głosu"
+        },
+        "app.RGVlcGdyYW0.action.c3ludGhlc2l6ZS1zcGVlY2g.option.bW9kZWw.short_desc": {
+          "source": "Deepgram TTS voice model",
+          "message": "Model głosu Deepgram TTS"
+        },
+        "app.RGVlcGdyYW0.action.c3ludGhlc2l6ZS1zcGVlY2g.option.c2FtcGxlX3JhdGU.desc": {
+          "source": "Output sample rate in Hz.  Valid values depend on the selected encoding — e.g. `8000`, `16000`, `24000`, `32000`, `48000` for linear16.",
+          "message": "Wyjściowa częstotliwość próbkowania w Hz. Prawidłowe wartości zależą od wybranego kodowania — np. `8000`, `16000`, `24000`, `32000`, `48000` dla linear16."
+        },
+        "app.RGVlcGdyYW0.action.c3ludGhlc2l6ZS1zcGVlY2g.option.c2FtcGxlX3JhdGU.display_name": {
+          "source": "Sample Rate",
+          "message": "Częstotliwość próbkowania"
+        },
+        "app.RGVlcGdyYW0.action.c3ludGhlc2l6ZS1zcGVlY2g.option.c2FtcGxlX3JhdGU.short_desc": {
+          "source": "Output sample rate in Hz (encoding-specific)",
+          "message": "Wyjściowa częstotliwość próbkowania w Hz (zależna od kodowania)"
+        },
+        "app.RGVlcGdyYW0.action.c3ludGhlc2l6ZS1zcGVlY2g.option.dGV4dA.desc": {
+          "source": "The text to synthesize into speech.  Maximum length depends on the model — typically up to ~2000 characters per request.",
+          "message": "Tekst do zsyntetyzowania na mowę. Maksymalna długość zależy od modelu — zazwyczaj do ok. 2000 znaków na żądanie."
+        },
+        "app.RGVlcGdyYW0.action.c3ludGhlc2l6ZS1zcGVlY2g.option.dGV4dA.display_name": {
+          "source": "Text",
+          "message": "Tekst"
+        },
+        "app.RGVlcGdyYW0.action.c3ludGhlc2l6ZS1zcGVlY2g.option.dGV4dA.short_desc": {
+          "source": "Text to synthesize",
+          "message": "Tekst do syntezy"
+        },
+        "app.RGVlcGdyYW0.action.c3ludGhlc2l6ZS1zcGVlY2g.short_desc": {
+          "source": "Synthesize speech from text via Deepgram TTS (Aura models)",
+          "message": "Syntetyzuj mowę z tekstu za pomocą Deepgram TTS (modele Aura)"
+        },
+        "app.RGVlcGdyYW0.action.dHJhbnNjcmliZS1maWxl.desc": {
+          "source": "Submits a public audio URL to Deepgram's `/v1/listen` endpoint and returns the JSON transcript.  Supports the Nova model family with smart formatting, diarization, summarization, and language detection.\n\n**Note**: this action submits via URL only.  For raw-audio uploads and realtime WebSocket streaming, use @ref DeepgramRestClient::DeepgramRestClientIo \"DeepgramRestClientIo\" directly.",
+          "message": "Przesyła publiczny adres URL audio do punktu końcowego `/v1/listen` usługi Deepgram i zwraca transkrypcję JSON. Obsługuje rodzinę modeli Nova z inteligentnym formatowaniem, diaryzacją, podsumowywaniem i wykrywaniem języka.\n\n**Uwaga**: to działanie przesyła dane tylko za pośrednictwem adresu URL. W przypadku przesyłania surowego dźwięku i strumieniowania WebSocket w czasie rzeczywistym użyj bezpośrednio @ref DeepgramRestClient::DeepgramRestClientIo \"DeepgramRestClientIo\"."
+        },
+        "app.RGVlcGdyYW0.action.dHJhbnNjcmliZS1maWxl.display_name": {
+          "source": "Transcribe File",
+          "message": "Transkrybuj plik"
+        },
+        "app.RGVlcGdyYW0.action.dHJhbnNjcmliZS1maWxl.option.Y2FsbGJhY2s.desc": {
+          "source": "When provided, Deepgram returns immediately and POSTs the final transcript to this URL when ready.  Use for long files.",
+          "message": "Po podaniu Deepgram odpowiada natychmiast i wysyła gotową transkrypcję metodą POST pod ten adres URL. Używane w przypadku długich plików."
+        },
+        "app.RGVlcGdyYW0.action.dHJhbnNjcmliZS1maWxl.option.Y2FsbGJhY2s.display_name": {
+          "source": "Callback URL",
+          "message": "Adres URL wywołania zwrotnego"
+        },
+        "app.RGVlcGdyYW0.action.dHJhbnNjcmliZS1maWxl.option.Y2FsbGJhY2s.short_desc": {
+          "source": "Webhook URL for async transcript delivery",
+          "message": "Adres URL webhooka do asynchronicznego dostarczania transkrypcji"
+        },
+        "app.RGVlcGdyYW0.action.dHJhbnNjcmliZS1maWxl.option.ZGV0ZWN0X2xhbmd1YWdl.desc": {
+          "source": "When `True`, ignores the `language` parameter and detects the language automatically.",
+          "message": "Gdy `True`, ignoruje parametr `language` i automatycznie wykrywa język."
+        },
+        "app.RGVlcGdyYW0.action.dHJhbnNjcmliZS1maWxl.option.ZGV0ZWN0X2xhbmd1YWdl.display_name": {
+          "source": "Detect Language",
+          "message": "Wykryj język"
+        },
+        "app.RGVlcGdyYW0.action.dHJhbnNjcmliZS1maWxl.option.ZGV0ZWN0X2xhbmd1YWdl.short_desc": {
+          "source": "Auto-detect the spoken language",
+          "message": "Automatycznie wykrywaj język mówiony"
+        },
+        "app.RGVlcGdyYW0.action.dHJhbnNjcmliZS1maWxl.option.ZGlhcml6ZQ.desc": {
+          "source": "When `True`, attempts speaker diarization — labels segments with `speaker: 0`, `speaker: 1`, etc.",
+          "message": "Gdy `True`, podejmuje próbę diaryzacji mówców — oznacza segmenty jako `speaker: 0`, `speaker: 1` itp."
+        },
+        "app.RGVlcGdyYW0.action.dHJhbnNjcmliZS1maWxl.option.ZGlhcml6ZQ.display_name": {
+          "source": "Diarize",
+          "message": "Diaryzacja"
+        },
+        "app.RGVlcGdyYW0.action.dHJhbnNjcmliZS1maWxl.option.ZGlhcml6ZQ.short_desc": {
+          "source": "Identify distinct speakers in the audio",
+          "message": "Rozpoznaj poszczególnych mówców w nagraniu audio"
+        },
+        "app.RGVlcGdyYW0.action.dHJhbnNjcmliZS1maWxl.option.a2V5d29yZHM.desc": {
+          "source": "List of keywords to boost during recognition.  Each entry may also include a `:<intensity>` suffix (e.g., `Qore:2`).",
+          "message": "Lista słów kluczowych do wzmocnienia podczas rozpoznawania. Każdy wpis może również zawierać sufiks `:<intensity>` (np. `Qore:2`)."
+        },
+        "app.RGVlcGdyYW0.action.dHJhbnNjcmliZS1maWxl.option.a2V5d29yZHM.display_name": {
+          "source": "Keywords",
+          "message": "Słowa kluczowe"
+        },
+        "app.RGVlcGdyYW0.action.dHJhbnNjcmliZS1maWxl.option.a2V5d29yZHM.short_desc": {
+          "source": "Keywords to boost during recognition (list of strings)",
+          "message": "Słowa kluczowe do wzmocnienia podczas rozpoznawania (lista ciągów znaków)"
+        },
+        "app.RGVlcGdyYW0.action.dHJhbnNjcmliZS1maWxl.option.bGFuZ3VhZ2U.desc": {
+          "source": "BCP-47 language code.  Pass `multi` to enable Nova-3's multilingual mode.  Default is `en` (English).",
+          "message": "Kod języka BCP-47. Przekaż `multi`, aby włączyć tryb wielojęzyczny Nova-3. Wartość domyślna to `en` (angielski)."
+        },
+        "app.RGVlcGdyYW0.action.dHJhbnNjcmliZS1maWxl.option.bGFuZ3VhZ2U.display_name": {
+          "source": "Language",
+          "message": "Język"
+        },
+        "app.RGVlcGdyYW0.action.dHJhbnNjcmliZS1maWxl.option.bGFuZ3VhZ2U.short_desc": {
+          "source": "BCP-47 language code (e.g., `en-US`, `de`, `fr`)",
+          "message": "Kod języka BCP-47 (np. `en-US`, `de`, `fr`)"
+        },
+        "app.RGVlcGdyYW0.action.dHJhbnNjcmliZS1maWxl.option.bW9kZWw.allowed-value.c3RyaW5nOm5vdmE.display_name": {
+          "source": "Nova",
+          "message": "Nova"
+        },
+        "app.RGVlcGdyYW0.action.dHJhbnNjcmliZS1maWxl.option.bW9kZWw.allowed-value.c3RyaW5nOm5vdmEtMg.display_name": {
+          "source": "Nova 2",
+          "message": "Nova 2"
+        },
+        "app.RGVlcGdyYW0.action.dHJhbnNjcmliZS1maWxl.option.bW9kZWw.allowed-value.c3RyaW5nOm5vdmEtMw.display_name": {
+          "source": "Nova 3 (latest)",
+          "message": "Nova 3 (najnowszy)"
+        },
+        "app.RGVlcGdyYW0.action.dHJhbnNjcmliZS1maWxl.option.bW9kZWw.allowed-value.c3RyaW5nOmJhc2U.display_name": {
+          "source": "Base",
+          "message": "Baza"
+        },
+        "app.RGVlcGdyYW0.action.dHJhbnNjcmliZS1maWxl.option.bW9kZWw.allowed-value.c3RyaW5nOmVuaGFuY2Vk.display_name": {
+          "source": "Enhanced",
+          "message": "Ulepszony"
+        },
+        "app.RGVlcGdyYW0.action.dHJhbnNjcmliZS1maWxl.option.bW9kZWw.desc": {
+          "source": "The Deepgram ASR model — one of `nova-3` (latest), `nova-2`, `nova`, `enhanced`, or `base`.  `nova-3` offers the best accuracy for general-purpose transcription.",
+          "message": "Model ASR Deepgram — jeden z: `nova-3` (najnowszy), `nova-2`, `nova`, `enhanced` lub `base`. `nova-3` oferuje najlepszą dokładność w transkrypcji ogólnego przeznaczenia."
+        },
+        "app.RGVlcGdyYW0.action.dHJhbnNjcmliZS1maWxl.option.bW9kZWw.display_name": {
+          "source": "Model",
+          "message": "Model"
+        },
+        "app.RGVlcGdyYW0.action.dHJhbnNjcmliZS1maWxl.option.bW9kZWw.short_desc": {
+          "source": "Deepgram ASR model name",
+          "message": "Nazwa modelu ASR Deepgram"
+        },
+        "app.RGVlcGdyYW0.action.dHJhbnNjcmliZS1maWxl.option.c21hcnRfZm9ybWF0.desc": {
+          "source": "When `True`, applies smart formatting (punctuation, capitalization, dates, currency, etc.) to the transcript.",
+          "message": "Gdy `True`, stosuje inteligentne formatowanie (interpunkcja, wielkość liter, daty, waluty itp.) do transkrypcji."
+        },
+        "app.RGVlcGdyYW0.action.dHJhbnNjcmliZS1maWxl.option.c21hcnRfZm9ybWF0.display_name": {
+          "source": "Smart Format",
+          "message": "Inteligentne formatowanie"
+        },
+        "app.RGVlcGdyYW0.action.dHJhbnNjcmliZS1maWxl.option.c21hcnRfZm9ybWF0.short_desc": {
+          "source": "Apply punctuation, capitalization, and number formatting",
+          "message": "Zastosuj interpunkcję, wielkość liter i formatowanie liczb"
+        },
+        "app.RGVlcGdyYW0.action.dHJhbnNjcmliZS1maWxl.option.c3VtbWFyaXpl.allowed-value.c3RyaW5nOnYy.display_name": {
+          "source": "v2 (abstractive)",
+          "message": "v2 (abstrakcyjne)"
+        },
+        "app.RGVlcGdyYW0.action.dHJhbnNjcmliZS1maWxl.option.c3VtbWFyaXpl.desc": {
+          "source": "When set to `v2`, returns an abstractive summary of the transcript in addition to the words.",
+          "message": "Po ustawieniu na `v2` zwraca podsumowanie abstrakcyjne transkrypcji oprócz słów."
+        },
+        "app.RGVlcGdyYW0.action.dHJhbnNjcmliZS1maWxl.option.c3VtbWFyaXpl.display_name": {
+          "source": "Summarize",
+          "message": "Podsumuj"
+        },
+        "app.RGVlcGdyYW0.action.dHJhbnNjcmliZS1maWxl.option.c3VtbWFyaXpl.short_desc": {
+          "source": "Return a summary of the transcript",
+          "message": "Zwróć podsumowanie transkrypcji"
+        },
+        "app.RGVlcGdyYW0.action.dHJhbnNjcmliZS1maWxl.option.cHVuY3R1YXRl.desc": {
+          "source": "Add punctuation to the transcript.  Implied by `smart_format`.",
+          "message": "Dodaj interpunkcję do transkrypcji. Wynika z `smart_format`."
+        },
+        "app.RGVlcGdyYW0.action.dHJhbnNjcmliZS1maWxl.option.cHVuY3R1YXRl.display_name": {
+          "source": "Punctuate",
+          "message": "Interpunkcja"
+        },
+        "app.RGVlcGdyYW0.action.dHJhbnNjcmliZS1maWxl.option.cHVuY3R1YXRl.short_desc": {
+          "source": "Add punctuation to the transcript",
+          "message": "Dodaj interpunkcję do transkrypcji"
+        },
+        "app.RGVlcGdyYW0.action.dHJhbnNjcmliZS1maWxl.option.dXJs.desc": {
+          "source": "Public URL of the audio file to transcribe.  Deepgram fetches the file from this URL; it must be reachable from the public internet.",
+          "message": "Publiczny adres URL pliku audio do transkrypcji. Deepgram pobiera plik z tego adresu URL; musi być on dostępny z publicznego internetu."
+        },
+        "app.RGVlcGdyYW0.action.dHJhbnNjcmliZS1maWxl.option.dXJs.display_name": {
+          "source": "Audio URL",
+          "message": "Adres URL audio"
+        },
+        "app.RGVlcGdyYW0.action.dHJhbnNjcmliZS1maWxl.option.dXJs.short_desc": {
+          "source": "Public URL of the audio file to transcribe",
+          "message": "Publiczny adres URL pliku audio do transkrypcji"
+        },
+        "app.RGVlcGdyYW0.action.dHJhbnNjcmliZS1maWxl.option.dXR0ZXJhbmNlcw.desc": {
+          "source": "When `True`, groups words into utterances based on natural speech pauses.",
+          "message": "Gdy `True`, grupuje słowa w wypowiedzi na podstawie naturalnych pauz w mowie."
+        },
+        "app.RGVlcGdyYW0.action.dHJhbnNjcmliZS1maWxl.option.dXR0ZXJhbmNlcw.display_name": {
+          "source": "Utterances",
+          "message": "Wypowiedzi"
+        },
+        "app.RGVlcGdyYW0.action.dHJhbnNjcmliZS1maWxl.option.dXR0ZXJhbmNlcw.short_desc": {
+          "source": "Group transcript words into utterances",
+          "message": "Grupuj słowa transkrypcji w wypowiedzi"
+        },
+        "app.RGVlcGdyYW0.action.dHJhbnNjcmliZS1maWxl.short_desc": {
+          "source": "Transcribe an audio file by URL via Deepgram ASR",
+          "message": "Transkrybuj plik audio z adresu URL za pomocą Deepgram ASR"
+        },
+        "app.RGVlcGdyYW0.desc": {
+          "source": "Provides access to [Deepgram](https://deepgram.com) — a speech AI platform offering automatic speech recognition (ASR) and text-to-speech (TTS) APIs.\n\n**Common use cases**:\n- **Transcription**: convert recorded audio (PSTN calls, meeting recordings, podcasts) into searchable text with the Nova model family\n- **Voice synthesis**: generate natural-sounding speech from text via the Aura voice models — for voice agents, IVR, and accessibility\n- **Conversational AI**: pair Deepgram TTS with any LLM to build end-to-end voice conversation pipelines",
+          "message": "Zapewnia dostęp do [Deepgram](https://deepgram.com) — platformy speech AI oferującej interfejsy API do automatycznego rozpoznawania mowy (ASR) oraz syntezy mowy (TTS).\n\n**Typowe zastosowania**:\n- **Transkrypcja**: konwersja nagranego dźwięku (połączenia PSTN, nagrania spotkań, podcasty) na tekst z możliwością wyszukiwania za pomocą rodziny modeli Nova\n- **Synteza głosu**: generowanie naturalnie brzmiącej mowy z tekstu za pomocą modeli głosowych Aura — dla agentów głosowych, systemów IVR i ułatwień dostępu\n- **Konwersacyjna sztuczna inteligencja**: połączenie Deepgram TTS z dowolnym modelem LLM w celu tworzenia kompleksowych potoków konwersacji głosowej"
+        },
+        "app.RGVlcGdyYW0.display_name": {
+          "source": "Deepgram",
+          "message": "Deepgram"
+        },
+        "app.RGVlcGdyYW0.short_desc": {
+          "source": "Deepgram speech (ASR + TTS) services",
+          "message": "Usługi głosowe Deepgram (ASR + TTS)"
+        }
+      }
+    }
+  }
+}

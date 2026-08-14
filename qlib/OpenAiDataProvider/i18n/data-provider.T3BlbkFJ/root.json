@@ -1396,8 +1396,8 @@
           "message": "A set of resources that are used by the thread's tools"
         },
         "app.T3BlbkFJ.action.Y3JlYXRlLXRocmVhZA.option.dG9vbF9yZXNvdXJjZXM.desc": {
-          "source": "A set of resources that are used by the thread's tools. The resources are specific to the type of tool. For example, the code_interpreter` tool requires a list of file IDs, while the `file_search` tool requires a list of vector store IDs",
-          "message": "A set of resources that are used by the thread's tools. The resources are specific to the type of tool. For example, the code_interpreter` tool requires a list of file IDs, while the `file_search` tool requires a list of vector store IDs"
+          "source": "A set of resources that are used by the thread's tools. The resources are specific to the type of tool. For example, the `code_interpreter` tool requires a list of file IDs, while the `file_search` tool requires a list of vector store IDs",
+          "message": "A set of resources that are used by the thread's tools. The resources are specific to the type of tool. For example, the `code_interpreter` tool requires a list of file IDs, while the `file_search` tool requires a list of vector store IDs"
         },
         "app.T3BlbkFJ.action.Y3JlYXRlLXRocmVhZA.option.bWV0YWRhdGE.display_name": {
           "source": "Metadata",
@@ -1456,8 +1456,8 @@
           "message": "A set of resources that are used by the thread's tools"
         },
         "app.T3BlbkFJ.action.dXBkYXRlLXRocmVhZA.option.dG9vbF9yZXNvdXJjZXM.desc": {
-          "source": "A set of resources that are used by the thread's tools. The resources are specific to the type of tool. For example, the code_interpreter` tool requires a list of file IDs, while the `file_search` tool requires a list of vector store IDs",
-          "message": "A set of resources that are used by the thread's tools. The resources are specific to the type of tool. For example, the code_interpreter` tool requires a list of file IDs, while the `file_search` tool requires a list of vector store IDs"
+          "source": "A set of resources that are used by the thread's tools. The resources are specific to the type of tool. For example, the `code_interpreter` tool requires a list of file IDs, while the `file_search` tool requires a list of vector store IDs",
+          "message": "A set of resources that are used by the thread's tools. The resources are specific to the type of tool. For example, the `code_interpreter` tool requires a list of file IDs, while the `file_search` tool requires a list of vector store IDs"
         },
         "app.T3BlbkFJ.action.dXBkYXRlLXRocmVhZA.option.bWV0YWRhdGE.display_name": {
           "source": "Metadata",

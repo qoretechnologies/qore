@@ -1,0 +1,2125 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "uk": {
+      "messages": {
+        "app.R29yZ2lhcw.action.Y3JlYXRlLW1lc3NhZ2U.desc": {
+          "source": "Add a new message (reply or internal note) to a Gorgias ticket",
+          "message": "Додати нове повідомлення (відповідь або внутрішню примітку) до тікета Gorgias"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLW1lc3NhZ2U.display_name": {
+          "source": "Create a Message",
+          "message": "Створити повідомлення"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLW1lc3NhZ2U.option.Y2hhbm5lbA.allowed-value.c3RyaW5nOmFwaQ.display_name": {
+          "source": "API",
+          "message": "API"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLW1lc3NhZ2U.option.Y2hhbm5lbA.allowed-value.c3RyaW5nOmNoYXQ.display_name": {
+          "source": "Chat",
+          "message": "Чат"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLW1lc3NhZ2U.option.Y2hhbm5lbA.allowed-value.c3RyaW5nOmNvbnRhY3RfZm9ybQ.display_name": {
+          "source": "Contact Form",
+          "message": "Контактна форма"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLW1lc3NhZ2U.option.Y2hhbm5lbA.allowed-value.c3RyaW5nOmVtYWls.display_name": {
+          "source": "Email",
+          "message": "Електронна пошта"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLW1lc3NhZ2U.option.Y2hhbm5lbA.allowed-value.c3RyaW5nOmZhY2Vib29r.display_name": {
+          "source": "Facebook",
+          "message": "Facebook"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLW1lc3NhZ2U.option.Y2hhbm5lbA.allowed-value.c3RyaW5nOmhlbHAtY2VudGVy.display_name": {
+          "source": "Help Center",
+          "message": "Центр довідки"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLW1lc3NhZ2U.option.Y2hhbm5lbA.allowed-value.c3RyaW5nOmluc3RhZ3JhbQ.display_name": {
+          "source": "Instagram",
+          "message": "Instagram"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLW1lc3NhZ2U.option.Y2hhbm5lbA.allowed-value.c3RyaW5nOmludGVybmFsLW5vdGU.display_name": {
+          "source": "Internal Note",
+          "message": "Внутрішня примітка"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLW1lc3NhZ2U.option.Y2hhbm5lbA.allowed-value.c3RyaW5nOnBob25l.display_name": {
+          "source": "Phone",
+          "message": "Телефон"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLW1lc3NhZ2U.option.Y2hhbm5lbA.allowed-value.c3RyaW5nOnNtcw.display_name": {
+          "source": "SMS",
+          "message": "SMS"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLW1lc3NhZ2U.option.Y2hhbm5lbA.allowed-value.c3RyaW5nOnR3aXR0ZXI.display_name": {
+          "source": "Twitter",
+          "message": "Twitter"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLW1lc3NhZ2U.option.Y2hhbm5lbA.allowed-value.c3RyaW5nOndoYXRzYXBw.display_name": {
+          "source": "WhatsApp",
+          "message": "WhatsApp"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLW1lc3NhZ2U.option.Y2hhbm5lbA.desc": {
+          "source": "The channel for the message",
+          "message": "Канал для повідомлення"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLW1lc3NhZ2U.option.Y2hhbm5lbA.display_name": {
+          "source": "Channel",
+          "message": "Канал"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLW1lc3NhZ2U.option.Y2hhbm5lbA.short_desc": {
+          "source": "Message channel",
+          "message": "Канал повідомлення"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLW1lc3NhZ2U.option.YXR0YWNobWVudHM.desc": {
+          "source": "List of file attachments for the message. Each attachment requires a `url` pointing to the file location, and optionally `name`, `content_type`, `size`, and `public` fields",
+          "message": "Список вкладених файлів для повідомлення. Кожне вкладення вимагає `url`, що вказує на розташування файлу, та необов'язкові поля `name`, `content_type`, `size` і `public`"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLW1lc3NhZ2U.option.YXR0YWNobWVudHM.display_name": {
+          "source": "Attachments",
+          "message": "Вкладення"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLW1lc3NhZ2U.option.YXR0YWNobWVudHM.short_desc": {
+          "source": "File attachments",
+          "message": "Вкладені файли"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLW1lc3NhZ2U.option.Ym9keV90ZXh0.desc": {
+          "source": "The plain text body of the message. Provide either `body_text` or `body_html`",
+          "message": "Тіло повідомлення у форматі звичайного тексту. Вкажіть або `body_text`, або `body_html`"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLW1lc3NhZ2U.option.Ym9keV90ZXh0.display_name": {
+          "source": "Body Text",
+          "message": "Текст листа"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLW1lc3NhZ2U.option.Ym9keV90ZXh0.short_desc": {
+          "source": "Plain text body",
+          "message": "Тіло звичайного тексту"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLW1lc3NhZ2U.option.Ym9keV9odG1s.desc": {
+          "source": "The HTML body of the message. Provide either `body_text` or `body_html`",
+          "message": "HTML-тіло повідомлення. Вкажіть або `body_text`, або `body_html`"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLW1lc3NhZ2U.option.Ym9keV9odG1s.display_name": {
+          "source": "Body HTML",
+          "message": "HTML листа"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLW1lc3NhZ2U.option.Ym9keV9odG1s.short_desc": {
+          "source": "HTML body",
+          "message": "HTML-тіло"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLW1lc3NhZ2U.option.ZnJvbV9hZ2VudA.desc": {
+          "source": "Whether the message is from an agent (`True`) or customer (`False`)",
+          "message": "Чи повідомлення від агента (`True`), чи від клієнта (`False`)"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLW1lc3NhZ2U.option.ZnJvbV9hZ2VudA.display_name": {
+          "source": "From Agent",
+          "message": "Від агента"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLW1lc3NhZ2U.option.ZnJvbV9hZ2VudA.short_desc": {
+          "source": "Whether from agent",
+          "message": "Чи від агента"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLW1lc3NhZ2U.option.c2VuZGVy.desc": {
+          "source": "The sender of the message. Provide `id` for agents or `email` for customers",
+          "message": "Відправник повідомлення. Вкажіть `id` для агентів або `email` для клієнтів"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLW1lc3NhZ2U.option.c2VuZGVy.display_name": {
+          "source": "Sender",
+          "message": "Відправник"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLW1lc3NhZ2U.option.c2VuZGVy.short_desc": {
+          "source": "Message sender",
+          "message": "Відправник повідомлення"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLW1lc3NhZ2U.option.c3ViamVjdA.desc": {
+          "source": "The subject line of the message (for email channel)",
+          "message": "Тема повідомлення (для каналу електронної пошти)"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLW1lc3NhZ2U.option.c3ViamVjdA.display_name": {
+          "source": "Subject",
+          "message": "Тема"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLW1lc3NhZ2U.option.c3ViamVjdA.short_desc": {
+          "source": "Message subject",
+          "message": "Тема повідомлення"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLW1lc3NhZ2U.option.cmVjZWl2ZXI.desc": {
+          "source": "The receiver of the message. Provide `id` for an agent or `email` for a customer",
+          "message": "Одержувач повідомлення. Вкажіть `id` для агента або `email` для клієнта"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLW1lc3NhZ2U.option.cmVjZWl2ZXI.display_name": {
+          "source": "Receiver",
+          "message": "Одержувач"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLW1lc3NhZ2U.option.cmVjZWl2ZXI.short_desc": {
+          "source": "Message receiver",
+          "message": "Одержувач повідомлення"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLW1lc3NhZ2U.option.dGlja2V0X2lk.desc": {
+          "source": "The ID of the ticket to add the message to",
+          "message": "ID тікета, до якого слід додати повідомлення"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLW1lc3NhZ2U.option.dGlja2V0X2lk.display_name": {
+          "source": "Ticket ID",
+          "message": "ID тікета"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLW1lc3NhZ2U.option.dGlja2V0X2lk.short_desc": {
+          "source": "The ticket to add a message to",
+          "message": "Тікет, до якого слід додати повідомлення"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLW1lc3NhZ2U.option.dmlh.allowed-value.c3RyaW5nOmFwaQ.display_name": {
+          "source": "API",
+          "message": "API"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLW1lc3NhZ2U.option.dmlh.allowed-value.c3RyaW5nOmNoYXQ.display_name": {
+          "source": "Chat",
+          "message": "Чат"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLW1lc3NhZ2U.option.dmlh.allowed-value.c3RyaW5nOmNvbnRhY3RfZm9ybQ.display_name": {
+          "source": "Contact Form",
+          "message": "Контактна форма"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLW1lc3NhZ2U.option.dmlh.allowed-value.c3RyaW5nOmVtYWls.display_name": {
+          "source": "Email",
+          "message": "Електронна пошта"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLW1lc3NhZ2U.option.dmlh.allowed-value.c3RyaW5nOmZhY2Vib29r.display_name": {
+          "source": "Facebook",
+          "message": "Facebook"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLW1lc3NhZ2U.option.dmlh.allowed-value.c3RyaW5nOmhlbHAtY2VudGVy.display_name": {
+          "source": "Help Center",
+          "message": "Центр довідки"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLW1lc3NhZ2U.option.dmlh.allowed-value.c3RyaW5nOmhlbHBkZXNr.display_name": {
+          "source": "Helpdesk",
+          "message": "Helpdesk"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLW1lc3NhZ2U.option.dmlh.allowed-value.c3RyaW5nOmluc3RhZ3JhbQ.display_name": {
+          "source": "Instagram",
+          "message": "Instagram"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLW1lc3NhZ2U.option.dmlh.allowed-value.c3RyaW5nOnBob25l.display_name": {
+          "source": "Phone",
+          "message": "Телефон"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLW1lc3NhZ2U.option.dmlh.allowed-value.c3RyaW5nOnNtcw.display_name": {
+          "source": "SMS",
+          "message": "SMS"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLW1lc3NhZ2U.option.dmlh.allowed-value.c3RyaW5nOnR3aXR0ZXI.display_name": {
+          "source": "Twitter",
+          "message": "Twitter"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLW1lc3NhZ2U.option.dmlh.allowed-value.c3RyaW5nOndoYXRzYXBw.display_name": {
+          "source": "WhatsApp",
+          "message": "WhatsApp"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLW1lc3NhZ2U.option.dmlh.desc": {
+          "source": "How the message was created",
+          "message": "Спосіб створення повідомлення"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLW1lc3NhZ2U.option.dmlh.display_name": {
+          "source": "Via",
+          "message": "Через"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLW1lc3NhZ2U.option.dmlh.short_desc": {
+          "source": "Message source",
+          "message": "Джерело повідомлення"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLW1lc3NhZ2U.short_desc": {
+          "source": "Add a message to a ticket",
+          "message": "Додати повідомлення до тікета"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLWN1c3RvbWVy.desc": {
+          "source": "Create a new Gorgias customer profile",
+          "message": "Створити новий профіль клієнта Gorgias"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLWN1c3RvbWVy.display_name": {
+          "source": "Create a Customer",
+          "message": "Створити клієнта"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLWN1c3RvbWVy.option.Y2hhbm5lbHM.desc": {
+          "source": "List of communication channels for the customer. Each channel has an `address`, `type`, and optional `preferred` flag",
+          "message": "Список каналів зв'язку для клієнта. Кожен канал має `address`, `type` та необов'язковий прапорець `preferred`"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLWN1c3RvbWVy.option.Y2hhbm5lbHM.display_name": {
+          "source": "Channels",
+          "message": "Канали"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLWN1c3RvbWVy.option.Y2hhbm5lbHM.short_desc": {
+          "source": "Communication channels",
+          "message": "Канали зв'язку"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLWN1c3RvbWVy.option.ZW1haWw.desc": {
+          "source": "The primary email address of the customer",
+          "message": "Основна адреса електронної пошти клієнта"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLWN1c3RvbWVy.option.ZW1haWw.display_name": {
+          "source": "Email",
+          "message": "Електронна пошта"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLWN1c3RvbWVy.option.ZW1haWw.short_desc": {
+          "source": "Customer email address",
+          "message": "Адреса електронної пошти клієнта"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLWN1c3RvbWVy.option.ZXh0ZXJuYWxfaWQ.desc": {
+          "source": "An external identifier for the customer from an integrated system",
+          "message": "Зовнішній ідентифікатор клієнта з інтегрованої системи"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLWN1c3RvbWVy.option.ZXh0ZXJuYWxfaWQ.display_name": {
+          "source": "External ID",
+          "message": "Зовнішній ID"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLWN1c3RvbWVy.option.ZXh0ZXJuYWxfaWQ.short_desc": {
+          "source": "External identifier",
+          "message": "Зовнішній ідентифікатор"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLWN1c3RvbWVy.option.Zmlyc3RuYW1l.desc": {
+          "source": "The first name of the customer",
+          "message": "Ім'я клієнта"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLWN1c3RvbWVy.option.Zmlyc3RuYW1l.display_name": {
+          "source": "First Name",
+          "message": "Ім'я"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLWN1c3RvbWVy.option.Zmlyc3RuYW1l.short_desc": {
+          "source": "Customer first name",
+          "message": "Ім'я клієнта"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLWN1c3RvbWVy.option.bGFuZ3VhZ2U.desc": {
+          "source": "The preferred language of the customer (ISO 639-1 code)",
+          "message": "Бажана мова клієнта (код ISO 639-1)"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLWN1c3RvbWVy.option.bGFuZ3VhZ2U.display_name": {
+          "source": "Language",
+          "message": "Мова"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLWN1c3RvbWVy.option.bGFuZ3VhZ2U.short_desc": {
+          "source": "Preferred language",
+          "message": "Бажана мова"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLWN1c3RvbWVy.option.bGFzdG5hbWU.desc": {
+          "source": "The last name of the customer",
+          "message": "Прізвище клієнта"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLWN1c3RvbWVy.option.bGFzdG5hbWU.display_name": {
+          "source": "Last Name",
+          "message": "Прізвище"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLWN1c3RvbWVy.option.bGFzdG5hbWU.short_desc": {
+          "source": "Customer last name",
+          "message": "Прізвище клієнта"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLWN1c3RvbWVy.option.bm90ZQ.desc": {
+          "source": "Internal notes about the customer",
+          "message": "Внутрішні примітки про клієнта"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLWN1c3RvbWVy.option.bm90ZQ.display_name": {
+          "source": "Note",
+          "message": "Примітка"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLWN1c3RvbWVy.option.bm90ZQ.short_desc": {
+          "source": "Internal note",
+          "message": "Внутрішня примітка"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLWN1c3RvbWVy.option.bmFtZQ.desc": {
+          "source": "The full name of the customer",
+          "message": "Повне ім'я клієнта"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLWN1c3RvbWVy.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "Назва"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLWN1c3RvbWVy.option.bmFtZQ.short_desc": {
+          "source": "Full name",
+          "message": "Повне ім'я"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLWN1c3RvbWVy.option.dGltZXpvbmU.desc": {
+          "source": "The timezone of the customer (e.g., `America/New_York`)",
+          "message": "Часовий пояс клієнта (наприклад, `America/New_York`)"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLWN1c3RvbWVy.option.dGltZXpvbmU.display_name": {
+          "source": "Timezone",
+          "message": "Часовий пояс"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLWN1c3RvbWVy.option.dGltZXpvbmU.short_desc": {
+          "source": "Customer timezone",
+          "message": "Часовий пояс клієнта"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLWN1c3RvbWVy.short_desc": {
+          "source": "Create a new customer",
+          "message": "Створити нового клієнта"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLXRhZw.desc": {
+          "source": "Create a new Gorgias tag for organizing tickets",
+          "message": "Створити новий тег Gorgias для впорядкування тікетів"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLXRhZw.display_name": {
+          "source": "Create a Tag",
+          "message": "Створити тег"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLXRhZw.option.ZGVjb3JhdGlvbg.desc": {
+          "source": "Visual decoration settings for the tag",
+          "message": "Параметри візуального оформлення тегу"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLXRhZw.option.ZGVjb3JhdGlvbg.display_name": {
+          "source": "Decoration",
+          "message": "Оформлення"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLXRhZw.option.ZGVjb3JhdGlvbg.short_desc": {
+          "source": "Visual decoration",
+          "message": "Візуальне оформлення"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLXRhZw.option.ZGVzY3JpcHRpb24.desc": {
+          "source": "A short description of the tag",
+          "message": "Короткий опис тегу"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLXRhZw.option.ZGVzY3JpcHRpb24.display_name": {
+          "source": "Description",
+          "message": "Опис"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLXRhZw.option.ZGVzY3JpcHRpb24.short_desc": {
+          "source": "Tag description",
+          "message": "Опис тегу"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLXRhZw.option.bmFtZQ.desc": {
+          "source": "The name of the tag (min 1, max 256 characters)",
+          "message": "Назва тегу (від 1 до 256 символів)"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLXRhZw.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "Назва"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLXRhZw.option.bmFtZQ.short_desc": {
+          "source": "Tag name",
+          "message": "Назва тегу"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLXRhZw.short_desc": {
+          "source": "Create a new tag",
+          "message": "Створити новий тег"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLXRpY2tldA.desc": {
+          "source": "Create a new Gorgias support ticket with messages, channel, and optional assignment",
+          "message": "Створити новий тікет підтримки Gorgias із повідомленнями, каналом та необов'язковим призначенням"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLXRpY2tldA.display_name": {
+          "source": "Create a Ticket",
+          "message": "Створити тікет"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLXRpY2tldA.option.Y2hhbm5lbA.allowed-value.c3RyaW5nOmFwaQ.display_name": {
+          "source": "API",
+          "message": "API"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLXRpY2tldA.option.Y2hhbm5lbA.allowed-value.c3RyaW5nOmNoYXQ.display_name": {
+          "source": "Chat",
+          "message": "Чат"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLXRpY2tldA.option.Y2hhbm5lbA.allowed-value.c3RyaW5nOmNvbnRhY3RfZm9ybQ.display_name": {
+          "source": "Contact Form",
+          "message": "Контактна форма"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLXRpY2tldA.option.Y2hhbm5lbA.allowed-value.c3RyaW5nOmVtYWls.display_name": {
+          "source": "Email",
+          "message": "Електронна пошта"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLXRpY2tldA.option.Y2hhbm5lbA.allowed-value.c3RyaW5nOmZhY2Vib29r.display_name": {
+          "source": "Facebook",
+          "message": "Facebook"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLXRpY2tldA.option.Y2hhbm5lbA.allowed-value.c3RyaW5nOmhlbHAtY2VudGVy.display_name": {
+          "source": "Help Center",
+          "message": "Центр довідки"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLXRpY2tldA.option.Y2hhbm5lbA.allowed-value.c3RyaW5nOmluc3RhZ3JhbQ.display_name": {
+          "source": "Instagram",
+          "message": "Instagram"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLXRpY2tldA.option.Y2hhbm5lbA.allowed-value.c3RyaW5nOmludGVybmFsLW5vdGU.display_name": {
+          "source": "Internal Note",
+          "message": "Внутрішня примітка"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLXRpY2tldA.option.Y2hhbm5lbA.allowed-value.c3RyaW5nOnBob25l.display_name": {
+          "source": "Phone",
+          "message": "Телефон"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLXRpY2tldA.option.Y2hhbm5lbA.allowed-value.c3RyaW5nOnNtcw.display_name": {
+          "source": "SMS",
+          "message": "SMS"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLXRpY2tldA.option.Y2hhbm5lbA.allowed-value.c3RyaW5nOnR3aXR0ZXI.display_name": {
+          "source": "Twitter",
+          "message": "Twitter"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLXRpY2tldA.option.Y2hhbm5lbA.allowed-value.c3RyaW5nOndoYXRzYXBw.display_name": {
+          "source": "WhatsApp",
+          "message": "WhatsApp"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLXRpY2tldA.option.Y2hhbm5lbA.desc": {
+          "source": "The channel for the ticket (e.g., `email`, `chat`, `api`)",
+          "message": "Канал для тікета (наприклад, `email`, `chat`, `api`)"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLXRpY2tldA.option.Y2hhbm5lbA.display_name": {
+          "source": "Channel",
+          "message": "Канал"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLXRpY2tldA.option.Y2hhbm5lbA.short_desc": {
+          "source": "Communication channel",
+          "message": "Канал зв'язку"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLXRpY2tldA.option.Y3VzdG9tZXI.desc": {
+          "source": "The customer for this ticket. Provide `id` to reference an existing customer, or `email` to match or create by email address",
+          "message": "Клієнт для цього тікета. Вкажіть `id`, щоб посилатися на наявного клієнта, або `email`, щоб зіставити чи створити за адресою електронної пошти"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLXRpY2tldA.option.Y3VzdG9tZXI.display_name": {
+          "source": "Customer",
+          "message": "Клієнт"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLXRpY2tldA.option.Y3VzdG9tZXI.short_desc": {
+          "source": "Customer data",
+          "message": "Дані клієнта"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLXRpY2tldA.option.YXNzaWduZWVfdGVhbQ.desc": {
+          "source": "The team to assign to this ticket",
+          "message": "Команда, яку потрібно призначити на цей тікет"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLXRpY2tldA.option.YXNzaWduZWVfdGVhbQ.display_name": {
+          "source": "Assignee Team",
+          "message": "Призначена команда"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLXRpY2tldA.option.YXNzaWduZWVfdGVhbQ.short_desc": {
+          "source": "Assigned team",
+          "message": "Призначена команда"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLXRpY2tldA.option.YXNzaWduZWVfdXNlcg.desc": {
+          "source": "The agent to assign to this ticket",
+          "message": "Агент, якого потрібно призначити на цей тікет"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLXRpY2tldA.option.YXNzaWduZWVfdXNlcg.display_name": {
+          "source": "Assignee User",
+          "message": "Призначений користувач"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLXRpY2tldA.option.YXNzaWduZWVfdXNlcg.short_desc": {
+          "source": "Assigned agent",
+          "message": "Призначений агент"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLXRpY2tldA.option.ZXh0ZXJuYWxfaWQ.desc": {
+          "source": "An external identifier for the ticket (max 255 characters)",
+          "message": "Зовнішній ідентифікатор тікета (макс. 255 символів)"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLXRpY2tldA.option.ZXh0ZXJuYWxfaWQ.display_name": {
+          "source": "External ID",
+          "message": "Зовнішній ID"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLXRpY2tldA.option.ZXh0ZXJuYWxfaWQ.short_desc": {
+          "source": "External identifier",
+          "message": "Зовнішній ідентифікатор"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLXRpY2tldA.option.bGFuZ3VhZ2U.desc": {
+          "source": "The language of the ticket content",
+          "message": "Мова вмісту тікета"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLXRpY2tldA.option.bGFuZ3VhZ2U.display_name": {
+          "source": "Language",
+          "message": "Мова"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLXRpY2tldA.option.bGFuZ3VhZ2U.short_desc": {
+          "source": "Ticket language",
+          "message": "Мова тікета"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLXRpY2tldA.option.bWVzc2FnZXM.desc": {
+          "source": "List of initial messages for the ticket. Required field. Each message must have `channel`, `from_agent`, and `via`. Provide either `body_text` or `body_html` for message content. Up to 500 messages per ticket",
+          "message": "Список початкових повідомлень для тікета. Обов'язкове поле. Кожне повідомлення повинно мати `channel`, `from_agent` і `via`. Вкажіть `body_text` або `body_html` для вмісту повідомлення. До 500 повідомлень на тікет"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLXRpY2tldA.option.bWVzc2FnZXM.display_name": {
+          "source": "Messages",
+          "message": "Повідомлення"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLXRpY2tldA.option.bWVzc2FnZXM.short_desc": {
+          "source": "Initial messages",
+          "message": "Початкові повідомлення"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLXRpY2tldA.option.c3BhbQ.desc": {
+          "source": "Whether to mark the ticket as spam. Default: `False`",
+          "message": "Чи позначати тікет як спам. За замовчуванням: `False`"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLXRpY2tldA.option.c3BhbQ.display_name": {
+          "source": "Spam",
+          "message": "Спам"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLXRpY2tldA.option.c3BhbQ.short_desc": {
+          "source": "Mark as spam",
+          "message": "Позначити як спам"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLXRpY2tldA.option.c3RhdHVz.allowed-value.c3RyaW5nOm9wZW4.display_name": {
+          "source": "Open",
+          "message": "Відкрита"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLXRpY2tldA.option.c3RhdHVz.allowed-value.c3RyaW5nOmNsb3NlZA.display_name": {
+          "source": "Closed",
+          "message": "Закрито"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLXRpY2tldA.option.c3RhdHVz.desc": {
+          "source": "The initial status of the ticket",
+          "message": "Початковий статус тікета"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLXRpY2tldA.option.c3RhdHVz.display_name": {
+          "source": "Status",
+          "message": "Статус"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLXRpY2tldA.option.c3RhdHVz.short_desc": {
+          "source": "Ticket status",
+          "message": "Статус тікета"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLXRpY2tldA.option.c3ViamVjdA.desc": {
+          "source": "The subject line of the ticket (max 998 characters)",
+          "message": "Тема тікета (макс. 998 символів)"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLXRpY2tldA.option.c3ViamVjdA.display_name": {
+          "source": "Subject",
+          "message": "Тема"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLXRpY2tldA.option.c3ViamVjdA.short_desc": {
+          "source": "Ticket subject line",
+          "message": "Тема тікета"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLXRpY2tldA.option.cHJpb3JpdHk.allowed-value.c3RyaW5nOm5vcm1hbA.display_name": {
+          "source": "Normal",
+          "message": "Звичайний"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLXRpY2tldA.option.cHJpb3JpdHk.allowed-value.c3RyaW5nOmNyaXRpY2Fs.display_name": {
+          "source": "Critical",
+          "message": "Критичний"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLXRpY2tldA.option.cHJpb3JpdHk.allowed-value.c3RyaW5nOmhpZ2g.display_name": {
+          "source": "High",
+          "message": "Високий"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLXRpY2tldA.option.cHJpb3JpdHk.allowed-value.c3RyaW5nOmxvdw.display_name": {
+          "source": "Low",
+          "message": "Низький"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLXRpY2tldA.option.cHJpb3JpdHk.desc": {
+          "source": "The priority level of the ticket",
+          "message": "Рівень пріоритету тікета"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLXRpY2tldA.option.cHJpb3JpdHk.display_name": {
+          "source": "Priority",
+          "message": "Пріоритет"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLXRpY2tldA.option.cHJpb3JpdHk.short_desc": {
+          "source": "Ticket priority",
+          "message": "Пріоритет тікета"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLXRpY2tldA.option.dGFncw.desc": {
+          "source": "List of tags to apply to the ticket. Each tag must have a `name` field",
+          "message": "Список тегів для застосування до тікета. Кожен тег повинен містити поле `name`"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLXRpY2tldA.option.dGFncw.display_name": {
+          "source": "Tags",
+          "message": "Теги"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLXRpY2tldA.option.dGFncw.short_desc": {
+          "source": "Tags to apply",
+          "message": "Теги для застосування"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLXRpY2tldA.option.dmlh.allowed-value.c3RyaW5nOmFwaQ.display_name": {
+          "source": "API",
+          "message": "API"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLXRpY2tldA.option.dmlh.allowed-value.c3RyaW5nOmNoYXQ.display_name": {
+          "source": "Chat",
+          "message": "Чат"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLXRpY2tldA.option.dmlh.allowed-value.c3RyaW5nOmNvbnRhY3RfZm9ybQ.display_name": {
+          "source": "Contact Form",
+          "message": "Контактна форма"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLXRpY2tldA.option.dmlh.allowed-value.c3RyaW5nOmVtYWls.display_name": {
+          "source": "Email",
+          "message": "Електронна пошта"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLXRpY2tldA.option.dmlh.allowed-value.c3RyaW5nOmZhY2Vib29r.display_name": {
+          "source": "Facebook",
+          "message": "Facebook"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLXRpY2tldA.option.dmlh.allowed-value.c3RyaW5nOmhlbHAtY2VudGVy.display_name": {
+          "source": "Help Center",
+          "message": "Центр довідки"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLXRpY2tldA.option.dmlh.allowed-value.c3RyaW5nOmhlbHBkZXNr.display_name": {
+          "source": "Helpdesk",
+          "message": "Helpdesk"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLXRpY2tldA.option.dmlh.allowed-value.c3RyaW5nOmluc3RhZ3JhbQ.display_name": {
+          "source": "Instagram",
+          "message": "Instagram"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLXRpY2tldA.option.dmlh.allowed-value.c3RyaW5nOnBob25l.display_name": {
+          "source": "Phone",
+          "message": "Телефон"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLXRpY2tldA.option.dmlh.allowed-value.c3RyaW5nOnNtcw.display_name": {
+          "source": "SMS",
+          "message": "SMS"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLXRpY2tldA.option.dmlh.allowed-value.c3RyaW5nOnR3aXR0ZXI.display_name": {
+          "source": "Twitter",
+          "message": "Twitter"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLXRpY2tldA.option.dmlh.allowed-value.c3RyaW5nOndoYXRzYXBw.display_name": {
+          "source": "WhatsApp",
+          "message": "WhatsApp"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLXRpY2tldA.option.dmlh.desc": {
+          "source": "How the ticket was created. Required field",
+          "message": "Спосіб створення тікета. Обов'язкове поле"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLXRpY2tldA.option.dmlh.display_name": {
+          "source": "Via",
+          "message": "Через"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLXRpY2tldA.option.dmlh.short_desc": {
+          "source": "Ticket source",
+          "message": "Джерело тікета"
+        },
+        "app.R29yZ2lhcw.action.Y3JlYXRlLXRpY2tldA.short_desc": {
+          "source": "Create a new support ticket",
+          "message": "Створити новий тікет підтримки"
+        },
+        "app.R29yZ2lhcw.action.Z2V0LW1lc3NhZ2U.desc": {
+          "source": "Retrieve a single message from a Gorgias ticket",
+          "message": "Отримати одне повідомлення з тікета Gorgias"
+        },
+        "app.R29yZ2lhcw.action.Z2V0LW1lc3NhZ2U.display_name": {
+          "source": "Get a Message",
+          "message": "Отримати повідомлення"
+        },
+        "app.R29yZ2lhcw.action.Z2V0LW1lc3NhZ2U.option.bWVzc2FnZV9pZA.display_name": {
+          "source": "Message ID",
+          "message": "Ідентифікатор повідомлення"
+        },
+        "app.R29yZ2lhcw.action.Z2V0LW1lc3NhZ2U.option.bWVzc2FnZV9pZA.short_desc": {
+          "source": "The message ID",
+          "message": "ID повідомлення"
+        },
+        "app.R29yZ2lhcw.action.Z2V0LW1lc3NhZ2U.option.dGlja2V0X2lk.display_name": {
+          "source": "Ticket ID",
+          "message": "ID тікета"
+        },
+        "app.R29yZ2lhcw.action.Z2V0LW1lc3NhZ2U.option.dGlja2V0X2lk.short_desc": {
+          "source": "The ticket containing the message",
+          "message": "Тікет, що містить повідомлення"
+        },
+        "app.R29yZ2lhcw.action.Z2V0LW1lc3NhZ2U.short_desc": {
+          "source": "Get a single message by ID",
+          "message": "Отримати одне повідомлення за ID"
+        },
+        "app.R29yZ2lhcw.action.Z2V0LWN1c3RvbWVy.desc": {
+          "source": "Retrieve a single Gorgias customer by their ID",
+          "message": "Отримати одного клієнта Gorgias за його ID"
+        },
+        "app.R29yZ2lhcw.action.Z2V0LWN1c3RvbWVy.display_name": {
+          "source": "Get a Customer",
+          "message": "Отримати клієнта"
+        },
+        "app.R29yZ2lhcw.action.Z2V0LWN1c3RvbWVy.option.Y3VzdG9tZXJfaWQ.display_name": {
+          "source": "Customer ID",
+          "message": "ID клієнта"
+        },
+        "app.R29yZ2lhcw.action.Z2V0LWN1c3RvbWVy.option.Y3VzdG9tZXJfaWQ.short_desc": {
+          "source": "The customer ID",
+          "message": "Ідентифікатор клієнта"
+        },
+        "app.R29yZ2lhcw.action.Z2V0LWN1c3RvbWVy.short_desc": {
+          "source": "Get a single customer by ID",
+          "message": "Отримати одного клієнта за ID"
+        },
+        "app.R29yZ2lhcw.action.Z2V0LXRhZw.desc": {
+          "source": "Retrieve a single Gorgias tag by its ID",
+          "message": "Отримати один тег Gorgias за його ID"
+        },
+        "app.R29yZ2lhcw.action.Z2V0LXRhZw.display_name": {
+          "source": "Get a Tag",
+          "message": "Отримати тег"
+        },
+        "app.R29yZ2lhcw.action.Z2V0LXRhZw.option.dGFnX2lk.display_name": {
+          "source": "Tag ID",
+          "message": "Ідентифікатор тегу"
+        },
+        "app.R29yZ2lhcw.action.Z2V0LXRhZw.option.dGFnX2lk.short_desc": {
+          "source": "The tag ID",
+          "message": "ID тегу"
+        },
+        "app.R29yZ2lhcw.action.Z2V0LXRhZw.short_desc": {
+          "source": "Get a single tag by ID",
+          "message": "Отримати один тег за ID"
+        },
+        "app.R29yZ2lhcw.action.Z2V0LXRpY2tldA.desc": {
+          "source": "Retrieve a single Gorgias ticket by its ID",
+          "message": "Отримати один тікет Gorgias за його ID"
+        },
+        "app.R29yZ2lhcw.action.Z2V0LXRpY2tldA.display_name": {
+          "source": "Get a Ticket",
+          "message": "Отримати тікет"
+        },
+        "app.R29yZ2lhcw.action.Z2V0LXRpY2tldA.option.dGlja2V0X2lk.display_name": {
+          "source": "Ticket ID",
+          "message": "ID тікета"
+        },
+        "app.R29yZ2lhcw.action.Z2V0LXRpY2tldA.option.dGlja2V0X2lk.short_desc": {
+          "source": "The ticket ID",
+          "message": "ID тікета"
+        },
+        "app.R29yZ2lhcw.action.Z2V0LXRpY2tldA.short_desc": {
+          "source": "Get a single ticket by ID",
+          "message": "Отримати один тікет за ID"
+        },
+        "app.R29yZ2lhcw.action.Z2V0LXVzZXI.desc": {
+          "source": "Retrieve a single Gorgias user (agent) by their ID",
+          "message": "Отримати одного користувача Gorgias (агента) за його ID"
+        },
+        "app.R29yZ2lhcw.action.Z2V0LXVzZXI.display_name": {
+          "source": "Get a User",
+          "message": "Отримати користувача"
+        },
+        "app.R29yZ2lhcw.action.Z2V0LXVzZXI.option.dXNlcl9pZA.display_name": {
+          "source": "User ID",
+          "message": "ID користувача"
+        },
+        "app.R29yZ2lhcw.action.Z2V0LXVzZXI.option.dXNlcl9pZA.short_desc": {
+          "source": "The user ID",
+          "message": "ID користувача"
+        },
+        "app.R29yZ2lhcw.action.Z2V0LXVzZXI.short_desc": {
+          "source": "Get a single user by ID",
+          "message": "Отримати одного користувача за ID"
+        },
+        "app.R29yZ2lhcw.action.ZGVsZXRlLW1lc3NhZ2U.desc": {
+          "source": "Permanently delete a message from a Gorgias ticket",
+          "message": "Остаточно видалити повідомлення з тікета Gorgias"
+        },
+        "app.R29yZ2lhcw.action.ZGVsZXRlLW1lc3NhZ2U.display_name": {
+          "source": "Delete a Message",
+          "message": "Видалити повідомлення"
+        },
+        "app.R29yZ2lhcw.action.ZGVsZXRlLW1lc3NhZ2U.option.bWVzc2FnZV9pZA.desc": {
+          "source": "The ID of the message to delete",
+          "message": "ID повідомлення для видалення"
+        },
+        "app.R29yZ2lhcw.action.ZGVsZXRlLW1lc3NhZ2U.option.bWVzc2FnZV9pZA.display_name": {
+          "source": "Message ID",
+          "message": "Ідентифікатор повідомлення"
+        },
+        "app.R29yZ2lhcw.action.ZGVsZXRlLW1lc3NhZ2U.option.bWVzc2FnZV9pZA.short_desc": {
+          "source": "The message to delete",
+          "message": "Повідомлення для видалення"
+        },
+        "app.R29yZ2lhcw.action.ZGVsZXRlLW1lc3NhZ2U.option.dGlja2V0X2lk.desc": {
+          "source": "The ID of the ticket containing the message to delete",
+          "message": "ID тікета, що містить повідомлення для видалення"
+        },
+        "app.R29yZ2lhcw.action.ZGVsZXRlLW1lc3NhZ2U.option.dGlja2V0X2lk.display_name": {
+          "source": "Ticket ID",
+          "message": "ID тікета"
+        },
+        "app.R29yZ2lhcw.action.ZGVsZXRlLW1lc3NhZ2U.option.dGlja2V0X2lk.short_desc": {
+          "source": "The ticket containing the message",
+          "message": "Тікет, що містить повідомлення"
+        },
+        "app.R29yZ2lhcw.action.ZGVsZXRlLW1lc3NhZ2U.short_desc": {
+          "source": "Delete an existing message",
+          "message": "Видалити наявне повідомлення"
+        },
+        "app.R29yZ2lhcw.action.ZGVsZXRlLWN1c3RvbWVy.desc": {
+          "source": "Permanently delete a Gorgias customer",
+          "message": "Остаточно видалити клієнта Gorgias"
+        },
+        "app.R29yZ2lhcw.action.ZGVsZXRlLWN1c3RvbWVy.display_name": {
+          "source": "Delete a Customer",
+          "message": "Видалити клієнта"
+        },
+        "app.R29yZ2lhcw.action.ZGVsZXRlLWN1c3RvbWVy.option.Y3VzdG9tZXJfaWQ.desc": {
+          "source": "The ID of the customer to delete",
+          "message": "ID клієнта для видалення"
+        },
+        "app.R29yZ2lhcw.action.ZGVsZXRlLWN1c3RvbWVy.option.Y3VzdG9tZXJfaWQ.display_name": {
+          "source": "Customer ID",
+          "message": "ID клієнта"
+        },
+        "app.R29yZ2lhcw.action.ZGVsZXRlLWN1c3RvbWVy.option.Y3VzdG9tZXJfaWQ.short_desc": {
+          "source": "The customer to delete",
+          "message": "Клієнт для видалення"
+        },
+        "app.R29yZ2lhcw.action.ZGVsZXRlLWN1c3RvbWVy.short_desc": {
+          "source": "Delete an existing customer",
+          "message": "Видалити наявного клієнта"
+        },
+        "app.R29yZ2lhcw.action.ZGVsZXRlLXRhZw.desc": {
+          "source": "Permanently delete a Gorgias tag",
+          "message": "Остаточно видалити тег Gorgias"
+        },
+        "app.R29yZ2lhcw.action.ZGVsZXRlLXRhZw.display_name": {
+          "source": "Delete a Tag",
+          "message": "Видалити тег"
+        },
+        "app.R29yZ2lhcw.action.ZGVsZXRlLXRhZw.option.dGFnX2lk.desc": {
+          "source": "The ID of the tag to delete",
+          "message": "ID тегу для видалення"
+        },
+        "app.R29yZ2lhcw.action.ZGVsZXRlLXRhZw.option.dGFnX2lk.display_name": {
+          "source": "Tag ID",
+          "message": "Ідентифікатор тегу"
+        },
+        "app.R29yZ2lhcw.action.ZGVsZXRlLXRhZw.option.dGFnX2lk.short_desc": {
+          "source": "The tag to delete",
+          "message": "Тег для видалення"
+        },
+        "app.R29yZ2lhcw.action.ZGVsZXRlLXRhZw.short_desc": {
+          "source": "Delete an existing tag",
+          "message": "Видалити наявний тег"
+        },
+        "app.R29yZ2lhcw.action.ZGVsZXRlLXRpY2tldA.desc": {
+          "source": "Permanently delete a Gorgias ticket",
+          "message": "Остаточно видалити тікет Gorgias"
+        },
+        "app.R29yZ2lhcw.action.ZGVsZXRlLXRpY2tldA.display_name": {
+          "source": "Delete a Ticket",
+          "message": "Видалити тікет"
+        },
+        "app.R29yZ2lhcw.action.ZGVsZXRlLXRpY2tldA.option.dGlja2V0X2lk.desc": {
+          "source": "The ID of the ticket to delete",
+          "message": "ID тікета для видалення"
+        },
+        "app.R29yZ2lhcw.action.ZGVsZXRlLXRpY2tldA.option.dGlja2V0X2lk.display_name": {
+          "source": "Ticket ID",
+          "message": "ID тікета"
+        },
+        "app.R29yZ2lhcw.action.ZGVsZXRlLXRpY2tldA.option.dGlja2V0X2lk.short_desc": {
+          "source": "The ticket to delete",
+          "message": "Тікет для видалення"
+        },
+        "app.R29yZ2lhcw.action.ZGVsZXRlLXRpY2tldA.short_desc": {
+          "source": "Delete an existing ticket",
+          "message": "Видалити наявний тікет"
+        },
+        "app.R29yZ2lhcw.action.bGlzdC10YWdz.desc": {
+          "source": "List all Gorgias tags",
+          "message": "Отримати список усіх тегів Gorgias"
+        },
+        "app.R29yZ2lhcw.action.bGlzdC10YWdz.display_name": {
+          "source": "List Tags",
+          "message": "Список тегів"
+        },
+        "app.R29yZ2lhcw.action.bGlzdC10YWdz.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "Ліміт"
+        },
+        "app.R29yZ2lhcw.action.bGlzdC10YWdz.option.bGltaXQ.short_desc": {
+          "source": "Maximum results",
+          "message": "Максимальна кількість результатів"
+        },
+        "app.R29yZ2lhcw.action.bGlzdC10YWdz.option.dGFnX2lk.display_name": {
+          "source": "Tag ID",
+          "message": "Ідентифікатор тегу"
+        },
+        "app.R29yZ2lhcw.action.bGlzdC10YWdz.option.dGFnX2lk.short_desc": {
+          "source": "Get a specific tag",
+          "message": "Отримати конкретний тег"
+        },
+        "app.R29yZ2lhcw.action.bGlzdC10YWdz.short_desc": {
+          "source": "List tags",
+          "message": "Список тегів"
+        },
+        "app.R29yZ2lhcw.action.bGlzdC10aWNrZXRz.desc": {
+          "source": "List Gorgias support tickets with optional filtering by status, assignee, customer, and channel",
+          "message": "Отримати список тікетів підтримки Gorgias з необов'язковою фільтрацією за статусом, призначеним виконавцем, клієнтом і каналом"
+        },
+        "app.R29yZ2lhcw.action.bGlzdC10aWNrZXRz.display_name": {
+          "source": "List Tickets",
+          "message": "Список тікетів"
+        },
+        "app.R29yZ2lhcw.action.bGlzdC10aWNrZXRz.option.Y2hhbm5lbA.allowed-value.c3RyaW5nOmFwaQ.display_name": {
+          "source": "API",
+          "message": "API"
+        },
+        "app.R29yZ2lhcw.action.bGlzdC10aWNrZXRz.option.Y2hhbm5lbA.allowed-value.c3RyaW5nOmNoYXQ.display_name": {
+          "source": "Chat",
+          "message": "Чат"
+        },
+        "app.R29yZ2lhcw.action.bGlzdC10aWNrZXRz.option.Y2hhbm5lbA.allowed-value.c3RyaW5nOmNvbnRhY3RfZm9ybQ.display_name": {
+          "source": "Contact Form",
+          "message": "Контактна форма"
+        },
+        "app.R29yZ2lhcw.action.bGlzdC10aWNrZXRz.option.Y2hhbm5lbA.allowed-value.c3RyaW5nOmVtYWls.display_name": {
+          "source": "Email",
+          "message": "Електронна пошта"
+        },
+        "app.R29yZ2lhcw.action.bGlzdC10aWNrZXRz.option.Y2hhbm5lbA.allowed-value.c3RyaW5nOmZhY2Vib29r.display_name": {
+          "source": "Facebook",
+          "message": "Facebook"
+        },
+        "app.R29yZ2lhcw.action.bGlzdC10aWNrZXRz.option.Y2hhbm5lbA.allowed-value.c3RyaW5nOmhlbHAtY2VudGVy.display_name": {
+          "source": "Help Center",
+          "message": "Центр довідки"
+        },
+        "app.R29yZ2lhcw.action.bGlzdC10aWNrZXRz.option.Y2hhbm5lbA.allowed-value.c3RyaW5nOmluc3RhZ3JhbQ.display_name": {
+          "source": "Instagram",
+          "message": "Instagram"
+        },
+        "app.R29yZ2lhcw.action.bGlzdC10aWNrZXRz.option.Y2hhbm5lbA.allowed-value.c3RyaW5nOmludGVybmFsLW5vdGU.display_name": {
+          "source": "Internal Note",
+          "message": "Внутрішня примітка"
+        },
+        "app.R29yZ2lhcw.action.bGlzdC10aWNrZXRz.option.Y2hhbm5lbA.allowed-value.c3RyaW5nOnBob25l.display_name": {
+          "source": "Phone",
+          "message": "Телефон"
+        },
+        "app.R29yZ2lhcw.action.bGlzdC10aWNrZXRz.option.Y2hhbm5lbA.allowed-value.c3RyaW5nOnNtcw.display_name": {
+          "source": "SMS",
+          "message": "SMS"
+        },
+        "app.R29yZ2lhcw.action.bGlzdC10aWNrZXRz.option.Y2hhbm5lbA.allowed-value.c3RyaW5nOnR3aXR0ZXI.display_name": {
+          "source": "Twitter",
+          "message": "Twitter"
+        },
+        "app.R29yZ2lhcw.action.bGlzdC10aWNrZXRz.option.Y2hhbm5lbA.allowed-value.c3RyaW5nOndoYXRzYXBw.display_name": {
+          "source": "WhatsApp",
+          "message": "WhatsApp"
+        },
+        "app.R29yZ2lhcw.action.bGlzdC10aWNrZXRz.option.Y2hhbm5lbA.display_name": {
+          "source": "Channel",
+          "message": "Канал"
+        },
+        "app.R29yZ2lhcw.action.bGlzdC10aWNrZXRz.option.Y2hhbm5lbA.short_desc": {
+          "source": "Filter by channel",
+          "message": "Фільтрувати за каналом"
+        },
+        "app.R29yZ2lhcw.action.bGlzdC10aWNrZXRz.option.Y3VzdG9tZXJfaWQ.display_name": {
+          "source": "Customer ID",
+          "message": "ID клієнта"
+        },
+        "app.R29yZ2lhcw.action.bGlzdC10aWNrZXRz.option.Y3VzdG9tZXJfaWQ.short_desc": {
+          "source": "Filter by customer",
+          "message": "Фільтрувати за клієнтом"
+        },
+        "app.R29yZ2lhcw.action.bGlzdC10aWNrZXRz.option.YXNzaWduZWVfdXNlcl9pZA.display_name": {
+          "source": "Assignee User ID",
+          "message": "ID призначеного користувача"
+        },
+        "app.R29yZ2lhcw.action.bGlzdC10aWNrZXRz.option.YXNzaWduZWVfdXNlcl9pZA.short_desc": {
+          "source": "Filter by assigned agent",
+          "message": "Фільтрувати за призначеним агентом"
+        },
+        "app.R29yZ2lhcw.action.bGlzdC10aWNrZXRz.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "Ліміт"
+        },
+        "app.R29yZ2lhcw.action.bGlzdC10aWNrZXRz.option.bGltaXQ.short_desc": {
+          "source": "Maximum results",
+          "message": "Максимальна кількість результатів"
+        },
+        "app.R29yZ2lhcw.action.bGlzdC10aWNrZXRz.option.c3RhdHVz.allowed-value.c3RyaW5nOm9wZW4.display_name": {
+          "source": "Open",
+          "message": "Відкрита"
+        },
+        "app.R29yZ2lhcw.action.bGlzdC10aWNrZXRz.option.c3RhdHVz.allowed-value.c3RyaW5nOmNsb3NlZA.display_name": {
+          "source": "Closed",
+          "message": "Закрито"
+        },
+        "app.R29yZ2lhcw.action.bGlzdC10aWNrZXRz.option.c3RhdHVz.display_name": {
+          "source": "Status",
+          "message": "Статус"
+        },
+        "app.R29yZ2lhcw.action.bGlzdC10aWNrZXRz.option.c3RhdHVz.short_desc": {
+          "source": "Filter by status",
+          "message": "Фільтр за статусом"
+        },
+        "app.R29yZ2lhcw.action.bGlzdC10aWNrZXRz.option.dGlja2V0X2lk.display_name": {
+          "source": "Ticket ID",
+          "message": "ID тікета"
+        },
+        "app.R29yZ2lhcw.action.bGlzdC10aWNrZXRz.option.dGlja2V0X2lk.short_desc": {
+          "source": "Get a specific ticket",
+          "message": "Отримати конкретний тікет"
+        },
+        "app.R29yZ2lhcw.action.bGlzdC10aWNrZXRz.short_desc": {
+          "source": "List support tickets",
+          "message": "Список тікетів підтримки"
+        },
+        "app.R29yZ2lhcw.action.bGlzdC11c2Vycw.desc": {
+          "source": "List all Gorgias helpdesk agents (users)",
+          "message": "Отримати список усіх агентів (користувачів) служби підтримки Gorgias"
+        },
+        "app.R29yZ2lhcw.action.bGlzdC11c2Vycw.display_name": {
+          "source": "List Users",
+          "message": "Список користувачів"
+        },
+        "app.R29yZ2lhcw.action.bGlzdC11c2Vycw.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "Ліміт"
+        },
+        "app.R29yZ2lhcw.action.bGlzdC11c2Vycw.option.bGltaXQ.short_desc": {
+          "source": "Maximum results",
+          "message": "Максимальна кількість результатів"
+        },
+        "app.R29yZ2lhcw.action.bGlzdC11c2Vycw.option.dXNlcl9pZA.display_name": {
+          "source": "User ID",
+          "message": "ID користувача"
+        },
+        "app.R29yZ2lhcw.action.bGlzdC11c2Vycw.option.dXNlcl9pZA.short_desc": {
+          "source": "Get a specific user",
+          "message": "Отримати конкретного користувача"
+        },
+        "app.R29yZ2lhcw.action.bGlzdC11c2Vycw.short_desc": {
+          "source": "List helpdesk agents",
+          "message": "Список агентів служби підтримки"
+        },
+        "app.R29yZ2lhcw.action.bGlzdC1jdXN0b21lcnM.desc": {
+          "source": "List Gorgias customers with optional filtering",
+          "message": "Список клієнтів Gorgias з опціональною фільтрацією"
+        },
+        "app.R29yZ2lhcw.action.bGlzdC1jdXN0b21lcnM.display_name": {
+          "source": "List Customers",
+          "message": "Список клієнтів"
+        },
+        "app.R29yZ2lhcw.action.bGlzdC1jdXN0b21lcnM.option.Y3VzdG9tZXJfaWQ.display_name": {
+          "source": "Customer ID",
+          "message": "ID клієнта"
+        },
+        "app.R29yZ2lhcw.action.bGlzdC1jdXN0b21lcnM.option.Y3VzdG9tZXJfaWQ.short_desc": {
+          "source": "Get a specific customer",
+          "message": "Отримати конкретного клієнта"
+        },
+        "app.R29yZ2lhcw.action.bGlzdC1jdXN0b21lcnM.option.ZW1haWw.display_name": {
+          "source": "Email",
+          "message": "Електронна пошта"
+        },
+        "app.R29yZ2lhcw.action.bGlzdC1jdXN0b21lcnM.option.ZW1haWw.short_desc": {
+          "source": "Filter by email",
+          "message": "Фільтрувати за електронною поштою"
+        },
+        "app.R29yZ2lhcw.action.bGlzdC1jdXN0b21lcnM.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "Ліміт"
+        },
+        "app.R29yZ2lhcw.action.bGlzdC1jdXN0b21lcnM.option.bGltaXQ.short_desc": {
+          "source": "Maximum results",
+          "message": "Максимальна кількість результатів"
+        },
+        "app.R29yZ2lhcw.action.bGlzdC1jdXN0b21lcnM.short_desc": {
+          "source": "List customers",
+          "message": "Список клієнтів"
+        },
+        "app.R29yZ2lhcw.action.bGlzdC1tZXNzYWdlcw.desc": {
+          "source": "List all messages for a specific Gorgias ticket",
+          "message": "Список усіх повідомлень для конкретного тікета Gorgias"
+        },
+        "app.R29yZ2lhcw.action.bGlzdC1tZXNzYWdlcw.display_name": {
+          "source": "List Messages",
+          "message": "Список повідомлень"
+        },
+        "app.R29yZ2lhcw.action.bGlzdC1tZXNzYWdlcw.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "Ліміт"
+        },
+        "app.R29yZ2lhcw.action.bGlzdC1tZXNzYWdlcw.option.bGltaXQ.short_desc": {
+          "source": "Maximum results",
+          "message": "Максимальна кількість результатів"
+        },
+        "app.R29yZ2lhcw.action.bGlzdC1tZXNzYWdlcw.option.bWVzc2FnZV9pZA.display_name": {
+          "source": "Message ID",
+          "message": "Ідентифікатор повідомлення"
+        },
+        "app.R29yZ2lhcw.action.bGlzdC1tZXNzYWdlcw.option.bWVzc2FnZV9pZA.short_desc": {
+          "source": "Get a specific message",
+          "message": "Отримати конкретне повідомлення"
+        },
+        "app.R29yZ2lhcw.action.bGlzdC1tZXNzYWdlcw.option.dGlja2V0X2lk.display_name": {
+          "source": "Ticket ID",
+          "message": "ID тікета"
+        },
+        "app.R29yZ2lhcw.action.bGlzdC1tZXNzYWdlcw.option.dGlja2V0X2lk.short_desc": {
+          "source": "The ticket to list messages for",
+          "message": "Тікет, для якого потрібно отримати список повідомлень"
+        },
+        "app.R29yZ2lhcw.action.bGlzdC1tZXNzYWdlcw.short_desc": {
+          "source": "List messages for a ticket",
+          "message": "Список повідомлень для тікета"
+        },
+        "app.R29yZ2lhcw.action.bWFrZS1hcGktY2FsbA.desc": {
+          "source": "Make a custom HTTP / REST API call to **Gorgias** using the configured connection's authentication.\n\nSpecify the HTTP method, the URI path (relative to the connection's API base URL), optional query parameters, headers, and request body. The response is returned as a hash containing the status code, response headers, and response body.\n\nUse this action for endpoints that are not yet exposed as first-class actions on this app.",
+          "message": "Виконати довільний виклик HTTP / REST API до **Gorgias**, використовуючи автентифікацію налаштованого підключення.\n\nВкажіть HTTP-метод, шлях URI (відносно базової URL-адреси API підключення), необов'язкові параметри запиту, заголовки та тіло запиту. Відповідь повертається у вигляді хешу, що містить код стану, заголовки відповіді та тіло відповіді.\n\nВикористовуйте цю дію для кінцевих точок, які ще не представлені як окремі дії в цьому додатку."
+        },
+        "app.R29yZ2lhcw.action.bWFrZS1hcGktY2FsbA.display_name": {
+          "source": "Make an API call",
+          "message": "Зробити виклик API"
+        },
+        "app.R29yZ2lhcw.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.desc": {
+          "source": "The request body. The effective type depends on `body_type`: JSON/form/YAML expect a hash, XML/text expect a string, multipart expects a file structure, binary expects raw bytes.",
+          "message": "Тіло запиту. Ефективний тип залежить від `body_type`: JSON/form/YAML очікують хеш, XML/text очікують рядок, multipart очікує структуру файлу, binary очікує необроблені байти."
+        },
+        "app.R29yZ2lhcw.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.display_name": {
+          "source": "Body",
+          "message": "Тіло"
+        },
+        "app.R29yZ2lhcw.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.short_desc": {
+          "source": "The request body",
+          "message": "Тіло запиту"
+        },
+        "app.R29yZ2lhcw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.desc": {
+          "source": "Upload a file using `multipart/form-data`. The body must be a @ref DataProvider::FileDataType \"FileDataType\" structure (filename + content + mime_type). The framework builds the multipart envelope and sets the boundary header.",
+          "message": "Завантажити файл за допомогою `multipart/form-data`. Тіло має бути структурою @ref DataProvider::FileDataType \"FileDataType\" (filename + content + mime_type). Фреймворк створює конверт multipart і встановлює заголовок boundary."
+        },
+        "app.R29yZ2lhcw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.display_name": {
+          "source": "Multipart Form",
+          "message": "Форма Multipart"
+        },
+        "app.R29yZ2lhcw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.short_desc": {
+          "source": "Upload a file using multipart/form-data",
+          "message": "Завантажити файл за допомогою multipart/form-data"
+        },
+        "app.R29yZ2lhcw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.desc": {
+          "source": "Pass the body to the REST client unchanged; the client decides serialization based on its configured `data` option and the value type",
+          "message": "Передати тіло REST-клієнту без змін; клієнт визначає серіалізацію на основі налаштованого параметра `data` та типу значення"
+        },
+        "app.R29yZ2lhcw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.display_name": {
+          "source": "Auto",
+          "message": "Авто"
+        },
+        "app.R29yZ2lhcw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.short_desc": {
+          "source": "Pass-through; use connection serialization and let the REST client decide",
+          "message": "Пряма передача; використовувати серіалізацію з'єднання та дозволити REST-клієнту приймати рішення"
+        },
+        "app.R29yZ2lhcw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.desc": {
+          "source": "Send the body as raw bytes. The body must be a binary value. Sets `Content-Type: application/octet-stream` unless overridden by `hdr`.",
+          "message": "Надіслати тіло як необроблені байти. Тіло має бути бінарним значенням. Установлює `Content-Type: application/octet-stream`, якщо не перевизначено через `hdr`."
+        },
+        "app.R29yZ2lhcw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.display_name": {
+          "source": "Raw Binary",
+          "message": "Необроблені бінарні дані"
+        },
+        "app.R29yZ2lhcw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.short_desc": {
+          "source": "Send body as raw bytes",
+          "message": "Надіслати тіло як необроблені байти"
+        },
+        "app.R29yZ2lhcw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.desc": {
+          "source": "Serialize a hash of form fields as `application/x-www-form-urlencoded`. The body must be a hash whose values are scalars (strings/numbers/booleans).",
+          "message": "Серіалізувати хеш полів форми як `application/x-www-form-urlencoded`. Тіло має бути хешем, значеннями якого є скаляри (рядки/числа/булеві значення)."
+        },
+        "app.R29yZ2lhcw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.display_name": {
+          "source": "Form (URL-encoded)",
+          "message": "Форма (URL-encoded)"
+        },
+        "app.R29yZ2lhcw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.short_desc": {
+          "source": "Serialize body as application/x-www-form-urlencoded form fields",
+          "message": "Серіалізувати тіло як поля форми application/x-www-form-urlencoded"
+        },
+        "app.R29yZ2lhcw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.desc": {
+          "source": "Serialize the body as JSON; sets `Content-Type: application/json`. The body should be a hash, list, or scalar value.",
+          "message": "Серіалізувати тіло як JSON; встановлює `Content-Type: application/json`. Тіло має бути хешем, списком або скалярним значенням."
+        },
+        "app.R29yZ2lhcw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.display_name": {
+          "source": "JSON",
+          "message": "JSON"
+        },
+        "app.R29yZ2lhcw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.short_desc": {
+          "source": "Serialize body as JSON",
+          "message": "Серіалізувати тіло як JSON"
+        },
+        "app.R29yZ2lhcw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.desc": {
+          "source": "Send the body as plain text. The body must be a string. Sets `Content-Type: text/plain`.",
+          "message": "Надіслати тіло як простий текст. Тіло має бути рядком. Установлює `Content-Type: text/plain`."
+        },
+        "app.R29yZ2lhcw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.display_name": {
+          "source": "Plain Text",
+          "message": "Простий текст"
+        },
+        "app.R29yZ2lhcw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.short_desc": {
+          "source": "Send body as text/plain",
+          "message": "Надіслати тіло як text/plain"
+        },
+        "app.R29yZ2lhcw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.desc": {
+          "source": "Send the body as XML. If the body is a hash it is serialized to XML; if it is a string it is sent verbatim. Sets `Content-Type: application/xml`.",
+          "message": "Надіслати тіло як XML. Якщо тіло є хешем, воно серіалізується в XML; якщо це рядок, воно надсилається без змін. Установлює `Content-Type: application/xml`."
+        },
+        "app.R29yZ2lhcw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.display_name": {
+          "source": "XML",
+          "message": "XML"
+        },
+        "app.R29yZ2lhcw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.short_desc": {
+          "source": "Send body as XML",
+          "message": "Надіслати тіло як XML"
+        },
+        "app.R29yZ2lhcw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.desc": {
+          "source": "Send the body as YAML. If the body is a hash it is serialized to YAML; if it is a string it is sent verbatim. Sets `Content-Type: application/x-yaml`.",
+          "message": "Надіслати тіло як YAML. Якщо тіло є хешем, воно серіалізується в YAML; якщо це рядок, воно надсилається без змін. Установлює `Content-Type: application/x-yaml`."
+        },
+        "app.R29yZ2lhcw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.display_name": {
+          "source": "YAML",
+          "message": "YAML"
+        },
+        "app.R29yZ2lhcw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.short_desc": {
+          "source": "Send body as YAML",
+          "message": "Надіслати тіло як YAML"
+        },
+        "app.R29yZ2lhcw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.desc": {
+          "source": "Selects the body serialization mode and the corresponding `Content-Type` header. Changing this field reshapes the `body` editor - selecting JSON exposes a JSON editor, selecting Multipart Form exposes a file picker, and so on.",
+          "message": "Вибирає режим серіалізації тіла та відповідний заголовок `Content-Type`. Зміна цього поля змінює вигляд редактора `body` — вибір JSON відкриває редактор JSON, вибір Multipart Form відкриває вибір файлу тощо."
+        },
+        "app.R29yZ2lhcw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.display_name": {
+          "source": "Body Type",
+          "message": "Тип тіла"
+        },
+        "app.R29yZ2lhcw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.short_desc": {
+          "source": "How the body is serialized and what Content-Type is sent",
+          "message": "Як серіалізується тіло та який Content-Type надсилається"
+        },
+        "app.R29yZ2lhcw.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.desc": {
+          "source": "If `True`, non-2xx HTTP responses return as the normal response hash (with the actual status code) instead of raising `REST-RESPONSE-ERROR`. Useful for handling 4xx/5xx as data - e.g. checking whether a resource exists. Overrides the connection's `error_passthru` setting for this call only.",
+          "message": "Якщо `True`, HTTP-відповіді з кодом, відмінним від 2xx, повертаються як звичайний хеш відповіді (з фактичним кодом стану) замість генерації `REST-RESPONSE-ERROR`. Корисно для обробки 4xx/5xx як даних — наприклад, перевірки існування ресурсу. Перевизначає налаштування `error_passthru` з'єднання лише для цього виклику."
+        },
+        "app.R29yZ2lhcw.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.display_name": {
+          "source": "Return Errors as Data",
+          "message": "Повертати помилки як дані"
+        },
+        "app.R29yZ2lhcw.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.short_desc": {
+          "source": "Return non-2xx responses normally instead of throwing",
+          "message": "Повертати відповіді з кодом, відмінним від 2xx, у звичайному режимі замість генерації помилки"
+        },
+        "app.R29yZ2lhcw.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.desc": {
+          "source": "Optional list of HTTP status codes treated as success. If set and the response status is not in this list, the action throws `REST-STATUS-ERROR`. When unset, the REST client's default behavior applies (typically: 2xx is success, non-2xx throws).",
+          "message": "Необов'язковий список кодів стану HTTP, які вважаються успішними. Якщо задано і код стану відповіді відсутній у цьому списку, дія генерує `REST-STATUS-ERROR`. Якщо не задано, застосовується поведінка REST-клієнта за замовчуванням (зазвичай: 2xx — успіх, не-2xx генерує помилку)."
+        },
+        "app.R29yZ2lhcw.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.display_name": {
+          "source": "Expected Status Codes",
+          "message": "Очікувані коди стану"
+        },
+        "app.R29yZ2lhcw.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.short_desc": {
+          "source": "Response status codes treated as success",
+          "message": "Коди стану відповіді, які вважаються успішними"
+        },
+        "app.R29yZ2lhcw.action.bWFrZS1hcGktY2FsbA.option.aGRy.desc": {
+          "source": "Hash of custom headers added to the request. These override any default headers set by `body_type` (e.g. supplying `Content-Type` here wins over the body-type default).",
+          "message": "Хеш користувацьких заголовків, доданих до запиту. Вони перевизначають будь-які заголовки за замовчуванням, встановлені `body_type` (наприклад, передання `Content-Type` тут має перевагу над замовчуваним значенням для типу тіла)."
+        },
+        "app.R29yZ2lhcw.action.bWFrZS1hcGktY2FsbA.option.aGRy.display_name": {
+          "source": "Custom Headers",
+          "message": "Користувацькі заголовки"
+        },
+        "app.R29yZ2lhcw.action.bWFrZS1hcGktY2FsbA.option.aGRy.short_desc": {
+          "source": "Extra request headers",
+          "message": "Додаткові заголовки запиту"
+        },
+        "app.R29yZ2lhcw.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.desc": {
+          "source": "If `True`, the response hash includes a `debug` sub-hash containing the request method/URL/headers (with sensitive values redacted), request and response sizes, and round-trip duration. Useful when investigating slow or failing calls. Off by default to keep responses lean.",
+          "message": "Якщо `True`, хеш відповіді містить підхеш `debug`, що містить метод/URL/заголовки запиту (з відредагованими конфіденційними значеннями), розміри запиту та відповіді, а також тривалість виконання. Корисно під час дослідження повільних або невдалих викликів. Вимкнено за замовчуванням для зменшення обсягу відповідей."
+        },
+        "app.R29yZ2lhcw.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.display_name": {
+          "source": "Include Debug Info",
+          "message": "Включати зневаджувальну інформацію"
+        },
+        "app.R29yZ2lhcw.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.short_desc": {
+          "source": "Include request/timing/size debug info in the response",
+          "message": "Включати зневаджувальну інформацію про запит/час/розмір у відповідь"
+        },
+        "app.R29yZ2lhcw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.desc": {
+          "source": "HTTP `OPTIONS`",
+          "message": "HTTP `OPTIONS`"
+        },
+        "app.R29yZ2lhcw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.display_name": {
+          "source": "OPTIONS",
+          "message": "OPTIONS"
+        },
+        "app.R29yZ2lhcw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.short_desc": {
+          "source": "HTTP OPTIONS",
+          "message": "HTTP OPTIONS"
+        },
+        "app.R29yZ2lhcw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.desc": {
+          "source": "HTTP `DELETE`",
+          "message": "HTTP `DELETE`"
+        },
+        "app.R29yZ2lhcw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.display_name": {
+          "source": "DELETE",
+          "message": "DELETE"
+        },
+        "app.R29yZ2lhcw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.short_desc": {
+          "source": "HTTP DELETE",
+          "message": "HTTP DELETE"
+        },
+        "app.R29yZ2lhcw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.desc": {
+          "source": "HTTP `GET`",
+          "message": "HTTP `GET`"
+        },
+        "app.R29yZ2lhcw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.display_name": {
+          "source": "GET",
+          "message": "GET"
+        },
+        "app.R29yZ2lhcw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.short_desc": {
+          "source": "HTTP GET",
+          "message": "HTTP GET"
+        },
+        "app.R29yZ2lhcw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.desc": {
+          "source": "HTTP `HEAD`",
+          "message": "HTTP `HEAD`"
+        },
+        "app.R29yZ2lhcw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.display_name": {
+          "source": "HEAD",
+          "message": "HEAD"
+        },
+        "app.R29yZ2lhcw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.short_desc": {
+          "source": "HTTP HEAD",
+          "message": "HTTP HEAD"
+        },
+        "app.R29yZ2lhcw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.desc": {
+          "source": "HTTP `PATCH`",
+          "message": "HTTP `PATCH`"
+        },
+        "app.R29yZ2lhcw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.display_name": {
+          "source": "PATCH",
+          "message": "PATCH"
+        },
+        "app.R29yZ2lhcw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.short_desc": {
+          "source": "HTTP PATCH",
+          "message": "HTTP PATCH"
+        },
+        "app.R29yZ2lhcw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.desc": {
+          "source": "HTTP `POST`",
+          "message": "HTTP `POST`"
+        },
+        "app.R29yZ2lhcw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.display_name": {
+          "source": "POST",
+          "message": "POST"
+        },
+        "app.R29yZ2lhcw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.short_desc": {
+          "source": "HTTP POST",
+          "message": "HTTP POST"
+        },
+        "app.R29yZ2lhcw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.desc": {
+          "source": "HTTP `PUT`",
+          "message": "HTTP `PUT`"
+        },
+        "app.R29yZ2lhcw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.display_name": {
+          "source": "PUT",
+          "message": "PUT"
+        },
+        "app.R29yZ2lhcw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.short_desc": {
+          "source": "HTTP PUT",
+          "message": "HTTP PUT"
+        },
+        "app.R29yZ2lhcw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.desc": {
+          "source": "HTTP `TRACE`",
+          "message": "HTTP `TRACE`"
+        },
+        "app.R29yZ2lhcw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.display_name": {
+          "source": "TRACE",
+          "message": "TRACE"
+        },
+        "app.R29yZ2lhcw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.short_desc": {
+          "source": "HTTP TRACE",
+          "message": "HTTP TRACE"
+        },
+        "app.R29yZ2lhcw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "Метод HTTP для використання в запиті"
+        },
+        "app.R29yZ2lhcw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.display_name": {
+          "source": "HTTP Method",
+          "message": "Метод HTTP"
+        },
+        "app.R29yZ2lhcw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.short_desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "Метод HTTP для використання в запиті"
+        },
+        "app.R29yZ2lhcw.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain `{name}` placeholders that are replaced from `path_vars`. Example: `/users/{id}/comments`.",
+          "message": "Шлях URI відносно базового URL API з'єднання. Може містити заповнювачі `{name}`, які замінюються з `path_vars`. Приклад: `/users/{id}/comments`."
+        },
+        "app.R29yZ2lhcw.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.display_name": {
+          "source": "URI Path",
+          "message": "Шлях URI"
+        },
+        "app.R29yZ2lhcw.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.short_desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain '{name}' placeholders that are replaced from 'path_vars'. Example: '/users/{id}/comments'",
+          "message": "Шлях URI відносно базового URL API підключення. Може містити заповнювачі '{name}', які замінюються з 'path_vars'. Приклад: '/users/{id}/comments'"
+        },
+        "app.R29yZ2lhcw.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.desc": {
+          "source": "Hash of values substituted into `{name}` placeholders in the URI path. Example: with `path = /users/{id}` and `path_vars = {id: 123}` the framework sends `/users/123`. Values are URL-encoded.",
+          "message": "Хеш значень, що підставляються замість заповнювачів `{name}` у шляху URI. Приклад: із `path = /users/{id}` та `path_vars = {id: 123}` фреймворк надсилає `/users/123`. Значення кодуються у форматі URL."
+        },
+        "app.R29yZ2lhcw.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.display_name": {
+          "source": "Path Variables",
+          "message": "Змінні шляху"
+        },
+        "app.R29yZ2lhcw.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.short_desc": {
+          "source": "Values for {name} placeholders in path",
+          "message": "Значення для заповнювачів {name} у шляху"
+        },
+        "app.R29yZ2lhcw.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.desc": {
+          "source": "Hash of query string parameters to append to the URI path. Values are URL-encoded; list values are joined with `,`.",
+          "message": "Хеш параметрів рядка запиту для додавання до шляху URI. Значення кодуються у форматі URL; значення списку об'єднуються за допомогою `,`."
+        },
+        "app.R29yZ2lhcw.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.display_name": {
+          "source": "Query Arguments",
+          "message": "Аргументи запиту"
+        },
+        "app.R29yZ2lhcw.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.short_desc": {
+          "source": "Query string parameters",
+          "message": "Параметри рядка запиту"
+        },
+        "app.R29yZ2lhcw.action.bWFrZS1hcGktY2FsbA.short_desc": {
+          "source": "Make a custom API call to Gorgias",
+          "message": "Зробити довільний виклик API до Gorgias"
+        },
+        "app.R29yZ2lhcw.action.bmV3LXRpY2tldA.desc": {
+          "source": "Fires when a new ticket is created in Gorgias",
+          "message": "Спрацьовує, коли в Gorgias створюється новий тікет"
+        },
+        "app.R29yZ2lhcw.action.bmV3LXRpY2tldA.display_name": {
+          "source": "New Ticket",
+          "message": "Новий тікет"
+        },
+        "app.R29yZ2lhcw.action.bmV3LXRpY2tldA.short_desc": {
+          "source": "Trigger when a new ticket is created",
+          "message": "Спрацьовувати при створенні нового тікета"
+        },
+        "app.R29yZ2lhcw.action.dGlja2V0LXVwZGF0ZQ.desc": {
+          "source": "Fires when a ticket is modified in Gorgias",
+          "message": "Спрацьовує, коли в Gorgias змінюється тікет"
+        },
+        "app.R29yZ2lhcw.action.dGlja2V0LXVwZGF0ZQ.display_name": {
+          "source": "Ticket Updated",
+          "message": "Тікет оновлено"
+        },
+        "app.R29yZ2lhcw.action.dGlja2V0LXVwZGF0ZQ.short_desc": {
+          "source": "Trigger when a ticket is updated",
+          "message": "Спрацьовувати при оновленні тікета"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLW1lc3NhZ2U.desc": {
+          "source": "Update the body, channel, or other properties of a message on a ticket",
+          "message": "Оновити тіло, канал або інші властивості повідомлення в тікеті"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLW1lc3NhZ2U.display_name": {
+          "source": "Update a Message",
+          "message": "Оновити повідомлення"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLW1lc3NhZ2U.option.Y2hhbm5lbA.allowed-value.c3RyaW5nOmFwaQ.display_name": {
+          "source": "API",
+          "message": "API"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLW1lc3NhZ2U.option.Y2hhbm5lbA.allowed-value.c3RyaW5nOmNoYXQ.display_name": {
+          "source": "Chat",
+          "message": "Чат"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLW1lc3NhZ2U.option.Y2hhbm5lbA.allowed-value.c3RyaW5nOmNvbnRhY3RfZm9ybQ.display_name": {
+          "source": "Contact Form",
+          "message": "Контактна форма"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLW1lc3NhZ2U.option.Y2hhbm5lbA.allowed-value.c3RyaW5nOmVtYWls.display_name": {
+          "source": "Email",
+          "message": "Електронна пошта"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLW1lc3NhZ2U.option.Y2hhbm5lbA.allowed-value.c3RyaW5nOmZhY2Vib29r.display_name": {
+          "source": "Facebook",
+          "message": "Facebook"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLW1lc3NhZ2U.option.Y2hhbm5lbA.allowed-value.c3RyaW5nOmhlbHAtY2VudGVy.display_name": {
+          "source": "Help Center",
+          "message": "Центр довідки"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLW1lc3NhZ2U.option.Y2hhbm5lbA.allowed-value.c3RyaW5nOmluc3RhZ3JhbQ.display_name": {
+          "source": "Instagram",
+          "message": "Instagram"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLW1lc3NhZ2U.option.Y2hhbm5lbA.allowed-value.c3RyaW5nOmludGVybmFsLW5vdGU.display_name": {
+          "source": "Internal Note",
+          "message": "Внутрішня примітка"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLW1lc3NhZ2U.option.Y2hhbm5lbA.allowed-value.c3RyaW5nOnBob25l.display_name": {
+          "source": "Phone",
+          "message": "Телефон"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLW1lc3NhZ2U.option.Y2hhbm5lbA.allowed-value.c3RyaW5nOnNtcw.display_name": {
+          "source": "SMS",
+          "message": "SMS"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLW1lc3NhZ2U.option.Y2hhbm5lbA.allowed-value.c3RyaW5nOnR3aXR0ZXI.display_name": {
+          "source": "Twitter",
+          "message": "Twitter"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLW1lc3NhZ2U.option.Y2hhbm5lbA.allowed-value.c3RyaW5nOndoYXRzYXBw.display_name": {
+          "source": "WhatsApp",
+          "message": "WhatsApp"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLW1lc3NhZ2U.option.Y2hhbm5lbA.desc": {
+          "source": "The channel for the message",
+          "message": "Канал для повідомлення"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLW1lc3NhZ2U.option.Y2hhbm5lbA.display_name": {
+          "source": "Channel",
+          "message": "Канал"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLW1lc3NhZ2U.option.Y2hhbm5lbA.short_desc": {
+          "source": "Message channel",
+          "message": "Канал повідомлення"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLW1lc3NhZ2U.option.YXR0YWNobWVudHM.desc": {
+          "source": "Updated list of file attachments for the message",
+          "message": "Оновлений список вкладених файлів для повідомлення"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLW1lc3NhZ2U.option.YXR0YWNobWVudHM.display_name": {
+          "source": "Attachments",
+          "message": "Вкладення"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLW1lc3NhZ2U.option.YXR0YWNobWVudHM.short_desc": {
+          "source": "File attachments",
+          "message": "Вкладені файли"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLW1lc3NhZ2U.option.Ym9keV90ZXh0.desc": {
+          "source": "The updated plain text body of the message",
+          "message": "Оновлений простий текст повідомлення"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLW1lc3NhZ2U.option.Ym9keV90ZXh0.display_name": {
+          "source": "Body Text",
+          "message": "Текст листа"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLW1lc3NhZ2U.option.Ym9keV90ZXh0.short_desc": {
+          "source": "Plain text body",
+          "message": "Тіло звичайного тексту"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLW1lc3NhZ2U.option.Ym9keV9odG1s.desc": {
+          "source": "The updated HTML body of the message",
+          "message": "Оновлений HTML-текст повідомлення"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLW1lc3NhZ2U.option.Ym9keV9odG1s.display_name": {
+          "source": "Body HTML",
+          "message": "HTML листа"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLW1lc3NhZ2U.option.Ym9keV9odG1s.short_desc": {
+          "source": "HTML body",
+          "message": "HTML-тіло"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLW1lc3NhZ2U.option.ZXh0ZXJuYWxfaWQ.desc": {
+          "source": "An external identifier for the message",
+          "message": "Зовнішній ідентифікатор повідомлення"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLW1lc3NhZ2U.option.ZXh0ZXJuYWxfaWQ.display_name": {
+          "source": "External ID",
+          "message": "Зовнішній ID"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLW1lc3NhZ2U.option.ZXh0ZXJuYWxfaWQ.short_desc": {
+          "source": "External identifier",
+          "message": "Зовнішній ідентифікатор"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLW1lc3NhZ2U.option.ZnJvbV9hZ2VudA.desc": {
+          "source": "Whether the message is from an agent (`True`) or customer (`False`)",
+          "message": "Чи повідомлення від агента (`True`), чи від клієнта (`False`)"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLW1lc3NhZ2U.option.ZnJvbV9hZ2VudA.display_name": {
+          "source": "From Agent",
+          "message": "Від агента"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLW1lc3NhZ2U.option.ZnJvbV9hZ2VudA.short_desc": {
+          "source": "Whether from agent",
+          "message": "Чи від агента"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLW1lc3NhZ2U.option.bWVzc2FnZV9pZA.desc": {
+          "source": "The ID of the message to update",
+          "message": "ID повідомлення для оновлення"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLW1lc3NhZ2U.option.bWVzc2FnZV9pZA.display_name": {
+          "source": "Message ID",
+          "message": "Ідентифікатор повідомлення"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLW1lc3NhZ2U.option.bWVzc2FnZV9pZA.short_desc": {
+          "source": "The message to update",
+          "message": "Повідомлення для оновлення"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLW1lc3NhZ2U.option.c2VuZGVy.desc": {
+          "source": "The sender of the message. Provide `id` for agents or `email` for customers",
+          "message": "Відправник повідомлення. Вкажіть `id` для агентів або `email` для клієнтів"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLW1lc3NhZ2U.option.c2VuZGVy.display_name": {
+          "source": "Sender",
+          "message": "Відправник"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLW1lc3NhZ2U.option.c2VuZGVy.short_desc": {
+          "source": "Message sender",
+          "message": "Відправник повідомлення"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLW1lc3NhZ2U.option.c3ViamVjdA.desc": {
+          "source": "The updated subject line of the message",
+          "message": "Оновлена тема повідомлення"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLW1lc3NhZ2U.option.c3ViamVjdA.display_name": {
+          "source": "Subject",
+          "message": "Тема"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLW1lc3NhZ2U.option.c3ViamVjdA.short_desc": {
+          "source": "Message subject",
+          "message": "Тема повідомлення"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLW1lc3NhZ2U.option.cmVjZWl2ZXI.desc": {
+          "source": "The receiver of the message. Provide `id` for an agent or `email` for a customer",
+          "message": "Одержувач повідомлення. Вкажіть `id` для агента або `email` для клієнта"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLW1lc3NhZ2U.option.cmVjZWl2ZXI.display_name": {
+          "source": "Receiver",
+          "message": "Одержувач"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLW1lc3NhZ2U.option.cmVjZWl2ZXI.short_desc": {
+          "source": "Message receiver",
+          "message": "Одержувач повідомлення"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLW1lc3NhZ2U.option.dGlja2V0X2lk.desc": {
+          "source": "The ID of the ticket containing the message to update",
+          "message": "ID тікета, що містить повідомлення для оновлення"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLW1lc3NhZ2U.option.dGlja2V0X2lk.display_name": {
+          "source": "Ticket ID",
+          "message": "ID тікета"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLW1lc3NhZ2U.option.dGlja2V0X2lk.short_desc": {
+          "source": "The ticket containing the message",
+          "message": "Тікет, що містить повідомлення"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLW1lc3NhZ2U.option.dmlh.allowed-value.c3RyaW5nOmFwaQ.display_name": {
+          "source": "API",
+          "message": "API"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLW1lc3NhZ2U.option.dmlh.allowed-value.c3RyaW5nOmNoYXQ.display_name": {
+          "source": "Chat",
+          "message": "Чат"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLW1lc3NhZ2U.option.dmlh.allowed-value.c3RyaW5nOmNvbnRhY3RfZm9ybQ.display_name": {
+          "source": "Contact Form",
+          "message": "Контактна форма"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLW1lc3NhZ2U.option.dmlh.allowed-value.c3RyaW5nOmVtYWls.display_name": {
+          "source": "Email",
+          "message": "Електронна пошта"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLW1lc3NhZ2U.option.dmlh.allowed-value.c3RyaW5nOmZhY2Vib29r.display_name": {
+          "source": "Facebook",
+          "message": "Facebook"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLW1lc3NhZ2U.option.dmlh.allowed-value.c3RyaW5nOmhlbHAtY2VudGVy.display_name": {
+          "source": "Help Center",
+          "message": "Центр довідки"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLW1lc3NhZ2U.option.dmlh.allowed-value.c3RyaW5nOmhlbHBkZXNr.display_name": {
+          "source": "Helpdesk",
+          "message": "Helpdesk"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLW1lc3NhZ2U.option.dmlh.allowed-value.c3RyaW5nOmluc3RhZ3JhbQ.display_name": {
+          "source": "Instagram",
+          "message": "Instagram"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLW1lc3NhZ2U.option.dmlh.allowed-value.c3RyaW5nOnBob25l.display_name": {
+          "source": "Phone",
+          "message": "Телефон"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLW1lc3NhZ2U.option.dmlh.allowed-value.c3RyaW5nOnNtcw.display_name": {
+          "source": "SMS",
+          "message": "SMS"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLW1lc3NhZ2U.option.dmlh.allowed-value.c3RyaW5nOnR3aXR0ZXI.display_name": {
+          "source": "Twitter",
+          "message": "Twitter"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLW1lc3NhZ2U.option.dmlh.allowed-value.c3RyaW5nOndoYXRzYXBw.display_name": {
+          "source": "WhatsApp",
+          "message": "WhatsApp"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLW1lc3NhZ2U.option.dmlh.desc": {
+          "source": "How the message was created",
+          "message": "Спосіб створення повідомлення"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLW1lc3NhZ2U.option.dmlh.display_name": {
+          "source": "Via",
+          "message": "Через"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLW1lc3NhZ2U.option.dmlh.short_desc": {
+          "source": "Message source",
+          "message": "Джерело повідомлення"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLW1lc3NhZ2U.short_desc": {
+          "source": "Update an existing message",
+          "message": "Оновити існуюче повідомлення"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLWN1c3RvbWVy.desc": {
+          "source": "Update the name, email, or other properties of a customer",
+          "message": "Оновити ім'я, електронну пошту або інші властивості клієнта"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLWN1c3RvbWVy.display_name": {
+          "source": "Update a Customer",
+          "message": "Оновити клієнта"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLWN1c3RvbWVy.option.Y2hhbm5lbHM.desc": {
+          "source": "List of communication channels for the customer. Each channel has an `address`, `type`, and optional `preferred` flag",
+          "message": "Список каналів зв'язку для клієнта. Кожен канал має `address`, `type` та необов'язковий прапорець `preferred`"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLWN1c3RvbWVy.option.Y2hhbm5lbHM.display_name": {
+          "source": "Channels",
+          "message": "Канали"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLWN1c3RvbWVy.option.Y2hhbm5lbHM.short_desc": {
+          "source": "Communication channels",
+          "message": "Канали зв'язку"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLWN1c3RvbWVy.option.Y3VzdG9tZXJfaWQ.desc": {
+          "source": "The ID of the customer to update",
+          "message": "ID клієнта для оновлення"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLWN1c3RvbWVy.option.Y3VzdG9tZXJfaWQ.display_name": {
+          "source": "Customer ID",
+          "message": "ID клієнта"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLWN1c3RvbWVy.option.Y3VzdG9tZXJfaWQ.short_desc": {
+          "source": "The customer to update",
+          "message": "Клієнт для оновлення"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLWN1c3RvbWVy.option.ZW1haWw.desc": {
+          "source": "The primary email address of the customer",
+          "message": "Основна адреса електронної пошти клієнта"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLWN1c3RvbWVy.option.ZW1haWw.display_name": {
+          "source": "Email",
+          "message": "Електронна пошта"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLWN1c3RvbWVy.option.ZW1haWw.short_desc": {
+          "source": "Customer email address",
+          "message": "Адреса електронної пошти клієнта"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLWN1c3RvbWVy.option.ZXh0ZXJuYWxfaWQ.desc": {
+          "source": "An external identifier for the customer",
+          "message": "Зовнішній ідентифікатор клієнта"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLWN1c3RvbWVy.option.ZXh0ZXJuYWxfaWQ.display_name": {
+          "source": "External ID",
+          "message": "Зовнішній ID"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLWN1c3RvbWVy.option.ZXh0ZXJuYWxfaWQ.short_desc": {
+          "source": "External identifier",
+          "message": "Зовнішній ідентифікатор"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLWN1c3RvbWVy.option.Zmlyc3RuYW1l.desc": {
+          "source": "The first name of the customer",
+          "message": "Ім'я клієнта"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLWN1c3RvbWVy.option.Zmlyc3RuYW1l.display_name": {
+          "source": "First Name",
+          "message": "Ім'я"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLWN1c3RvbWVy.option.Zmlyc3RuYW1l.short_desc": {
+          "source": "Customer first name",
+          "message": "Ім'я клієнта"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLWN1c3RvbWVy.option.bGFuZ3VhZ2U.desc": {
+          "source": "The preferred language of the customer (ISO 639-1 code)",
+          "message": "Бажана мова клієнта (код ISO 639-1)"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLWN1c3RvbWVy.option.bGFuZ3VhZ2U.display_name": {
+          "source": "Language",
+          "message": "Мова"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLWN1c3RvbWVy.option.bGFuZ3VhZ2U.short_desc": {
+          "source": "Preferred language",
+          "message": "Бажана мова"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLWN1c3RvbWVy.option.bGFzdG5hbWU.desc": {
+          "source": "The last name of the customer",
+          "message": "Прізвище клієнта"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLWN1c3RvbWVy.option.bGFzdG5hbWU.display_name": {
+          "source": "Last Name",
+          "message": "Прізвище"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLWN1c3RvbWVy.option.bGFzdG5hbWU.short_desc": {
+          "source": "Customer last name",
+          "message": "Прізвище клієнта"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLWN1c3RvbWVy.option.bm90ZQ.desc": {
+          "source": "Internal notes about the customer",
+          "message": "Внутрішні примітки про клієнта"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLWN1c3RvbWVy.option.bm90ZQ.display_name": {
+          "source": "Note",
+          "message": "Примітка"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLWN1c3RvbWVy.option.bm90ZQ.short_desc": {
+          "source": "Internal note",
+          "message": "Внутрішня примітка"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLWN1c3RvbWVy.option.bmFtZQ.desc": {
+          "source": "The full name of the customer",
+          "message": "Повне ім'я клієнта"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLWN1c3RvbWVy.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "Назва"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLWN1c3RvbWVy.option.bmFtZQ.short_desc": {
+          "source": "Full name",
+          "message": "Повне ім'я"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLWN1c3RvbWVy.option.dGltZXpvbmU.desc": {
+          "source": "The timezone of the customer",
+          "message": "Часовий пояс клієнта"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLWN1c3RvbWVy.option.dGltZXpvbmU.display_name": {
+          "source": "Timezone",
+          "message": "Часовий пояс"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLWN1c3RvbWVy.option.dGltZXpvbmU.short_desc": {
+          "source": "Customer timezone",
+          "message": "Часовий пояс клієнта"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLWN1c3RvbWVy.short_desc": {
+          "source": "Update an existing customer",
+          "message": "Оновити наявного клієнта"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLXRhZw.desc": {
+          "source": "Update the name or decoration of a tag",
+          "message": "Оновити назву або оформлення тегу"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLXRhZw.display_name": {
+          "source": "Update a Tag",
+          "message": "Оновити тег"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLXRhZw.option.ZGVjb3JhdGlvbg.desc": {
+          "source": "Visual decoration settings for the tag",
+          "message": "Параметри візуального оформлення тегу"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLXRhZw.option.ZGVjb3JhdGlvbg.display_name": {
+          "source": "Decoration",
+          "message": "Оформлення"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLXRhZw.option.ZGVjb3JhdGlvbg.short_desc": {
+          "source": "Visual decoration",
+          "message": "Візуальне оформлення"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLXRhZw.option.ZGVzY3JpcHRpb24.desc": {
+          "source": "A short description of the tag",
+          "message": "Короткий опис тегу"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLXRhZw.option.ZGVzY3JpcHRpb24.display_name": {
+          "source": "Description",
+          "message": "Опис"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLXRhZw.option.ZGVzY3JpcHRpb24.short_desc": {
+          "source": "Tag description",
+          "message": "Опис тегу"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLXRhZw.option.bmFtZQ.desc": {
+          "source": "The new name of the tag (min 1, max 256 characters)",
+          "message": "Нова назва тегу (мін. 1, макс. 256 символів)"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLXRhZw.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "Назва"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLXRhZw.option.bmFtZQ.short_desc": {
+          "source": "Tag name",
+          "message": "Назва тегу"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLXRhZw.option.dGFnX2lk.desc": {
+          "source": "The ID of the tag to update",
+          "message": "ID тегу для оновлення"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLXRhZw.option.dGFnX2lk.display_name": {
+          "source": "Tag ID",
+          "message": "Ідентифікатор тегу"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLXRhZw.option.dGFnX2lk.short_desc": {
+          "source": "The tag to update",
+          "message": "Тег для оновлення"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLXRhZw.short_desc": {
+          "source": "Update an existing tag",
+          "message": "Оновити наявний тег"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLXRpY2tldA.desc": {
+          "source": "Update the status, priority, assignment, or other properties of a ticket",
+          "message": "Оновити статус, пріоритет, призначення або інші властивості тікета"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLXRpY2tldA.display_name": {
+          "source": "Update a Ticket",
+          "message": "Оновити тікет"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLXRpY2tldA.option.Y3VzdG9tZXI.desc": {
+          "source": "Update the customer associated with this ticket. Provide `id` to reference an existing customer, or `email` to match by email address",
+          "message": "Оновити клієнта, пов'язаного з цим тікетом. Вкажіть `id`, щоб послатися на наявного клієнта, або `email`, щоб знайти за адресою електронної пошти"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLXRpY2tldA.option.Y3VzdG9tZXI.display_name": {
+          "source": "Customer",
+          "message": "Клієнт"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLXRpY2tldA.option.Y3VzdG9tZXI.short_desc": {
+          "source": "Customer data",
+          "message": "Дані клієнта"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLXRpY2tldA.option.YXNzaWduZWVfdGVhbQ.desc": {
+          "source": "The team to assign, or `NOTHING` to unassign",
+          "message": "Команда для призначення, або `NOTHING`, щоб скасувати призначення"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLXRpY2tldA.option.YXNzaWduZWVfdGVhbQ.display_name": {
+          "source": "Assignee Team",
+          "message": "Призначена команда"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLXRpY2tldA.option.YXNzaWduZWVfdGVhbQ.short_desc": {
+          "source": "Assigned team",
+          "message": "Призначена команда"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLXRpY2tldA.option.YXNzaWduZWVfdXNlcg.desc": {
+          "source": "The agent to assign, or `NOTHING` to unassign",
+          "message": "Агент для призначення, або `NOTHING`, щоб скасувати призначення"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLXRpY2tldA.option.YXNzaWduZWVfdXNlcg.display_name": {
+          "source": "Assignee User",
+          "message": "Призначений користувач"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLXRpY2tldA.option.YXNzaWduZWVfdXNlcg.short_desc": {
+          "source": "Assigned agent",
+          "message": "Призначений агент"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLXRpY2tldA.option.ZXh0ZXJuYWxfaWQ.desc": {
+          "source": "An external identifier for the ticket (max 255 characters)",
+          "message": "Зовнішній ідентифікатор тікета (макс. 255 символів)"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLXRpY2tldA.option.ZXh0ZXJuYWxfaWQ.display_name": {
+          "source": "External ID",
+          "message": "Зовнішній ID"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLXRpY2tldA.option.ZXh0ZXJuYWxfaWQ.short_desc": {
+          "source": "External identifier",
+          "message": "Зовнішній ідентифікатор"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLXRpY2tldA.option.c25vb3plX2RhdGV0aW1l.desc": {
+          "source": "ISO 8601 timestamp until which to snooze the ticket",
+          "message": "Часова мітка ISO 8601, до якої потрібно відкласти тікет"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLXRpY2tldA.option.c25vb3plX2RhdGV0aW1l.display_name": {
+          "source": "Snooze Until",
+          "message": "Відкласти до"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLXRpY2tldA.option.c25vb3plX2RhdGV0aW1l.short_desc": {
+          "source": "Snooze datetime",
+          "message": "Дата та час відкладення"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLXRpY2tldA.option.c3BhbQ.desc": {
+          "source": "Whether to mark the ticket as spam",
+          "message": "Чи позначати тікет як спам"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLXRpY2tldA.option.c3BhbQ.display_name": {
+          "source": "Spam",
+          "message": "Спам"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLXRpY2tldA.option.c3BhbQ.short_desc": {
+          "source": "Mark as spam",
+          "message": "Позначити як спам"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLXRpY2tldA.option.c3RhdHVz.allowed-value.c3RyaW5nOm9wZW4.display_name": {
+          "source": "Open",
+          "message": "Відкрита"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLXRpY2tldA.option.c3RhdHVz.allowed-value.c3RyaW5nOmNsb3NlZA.display_name": {
+          "source": "Closed",
+          "message": "Закрито"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLXRpY2tldA.option.c3RhdHVz.desc": {
+          "source": "The new status of the ticket",
+          "message": "Новий статус тікета"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLXRpY2tldA.option.c3RhdHVz.display_name": {
+          "source": "Status",
+          "message": "Статус"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLXRpY2tldA.option.c3RhdHVz.short_desc": {
+          "source": "Ticket status",
+          "message": "Статус тікета"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLXRpY2tldA.option.c3ViamVjdA.desc": {
+          "source": "The new subject line (max 998 characters)",
+          "message": "Нова тема (макс. 998 символів)"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLXRpY2tldA.option.c3ViamVjdA.display_name": {
+          "source": "Subject",
+          "message": "Тема"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLXRpY2tldA.option.c3ViamVjdA.short_desc": {
+          "source": "Ticket subject",
+          "message": "Тема тікета"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLXRpY2tldA.option.cHJpb3JpdHk.allowed-value.c3RyaW5nOm5vcm1hbA.display_name": {
+          "source": "Normal",
+          "message": "Звичайний"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLXRpY2tldA.option.cHJpb3JpdHk.allowed-value.c3RyaW5nOmNyaXRpY2Fs.display_name": {
+          "source": "Critical",
+          "message": "Критичний"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLXRpY2tldA.option.cHJpb3JpdHk.allowed-value.c3RyaW5nOmhpZ2g.display_name": {
+          "source": "High",
+          "message": "Високий"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLXRpY2tldA.option.cHJpb3JpdHk.allowed-value.c3RyaW5nOmxvdw.display_name": {
+          "source": "Low",
+          "message": "Низький"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLXRpY2tldA.option.cHJpb3JpdHk.desc": {
+          "source": "The new priority level",
+          "message": "Новий рівень пріоритету"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLXRpY2tldA.option.cHJpb3JpdHk.display_name": {
+          "source": "Priority",
+          "message": "Пріоритет"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLXRpY2tldA.option.cHJpb3JpdHk.short_desc": {
+          "source": "Ticket priority",
+          "message": "Пріоритет тікета"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLXRpY2tldA.option.dGFncw.desc": {
+          "source": "List of tags to set on the ticket. Replaces existing tags. Each tag must have a `name` field",
+          "message": "Список тегів для встановлення в тікеті. Замінює наявні теги. Кожен тег повинен містити поле `name`"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLXRpY2tldA.option.dGFncw.display_name": {
+          "source": "Tags",
+          "message": "Теги"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLXRpY2tldA.option.dGFncw.short_desc": {
+          "source": "Tags to set",
+          "message": "Теги для встановлення"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLXRpY2tldA.option.dGlja2V0X2lk.desc": {
+          "source": "The ID of the ticket to update",
+          "message": "ID тікета для оновлення"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLXRpY2tldA.option.dGlja2V0X2lk.display_name": {
+          "source": "Ticket ID",
+          "message": "ID тікета"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLXRpY2tldA.option.dGlja2V0X2lk.short_desc": {
+          "source": "The ticket to update",
+          "message": "Тікет для оновлення"
+        },
+        "app.R29yZ2lhcw.action.dXBkYXRlLXRpY2tldA.short_desc": {
+          "source": "Update an existing ticket",
+          "message": "Оновити наявний тікет"
+        },
+        "app.R29yZ2lhcw.desc": {
+          "source": "Gorgias is a customer support and helpdesk platform for e-commerce and SaaS businesses.\n\nThis integration supports managing tickets, customers, tags, messages, and monitoring ticket events.",
+          "message": "Gorgias — це платформа клієнтської підтримки та helpdesk для бізнесів у сфері електронної комерції та SaaS.\n\nЦя інтеграція підтримує керування тікетами, клієнтами, тегами, повідомленнями та моніторинг подій тікетів."
+        },
+        "app.R29yZ2lhcw.display_name": {
+          "source": "Gorgias",
+          "message": "Gorgias"
+        },
+        "app.R29yZ2lhcw.short_desc": {
+          "source": "Gorgias customer support and helpdesk platform",
+          "message": "Платформа підтримки клієнтів і helpdesk Gorgias"
+        }
+      }
+    }
+  }
+}

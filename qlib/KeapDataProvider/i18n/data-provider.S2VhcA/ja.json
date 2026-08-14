@@ -1,0 +1,2345 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "ja": {
+      "messages": {
+        "app.S2VhcA.action.Y29udGFjdC11cGRhdGVk.desc": {
+          "source": "Triggers when a contact is updated in Keap",
+          "message": "Keap で連絡先が更新されたときにトリガーされます"
+        },
+        "app.S2VhcA.action.Y29udGFjdC11cGRhdGVk.display_name": {
+          "source": "Contact Updated",
+          "message": "連絡先が更新されました"
+        },
+        "app.S2VhcA.action.Y29udGFjdC11cGRhdGVk.short_desc": {
+          "source": "Watch for contact updates",
+          "message": "連絡先の更新を監視"
+        },
+        "app.S2VhcA.action.Y29udGFjdC1hZGRlZA.desc": {
+          "source": "Triggers when a new contact is created in Keap",
+          "message": "Keap で新しい連絡先が作成されたときにトリガーされます"
+        },
+        "app.S2VhcA.action.Y29udGFjdC1hZGRlZA.display_name": {
+          "source": "Contact Added",
+          "message": "連絡先が追加されました"
+        },
+        "app.S2VhcA.action.Y29udGFjdC1hZGRlZA.short_desc": {
+          "source": "Watch for new contacts",
+          "message": "新しい連絡先を監視"
+        },
+        "app.S2VhcA.action.Y3JlYXRlLW5vdGU.desc": {
+          "source": "Create a new note for a contact in Keap",
+          "message": "Keap で連絡先の新しいノートを作成します"
+        },
+        "app.S2VhcA.action.Y3JlYXRlLW5vdGU.display_name": {
+          "source": "Create a Note",
+          "message": "ノートを作成"
+        },
+        "app.S2VhcA.action.Y3JlYXRlLW5vdGU.option.Y29udGFjdF9pZA.display_name": {
+          "source": "Contact ID",
+          "message": "連絡先ID"
+        },
+        "app.S2VhcA.action.Y3JlYXRlLW5vdGU.option.Y29udGFjdF9pZA.short_desc": {
+          "source": "The contact",
+          "message": "連絡先"
+        },
+        "app.S2VhcA.action.Y3JlYXRlLW5vdGU.option.Ym9keQ.display_name": {
+          "source": "Body",
+          "message": "ボディ"
+        },
+        "app.S2VhcA.action.Y3JlYXRlLW5vdGU.option.Ym9keQ.short_desc": {
+          "source": "Note body",
+          "message": "ノート本文"
+        },
+        "app.S2VhcA.action.Y3JlYXRlLW5vdGU.option.dGl0bGU.display_name": {
+          "source": "Title",
+          "message": "タイトル"
+        },
+        "app.S2VhcA.action.Y3JlYXRlLW5vdGU.option.dGl0bGU.short_desc": {
+          "source": "Note title",
+          "message": "ノートタイトル"
+        },
+        "app.S2VhcA.action.Y3JlYXRlLW5vdGU.option.dHlwZQ.desc": {
+          "source": "The type of note",
+          "message": "ノートのタイプ"
+        },
+        "app.S2VhcA.action.Y3JlYXRlLW5vdGU.option.dHlwZQ.display_name": {
+          "source": "Type",
+          "message": "タイプ"
+        },
+        "app.S2VhcA.action.Y3JlYXRlLW5vdGU.option.dHlwZQ.short_desc": {
+          "source": "Note type",
+          "message": "ノートタイプ"
+        },
+        "app.S2VhcA.action.Y3JlYXRlLW5vdGU.short_desc": {
+          "source": "Create a new note",
+          "message": "新しいノートを作成"
+        },
+        "app.S2VhcA.action.Y3JlYXRlLW9wcG9ydHVuaXR5.desc": {
+          "source": "Create a new opportunity in Keap",
+          "message": "Keap で新しい案件を作成します"
+        },
+        "app.S2VhcA.action.Y3JlYXRlLW9wcG9ydHVuaXR5.display_name": {
+          "source": "Create an Opportunity",
+          "message": "案件を作成"
+        },
+        "app.S2VhcA.action.Y3JlYXRlLW9wcG9ydHVuaXR5.option.Y29udGFjdF9pZA.display_name": {
+          "source": "Contact ID",
+          "message": "連絡先ID"
+        },
+        "app.S2VhcA.action.Y3JlYXRlLW9wcG9ydHVuaXR5.option.Y29udGFjdF9pZA.short_desc": {
+          "source": "Associated contact",
+          "message": "関連する連絡先"
+        },
+        "app.S2VhcA.action.Y3JlYXRlLW9wcG9ydHVuaXR5.option.ZXN0aW1hdGVkX2Nsb3NlX3RpbWU.display_name": {
+          "source": "Estimated Close Time",
+          "message": "予想成約日時"
+        },
+        "app.S2VhcA.action.Y3JlYXRlLW9wcG9ydHVuaXR5.option.ZXN0aW1hdGVkX2Nsb3NlX3RpbWU.short_desc": {
+          "source": "Expected close date/time",
+          "message": "予想成約日時"
+        },
+        "app.S2VhcA.action.Y3JlYXRlLW9wcG9ydHVuaXR5.option.b3Bwb3J0dW5pdHlfbm90ZXM.display_name": {
+          "source": "Notes",
+          "message": "メモ"
+        },
+        "app.S2VhcA.action.Y3JlYXRlLW9wcG9ydHVuaXR5.option.b3Bwb3J0dW5pdHlfbm90ZXM.short_desc": {
+          "source": "Opportunity notes",
+          "message": "案件ノート"
+        },
+        "app.S2VhcA.action.Y3JlYXRlLW9wcG9ydHVuaXR5.option.b3Bwb3J0dW5pdHlfdGl0bGU.desc": {
+          "source": "Title of the opportunity",
+          "message": "案件のタイトル"
+        },
+        "app.S2VhcA.action.Y3JlYXRlLW9wcG9ydHVuaXR5.option.b3Bwb3J0dW5pdHlfdGl0bGU.display_name": {
+          "source": "Title",
+          "message": "タイトル"
+        },
+        "app.S2VhcA.action.Y3JlYXRlLW9wcG9ydHVuaXR5.option.b3Bwb3J0dW5pdHlfdGl0bGU.short_desc": {
+          "source": "Opportunity title",
+          "message": "案件タイトル"
+        },
+        "app.S2VhcA.action.Y3JlYXRlLW9wcG9ydHVuaXR5.option.c3RhZ2VfaWQ.display_name": {
+          "source": "Stage ID",
+          "message": "ステージID"
+        },
+        "app.S2VhcA.action.Y3JlYXRlLW9wcG9ydHVuaXR5.option.c3RhZ2VfaWQ.short_desc": {
+          "source": "Pipeline stage",
+          "message": "パイプラインステージ"
+        },
+        "app.S2VhcA.action.Y3JlYXRlLW9wcG9ydHVuaXR5.option.cHJvamVjdGVkX3JldmVudWVfaGlnaA.display_name": {
+          "source": "Projected Revenue High",
+          "message": "予想売上高 (上限)"
+        },
+        "app.S2VhcA.action.Y3JlYXRlLW9wcG9ydHVuaXR5.option.cHJvamVjdGVkX3JldmVudWVfaGlnaA.short_desc": {
+          "source": "High revenue estimate",
+          "message": "予想売上高の上限"
+        },
+        "app.S2VhcA.action.Y3JlYXRlLW9wcG9ydHVuaXR5.option.cHJvamVjdGVkX3JldmVudWVfbG93.display_name": {
+          "source": "Projected Revenue Low",
+          "message": "予想売上高 (下限)"
+        },
+        "app.S2VhcA.action.Y3JlYXRlLW9wcG9ydHVuaXR5.option.cHJvamVjdGVkX3JldmVudWVfbG93.short_desc": {
+          "source": "Low revenue estimate",
+          "message": "予想売上高の下限"
+        },
+        "app.S2VhcA.action.Y3JlYXRlLW9wcG9ydHVuaXR5.short_desc": {
+          "source": "Create a new opportunity",
+          "message": "新しい案件を作成"
+        },
+        "app.S2VhcA.action.Y3JlYXRlLW9yZGVy.desc": {
+          "source": "Create a new order in Keap",
+          "message": "Keap で新しい注文を作成します"
+        },
+        "app.S2VhcA.action.Y3JlYXRlLW9yZGVy.display_name": {
+          "source": "Create an Order",
+          "message": "注文を作成"
+        },
+        "app.S2VhcA.action.Y3JlYXRlLW9yZGVy.option.Y29udGFjdF9pZA.display_name": {
+          "source": "Contact ID",
+          "message": "連絡先ID"
+        },
+        "app.S2VhcA.action.Y3JlYXRlLW9yZGVy.option.Y29udGFjdF9pZA.short_desc": {
+          "source": "Associated contact",
+          "message": "関連する連絡先"
+        },
+        "app.S2VhcA.action.Y3JlYXRlLW9yZGVy.option.b3JkZXJfaXRlbXM.desc": {
+          "source": "List of order item hashes",
+          "message": "注文品目ハッシュのリスト"
+        },
+        "app.S2VhcA.action.Y3JlYXRlLW9yZGVy.option.b3JkZXJfaXRlbXM.display_name": {
+          "source": "Order Items",
+          "message": "注文商品"
+        },
+        "app.S2VhcA.action.Y3JlYXRlLW9yZGVy.option.b3JkZXJfaXRlbXM.short_desc": {
+          "source": "Items in the order",
+          "message": "注文内の品目"
+        },
+        "app.S2VhcA.action.Y3JlYXRlLW9yZGVy.option.b3JkZXJfdGl0bGU.display_name": {
+          "source": "Order Title",
+          "message": "注文タイトル"
+        },
+        "app.S2VhcA.action.Y3JlYXRlLW9yZGVy.option.b3JkZXJfdGl0bGU.short_desc": {
+          "source": "Title of the order",
+          "message": "注文のタイトル"
+        },
+        "app.S2VhcA.action.Y3JlYXRlLW9yZGVy.option.b3JkZXJfdGltZQ.display_name": {
+          "source": "Order Time",
+          "message": "注文日時"
+        },
+        "app.S2VhcA.action.Y3JlYXRlLW9yZGVy.option.b3JkZXJfdGltZQ.short_desc": {
+          "source": "Date/time of the order",
+          "message": "注文の日時"
+        },
+        "app.S2VhcA.action.Y3JlYXRlLW9yZGVy.option.cHJvbW9fY29kZXM.display_name": {
+          "source": "Promo Codes",
+          "message": "プロモーションコード"
+        },
+        "app.S2VhcA.action.Y3JlYXRlLW9yZGVy.option.cHJvbW9fY29kZXM.short_desc": {
+          "source": "Promotional codes",
+          "message": "プロモーションコード"
+        },
+        "app.S2VhcA.action.Y3JlYXRlLW9yZGVy.short_desc": {
+          "source": "Create a new order",
+          "message": "新規注文を作成"
+        },
+        "app.S2VhcA.action.Y3JlYXRlLWNvbXBhbnk.desc": {
+          "source": "Create a new company in Keap",
+          "message": "Keap で新しい会社を作成します"
+        },
+        "app.S2VhcA.action.Y3JlYXRlLWNvbXBhbnk.display_name": {
+          "source": "Create a Company",
+          "message": "会社を作成"
+        },
+        "app.S2VhcA.action.Y3JlYXRlLWNvbXBhbnk.option.Y29tcGFueV9uYW1l.desc": {
+          "source": "Name of the company",
+          "message": "会社名"
+        },
+        "app.S2VhcA.action.Y3JlYXRlLWNvbXBhbnk.option.Y29tcGFueV9uYW1l.display_name": {
+          "source": "Company Name",
+          "message": "会社名"
+        },
+        "app.S2VhcA.action.Y3JlYXRlLWNvbXBhbnk.option.Y29tcGFueV9uYW1l.short_desc": {
+          "source": "Name of the company",
+          "message": "会社名"
+        },
+        "app.S2VhcA.action.Y3JlYXRlLWNvbXBhbnk.option.ZW1haWxfYWRkcmVzcw.display_name": {
+          "source": "Email",
+          "message": "メール"
+        },
+        "app.S2VhcA.action.Y3JlYXRlLWNvbXBhbnk.option.ZW1haWxfYWRkcmVzcw.short_desc": {
+          "source": "Company email",
+          "message": "会社のメールアドレス"
+        },
+        "app.S2VhcA.action.Y3JlYXRlLWNvbXBhbnk.option.cGhvbmVfbnVtYmVy.display_name": {
+          "source": "Phone",
+          "message": "電話番号"
+        },
+        "app.S2VhcA.action.Y3JlYXRlLWNvbXBhbnk.option.cGhvbmVfbnVtYmVy.short_desc": {
+          "source": "Company phone",
+          "message": "会社の電話番号"
+        },
+        "app.S2VhcA.action.Y3JlYXRlLWNvbXBhbnk.option.d2Vic2l0ZQ.display_name": {
+          "source": "Website",
+          "message": "ウェブサイト"
+        },
+        "app.S2VhcA.action.Y3JlYXRlLWNvbXBhbnk.option.d2Vic2l0ZQ.short_desc": {
+          "source": "Company website",
+          "message": "会社のWebサイト"
+        },
+        "app.S2VhcA.action.Y3JlYXRlLWNvbXBhbnk.short_desc": {
+          "source": "Create a new company",
+          "message": "新しい会社を作成"
+        },
+        "app.S2VhcA.action.Y3JlYXRlLWNvbnRhY3Q.desc": {
+          "source": "Create a new contact in Keap",
+          "message": "Keap で新しい連絡先を作成します"
+        },
+        "app.S2VhcA.action.Y3JlYXRlLWNvbnRhY3Q.display_name": {
+          "source": "Create a Contact",
+          "message": "連絡先を作成"
+        },
+        "app.S2VhcA.action.Y3JlYXRlLWNvbnRhY3Q.option.YW5uaXZlcnNhcnlfZGF0ZQ.display_name": {
+          "source": "Anniversary",
+          "message": "記念日"
+        },
+        "app.S2VhcA.action.Y3JlYXRlLWNvbnRhY3Q.option.YW5uaXZlcnNhcnlfZGF0ZQ.short_desc": {
+          "source": "Contact anniversary",
+          "message": "連絡先の記念日"
+        },
+        "app.S2VhcA.action.Y3JlYXRlLWNvbnRhY3Q.option.YmlydGhfZGF0ZQ.display_name": {
+          "source": "Birthday",
+          "message": "誕生日"
+        },
+        "app.S2VhcA.action.Y3JlYXRlLWNvbnRhY3Q.option.YmlydGhfZGF0ZQ.short_desc": {
+          "source": "Contact birthday",
+          "message": "連絡先の誕生日"
+        },
+        "app.S2VhcA.action.Y3JlYXRlLWNvbnRhY3Q.option.Z2l2ZW5fbmFtZQ.desc": {
+          "source": "First name of the contact",
+          "message": "連絡先の名"
+        },
+        "app.S2VhcA.action.Y3JlYXRlLWNvbnRhY3Q.option.Z2l2ZW5fbmFtZQ.display_name": {
+          "source": "First Name",
+          "message": "名"
+        },
+        "app.S2VhcA.action.Y3JlYXRlLWNvbnRhY3Q.option.Z2l2ZW5fbmFtZQ.short_desc": {
+          "source": "Contact first name",
+          "message": "連絡先の名"
+        },
+        "app.S2VhcA.action.Y3JlYXRlLWNvbnRhY3Q.option.ZW1haWw.desc": {
+          "source": "The contact's email address",
+          "message": "コンタクトのメールアドレス"
+        },
+        "app.S2VhcA.action.Y3JlYXRlLWNvbnRhY3Q.option.ZW1haWw.display_name": {
+          "source": "Email",
+          "message": "メール"
+        },
+        "app.S2VhcA.action.Y3JlYXRlLWNvbnRhY3Q.option.ZW1haWw.short_desc": {
+          "source": "Contact email address",
+          "message": "連絡先のメールアドレス"
+        },
+        "app.S2VhcA.action.Y3JlYXRlLWNvbnRhY3Q.option.ZmFtaWx5X25hbWU.desc": {
+          "source": "Last name of the contact",
+          "message": "連絡先の姓"
+        },
+        "app.S2VhcA.action.Y3JlYXRlLWNvbnRhY3Q.option.ZmFtaWx5X25hbWU.display_name": {
+          "source": "Last Name",
+          "message": "姓"
+        },
+        "app.S2VhcA.action.Y3JlYXRlLWNvbnRhY3Q.option.ZmFtaWx5X25hbWU.short_desc": {
+          "source": "Contact last name",
+          "message": "連絡先の姓"
+        },
+        "app.S2VhcA.action.Y3JlYXRlLWNvbnRhY3Q.option.am9iX3RpdGxl.display_name": {
+          "source": "Job Title",
+          "message": "役職"
+        },
+        "app.S2VhcA.action.Y3JlYXRlLWNvbnRhY3Q.option.am9iX3RpdGxl.short_desc": {
+          "source": "Contact job title",
+          "message": "連絡先の役職"
+        },
+        "app.S2VhcA.action.Y3JlYXRlLWNvbnRhY3Q.option.b3duZXJfaWQ.desc": {
+          "source": "The ID of the user who owns this contact",
+          "message": "この連絡先を所有するユーザーのID"
+        },
+        "app.S2VhcA.action.Y3JlYXRlLWNvbnRhY3Q.option.b3duZXJfaWQ.display_name": {
+          "source": "Owner ID",
+          "message": "所有者ID"
+        },
+        "app.S2VhcA.action.Y3JlYXRlLWNvbnRhY3Q.option.b3duZXJfaWQ.short_desc": {
+          "source": "Contact owner user ID",
+          "message": "連絡先担当者のユーザー ID"
+        },
+        "app.S2VhcA.action.Y3JlYXRlLWNvbnRhY3Q.option.bGVhZHNvdXJjZV9pZA.display_name": {
+          "source": "Lead Source ID",
+          "message": "リードソースID"
+        },
+        "app.S2VhcA.action.Y3JlYXRlLWNvbnRhY3Q.option.bGVhZHNvdXJjZV9pZA.short_desc": {
+          "source": "Lead source",
+          "message": "リードソース"
+        },
+        "app.S2VhcA.action.Y3JlYXRlLWNvbnRhY3Q.option.bWlkZGxlX25hbWU.display_name": {
+          "source": "Middle Name",
+          "message": "ミドルネーム"
+        },
+        "app.S2VhcA.action.Y3JlYXRlLWNvbnRhY3Q.option.bWlkZGxlX25hbWU.short_desc": {
+          "source": "Contact middle name",
+          "message": "連絡先のミドルネーム"
+        },
+        "app.S2VhcA.action.Y3JlYXRlLWNvbnRhY3Q.option.c291cmNlX3R5cGU.allowed-value.c3RyaW5nOk1BTlVBTA.desc": {
+          "source": "Created manually",
+          "message": "手動で作成"
+        },
+        "app.S2VhcA.action.Y3JlYXRlLWNvbnRhY3Q.option.c291cmNlX3R5cGU.allowed-value.c3RyaW5nOkFQSQ.desc": {
+          "source": "Created via API",
+          "message": "API 経由で作成"
+        },
+        "app.S2VhcA.action.Y3JlYXRlLWNvbnRhY3Q.option.c291cmNlX3R5cGU.allowed-value.c3RyaW5nOklNUE9SVA.desc": {
+          "source": "Created via import",
+          "message": "インポート経由で作成"
+        },
+        "app.S2VhcA.action.Y3JlYXRlLWNvbnRhY3Q.option.c291cmNlX3R5cGU.allowed-value.c3RyaW5nOldFQkZPUk0.desc": {
+          "source": "Created via web form",
+          "message": "Web フォーム経由で作成"
+        },
+        "app.S2VhcA.action.Y3JlYXRlLWNvbnRhY3Q.option.c291cmNlX3R5cGU.display_name": {
+          "source": "Source Type",
+          "message": "ソースタイプ"
+        },
+        "app.S2VhcA.action.Y3JlYXRlLWNvbnRhY3Q.option.c291cmNlX3R5cGU.short_desc": {
+          "source": "How the contact was created",
+          "message": "連絡先が作成された方法"
+        },
+        "app.S2VhcA.action.Y3JlYXRlLWNvbnRhY3Q.option.c3BvdXNlX25hbWU.display_name": {
+          "source": "Spouse Name",
+          "message": "配偶者名"
+        },
+        "app.S2VhcA.action.Y3JlYXRlLWNvbnRhY3Q.option.c3BvdXNlX25hbWU.short_desc": {
+          "source": "Contact spouse name",
+          "message": "連絡先の配偶者名"
+        },
+        "app.S2VhcA.action.Y3JlYXRlLWNvbnRhY3Q.option.c3VmZml4.display_name": {
+          "source": "Suffix",
+          "message": "接尾辞"
+        },
+        "app.S2VhcA.action.Y3JlYXRlLWNvbnRhY3Q.option.c3VmZml4.short_desc": {
+          "source": "Name suffix (e.g., Jr., III)",
+          "message": "名前の接尾辞 (例: Jr.、III)"
+        },
+        "app.S2VhcA.action.Y3JlYXRlLWNvbnRhY3Q.option.cGhvbmVfbnVtYmVy.desc": {
+          "source": "The contact's phone number",
+          "message": "コンタクトの電話番号"
+        },
+        "app.S2VhcA.action.Y3JlYXRlLWNvbnRhY3Q.option.cGhvbmVfbnVtYmVy.display_name": {
+          "source": "Phone Number",
+          "message": "電話番号"
+        },
+        "app.S2VhcA.action.Y3JlYXRlLWNvbnRhY3Q.option.cGhvbmVfbnVtYmVy.short_desc": {
+          "source": "Contact phone number",
+          "message": "連絡先の電話番号"
+        },
+        "app.S2VhcA.action.Y3JlYXRlLWNvbnRhY3Q.option.cHJlZmVycmVkX25hbWU.display_name": {
+          "source": "Preferred Name",
+          "message": "呼称"
+        },
+        "app.S2VhcA.action.Y3JlYXRlLWNvbnRhY3Q.option.cHJlZmVycmVkX25hbWU.short_desc": {
+          "source": "Contact preferred name",
+          "message": "連絡先の呼称"
+        },
+        "app.S2VhcA.action.Y3JlYXRlLWNvbnRhY3Q.option.cHJlZml4.display_name": {
+          "source": "Prefix",
+          "message": "接頭辞"
+        },
+        "app.S2VhcA.action.Y3JlYXRlLWNvbnRhY3Q.option.cHJlZml4.short_desc": {
+          "source": "Name prefix (e.g., Mr., Dr.)",
+          "message": "名前の敬称 (例: Mr.、Dr.)"
+        },
+        "app.S2VhcA.action.Y3JlYXRlLWNvbnRhY3Q.option.d2Vic2l0ZQ.display_name": {
+          "source": "Website",
+          "message": "ウェブサイト"
+        },
+        "app.S2VhcA.action.Y3JlYXRlLWNvbnRhY3Q.option.d2Vic2l0ZQ.short_desc": {
+          "source": "Contact website URL",
+          "message": "連絡先の Web サイト URL"
+        },
+        "app.S2VhcA.action.Y3JlYXRlLWNvbnRhY3Q.option.dGltZV96b25l.display_name": {
+          "source": "Time Zone",
+          "message": "タイムゾーン"
+        },
+        "app.S2VhcA.action.Y3JlYXRlLWNvbnRhY3Q.option.dGltZV96b25l.short_desc": {
+          "source": "Contact time zone",
+          "message": "連絡先のタイムゾーン"
+        },
+        "app.S2VhcA.action.Y3JlYXRlLWNvbnRhY3Q.short_desc": {
+          "source": "Create a new contact",
+          "message": "新しいコンタクトを作成"
+        },
+        "app.S2VhcA.action.Y3JlYXRlLXRhZw.desc": {
+          "source": "Create a new tag in Keap",
+          "message": "Keap で新しいタグを作成します"
+        },
+        "app.S2VhcA.action.Y3JlYXRlLXRhZw.display_name": {
+          "source": "Create a Tag",
+          "message": "タグを作成"
+        },
+        "app.S2VhcA.action.Y3JlYXRlLXRhZw.option.Y2F0ZWdvcnlfaWQ.display_name": {
+          "source": "Category ID",
+          "message": "カテゴリID"
+        },
+        "app.S2VhcA.action.Y3JlYXRlLXRhZw.option.Y2F0ZWdvcnlfaWQ.short_desc": {
+          "source": "Tag category",
+          "message": "タグカテゴリー"
+        },
+        "app.S2VhcA.action.Y3JlYXRlLXRhZw.option.ZGVzY3JpcHRpb24.display_name": {
+          "source": "Description",
+          "message": "説明"
+        },
+        "app.S2VhcA.action.Y3JlYXRlLXRhZw.option.ZGVzY3JpcHRpb24.short_desc": {
+          "source": "Tag description",
+          "message": "タグの説明"
+        },
+        "app.S2VhcA.action.Y3JlYXRlLXRhZw.option.bmFtZQ.desc": {
+          "source": "Name of the tag",
+          "message": "タグの名前"
+        },
+        "app.S2VhcA.action.Y3JlYXRlLXRhZw.option.bmFtZQ.display_name": {
+          "source": "Tag Name",
+          "message": "タグ名"
+        },
+        "app.S2VhcA.action.Y3JlYXRlLXRhZw.option.bmFtZQ.short_desc": {
+          "source": "Name of the tag",
+          "message": "タグの名前"
+        },
+        "app.S2VhcA.action.Y3JlYXRlLXRhZw.short_desc": {
+          "source": "Create a new tag",
+          "message": "新しいタグを作成"
+        },
+        "app.S2VhcA.action.Y3JlYXRlLXRhc2s.desc": {
+          "source": "Create a new task in Keap",
+          "message": "Keapで新しいタスクを作成します"
+        },
+        "app.S2VhcA.action.Y3JlYXRlLXRhc2s.display_name": {
+          "source": "Create a Task",
+          "message": "タスクを作成"
+        },
+        "app.S2VhcA.action.Y3JlYXRlLXRhc2s.option.Y29tcGxldGVk.display_name": {
+          "source": "Completed",
+          "message": "完了"
+        },
+        "app.S2VhcA.action.Y3JlYXRlLXRhc2s.option.Y29tcGxldGVk.short_desc": {
+          "source": "Task completion status",
+          "message": "タスクの完了ステータス"
+        },
+        "app.S2VhcA.action.Y3JlYXRlLXRhc2s.option.Y29udGFjdF9pZA.display_name": {
+          "source": "Contact ID",
+          "message": "連絡先ID"
+        },
+        "app.S2VhcA.action.Y3JlYXRlLXRhc2s.option.Y29udGFjdF9pZA.short_desc": {
+          "source": "Associated contact",
+          "message": "関連する連絡先"
+        },
+        "app.S2VhcA.action.Y3JlYXRlLXRhc2s.option.YXNzaWduZWRfdG9fdXNlcl9pZA.display_name": {
+          "source": "Assigned User ID",
+          "message": "割り当てられたユーザーID"
+        },
+        "app.S2VhcA.action.Y3JlYXRlLXRhc2s.option.YXNzaWduZWRfdG9fdXNlcl9pZA.short_desc": {
+          "source": "Assigned user",
+          "message": "割り当てられたユーザー"
+        },
+        "app.S2VhcA.action.Y3JlYXRlLXRhc2s.option.ZGVzY3JpcHRpb24.display_name": {
+          "source": "Description",
+          "message": "説明"
+        },
+        "app.S2VhcA.action.Y3JlYXRlLXRhc2s.option.ZGVzY3JpcHRpb24.short_desc": {
+          "source": "Task description",
+          "message": "タスクの説明"
+        },
+        "app.S2VhcA.action.Y3JlYXRlLXRhc2s.option.ZHVlX3RpbWU.display_name": {
+          "source": "Due Time",
+          "message": "期日"
+        },
+        "app.S2VhcA.action.Y3JlYXRlLXRhc2s.option.ZHVlX3RpbWU.short_desc": {
+          "source": "Task due date/time",
+          "message": "タスクの期日/日時"
+        },
+        "app.S2VhcA.action.Y3JlYXRlLXRhc2s.option.cHJpb3JpdHk.display_name": {
+          "source": "Priority",
+          "message": "優先度"
+        },
+        "app.S2VhcA.action.Y3JlYXRlLXRhc2s.option.cHJpb3JpdHk.short_desc": {
+          "source": "Task priority",
+          "message": "タスクの優先度"
+        },
+        "app.S2VhcA.action.Y3JlYXRlLXRhc2s.option.dGl0bGU.display_name": {
+          "source": "Title",
+          "message": "タイトル"
+        },
+        "app.S2VhcA.action.Y3JlYXRlLXRhc2s.option.dGl0bGU.short_desc": {
+          "source": "Task title",
+          "message": "タスクタイトル"
+        },
+        "app.S2VhcA.action.Y3JlYXRlLXRhc2s.option.dHlwZQ.display_name": {
+          "source": "Type",
+          "message": "タイプ"
+        },
+        "app.S2VhcA.action.Y3JlYXRlLXRhc2s.option.dHlwZQ.short_desc": {
+          "source": "Task type",
+          "message": "タスクタイプ"
+        },
+        "app.S2VhcA.action.Y3JlYXRlLXRhc2s.short_desc": {
+          "source": "Create a new task",
+          "message": "新しいタスクを作成"
+        },
+        "app.S2VhcA.action.YXBwbHktdGFn.desc": {
+          "source": "Apply one or more tags to a contact in Keap",
+          "message": "Keapで連絡先に1つ以上のタグを適用します"
+        },
+        "app.S2VhcA.action.YXBwbHktdGFn.display_name": {
+          "source": "Apply Tag to Contact",
+          "message": "連絡先にタグを適用"
+        },
+        "app.S2VhcA.action.YXBwbHktdGFn.option.Y29udGFjdF9pZA.display_name": {
+          "source": "Contact ID",
+          "message": "連絡先ID"
+        },
+        "app.S2VhcA.action.YXBwbHktdGFn.option.Y29udGFjdF9pZA.short_desc": {
+          "source": "The contact to tag",
+          "message": "タグを適用する連絡先"
+        },
+        "app.S2VhcA.action.YXBwbHktdGFn.option.dGFnX2lkcw.desc": {
+          "source": "List of integer tag IDs",
+          "message": "整数タグIDのリスト"
+        },
+        "app.S2VhcA.action.YXBwbHktdGFn.option.dGFnX2lkcw.display_name": {
+          "source": "Tag IDs",
+          "message": "タグID"
+        },
+        "app.S2VhcA.action.YXBwbHktdGFn.option.dGFnX2lkcw.short_desc": {
+          "source": "Tags to apply",
+          "message": "適用するタグ"
+        },
+        "app.S2VhcA.action.YXBwbHktdGFn.short_desc": {
+          "source": "Apply a tag to a contact",
+          "message": "連絡先にタグを適用します"
+        },
+        "app.S2VhcA.action.Z2V0LW9wcG9ydHVuaXR5.desc": {
+          "source": "Retrieve a single opportunity by ID from Keap",
+          "message": "KeapからIDで単一の商談を取得します"
+        },
+        "app.S2VhcA.action.Z2V0LW9wcG9ydHVuaXR5.display_name": {
+          "source": "Get an Opportunity",
+          "message": "商談を取得"
+        },
+        "app.S2VhcA.action.Z2V0LW9wcG9ydHVuaXR5.option.b3Bwb3J0dW5pdHlfaWQ.display_name": {
+          "source": "Opportunity ID",
+          "message": "商談ID"
+        },
+        "app.S2VhcA.action.Z2V0LW9wcG9ydHVuaXR5.option.b3Bwb3J0dW5pdHlfaWQ.short_desc": {
+          "source": "The opportunity ID",
+          "message": "商談ID"
+        },
+        "app.S2VhcA.action.Z2V0LW9wcG9ydHVuaXR5.short_desc": {
+          "source": "Get a single opportunity by ID",
+          "message": "IDで単一の商談を取得"
+        },
+        "app.S2VhcA.action.Z2V0LW9yZGVy.desc": {
+          "source": "Retrieve a single order by ID from Keap",
+          "message": "KeapからIDで単一の注文を取得します"
+        },
+        "app.S2VhcA.action.Z2V0LW9yZGVy.display_name": {
+          "source": "Get an Order",
+          "message": "注文を取得"
+        },
+        "app.S2VhcA.action.Z2V0LW9yZGVy.option.b3JkZXJfaWQ.display_name": {
+          "source": "Order ID",
+          "message": "注文 ID"
+        },
+        "app.S2VhcA.action.Z2V0LW9yZGVy.option.b3JkZXJfaWQ.short_desc": {
+          "source": "The order ID",
+          "message": "注文ID"
+        },
+        "app.S2VhcA.action.Z2V0LW9yZGVy.short_desc": {
+          "source": "Get a single order by ID",
+          "message": "ID で単一の注文を取得"
+        },
+        "app.S2VhcA.action.Z2V0LWNvbXBhbnk.desc": {
+          "source": "Retrieve a single company by ID from Keap",
+          "message": "KeapからIDで単一の会社を取得します"
+        },
+        "app.S2VhcA.action.Z2V0LWNvbXBhbnk.display_name": {
+          "source": "Get a Company",
+          "message": "会社の取得"
+        },
+        "app.S2VhcA.action.Z2V0LWNvbXBhbnk.option.Y29tcGFueV9pZA.display_name": {
+          "source": "Company ID",
+          "message": "会社ID"
+        },
+        "app.S2VhcA.action.Z2V0LWNvbXBhbnk.option.Y29tcGFueV9pZA.short_desc": {
+          "source": "The company ID",
+          "message": "会社ID"
+        },
+        "app.S2VhcA.action.Z2V0LWNvbXBhbnk.short_desc": {
+          "source": "Get a single company by ID",
+          "message": "IDで単一の会社を取得"
+        },
+        "app.S2VhcA.action.Z2V0LWNvbnRhY3Q.desc": {
+          "source": "Retrieve a single contact by ID from Keap",
+          "message": "KeapからIDで単一の連絡先を取得します"
+        },
+        "app.S2VhcA.action.Z2V0LWNvbnRhY3Q.display_name": {
+          "source": "Get a Contact",
+          "message": "連絡先を取得"
+        },
+        "app.S2VhcA.action.Z2V0LWNvbnRhY3Q.option.Y29udGFjdF9pZA.display_name": {
+          "source": "Contact ID",
+          "message": "連絡先ID"
+        },
+        "app.S2VhcA.action.Z2V0LWNvbnRhY3Q.option.Y29udGFjdF9pZA.short_desc": {
+          "source": "The contact ID",
+          "message": "連絡先ID"
+        },
+        "app.S2VhcA.action.Z2V0LWNvbnRhY3Q.short_desc": {
+          "source": "Get a single contact by ID",
+          "message": "IDによって単一の連絡先を取得"
+        },
+        "app.S2VhcA.action.Z2V0LWZpbGU.desc": {
+          "source": "Get file details from Keap",
+          "message": "Keapからファイル詳細を取得します"
+        },
+        "app.S2VhcA.action.Z2V0LWZpbGU.display_name": {
+          "source": "Get a File",
+          "message": "ファイルの取得"
+        },
+        "app.S2VhcA.action.Z2V0LWZpbGU.option.ZmlsZV9pZA.display_name": {
+          "source": "File ID",
+          "message": "ファイルID"
+        },
+        "app.S2VhcA.action.Z2V0LWZpbGU.option.ZmlsZV9pZA.short_desc": {
+          "source": "The file to retrieve",
+          "message": "取得するファイル"
+        },
+        "app.S2VhcA.action.Z2V0LWZpbGU.short_desc": {
+          "source": "Get file details",
+          "message": "ファイル詳細を取得"
+        },
+        "app.S2VhcA.action.Z2V0LXByb2R1Y3Q.desc": {
+          "source": "Retrieve a single product by ID from Keap",
+          "message": "KeapからIDで単一の商品を取得します"
+        },
+        "app.S2VhcA.action.Z2V0LXByb2R1Y3Q.display_name": {
+          "source": "Get a Product",
+          "message": "商品を取得"
+        },
+        "app.S2VhcA.action.Z2V0LXByb2R1Y3Q.option.cHJvZHVjdF9pZA.display_name": {
+          "source": "Product ID",
+          "message": "商品 ID"
+        },
+        "app.S2VhcA.action.Z2V0LXByb2R1Y3Q.option.cHJvZHVjdF9pZA.short_desc": {
+          "source": "The product ID",
+          "message": "製品ID"
+        },
+        "app.S2VhcA.action.Z2V0LXByb2R1Y3Q.short_desc": {
+          "source": "Get a single product by ID",
+          "message": "IDで単一の商品を取得"
+        },
+        "app.S2VhcA.action.Z2V0LXRhZw.desc": {
+          "source": "Retrieve a single tag by ID from Keap",
+          "message": "KeapからIDで単一のタグを取得します"
+        },
+        "app.S2VhcA.action.Z2V0LXRhZw.display_name": {
+          "source": "Get a Tag",
+          "message": "タグを取得"
+        },
+        "app.S2VhcA.action.Z2V0LXRhZw.option.dGFnX2lk.display_name": {
+          "source": "Tag ID",
+          "message": "タグ ID"
+        },
+        "app.S2VhcA.action.Z2V0LXRhZw.option.dGFnX2lk.short_desc": {
+          "source": "The tag ID",
+          "message": "タグ ID"
+        },
+        "app.S2VhcA.action.Z2V0LXRhZw.short_desc": {
+          "source": "Get a single tag by ID",
+          "message": "ID で単一のタグを取得"
+        },
+        "app.S2VhcA.action.Z2V0LXRhc2s.desc": {
+          "source": "Retrieve a single task by ID from Keap",
+          "message": "KeapからIDで単一のタスクを取得します"
+        },
+        "app.S2VhcA.action.Z2V0LXRhc2s.display_name": {
+          "source": "Get a Task",
+          "message": "タスクを取得"
+        },
+        "app.S2VhcA.action.Z2V0LXRhc2s.option.dGFza19pZA.display_name": {
+          "source": "Task ID",
+          "message": "タスク ID"
+        },
+        "app.S2VhcA.action.Z2V0LXRhc2s.option.dGFza19pZA.short_desc": {
+          "source": "The task ID",
+          "message": "タスクID"
+        },
+        "app.S2VhcA.action.Z2V0LXRhc2s.short_desc": {
+          "source": "Get a single task by ID",
+          "message": "IDで単一のタスクを取得"
+        },
+        "app.S2VhcA.action.ZGVsZXRlLW5vdGU.desc": {
+          "source": "Delete a note from Keap",
+          "message": "Keapからノートを削除します"
+        },
+        "app.S2VhcA.action.ZGVsZXRlLW5vdGU.display_name": {
+          "source": "Delete a Note",
+          "message": "メモを削除"
+        },
+        "app.S2VhcA.action.ZGVsZXRlLW5vdGU.option.Y29udGFjdF9pZA.display_name": {
+          "source": "Contact ID",
+          "message": "連絡先ID"
+        },
+        "app.S2VhcA.action.ZGVsZXRlLW5vdGU.option.Y29udGFjdF9pZA.short_desc": {
+          "source": "The contact",
+          "message": "連絡先"
+        },
+        "app.S2VhcA.action.ZGVsZXRlLW5vdGU.option.bm90ZV9pZA.display_name": {
+          "source": "Note ID",
+          "message": "メモID"
+        },
+        "app.S2VhcA.action.ZGVsZXRlLW5vdGU.option.bm90ZV9pZA.short_desc": {
+          "source": "The note to delete",
+          "message": "削除するノート"
+        },
+        "app.S2VhcA.action.ZGVsZXRlLW5vdGU.short_desc": {
+          "source": "Delete a note",
+          "message": "メモを削除"
+        },
+        "app.S2VhcA.action.ZGVsZXRlLW9wcG9ydHVuaXR5.desc": {
+          "source": "Delete an opportunity from Keap",
+          "message": "Keapから商談を削除します"
+        },
+        "app.S2VhcA.action.ZGVsZXRlLW9wcG9ydHVuaXR5.display_name": {
+          "source": "Delete an Opportunity",
+          "message": "商談を削除"
+        },
+        "app.S2VhcA.action.ZGVsZXRlLW9wcG9ydHVuaXR5.option.b3Bwb3J0dW5pdHlfaWQ.display_name": {
+          "source": "Opportunity ID",
+          "message": "商談ID"
+        },
+        "app.S2VhcA.action.ZGVsZXRlLW9wcG9ydHVuaXR5.option.b3Bwb3J0dW5pdHlfaWQ.short_desc": {
+          "source": "The opportunity to delete",
+          "message": "削除する商談"
+        },
+        "app.S2VhcA.action.ZGVsZXRlLW9wcG9ydHVuaXR5.short_desc": {
+          "source": "Delete an opportunity",
+          "message": "商談を削除"
+        },
+        "app.S2VhcA.action.ZGVsZXRlLWNvbXBhbnk.desc": {
+          "source": "Delete a company from Keap",
+          "message": "Keapから会社を削除します"
+        },
+        "app.S2VhcA.action.ZGVsZXRlLWNvbXBhbnk.display_name": {
+          "source": "Delete a Company",
+          "message": "会社を削除"
+        },
+        "app.S2VhcA.action.ZGVsZXRlLWNvbXBhbnk.option.Y29tcGFueV9pZA.display_name": {
+          "source": "Company ID",
+          "message": "会社ID"
+        },
+        "app.S2VhcA.action.ZGVsZXRlLWNvbXBhbnk.option.Y29tcGFueV9pZA.short_desc": {
+          "source": "The company to delete",
+          "message": "削除する会社"
+        },
+        "app.S2VhcA.action.ZGVsZXRlLWNvbXBhbnk.short_desc": {
+          "source": "Delete a company",
+          "message": "会社を削除"
+        },
+        "app.S2VhcA.action.ZGVsZXRlLWNvbnRhY3Q.desc": {
+          "source": "Delete a contact from Keap",
+          "message": "Keapから連絡先を削除します"
+        },
+        "app.S2VhcA.action.ZGVsZXRlLWNvbnRhY3Q.display_name": {
+          "source": "Delete a Contact",
+          "message": "連絡先を削除"
+        },
+        "app.S2VhcA.action.ZGVsZXRlLWNvbnRhY3Q.option.Y29udGFjdF9pZA.display_name": {
+          "source": "Contact ID",
+          "message": "連絡先ID"
+        },
+        "app.S2VhcA.action.ZGVsZXRlLWNvbnRhY3Q.option.Y29udGFjdF9pZA.short_desc": {
+          "source": "The contact to delete",
+          "message": "削除する連絡先"
+        },
+        "app.S2VhcA.action.ZGVsZXRlLWNvbnRhY3Q.short_desc": {
+          "source": "Delete a contact",
+          "message": "連絡先の削除"
+        },
+        "app.S2VhcA.action.ZGVsZXRlLWZpbGU.desc": {
+          "source": "Delete a file from Keap",
+          "message": "Keapからファイルを削除します"
+        },
+        "app.S2VhcA.action.ZGVsZXRlLWZpbGU.display_name": {
+          "source": "Delete a File",
+          "message": "ファイルの削除"
+        },
+        "app.S2VhcA.action.ZGVsZXRlLWZpbGU.option.ZmlsZV9pZA.display_name": {
+          "source": "File ID",
+          "message": "ファイルID"
+        },
+        "app.S2VhcA.action.ZGVsZXRlLWZpbGU.option.ZmlsZV9pZA.short_desc": {
+          "source": "The file to delete",
+          "message": "削除するファイル"
+        },
+        "app.S2VhcA.action.ZGVsZXRlLWZpbGU.short_desc": {
+          "source": "Delete a file",
+          "message": "ファイルを削除"
+        },
+        "app.S2VhcA.action.ZGVsZXRlLXRhZw.desc": {
+          "source": "Delete a tag from Keap",
+          "message": "Keapからタグを削除します"
+        },
+        "app.S2VhcA.action.ZGVsZXRlLXRhZw.display_name": {
+          "source": "Delete a Tag",
+          "message": "タグの削除"
+        },
+        "app.S2VhcA.action.ZGVsZXRlLXRhZw.option.dGFnX2lk.display_name": {
+          "source": "Tag ID",
+          "message": "タグ ID"
+        },
+        "app.S2VhcA.action.ZGVsZXRlLXRhZw.option.dGFnX2lk.short_desc": {
+          "source": "The tag to delete",
+          "message": "削除するタグ"
+        },
+        "app.S2VhcA.action.ZGVsZXRlLXRhZw.short_desc": {
+          "source": "Delete a tag",
+          "message": "タグを削除"
+        },
+        "app.S2VhcA.action.ZGVsZXRlLXRhc2s.desc": {
+          "source": "Delete a task from Keap",
+          "message": "Keapからタスクを削除します"
+        },
+        "app.S2VhcA.action.ZGVsZXRlLXRhc2s.display_name": {
+          "source": "Delete a Task",
+          "message": "タスクの削除"
+        },
+        "app.S2VhcA.action.ZGVsZXRlLXRhc2s.option.dGFza19pZA.display_name": {
+          "source": "Task ID",
+          "message": "タスク ID"
+        },
+        "app.S2VhcA.action.ZGVsZXRlLXRhc2s.option.dGFza19pZA.short_desc": {
+          "source": "The task to delete",
+          "message": "削除するタスク"
+        },
+        "app.S2VhcA.action.ZGVsZXRlLXRhc2s.short_desc": {
+          "source": "Delete a task",
+          "message": "タスクを削除"
+        },
+        "app.S2VhcA.action.b3Bwb3J0dW5pdHktYWRkZWQ.desc": {
+          "source": "Triggers when a new opportunity is created in Keap",
+          "message": "Keapで新しい商談が作成されたときにトリガーされます"
+        },
+        "app.S2VhcA.action.b3Bwb3J0dW5pdHktYWRkZWQ.display_name": {
+          "source": "Opportunity Added",
+          "message": "商談の追加"
+        },
+        "app.S2VhcA.action.b3Bwb3J0dW5pdHktYWRkZWQ.short_desc": {
+          "source": "Watch for new opportunities",
+          "message": "新しい商談を監視"
+        },
+        "app.S2VhcA.action.b3JkZXItYWRkZWQ.desc": {
+          "source": "Triggers when a new order is created in Keap",
+          "message": "Keapで新しい注文が作成されたときにトリガーされます"
+        },
+        "app.S2VhcA.action.b3JkZXItYWRkZWQ.display_name": {
+          "source": "Order Added",
+          "message": "注文の追加"
+        },
+        "app.S2VhcA.action.b3JkZXItYWRkZWQ.short_desc": {
+          "source": "Watch for new orders",
+          "message": "新しい注文を監視"
+        },
+        "app.S2VhcA.action.bGlzdC10YWdz.desc": {
+          "source": "List tags in Keap with optional filtering",
+          "message": "Keapのタグをオプションのフィルタリング付きで一覧表示します"
+        },
+        "app.S2VhcA.action.bGlzdC10YWdz.display_name": {
+          "source": "List Tags",
+          "message": "タグのリスト取得"
+        },
+        "app.S2VhcA.action.bGlzdC10YWdz.option.Y2F0ZWdvcnlfaWQ.display_name": {
+          "source": "Category ID",
+          "message": "カテゴリID"
+        },
+        "app.S2VhcA.action.bGlzdC10YWdz.option.Y2F0ZWdvcnlfaWQ.short_desc": {
+          "source": "Filter by category",
+          "message": "カテゴリで絞り込み"
+        },
+        "app.S2VhcA.action.bGlzdC10YWdz.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "上限"
+        },
+        "app.S2VhcA.action.bGlzdC10YWdz.option.bGltaXQ.short_desc": {
+          "source": "Maximum results",
+          "message": "最大結果数"
+        },
+        "app.S2VhcA.action.bGlzdC10YWdz.option.bmFtZQ.display_name": {
+          "source": "Tag Name",
+          "message": "タグ名"
+        },
+        "app.S2VhcA.action.bGlzdC10YWdz.option.bmFtZQ.short_desc": {
+          "source": "Filter by tag name",
+          "message": "タグ名でフィルター"
+        },
+        "app.S2VhcA.action.bGlzdC10YWdz.option.dGFnX2lk.display_name": {
+          "source": "Tag ID",
+          "message": "タグ ID"
+        },
+        "app.S2VhcA.action.bGlzdC10YWdz.option.dGFnX2lk.short_desc": {
+          "source": "Filter by tag ID",
+          "message": "タグIDで絞り込み"
+        },
+        "app.S2VhcA.action.bGlzdC10YWdz.short_desc": {
+          "source": "List all tags",
+          "message": "すべてのタグを一覧表示"
+        },
+        "app.S2VhcA.action.bGlzdC10YXNrcw.desc": {
+          "source": "List tasks in Keap with optional filtering",
+          "message": "Keapのタスクをオプションのフィルタリング付きで一覧表示します"
+        },
+        "app.S2VhcA.action.bGlzdC10YXNrcw.display_name": {
+          "source": "List Tasks",
+          "message": "タスクの一覧表示"
+        },
+        "app.S2VhcA.action.bGlzdC10YXNrcw.option.Y29tcGxldGVk.display_name": {
+          "source": "Completed",
+          "message": "完了"
+        },
+        "app.S2VhcA.action.bGlzdC10YXNrcw.option.Y29tcGxldGVk.short_desc": {
+          "source": "Filter by completion status",
+          "message": "完了ステータスでフィルター処理"
+        },
+        "app.S2VhcA.action.bGlzdC10YXNrcw.option.Y29udGFjdF9pZA.display_name": {
+          "source": "Contact ID",
+          "message": "連絡先ID"
+        },
+        "app.S2VhcA.action.bGlzdC10YXNrcw.option.Y29udGFjdF9pZA.short_desc": {
+          "source": "Filter by contact",
+          "message": "コンタクトで絞り込み"
+        },
+        "app.S2VhcA.action.bGlzdC10YXNrcw.option.b3JkZXJfYnk.display_name": {
+          "source": "Order By",
+          "message": "並べ替え"
+        },
+        "app.S2VhcA.action.bGlzdC10YXNrcw.option.b3JkZXJfYnk.short_desc": {
+          "source": "Sort field",
+          "message": "ソートフィールド"
+        },
+        "app.S2VhcA.action.bGlzdC10YXNrcw.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "上限"
+        },
+        "app.S2VhcA.action.bGlzdC10YXNrcw.option.bGltaXQ.short_desc": {
+          "source": "Maximum results",
+          "message": "最大結果数"
+        },
+        "app.S2VhcA.action.bGlzdC10YXNrcw.option.dGFza19pZA.display_name": {
+          "source": "Task ID",
+          "message": "タスク ID"
+        },
+        "app.S2VhcA.action.bGlzdC10YXNrcw.option.dGFza19pZA.short_desc": {
+          "source": "Filter by task ID",
+          "message": "タスクIDでフィルタリング"
+        },
+        "app.S2VhcA.action.bGlzdC10YXNrcw.option.dXNlcl9pZA.display_name": {
+          "source": "User ID",
+          "message": "ユーザーID"
+        },
+        "app.S2VhcA.action.bGlzdC10YXNrcw.option.dXNlcl9pZA.short_desc": {
+          "source": "Filter by assigned user",
+          "message": "担当ユーザーでフィルタリング"
+        },
+        "app.S2VhcA.action.bGlzdC10YXNrcw.short_desc": {
+          "source": "List all tasks",
+          "message": "すべてのタスクを一覧表示"
+        },
+        "app.S2VhcA.action.bGlzdC1hZmZpbGlhdGVz.desc": {
+          "source": "List affiliates in Keap",
+          "message": "Keapのアフィリエイトを一覧表示します"
+        },
+        "app.S2VhcA.action.bGlzdC1hZmZpbGlhdGVz.display_name": {
+          "source": "List Affiliates",
+          "message": "アフィリエイトの一覧表示"
+        },
+        "app.S2VhcA.action.bGlzdC1hZmZpbGlhdGVz.option.b3JkZXJfYnk.display_name": {
+          "source": "Order By",
+          "message": "並べ替え"
+        },
+        "app.S2VhcA.action.bGlzdC1hZmZpbGlhdGVz.option.b3JkZXJfYnk.short_desc": {
+          "source": "Sort field",
+          "message": "ソートフィールド"
+        },
+        "app.S2VhcA.action.bGlzdC1hZmZpbGlhdGVz.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "上限"
+        },
+        "app.S2VhcA.action.bGlzdC1hZmZpbGlhdGVz.option.bGltaXQ.short_desc": {
+          "source": "Maximum results",
+          "message": "最大結果数"
+        },
+        "app.S2VhcA.action.bGlzdC1hZmZpbGlhdGVz.short_desc": {
+          "source": "List all affiliates",
+          "message": "すべてのアフィリエイトを一覧表示"
+        },
+        "app.S2VhcA.action.bGlzdC1jYW1wYWlnbnM.desc": {
+          "source": "List campaigns in Keap with optional filtering",
+          "message": "Keapのキャンペーンをオプションのフィルタリング付きで一覧表示します"
+        },
+        "app.S2VhcA.action.bGlzdC1jYW1wYWlnbnM.display_name": {
+          "source": "List Campaigns",
+          "message": "キャンペーン一覧"
+        },
+        "app.S2VhcA.action.bGlzdC1jYW1wYWlnbnM.option.b3JkZXJfYnk.display_name": {
+          "source": "Order By",
+          "message": "並べ替え"
+        },
+        "app.S2VhcA.action.bGlzdC1jYW1wYWlnbnM.option.b3JkZXJfYnk.short_desc": {
+          "source": "Sort field",
+          "message": "ソートフィールド"
+        },
+        "app.S2VhcA.action.bGlzdC1jYW1wYWlnbnM.option.b3JkZXJfZGlyZWN0aW9u.desc": {
+          "source": "Sort direction",
+          "message": "ソート方向"
+        },
+        "app.S2VhcA.action.bGlzdC1jYW1wYWlnbnM.option.b3JkZXJfZGlyZWN0aW9u.display_name": {
+          "source": "Order Direction",
+          "message": "並び替え方向"
+        },
+        "app.S2VhcA.action.bGlzdC1jYW1wYWlnbnM.option.b3JkZXJfZGlyZWN0aW9u.short_desc": {
+          "source": "Sort direction",
+          "message": "ソート方向"
+        },
+        "app.S2VhcA.action.bGlzdC1jYW1wYWlnbnM.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "上限"
+        },
+        "app.S2VhcA.action.bGlzdC1jYW1wYWlnbnM.option.bGltaXQ.short_desc": {
+          "source": "Maximum results",
+          "message": "最大結果数"
+        },
+        "app.S2VhcA.action.bGlzdC1jYW1wYWlnbnM.short_desc": {
+          "source": "List all campaigns",
+          "message": "すべてのキャンペーンを一覧表示"
+        },
+        "app.S2VhcA.action.bGlzdC1jb21wYW5pZXM.desc": {
+          "source": "List companies in Keap with optional filtering",
+          "message": "Keapの会社をオプションのフィルタリング付きで一覧表示します"
+        },
+        "app.S2VhcA.action.bGlzdC1jb21wYW5pZXM.display_name": {
+          "source": "List Companies",
+          "message": "会社一覧を取得"
+        },
+        "app.S2VhcA.action.bGlzdC1jb21wYW5pZXM.option.Y29tcGFueV9pZA.display_name": {
+          "source": "Company ID",
+          "message": "会社ID"
+        },
+        "app.S2VhcA.action.bGlzdC1jb21wYW5pZXM.option.Y29tcGFueV9pZA.short_desc": {
+          "source": "Filter by company ID",
+          "message": "会社IDでフィルター"
+        },
+        "app.S2VhcA.action.bGlzdC1jb21wYW5pZXM.option.Y29tcGFueV9uYW1l.display_name": {
+          "source": "Company Name",
+          "message": "会社名"
+        },
+        "app.S2VhcA.action.bGlzdC1jb21wYW5pZXM.option.Y29tcGFueV9uYW1l.short_desc": {
+          "source": "Filter by company name",
+          "message": "会社名で絞り込み"
+        },
+        "app.S2VhcA.action.bGlzdC1jb21wYW5pZXM.option.b3JkZXJfYnk.display_name": {
+          "source": "Order By",
+          "message": "並べ替え"
+        },
+        "app.S2VhcA.action.bGlzdC1jb21wYW5pZXM.option.b3JkZXJfYnk.short_desc": {
+          "source": "Sort field",
+          "message": "ソートフィールド"
+        },
+        "app.S2VhcA.action.bGlzdC1jb21wYW5pZXM.option.b3JkZXJfZGlyZWN0aW9u.desc": {
+          "source": "Sort direction",
+          "message": "ソート方向"
+        },
+        "app.S2VhcA.action.bGlzdC1jb21wYW5pZXM.option.b3JkZXJfZGlyZWN0aW9u.display_name": {
+          "source": "Order Direction",
+          "message": "並び替え方向"
+        },
+        "app.S2VhcA.action.bGlzdC1jb21wYW5pZXM.option.b3JkZXJfZGlyZWN0aW9u.short_desc": {
+          "source": "Sort direction",
+          "message": "ソート方向"
+        },
+        "app.S2VhcA.action.bGlzdC1jb21wYW5pZXM.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "上限"
+        },
+        "app.S2VhcA.action.bGlzdC1jb21wYW5pZXM.option.bGltaXQ.short_desc": {
+          "source": "Maximum results",
+          "message": "最大結果数"
+        },
+        "app.S2VhcA.action.bGlzdC1jb21wYW5pZXM.short_desc": {
+          "source": "List all companies",
+          "message": "すべての企業を一覧表示"
+        },
+        "app.S2VhcA.action.bGlzdC1jb250YWN0cw.desc": {
+          "source": "List contacts in Keap with optional filtering",
+          "message": "Keapの連絡先をオプションのフィルタリング付きで一覧表示します"
+        },
+        "app.S2VhcA.action.bGlzdC1jb250YWN0cw.display_name": {
+          "source": "List Contacts",
+          "message": "連絡先一覧"
+        },
+        "app.S2VhcA.action.bGlzdC1jb250YWN0cw.option.Y29udGFjdF9pZA.display_name": {
+          "source": "Contact ID",
+          "message": "連絡先ID"
+        },
+        "app.S2VhcA.action.bGlzdC1jb250YWN0cw.option.Y29udGFjdF9pZA.short_desc": {
+          "source": "Filter by contact ID",
+          "message": "連絡先IDで絞り込み"
+        },
+        "app.S2VhcA.action.bGlzdC1jb250YWN0cw.option.Z2l2ZW5fbmFtZQ.display_name": {
+          "source": "First Name",
+          "message": "名"
+        },
+        "app.S2VhcA.action.bGlzdC1jb250YWN0cw.option.Z2l2ZW5fbmFtZQ.short_desc": {
+          "source": "Filter by first name",
+          "message": "名で絞り込み"
+        },
+        "app.S2VhcA.action.bGlzdC1jb250YWN0cw.option.ZW1haWw.display_name": {
+          "source": "Email",
+          "message": "メール"
+        },
+        "app.S2VhcA.action.bGlzdC1jb250YWN0cw.option.ZW1haWw.short_desc": {
+          "source": "Filter by email",
+          "message": "メールアドレスで絞り込み"
+        },
+        "app.S2VhcA.action.bGlzdC1jb250YWN0cw.option.ZmFtaWx5X25hbWU.display_name": {
+          "source": "Last Name",
+          "message": "姓"
+        },
+        "app.S2VhcA.action.bGlzdC1jb250YWN0cw.option.ZmFtaWx5X25hbWU.short_desc": {
+          "source": "Filter by last name",
+          "message": "姓で絞り込み"
+        },
+        "app.S2VhcA.action.bGlzdC1jb250YWN0cw.option.b3JkZXJfYnk.display_name": {
+          "source": "Order By",
+          "message": "並べ替え"
+        },
+        "app.S2VhcA.action.bGlzdC1jb250YWN0cw.option.b3JkZXJfYnk.short_desc": {
+          "source": "Sort field",
+          "message": "ソートフィールド"
+        },
+        "app.S2VhcA.action.bGlzdC1jb250YWN0cw.option.b3JkZXJfZGlyZWN0aW9u.desc": {
+          "source": "Sort direction",
+          "message": "ソート方向"
+        },
+        "app.S2VhcA.action.bGlzdC1jb250YWN0cw.option.b3JkZXJfZGlyZWN0aW9u.display_name": {
+          "source": "Order Direction",
+          "message": "並び替え方向"
+        },
+        "app.S2VhcA.action.bGlzdC1jb250YWN0cw.option.b3JkZXJfZGlyZWN0aW9u.short_desc": {
+          "source": "Sort direction",
+          "message": "ソート方向"
+        },
+        "app.S2VhcA.action.bGlzdC1jb250YWN0cw.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "上限"
+        },
+        "app.S2VhcA.action.bGlzdC1jb250YWN0cw.option.bGltaXQ.short_desc": {
+          "source": "Maximum results",
+          "message": "最大結果数"
+        },
+        "app.S2VhcA.action.bGlzdC1jb250YWN0cw.short_desc": {
+          "source": "List all contacts",
+          "message": "すべてのコンタクトを一覧表示"
+        },
+        "app.S2VhcA.action.bGlzdC1lbWFpbHM.desc": {
+          "source": "List emails in Keap with optional filtering",
+          "message": "Keapのメールをオプションのフィルタリング付きで一覧表示します"
+        },
+        "app.S2VhcA.action.bGlzdC1lbWFpbHM.display_name": {
+          "source": "List Emails",
+          "message": "メールを一覧表示"
+        },
+        "app.S2VhcA.action.bGlzdC1lbWFpbHM.option.Y29udGFjdF9pZA.display_name": {
+          "source": "Contact ID",
+          "message": "連絡先ID"
+        },
+        "app.S2VhcA.action.bGlzdC1lbWFpbHM.option.Y29udGFjdF9pZA.short_desc": {
+          "source": "Filter by contact",
+          "message": "コンタクトで絞り込み"
+        },
+        "app.S2VhcA.action.bGlzdC1lbWFpbHM.option.ZW1haWw.display_name": {
+          "source": "Email",
+          "message": "メール"
+        },
+        "app.S2VhcA.action.bGlzdC1lbWFpbHM.option.ZW1haWw.short_desc": {
+          "source": "Filter by email address",
+          "message": "メールアドレスで絞り込み"
+        },
+        "app.S2VhcA.action.bGlzdC1lbWFpbHM.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "上限"
+        },
+        "app.S2VhcA.action.bGlzdC1lbWFpbHM.option.bGltaXQ.short_desc": {
+          "source": "Maximum results",
+          "message": "最大結果数"
+        },
+        "app.S2VhcA.action.bGlzdC1lbWFpbHM.short_desc": {
+          "source": "List emails",
+          "message": "メールを一覧表示"
+        },
+        "app.S2VhcA.action.bGlzdC1maWxlcw.desc": {
+          "source": "List files in Keap with optional filtering",
+          "message": "Keapのファイルをオプションのフィルタリング付きで一覧表示します"
+        },
+        "app.S2VhcA.action.bGlzdC1maWxlcw.display_name": {
+          "source": "List Files",
+          "message": "ファイル一覧"
+        },
+        "app.S2VhcA.action.bGlzdC1maWxlcw.option.Y29udGFjdF9pZA.display_name": {
+          "source": "Contact ID",
+          "message": "連絡先ID"
+        },
+        "app.S2VhcA.action.bGlzdC1maWxlcw.option.Y29udGFjdF9pZA.short_desc": {
+          "source": "Filter by contact",
+          "message": "コンタクトで絞り込み"
+        },
+        "app.S2VhcA.action.bGlzdC1maWxlcw.option.ZmlsZV9pZA.display_name": {
+          "source": "File ID",
+          "message": "ファイルID"
+        },
+        "app.S2VhcA.action.bGlzdC1maWxlcw.option.ZmlsZV9pZA.short_desc": {
+          "source": "Filter by file ID",
+          "message": "ファイルIDでフィルター"
+        },
+        "app.S2VhcA.action.bGlzdC1maWxlcw.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "上限"
+        },
+        "app.S2VhcA.action.bGlzdC1maWxlcw.option.bGltaXQ.short_desc": {
+          "source": "Maximum results",
+          "message": "最大結果数"
+        },
+        "app.S2VhcA.action.bGlzdC1maWxlcw.option.cGVybWlzc2lvbg.allowed-value.c3RyaW5nOkJPVEg.desc": {
+          "source": "Both user and company files",
+          "message": "ユーザーと会社の両方のファイル"
+        },
+        "app.S2VhcA.action.bGlzdC1maWxlcw.option.cGVybWlzc2lvbg.allowed-value.c3RyaW5nOkNPTVBBTlk.desc": {
+          "source": "Files owned by the company",
+          "message": "会社が所有するファイル"
+        },
+        "app.S2VhcA.action.bGlzdC1maWxlcw.option.cGVybWlzc2lvbg.allowed-value.c3RyaW5nOlVTRVI.desc": {
+          "source": "Files owned by the user",
+          "message": "ユーザーが所有するファイル"
+        },
+        "app.S2VhcA.action.bGlzdC1maWxlcw.option.cGVybWlzc2lvbg.display_name": {
+          "source": "Permission",
+          "message": "権限"
+        },
+        "app.S2VhcA.action.bGlzdC1maWxlcw.option.cGVybWlzc2lvbg.short_desc": {
+          "source": "Filter by permission",
+          "message": "権限でフィルター"
+        },
+        "app.S2VhcA.action.bGlzdC1maWxlcw.short_desc": {
+          "source": "List all files",
+          "message": "すべてのファイルを一覧表示"
+        },
+        "app.S2VhcA.action.bGlzdC1ub3Rlcw.desc": {
+          "source": "List notes for a contact in Keap",
+          "message": "Keapの連絡先のノートを一覧表示します"
+        },
+        "app.S2VhcA.action.bGlzdC1ub3Rlcw.display_name": {
+          "source": "List Notes",
+          "message": "ノートを一覧表示"
+        },
+        "app.S2VhcA.action.bGlzdC1ub3Rlcw.option.Y29udGFjdF9pZA.display_name": {
+          "source": "Contact ID",
+          "message": "連絡先ID"
+        },
+        "app.S2VhcA.action.bGlzdC1ub3Rlcw.option.Y29udGFjdF9pZA.short_desc": {
+          "source": "The contact",
+          "message": "連絡先"
+        },
+        "app.S2VhcA.action.bGlzdC1ub3Rlcw.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "上限"
+        },
+        "app.S2VhcA.action.bGlzdC1ub3Rlcw.option.bGltaXQ.short_desc": {
+          "source": "Maximum results",
+          "message": "最大結果数"
+        },
+        "app.S2VhcA.action.bGlzdC1ub3Rlcw.option.bm90ZV9pZA.display_name": {
+          "source": "Note ID",
+          "message": "メモID"
+        },
+        "app.S2VhcA.action.bGlzdC1ub3Rlcw.option.bm90ZV9pZA.short_desc": {
+          "source": "Filter by note ID",
+          "message": "ノートIDでフィルタリング"
+        },
+        "app.S2VhcA.action.bGlzdC1ub3Rlcw.short_desc": {
+          "source": "List notes for a contact",
+          "message": "連絡先のメモ一覧の取得"
+        },
+        "app.S2VhcA.action.bGlzdC1vcHBvcnR1bml0aWVz.desc": {
+          "source": "List opportunities in Keap with optional filtering",
+          "message": "Keapの商談をオプションのフィルタリング付きで一覧表示します"
+        },
+        "app.S2VhcA.action.bGlzdC1vcHBvcnR1bml0aWVz.display_name": {
+          "source": "List Opportunities",
+          "message": "商談を一覧表示"
+        },
+        "app.S2VhcA.action.bGlzdC1vcHBvcnR1bml0aWVz.option.Y29udGFjdF9pZA.display_name": {
+          "source": "Contact ID",
+          "message": "連絡先ID"
+        },
+        "app.S2VhcA.action.bGlzdC1vcHBvcnR1bml0aWVz.option.Y29udGFjdF9pZA.short_desc": {
+          "source": "Filter by contact",
+          "message": "コンタクトで絞り込み"
+        },
+        "app.S2VhcA.action.bGlzdC1vcHBvcnR1bml0aWVz.option.b3Bwb3J0dW5pdHlfaWQ.display_name": {
+          "source": "Opportunity ID",
+          "message": "商談ID"
+        },
+        "app.S2VhcA.action.bGlzdC1vcHBvcnR1bml0aWVz.option.b3Bwb3J0dW5pdHlfaWQ.short_desc": {
+          "source": "Filter by opportunity ID",
+          "message": "商談IDでフィルタリング"
+        },
+        "app.S2VhcA.action.bGlzdC1vcHBvcnR1bml0aWVz.option.b3JkZXJfYnk.display_name": {
+          "source": "Order By",
+          "message": "並べ替え"
+        },
+        "app.S2VhcA.action.bGlzdC1vcHBvcnR1bml0aWVz.option.b3JkZXJfYnk.short_desc": {
+          "source": "Sort field",
+          "message": "ソートフィールド"
+        },
+        "app.S2VhcA.action.bGlzdC1vcHBvcnR1bml0aWVz.option.b3JkZXJfZGlyZWN0aW9u.desc": {
+          "source": "Sort direction",
+          "message": "ソート方向"
+        },
+        "app.S2VhcA.action.bGlzdC1vcHBvcnR1bml0aWVz.option.b3JkZXJfZGlyZWN0aW9u.display_name": {
+          "source": "Order Direction",
+          "message": "並び替え方向"
+        },
+        "app.S2VhcA.action.bGlzdC1vcHBvcnR1bml0aWVz.option.b3JkZXJfZGlyZWN0aW9u.short_desc": {
+          "source": "Sort direction",
+          "message": "ソート方向"
+        },
+        "app.S2VhcA.action.bGlzdC1vcHBvcnR1bml0aWVz.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "上限"
+        },
+        "app.S2VhcA.action.bGlzdC1vcHBvcnR1bml0aWVz.option.bGltaXQ.short_desc": {
+          "source": "Maximum results",
+          "message": "最大結果数"
+        },
+        "app.S2VhcA.action.bGlzdC1vcHBvcnR1bml0aWVz.option.c3RhZ2VfaWQ.display_name": {
+          "source": "Stage ID",
+          "message": "ステージID"
+        },
+        "app.S2VhcA.action.bGlzdC1vcHBvcnR1bml0aWVz.option.c3RhZ2VfaWQ.short_desc": {
+          "source": "Filter by stage",
+          "message": "ステージで絞り込み"
+        },
+        "app.S2VhcA.action.bGlzdC1vcHBvcnR1bml0aWVz.short_desc": {
+          "source": "List all opportunities",
+          "message": "すべての商談を一覧表示"
+        },
+        "app.S2VhcA.action.bGlzdC1vcmRlcnM.desc": {
+          "source": "List orders in Keap with optional filtering",
+          "message": "Keapの注文を任意のフィルタリングで一覧表示します"
+        },
+        "app.S2VhcA.action.bGlzdC1vcmRlcnM.display_name": {
+          "source": "List Orders",
+          "message": "注文の一覧取得"
+        },
+        "app.S2VhcA.action.bGlzdC1vcmRlcnM.option.Y29udGFjdF9pZA.display_name": {
+          "source": "Contact ID",
+          "message": "連絡先ID"
+        },
+        "app.S2VhcA.action.bGlzdC1vcmRlcnM.option.Y29udGFjdF9pZA.short_desc": {
+          "source": "Filter by contact",
+          "message": "コンタクトで絞り込み"
+        },
+        "app.S2VhcA.action.bGlzdC1vcmRlcnM.option.b3JkZXJfYnk.display_name": {
+          "source": "Order By",
+          "message": "並べ替え"
+        },
+        "app.S2VhcA.action.bGlzdC1vcmRlcnM.option.b3JkZXJfYnk.short_desc": {
+          "source": "Sort field",
+          "message": "ソートフィールド"
+        },
+        "app.S2VhcA.action.bGlzdC1vcmRlcnM.option.b3JkZXJfZGlyZWN0aW9u.desc": {
+          "source": "Sort direction",
+          "message": "ソート方向"
+        },
+        "app.S2VhcA.action.bGlzdC1vcmRlcnM.option.b3JkZXJfZGlyZWN0aW9u.display_name": {
+          "source": "Order Direction",
+          "message": "並び替え方向"
+        },
+        "app.S2VhcA.action.bGlzdC1vcmRlcnM.option.b3JkZXJfZGlyZWN0aW9u.short_desc": {
+          "source": "Sort direction",
+          "message": "ソート方向"
+        },
+        "app.S2VhcA.action.bGlzdC1vcmRlcnM.option.b3JkZXJfaWQ.display_name": {
+          "source": "Order ID",
+          "message": "注文 ID"
+        },
+        "app.S2VhcA.action.bGlzdC1vcmRlcnM.option.b3JkZXJfaWQ.short_desc": {
+          "source": "Filter by order ID",
+          "message": "注文IDで絞り込み"
+        },
+        "app.S2VhcA.action.bGlzdC1vcmRlcnM.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "上限"
+        },
+        "app.S2VhcA.action.bGlzdC1vcmRlcnM.option.bGltaXQ.short_desc": {
+          "source": "Maximum results",
+          "message": "最大結果数"
+        },
+        "app.S2VhcA.action.bGlzdC1vcmRlcnM.option.cGFpZA.display_name": {
+          "source": "Paid",
+          "message": "支払い済み"
+        },
+        "app.S2VhcA.action.bGlzdC1vcmRlcnM.option.cGFpZA.short_desc": {
+          "source": "Filter by payment status",
+          "message": "支払いステータスで絞り込み"
+        },
+        "app.S2VhcA.action.bGlzdC1vcmRlcnM.short_desc": {
+          "source": "List all orders",
+          "message": "すべての注文を一覧表示"
+        },
+        "app.S2VhcA.action.bGlzdC1wcm9kdWN0cw.desc": {
+          "source": "List products in Keap with optional filtering",
+          "message": "Keapの製品を任意のフィルタリングで一覧表示します"
+        },
+        "app.S2VhcA.action.bGlzdC1wcm9kdWN0cw.display_name": {
+          "source": "List Products",
+          "message": "商品一覧"
+        },
+        "app.S2VhcA.action.bGlzdC1wcm9kdWN0cw.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "上限"
+        },
+        "app.S2VhcA.action.bGlzdC1wcm9kdWN0cw.option.bGltaXQ.short_desc": {
+          "source": "Maximum results",
+          "message": "最大結果数"
+        },
+        "app.S2VhcA.action.bGlzdC1wcm9kdWN0cw.option.cHJvZHVjdF9pZA.display_name": {
+          "source": "Product ID",
+          "message": "商品 ID"
+        },
+        "app.S2VhcA.action.bGlzdC1wcm9kdWN0cw.option.cHJvZHVjdF9pZA.short_desc": {
+          "source": "Filter by product ID",
+          "message": "商品IDで絞り込み"
+        },
+        "app.S2VhcA.action.bGlzdC1wcm9kdWN0cw.short_desc": {
+          "source": "List all products",
+          "message": "すべての商品を一覧表示"
+        },
+        "app.S2VhcA.action.bWFrZS1hcGktY2FsbA.desc": {
+          "source": "Make a custom HTTP / REST API call to **Keap** using the configured connection's authentication.\n\nSpecify the HTTP method, the URI path (relative to the connection's API base URL), optional query parameters, headers, and request body. The response is returned as a hash containing the status code, response headers, and response body.\n\nUse this action for endpoints that are not yet exposed as first-class actions on this app.",
+          "message": "設定された接続の認証を使用して、**Keap**へのカスタムHTTP / REST API呼び出しを実行します。\n\nHTTPメソッド、URIパス（接続のAPIベースURLに対する相対パス）、任意のクエリパラメータ、ヘッダー、リクエスト本文を指定します。レスポンスは、ステータスコード、レスポンスヘッダー、レスポンス本文を含むハッシュとして返されます。\n\nこのアクションは、このアプリでファーストクラスのアクションとしてまだ公開されていないエンドポイントに使用します。"
+        },
+        "app.S2VhcA.action.bWFrZS1hcGktY2FsbA.display_name": {
+          "source": "Make an API call",
+          "message": "API コールを実行"
+        },
+        "app.S2VhcA.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.desc": {
+          "source": "The request body. The effective type depends on `body_type`: JSON/form/YAML expect a hash, XML/text expect a string, multipart expects a file structure, binary expects raw bytes.",
+          "message": "リクエストボディ。有効な型は`body_type`に依存します。JSON/form/YAMLはハッシュを期待し、XML/textは文字列を期待し、multipartはファイル構造を期待し、binaryは生バイトを期待します。"
+        },
+        "app.S2VhcA.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.display_name": {
+          "source": "Body",
+          "message": "ボディ"
+        },
+        "app.S2VhcA.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.short_desc": {
+          "source": "The request body",
+          "message": "リクエストボディ"
+        },
+        "app.S2VhcA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.desc": {
+          "source": "Upload a file using `multipart/form-data`. The body must be a @ref DataProvider::FileDataType \"FileDataType\" structure (filename + content + mime_type). The framework builds the multipart envelope and sets the boundary header.",
+          "message": "`multipart/form-data`を使用してファイルをアップロードします。ボディは@ref DataProvider::FileDataType \"FileDataType\"構造（filename + content + mime_type）である必要があります。フレームワークがmultipartエンベロープを構築し、boundaryヘッダーを設定します。"
+        },
+        "app.S2VhcA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.display_name": {
+          "source": "Multipart Form",
+          "message": "マルチパートフォーム"
+        },
+        "app.S2VhcA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.short_desc": {
+          "source": "Upload a file using multipart/form-data",
+          "message": "multipart/form-dataを使用してファイルをアップロード"
+        },
+        "app.S2VhcA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.desc": {
+          "source": "Pass the body to the REST client unchanged; the client decides serialization based on its configured `data` option and the value type",
+          "message": "ボディを変更せずにRESTクライアントに渡します。クライアントは設定された`data`オプションと値の型に基づいてシリアライズを決定します"
+        },
+        "app.S2VhcA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.display_name": {
+          "source": "Auto",
+          "message": "自動"
+        },
+        "app.S2VhcA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.short_desc": {
+          "source": "Pass-through; use connection serialization and let the REST client decide",
+          "message": "パススルー。接続のシリアライズを使用し、RESTクライアントに決定させます"
+        },
+        "app.S2VhcA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.desc": {
+          "source": "Send the body as raw bytes. The body must be a binary value. Sets `Content-Type: application/octet-stream` unless overridden by `hdr`.",
+          "message": "ボディを生バイトとして送信します。ボディはバイナリ値である必要があります。`hdr`によってオーバーライドされない限り、`Content-Type: application/octet-stream`を設定します。"
+        },
+        "app.S2VhcA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.display_name": {
+          "source": "Raw Binary",
+          "message": "生バイナリ"
+        },
+        "app.S2VhcA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.short_desc": {
+          "source": "Send body as raw bytes",
+          "message": "ボディを生バイトとして送信"
+        },
+        "app.S2VhcA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.desc": {
+          "source": "Serialize a hash of form fields as `application/x-www-form-urlencoded`. The body must be a hash whose values are scalars (strings/numbers/booleans).",
+          "message": "フォームフィールドのハッシュを`application/x-www-form-urlencoded`としてシリアライズします。ボディは値がスカラー（文字列/数値/ブール値）のハッシュである必要があります。"
+        },
+        "app.S2VhcA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.display_name": {
+          "source": "Form (URL-encoded)",
+          "message": "フォーム (URLエンコード)"
+        },
+        "app.S2VhcA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.short_desc": {
+          "source": "Serialize body as application/x-www-form-urlencoded form fields",
+          "message": "ボディをapplication/x-www-form-urlencodedフォームフィールドとしてシリアライズ"
+        },
+        "app.S2VhcA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.desc": {
+          "source": "Serialize the body as JSON; sets `Content-Type: application/json`. The body should be a hash, list, or scalar value.",
+          "message": "ボディをJSONとしてシリアライズします。`Content-Type: application/json`を設定します。ボディはハッシュ、リスト、またはスカラー値である必要があります。"
+        },
+        "app.S2VhcA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.display_name": {
+          "source": "JSON",
+          "message": "JSON"
+        },
+        "app.S2VhcA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.short_desc": {
+          "source": "Serialize body as JSON",
+          "message": "ボディをJSONとしてシリアライズ"
+        },
+        "app.S2VhcA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.desc": {
+          "source": "Send the body as plain text. The body must be a string. Sets `Content-Type: text/plain`.",
+          "message": "ボディをプレーンテキストとして送信します。ボディは文字列である必要があります。`Content-Type: text/plain`を設定します。"
+        },
+        "app.S2VhcA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.display_name": {
+          "source": "Plain Text",
+          "message": "プレーンテキスト"
+        },
+        "app.S2VhcA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.short_desc": {
+          "source": "Send body as text/plain",
+          "message": "ボディをtext/plainとして送信"
+        },
+        "app.S2VhcA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.desc": {
+          "source": "Send the body as XML. If the body is a hash it is serialized to XML; if it is a string it is sent verbatim. Sets `Content-Type: application/xml`.",
+          "message": "ボディをXMLとして送信します。ボディがハッシュの場合はXMLにシリアライズされ、文字列の場合はそのまま送信されます。`Content-Type: application/xml`を設定します。"
+        },
+        "app.S2VhcA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.display_name": {
+          "source": "XML",
+          "message": "XML"
+        },
+        "app.S2VhcA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.short_desc": {
+          "source": "Send body as XML",
+          "message": "ボディをXMLとして送信"
+        },
+        "app.S2VhcA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.desc": {
+          "source": "Send the body as YAML. If the body is a hash it is serialized to YAML; if it is a string it is sent verbatim. Sets `Content-Type: application/x-yaml`.",
+          "message": "ボディをYAMLとして送信します。ボディがハッシュの場合はYAMLにシリアライズされ、文字列の場合はそのまま送信されます。`Content-Type: application/x-yaml`を設定します。"
+        },
+        "app.S2VhcA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.display_name": {
+          "source": "YAML",
+          "message": "YAML"
+        },
+        "app.S2VhcA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.short_desc": {
+          "source": "Send body as YAML",
+          "message": "ボディをYAMLとして送信"
+        },
+        "app.S2VhcA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.desc": {
+          "source": "Selects the body serialization mode and the corresponding `Content-Type` header. Changing this field reshapes the `body` editor - selecting JSON exposes a JSON editor, selecting Multipart Form exposes a file picker, and so on.",
+          "message": "ボディのシリアライズモードと対応する`Content-Type`ヘッダーを選択します。このフィールドを変更すると`body`エディターの形状が変わります。JSONを選択するとJSONエディターが表示され、マルチパートフォームを選択するとファイルピッカーが表示される、などです。"
+        },
+        "app.S2VhcA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.display_name": {
+          "source": "Body Type",
+          "message": "ボディタイプ"
+        },
+        "app.S2VhcA.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.short_desc": {
+          "source": "How the body is serialized and what Content-Type is sent",
+          "message": "ボディのシリアライズ方法および送信されるContent-Type"
+        },
+        "app.S2VhcA.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.desc": {
+          "source": "If `True`, non-2xx HTTP responses return as the normal response hash (with the actual status code) instead of raising `REST-RESPONSE-ERROR`. Useful for handling 4xx/5xx as data - e.g. checking whether a resource exists. Overrides the connection's `error_passthru` setting for this call only.",
+          "message": "`True`の場合、2xx以外のHTTPレスポンスは`REST-RESPONSE-ERROR`を発生させる代わりに（実際のステータスコードを含む）通常のレスポンスハッシュとして返されます。リソースが存在するかどうかの確認など、4xx/5xxをデータとして処理する場合に便利です。この呼び出しに限り、接続の`error_passthru`設定をオーバーライドします。"
+        },
+        "app.S2VhcA.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.display_name": {
+          "source": "Return Errors as Data",
+          "message": "エラーをデータとして返す"
+        },
+        "app.S2VhcA.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.short_desc": {
+          "source": "Return non-2xx responses normally instead of throwing",
+          "message": "例外をスローする代わりに2xx以外のレスポンスを通常通り返す"
+        },
+        "app.S2VhcA.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.desc": {
+          "source": "Optional list of HTTP status codes treated as success. If set and the response status is not in this list, the action throws `REST-STATUS-ERROR`. When unset, the REST client's default behavior applies (typically: 2xx is success, non-2xx throws).",
+          "message": "成功として扱われるHTTPステータスコードのオプションリスト。設定されていてレスポンスステータスがこのリストに含まれない場合、アクションは`REST-STATUS-ERROR`をスローします。未設定の場合、RESTクライアントのデフォルト動作が適用されます（通常：2xxは成功、2xx以外はスロー）。"
+        },
+        "app.S2VhcA.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.display_name": {
+          "source": "Expected Status Codes",
+          "message": "期待されるステータスコード"
+        },
+        "app.S2VhcA.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.short_desc": {
+          "source": "Response status codes treated as success",
+          "message": "成功として扱われるレスポンスステータスコード"
+        },
+        "app.S2VhcA.action.bWFrZS1hcGktY2FsbA.option.aGRy.desc": {
+          "source": "Hash of custom headers added to the request. These override any default headers set by `body_type` (e.g. supplying `Content-Type` here wins over the body-type default).",
+          "message": "リクエストに追加されるカスタムヘッダーのハッシュ。これらは`body_type`によって設定されたデフォルトヘッダーをオーバーライドします（例：ここで`Content-Type`を指定すると、ボディタイプのデフォルトより優先されます）。"
+        },
+        "app.S2VhcA.action.bWFrZS1hcGktY2FsbA.option.aGRy.display_name": {
+          "source": "Custom Headers",
+          "message": "カスタムヘッダー"
+        },
+        "app.S2VhcA.action.bWFrZS1hcGktY2FsbA.option.aGRy.short_desc": {
+          "source": "Extra request headers",
+          "message": "追加のリクエストヘッダー"
+        },
+        "app.S2VhcA.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.desc": {
+          "source": "If `True`, the response hash includes a `debug` sub-hash containing the request method/URL/headers (with sensitive values redacted), request and response sizes, and round-trip duration. Useful when investigating slow or failing calls. Off by default to keep responses lean.",
+          "message": "`True`の場合、レスポンスハッシュにはリクエストメソッド/URL/ヘッダー（機密値は伏字処理済み）、リクエストとレスポンスのサイズ、およびラウンドトリップ時間を含む`debug`サブハッシュが含まれます。遅い呼び出しや失敗した呼び出しを調査する際に便利です。レスポンスを軽量に保つため、デフォルトではオフになっています。"
+        },
+        "app.S2VhcA.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.display_name": {
+          "source": "Include Debug Info",
+          "message": "デバッグ情報を含める"
+        },
+        "app.S2VhcA.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.short_desc": {
+          "source": "Include request/timing/size debug info in the response",
+          "message": "レスポンスにリクエスト/タイミング/サイズのデバッグ情報を含める"
+        },
+        "app.S2VhcA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.desc": {
+          "source": "HTTP `OPTIONS`",
+          "message": "HTTP `OPTIONS`"
+        },
+        "app.S2VhcA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.display_name": {
+          "source": "OPTIONS",
+          "message": "OPTIONS"
+        },
+        "app.S2VhcA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.short_desc": {
+          "source": "HTTP OPTIONS",
+          "message": "HTTP OPTIONS"
+        },
+        "app.S2VhcA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.desc": {
+          "source": "HTTP `DELETE`",
+          "message": "HTTP `DELETE`"
+        },
+        "app.S2VhcA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.display_name": {
+          "source": "DELETE",
+          "message": "DELETE"
+        },
+        "app.S2VhcA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.short_desc": {
+          "source": "HTTP DELETE",
+          "message": "HTTP DELETE"
+        },
+        "app.S2VhcA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.desc": {
+          "source": "HTTP `GET`",
+          "message": "HTTP `GET`"
+        },
+        "app.S2VhcA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.display_name": {
+          "source": "GET",
+          "message": "GET"
+        },
+        "app.S2VhcA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.short_desc": {
+          "source": "HTTP GET",
+          "message": "HTTP GET"
+        },
+        "app.S2VhcA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.desc": {
+          "source": "HTTP `HEAD`",
+          "message": "HTTP `HEAD`"
+        },
+        "app.S2VhcA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.display_name": {
+          "source": "HEAD",
+          "message": "HEAD"
+        },
+        "app.S2VhcA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.short_desc": {
+          "source": "HTTP HEAD",
+          "message": "HTTP HEAD"
+        },
+        "app.S2VhcA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.desc": {
+          "source": "HTTP `PATCH`",
+          "message": "HTTP `PATCH`"
+        },
+        "app.S2VhcA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.display_name": {
+          "source": "PATCH",
+          "message": "PATCH"
+        },
+        "app.S2VhcA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.short_desc": {
+          "source": "HTTP PATCH",
+          "message": "HTTP PATCH"
+        },
+        "app.S2VhcA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.desc": {
+          "source": "HTTP `POST`",
+          "message": "HTTP `POST`"
+        },
+        "app.S2VhcA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.display_name": {
+          "source": "POST",
+          "message": "POST"
+        },
+        "app.S2VhcA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.short_desc": {
+          "source": "HTTP POST",
+          "message": "HTTP POST"
+        },
+        "app.S2VhcA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.desc": {
+          "source": "HTTP `PUT`",
+          "message": "HTTP `PUT`"
+        },
+        "app.S2VhcA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.display_name": {
+          "source": "PUT",
+          "message": "PUT"
+        },
+        "app.S2VhcA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.short_desc": {
+          "source": "HTTP PUT",
+          "message": "HTTP PUT"
+        },
+        "app.S2VhcA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.desc": {
+          "source": "HTTP `TRACE`",
+          "message": "HTTP `TRACE`"
+        },
+        "app.S2VhcA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.display_name": {
+          "source": "TRACE",
+          "message": "TRACE"
+        },
+        "app.S2VhcA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.short_desc": {
+          "source": "HTTP TRACE",
+          "message": "HTTP TRACE"
+        },
+        "app.S2VhcA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "リクエストに使用するHTTPメソッド"
+        },
+        "app.S2VhcA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.display_name": {
+          "source": "HTTP Method",
+          "message": "HTTPメソッド"
+        },
+        "app.S2VhcA.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.short_desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "リクエストに使用するHTTPメソッド"
+        },
+        "app.S2VhcA.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain `{name}` placeholders that are replaced from `path_vars`. Example: `/users/{id}/comments`.",
+          "message": "接続のAPIベースURLに対する相対URIパス。`path_vars`から置換される`{name}`プレースホルダーを含めることができます。例: `/users/{id}/comments`。"
+        },
+        "app.S2VhcA.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.display_name": {
+          "source": "URI Path",
+          "message": "URIパス"
+        },
+        "app.S2VhcA.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.short_desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain '{name}' placeholders that are replaced from 'path_vars'. Example: '/users/{id}/comments'",
+          "message": "接続のAPIベースURLに対する相対URIパス。'path_vars' から置換される '{name}' プレースホルダーを含めることができます。例: '/users/{id}/comments'"
+        },
+        "app.S2VhcA.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.desc": {
+          "source": "Hash of values substituted into `{name}` placeholders in the URI path. Example: with `path = /users/{id}` and `path_vars = {id: 123}` the framework sends `/users/123`. Values are URL-encoded.",
+          "message": "URIパス内の `{name}` プレースホルダーに置換される値のハッシュ。例: `path = /users/{id}` と `path_vars = {id: 123}` を指定すると、フレームワークは `/users/123` を送信します。値はURLエンコードされます。"
+        },
+        "app.S2VhcA.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.display_name": {
+          "source": "Path Variables",
+          "message": "パス変数"
+        },
+        "app.S2VhcA.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.short_desc": {
+          "source": "Values for {name} placeholders in path",
+          "message": "パス内の {name} プレースホルダーの値"
+        },
+        "app.S2VhcA.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.desc": {
+          "source": "Hash of query string parameters to append to the URI path. Values are URL-encoded; list values are joined with `,`.",
+          "message": "URIパスに追加するクエリ文字列パラメータのハッシュ。値はURLエンコードされます。リスト値は `,` で結合されます。"
+        },
+        "app.S2VhcA.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.display_name": {
+          "source": "Query Arguments",
+          "message": "クエリ引数"
+        },
+        "app.S2VhcA.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.short_desc": {
+          "source": "Query string parameters",
+          "message": "クエリ文字列パラメータ"
+        },
+        "app.S2VhcA.action.bWFrZS1hcGktY2FsbA.short_desc": {
+          "source": "Make a custom API call to Keap",
+          "message": "KeapへのカスタムAPI呼び出しを実行します"
+        },
+        "app.S2VhcA.action.bWVyZ2UtY29udGFjdHM.desc": {
+          "source": "Merge a duplicate contact into a surviving contact in Keap",
+          "message": "Keapで重複連絡先を存続連絡先にマージします"
+        },
+        "app.S2VhcA.action.bWVyZ2UtY29udGFjdHM.display_name": {
+          "source": "Merge Contacts",
+          "message": "連絡先をマージ"
+        },
+        "app.S2VhcA.action.bWVyZ2UtY29udGFjdHM.option.Y29udGFjdF9pZA.display_name": {
+          "source": "Surviving Contact ID",
+          "message": "存続連絡先ID"
+        },
+        "app.S2VhcA.action.bWVyZ2UtY29udGFjdHM.option.Y29udGFjdF9pZA.short_desc": {
+          "source": "The contact that survives",
+          "message": "存続させる連絡先"
+        },
+        "app.S2VhcA.action.bWVyZ2UtY29udGFjdHM.option.ZHVwbGljYXRlX2NvbnRhY3RfaWQ.display_name": {
+          "source": "Duplicate Contact ID",
+          "message": "重複連絡先ID"
+        },
+        "app.S2VhcA.action.bWVyZ2UtY29udGFjdHM.option.ZHVwbGljYXRlX2NvbnRhY3RfaWQ.short_desc": {
+          "source": "The contact to merge and delete",
+          "message": "マージして削除する連絡先"
+        },
+        "app.S2VhcA.action.bWVyZ2UtY29udGFjdHM.short_desc": {
+          "source": "Merge two contacts",
+          "message": "2件の連絡先をマージします"
+        },
+        "app.S2VhcA.action.bm90ZS1hZGRlZA.desc": {
+          "source": "Triggers when a new note is added in Keap",
+          "message": "Keapで新しいノートが追加されたときにトリガーされます"
+        },
+        "app.S2VhcA.action.bm90ZS1hZGRlZA.display_name": {
+          "source": "Note Added",
+          "message": "ノートが追加されました"
+        },
+        "app.S2VhcA.action.bm90ZS1hZGRlZA.short_desc": {
+          "source": "Watch for new notes",
+          "message": "新しいノートを監視します"
+        },
+        "app.S2VhcA.action.cmVtb3ZlLXRhZw.desc": {
+          "source": "Remove a tag from a contact in Keap",
+          "message": "Keapで連絡先からタグを削除します"
+        },
+        "app.S2VhcA.action.cmVtb3ZlLXRhZw.display_name": {
+          "source": "Remove Tag from Contact",
+          "message": "連絡先からタグを削除"
+        },
+        "app.S2VhcA.action.cmVtb3ZlLXRhZw.option.Y29udGFjdF9pZA.display_name": {
+          "source": "Contact ID",
+          "message": "連絡先ID"
+        },
+        "app.S2VhcA.action.cmVtb3ZlLXRhZw.option.Y29udGFjdF9pZA.short_desc": {
+          "source": "The contact",
+          "message": "連絡先"
+        },
+        "app.S2VhcA.action.cmVtb3ZlLXRhZw.option.dGFnX2lk.display_name": {
+          "source": "Tag ID",
+          "message": "タグ ID"
+        },
+        "app.S2VhcA.action.cmVtb3ZlLXRhZw.option.dGFnX2lk.short_desc": {
+          "source": "The tag to remove",
+          "message": "削除するタグ"
+        },
+        "app.S2VhcA.action.cmVtb3ZlLXRhZw.short_desc": {
+          "source": "Remove a tag from a contact",
+          "message": "連絡先からタグを削除"
+        },
+        "app.S2VhcA.action.dGFnLWFwcGxpZWQ.desc": {
+          "source": "Triggers when a tag is applied to a contact in Keap",
+          "message": "Keapで連絡先にタグが適用されたときにトリガーされます"
+        },
+        "app.S2VhcA.action.dGFnLWFwcGxpZWQ.display_name": {
+          "source": "Tag Applied",
+          "message": "タグが適用されました"
+        },
+        "app.S2VhcA.action.dGFnLWFwcGxpZWQ.short_desc": {
+          "source": "Watch for tag applications",
+          "message": "タグ適用の監視"
+        },
+        "app.S2VhcA.action.dGFzay1jcmVhdGVk.desc": {
+          "source": "Triggers when a new task is created in Keap",
+          "message": "Keapで新しいタスクが作成されたときにトリガーされます"
+        },
+        "app.S2VhcA.action.dGFzay1jcmVhdGVk.display_name": {
+          "source": "Task Created",
+          "message": "タスクが作成されました"
+        },
+        "app.S2VhcA.action.dGFzay1jcmVhdGVk.short_desc": {
+          "source": "Watch for new tasks",
+          "message": "新規タスクを監視"
+        },
+        "app.S2VhcA.action.dXBkYXRlLW5vdGU.desc": {
+          "source": "Update an existing note in Keap",
+          "message": "Keapの既存のノートを更新します"
+        },
+        "app.S2VhcA.action.dXBkYXRlLW5vdGU.display_name": {
+          "source": "Update a Note",
+          "message": "メモを更新"
+        },
+        "app.S2VhcA.action.dXBkYXRlLW5vdGU.option.Y29udGFjdF9pZA.display_name": {
+          "source": "Contact ID",
+          "message": "連絡先ID"
+        },
+        "app.S2VhcA.action.dXBkYXRlLW5vdGU.option.Y29udGFjdF9pZA.short_desc": {
+          "source": "The contact",
+          "message": "連絡先"
+        },
+        "app.S2VhcA.action.dXBkYXRlLW5vdGU.option.Ym9keQ.display_name": {
+          "source": "Body",
+          "message": "ボディ"
+        },
+        "app.S2VhcA.action.dXBkYXRlLW5vdGU.option.Ym9keQ.short_desc": {
+          "source": "Note body",
+          "message": "ノート本文"
+        },
+        "app.S2VhcA.action.dXBkYXRlLW5vdGU.option.bm90ZV9pZA.display_name": {
+          "source": "Note ID",
+          "message": "メモID"
+        },
+        "app.S2VhcA.action.dXBkYXRlLW5vdGU.option.bm90ZV9pZA.short_desc": {
+          "source": "The note to update",
+          "message": "更新するノート"
+        },
+        "app.S2VhcA.action.dXBkYXRlLW5vdGU.option.dGl0bGU.display_name": {
+          "source": "Title",
+          "message": "タイトル"
+        },
+        "app.S2VhcA.action.dXBkYXRlLW5vdGU.option.dGl0bGU.short_desc": {
+          "source": "Note title",
+          "message": "ノートタイトル"
+        },
+        "app.S2VhcA.action.dXBkYXRlLW5vdGU.short_desc": {
+          "source": "Update an existing note",
+          "message": "既存のノートを更新"
+        },
+        "app.S2VhcA.action.dXBkYXRlLW9wcG9ydHVuaXR5.desc": {
+          "source": "Update an existing opportunity in Keap",
+          "message": "Keapの既存の商談を更新します"
+        },
+        "app.S2VhcA.action.dXBkYXRlLW9wcG9ydHVuaXR5.display_name": {
+          "source": "Update an Opportunity",
+          "message": "商談を更新"
+        },
+        "app.S2VhcA.action.dXBkYXRlLW9wcG9ydHVuaXR5.option.ZXN0aW1hdGVkX2Nsb3NlX3RpbWU.display_name": {
+          "source": "Estimated Close Time",
+          "message": "予想成約日時"
+        },
+        "app.S2VhcA.action.dXBkYXRlLW9wcG9ydHVuaXR5.option.ZXN0aW1hdGVkX2Nsb3NlX3RpbWU.short_desc": {
+          "source": "Expected close date/time",
+          "message": "予想成約日時"
+        },
+        "app.S2VhcA.action.dXBkYXRlLW9wcG9ydHVuaXR5.option.b3Bwb3J0dW5pdHlfaWQ.display_name": {
+          "source": "Opportunity ID",
+          "message": "商談ID"
+        },
+        "app.S2VhcA.action.dXBkYXRlLW9wcG9ydHVuaXR5.option.b3Bwb3J0dW5pdHlfaWQ.short_desc": {
+          "source": "The opportunity to update",
+          "message": "更新する商談"
+        },
+        "app.S2VhcA.action.dXBkYXRlLW9wcG9ydHVuaXR5.option.b3Bwb3J0dW5pdHlfbm90ZXM.display_name": {
+          "source": "Notes",
+          "message": "メモ"
+        },
+        "app.S2VhcA.action.dXBkYXRlLW9wcG9ydHVuaXR5.option.b3Bwb3J0dW5pdHlfbm90ZXM.short_desc": {
+          "source": "Opportunity notes",
+          "message": "案件ノート"
+        },
+        "app.S2VhcA.action.dXBkYXRlLW9wcG9ydHVuaXR5.option.b3Bwb3J0dW5pdHlfdGl0bGU.display_name": {
+          "source": "Title",
+          "message": "タイトル"
+        },
+        "app.S2VhcA.action.dXBkYXRlLW9wcG9ydHVuaXR5.option.b3Bwb3J0dW5pdHlfdGl0bGU.short_desc": {
+          "source": "Opportunity title",
+          "message": "案件タイトル"
+        },
+        "app.S2VhcA.action.dXBkYXRlLW9wcG9ydHVuaXR5.option.c3RhZ2VfaWQ.display_name": {
+          "source": "Stage ID",
+          "message": "ステージID"
+        },
+        "app.S2VhcA.action.dXBkYXRlLW9wcG9ydHVuaXR5.option.c3RhZ2VfaWQ.short_desc": {
+          "source": "Pipeline stage",
+          "message": "パイプラインステージ"
+        },
+        "app.S2VhcA.action.dXBkYXRlLW9wcG9ydHVuaXR5.option.cHJvamVjdGVkX3JldmVudWVfaGlnaA.display_name": {
+          "source": "Projected Revenue High",
+          "message": "予想売上高 (上限)"
+        },
+        "app.S2VhcA.action.dXBkYXRlLW9wcG9ydHVuaXR5.option.cHJvamVjdGVkX3JldmVudWVfaGlnaA.short_desc": {
+          "source": "High revenue estimate",
+          "message": "予想売上高の上限"
+        },
+        "app.S2VhcA.action.dXBkYXRlLW9wcG9ydHVuaXR5.option.cHJvamVjdGVkX3JldmVudWVfbG93.display_name": {
+          "source": "Projected Revenue Low",
+          "message": "予想売上高 (下限)"
+        },
+        "app.S2VhcA.action.dXBkYXRlLW9wcG9ydHVuaXR5.option.cHJvamVjdGVkX3JldmVudWVfbG93.short_desc": {
+          "source": "Low revenue estimate",
+          "message": "予想売上高の下限"
+        },
+        "app.S2VhcA.action.dXBkYXRlLW9wcG9ydHVuaXR5.short_desc": {
+          "source": "Update an existing opportunity",
+          "message": "既存の商談を更新"
+        },
+        "app.S2VhcA.action.dXBkYXRlLWNvbXBhbnk.desc": {
+          "source": "Update an existing company in Keap",
+          "message": "Keapの既存の会社を更新します"
+        },
+        "app.S2VhcA.action.dXBkYXRlLWNvbXBhbnk.display_name": {
+          "source": "Update a Company",
+          "message": "会社を更新"
+        },
+        "app.S2VhcA.action.dXBkYXRlLWNvbXBhbnk.option.Y29tcGFueV9pZA.display_name": {
+          "source": "Company ID",
+          "message": "会社ID"
+        },
+        "app.S2VhcA.action.dXBkYXRlLWNvbXBhbnk.option.Y29tcGFueV9pZA.short_desc": {
+          "source": "The company to update",
+          "message": "更新する会社"
+        },
+        "app.S2VhcA.action.dXBkYXRlLWNvbXBhbnk.option.Y29tcGFueV9uYW1l.display_name": {
+          "source": "Company Name",
+          "message": "会社名"
+        },
+        "app.S2VhcA.action.dXBkYXRlLWNvbXBhbnk.option.Y29tcGFueV9uYW1l.short_desc": {
+          "source": "Name of the company",
+          "message": "会社名"
+        },
+        "app.S2VhcA.action.dXBkYXRlLWNvbXBhbnk.option.ZW1haWxfYWRkcmVzcw.display_name": {
+          "source": "Email",
+          "message": "メール"
+        },
+        "app.S2VhcA.action.dXBkYXRlLWNvbXBhbnk.option.ZW1haWxfYWRkcmVzcw.short_desc": {
+          "source": "Company email",
+          "message": "会社のメールアドレス"
+        },
+        "app.S2VhcA.action.dXBkYXRlLWNvbXBhbnk.option.cGhvbmVfbnVtYmVy.display_name": {
+          "source": "Phone",
+          "message": "電話番号"
+        },
+        "app.S2VhcA.action.dXBkYXRlLWNvbXBhbnk.option.cGhvbmVfbnVtYmVy.short_desc": {
+          "source": "Company phone",
+          "message": "会社の電話番号"
+        },
+        "app.S2VhcA.action.dXBkYXRlLWNvbXBhbnk.option.d2Vic2l0ZQ.display_name": {
+          "source": "Website",
+          "message": "ウェブサイト"
+        },
+        "app.S2VhcA.action.dXBkYXRlLWNvbXBhbnk.option.d2Vic2l0ZQ.short_desc": {
+          "source": "Company website",
+          "message": "会社のWebサイト"
+        },
+        "app.S2VhcA.action.dXBkYXRlLWNvbXBhbnk.short_desc": {
+          "source": "Update an existing company",
+          "message": "既存の会社を更新"
+        },
+        "app.S2VhcA.action.dXBkYXRlLWNvbnRhY3Q.desc": {
+          "source": "Update an existing contact in Keap",
+          "message": "Keapの既存の連絡先を更新します"
+        },
+        "app.S2VhcA.action.dXBkYXRlLWNvbnRhY3Q.display_name": {
+          "source": "Update a Contact",
+          "message": "連絡先を更新"
+        },
+        "app.S2VhcA.action.dXBkYXRlLWNvbnRhY3Q.option.Y29udGFjdF9pZA.display_name": {
+          "source": "Contact ID",
+          "message": "連絡先ID"
+        },
+        "app.S2VhcA.action.dXBkYXRlLWNvbnRhY3Q.option.Y29udGFjdF9pZA.short_desc": {
+          "source": "The contact to update",
+          "message": "更新する連絡先"
+        },
+        "app.S2VhcA.action.dXBkYXRlLWNvbnRhY3Q.option.YmlydGhfZGF0ZQ.display_name": {
+          "source": "Birthday",
+          "message": "誕生日"
+        },
+        "app.S2VhcA.action.dXBkYXRlLWNvbnRhY3Q.option.YmlydGhfZGF0ZQ.short_desc": {
+          "source": "Contact birthday",
+          "message": "連絡先の誕生日"
+        },
+        "app.S2VhcA.action.dXBkYXRlLWNvbnRhY3Q.option.Z2l2ZW5fbmFtZQ.display_name": {
+          "source": "First Name",
+          "message": "名"
+        },
+        "app.S2VhcA.action.dXBkYXRlLWNvbnRhY3Q.option.Z2l2ZW5fbmFtZQ.short_desc": {
+          "source": "Contact first name",
+          "message": "連絡先の名"
+        },
+        "app.S2VhcA.action.dXBkYXRlLWNvbnRhY3Q.option.ZW1haWw.desc": {
+          "source": "The contact's email address",
+          "message": "コンタクトのメールアドレス"
+        },
+        "app.S2VhcA.action.dXBkYXRlLWNvbnRhY3Q.option.ZW1haWw.display_name": {
+          "source": "Email",
+          "message": "メール"
+        },
+        "app.S2VhcA.action.dXBkYXRlLWNvbnRhY3Q.option.ZW1haWw.short_desc": {
+          "source": "Contact email address",
+          "message": "連絡先のメールアドレス"
+        },
+        "app.S2VhcA.action.dXBkYXRlLWNvbnRhY3Q.option.ZmFtaWx5X25hbWU.display_name": {
+          "source": "Last Name",
+          "message": "姓"
+        },
+        "app.S2VhcA.action.dXBkYXRlLWNvbnRhY3Q.option.ZmFtaWx5X25hbWU.short_desc": {
+          "source": "Contact last name",
+          "message": "連絡先の姓"
+        },
+        "app.S2VhcA.action.dXBkYXRlLWNvbnRhY3Q.option.am9iX3RpdGxl.display_name": {
+          "source": "Job Title",
+          "message": "役職"
+        },
+        "app.S2VhcA.action.dXBkYXRlLWNvbnRhY3Q.option.am9iX3RpdGxl.short_desc": {
+          "source": "Contact job title",
+          "message": "連絡先の役職"
+        },
+        "app.S2VhcA.action.dXBkYXRlLWNvbnRhY3Q.option.b3duZXJfaWQ.display_name": {
+          "source": "Owner ID",
+          "message": "所有者ID"
+        },
+        "app.S2VhcA.action.dXBkYXRlLWNvbnRhY3Q.option.b3duZXJfaWQ.short_desc": {
+          "source": "Contact owner user ID",
+          "message": "連絡先担当者のユーザー ID"
+        },
+        "app.S2VhcA.action.dXBkYXRlLWNvbnRhY3Q.option.bWlkZGxlX25hbWU.display_name": {
+          "source": "Middle Name",
+          "message": "ミドルネーム"
+        },
+        "app.S2VhcA.action.dXBkYXRlLWNvbnRhY3Q.option.bWlkZGxlX25hbWU.short_desc": {
+          "source": "Contact middle name",
+          "message": "連絡先のミドルネーム"
+        },
+        "app.S2VhcA.action.dXBkYXRlLWNvbnRhY3Q.option.c3BvdXNlX25hbWU.display_name": {
+          "source": "Spouse Name",
+          "message": "配偶者名"
+        },
+        "app.S2VhcA.action.dXBkYXRlLWNvbnRhY3Q.option.c3BvdXNlX25hbWU.short_desc": {
+          "source": "Contact spouse name",
+          "message": "連絡先の配偶者名"
+        },
+        "app.S2VhcA.action.dXBkYXRlLWNvbnRhY3Q.option.c3VmZml4.display_name": {
+          "source": "Suffix",
+          "message": "接尾辞"
+        },
+        "app.S2VhcA.action.dXBkYXRlLWNvbnRhY3Q.option.c3VmZml4.short_desc": {
+          "source": "Name suffix (e.g., Jr., III)",
+          "message": "名前の接尾辞 (例: Jr.、III)"
+        },
+        "app.S2VhcA.action.dXBkYXRlLWNvbnRhY3Q.option.cGhvbmVfbnVtYmVy.desc": {
+          "source": "The contact's phone number",
+          "message": "コンタクトの電話番号"
+        },
+        "app.S2VhcA.action.dXBkYXRlLWNvbnRhY3Q.option.cGhvbmVfbnVtYmVy.display_name": {
+          "source": "Phone Number",
+          "message": "電話番号"
+        },
+        "app.S2VhcA.action.dXBkYXRlLWNvbnRhY3Q.option.cGhvbmVfbnVtYmVy.short_desc": {
+          "source": "Contact phone number",
+          "message": "連絡先の電話番号"
+        },
+        "app.S2VhcA.action.dXBkYXRlLWNvbnRhY3Q.option.cHJlZmVycmVkX25hbWU.display_name": {
+          "source": "Preferred Name",
+          "message": "呼称"
+        },
+        "app.S2VhcA.action.dXBkYXRlLWNvbnRhY3Q.option.cHJlZmVycmVkX25hbWU.short_desc": {
+          "source": "Contact preferred name",
+          "message": "連絡先の呼称"
+        },
+        "app.S2VhcA.action.dXBkYXRlLWNvbnRhY3Q.option.cHJlZml4.display_name": {
+          "source": "Prefix",
+          "message": "接頭辞"
+        },
+        "app.S2VhcA.action.dXBkYXRlLWNvbnRhY3Q.option.cHJlZml4.short_desc": {
+          "source": "Name prefix (e.g., Mr., Dr.)",
+          "message": "名前の敬称 (例: Mr.、Dr.)"
+        },
+        "app.S2VhcA.action.dXBkYXRlLWNvbnRhY3Q.option.d2Vic2l0ZQ.display_name": {
+          "source": "Website",
+          "message": "ウェブサイト"
+        },
+        "app.S2VhcA.action.dXBkYXRlLWNvbnRhY3Q.option.d2Vic2l0ZQ.short_desc": {
+          "source": "Contact website URL",
+          "message": "連絡先の Web サイト URL"
+        },
+        "app.S2VhcA.action.dXBkYXRlLWNvbnRhY3Q.option.dGltZV96b25l.display_name": {
+          "source": "Time Zone",
+          "message": "タイムゾーン"
+        },
+        "app.S2VhcA.action.dXBkYXRlLWNvbnRhY3Q.option.dGltZV96b25l.short_desc": {
+          "source": "Contact time zone",
+          "message": "連絡先のタイムゾーン"
+        },
+        "app.S2VhcA.action.dXBkYXRlLWNvbnRhY3Q.short_desc": {
+          "source": "Update an existing contact",
+          "message": "既存の連絡先を更新"
+        },
+        "app.S2VhcA.action.dXBkYXRlLXRhc2s.desc": {
+          "source": "Update an existing task in Keap",
+          "message": "Keapの既存のタスクを更新します"
+        },
+        "app.S2VhcA.action.dXBkYXRlLXRhc2s.display_name": {
+          "source": "Update a Task",
+          "message": "タスクを更新"
+        },
+        "app.S2VhcA.action.dXBkYXRlLXRhc2s.option.Y29tcGxldGVk.display_name": {
+          "source": "Completed",
+          "message": "完了"
+        },
+        "app.S2VhcA.action.dXBkYXRlLXRhc2s.option.Y29tcGxldGVk.short_desc": {
+          "source": "Task completion status",
+          "message": "タスクの完了ステータス"
+        },
+        "app.S2VhcA.action.dXBkYXRlLXRhc2s.option.ZGVzY3JpcHRpb24.display_name": {
+          "source": "Description",
+          "message": "説明"
+        },
+        "app.S2VhcA.action.dXBkYXRlLXRhc2s.option.ZGVzY3JpcHRpb24.short_desc": {
+          "source": "Task description",
+          "message": "タスクの説明"
+        },
+        "app.S2VhcA.action.dXBkYXRlLXRhc2s.option.ZHVlX3RpbWU.display_name": {
+          "source": "Due Time",
+          "message": "期日"
+        },
+        "app.S2VhcA.action.dXBkYXRlLXRhc2s.option.ZHVlX3RpbWU.short_desc": {
+          "source": "Task due date/time",
+          "message": "タスクの期日/日時"
+        },
+        "app.S2VhcA.action.dXBkYXRlLXRhc2s.option.cHJpb3JpdHk.display_name": {
+          "source": "Priority",
+          "message": "優先度"
+        },
+        "app.S2VhcA.action.dXBkYXRlLXRhc2s.option.cHJpb3JpdHk.short_desc": {
+          "source": "Task priority",
+          "message": "タスクの優先度"
+        },
+        "app.S2VhcA.action.dXBkYXRlLXRhc2s.option.dGFza19pZA.display_name": {
+          "source": "Task ID",
+          "message": "タスク ID"
+        },
+        "app.S2VhcA.action.dXBkYXRlLXRhc2s.option.dGFza19pZA.short_desc": {
+          "source": "The task to update",
+          "message": "更新するタスク"
+        },
+        "app.S2VhcA.action.dXBkYXRlLXRhc2s.option.dGl0bGU.display_name": {
+          "source": "Title",
+          "message": "タイトル"
+        },
+        "app.S2VhcA.action.dXBkYXRlLXRhc2s.option.dGl0bGU.short_desc": {
+          "source": "Task title",
+          "message": "タスクタイトル"
+        },
+        "app.S2VhcA.action.dXBkYXRlLXRhc2s.short_desc": {
+          "source": "Update an existing task",
+          "message": "既存のタスクを更新"
+        },
+        "app.S2VhcA.action.dXBsb2FkLWZpbGU.desc": {
+          "source": "Upload a file to Keap",
+          "message": "Keapにファイルをアップロードします"
+        },
+        "app.S2VhcA.action.dXBsb2FkLWZpbGU.display_name": {
+          "source": "Upload a File",
+          "message": "ファイルをアップロード"
+        },
+        "app.S2VhcA.action.dXBsb2FkLWZpbGU.option.Y29udGFjdF9pZA.display_name": {
+          "source": "Contact ID",
+          "message": "連絡先ID"
+        },
+        "app.S2VhcA.action.dXBsb2FkLWZpbGU.option.Y29udGFjdF9pZA.short_desc": {
+          "source": "Associated contact",
+          "message": "関連する連絡先"
+        },
+        "app.S2VhcA.action.dXBsb2FkLWZpbGU.option.ZmlsZV9kYXRh.desc": {
+          "source": "Base64-encoded file data",
+          "message": "Base64エンコードされたファイルデータ"
+        },
+        "app.S2VhcA.action.dXBsb2FkLWZpbGU.option.ZmlsZV9kYXRh.display_name": {
+          "source": "File Data",
+          "message": "ファイルデータ"
+        },
+        "app.S2VhcA.action.dXBsb2FkLWZpbGU.option.ZmlsZV9kYXRh.short_desc": {
+          "source": "Base64-encoded file data",
+          "message": "Base64エンコードされたファイルデータ"
+        },
+        "app.S2VhcA.action.dXBsb2FkLWZpbGU.option.ZmlsZV9uYW1l.display_name": {
+          "source": "File Name",
+          "message": "ファイル名"
+        },
+        "app.S2VhcA.action.dXBsb2FkLWZpbGU.option.ZmlsZV9uYW1l.short_desc": {
+          "source": "Name of the file",
+          "message": "ファイルの名前"
+        },
+        "app.S2VhcA.action.dXBsb2FkLWZpbGU.option.aXNfcHVibGlj.display_name": {
+          "source": "Is Public",
+          "message": "公開"
+        },
+        "app.S2VhcA.action.dXBsb2FkLWZpbGU.option.aXNfcHVibGlj.short_desc": {
+          "source": "File visibility",
+          "message": "ファイルの公開範囲"
+        },
+        "app.S2VhcA.action.dXBsb2FkLWZpbGU.short_desc": {
+          "source": "Upload a file",
+          "message": "ファイルをアップロードします"
+        },
+        "app.S2VhcA.desc": {
+          "source": "Keap (formerly Infusionsoft) is a CRM and marketing automation platform for contacts, companies, opportunities, orders, tags, tasks, and email.\n\nThis integration supports full CRUD operations on core CRM resources, tag management, and event-based triggers.",
+          "message": "Keap（旧Infusionsoft）は、連絡先、会社、商談、注文、タグ、タスク、メールを管理するためのCRMおよびマーケティングオートメーションプラットフォームです。\n\nこの統合機能は、コアCRMリソースに対する完全なCRUD操作、タグ管理、イベントベースのトリガーをサポートします。"
+        },
+        "app.S2VhcA.display_name": {
+          "source": "Keap",
+          "message": "Keap"
+        },
+        "app.S2VhcA.short_desc": {
+          "source": "Keap CRM and marketing automation platform",
+          "message": "Keap CRMおよびマーケティングオートメーションプラットフォーム"
+        }
+      }
+    }
+  }
+}

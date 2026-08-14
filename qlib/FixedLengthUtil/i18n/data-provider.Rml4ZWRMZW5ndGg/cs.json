@@ -1,0 +1,273 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "cs": {
+      "messages": {
+        "app.Rml4ZWRMZW5ndGg.action.cmVhZA.desc": {
+          "source": "Read fixed-length file data from a specific file location",
+          "message": "Číst souborová data s pevnou délkou ze zadaného umístění souboru"
+        },
+        "app.Rml4ZWRMZW5ndGg.action.cmVhZA.display_name": {
+          "source": "Read Fixed-Length Data",
+          "message": "Číst data s pevnou délkou"
+        },
+        "app.Rml4ZWRMZW5ndGg.action.cmVhZA.option.ZGF0ZV9mb3JtYXQ.desc": {
+          "source": "The default date format for parsing `date` fields; see [Date Mask Format](https://qoretechnologies.com/manual/qorus/current/qore/lang/html/group__date__and__time__functions.html#date_mask) for more information on this option (ex: `DD/MM/YYYY HH:mm:SS`)",
+          "message": "Výchozí formát data pro parsování polí `date`; více informací o této možnosti viz [Date Mask Format](https://qoretechnologies.com/manual/qorus/current/qore/lang/html/group__date__and__time__functions.html#date_mask) (např. `DD/MM/YYYY HH:mm:SS`)"
+        },
+        "app.Rml4ZWRMZW5ndGg.action.cmVhZA.option.ZGF0ZV9mb3JtYXQ.display_name": {
+          "source": "Date Format",
+          "message": "Formát data"
+        },
+        "app.Rml4ZWRMZW5ndGg.action.cmVhZA.option.ZGF0ZV9mb3JtYXQ.short_desc": {
+          "source": "The default mask for date value input parsing",
+          "message": "Výchozí maska pro parsování vstupních hodnot data"
+        },
+        "app.Rml4ZWRMZW5ndGg.action.cmVhZA.option.ZW5jb2Rpbmc.desc": {
+          "source": "Character encoding for the input file (and output data)",
+          "message": "Kódování znaků pro vstupní soubor (a výstupní data)"
+        },
+        "app.Rml4ZWRMZW5ndGg.action.cmVhZA.option.ZW5jb2Rpbmc.display_name": {
+          "source": "Input Character Encoding",
+          "message": "Vstupní kódování znaků"
+        },
+        "app.Rml4ZWRMZW5ndGg.action.cmVhZA.option.ZW5jb2Rpbmc.short_desc": {
+          "source": "The Character encoding for the input file",
+          "message": "Kódování znaků pro vstupní soubor"
+        },
+        "app.Rml4ZWRMZW5ndGg.action.cmVhZA.option.ZW9s.desc": {
+          "source": "The end of line character(s); if not specified, then the end-of-line characters will be auto detected",
+          "message": "Znak(y) konce řádku; pokud není zadáno, znaky konce řádku budou detekovány automaticky"
+        },
+        "app.Rml4ZWRMZW5ndGg.action.cmVhZA.option.ZW9s.display_name": {
+          "source": "End Of Line Chars",
+          "message": "Znaky konce řádku"
+        },
+        "app.Rml4ZWRMZW5ndGg.action.cmVhZA.option.ZW9s.short_desc": {
+          "source": "The end of line / record character(s)",
+          "message": "Znak(y) konce řádku / záznamu"
+        },
+        "app.Rml4ZWRMZW5ndGg.action.cmVhZA.option.aWdub3JlX2VtcHR5.desc": {
+          "source": "If `true`, empty lines will be ignored",
+          "message": "Pokud je `true`, prázdné řádky budou ignorovány"
+        },
+        "app.Rml4ZWRMZW5ndGg.action.cmVhZA.option.aWdub3JlX2VtcHR5.display_name": {
+          "source": "Ignore Empty Lines",
+          "message": "Ignorovat prázdné řádky"
+        },
+        "app.Rml4ZWRMZW5ndGg.action.cmVhZA.option.aWdub3JlX2VtcHR5.short_desc": {
+          "source": "If true, empty lines will be ignored",
+          "message": "Pokud je hodnota true, prázdné řádky budou ignorovány"
+        },
+        "app.Rml4ZWRMZW5ndGg.action.cmVhZA.option.bnVtYmVyX2Zvcm1hdA.desc": {
+          "source": "The default format for `int`, `float`, and `number` fields as a string giving the thousands separator character followed by the decimal separator character (ex: `.,` for continental-European-style numbers)",
+          "message": "Výchozí formát pro pole `int`, `float` a `number` jako řetězec udávající oddělovač tisíců následovaný oddělovačem desetinných míst (např. `.,` pro čísla kontinentálního evropského stylu)"
+        },
+        "app.Rml4ZWRMZW5ndGg.action.cmVhZA.option.bnVtYmVyX2Zvcm1hdA.display_name": {
+          "source": "Number Format",
+          "message": "Formát čísel"
+        },
+        "app.Rml4ZWRMZW5ndGg.action.cmVhZA.option.bnVtYmVyX2Zvcm1hdA.short_desc": {
+          "source": "The default number format for parsing int, float, and number fields",
+          "message": "Výchozí formát čísel pro parsování polí typu int, float a number"
+        },
+        "app.Rml4ZWRMZW5ndGg.action.cmVhZA.option.c3BlYw.desc": {
+          "source": "The fixed-length record specification hash",
+          "message": "Hash specifikace záznamu s pevnou délkou"
+        },
+        "app.Rml4ZWRMZW5ndGg.action.cmVhZA.option.c3BlYw.display_name": {
+          "source": "Record Descriptions",
+          "message": "Popisy záznamů"
+        },
+        "app.Rml4ZWRMZW5ndGg.action.cmVhZA.option.c3BlYw.short_desc": {
+          "source": "The fixed-length record specification hash",
+          "message": "Hash specifikace záznamu s pevnou délkou"
+        },
+        "app.Rml4ZWRMZW5ndGg.action.cmVhZA.option.c3RyZWFt.desc": {
+          "source": "The input stream for fixed-length data; mutually exclusive with \"path\"",
+          "message": "Vstupní stream pro data s pevnou délkou; vzájemně se vylučuje s „path“"
+        },
+        "app.Rml4ZWRMZW5ndGg.action.cmVhZA.option.c3RyZWFt.display_name": {
+          "source": "Input Stream",
+          "message": "Vstupní proud"
+        },
+        "app.Rml4ZWRMZW5ndGg.action.cmVhZA.option.c3RyZWFt.short_desc": {
+          "source": "An input stream object for fixed-length data",
+          "message": "Objekt vstupního streamu pro data s pevnou délkou"
+        },
+        "app.Rml4ZWRMZW5ndGg.action.cmVhZA.option.cGF0aA.desc": {
+          "source": "The path to the fixed-length data; mutually exclusive with \"stream\"; resolved with a call to [FileLocationHandler::getBinaryStreamFromLocation()](https://qoretechnologies.com/manual/qorus/current/qore/modules/FileLocationHandler/html/class_file_location_handler_1_1_file_location_handler.html#a29c2338efc901a6b8f24542505e2a094)",
+          "message": "Cesta k datům s pevnou délkou; vzájemně se vylučuje s „stream“; překládá se voláním [FileLocationHandler::getBinaryStreamFromLocation()](https://qoretechnologies.com/manual/qorus/current/qore/modules/FileLocationHandler/html/class_file_location_handler_1_1_file_location_handler.html#a29c2338efc901a6b8f24542505e2a094)"
+        },
+        "app.Rml4ZWRMZW5ndGg.action.cmVhZA.option.cGF0aA.display_name": {
+          "source": "Input Location",
+          "message": "Vstupní umístění"
+        },
+        "app.Rml4ZWRMZW5ndGg.action.cmVhZA.option.cGF0aA.short_desc": {
+          "source": "The location of the input file",
+          "message": "Umístění vstupního souboru"
+        },
+        "app.Rml4ZWRMZW5ndGg.action.cmVhZA.option.dGltZXpvbmU.desc": {
+          "source": "The timezone region to use when parsing dates (ex: `Europe/Prague`); see [TZ indentifier](https://en.wikipedia.org/wiki/List_of_tz_database_time_zones) for valid values",
+          "message": "Region časového pásma použitý při parsování dat (např. `Europe/Prague`); platné hodnoty viz [TZ indentifier](https://en.wikipedia.org/wiki/List_of_tz_database_time_zones)"
+        },
+        "app.Rml4ZWRMZW5ndGg.action.cmVhZA.option.dGltZXpvbmU.display_name": {
+          "source": "Timezone Region",
+          "message": "Oblast časového pásma"
+        },
+        "app.Rml4ZWRMZW5ndGg.action.cmVhZA.option.dGltZXpvbmU.short_desc": {
+          "source": "The timezone region to use when parsing dates",
+          "message": "Oblast časového pásma použitá při zpracování dat"
+        },
+        "app.Rml4ZWRMZW5ndGg.action.cmVhZA.short_desc": {
+          "source": "Read fixed-length file data from a specific file location",
+          "message": "Číst souborová data s pevnou délkou ze zadaného umístění souboru"
+        },
+        "app.Rml4ZWRMZW5ndGg.action.d3JpdGU.desc": {
+          "source": "Write fixed-length file data to a specific file location",
+          "message": "Zapsat souborová data s pevnou délkou do zadaného umístění souboru"
+        },
+        "app.Rml4ZWRMZW5ndGg.action.d3JpdGU.display_name": {
+          "source": "Write Fixed-Length Data",
+          "message": "Zapsat data s pevnou délkou"
+        },
+        "app.Rml4ZWRMZW5ndGg.action.d3JpdGU.option.ZGF0ZV9mb3JtYXQ.desc": {
+          "source": "The default mask for `date` value output formatting; see [Date Formatting Codes](https://qoretechnologies.com/manual/qorus/current/qore/lang/html/group__date__and__time__functions.html#date_formatting) for more information",
+          "message": "Výchozí maska pro formátování výstupních hodnot `date`; více informací viz [Date Formatting Codes](https://qoretechnologies.com/manual/qorus/current/qore/lang/html/group__date__and__time__functions.html#date_formatting)"
+        },
+        "app.Rml4ZWRMZW5ndGg.action.d3JpdGU.option.ZGF0ZV9mb3JtYXQ.display_name": {
+          "source": "Date Format",
+          "message": "Formát data"
+        },
+        "app.Rml4ZWRMZW5ndGg.action.d3JpdGU.option.ZGF0ZV9mb3JtYXQ.short_desc": {
+          "source": "The default mask for date value output formatting",
+          "message": "Výchozí maska pro formátování výstupních hodnot data"
+        },
+        "app.Rml4ZWRMZW5ndGg.action.d3JpdGU.option.ZW5jb2Rpbmc.desc": {
+          "source": "The output character encoding for the data",
+          "message": "Výstupní kódování znaků pro data"
+        },
+        "app.Rml4ZWRMZW5ndGg.action.d3JpdGU.option.ZW5jb2Rpbmc.display_name": {
+          "source": "Character Encoding",
+          "message": "Kódování znaků"
+        },
+        "app.Rml4ZWRMZW5ndGg.action.d3JpdGU.option.ZW5jb2Rpbmc.short_desc": {
+          "source": "The output character encoding",
+          "message": "Kódování výstupních znaků"
+        },
+        "app.Rml4ZWRMZW5ndGg.action.d3JpdGU.option.ZW9s.desc": {
+          "source": "The end of line / record character(s); if not present, the current platform standard will be used",
+          "message": "Znak(y) konce řádku / záznamu; pokud není uvedeno, použije se výchozí standard platformy"
+        },
+        "app.Rml4ZWRMZW5ndGg.action.d3JpdGU.option.ZW9s.display_name": {
+          "source": "End Of Line Chars",
+          "message": "Znaky konce řádku"
+        },
+        "app.Rml4ZWRMZW5ndGg.action.d3JpdGU.option.ZW9s.short_desc": {
+          "source": "The end of line / record character(s)",
+          "message": "Znak(y) konce řádku / záznamu"
+        },
+        "app.Rml4ZWRMZW5ndGg.action.d3JpdGU.option.ZmlsZV9mbGFncw.desc": {
+          "source": "Additional writer file open flags; `O_WRONLY | O_CREAT` is used by default; use `O_EXCL` to ensure not to overwrite the target or `O_TRUNC` to replace any existing file or `O_APPEND` to append to an existing file",
+          "message": "Dodatečné příznaky otevření souboru pro zápis; ve výchozím nastavení se používá `O_WRONLY | O_CREAT`; použijte `O_EXCL` k zajištění nepřepsání cíle, `O_TRUNC` k nahrazení existujícího souboru nebo `O_APPEND` k připojení k existujícímu souboru"
+        },
+        "app.Rml4ZWRMZW5ndGg.action.d3JpdGU.option.ZmlsZV9mbGFncw.display_name": {
+          "source": "File Flags",
+          "message": "Příznaky souboru"
+        },
+        "app.Rml4ZWRMZW5ndGg.action.d3JpdGU.option.ZmlsZV9mbGFncw.short_desc": {
+          "source": "Additional writer file open flags",
+          "message": "Dodatečné příznaky otevření souboru pro zápis"
+        },
+        "app.Rml4ZWRMZW5ndGg.action.d3JpdGU.option.bnVtYmVyX2Zvcm1hdA.desc": {
+          "source": "The default output format for `int`, `float`, and `number` fields; it is a number format string with 1 to 3 fields as follows: *<thousands_separator>*[*<decimal_separator>*[*<decimals>*]]; ex: `\".,3\"` (= `.` for the thousands separator, `,` for the decimal separator, and 3 digits after the decimal place)",
+          "message": "Výchozí výstupní formát pro pole `int`, `float` a `number`; jedná se o formátovací řetězec čísla s 1 až 3 poli následovně: *<oddělovač_tisíců>*[*<desetinný_oddělovač>*[*<desetinná_místa>*]]; např.: `\".,3\"` (= `.` pro oddělovač tisíců, `,` pro desetinný oddělovač a 3 číslice za desetinnou čárkou)"
+        },
+        "app.Rml4ZWRMZW5ndGg.action.d3JpdGU.option.bnVtYmVyX2Zvcm1hdA.display_name": {
+          "source": "Output Number Format",
+          "message": "Formát výstupního čísla"
+        },
+        "app.Rml4ZWRMZW5ndGg.action.d3JpdGU.option.bnVtYmVyX2Zvcm1hdA.short_desc": {
+          "source": "The default output format for 'int', 'float', and 'number' fields",
+          "message": "Výchozí výstupní formát pro pole 'int', 'float' a 'number'"
+        },
+        "app.Rml4ZWRMZW5ndGg.action.d3JpdGU.option.c3BlYw.desc": {
+          "source": "The fixed-length record specification hash",
+          "message": "Hash specifikace záznamu s pevnou délkou"
+        },
+        "app.Rml4ZWRMZW5ndGg.action.d3JpdGU.option.c3BlYw.display_name": {
+          "source": "Record Descriptions",
+          "message": "Popisy záznamů"
+        },
+        "app.Rml4ZWRMZW5ndGg.action.d3JpdGU.option.c3BlYw.short_desc": {
+          "source": "The fixed-length record specification hash",
+          "message": "Hash specifikace záznamu s pevnou délkou"
+        },
+        "app.Rml4ZWRMZW5ndGg.action.d3JpdGU.option.c3RyZWFt.desc": {
+          "source": "an output stream for fixed-length data; mutually exclusive with \"path\"",
+          "message": "výstupní stream pro data s pevnou délkou; vzájemně se vylučuje s „path“"
+        },
+        "app.Rml4ZWRMZW5ndGg.action.d3JpdGU.option.c3RyZWFt.display_name": {
+          "source": "Output Stream",
+          "message": "Výstupní proud"
+        },
+        "app.Rml4ZWRMZW5ndGg.action.d3JpdGU.option.c3RyZWFt.short_desc": {
+          "source": "An output stream object for the fixed-length data",
+          "message": "Objekt výstupního streamu pro data s pevnou délkou"
+        },
+        "app.Rml4ZWRMZW5ndGg.action.d3JpdGU.option.cGF0aA.desc": {
+          "source": "The path to the fixed-length data; mutually exclusive with \"stream\"; the output location is handled by a call to [FileLocationHandler::getOutputStreamForLocation()](https://qoretechnologies.com/manual/qorus/current/qore/modules/FileLocationHandler/html/class_file_location_handler_1_1_file_location_handler.html#a9d1ca411ea23126280b9d2e4b4b3ede9",
+          "message": "Cesta k datům s pevnou délkou; vzájemně se vylučuje s „stream“; výstupní umístění je zpracováno voláním [FileLocationHandler::getOutputStreamForLocation()](https://qoretechnologies.com/manual/qorus/current/qore/modules/FileLocationHandler/html/class_file_location_handler_1_1_file_location_handler.html#a9d1ca411ea23126280b9d2e4b4b3ede9"
+        },
+        "app.Rml4ZWRMZW5ndGg.action.d3JpdGU.option.cGF0aA.display_name": {
+          "source": "Output Path",
+          "message": "Výstupní cesta"
+        },
+        "app.Rml4ZWRMZW5ndGg.action.d3JpdGU.option.cGF0aA.short_desc": {
+          "source": "Where to write the output file",
+          "message": "Kam zapsat výstupní soubor"
+        },
+        "app.Rml4ZWRMZW5ndGg.action.d3JpdGU.option.dGFiMnNwYWNl.desc": {
+          "source": "Controls whether to replace tabs with spaces, and its value determines how many spaces to output in place of one tab character",
+          "message": "Určuje, zda nahradit tabulátory mezerami, a jeho hodnota určuje, kolik mezer se má vypsat místo jednoho znaku tabulátoru"
+        },
+        "app.Rml4ZWRMZW5ndGg.action.d3JpdGU.option.dGFiMnNwYWNl.display_name": {
+          "source": "Convert Tabs to Spaces",
+          "message": "Převést tabulátory na mezery"
+        },
+        "app.Rml4ZWRMZW5ndGg.action.d3JpdGU.option.dGFiMnNwYWNl.short_desc": {
+          "source": "Convert tabs to spaces automatically",
+          "message": "Automaticky převádět tabulátory na mezery"
+        },
+        "app.Rml4ZWRMZW5ndGg.action.d3JpdGU.option.dHJ1bmNhdGU.desc": {
+          "source": "Controls whether to truncate an output field value if it's bigger than its specified `length`; the default is `false`",
+          "message": "Určuje, zda zkrátit hodnotu výstupního pole, pokud je větší než její zadaná `length`; výchozí hodnota je `false`"
+        },
+        "app.Rml4ZWRMZW5ndGg.action.d3JpdGU.option.dHJ1bmNhdGU.display_name": {
+          "source": "Truncate Long Fields",
+          "message": "Zkrátit dlouhá pole"
+        },
+        "app.Rml4ZWRMZW5ndGg.action.d3JpdGU.option.dHJ1bmNhdGU.short_desc": {
+          "source": "Truncate field values automatically",
+          "message": "Automaticky zkracovat hodnoty polí"
+        },
+        "app.Rml4ZWRMZW5ndGg.action.d3JpdGU.short_desc": {
+          "source": "Write fixed-length file data to a specific file location",
+          "message": "Zapsat souborová data s pevnou délkou do zadaného umístění souboru"
+        },
+        "app.Rml4ZWRMZW5ndGg.desc": {
+          "source": "Read and write fixed-length file data",
+          "message": "Čtení a zápis souborových dat s pevnou délkou"
+        },
+        "app.Rml4ZWRMZW5ndGg.display_name": {
+          "source": "Fixed-Length Files",
+          "message": "Soubory s pevnou délkou"
+        },
+        "app.Rml4ZWRMZW5ndGg.short_desc": {
+          "source": "Read and write fixed-length file data",
+          "message": "Čtení a zápis souborových dat s pevnou délkou"
+        }
+      }
+    }
+  }
+}

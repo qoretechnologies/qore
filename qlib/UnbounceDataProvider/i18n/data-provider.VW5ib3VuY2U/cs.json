@@ -1,0 +1,1221 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "cs": {
+      "messages": {
+        "app.VW5ib3VuY2U.action.Y3JlYXRlLWxlYWQ.desc": {
+          "source": "Create a new lead on an Unbounce landing page with form submission data",
+          "message": "Vytvořit nového zájemce na vstupní stránce Unbounce s daty odeslaného formuláře"
+        },
+        "app.VW5ib3VuY2U.action.Y3JlYXRlLWxlYWQ.display_name": {
+          "source": "Create a Lead",
+          "message": "Vytvořit lead"
+        },
+        "app.VW5ib3VuY2U.action.Y3JlYXRlLWxlYWQ.option.Y29udmVyc2lvbg.desc": {
+          "source": "Whether to count this lead as a conversion",
+          "message": "Zda započítat tohoto zájemce jako konverzi"
+        },
+        "app.VW5ib3VuY2U.action.Y3JlYXRlLWxlYWQ.option.Y29udmVyc2lvbg.display_name": {
+          "source": "Conversion",
+          "message": "Konverze"
+        },
+        "app.VW5ib3VuY2U.action.Y3JlYXRlLWxlYWQ.option.Y29udmVyc2lvbg.short_desc": {
+          "source": "Count as conversion",
+          "message": "Započítat jako konverzi"
+        },
+        "app.VW5ib3VuY2U.action.Y3JlYXRlLWxlYWQ.option.Zm9ybV9zdWJtaXNzaW9u.desc": {
+          "source": "The form submission data including variant ID, submitter IP, and form field values",
+          "message": "Data odeslání formuláře včetně ID varianty, IP adresy odesílatele a hodnot polí formuláře"
+        },
+        "app.VW5ib3VuY2U.action.Y3JlYXRlLWxlYWQ.option.Zm9ybV9zdWJtaXNzaW9u.display_name": {
+          "source": "Form Submission",
+          "message": "Odeslání formuláře"
+        },
+        "app.VW5ib3VuY2U.action.Y3JlYXRlLWxlYWQ.option.Zm9ybV9zdWJtaXNzaW9u.short_desc": {
+          "source": "Form submission data",
+          "message": "Data odeslání formuláře"
+        },
+        "app.VW5ib3VuY2U.action.Y3JlYXRlLWxlYWQ.option.cGFnZV9pZA.desc": {
+          "source": "The ID of the page to create the lead on",
+          "message": "ID stránky, na které se má zájemce vytvořit"
+        },
+        "app.VW5ib3VuY2U.action.Y3JlYXRlLWxlYWQ.option.cGFnZV9pZA.display_name": {
+          "source": "Page ID",
+          "message": "ID stránky"
+        },
+        "app.VW5ib3VuY2U.action.Y3JlYXRlLWxlYWQ.option.cGFnZV9pZA.short_desc": {
+          "source": "Target page ID",
+          "message": "ID cílové stránky"
+        },
+        "app.VW5ib3VuY2U.action.Y3JlYXRlLWxlYWQ.option.dmlzaXRvcl9pZA.desc": {
+          "source": "The visitor ID to associate with this lead",
+          "message": "ID návštěvníka, které se má přiřadit k tomuto zájemci"
+        },
+        "app.VW5ib3VuY2U.action.Y3JlYXRlLWxlYWQ.option.dmlzaXRvcl9pZA.display_name": {
+          "source": "Visitor ID",
+          "message": "ID návštěvníka"
+        },
+        "app.VW5ib3VuY2U.action.Y3JlYXRlLWxlYWQ.option.dmlzaXRvcl9pZA.short_desc": {
+          "source": "Visitor identifier",
+          "message": "Identifikátor návštěvníka"
+        },
+        "app.VW5ib3VuY2U.action.Y3JlYXRlLWxlYWQ.short_desc": {
+          "source": "Create a new lead on a page",
+          "message": "Vytvořit nového zájemce na stránce"
+        },
+        "app.VW5ib3VuY2U.action.Y3JlYXRlLWxlYWQtZGVsZXRpb24tcmVxdWVzdA.desc": {
+          "source": "Create a lead deletion request to delete leads in bulk for a specific page. Can delete specific leads by ID, all leads, or leads within a date range",
+          "message": "Vytvořit požadavek na hromadné smazání zájemců pro konkrétní stránku. Může smazat konkrétní zájemce podle ID, všechny zájemce nebo zájemce v časovém rozmezí"
+        },
+        "app.VW5ib3VuY2U.action.Y3JlYXRlLWxlYWQtZGVsZXRpb24tcmVxdWVzdA.display_name": {
+          "source": "Create Lead Deletion Request",
+          "message": "Vytvořit požadavek na smazání zájemců"
+        },
+        "app.VW5ib3VuY2U.action.Y3JlYXRlLWxlYWQtZGVsZXRpb24tcmVxdWVzdA.option.YWxsX2xlYWRz.desc": {
+          "source": "If `True`, delete all leads for the page. Cannot be combined with `lead_ids`",
+          "message": "Pokud je `True`, smaže všechny zájemce pro danou stránku. Nelze kombinovat s `lead_ids`"
+        },
+        "app.VW5ib3VuY2U.action.Y3JlYXRlLWxlYWQtZGVsZXRpb24tcmVxdWVzdA.option.YWxsX2xlYWRz.display_name": {
+          "source": "All Leads",
+          "message": "Všichni zájemci"
+        },
+        "app.VW5ib3VuY2U.action.Y3JlYXRlLWxlYWQtZGVsZXRpb24tcmVxdWVzdA.option.YWxsX2xlYWRz.short_desc": {
+          "source": "Delete all leads",
+          "message": "Smazat všechny zájemce"
+        },
+        "app.VW5ib3VuY2U.action.Y3JlYXRlLWxlYWQtZGVsZXRpb24tcmVxdWVzdA.option.ZnJvbQ.desc": {
+          "source": "Delete leads created on or after this date",
+          "message": "Smazat zájemce vytvořené v toto datum nebo později"
+        },
+        "app.VW5ib3VuY2U.action.Y3JlYXRlLWxlYWQtZGVsZXRpb24tcmVxdWVzdA.option.ZnJvbQ.display_name": {
+          "source": "From",
+          "message": "Od"
+        },
+        "app.VW5ib3VuY2U.action.Y3JlYXRlLWxlYWQtZGVsZXRpb24tcmVxdWVzdA.option.ZnJvbQ.short_desc": {
+          "source": "Start date filter",
+          "message": "Filtr data od"
+        },
+        "app.VW5ib3VuY2U.action.Y3JlYXRlLWxlYWQtZGVsZXRpb24tcmVxdWVzdA.option.bGVhZF9pZHM.desc": {
+          "source": "A list of specific lead IDs to delete. If not provided, use `all_leads` or date range filters instead",
+          "message": "Seznam konkrétních ID zájemců ke smazání. Pokud není zadán, použijte místo toho `all_leads` nebo filtry rozsahu dat"
+        },
+        "app.VW5ib3VuY2U.action.Y3JlYXRlLWxlYWQtZGVsZXRpb24tcmVxdWVzdA.option.bGVhZF9pZHM.display_name": {
+          "source": "Lead IDs",
+          "message": "ID zájemců"
+        },
+        "app.VW5ib3VuY2U.action.Y3JlYXRlLWxlYWQtZGVsZXRpb24tcmVxdWVzdA.option.bGVhZF9pZHM.short_desc": {
+          "source": "Specific lead IDs to delete",
+          "message": "Konkrétní ID zájemců ke smazání"
+        },
+        "app.VW5ib3VuY2U.action.Y3JlYXRlLWxlYWQtZGVsZXRpb24tcmVxdWVzdA.option.cGFnZV9pZA.desc": {
+          "source": "The ID of the page to create the lead deletion request for",
+          "message": "ID stránky, pro kterou se má vytvořit požadavek na smazání zájemců"
+        },
+        "app.VW5ib3VuY2U.action.Y3JlYXRlLWxlYWQtZGVsZXRpb24tcmVxdWVzdA.option.cGFnZV9pZA.display_name": {
+          "source": "Page ID",
+          "message": "ID stránky"
+        },
+        "app.VW5ib3VuY2U.action.Y3JlYXRlLWxlYWQtZGVsZXRpb24tcmVxdWVzdA.option.cGFnZV9pZA.short_desc": {
+          "source": "Target page ID",
+          "message": "ID cílové stránky"
+        },
+        "app.VW5ib3VuY2U.action.Y3JlYXRlLWxlYWQtZGVsZXRpb24tcmVxdWVzdA.option.dG8.desc": {
+          "source": "Delete leads created on or before this date",
+          "message": "Smazat zájemce vytvořené v toto datum nebo dříve"
+        },
+        "app.VW5ib3VuY2U.action.Y3JlYXRlLWxlYWQtZGVsZXRpb24tcmVxdWVzdA.option.dG8.display_name": {
+          "source": "To",
+          "message": "Komu"
+        },
+        "app.VW5ib3VuY2U.action.Y3JlYXRlLWxlYWQtZGVsZXRpb24tcmVxdWVzdA.option.dG8.short_desc": {
+          "source": "End date filter",
+          "message": "Filtr data do"
+        },
+        "app.VW5ib3VuY2U.action.Y3JlYXRlLWxlYWQtZGVsZXRpb24tcmVxdWVzdA.short_desc": {
+          "source": "Create a bulk lead deletion request",
+          "message": "Vytvořit požadavek na hromadné smazání zájemců"
+        },
+        "app.VW5ib3VuY2U.action.Z2V0LWFjY291bnQ.desc": {
+          "source": "Retrieve a single account by ID",
+          "message": "Načíst jeden účet podle ID"
+        },
+        "app.VW5ib3VuY2U.action.Z2V0LWFjY291bnQ.display_name": {
+          "source": "Get an Account",
+          "message": "Získat účet"
+        },
+        "app.VW5ib3VuY2U.action.Z2V0LWFjY291bnQ.option.YWNjb3VudF9pZA.display_name": {
+          "source": "Account ID",
+          "message": "ID účtu"
+        },
+        "app.VW5ib3VuY2U.action.Z2V0LWFjY291bnQ.option.YWNjb3VudF9pZA.short_desc": {
+          "source": "The account ID",
+          "message": "ID účtu"
+        },
+        "app.VW5ib3VuY2U.action.Z2V0LWFjY291bnQ.short_desc": {
+          "source": "Get a single account by ID",
+          "message": "Získat jeden účet podle ID"
+        },
+        "app.VW5ib3VuY2U.action.Z2V0LWRvbWFpbg.desc": {
+          "source": "Retrieve a single domain by ID",
+          "message": "Získat jednu doménu podle ID"
+        },
+        "app.VW5ib3VuY2U.action.Z2V0LWRvbWFpbg.display_name": {
+          "source": "Get a Domain",
+          "message": "Získat doménu"
+        },
+        "app.VW5ib3VuY2U.action.Z2V0LWRvbWFpbg.option.ZG9tYWluX2lk.display_name": {
+          "source": "Domain ID",
+          "message": "ID domény"
+        },
+        "app.VW5ib3VuY2U.action.Z2V0LWRvbWFpbg.option.ZG9tYWluX2lk.short_desc": {
+          "source": "The domain ID",
+          "message": "ID domény"
+        },
+        "app.VW5ib3VuY2U.action.Z2V0LWRvbWFpbg.short_desc": {
+          "source": "Get a single domain by ID",
+          "message": "Získat jednu doménu podle ID"
+        },
+        "app.VW5ib3VuY2U.action.Z2V0LWxlYWQ.desc": {
+          "source": "Retrieve a single lead by ID",
+          "message": "Získat jednoho leada podle ID"
+        },
+        "app.VW5ib3VuY2U.action.Z2V0LWxlYWQ.display_name": {
+          "source": "Get a Lead",
+          "message": "Získat lead"
+        },
+        "app.VW5ib3VuY2U.action.Z2V0LWxlYWQ.option.bGVhZF9pZA.display_name": {
+          "source": "Lead ID",
+          "message": "ID leadu"
+        },
+        "app.VW5ib3VuY2U.action.Z2V0LWxlYWQ.option.bGVhZF9pZA.short_desc": {
+          "source": "The lead ID",
+          "message": "ID leadu"
+        },
+        "app.VW5ib3VuY2U.action.Z2V0LWxlYWQ.short_desc": {
+          "source": "Get a single lead by ID",
+          "message": "Získat lead podle ID"
+        },
+        "app.VW5ib3VuY2U.action.Z2V0LWxlYWQtZGVsZXRpb24tcmVxdWVzdA.desc": {
+          "source": "Retrieve the status of a lead deletion request by page ID and deletion request ID",
+          "message": "Získat stav žádosti o smazání leada podle ID stránky a ID žádosti o smazání"
+        },
+        "app.VW5ib3VuY2U.action.Z2V0LWxlYWQtZGVsZXRpb24tcmVxdWVzdA.display_name": {
+          "source": "Get Lead Deletion Request",
+          "message": "Získat žádost o smazání leada"
+        },
+        "app.VW5ib3VuY2U.action.Z2V0LWxlYWQtZGVsZXRpb24tcmVxdWVzdA.option.ZGVsZXRpb25fcmVxdWVzdF9pZA.display_name": {
+          "source": "Deletion Request ID",
+          "message": "ID žádosti o smazání"
+        },
+        "app.VW5ib3VuY2U.action.Z2V0LWxlYWQtZGVsZXRpb24tcmVxdWVzdA.option.ZGVsZXRpb25fcmVxdWVzdF9pZA.short_desc": {
+          "source": "Deletion request ID",
+          "message": "ID žádosti o smazání"
+        },
+        "app.VW5ib3VuY2U.action.Z2V0LWxlYWQtZGVsZXRpb24tcmVxdWVzdA.option.cGFnZV9pZA.display_name": {
+          "source": "Page ID",
+          "message": "ID stránky"
+        },
+        "app.VW5ib3VuY2U.action.Z2V0LWxlYWQtZGVsZXRpb24tcmVxdWVzdA.option.cGFnZV9pZA.short_desc": {
+          "source": "Page ID",
+          "message": "ID stránky"
+        },
+        "app.VW5ib3VuY2U.action.Z2V0LWxlYWQtZGVsZXRpb24tcmVxdWVzdA.short_desc": {
+          "source": "Get a lead deletion request status",
+          "message": "Získat stav žádosti o smazání leada"
+        },
+        "app.VW5ib3VuY2U.action.Z2V0LXBhZ2U.desc": {
+          "source": "Retrieve a single landing page by ID",
+          "message": "Získat jednu vstupní stránku podle ID"
+        },
+        "app.VW5ib3VuY2U.action.Z2V0LXBhZ2U.display_name": {
+          "source": "Get a Page",
+          "message": "Získat stránku"
+        },
+        "app.VW5ib3VuY2U.action.Z2V0LXBhZ2U.option.cGFnZV9pZA.display_name": {
+          "source": "Page ID",
+          "message": "ID stránky"
+        },
+        "app.VW5ib3VuY2U.action.Z2V0LXBhZ2U.option.cGFnZV9pZA.short_desc": {
+          "source": "The page ID",
+          "message": "ID stránky"
+        },
+        "app.VW5ib3VuY2U.action.Z2V0LXBhZ2U.short_desc": {
+          "source": "Get a single page by ID",
+          "message": "Získat jednu stránku podle ID"
+        },
+        "app.VW5ib3VuY2U.action.Z2V0LXN1Yi1hY2NvdW50.desc": {
+          "source": "Retrieve a single sub-account by ID",
+          "message": "Získat jeden podúčet podle ID"
+        },
+        "app.VW5ib3VuY2U.action.Z2V0LXN1Yi1hY2NvdW50.display_name": {
+          "source": "Get a Sub-Account",
+          "message": "Získat podúčet"
+        },
+        "app.VW5ib3VuY2U.action.Z2V0LXN1Yi1hY2NvdW50.option.c3ViX2FjY291bnRfaWQ.display_name": {
+          "source": "Sub Account ID",
+          "message": "ID podúčtu"
+        },
+        "app.VW5ib3VuY2U.action.Z2V0LXN1Yi1hY2NvdW50.option.c3ViX2FjY291bnRfaWQ.short_desc": {
+          "source": "The sub-account ID",
+          "message": "ID podúčtu"
+        },
+        "app.VW5ib3VuY2U.action.Z2V0LXN1Yi1hY2NvdW50.short_desc": {
+          "source": "Get a single sub-account by ID",
+          "message": "Získat jeden podúčet podle ID"
+        },
+        "app.VW5ib3VuY2U.action.Z2V0LXVzZXI.desc": {
+          "source": "Retrieve a user by ID, or the current authenticated user if no ID is provided",
+          "message": "Získat uživatele podle ID nebo aktuálně ověřeného uživatele, pokud není ID zadáno"
+        },
+        "app.VW5ib3VuY2U.action.Z2V0LXVzZXI.display_name": {
+          "source": "Get User",
+          "message": "Získat uživatele"
+        },
+        "app.VW5ib3VuY2U.action.Z2V0LXVzZXI.option.dXNlcl9pZA.display_name": {
+          "source": "User ID",
+          "message": "ID uživatele"
+        },
+        "app.VW5ib3VuY2U.action.Z2V0LXVzZXI.option.dXNlcl9pZA.short_desc": {
+          "source": "The user ID (leave empty for current user)",
+          "message": "ID uživatele (ponechte prázdné pro aktuálního uživatele)"
+        },
+        "app.VW5ib3VuY2U.action.Z2V0LXVzZXI.short_desc": {
+          "source": "Get a user by ID or the current user",
+          "message": "Získat uživatele podle ID nebo aktuálního uživatele"
+        },
+        "app.VW5ib3VuY2U.action.ZGVsZXRlLWxlYWQ.desc": {
+          "source": "Delete a lead from an Unbounce landing page. The deletion is processed asynchronously (HTTP 202)",
+          "message": "Smazat leada ze vstupní stránky Unbounce. Smazání je zpracováno asynchronně (HTTP 202)"
+        },
+        "app.VW5ib3VuY2U.action.ZGVsZXRlLWxlYWQ.display_name": {
+          "source": "Delete a Lead",
+          "message": "Odstranit lead"
+        },
+        "app.VW5ib3VuY2U.action.ZGVsZXRlLWxlYWQ.option.bGVhZF9pZA.desc": {
+          "source": "The unique identifier of the lead to delete",
+          "message": "Jedinečný identifikátor leada ke smazání"
+        },
+        "app.VW5ib3VuY2U.action.ZGVsZXRlLWxlYWQ.option.bGVhZF9pZA.display_name": {
+          "source": "Lead ID",
+          "message": "ID leadu"
+        },
+        "app.VW5ib3VuY2U.action.ZGVsZXRlLWxlYWQ.option.bGVhZF9pZA.short_desc": {
+          "source": "Lead to delete",
+          "message": "Zájemce k odstranění"
+        },
+        "app.VW5ib3VuY2U.action.ZGVsZXRlLWxlYWQ.option.cGFnZV9pZA.desc": {
+          "source": "The ID of the page containing the lead to delete",
+          "message": "ID stránky obsahující leada ke smazání"
+        },
+        "app.VW5ib3VuY2U.action.ZGVsZXRlLWxlYWQ.option.cGFnZV9pZA.display_name": {
+          "source": "Page ID",
+          "message": "ID stránky"
+        },
+        "app.VW5ib3VuY2U.action.ZGVsZXRlLWxlYWQ.option.cGFnZV9pZA.short_desc": {
+          "source": "Page containing the lead",
+          "message": "Stránka obsahující leada"
+        },
+        "app.VW5ib3VuY2U.action.ZGVsZXRlLWxlYWQ.short_desc": {
+          "source": "Delete a lead from a page",
+          "message": "Smazat leada ze stránky"
+        },
+        "app.VW5ib3VuY2U.action.bGVhZC1hZGRlZA.desc": {
+          "source": "Fires when a new lead is captured on an Unbounce landing page, detected via polling",
+          "message": "Spustí se, když je na vstupní stránce Unbounce zachycen nový lead (detekováno dotazováním)"
+        },
+        "app.VW5ib3VuY2U.action.bGVhZC1hZGRlZA.display_name": {
+          "source": "Watch New Leads",
+          "message": "Sledovat nové leady"
+        },
+        "app.VW5ib3VuY2U.action.bGVhZC1hZGRlZA.short_desc": {
+          "source": "Trigger when new leads are captured on a page",
+          "message": "Spustit, když jsou na stránce zachyceni noví leadi"
+        },
+        "app.VW5ib3VuY2U.action.bGlzdC1hY2NvdW50cw.desc": {
+          "source": "List all accounts accessible to the authenticated user",
+          "message": "Zobrazit všechny účty přístupné ověřenému uživateli"
+        },
+        "app.VW5ib3VuY2U.action.bGlzdC1hY2NvdW50cw.display_name": {
+          "source": "List Accounts",
+          "message": "Seznam účtů"
+        },
+        "app.VW5ib3VuY2U.action.bGlzdC1hY2NvdW50cw.option.YWNjb3VudF9pZA.display_name": {
+          "source": "Account ID",
+          "message": "ID účtu"
+        },
+        "app.VW5ib3VuY2U.action.bGlzdC1hY2NvdW50cw.option.YWNjb3VudF9pZA.short_desc": {
+          "source": "Filter by account ID",
+          "message": "Filtrovat podle ID účtu"
+        },
+        "app.VW5ib3VuY2U.action.bGlzdC1hY2NvdW50cw.option.ZnJvbQ.display_name": {
+          "source": "From",
+          "message": "Od"
+        },
+        "app.VW5ib3VuY2U.action.bGlzdC1hY2NvdW50cw.option.ZnJvbQ.short_desc": {
+          "source": "Start date filter",
+          "message": "Filtr data od"
+        },
+        "app.VW5ib3VuY2U.action.bGlzdC1hY2NvdW50cw.option.b2Zmc2V0.display_name": {
+          "source": "Offset",
+          "message": "Posun"
+        },
+        "app.VW5ib3VuY2U.action.bGlzdC1hY2NvdW50cw.option.b2Zmc2V0.short_desc": {
+          "source": "Result offset",
+          "message": "Posun výsledků"
+        },
+        "app.VW5ib3VuY2U.action.bGlzdC1hY2NvdW50cw.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "Limit"
+        },
+        "app.VW5ib3VuY2U.action.bGlzdC1hY2NvdW50cw.option.bGltaXQ.short_desc": {
+          "source": "Maximum results",
+          "message": "Maximální počet výsledků"
+        },
+        "app.VW5ib3VuY2U.action.bGlzdC1hY2NvdW50cw.option.c29ydF9vcmRlcg.allowed-value.c3RyaW5nOmFzYw.desc": {
+          "source": "Sort in ascending order",
+          "message": "Seřadit vzestupně"
+        },
+        "app.VW5ib3VuY2U.action.bGlzdC1hY2NvdW50cw.option.c29ydF9vcmRlcg.allowed-value.c3RyaW5nOmFzYw.display_name": {
+          "source": "Ascending",
+          "message": "Vzestupně"
+        },
+        "app.VW5ib3VuY2U.action.bGlzdC1hY2NvdW50cw.option.c29ydF9vcmRlcg.allowed-value.c3RyaW5nOmRlc2M.desc": {
+          "source": "Sort in descending order",
+          "message": "Seřadit sestupně"
+        },
+        "app.VW5ib3VuY2U.action.bGlzdC1hY2NvdW50cw.option.c29ydF9vcmRlcg.allowed-value.c3RyaW5nOmRlc2M.display_name": {
+          "source": "Descending",
+          "message": "Sestupně"
+        },
+        "app.VW5ib3VuY2U.action.bGlzdC1hY2NvdW50cw.option.c29ydF9vcmRlcg.display_name": {
+          "source": "Sort Order",
+          "message": "Pořadí řazení"
+        },
+        "app.VW5ib3VuY2U.action.bGlzdC1hY2NvdW50cw.option.c29ydF9vcmRlcg.short_desc": {
+          "source": "Sort direction",
+          "message": "Směr řazení"
+        },
+        "app.VW5ib3VuY2U.action.bGlzdC1hY2NvdW50cw.option.dG8.display_name": {
+          "source": "To",
+          "message": "Komu"
+        },
+        "app.VW5ib3VuY2U.action.bGlzdC1hY2NvdW50cw.option.dG8.short_desc": {
+          "source": "End date filter",
+          "message": "Filtr data do"
+        },
+        "app.VW5ib3VuY2U.action.bGlzdC1hY2NvdW50cw.short_desc": {
+          "source": "List all accounts",
+          "message": "Zobrazit všechny účty"
+        },
+        "app.VW5ib3VuY2U.action.bGlzdC1kb21haW5z.desc": {
+          "source": "List all domains for a given sub-account",
+          "message": "Zobrazit všechny domény pro daný podúčet"
+        },
+        "app.VW5ib3VuY2U.action.bGlzdC1kb21haW5z.display_name": {
+          "source": "List Domains",
+          "message": "Zobrazit domény"
+        },
+        "app.VW5ib3VuY2U.action.bGlzdC1kb21haW5z.option.ZG9tYWluX2lk.display_name": {
+          "source": "Domain ID",
+          "message": "ID domény"
+        },
+        "app.VW5ib3VuY2U.action.bGlzdC1kb21haW5z.option.ZG9tYWluX2lk.short_desc": {
+          "source": "Filter by domain ID",
+          "message": "Filtrovat podle ID domény"
+        },
+        "app.VW5ib3VuY2U.action.bGlzdC1kb21haW5z.option.ZnJvbQ.display_name": {
+          "source": "From",
+          "message": "Od"
+        },
+        "app.VW5ib3VuY2U.action.bGlzdC1kb21haW5z.option.ZnJvbQ.short_desc": {
+          "source": "Start date filter",
+          "message": "Filtr data od"
+        },
+        "app.VW5ib3VuY2U.action.bGlzdC1kb21haW5z.option.b2Zmc2V0.display_name": {
+          "source": "Offset",
+          "message": "Posun"
+        },
+        "app.VW5ib3VuY2U.action.bGlzdC1kb21haW5z.option.b2Zmc2V0.short_desc": {
+          "source": "Result offset",
+          "message": "Posun výsledků"
+        },
+        "app.VW5ib3VuY2U.action.bGlzdC1kb21haW5z.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "Limit"
+        },
+        "app.VW5ib3VuY2U.action.bGlzdC1kb21haW5z.option.bGltaXQ.short_desc": {
+          "source": "Maximum results",
+          "message": "Maximální počet výsledků"
+        },
+        "app.VW5ib3VuY2U.action.bGlzdC1kb21haW5z.option.c29ydF9vcmRlcg.allowed-value.c3RyaW5nOmFzYw.desc": {
+          "source": "Sort in ascending order",
+          "message": "Seřadit vzestupně"
+        },
+        "app.VW5ib3VuY2U.action.bGlzdC1kb21haW5z.option.c29ydF9vcmRlcg.allowed-value.c3RyaW5nOmFzYw.display_name": {
+          "source": "Ascending",
+          "message": "Vzestupně"
+        },
+        "app.VW5ib3VuY2U.action.bGlzdC1kb21haW5z.option.c29ydF9vcmRlcg.allowed-value.c3RyaW5nOmRlc2M.desc": {
+          "source": "Sort in descending order",
+          "message": "Seřadit sestupně"
+        },
+        "app.VW5ib3VuY2U.action.bGlzdC1kb21haW5z.option.c29ydF9vcmRlcg.allowed-value.c3RyaW5nOmRlc2M.display_name": {
+          "source": "Descending",
+          "message": "Sestupně"
+        },
+        "app.VW5ib3VuY2U.action.bGlzdC1kb21haW5z.option.c29ydF9vcmRlcg.display_name": {
+          "source": "Sort Order",
+          "message": "Pořadí řazení"
+        },
+        "app.VW5ib3VuY2U.action.bGlzdC1kb21haW5z.option.c29ydF9vcmRlcg.short_desc": {
+          "source": "Sort direction",
+          "message": "Směr řazení"
+        },
+        "app.VW5ib3VuY2U.action.bGlzdC1kb21haW5z.option.c3ViX2FjY291bnRfaWQ.display_name": {
+          "source": "Sub Account ID",
+          "message": "ID podúčtu"
+        },
+        "app.VW5ib3VuY2U.action.bGlzdC1kb21haW5z.option.c3ViX2FjY291bnRfaWQ.short_desc": {
+          "source": "Sub-account to list domains for",
+          "message": "Podúčet, pro který se mají vypsat domény"
+        },
+        "app.VW5ib3VuY2U.action.bGlzdC1kb21haW5z.option.dG8.display_name": {
+          "source": "To",
+          "message": "Komu"
+        },
+        "app.VW5ib3VuY2U.action.bGlzdC1kb21haW5z.option.dG8.short_desc": {
+          "source": "End date filter",
+          "message": "Filtr data do"
+        },
+        "app.VW5ib3VuY2U.action.bGlzdC1kb21haW5z.short_desc": {
+          "source": "List domains for a sub-account",
+          "message": "Zobrazit domény pro podúčet"
+        },
+        "app.VW5ib3VuY2U.action.bGlzdC1mb3JtLWZpZWxkcw.desc": {
+          "source": "List all form fields configured on a specific landing page",
+          "message": "Zobrazit všechna pole formuláře nakonfigurovaná na konkrétní vstupní stránce"
+        },
+        "app.VW5ib3VuY2U.action.bGlzdC1mb3JtLWZpZWxkcw.display_name": {
+          "source": "List Form Fields",
+          "message": "Zobrazit seznam formulářových polí"
+        },
+        "app.VW5ib3VuY2U.action.bGlzdC1mb3JtLWZpZWxkcw.option.b2Zmc2V0.display_name": {
+          "source": "Offset",
+          "message": "Posun"
+        },
+        "app.VW5ib3VuY2U.action.bGlzdC1mb3JtLWZpZWxkcw.option.b2Zmc2V0.short_desc": {
+          "source": "Result offset",
+          "message": "Posun výsledků"
+        },
+        "app.VW5ib3VuY2U.action.bGlzdC1mb3JtLWZpZWxkcw.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "Limit"
+        },
+        "app.VW5ib3VuY2U.action.bGlzdC1mb3JtLWZpZWxkcw.option.bGltaXQ.short_desc": {
+          "source": "Maximum results",
+          "message": "Maximální počet výsledků"
+        },
+        "app.VW5ib3VuY2U.action.bGlzdC1mb3JtLWZpZWxkcw.option.cGFnZV9pZA.display_name": {
+          "source": "Page ID",
+          "message": "ID stránky"
+        },
+        "app.VW5ib3VuY2U.action.bGlzdC1mb3JtLWZpZWxkcw.option.cGFnZV9pZA.short_desc": {
+          "source": "Page to list form fields for",
+          "message": "Stránka, pro kterou se mají vypsat pole formuláře"
+        },
+        "app.VW5ib3VuY2U.action.bGlzdC1mb3JtLWZpZWxkcw.short_desc": {
+          "source": "List form fields for a page",
+          "message": "Zobrazit pole formuláře pro stránku"
+        },
+        "app.VW5ib3VuY2U.action.bGlzdC1sZWFkcw.desc": {
+          "source": "List all leads captured on a specific landing page",
+          "message": "Zobrazit všechny leady zachycené na konkrétní vstupní stránce"
+        },
+        "app.VW5ib3VuY2U.action.bGlzdC1sZWFkcw.display_name": {
+          "source": "List Leads",
+          "message": "Vypsat leady"
+        },
+        "app.VW5ib3VuY2U.action.bGlzdC1sZWFkcw.option.ZnJvbQ.display_name": {
+          "source": "From",
+          "message": "Od"
+        },
+        "app.VW5ib3VuY2U.action.bGlzdC1sZWFkcw.option.ZnJvbQ.short_desc": {
+          "source": "Start date filter",
+          "message": "Filtr data od"
+        },
+        "app.VW5ib3VuY2U.action.bGlzdC1sZWFkcw.option.b2Zmc2V0.display_name": {
+          "source": "Offset",
+          "message": "Posun"
+        },
+        "app.VW5ib3VuY2U.action.bGlzdC1sZWFkcw.option.b2Zmc2V0.short_desc": {
+          "source": "Result offset",
+          "message": "Posun výsledků"
+        },
+        "app.VW5ib3VuY2U.action.bGlzdC1sZWFkcw.option.bGVhZF9pZA.display_name": {
+          "source": "Lead ID",
+          "message": "ID leadu"
+        },
+        "app.VW5ib3VuY2U.action.bGlzdC1sZWFkcw.option.bGVhZF9pZA.short_desc": {
+          "source": "Filter by lead ID",
+          "message": "Filtrovat podle ID leadu"
+        },
+        "app.VW5ib3VuY2U.action.bGlzdC1sZWFkcw.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "Limit"
+        },
+        "app.VW5ib3VuY2U.action.bGlzdC1sZWFkcw.option.bGltaXQ.short_desc": {
+          "source": "Maximum results",
+          "message": "Maximální počet výsledků"
+        },
+        "app.VW5ib3VuY2U.action.bGlzdC1sZWFkcw.option.c29ydF9vcmRlcg.allowed-value.c3RyaW5nOmFzYw.desc": {
+          "source": "Sort in ascending order",
+          "message": "Seřadit vzestupně"
+        },
+        "app.VW5ib3VuY2U.action.bGlzdC1sZWFkcw.option.c29ydF9vcmRlcg.allowed-value.c3RyaW5nOmFzYw.display_name": {
+          "source": "Ascending",
+          "message": "Vzestupně"
+        },
+        "app.VW5ib3VuY2U.action.bGlzdC1sZWFkcw.option.c29ydF9vcmRlcg.allowed-value.c3RyaW5nOmRlc2M.desc": {
+          "source": "Sort in descending order",
+          "message": "Seřadit sestupně"
+        },
+        "app.VW5ib3VuY2U.action.bGlzdC1sZWFkcw.option.c29ydF9vcmRlcg.allowed-value.c3RyaW5nOmRlc2M.display_name": {
+          "source": "Descending",
+          "message": "Sestupně"
+        },
+        "app.VW5ib3VuY2U.action.bGlzdC1sZWFkcw.option.c29ydF9vcmRlcg.display_name": {
+          "source": "Sort Order",
+          "message": "Pořadí řazení"
+        },
+        "app.VW5ib3VuY2U.action.bGlzdC1sZWFkcw.option.c29ydF9vcmRlcg.short_desc": {
+          "source": "Sort direction",
+          "message": "Směr řazení"
+        },
+        "app.VW5ib3VuY2U.action.bGlzdC1sZWFkcw.option.cGFnZV9pZA.display_name": {
+          "source": "Page ID",
+          "message": "ID stránky"
+        },
+        "app.VW5ib3VuY2U.action.bGlzdC1sZWFkcw.option.cGFnZV9pZA.short_desc": {
+          "source": "Page to list leads for",
+          "message": "Stránka, pro kterou se mají vypsat leadi"
+        },
+        "app.VW5ib3VuY2U.action.bGlzdC1sZWFkcw.option.dG8.display_name": {
+          "source": "To",
+          "message": "Komu"
+        },
+        "app.VW5ib3VuY2U.action.bGlzdC1sZWFkcw.option.dG8.short_desc": {
+          "source": "End date filter",
+          "message": "Filtr data do"
+        },
+        "app.VW5ib3VuY2U.action.bGlzdC1sZWFkcw.short_desc": {
+          "source": "List leads for a page",
+          "message": "Zobrazit leady pro stránku"
+        },
+        "app.VW5ib3VuY2U.action.bGlzdC1wYWdlLWdyb3Vwcw.desc": {
+          "source": "List all page groups for a given sub-account",
+          "message": "Zobrazit všechny skupiny stránek pro daný podúčet"
+        },
+        "app.VW5ib3VuY2U.action.bGlzdC1wYWdlLWdyb3Vwcw.display_name": {
+          "source": "List Page Groups",
+          "message": "Zobrazit skupiny stránek"
+        },
+        "app.VW5ib3VuY2U.action.bGlzdC1wYWdlLWdyb3Vwcw.option.ZnJvbQ.display_name": {
+          "source": "From",
+          "message": "Od"
+        },
+        "app.VW5ib3VuY2U.action.bGlzdC1wYWdlLWdyb3Vwcw.option.ZnJvbQ.short_desc": {
+          "source": "Start date filter",
+          "message": "Filtr data od"
+        },
+        "app.VW5ib3VuY2U.action.bGlzdC1wYWdlLWdyb3Vwcw.option.b2Zmc2V0.display_name": {
+          "source": "Offset",
+          "message": "Posun"
+        },
+        "app.VW5ib3VuY2U.action.bGlzdC1wYWdlLWdyb3Vwcw.option.b2Zmc2V0.short_desc": {
+          "source": "Result offset",
+          "message": "Posun výsledků"
+        },
+        "app.VW5ib3VuY2U.action.bGlzdC1wYWdlLWdyb3Vwcw.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "Limit"
+        },
+        "app.VW5ib3VuY2U.action.bGlzdC1wYWdlLWdyb3Vwcw.option.bGltaXQ.short_desc": {
+          "source": "Maximum results",
+          "message": "Maximální počet výsledků"
+        },
+        "app.VW5ib3VuY2U.action.bGlzdC1wYWdlLWdyb3Vwcw.option.c29ydF9vcmRlcg.allowed-value.c3RyaW5nOmFzYw.desc": {
+          "source": "Sort in ascending order",
+          "message": "Seřadit vzestupně"
+        },
+        "app.VW5ib3VuY2U.action.bGlzdC1wYWdlLWdyb3Vwcw.option.c29ydF9vcmRlcg.allowed-value.c3RyaW5nOmFzYw.display_name": {
+          "source": "Ascending",
+          "message": "Vzestupně"
+        },
+        "app.VW5ib3VuY2U.action.bGlzdC1wYWdlLWdyb3Vwcw.option.c29ydF9vcmRlcg.allowed-value.c3RyaW5nOmRlc2M.desc": {
+          "source": "Sort in descending order",
+          "message": "Seřadit sestupně"
+        },
+        "app.VW5ib3VuY2U.action.bGlzdC1wYWdlLWdyb3Vwcw.option.c29ydF9vcmRlcg.allowed-value.c3RyaW5nOmRlc2M.display_name": {
+          "source": "Descending",
+          "message": "Sestupně"
+        },
+        "app.VW5ib3VuY2U.action.bGlzdC1wYWdlLWdyb3Vwcw.option.c29ydF9vcmRlcg.display_name": {
+          "source": "Sort Order",
+          "message": "Pořadí řazení"
+        },
+        "app.VW5ib3VuY2U.action.bGlzdC1wYWdlLWdyb3Vwcw.option.c29ydF9vcmRlcg.short_desc": {
+          "source": "Sort direction",
+          "message": "Směr řazení"
+        },
+        "app.VW5ib3VuY2U.action.bGlzdC1wYWdlLWdyb3Vwcw.option.c3ViX2FjY291bnRfaWQ.display_name": {
+          "source": "Sub Account ID",
+          "message": "ID podúčtu"
+        },
+        "app.VW5ib3VuY2U.action.bGlzdC1wYWdlLWdyb3Vwcw.option.c3ViX2FjY291bnRfaWQ.short_desc": {
+          "source": "Sub-account to list page groups for",
+          "message": "Podúčet, pro který se mají vypsat skupiny stránek"
+        },
+        "app.VW5ib3VuY2U.action.bGlzdC1wYWdlLWdyb3Vwcw.option.dG8.display_name": {
+          "source": "To",
+          "message": "Komu"
+        },
+        "app.VW5ib3VuY2U.action.bGlzdC1wYWdlLWdyb3Vwcw.option.dG8.short_desc": {
+          "source": "End date filter",
+          "message": "Filtr data do"
+        },
+        "app.VW5ib3VuY2U.action.bGlzdC1wYWdlLWdyb3Vwcw.short_desc": {
+          "source": "List page groups for a sub-account",
+          "message": "Zobrazit skupiny stránek pro podúčet"
+        },
+        "app.VW5ib3VuY2U.action.bGlzdC1wYWdlcw.desc": {
+          "source": "List all landing pages with optional filtering by role, date range, and sort order",
+          "message": "Zobrazit všechny vstupní stránky s volitelným filtrováním podle role, časového rozmezí a pořadí řazení"
+        },
+        "app.VW5ib3VuY2U.action.bGlzdC1wYWdlcw.display_name": {
+          "source": "List Pages",
+          "message": "Vypsat stránky"
+        },
+        "app.VW5ib3VuY2U.action.bGlzdC1wYWdlcw.option.ZnJvbQ.display_name": {
+          "source": "From",
+          "message": "Od"
+        },
+        "app.VW5ib3VuY2U.action.bGlzdC1wYWdlcw.option.ZnJvbQ.short_desc": {
+          "source": "Start date filter",
+          "message": "Filtr data od"
+        },
+        "app.VW5ib3VuY2U.action.bGlzdC1wYWdlcw.option.b2Zmc2V0.display_name": {
+          "source": "Offset",
+          "message": "Posun"
+        },
+        "app.VW5ib3VuY2U.action.bGlzdC1wYWdlcw.option.b2Zmc2V0.short_desc": {
+          "source": "Result offset",
+          "message": "Posun výsledků"
+        },
+        "app.VW5ib3VuY2U.action.bGlzdC1wYWdlcw.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "Limit"
+        },
+        "app.VW5ib3VuY2U.action.bGlzdC1wYWdlcw.option.bGltaXQ.short_desc": {
+          "source": "Maximum results",
+          "message": "Maximální počet výsledků"
+        },
+        "app.VW5ib3VuY2U.action.bGlzdC1wYWdlcw.option.c29ydF9vcmRlcg.allowed-value.c3RyaW5nOmFzYw.desc": {
+          "source": "Sort in ascending order",
+          "message": "Seřadit vzestupně"
+        },
+        "app.VW5ib3VuY2U.action.bGlzdC1wYWdlcw.option.c29ydF9vcmRlcg.allowed-value.c3RyaW5nOmFzYw.display_name": {
+          "source": "Ascending",
+          "message": "Vzestupně"
+        },
+        "app.VW5ib3VuY2U.action.bGlzdC1wYWdlcw.option.c29ydF9vcmRlcg.allowed-value.c3RyaW5nOmRlc2M.desc": {
+          "source": "Sort in descending order",
+          "message": "Seřadit sestupně"
+        },
+        "app.VW5ib3VuY2U.action.bGlzdC1wYWdlcw.option.c29ydF9vcmRlcg.allowed-value.c3RyaW5nOmRlc2M.display_name": {
+          "source": "Descending",
+          "message": "Sestupně"
+        },
+        "app.VW5ib3VuY2U.action.bGlzdC1wYWdlcw.option.c29ydF9vcmRlcg.display_name": {
+          "source": "Sort Order",
+          "message": "Pořadí řazení"
+        },
+        "app.VW5ib3VuY2U.action.bGlzdC1wYWdlcw.option.c29ydF9vcmRlcg.short_desc": {
+          "source": "Sort direction",
+          "message": "Směr řazení"
+        },
+        "app.VW5ib3VuY2U.action.bGlzdC1wYWdlcw.option.cGFnZV9pZA.display_name": {
+          "source": "Page ID",
+          "message": "ID stránky"
+        },
+        "app.VW5ib3VuY2U.action.bGlzdC1wYWdlcw.option.cGFnZV9pZA.short_desc": {
+          "source": "Filter by page ID",
+          "message": "Filtrovat podle ID stránky"
+        },
+        "app.VW5ib3VuY2U.action.bGlzdC1wYWdlcw.option.cm9sZQ.allowed-value.c3RyaW5nOmF1dGhvcg.desc": {
+          "source": "Pages where the user is an author",
+          "message": "Stránky, kde je uživatel autorem"
+        },
+        "app.VW5ib3VuY2U.action.bGlzdC1wYWdlcw.option.cm9sZQ.allowed-value.c3RyaW5nOmF1dGhvcg.display_name": {
+          "source": "Author",
+          "message": "Autor"
+        },
+        "app.VW5ib3VuY2U.action.bGlzdC1wYWdlcw.option.cm9sZQ.allowed-value.c3RyaW5nOnZpZXdlcg.desc": {
+          "source": "Pages where the user is a viewer",
+          "message": "Stránky, kde je uživatel čtenářem"
+        },
+        "app.VW5ib3VuY2U.action.bGlzdC1wYWdlcw.option.cm9sZQ.allowed-value.c3RyaW5nOnZpZXdlcg.display_name": {
+          "source": "Viewer",
+          "message": "Čtenář"
+        },
+        "app.VW5ib3VuY2U.action.bGlzdC1wYWdlcw.option.cm9sZQ.display_name": {
+          "source": "Role",
+          "message": "Role"
+        },
+        "app.VW5ib3VuY2U.action.bGlzdC1wYWdlcw.option.cm9sZQ.short_desc": {
+          "source": "Filter by user role",
+          "message": "Filtrovat podle role uživatele"
+        },
+        "app.VW5ib3VuY2U.action.bGlzdC1wYWdlcw.option.d2l0aF9zdGF0cw.display_name": {
+          "source": "With Stats",
+          "message": "Se statistikami"
+        },
+        "app.VW5ib3VuY2U.action.bGlzdC1wYWdlcw.option.d2l0aF9zdGF0cw.short_desc": {
+          "source": "Include page statistics",
+          "message": "Zahrnout statistiky stránek"
+        },
+        "app.VW5ib3VuY2U.action.bGlzdC1wYWdlcw.option.dG8.display_name": {
+          "source": "To",
+          "message": "Komu"
+        },
+        "app.VW5ib3VuY2U.action.bGlzdC1wYWdlcw.option.dG8.short_desc": {
+          "source": "End date filter",
+          "message": "Filtr data do"
+        },
+        "app.VW5ib3VuY2U.action.bGlzdC1wYWdlcw.short_desc": {
+          "source": "List all landing pages",
+          "message": "Zobrazit všechny vstupní stránky"
+        },
+        "app.VW5ib3VuY2U.action.bGlzdC1zdWItYWNjb3VudHM.desc": {
+          "source": "List all sub-accounts for a given account",
+          "message": "Zobrazit všechny podúčty pro daný účet"
+        },
+        "app.VW5ib3VuY2U.action.bGlzdC1zdWItYWNjb3VudHM.display_name": {
+          "source": "List Sub-Accounts",
+          "message": "Zobrazit podúčty"
+        },
+        "app.VW5ib3VuY2U.action.bGlzdC1zdWItYWNjb3VudHM.option.YWNjb3VudF9pZA.display_name": {
+          "source": "Account ID",
+          "message": "ID účtu"
+        },
+        "app.VW5ib3VuY2U.action.bGlzdC1zdWItYWNjb3VudHM.option.YWNjb3VudF9pZA.short_desc": {
+          "source": "Parent account ID",
+          "message": "ID nadřazeného účtu"
+        },
+        "app.VW5ib3VuY2U.action.bGlzdC1zdWItYWNjb3VudHM.option.ZnJvbQ.display_name": {
+          "source": "From",
+          "message": "Od"
+        },
+        "app.VW5ib3VuY2U.action.bGlzdC1zdWItYWNjb3VudHM.option.ZnJvbQ.short_desc": {
+          "source": "Start date filter",
+          "message": "Filtr data od"
+        },
+        "app.VW5ib3VuY2U.action.bGlzdC1zdWItYWNjb3VudHM.option.b2Zmc2V0.display_name": {
+          "source": "Offset",
+          "message": "Posun"
+        },
+        "app.VW5ib3VuY2U.action.bGlzdC1zdWItYWNjb3VudHM.option.b2Zmc2V0.short_desc": {
+          "source": "Result offset",
+          "message": "Posun výsledků"
+        },
+        "app.VW5ib3VuY2U.action.bGlzdC1zdWItYWNjb3VudHM.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "Limit"
+        },
+        "app.VW5ib3VuY2U.action.bGlzdC1zdWItYWNjb3VudHM.option.bGltaXQ.short_desc": {
+          "source": "Maximum results",
+          "message": "Maximální počet výsledků"
+        },
+        "app.VW5ib3VuY2U.action.bGlzdC1zdWItYWNjb3VudHM.option.c29ydF9vcmRlcg.allowed-value.c3RyaW5nOmFzYw.desc": {
+          "source": "Sort in ascending order",
+          "message": "Seřadit vzestupně"
+        },
+        "app.VW5ib3VuY2U.action.bGlzdC1zdWItYWNjb3VudHM.option.c29ydF9vcmRlcg.allowed-value.c3RyaW5nOmFzYw.display_name": {
+          "source": "Ascending",
+          "message": "Vzestupně"
+        },
+        "app.VW5ib3VuY2U.action.bGlzdC1zdWItYWNjb3VudHM.option.c29ydF9vcmRlcg.allowed-value.c3RyaW5nOmRlc2M.desc": {
+          "source": "Sort in descending order",
+          "message": "Seřadit sestupně"
+        },
+        "app.VW5ib3VuY2U.action.bGlzdC1zdWItYWNjb3VudHM.option.c29ydF9vcmRlcg.allowed-value.c3RyaW5nOmRlc2M.display_name": {
+          "source": "Descending",
+          "message": "Sestupně"
+        },
+        "app.VW5ib3VuY2U.action.bGlzdC1zdWItYWNjb3VudHM.option.c29ydF9vcmRlcg.display_name": {
+          "source": "Sort Order",
+          "message": "Pořadí řazení"
+        },
+        "app.VW5ib3VuY2U.action.bGlzdC1zdWItYWNjb3VudHM.option.c29ydF9vcmRlcg.short_desc": {
+          "source": "Sort direction",
+          "message": "Směr řazení"
+        },
+        "app.VW5ib3VuY2U.action.bGlzdC1zdWItYWNjb3VudHM.option.c3ViX2FjY291bnRfaWQ.display_name": {
+          "source": "Sub Account ID",
+          "message": "ID podúčtu"
+        },
+        "app.VW5ib3VuY2U.action.bGlzdC1zdWItYWNjb3VudHM.option.c3ViX2FjY291bnRfaWQ.short_desc": {
+          "source": "Filter by sub-account ID",
+          "message": "Filtrovat podle ID podúčtu"
+        },
+        "app.VW5ib3VuY2U.action.bGlzdC1zdWItYWNjb3VudHM.option.dG8.display_name": {
+          "source": "To",
+          "message": "Komu"
+        },
+        "app.VW5ib3VuY2U.action.bGlzdC1zdWItYWNjb3VudHM.option.dG8.short_desc": {
+          "source": "End date filter",
+          "message": "Filtr data do"
+        },
+        "app.VW5ib3VuY2U.action.bGlzdC1zdWItYWNjb3VudHM.short_desc": {
+          "source": "List sub-accounts for an account",
+          "message": "Zobrazit podúčty pro účet"
+        },
+        "app.VW5ib3VuY2U.action.bWFrZS1hcGktY2FsbA.desc": {
+          "source": "Make a custom HTTP / REST API call to **Unbounce** using the configured connection's authentication.\n\nSpecify the HTTP method, the URI path (relative to the connection's API base URL), optional query parameters, headers, and request body. The response is returned as a hash containing the status code, response headers, and response body.\n\nUse this action for endpoints that are not yet exposed as first-class actions on this app.",
+          "message": "Provést vlastní volání HTTP / REST API do **Unbounce** pomocí ověření nakonfigurovaného připojení.\n\nZadejte metodu HTTP, cestu URI (relativní k základní adrese URL API připojení), volitelné parametry dotazu, hlavičky a tělo požadavku. Odpověď se vrátí jako hash obsahující stavový kód, hlavičky odpovědi a tělo odpovědi.\n\nTuto akci použijte pro koncové body, které ještě nejsou v této aplikaci k dispozici jako plnohodnotné akce."
+        },
+        "app.VW5ib3VuY2U.action.bWFrZS1hcGktY2FsbA.display_name": {
+          "source": "Make an API call",
+          "message": "Provést volání API"
+        },
+        "app.VW5ib3VuY2U.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.desc": {
+          "source": "The request body. The effective type depends on `body_type`: JSON/form/YAML expect a hash, XML/text expect a string, multipart expects a file structure, binary expects raw bytes.",
+          "message": "Tělo požadavku. Efektivní typ závisí na `body_type`: JSON/form/YAML očekávají hash, XML/text očekávají řetězec, multipart očekává strukturu souboru, binary očekává surové bajty."
+        },
+        "app.VW5ib3VuY2U.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.display_name": {
+          "source": "Body",
+          "message": "Tělo"
+        },
+        "app.VW5ib3VuY2U.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.short_desc": {
+          "source": "The request body",
+          "message": "Tělo požadavku"
+        },
+        "app.VW5ib3VuY2U.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.desc": {
+          "source": "Upload a file using `multipart/form-data`. The body must be a @ref DataProvider::FileDataType \"FileDataType\" structure (filename + content + mime_type). The framework builds the multipart envelope and sets the boundary header.",
+          "message": "Nahrát soubor pomocí `multipart/form-data`. Tělo musí být struktura @ref DataProvider::FileDataType \"FileDataType\" (filename + content + mime_type). Framework vytvoří obálku multipart a nastaví záhlaví boundary."
+        },
+        "app.VW5ib3VuY2U.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.display_name": {
+          "source": "Multipart Form",
+          "message": "Multipart Form"
+        },
+        "app.VW5ib3VuY2U.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.short_desc": {
+          "source": "Upload a file using multipart/form-data",
+          "message": "Nahrát soubor pomocí multipart/form-data"
+        },
+        "app.VW5ib3VuY2U.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.desc": {
+          "source": "Pass the body to the REST client unchanged; the client decides serialization based on its configured `data` option and the value type",
+          "message": "Předat tělo klientovi REST beze změny; klient rozhodne o serializaci na základě své nakonfigurované možnosti `data` a typu hodnoty"
+        },
+        "app.VW5ib3VuY2U.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.display_name": {
+          "source": "Auto",
+          "message": "Automaticky"
+        },
+        "app.VW5ib3VuY2U.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.short_desc": {
+          "source": "Pass-through; use connection serialization and let the REST client decide",
+          "message": "Předání bez změn; použít serializaci připojení a nechat rozhodnutí na klientovi REST"
+        },
+        "app.VW5ib3VuY2U.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.desc": {
+          "source": "Send the body as raw bytes. The body must be a binary value. Sets `Content-Type: application/octet-stream` unless overridden by `hdr`.",
+          "message": "Odeslat tělo jako surové bajty. Tělo musí být binární hodnota. Nastavuje `Content-Type: application/octet-stream`, pokud není přepsáno `hdr`."
+        },
+        "app.VW5ib3VuY2U.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.display_name": {
+          "source": "Raw Binary",
+          "message": "Surová binární data"
+        },
+        "app.VW5ib3VuY2U.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.short_desc": {
+          "source": "Send body as raw bytes",
+          "message": "Odeslat tělo jako surové bajty"
+        },
+        "app.VW5ib3VuY2U.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.desc": {
+          "source": "Serialize a hash of form fields as `application/x-www-form-urlencoded`. The body must be a hash whose values are scalars (strings/numbers/booleans).",
+          "message": "Serializovat hash formulářových polí jako `application/x-www-form-urlencoded`. Tělo musí být hash, jehož hodnotami jsou skaláry (řetězce/čísla/booleovské hodnoty)."
+        },
+        "app.VW5ib3VuY2U.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.display_name": {
+          "source": "Form (URL-encoded)",
+          "message": "Formulář (URL-encoded)"
+        },
+        "app.VW5ib3VuY2U.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.short_desc": {
+          "source": "Serialize body as application/x-www-form-urlencoded form fields",
+          "message": "Serializovat tělo jako formulářová pole application/x-www-form-urlencoded"
+        },
+        "app.VW5ib3VuY2U.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.desc": {
+          "source": "Serialize the body as JSON; sets `Content-Type: application/json`. The body should be a hash, list, or scalar value.",
+          "message": "Serializovat tělo jako JSON; nastavuje `Content-Type: application/json`. Tělo by mělo být hash, seznam nebo skalární hodnota."
+        },
+        "app.VW5ib3VuY2U.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.display_name": {
+          "source": "JSON",
+          "message": "JSON"
+        },
+        "app.VW5ib3VuY2U.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.short_desc": {
+          "source": "Serialize body as JSON",
+          "message": "Serializovat tělo jako JSON"
+        },
+        "app.VW5ib3VuY2U.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.desc": {
+          "source": "Send the body as plain text. The body must be a string. Sets `Content-Type: text/plain`.",
+          "message": "Odeslat tělo jako prostý text. Tělo musí být řetězec. Nastavuje `Content-Type: text/plain`."
+        },
+        "app.VW5ib3VuY2U.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.display_name": {
+          "source": "Plain Text",
+          "message": "Čistý text"
+        },
+        "app.VW5ib3VuY2U.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.short_desc": {
+          "source": "Send body as text/plain",
+          "message": "Odeslat tělo jako text/plain"
+        },
+        "app.VW5ib3VuY2U.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.desc": {
+          "source": "Send the body as XML. If the body is a hash it is serialized to XML; if it is a string it is sent verbatim. Sets `Content-Type: application/xml`.",
+          "message": "Odeslat tělo jako XML. Pokud je tělo hash, serializuje se do XML; pokud je to řetězec, odešle se doslovně. Nastavuje `Content-Type: application/xml`."
+        },
+        "app.VW5ib3VuY2U.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.display_name": {
+          "source": "XML",
+          "message": "XML"
+        },
+        "app.VW5ib3VuY2U.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.short_desc": {
+          "source": "Send body as XML",
+          "message": "Odeslat tělo jako XML"
+        },
+        "app.VW5ib3VuY2U.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.desc": {
+          "source": "Send the body as YAML. If the body is a hash it is serialized to YAML; if it is a string it is sent verbatim. Sets `Content-Type: application/x-yaml`.",
+          "message": "Odeslat tělo jako YAML. Pokud je tělo hash, serializuje se do YAML; pokud je to řetězec, odešle se doslovně. Nastavuje `Content-Type: application/x-yaml`."
+        },
+        "app.VW5ib3VuY2U.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.display_name": {
+          "source": "YAML",
+          "message": "YAML"
+        },
+        "app.VW5ib3VuY2U.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.short_desc": {
+          "source": "Send body as YAML",
+          "message": "Odeslat tělo jako YAML"
+        },
+        "app.VW5ib3VuY2U.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.desc": {
+          "source": "Selects the body serialization mode and the corresponding `Content-Type` header. Changing this field reshapes the `body` editor - selecting JSON exposes a JSON editor, selecting Multipart Form exposes a file picker, and so on.",
+          "message": "Vybírá režim serializace těla a odpovídající záhlaví `Content-Type`. Změna tohoto pole upraví editor `body` – výběrem JSON se zobrazí editor JSON, výběrem Multipart Form se zobrazí výběr souboru a podobně."
+        },
+        "app.VW5ib3VuY2U.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.display_name": {
+          "source": "Body Type",
+          "message": "Typ těla"
+        },
+        "app.VW5ib3VuY2U.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.short_desc": {
+          "source": "How the body is serialized and what Content-Type is sent",
+          "message": "Jak je tělo serializováno a jaký Content-Type je odeslán"
+        },
+        "app.VW5ib3VuY2U.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.desc": {
+          "source": "If `True`, non-2xx HTTP responses return as the normal response hash (with the actual status code) instead of raising `REST-RESPONSE-ERROR`. Useful for handling 4xx/5xx as data - e.g. checking whether a resource exists. Overrides the connection's `error_passthru` setting for this call only.",
+          "message": "Pokud je `True`, odpovědi HTTP jiné než 2xx se vrátí jako běžný hash odpovědi (s reálným stavovým kódem) namísto vyvolání `REST-RESPONSE-ERROR`. Užitečné pro zpracování 4xx/5xx jako dat – např. kontrola, zda prostředek existuje. Přepisuje nastavení `error_passthru` připojení pouze pro toto volání."
+        },
+        "app.VW5ib3VuY2U.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.display_name": {
+          "source": "Return Errors as Data",
+          "message": "Vracet chyby jako data"
+        },
+        "app.VW5ib3VuY2U.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.short_desc": {
+          "source": "Return non-2xx responses normally instead of throwing",
+          "message": "Vracet odpovědi jiné než 2xx normálně namísto vyvolání výjimky"
+        },
+        "app.VW5ib3VuY2U.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.desc": {
+          "source": "Optional list of HTTP status codes treated as success. If set and the response status is not in this list, the action throws `REST-STATUS-ERROR`. When unset, the REST client's default behavior applies (typically: 2xx is success, non-2xx throws).",
+          "message": "Volitelný seznam stavových kódů HTTP považovaných za úspěch. Je-li nastaven a stav odpovědi není v tomto seznamu, akce vyvolá `REST-STATUS-ERROR`. Pokud není nastaven, uplatní se výchozí chování klienta REST (obvykle: 2xx je úspěch, jiné než 2xx vyvolá výjimku)."
+        },
+        "app.VW5ib3VuY2U.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.display_name": {
+          "source": "Expected Status Codes",
+          "message": "Očekávané stavové kódy"
+        },
+        "app.VW5ib3VuY2U.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.short_desc": {
+          "source": "Response status codes treated as success",
+          "message": "Stavové kódy odpovědi považované za úspěch"
+        },
+        "app.VW5ib3VuY2U.action.bWFrZS1hcGktY2FsbA.option.aGRy.desc": {
+          "source": "Hash of custom headers added to the request. These override any default headers set by `body_type` (e.g. supplying `Content-Type` here wins over the body-type default).",
+          "message": "Hash vlastních záhlaví přidaných k požadavku. Tyto přepisují jakákoli výchozí záhlaví nastavená `body_type` (např. zadání `Content-Type` zde má přednost před výchozím nastavením typu těla)."
+        },
+        "app.VW5ib3VuY2U.action.bWFrZS1hcGktY2FsbA.option.aGRy.display_name": {
+          "source": "Custom Headers",
+          "message": "Vlastní záhlaví"
+        },
+        "app.VW5ib3VuY2U.action.bWFrZS1hcGktY2FsbA.option.aGRy.short_desc": {
+          "source": "Extra request headers",
+          "message": "Dodatečná záhlaví požadavku"
+        },
+        "app.VW5ib3VuY2U.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.desc": {
+          "source": "If `True`, the response hash includes a `debug` sub-hash containing the request method/URL/headers (with sensitive values redacted), request and response sizes, and round-trip duration. Useful when investigating slow or failing calls. Off by default to keep responses lean.",
+          "message": "Pokud je `True`, hash odpovědi obsahuje pod-hash `debug` obsahující metodu/URL/záhlaví požadavku (s cenzurovanými citlivými hodnotami), velikosti požadavku a odpovědi a dobu trvání. Užitečné při zkoumání pomalých nebo selhávajících volání. Ve výchozím nastavení vypnuto pro zachování kompaktních odpovědí."
+        },
+        "app.VW5ib3VuY2U.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.display_name": {
+          "source": "Include Debug Info",
+          "message": "Zahrnout ladicí informace"
+        },
+        "app.VW5ib3VuY2U.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.short_desc": {
+          "source": "Include request/timing/size debug info in the response",
+          "message": "Zahrnout do odpovědi ladicí informace o požadavku/časování/velikosti"
+        },
+        "app.VW5ib3VuY2U.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.desc": {
+          "source": "HTTP `OPTIONS`",
+          "message": "HTTP `OPTIONS`"
+        },
+        "app.VW5ib3VuY2U.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.display_name": {
+          "source": "OPTIONS",
+          "message": "OPTIONS"
+        },
+        "app.VW5ib3VuY2U.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.short_desc": {
+          "source": "HTTP OPTIONS",
+          "message": "HTTP OPTIONS"
+        },
+        "app.VW5ib3VuY2U.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.desc": {
+          "source": "HTTP `DELETE`",
+          "message": "HTTP `DELETE`"
+        },
+        "app.VW5ib3VuY2U.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.display_name": {
+          "source": "DELETE",
+          "message": "DELETE"
+        },
+        "app.VW5ib3VuY2U.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.short_desc": {
+          "source": "HTTP DELETE",
+          "message": "HTTP DELETE"
+        },
+        "app.VW5ib3VuY2U.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.desc": {
+          "source": "HTTP `GET`",
+          "message": "HTTP `GET`"
+        },
+        "app.VW5ib3VuY2U.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.display_name": {
+          "source": "GET",
+          "message": "GET"
+        },
+        "app.VW5ib3VuY2U.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.short_desc": {
+          "source": "HTTP GET",
+          "message": "HTTP GET"
+        },
+        "app.VW5ib3VuY2U.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.desc": {
+          "source": "HTTP `HEAD`",
+          "message": "HTTP `HEAD`"
+        },
+        "app.VW5ib3VuY2U.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.display_name": {
+          "source": "HEAD",
+          "message": "HEAD"
+        },
+        "app.VW5ib3VuY2U.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.short_desc": {
+          "source": "HTTP HEAD",
+          "message": "HTTP HEAD"
+        },
+        "app.VW5ib3VuY2U.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.desc": {
+          "source": "HTTP `PATCH`",
+          "message": "HTTP `PATCH`"
+        },
+        "app.VW5ib3VuY2U.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.display_name": {
+          "source": "PATCH",
+          "message": "PATCH"
+        },
+        "app.VW5ib3VuY2U.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.short_desc": {
+          "source": "HTTP PATCH",
+          "message": "HTTP PATCH"
+        },
+        "app.VW5ib3VuY2U.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.desc": {
+          "source": "HTTP `POST`",
+          "message": "HTTP `POST`"
+        },
+        "app.VW5ib3VuY2U.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.display_name": {
+          "source": "POST",
+          "message": "POST"
+        },
+        "app.VW5ib3VuY2U.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.short_desc": {
+          "source": "HTTP POST",
+          "message": "HTTP POST"
+        },
+        "app.VW5ib3VuY2U.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.desc": {
+          "source": "HTTP `PUT`",
+          "message": "HTTP `PUT`"
+        },
+        "app.VW5ib3VuY2U.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.display_name": {
+          "source": "PUT",
+          "message": "PUT"
+        },
+        "app.VW5ib3VuY2U.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.short_desc": {
+          "source": "HTTP PUT",
+          "message": "HTTP PUT"
+        },
+        "app.VW5ib3VuY2U.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.desc": {
+          "source": "HTTP `TRACE`",
+          "message": "HTTP `TRACE`"
+        },
+        "app.VW5ib3VuY2U.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.display_name": {
+          "source": "TRACE",
+          "message": "TRACE"
+        },
+        "app.VW5ib3VuY2U.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.short_desc": {
+          "source": "HTTP TRACE",
+          "message": "HTTP TRACE"
+        },
+        "app.VW5ib3VuY2U.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "Metoda HTTP, která se má použít pro požadavek"
+        },
+        "app.VW5ib3VuY2U.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.display_name": {
+          "source": "HTTP Method",
+          "message": "Metoda HTTP"
+        },
+        "app.VW5ib3VuY2U.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.short_desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "Metoda HTTP, která se má použít pro požadavek"
+        },
+        "app.VW5ib3VuY2U.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain `{name}` placeholders that are replaced from `path_vars`. Example: `/users/{id}/comments`.",
+          "message": "Cesta URI relativní k základní adrese URL API připojení. Může obsahovat zástupné symboly `{name}`, které jsou nahrazeny z `path_vars`. Příklad: `/users/{id}/comments`."
+        },
+        "app.VW5ib3VuY2U.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.display_name": {
+          "source": "URI Path",
+          "message": "Cesta URI"
+        },
+        "app.VW5ib3VuY2U.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.short_desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain '{name}' placeholders that are replaced from 'path_vars'. Example: '/users/{id}/comments'",
+          "message": "Cesta URI relativní vůči základní URL API připojení. Může obsahovat zástupné symboly '{name}', které jsou nahrazeny z 'path_vars'. Příklad: '/users/{id}/comments'"
+        },
+        "app.VW5ib3VuY2U.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.desc": {
+          "source": "Hash of values substituted into `{name}` placeholders in the URI path. Example: with `path = /users/{id}` and `path_vars = {id: 123}` the framework sends `/users/123`. Values are URL-encoded.",
+          "message": "Haš hodnot nahrazených za zástupné symboly `{name}` v cestě URI. Příklad: s `path = /users/{id}` a `path_vars = {id: 123}` rozhraní odesílá `/users/123`. Hodnoty jsou kódovány v URL."
+        },
+        "app.VW5ib3VuY2U.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.display_name": {
+          "source": "Path Variables",
+          "message": "Proměnné cesty"
+        },
+        "app.VW5ib3VuY2U.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.short_desc": {
+          "source": "Values for {name} placeholders in path",
+          "message": "Hodnoty pro zástupné symboly {name} v cestě"
+        },
+        "app.VW5ib3VuY2U.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.desc": {
+          "source": "Hash of query string parameters to append to the URI path. Values are URL-encoded; list values are joined with `,`.",
+          "message": "Haš parametrů dotazovacího řetězce, které se připojí k cestě URI. Hodnoty jsou kódovány v URL; hodnoty seznamu jsou spojeny pomocí `,`."
+        },
+        "app.VW5ib3VuY2U.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.display_name": {
+          "source": "Query Arguments",
+          "message": "Argumenty dotazu"
+        },
+        "app.VW5ib3VuY2U.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.short_desc": {
+          "source": "Query string parameters",
+          "message": "Parametry dotazovacího řetězce"
+        },
+        "app.VW5ib3VuY2U.action.bWFrZS1hcGktY2FsbA.short_desc": {
+          "source": "Make a custom API call to Unbounce",
+          "message": "Provést vlastní volání API do Unbounce"
+        },
+        "app.VW5ib3VuY2U.desc": {
+          "source": "Unbounce is a landing page builder and conversion optimization platform.\n\nThis integration supports listing accounts, sub-accounts, domains, pages, page groups, leads, and users, as well as creating and deleting leads, managing lead deletion requests, and watching for new leads via polling.",
+          "message": "Unbounce je nástroj pro tvorbu vstupních stránek a platforma pro optimalizaci konverzí.\n\nTato integrace podporuje výpis účtů, podúčtů, domén, stránek, skupin stránek, leadů a uživatelů, a také vytváření a mazání leadů, správu žádostí o smazání leadů a sledování nových leadů prostřednictvím dotazování."
+        },
+        "app.VW5ib3VuY2U.display_name": {
+          "source": "Unbounce",
+          "message": "Unbounce"
+        },
+        "app.VW5ib3VuY2U.short_desc": {
+          "source": "Unbounce landing page and lead management platform",
+          "message": "Platforma Unbounce pro tvorbu vstupních stránek a správu leadů"
+        }
+      }
+    }
+  }
+}

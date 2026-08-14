@@ -1,0 +1,761 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "it": {
+      "messages": {
+        "app.VGF2aWx5.action.Y3Jhd2w.desc": {
+          "source": "Multi-page web crawl starting from a seed URL via Tavily's `/crawl` endpoint.  Returns a tree of discovered pages with their extracted content.",
+          "message": "Scansione web multipagina a partire da un URL di origine tramite l'endpoint `/crawl` di Tavily. Restituisce un albero di pagine scoperte con il relativo contenuto estratto."
+        },
+        "app.VGF2aWx5.action.Y3Jhd2w.display_name": {
+          "source": "Crawl Site",
+          "message": "Scansiona sito"
+        },
+        "app.VGF2aWx5.action.Y3Jhd2w.option.ZXh0cmFjdF9kZXB0aA.allowed-value.c3RyaW5nOmFkdmFuY2Vk.display_name": {
+          "source": "Advanced",
+          "message": "Avanzato"
+        },
+        "app.VGF2aWx5.action.Y3Jhd2w.option.ZXh0cmFjdF9kZXB0aA.allowed-value.c3RyaW5nOmJhc2lj.display_name": {
+          "source": "Basic",
+          "message": "Base"
+        },
+        "app.VGF2aWx5.action.Y3Jhd2w.option.ZXh0cmFjdF9kZXB0aA.desc": {
+          "source": "Extraction depth applied to each crawled page.",
+          "message": "Profondità di estrazione applicata a ogni pagina scansionata."
+        },
+        "app.VGF2aWx5.action.Y3Jhd2w.option.ZXh0cmFjdF9kZXB0aA.display_name": {
+          "source": "Extract Depth",
+          "message": "Profondità di estrazione"
+        },
+        "app.VGF2aWx5.action.Y3Jhd2w.option.ZXh0cmFjdF9kZXB0aA.short_desc": {
+          "source": "Per-page extraction depth",
+          "message": "Profondità di estrazione per pagina"
+        },
+        "app.VGF2aWx5.action.Y3Jhd2w.option.ZXhjbHVkZV9wYXRocw.desc": {
+          "source": "List of URL path patterns to exclude.",
+          "message": "Elenco di pattern di percorsi URL da escludere."
+        },
+        "app.VGF2aWx5.action.Y3Jhd2w.option.ZXhjbHVkZV9wYXRocw.display_name": {
+          "source": "Exclude Paths",
+          "message": "Escludi percorsi"
+        },
+        "app.VGF2aWx5.action.Y3Jhd2w.option.ZXhjbHVkZV9wYXRocw.short_desc": {
+          "source": "URL path patterns to exclude",
+          "message": "Pattern di percorsi URL da escludere"
+        },
+        "app.VGF2aWx5.action.Y3Jhd2w.option.aW5zdHJ1Y3Rpb25z.desc": {
+          "source": "Optional natural-language hints to guide the crawler (e.g. \"focus on API reference pages\").",
+          "message": "Suggerimenti opzionali in linguaggio naturale per guidare il crawler (ad es. \"focus on API reference pages\")."
+        },
+        "app.VGF2aWx5.action.Y3Jhd2w.option.aW5zdHJ1Y3Rpb25z.display_name": {
+          "source": "Instructions",
+          "message": "Istruzioni"
+        },
+        "app.VGF2aWx5.action.Y3Jhd2w.option.aW5zdHJ1Y3Rpb25z.short_desc": {
+          "source": "Natural-language instructions for the crawl agent",
+          "message": "Istruzioni in linguaggio naturale per l'agente di scansione"
+        },
+        "app.VGF2aWx5.action.Y3Jhd2w.option.bGltaXQ.desc": {
+          "source": "Maximum total pages to fetch across the crawl.",
+          "message": "Numero massimo complessivo di pagine da recuperare durante la scansione."
+        },
+        "app.VGF2aWx5.action.Y3Jhd2w.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "Limite"
+        },
+        "app.VGF2aWx5.action.Y3Jhd2w.option.bGltaXQ.short_desc": {
+          "source": "Overall page limit",
+          "message": "Limite complessivo di pagine"
+        },
+        "app.VGF2aWx5.action.Y3Jhd2w.option.bWF4X2JyZWFkdGg.desc": {
+          "source": "Maximum number of outgoing links to follow per page.",
+          "message": "Numero massimo di collegamenti in uscita da seguire per pagina."
+        },
+        "app.VGF2aWx5.action.Y3Jhd2w.option.bWF4X2JyZWFkdGg.display_name": {
+          "source": "Max Breadth",
+          "message": "Ampiezza massima"
+        },
+        "app.VGF2aWx5.action.Y3Jhd2w.option.bWF4X2JyZWFkdGg.short_desc": {
+          "source": "Maximum links to follow per page",
+          "message": "Numero massimo di link da seguire per pagina"
+        },
+        "app.VGF2aWx5.action.Y3Jhd2w.option.bWF4X2RlcHRo.desc": {
+          "source": "Maximum link-graph depth from the seed URL.",
+          "message": "Profondità massima del grafo dei link a partire dall'URL di origine."
+        },
+        "app.VGF2aWx5.action.Y3Jhd2w.option.bWF4X2RlcHRo.display_name": {
+          "source": "Max Depth",
+          "message": "Profondità massima"
+        },
+        "app.VGF2aWx5.action.Y3Jhd2w.option.bWF4X2RlcHRo.short_desc": {
+          "source": "Maximum crawl depth from the seed",
+          "message": "Profondità massima di scansione dall'origine"
+        },
+        "app.VGF2aWx5.action.Y3Jhd2w.option.c2VsZWN0X3BhdGhz.desc": {
+          "source": "List of URL path patterns to include.",
+          "message": "Elenco di pattern di percorsi URL da includere."
+        },
+        "app.VGF2aWx5.action.Y3Jhd2w.option.c2VsZWN0X3BhdGhz.display_name": {
+          "source": "Select Paths",
+          "message": "Seleziona percorsi"
+        },
+        "app.VGF2aWx5.action.Y3Jhd2w.option.c2VsZWN0X3BhdGhz.short_desc": {
+          "source": "URL path patterns to include",
+          "message": "Pattern di percorsi URL da includere"
+        },
+        "app.VGF2aWx5.action.Y3Jhd2w.option.dXJs.desc": {
+          "source": "Seed URL the crawl begins at.",
+          "message": "URL seed da cui inizia il crawl."
+        },
+        "app.VGF2aWx5.action.Y3Jhd2w.option.dXJs.display_name": {
+          "source": "Seed URL",
+          "message": "URL di origine"
+        },
+        "app.VGF2aWx5.action.Y3Jhd2w.option.dXJs.short_desc": {
+          "source": "URL to start the crawl from",
+          "message": "URL da cui avviare il crawl"
+        },
+        "app.VGF2aWx5.action.Y3Jhd2w.short_desc": {
+          "source": "Crawl a site starting from a seed URL",
+          "message": "Esegui il crawl di un sito a partire da un URL seed"
+        },
+        "app.VGF2aWx5.action.ZXh0cmFjdA.desc": {
+          "source": "Extracts the main readable content from a list of URLs via Tavily's `/extract` endpoint.  Useful as a follow-up to a `search` result when the agent decides to read specific pages in full.",
+          "message": "Estrae il contenuto principale leggibile da un elenco di URL tramite l'endpoint `/extract` di Tavily. Utile come completamento a un risultato di `search` quando l'agente decide di leggere pagine specifiche per intero."
+        },
+        "app.VGF2aWx5.action.ZXh0cmFjdA.display_name": {
+          "source": "Extract URLs",
+          "message": "Estrai URL"
+        },
+        "app.VGF2aWx5.action.ZXh0cmFjdA.option.ZXh0cmFjdF9kZXB0aA.allowed-value.c3RyaW5nOmFkdmFuY2Vk.display_name": {
+          "source": "Advanced",
+          "message": "Avanzato"
+        },
+        "app.VGF2aWx5.action.ZXh0cmFjdA.option.ZXh0cmFjdF9kZXB0aA.allowed-value.c3RyaW5nOmJhc2lj.display_name": {
+          "source": "Basic",
+          "message": "Base"
+        },
+        "app.VGF2aWx5.action.ZXh0cmFjdA.option.ZXh0cmFjdF9kZXB0aA.desc": {
+          "source": "Extraction depth.",
+          "message": "Profondità di estrazione."
+        },
+        "app.VGF2aWx5.action.ZXh0cmFjdA.option.ZXh0cmFjdF9kZXB0aA.display_name": {
+          "source": "Extract Depth",
+          "message": "Profondità di estrazione"
+        },
+        "app.VGF2aWx5.action.ZXh0cmFjdA.option.ZXh0cmFjdF9kZXB0aA.short_desc": {
+          "source": "Extraction depth: 'basic' or 'advanced'",
+          "message": "Profondità di estrazione: 'basic' o 'advanced'"
+        },
+        "app.VGF2aWx5.action.ZXh0cmFjdA.option.aW5jbHVkZV9pbWFnZXM.desc": {
+          "source": "When `True`, each result includes image URLs found on the page.",
+          "message": "Quando è `True`, ciascun risultato include gli URL delle immagini trovate nella pagina."
+        },
+        "app.VGF2aWx5.action.ZXh0cmFjdA.option.aW5jbHVkZV9pbWFnZXM.display_name": {
+          "source": "Include Images",
+          "message": "Includi immagini"
+        },
+        "app.VGF2aWx5.action.ZXh0cmFjdA.option.aW5jbHVkZV9pbWFnZXM.short_desc": {
+          "source": "Return image URLs alongside extracted text",
+          "message": "Restituisci gli URL delle immagini insieme al testo estratto"
+        },
+        "app.VGF2aWx5.action.ZXh0cmFjdA.option.dXJscw.desc": {
+          "source": "Absolute URLs whose main content should be extracted.",
+          "message": "URL assoluti da cui estrarre il contenuto principale."
+        },
+        "app.VGF2aWx5.action.ZXh0cmFjdA.option.dXJscw.display_name": {
+          "source": "URLs",
+          "message": "URL"
+        },
+        "app.VGF2aWx5.action.ZXh0cmFjdA.option.dXJscw.short_desc": {
+          "source": "List of URLs to extract content from",
+          "message": "Elenco di URL da cui estrarre il contenuto"
+        },
+        "app.VGF2aWx5.action.ZXh0cmFjdA.short_desc": {
+          "source": "Extract main content from URLs via Tavily",
+          "message": "Estrai il contenuto principale da URL tramite Tavily"
+        },
+        "app.VGF2aWx5.action.bWFrZS1hcGktY2FsbA.desc": {
+          "source": "Make a custom HTTP / REST API call to **Tavily** using the configured connection's authentication.\n\nSpecify the HTTP method, the URI path (relative to the connection's API base URL), optional query parameters, headers, and request body. The response is returned as a hash containing the status code, response headers, and response body.\n\nUse this action for endpoints that are not yet exposed as first-class actions on this app.",
+          "message": "Esegui una chiamata API HTTP / REST personalizzata a **Tavily** utilizzando l'autenticazione della connessione configurata.\n\nSpecifica il metodo HTTP, il percorso URI (relativo all'URL base dell'API della connessione), parametri di query opzionali, intestazioni e il corpo della richiesta. La risposta viene restituita come hash contenente il codice di stato, le intestazioni di risposta e il corpo della risposta.\n\nUtilizza questa azione per gli endpoint che non sono ancora esposti come azioni di primo livello su questa app."
+        },
+        "app.VGF2aWx5.action.bWFrZS1hcGktY2FsbA.display_name": {
+          "source": "Make an API call",
+          "message": "Esegui una chiamata API"
+        },
+        "app.VGF2aWx5.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.desc": {
+          "source": "The request body. The effective type depends on `body_type`: JSON/form/YAML expect a hash, XML/text expect a string, multipart expects a file structure, binary expects raw bytes.",
+          "message": "Il corpo della richiesta. Il tipo effettivo dipende da `body_type`: JSON/form/YAML richiedono un hash, XML/testo richiedono una stringa, multipart richiede una struttura di file, binario richiede byte grezzi."
+        },
+        "app.VGF2aWx5.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.display_name": {
+          "source": "Body",
+          "message": "Corpo"
+        },
+        "app.VGF2aWx5.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.short_desc": {
+          "source": "The request body",
+          "message": "Il corpo della richiesta"
+        },
+        "app.VGF2aWx5.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.desc": {
+          "source": "Upload a file using `multipart/form-data`. The body must be a @ref DataProvider::FileDataType \"FileDataType\" structure (filename + content + mime_type). The framework builds the multipart envelope and sets the boundary header.",
+          "message": "Carica un file utilizzando `multipart/form-data`. Il corpo deve essere una struttura @ref DataProvider::FileDataType \"FileDataType\" (nome file + contenuto + mime_type). Il framework costruisce l'inviluppo multipart e imposta l'intestazione del boundary."
+        },
+        "app.VGF2aWx5.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.display_name": {
+          "source": "Multipart Form",
+          "message": "Modulo Multipart"
+        },
+        "app.VGF2aWx5.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.short_desc": {
+          "source": "Upload a file using multipart/form-data",
+          "message": "Carica un file utilizzando multipart/form-data"
+        },
+        "app.VGF2aWx5.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.desc": {
+          "source": "Pass the body to the REST client unchanged; the client decides serialization based on its configured `data` option and the value type",
+          "message": "Passa il corpo al client REST inalterato; il client decide la serializzazione in base alla sua opzione `data` configurata e al tipo di valore"
+        },
+        "app.VGF2aWx5.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.display_name": {
+          "source": "Auto",
+          "message": "Auto"
+        },
+        "app.VGF2aWx5.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.short_desc": {
+          "source": "Pass-through; use connection serialization and let the REST client decide",
+          "message": "Pass-through; usa la serializzazione della connessione e lascia decidere al client REST"
+        },
+        "app.VGF2aWx5.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.desc": {
+          "source": "Send the body as raw bytes. The body must be a binary value. Sets `Content-Type: application/octet-stream` unless overridden by `hdr`.",
+          "message": "Invia il corpo come byte grezzi. Il corpo deve essere un valore binario. Imposta `Content-Type: application/octet-stream` a meno che non sia sovrascritto da `hdr`."
+        },
+        "app.VGF2aWx5.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.display_name": {
+          "source": "Raw Binary",
+          "message": "Binario grezzo"
+        },
+        "app.VGF2aWx5.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.short_desc": {
+          "source": "Send body as raw bytes",
+          "message": "Invia il corpo come byte grezzi"
+        },
+        "app.VGF2aWx5.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.desc": {
+          "source": "Serialize a hash of form fields as `application/x-www-form-urlencoded`. The body must be a hash whose values are scalars (strings/numbers/booleans).",
+          "message": "Serializza un hash di campi modulo come `application/x-www-form-urlencoded`. Il corpo deve essere un hash i cui valori sono scalari (stringhe/numeri/booleani)."
+        },
+        "app.VGF2aWx5.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.display_name": {
+          "source": "Form (URL-encoded)",
+          "message": "Form (URL-encoded)"
+        },
+        "app.VGF2aWx5.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.short_desc": {
+          "source": "Serialize body as application/x-www-form-urlencoded form fields",
+          "message": "Serializza il corpo come campi del modulo application/x-www-form-urlencoded"
+        },
+        "app.VGF2aWx5.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.desc": {
+          "source": "Serialize the body as JSON; sets `Content-Type: application/json`. The body should be a hash, list, or scalar value.",
+          "message": "Serializza il corpo come JSON; imposta `Content-Type: application/json`. Il corpo deve essere un hash, un elenco o un valore scalare."
+        },
+        "app.VGF2aWx5.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.display_name": {
+          "source": "JSON",
+          "message": "JSON"
+        },
+        "app.VGF2aWx5.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.short_desc": {
+          "source": "Serialize body as JSON",
+          "message": "Serializza il corpo come JSON"
+        },
+        "app.VGF2aWx5.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.desc": {
+          "source": "Send the body as plain text. The body must be a string. Sets `Content-Type: text/plain`.",
+          "message": "Invia il corpo come testo semplice. Il corpo deve essere una stringa. Imposta `Content-Type: text/plain`."
+        },
+        "app.VGF2aWx5.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.display_name": {
+          "source": "Plain Text",
+          "message": "Testo normale"
+        },
+        "app.VGF2aWx5.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.short_desc": {
+          "source": "Send body as text/plain",
+          "message": "Invia il corpo come text/plain"
+        },
+        "app.VGF2aWx5.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.desc": {
+          "source": "Send the body as XML. If the body is a hash it is serialized to XML; if it is a string it is sent verbatim. Sets `Content-Type: application/xml`.",
+          "message": "Invia il corpo come XML. Se il corpo è un hash viene serializzato in XML; se è una stringa viene inviato testualmente. Imposta `Content-Type: application/xml`."
+        },
+        "app.VGF2aWx5.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.display_name": {
+          "source": "XML",
+          "message": "XML"
+        },
+        "app.VGF2aWx5.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.short_desc": {
+          "source": "Send body as XML",
+          "message": "Invia il corpo come XML"
+        },
+        "app.VGF2aWx5.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.desc": {
+          "source": "Send the body as YAML. If the body is a hash it is serialized to YAML; if it is a string it is sent verbatim. Sets `Content-Type: application/x-yaml`.",
+          "message": "Invia il corpo come YAML. Se il corpo è un hash viene serializzato in YAML; se è una stringa viene inviato testualmente. Imposta `Content-Type: application/x-yaml`."
+        },
+        "app.VGF2aWx5.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.display_name": {
+          "source": "YAML",
+          "message": "YAML"
+        },
+        "app.VGF2aWx5.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.short_desc": {
+          "source": "Send body as YAML",
+          "message": "Invia il corpo come YAML"
+        },
+        "app.VGF2aWx5.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.desc": {
+          "source": "Selects the body serialization mode and the corresponding `Content-Type` header. Changing this field reshapes the `body` editor - selecting JSON exposes a JSON editor, selecting Multipart Form exposes a file picker, and so on.",
+          "message": "Seleziona la modalità di serializzazione del corpo e la corrispondente intestazione `Content-Type`. La modifica di questo campo riorganizza l'editor `body`: selezionando JSON viene mostrato un editor JSON, selezionando Modulo Multipart viene mostrato un selettore di file e così via."
+        },
+        "app.VGF2aWx5.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.display_name": {
+          "source": "Body Type",
+          "message": "Tipo di corpo"
+        },
+        "app.VGF2aWx5.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.short_desc": {
+          "source": "How the body is serialized and what Content-Type is sent",
+          "message": "Come viene serializzato il corpo e quale Content-Type viene inviato"
+        },
+        "app.VGF2aWx5.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.desc": {
+          "source": "If `True`, non-2xx HTTP responses return as the normal response hash (with the actual status code) instead of raising `REST-RESPONSE-ERROR`. Useful for handling 4xx/5xx as data - e.g. checking whether a resource exists. Overrides the connection's `error_passthru` setting for this call only.",
+          "message": "Se `True`, le risposte HTTP diverse da 2xx ritornano come normale hash di risposta (con il codice di stato effettivo) invece di sollevare `REST-RESPONSE-ERROR`. Utile per gestire 4xx/5xx come dati, ad es. per verificare se una risorsa esiste. Sovrascrive l'impostazione `error_passthru` della connessione solo per questa chiamata."
+        },
+        "app.VGF2aWx5.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.display_name": {
+          "source": "Return Errors as Data",
+          "message": "Restituisci errori come dati"
+        },
+        "app.VGF2aWx5.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.short_desc": {
+          "source": "Return non-2xx responses normally instead of throwing",
+          "message": "Restituisci normalmente le risposte non 2xx invece di generare un'eccezione"
+        },
+        "app.VGF2aWx5.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.desc": {
+          "source": "Optional list of HTTP status codes treated as success. If set and the response status is not in this list, the action throws `REST-STATUS-ERROR`. When unset, the REST client's default behavior applies (typically: 2xx is success, non-2xx throws).",
+          "message": "Elenco opzionale di codici di stato HTTP trattati come successo. Se impostato e lo stato della risposta non è in questo elenco, l'azione genera `REST-STATUS-ERROR`. Quando non è impostato, si applica il comportamento predefinito del client REST (in genere: 2xx è successo, non-2xx genera un'eccezione)."
+        },
+        "app.VGF2aWx5.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.display_name": {
+          "source": "Expected Status Codes",
+          "message": "Codici di stato previsti"
+        },
+        "app.VGF2aWx5.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.short_desc": {
+          "source": "Response status codes treated as success",
+          "message": "Codici di stato della risposta trattati come successo"
+        },
+        "app.VGF2aWx5.action.bWFrZS1hcGktY2FsbA.option.aGRy.desc": {
+          "source": "Hash of custom headers added to the request. These override any default headers set by `body_type` (e.g. supplying `Content-Type` here wins over the body-type default).",
+          "message": "Hash di intestazioni personalizzate aggiunte alla richiesta. Queste sovrascrivono qualsiasi intestazione predefinita impostata da `body_type` (ad es. fornire `Content-Type` qui ha la precedenza sul valore predefinito del tipo di corpo)."
+        },
+        "app.VGF2aWx5.action.bWFrZS1hcGktY2FsbA.option.aGRy.display_name": {
+          "source": "Custom Headers",
+          "message": "Intestazioni personalizzate"
+        },
+        "app.VGF2aWx5.action.bWFrZS1hcGktY2FsbA.option.aGRy.short_desc": {
+          "source": "Extra request headers",
+          "message": "Intestazioni della richiesta aggiuntive"
+        },
+        "app.VGF2aWx5.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.desc": {
+          "source": "If `True`, the response hash includes a `debug` sub-hash containing the request method/URL/headers (with sensitive values redacted), request and response sizes, and round-trip duration. Useful when investigating slow or failing calls. Off by default to keep responses lean.",
+          "message": "Se `True`, l'hash della risposta include un sotto-hash `debug` contenente il metodo/URL/intestazioni della richiesta (con i valori sensibili oscurati), le dimensioni della richiesta e della risposta e la durata di andata e ritorno. Utile quando si indagano chiamate lente o con errori. Disattivato per impostazione predefinita per mantenere le risposte snelle."
+        },
+        "app.VGF2aWx5.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.display_name": {
+          "source": "Include Debug Info",
+          "message": "Includi informazioni di debug"
+        },
+        "app.VGF2aWx5.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.short_desc": {
+          "source": "Include request/timing/size debug info in the response",
+          "message": "Includi le informazioni di debug relative a richiesta/tempi/dimensioni nella risposta"
+        },
+        "app.VGF2aWx5.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.desc": {
+          "source": "HTTP `OPTIONS`",
+          "message": "HTTP `OPTIONS`"
+        },
+        "app.VGF2aWx5.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.display_name": {
+          "source": "OPTIONS",
+          "message": "OPTIONS"
+        },
+        "app.VGF2aWx5.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.short_desc": {
+          "source": "HTTP OPTIONS",
+          "message": "HTTP OPTIONS"
+        },
+        "app.VGF2aWx5.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.desc": {
+          "source": "HTTP `DELETE`",
+          "message": "HTTP `DELETE`"
+        },
+        "app.VGF2aWx5.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.display_name": {
+          "source": "DELETE",
+          "message": "DELETE"
+        },
+        "app.VGF2aWx5.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.short_desc": {
+          "source": "HTTP DELETE",
+          "message": "HTTP DELETE"
+        },
+        "app.VGF2aWx5.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.desc": {
+          "source": "HTTP `GET`",
+          "message": "HTTP `GET`"
+        },
+        "app.VGF2aWx5.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.display_name": {
+          "source": "GET",
+          "message": "GET"
+        },
+        "app.VGF2aWx5.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.short_desc": {
+          "source": "HTTP GET",
+          "message": "HTTP GET"
+        },
+        "app.VGF2aWx5.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.desc": {
+          "source": "HTTP `HEAD`",
+          "message": "HTTP `HEAD`"
+        },
+        "app.VGF2aWx5.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.display_name": {
+          "source": "HEAD",
+          "message": "HEAD"
+        },
+        "app.VGF2aWx5.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.short_desc": {
+          "source": "HTTP HEAD",
+          "message": "HTTP HEAD"
+        },
+        "app.VGF2aWx5.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.desc": {
+          "source": "HTTP `PATCH`",
+          "message": "HTTP `PATCH`"
+        },
+        "app.VGF2aWx5.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.display_name": {
+          "source": "PATCH",
+          "message": "PATCH"
+        },
+        "app.VGF2aWx5.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.short_desc": {
+          "source": "HTTP PATCH",
+          "message": "HTTP PATCH"
+        },
+        "app.VGF2aWx5.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.desc": {
+          "source": "HTTP `POST`",
+          "message": "HTTP `POST`"
+        },
+        "app.VGF2aWx5.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.display_name": {
+          "source": "POST",
+          "message": "POST"
+        },
+        "app.VGF2aWx5.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.short_desc": {
+          "source": "HTTP POST",
+          "message": "HTTP POST"
+        },
+        "app.VGF2aWx5.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.desc": {
+          "source": "HTTP `PUT`",
+          "message": "HTTP `PUT`"
+        },
+        "app.VGF2aWx5.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.display_name": {
+          "source": "PUT",
+          "message": "PUT"
+        },
+        "app.VGF2aWx5.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.short_desc": {
+          "source": "HTTP PUT",
+          "message": "HTTP PUT"
+        },
+        "app.VGF2aWx5.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.desc": {
+          "source": "HTTP `TRACE`",
+          "message": "HTTP `TRACE`"
+        },
+        "app.VGF2aWx5.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.display_name": {
+          "source": "TRACE",
+          "message": "TRACE"
+        },
+        "app.VGF2aWx5.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.short_desc": {
+          "source": "HTTP TRACE",
+          "message": "HTTP TRACE"
+        },
+        "app.VGF2aWx5.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "Il metodo HTTP da utilizzare per la richiesta"
+        },
+        "app.VGF2aWx5.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.display_name": {
+          "source": "HTTP Method",
+          "message": "Metodo HTTP"
+        },
+        "app.VGF2aWx5.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.short_desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "Il metodo HTTP da utilizzare per la richiesta"
+        },
+        "app.VGF2aWx5.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain `{name}` placeholders that are replaced from `path_vars`. Example: `/users/{id}/comments`.",
+          "message": "Il percorso URI relativo all'URL di base dell'API della connessione. Può contenere segnaposto `{name}` che vengono sostituiti da `path_vars`. Esempio: `/users/{id}/comments`."
+        },
+        "app.VGF2aWx5.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.display_name": {
+          "source": "URI Path",
+          "message": "Percorso URI"
+        },
+        "app.VGF2aWx5.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.short_desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain '{name}' placeholders that are replaced from 'path_vars'. Example: '/users/{id}/comments'",
+          "message": "Il percorso URI relativo all'URL di base dell'API della connessione. Può contenere segnaposto '{name}' che vengono sostituiti da 'path_vars'. Esempio: '/users/{id}/comments'"
+        },
+        "app.VGF2aWx5.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.desc": {
+          "source": "Hash of values substituted into `{name}` placeholders in the URI path. Example: with `path = /users/{id}` and `path_vars = {id: 123}` the framework sends `/users/123`. Values are URL-encoded.",
+          "message": "Hash dei valori sostituiti nei segnaposto `{name}` nel percorso URI. Esempio: con `path = /users/{id}` e `path_vars = {id: 123}` il framework invia `/users/123`. I valori sono codificati in URL."
+        },
+        "app.VGF2aWx5.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.display_name": {
+          "source": "Path Variables",
+          "message": "Variabili del percorso"
+        },
+        "app.VGF2aWx5.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.short_desc": {
+          "source": "Values for {name} placeholders in path",
+          "message": "Valori per i segnaposto {name} nel percorso"
+        },
+        "app.VGF2aWx5.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.desc": {
+          "source": "Hash of query string parameters to append to the URI path. Values are URL-encoded; list values are joined with `,`.",
+          "message": "Hash dei parametri della stringa di query da aggiungere al percorso URI. I valori sono codificati in URL; i valori dell'elenco sono uniti con `,`."
+        },
+        "app.VGF2aWx5.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.display_name": {
+          "source": "Query Arguments",
+          "message": "Argomenti della query"
+        },
+        "app.VGF2aWx5.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.short_desc": {
+          "source": "Query string parameters",
+          "message": "Parametri della stringa di query"
+        },
+        "app.VGF2aWx5.action.bWFrZS1hcGktY2FsbA.short_desc": {
+          "source": "Make a custom API call to Tavily",
+          "message": "Esegui una chiamata API personalizzata a Tavily"
+        },
+        "app.VGF2aWx5.action.bWFw.desc": {
+          "source": "Enumerates URLs reachable from a seed URL via Tavily's `/map` endpoint without fetching page content.  Useful for site discovery before a targeted `/extract` or `/crawl` call.",
+          "message": "Enumera gli URL raggiungibili da un URL seed tramite l'endpoint `/map` di Tavily senza recuperare il contenuto della pagina. Utile per l'individuazione del sito prima di una chiamata mirata `/extract` o `/crawl`."
+        },
+        "app.VGF2aWx5.action.bWFw.display_name": {
+          "source": "Map Site URLs",
+          "message": "Mappa URL del sito"
+        },
+        "app.VGF2aWx5.action.bWFw.option.ZXhjbHVkZV9wYXRocw.desc": {
+          "source": "List of URL path patterns to exclude.",
+          "message": "Elenco di pattern di percorsi URL da escludere."
+        },
+        "app.VGF2aWx5.action.bWFw.option.ZXhjbHVkZV9wYXRocw.display_name": {
+          "source": "Exclude Paths",
+          "message": "Escludi percorsi"
+        },
+        "app.VGF2aWx5.action.bWFw.option.ZXhjbHVkZV9wYXRocw.short_desc": {
+          "source": "URL path patterns to exclude",
+          "message": "Pattern di percorsi URL da escludere"
+        },
+        "app.VGF2aWx5.action.bWFw.option.aW5zdHJ1Y3Rpb25z.desc": {
+          "source": "Optional natural-language hints.",
+          "message": "Suggerimenti opzionali in linguaggio naturale."
+        },
+        "app.VGF2aWx5.action.bWFw.option.aW5zdHJ1Y3Rpb25z.display_name": {
+          "source": "Instructions",
+          "message": "Istruzioni"
+        },
+        "app.VGF2aWx5.action.bWFw.option.aW5zdHJ1Y3Rpb25z.short_desc": {
+          "source": "Natural-language instructions for the mapper",
+          "message": "Istruzioni in linguaggio naturale per il mappatore"
+        },
+        "app.VGF2aWx5.action.bWFw.option.bGltaXQ.desc": {
+          "source": "Maximum total URLs to enumerate.",
+          "message": "Numero massimo totale di URL da enumerare."
+        },
+        "app.VGF2aWx5.action.bWFw.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "Limite"
+        },
+        "app.VGF2aWx5.action.bWFw.option.bGltaXQ.short_desc": {
+          "source": "Overall URL limit",
+          "message": "Limite complessivo di URL"
+        },
+        "app.VGF2aWx5.action.bWFw.option.bWF4X2JyZWFkdGg.desc": {
+          "source": "Maximum links per page.",
+          "message": "Numero massimo di link per pagina."
+        },
+        "app.VGF2aWx5.action.bWFw.option.bWF4X2JyZWFkdGg.display_name": {
+          "source": "Max Breadth",
+          "message": "Ampiezza massima"
+        },
+        "app.VGF2aWx5.action.bWFw.option.bWF4X2JyZWFkdGg.short_desc": {
+          "source": "Maximum links to follow per page",
+          "message": "Numero massimo di link da seguire per pagina"
+        },
+        "app.VGF2aWx5.action.bWFw.option.bWF4X2RlcHRo.desc": {
+          "source": "Maximum link-graph depth.",
+          "message": "Profondità massima del grafo dei link."
+        },
+        "app.VGF2aWx5.action.bWFw.option.bWF4X2RlcHRo.display_name": {
+          "source": "Max Depth",
+          "message": "Profondità massima"
+        },
+        "app.VGF2aWx5.action.bWFw.option.bWF4X2RlcHRo.short_desc": {
+          "source": "Maximum link-graph depth",
+          "message": "Profondità massima del grafo dei link"
+        },
+        "app.VGF2aWx5.action.bWFw.option.c2VsZWN0X3BhdGhz.desc": {
+          "source": "List of URL path patterns to include.",
+          "message": "Elenco di pattern di percorsi URL da includere."
+        },
+        "app.VGF2aWx5.action.bWFw.option.c2VsZWN0X3BhdGhz.display_name": {
+          "source": "Select Paths",
+          "message": "Seleziona percorsi"
+        },
+        "app.VGF2aWx5.action.bWFw.option.c2VsZWN0X3BhdGhz.short_desc": {
+          "source": "URL path patterns to include",
+          "message": "Pattern di percorsi URL da includere"
+        },
+        "app.VGF2aWx5.action.bWFw.option.dXJs.desc": {
+          "source": "Seed URL.",
+          "message": "URL di origine."
+        },
+        "app.VGF2aWx5.action.bWFw.option.dXJs.display_name": {
+          "source": "Seed URL",
+          "message": "URL di origine"
+        },
+        "app.VGF2aWx5.action.bWFw.option.dXJs.short_desc": {
+          "source": "URL to start the URL map from",
+          "message": "URL da cui avviare la mappa degli URL"
+        },
+        "app.VGF2aWx5.action.bWFw.short_desc": {
+          "source": "Enumerate URLs reachable from a seed URL",
+          "message": "Enumera gli URL raggiungibili da un URL seed"
+        },
+        "app.VGF2aWx5.action.c2VhcmNo.desc": {
+          "source": "Performs a real-time web search via Tavily's `/search` endpoint and returns ranked results with title, url, content snippet, and relevance score.  Optionally includes an AI-summarized answer over the top results.",
+          "message": "Esegue una ricerca web in tempo reale tramite l'endpoint `/search` di Tavily e restituisce risultati classificati con titolo, URL, snippet di contenuto e punteggio di pertinenza. Facoltativamente include una risposta riassunta tramite IA sui risultati principali."
+        },
+        "app.VGF2aWx5.action.c2VhcmNo.display_name": {
+          "source": "Web Search",
+          "message": "Ricerca Web"
+        },
+        "app.VGF2aWx5.action.c2VhcmNo.option.ZGF5cw.desc": {
+          "source": "For `topic: news`, restrict results to the last N days.",
+          "message": "Per `topic: news`, limita i risultati agli ultimi N giorni."
+        },
+        "app.VGF2aWx5.action.c2VhcmNo.option.ZGF5cw.display_name": {
+          "source": "Days (news topic)",
+          "message": "Giorni (argomento notizie)"
+        },
+        "app.VGF2aWx5.action.c2VhcmNo.option.ZGF5cw.short_desc": {
+          "source": "Restrict 'news' searches to the last N days",
+          "message": "Limita le ricerche 'news' agli ultimi N giorni"
+        },
+        "app.VGF2aWx5.action.c2VhcmNo.option.ZXhjbHVkZV9kb21haW5z.desc": {
+          "source": "List of domains to exclude.",
+          "message": "Elenco di domini da escludere."
+        },
+        "app.VGF2aWx5.action.c2VhcmNo.option.ZXhjbHVkZV9kb21haW5z.display_name": {
+          "source": "Exclude Domains",
+          "message": "Escludi domini"
+        },
+        "app.VGF2aWx5.action.c2VhcmNo.option.ZXhjbHVkZV9kb21haW5z.short_desc": {
+          "source": "Exclude specific domains from results",
+          "message": "Escludi domini specifici dai risultati"
+        },
+        "app.VGF2aWx5.action.c2VhcmNo.option.aW5jbHVkZV9hbnN3ZXI.desc": {
+          "source": "When `True`, Tavily generates an AI-summarized answer over the top results and includes it in the response under the `answer` field.",
+          "message": "Quando è `True`, Tavily genera una risposta riassunta tramite IA sui risultati principali e la include nella risposta sotto il campo `answer`."
+        },
+        "app.VGF2aWx5.action.c2VhcmNo.option.aW5jbHVkZV9hbnN3ZXI.display_name": {
+          "source": "Include Answer",
+          "message": "Includi risposta"
+        },
+        "app.VGF2aWx5.action.c2VhcmNo.option.aW5jbHVkZV9hbnN3ZXI.short_desc": {
+          "source": "AI-summarize the top results into a single answer",
+          "message": "Riassumi tramite IA i risultati principali in una singola risposta"
+        },
+        "app.VGF2aWx5.action.c2VhcmNo.option.aW5jbHVkZV9kb21haW5z.desc": {
+          "source": "List of domains to restrict the search to (e.g. `(\"docs.qore.org\",)`).",
+          "message": "Elenco di domini a cui limitare la ricerca (ad es. `(\"docs.qore.org\",)`)."
+        },
+        "app.VGF2aWx5.action.c2VhcmNo.option.aW5jbHVkZV9kb21haW5z.display_name": {
+          "source": "Include Domains",
+          "message": "Includi domini"
+        },
+        "app.VGF2aWx5.action.c2VhcmNo.option.aW5jbHVkZV9kb21haW5z.short_desc": {
+          "source": "Restrict search to specific domains",
+          "message": "Limita la ricerca a domini specifici"
+        },
+        "app.VGF2aWx5.action.c2VhcmNo.option.aW5jbHVkZV9pbWFnZXM.desc": {
+          "source": "When `True`, response includes a list of image URLs.",
+          "message": "Quando è `True`, la risposta include un elenco di URL di immagini."
+        },
+        "app.VGF2aWx5.action.c2VhcmNo.option.aW5jbHVkZV9pbWFnZXM.display_name": {
+          "source": "Include Images",
+          "message": "Includi immagini"
+        },
+        "app.VGF2aWx5.action.c2VhcmNo.option.aW5jbHVkZV9pbWFnZXM.short_desc": {
+          "source": "Return image URLs alongside text results",
+          "message": "Restituisci gli URL delle immagini insieme ai risultati di testo"
+        },
+        "app.VGF2aWx5.action.c2VhcmNo.option.aW5jbHVkZV9yYXdfY29udGVudA.desc": {
+          "source": "When `True`, each result includes `raw_content` with the full scraped HTML/text.  Larger response, useful for downstream parsing.",
+          "message": "Quando è `True`, ciascun risultato include `raw_content` con l'HTML/testo completo estratto. Risposta più grande, utile per il parsing a valle."
+        },
+        "app.VGF2aWx5.action.c2VhcmNo.option.aW5jbHVkZV9yYXdfY29udGVudA.display_name": {
+          "source": "Include Raw Content",
+          "message": "Includi contenuto non elaborato"
+        },
+        "app.VGF2aWx5.action.c2VhcmNo.option.aW5jbHVkZV9yYXdfY29udGVudA.short_desc": {
+          "source": "Include raw scraped HTML in each result",
+          "message": "Includi l'HTML grezzo estratto in ciascun risultato"
+        },
+        "app.VGF2aWx5.action.c2VhcmNo.option.bWF4X3Jlc3VsdHM.desc": {
+          "source": "Maximum number of results to return.  Range 1-20.  Default 5.",
+          "message": "Numero massimo di risultati da restituire. Intervallo 1-20. Predefinito 5."
+        },
+        "app.VGF2aWx5.action.c2VhcmNo.option.bWF4X3Jlc3VsdHM.display_name": {
+          "source": "Max Results",
+          "message": "Risultati massimi"
+        },
+        "app.VGF2aWx5.action.c2VhcmNo.option.bWF4X3Jlc3VsdHM.short_desc": {
+          "source": "Maximum number of search results (1-20)",
+          "message": "Numero massimo di risultati di ricerca (1-20)"
+        },
+        "app.VGF2aWx5.action.c2VhcmNo.option.c2VhcmNoX2RlcHRo.allowed-value.c3RyaW5nOmFkdmFuY2Vk.display_name": {
+          "source": "Advanced",
+          "message": "Avanzato"
+        },
+        "app.VGF2aWx5.action.c2VhcmNo.option.c2VhcmNoX2RlcHRo.allowed-value.c3RyaW5nOmJhc2lj.display_name": {
+          "source": "Basic",
+          "message": "Base"
+        },
+        "app.VGF2aWx5.action.c2VhcmNo.option.c2VhcmNoX2RlcHRo.desc": {
+          "source": "Search depth.  `basic` returns faster, `advanced` does more iterative refinement at higher cost.",
+          "message": "Profondità di ricerca. `basic` è più veloce, `advanced` esegue un perfezionamento più iterativo a un costo maggiore."
+        },
+        "app.VGF2aWx5.action.c2VhcmNo.option.c2VhcmNoX2RlcHRo.display_name": {
+          "source": "Search Depth",
+          "message": "Profondità di ricerca"
+        },
+        "app.VGF2aWx5.action.c2VhcmNo.option.c2VhcmNoX2RlcHRo.short_desc": {
+          "source": "Search depth: 'basic' (fast) or 'advanced' (higher recall)",
+          "message": "Profondità di ricerca: 'basic' (veloce) o 'advanced' (recupero maggiore)"
+        },
+        "app.VGF2aWx5.action.c2VhcmNo.option.cXVlcnk.desc": {
+          "source": "Natural-language search query — what the agent wants to find on the web.",
+          "message": "Query di ricerca in linguaggio naturale — cosa desidera trovare l'agente sul web."
+        },
+        "app.VGF2aWx5.action.c2VhcmNo.option.cXVlcnk.display_name": {
+          "source": "Query",
+          "message": "Query"
+        },
+        "app.VGF2aWx5.action.c2VhcmNo.option.cXVlcnk.short_desc": {
+          "source": "Natural-language search query",
+          "message": "Query di ricerca in linguaggio naturale"
+        },
+        "app.VGF2aWx5.action.c2VhcmNo.option.dG9waWM.allowed-value.c3RyaW5nOm5ld3M.display_name": {
+          "source": "News",
+          "message": "Notizie"
+        },
+        "app.VGF2aWx5.action.c2VhcmNo.option.dG9waWM.allowed-value.c3RyaW5nOmdlbmVyYWw.display_name": {
+          "source": "General",
+          "message": "Generale"
+        },
+        "app.VGF2aWx5.action.c2VhcmNo.option.dG9waWM.desc": {
+          "source": "Topic-aware search.  `news` biases toward recent news sources.",
+          "message": "Ricerca sensibile all'argomento. `news` privilegia le fonti di notizie recenti."
+        },
+        "app.VGF2aWx5.action.c2VhcmNo.option.dG9waWM.display_name": {
+          "source": "Topic",
+          "message": "Topic"
+        },
+        "app.VGF2aWx5.action.c2VhcmNo.option.dG9waWM.short_desc": {
+          "source": "Search topic: 'general' or 'news'",
+          "message": "Argomento di ricerca: 'general' o 'news'"
+        },
+        "app.VGF2aWx5.action.c2VhcmNo.short_desc": {
+          "source": "Search the web via Tavily",
+          "message": "Cerca sul web tramite Tavily"
+        },
+        "app.VGF2aWx5.desc": {
+          "source": "Provides access to [Tavily](https://www.tavily.com) — the agentic web-search API used by AI agents to retrieve real-time information.\n\n**Common use cases**:\n- **Agent tools**: register `tavily_search` / `tavily_extract` as tools an LLM can invoke (see @ref tavilyrestclientintro \"TavilyRestClient\" docs)\n- **RAG ingestion**: fetch fresh sources before embedding\n- **Background research** in workflows: get current information about products, competitors, news, regulations",
+          "message": "Fornisce accesso a [Tavily](https://www.tavily.com) — l'API di ricerca web agentica utilizzata dagli agenti di IA per recuperare informazioni in tempo reale.\n\n**Casi d'uso comuni**:\n- **Strumenti agente**: registra `tavily_search` / `tavily_extract` come strumenti che un LLM può invocare (vedi la documentazione @ref tavilyrestclientintro \"TavilyRestClient\")\n- **Ingestione RAG**: recupera fonti aggiornate prima dell'embedding\n- **Ricerca di contesto** nei flussi di lavoro: ottieni informazioni aggiornate su prodotti, concorrenti, notizie, normative"
+        },
+        "app.VGF2aWx5.display_name": {
+          "source": "Tavily",
+          "message": "Tavily"
+        },
+        "app.VGF2aWx5.short_desc": {
+          "source": "Tavily real-time web search for AI agents",
+          "message": "Ricerca web in tempo reale di Tavily per agenti di IA"
+        }
+      }
+    }
+  }
+}

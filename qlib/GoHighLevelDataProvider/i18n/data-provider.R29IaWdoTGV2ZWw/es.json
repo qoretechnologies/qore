@@ -1,0 +1,1753 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "es": {
+      "messages": {
+        "app.R29IaWdoTGV2ZWw.action.Y3JlYXRlLW9wcG9ydHVuaXR5.desc": {
+          "source": "Create a new opportunity in GoHighLevel",
+          "message": "Crear una nueva oportunidad en GoHighLevel"
+        },
+        "app.R29IaWdoTGV2ZWw.action.Y3JlYXRlLW9wcG9ydHVuaXR5.display_name": {
+          "source": "Create an Opportunity",
+          "message": "Crear una oportunidad"
+        },
+        "app.R29IaWdoTGV2ZWw.action.Y3JlYXRlLW9wcG9ydHVuaXR5.option.Y29udGFjdElk.desc": {
+          "source": "The ID of the contact for this opportunity",
+          "message": "El ID del contacto para esta oportunidad"
+        },
+        "app.R29IaWdoTGV2ZWw.action.Y3JlYXRlLW9wcG9ydHVuaXR5.option.Y29udGFjdElk.display_name": {
+          "source": "Contact ID",
+          "message": "ID de contacto"
+        },
+        "app.R29IaWdoTGV2ZWw.action.Y3JlYXRlLW9wcG9ydHVuaXR5.option.Y29udGFjdElk.short_desc": {
+          "source": "The contact",
+          "message": "El contacto"
+        },
+        "app.R29IaWdoTGV2ZWw.action.Y3JlYXRlLW9wcG9ydHVuaXR5.option.YXNzaWduZWRUbw.desc": {
+          "source": "User ID to assign the opportunity to",
+          "message": "ID de usuario al que asignar la oportunidad"
+        },
+        "app.R29IaWdoTGV2ZWw.action.Y3JlYXRlLW9wcG9ydHVuaXR5.option.YXNzaWduZWRUbw.display_name": {
+          "source": "Assigned To",
+          "message": "Asignado a"
+        },
+        "app.R29IaWdoTGV2ZWw.action.Y3JlYXRlLW9wcG9ydHVuaXR5.option.YXNzaWduZWRUbw.short_desc": {
+          "source": "Assigned user",
+          "message": "Usuario asignado"
+        },
+        "app.R29IaWdoTGV2ZWw.action.Y3JlYXRlLW9wcG9ydHVuaXR5.option.bW9uZXRhcnlWYWx1ZQ.desc": {
+          "source": "Monetary value of the opportunity",
+          "message": "Valor monetario de la oportunidad"
+        },
+        "app.R29IaWdoTGV2ZWw.action.Y3JlYXRlLW9wcG9ydHVuaXR5.option.bW9uZXRhcnlWYWx1ZQ.display_name": {
+          "source": "Monetary Value",
+          "message": "Valor monetario"
+        },
+        "app.R29IaWdoTGV2ZWw.action.Y3JlYXRlLW9wcG9ydHVuaXR5.option.bW9uZXRhcnlWYWx1ZQ.short_desc": {
+          "source": "Deal value",
+          "message": "Valor del trato"
+        },
+        "app.R29IaWdoTGV2ZWw.action.Y3JlYXRlLW9wcG9ydHVuaXR5.option.bmFtZQ.desc": {
+          "source": "Name of the opportunity",
+          "message": "Nombre de la oportunidad"
+        },
+        "app.R29IaWdoTGV2ZWw.action.Y3JlYXRlLW9wcG9ydHVuaXR5.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "Nombre"
+        },
+        "app.R29IaWdoTGV2ZWw.action.Y3JlYXRlLW9wcG9ydHVuaXR5.option.bmFtZQ.short_desc": {
+          "source": "Opportunity name",
+          "message": "Nombre de la oportunidad"
+        },
+        "app.R29IaWdoTGV2ZWw.action.Y3JlYXRlLW9wcG9ydHVuaXR5.option.c3RhdHVz.allowed-value.c3RyaW5nOm9wZW4.display_name": {
+          "source": "Open",
+          "message": "Abierta"
+        },
+        "app.R29IaWdoTGV2ZWw.action.Y3JlYXRlLW9wcG9ydHVuaXR5.option.c3RhdHVz.allowed-value.c3RyaW5nOmFiYW5kb25lZA.display_name": {
+          "source": "Abandoned",
+          "message": "Abandonada"
+        },
+        "app.R29IaWdoTGV2ZWw.action.Y3JlYXRlLW9wcG9ydHVuaXR5.option.c3RhdHVz.allowed-value.c3RyaW5nOmxvc3Q.display_name": {
+          "source": "Lost",
+          "message": "Perdida"
+        },
+        "app.R29IaWdoTGV2ZWw.action.Y3JlYXRlLW9wcG9ydHVuaXR5.option.c3RhdHVz.allowed-value.c3RyaW5nOndvbg.display_name": {
+          "source": "Won",
+          "message": "Ganada"
+        },
+        "app.R29IaWdoTGV2ZWw.action.Y3JlYXRlLW9wcG9ydHVuaXR5.option.c3RhdHVz.desc": {
+          "source": "Status of the opportunity",
+          "message": "Estado de la oportunidad"
+        },
+        "app.R29IaWdoTGV2ZWw.action.Y3JlYXRlLW9wcG9ydHVuaXR5.option.c3RhdHVz.display_name": {
+          "source": "Status",
+          "message": "Estado"
+        },
+        "app.R29IaWdoTGV2ZWw.action.Y3JlYXRlLW9wcG9ydHVuaXR5.option.c3RhdHVz.short_desc": {
+          "source": "Opportunity status",
+          "message": "Estado de la oportunidad"
+        },
+        "app.R29IaWdoTGV2ZWw.action.Y3JlYXRlLW9wcG9ydHVuaXR5.option.cGlwZWxpbmVJZA.desc": {
+          "source": "The ID of the pipeline for this opportunity",
+          "message": "El ID del pipeline para esta oportunidad"
+        },
+        "app.R29IaWdoTGV2ZWw.action.Y3JlYXRlLW9wcG9ydHVuaXR5.option.cGlwZWxpbmVJZA.display_name": {
+          "source": "Pipeline ID",
+          "message": "ID del pipeline"
+        },
+        "app.R29IaWdoTGV2ZWw.action.Y3JlYXRlLW9wcG9ydHVuaXR5.option.cGlwZWxpbmVJZA.short_desc": {
+          "source": "The pipeline",
+          "message": "El pipeline"
+        },
+        "app.R29IaWdoTGV2ZWw.action.Y3JlYXRlLW9wcG9ydHVuaXR5.option.cGlwZWxpbmVTdGFnZUlk.desc": {
+          "source": "The ID of the pipeline stage",
+          "message": "El ID de la etapa del pipeline"
+        },
+        "app.R29IaWdoTGV2ZWw.action.Y3JlYXRlLW9wcG9ydHVuaXR5.option.cGlwZWxpbmVTdGFnZUlk.display_name": {
+          "source": "Pipeline Stage ID",
+          "message": "ID de etapa del pipeline"
+        },
+        "app.R29IaWdoTGV2ZWw.action.Y3JlYXRlLW9wcG9ydHVuaXR5.option.cGlwZWxpbmVTdGFnZUlk.short_desc": {
+          "source": "Pipeline stage",
+          "message": "Etapa del pipeline"
+        },
+        "app.R29IaWdoTGV2ZWw.action.Y3JlYXRlLW9wcG9ydHVuaXR5.short_desc": {
+          "source": "Create a new opportunity",
+          "message": "Crear una nueva oportunidad"
+        },
+        "app.R29IaWdoTGV2ZWw.action.Y3JlYXRlLWNvbnRhY3Q.desc": {
+          "source": "Create a new contact in GoHighLevel",
+          "message": "Crear un nuevo contacto en GoHighLevel"
+        },
+        "app.R29IaWdoTGV2ZWw.action.Y3JlYXRlLWNvbnRhY3Q.display_name": {
+          "source": "Create a Contact",
+          "message": "Crear un contacto"
+        },
+        "app.R29IaWdoTGV2ZWw.action.Y3JlYXRlLWNvbnRhY3Q.option.Y291bnRyeQ.desc": {
+          "source": "Country of the contact",
+          "message": "País del contacto"
+        },
+        "app.R29IaWdoTGV2ZWw.action.Y3JlYXRlLWNvbnRhY3Q.option.Y291bnRyeQ.display_name": {
+          "source": "Country",
+          "message": "País"
+        },
+        "app.R29IaWdoTGV2ZWw.action.Y3JlYXRlLWNvbnRhY3Q.option.Y291bnRyeQ.short_desc": {
+          "source": "Country",
+          "message": "País"
+        },
+        "app.R29IaWdoTGV2ZWw.action.Y3JlYXRlLWNvbnRhY3Q.option.Y29tcGFueU5hbWU.desc": {
+          "source": "Company name of the contact",
+          "message": "Nombre de la empresa del contacto"
+        },
+        "app.R29IaWdoTGV2ZWw.action.Y3JlYXRlLWNvbnRhY3Q.option.Y29tcGFueU5hbWU.display_name": {
+          "source": "Company Name",
+          "message": "Nombre de la empresa"
+        },
+        "app.R29IaWdoTGV2ZWw.action.Y3JlYXRlLWNvbnRhY3Q.option.Y29tcGFueU5hbWU.short_desc": {
+          "source": "Company name",
+          "message": "Nombre de la empresa"
+        },
+        "app.R29IaWdoTGV2ZWw.action.Y3JlYXRlLWNvbnRhY3Q.option.Y2l0eQ.desc": {
+          "source": "City of the contact",
+          "message": "Ciudad del contacto"
+        },
+        "app.R29IaWdoTGV2ZWw.action.Y3JlYXRlLWNvbnRhY3Q.option.Y2l0eQ.display_name": {
+          "source": "City",
+          "message": "Ciudad"
+        },
+        "app.R29IaWdoTGV2ZWw.action.Y3JlYXRlLWNvbnRhY3Q.option.Y2l0eQ.short_desc": {
+          "source": "City",
+          "message": "Ciudad"
+        },
+        "app.R29IaWdoTGV2ZWw.action.Y3JlYXRlLWNvbnRhY3Q.option.Y3VzdG9tRmllbGRz.desc": {
+          "source": "Custom field values for the contact; each entry has an `id` (custom field ID) and `field_value`",
+          "message": "Valores de campos personalizados para el contacto; cada entrada tiene un `id` (ID del campo personalizado) y `field_value`"
+        },
+        "app.R29IaWdoTGV2ZWw.action.Y3JlYXRlLWNvbnRhY3Q.option.Y3VzdG9tRmllbGRz.display_name": {
+          "source": "Custom Fields",
+          "message": "Campos personalizados"
+        },
+        "app.R29IaWdoTGV2ZWw.action.Y3JlYXRlLWNvbnRhY3Q.option.Y3VzdG9tRmllbGRz.short_desc": {
+          "source": "Custom field values for the contact",
+          "message": "Valores de campos personalizados para el contacto"
+        },
+        "app.R29IaWdoTGV2ZWw.action.Y3JlYXRlLWNvbnRhY3Q.option.YWRkcmVzczE.desc": {
+          "source": "Street address of the contact",
+          "message": "Dirección del contacto"
+        },
+        "app.R29IaWdoTGV2ZWw.action.Y3JlYXRlLWNvbnRhY3Q.option.YWRkcmVzczE.display_name": {
+          "source": "Address",
+          "message": "Dirección"
+        },
+        "app.R29IaWdoTGV2ZWw.action.Y3JlYXRlLWNvbnRhY3Q.option.YWRkcmVzczE.short_desc": {
+          "source": "Street address",
+          "message": "Dirección"
+        },
+        "app.R29IaWdoTGV2ZWw.action.Y3JlYXRlLWNvbnRhY3Q.option.YXNzaWduZWRUbw.desc": {
+          "source": "User ID to assign the contact to",
+          "message": "ID de usuario al que asignar el contacto"
+        },
+        "app.R29IaWdoTGV2ZWw.action.Y3JlYXRlLWNvbnRhY3Q.option.YXNzaWduZWRUbw.display_name": {
+          "source": "Assigned To",
+          "message": "Asignado a"
+        },
+        "app.R29IaWdoTGV2ZWw.action.Y3JlYXRlLWNvbnRhY3Q.option.YXNzaWduZWRUbw.short_desc": {
+          "source": "Assigned user",
+          "message": "Usuario asignado"
+        },
+        "app.R29IaWdoTGV2ZWw.action.Y3JlYXRlLWNvbnRhY3Q.option.ZG5k.desc": {
+          "source": "Whether the contact is on Do Not Disturb (`True` or `False`)",
+          "message": "Indica si el contacto está en No molestar (`True` o `False`)"
+        },
+        "app.R29IaWdoTGV2ZWw.action.Y3JlYXRlLWNvbnRhY3Q.option.ZG5k.display_name": {
+          "source": "Do Not Disturb",
+          "message": "No molestar"
+        },
+        "app.R29IaWdoTGV2ZWw.action.Y3JlYXRlLWNvbnRhY3Q.option.ZG5k.short_desc": {
+          "source": "DND status",
+          "message": "Estado de DND"
+        },
+        "app.R29IaWdoTGV2ZWw.action.Y3JlYXRlLWNvbnRhY3Q.option.ZW1haWw.desc": {
+          "source": "Email address of the contact",
+          "message": "Dirección de correo electrónico del contacto"
+        },
+        "app.R29IaWdoTGV2ZWw.action.Y3JlYXRlLWNvbnRhY3Q.option.ZW1haWw.display_name": {
+          "source": "Email",
+          "message": "Correo electrónico"
+        },
+        "app.R29IaWdoTGV2ZWw.action.Y3JlYXRlLWNvbnRhY3Q.option.ZW1haWw.short_desc": {
+          "source": "Contact email",
+          "message": "Correo electrónico del contacto"
+        },
+        "app.R29IaWdoTGV2ZWw.action.Y3JlYXRlLWNvbnRhY3Q.option.Zmlyc3ROYW1l.desc": {
+          "source": "First name of the contact",
+          "message": "Nombre del contacto"
+        },
+        "app.R29IaWdoTGV2ZWw.action.Y3JlYXRlLWNvbnRhY3Q.option.Zmlyc3ROYW1l.display_name": {
+          "source": "First Name",
+          "message": "Nombre"
+        },
+        "app.R29IaWdoTGV2ZWw.action.Y3JlYXRlLWNvbnRhY3Q.option.Zmlyc3ROYW1l.short_desc": {
+          "source": "Contact first name",
+          "message": "Nombre del contacto"
+        },
+        "app.R29IaWdoTGV2ZWw.action.Y3JlYXRlLWNvbnRhY3Q.option.bGFzdE5hbWU.desc": {
+          "source": "Last name of the contact",
+          "message": "Apellido del contacto"
+        },
+        "app.R29IaWdoTGV2ZWw.action.Y3JlYXRlLWNvbnRhY3Q.option.bGFzdE5hbWU.display_name": {
+          "source": "Last Name",
+          "message": "Apellido"
+        },
+        "app.R29IaWdoTGV2ZWw.action.Y3JlYXRlLWNvbnRhY3Q.option.bGFzdE5hbWU.short_desc": {
+          "source": "Contact last name",
+          "message": "Apellido del contacto"
+        },
+        "app.R29IaWdoTGV2ZWw.action.Y3JlYXRlLWNvbnRhY3Q.option.bmFtZQ.desc": {
+          "source": "Full name of the contact",
+          "message": "Nombre completo del contacto"
+        },
+        "app.R29IaWdoTGV2ZWw.action.Y3JlYXRlLWNvbnRhY3Q.option.bmFtZQ.display_name": {
+          "source": "Full Name",
+          "message": "Nombre completo"
+        },
+        "app.R29IaWdoTGV2ZWw.action.Y3JlYXRlLWNvbnRhY3Q.option.bmFtZQ.short_desc": {
+          "source": "Contact full name",
+          "message": "Nombre completo del contacto"
+        },
+        "app.R29IaWdoTGV2ZWw.action.Y3JlYXRlLWNvbnRhY3Q.option.c291cmNl.desc": {
+          "source": "Source of the contact (e.g. `website`, `referral`)",
+          "message": "Origen del contacto (p. ej. `website`, `referral`)"
+        },
+        "app.R29IaWdoTGV2ZWw.action.Y3JlYXRlLWNvbnRhY3Q.option.c291cmNl.display_name": {
+          "source": "Source",
+          "message": "Origen"
+        },
+        "app.R29IaWdoTGV2ZWw.action.Y3JlYXRlLWNvbnRhY3Q.option.c291cmNl.short_desc": {
+          "source": "Lead source",
+          "message": "Origen del cliente potencial"
+        },
+        "app.R29IaWdoTGV2ZWw.action.Y3JlYXRlLWNvbnRhY3Q.option.c3RhdGU.desc": {
+          "source": "State or province of the contact",
+          "message": "Estado o provincia del contacto"
+        },
+        "app.R29IaWdoTGV2ZWw.action.Y3JlYXRlLWNvbnRhY3Q.option.c3RhdGU.display_name": {
+          "source": "State",
+          "message": "Estado"
+        },
+        "app.R29IaWdoTGV2ZWw.action.Y3JlYXRlLWNvbnRhY3Q.option.c3RhdGU.short_desc": {
+          "source": "State or province",
+          "message": "Estado o provincia"
+        },
+        "app.R29IaWdoTGV2ZWw.action.Y3JlYXRlLWNvbnRhY3Q.option.cG9zdGFsQ29kZQ.desc": {
+          "source": "Postal or ZIP code of the contact",
+          "message": "Código postal del contacto"
+        },
+        "app.R29IaWdoTGV2ZWw.action.Y3JlYXRlLWNvbnRhY3Q.option.cG9zdGFsQ29kZQ.display_name": {
+          "source": "Postal Code",
+          "message": "Código postal"
+        },
+        "app.R29IaWdoTGV2ZWw.action.Y3JlYXRlLWNvbnRhY3Q.option.cG9zdGFsQ29kZQ.short_desc": {
+          "source": "Postal/ZIP code",
+          "message": "Código postal"
+        },
+        "app.R29IaWdoTGV2ZWw.action.Y3JlYXRlLWNvbnRhY3Q.option.cGhvbmU.desc": {
+          "source": "Phone number of the contact",
+          "message": "Número de teléfono del contacto"
+        },
+        "app.R29IaWdoTGV2ZWw.action.Y3JlYXRlLWNvbnRhY3Q.option.cGhvbmU.display_name": {
+          "source": "Phone",
+          "message": "Teléfono"
+        },
+        "app.R29IaWdoTGV2ZWw.action.Y3JlYXRlLWNvbnRhY3Q.option.cGhvbmU.short_desc": {
+          "source": "Phone number",
+          "message": "Número de teléfono"
+        },
+        "app.R29IaWdoTGV2ZWw.action.Y3JlYXRlLWNvbnRhY3Q.option.d2Vic2l0ZQ.desc": {
+          "source": "Website URL of the contact",
+          "message": "URL del sitio web del contacto"
+        },
+        "app.R29IaWdoTGV2ZWw.action.Y3JlYXRlLWNvbnRhY3Q.option.d2Vic2l0ZQ.display_name": {
+          "source": "Website",
+          "message": "Sitio web"
+        },
+        "app.R29IaWdoTGV2ZWw.action.Y3JlYXRlLWNvbnRhY3Q.option.d2Vic2l0ZQ.short_desc": {
+          "source": "Website URL",
+          "message": "URL del sitio web"
+        },
+        "app.R29IaWdoTGV2ZWw.action.Y3JlYXRlLWNvbnRhY3Q.option.dGFncw.desc": {
+          "source": "List of tags to assign to the contact",
+          "message": "Lista de etiquetas para asignar al contacto"
+        },
+        "app.R29IaWdoTGV2ZWw.action.Y3JlYXRlLWNvbnRhY3Q.option.dGFncw.display_name": {
+          "source": "Tags",
+          "message": "Etiquetas"
+        },
+        "app.R29IaWdoTGV2ZWw.action.Y3JlYXRlLWNvbnRhY3Q.option.dGFncw.short_desc": {
+          "source": "Contact tags",
+          "message": "Etiquetas del contacto"
+        },
+        "app.R29IaWdoTGV2ZWw.action.Y3JlYXRlLWNvbnRhY3Q.option.dGltZXpvbmU.desc": {
+          "source": "Timezone of the contact (e.g. `America/New_York`)",
+          "message": "Zona horaria del contacto (p. ej. `America/New_York`)"
+        },
+        "app.R29IaWdoTGV2ZWw.action.Y3JlYXRlLWNvbnRhY3Q.option.dGltZXpvbmU.display_name": {
+          "source": "Timezone",
+          "message": "Zona horaria"
+        },
+        "app.R29IaWdoTGV2ZWw.action.Y3JlYXRlLWNvbnRhY3Q.option.dGltZXpvbmU.short_desc": {
+          "source": "Timezone",
+          "message": "Zona horaria"
+        },
+        "app.R29IaWdoTGV2ZWw.action.Y3JlYXRlLWNvbnRhY3Q.short_desc": {
+          "source": "Create a new contact",
+          "message": "Crear un nuevo contacto"
+        },
+        "app.R29IaWdoTGV2ZWw.action.Y3JlYXRlLXRhc2s.desc": {
+          "source": "Create a new task for a contact in GoHighLevel",
+          "message": "Crear una nueva tarea para un contacto en GoHighLevel"
+        },
+        "app.R29IaWdoTGV2ZWw.action.Y3JlYXRlLXRhc2s.display_name": {
+          "source": "Create a Task",
+          "message": "Crear una tarea"
+        },
+        "app.R29IaWdoTGV2ZWw.action.Y3JlYXRlLXRhc2s.option.Y29tcGxldGVk.desc": {
+          "source": "Whether the task is completed (`True` or `False`)",
+          "message": "Indica si la tarea está completada (`True` o `False`)"
+        },
+        "app.R29IaWdoTGV2ZWw.action.Y3JlYXRlLXRhc2s.option.Y29tcGxldGVk.display_name": {
+          "source": "Completed",
+          "message": "Completada"
+        },
+        "app.R29IaWdoTGV2ZWw.action.Y3JlYXRlLXRhc2s.option.Y29tcGxldGVk.short_desc": {
+          "source": "Completion status",
+          "message": "Estado de finalización"
+        },
+        "app.R29IaWdoTGV2ZWw.action.Y3JlYXRlLXRhc2s.option.Y29udGFjdF9pZA.desc": {
+          "source": "The contact ID to create the task for",
+          "message": "El ID de contacto para el cual crear la tarea"
+        },
+        "app.R29IaWdoTGV2ZWw.action.Y3JlYXRlLXRhc2s.option.Y29udGFjdF9pZA.display_name": {
+          "source": "Contact ID",
+          "message": "ID de contacto"
+        },
+        "app.R29IaWdoTGV2ZWw.action.Y3JlYXRlLXRhc2s.option.Y29udGFjdF9pZA.short_desc": {
+          "source": "The contact",
+          "message": "El contacto"
+        },
+        "app.R29IaWdoTGV2ZWw.action.Y3JlYXRlLXRhc2s.option.YXNzaWduZWRUbw.desc": {
+          "source": "User ID to assign the task to",
+          "message": "ID de usuario al que asignar la tarea"
+        },
+        "app.R29IaWdoTGV2ZWw.action.Y3JlYXRlLXRhc2s.option.YXNzaWduZWRUbw.display_name": {
+          "source": "Assigned To",
+          "message": "Asignado a"
+        },
+        "app.R29IaWdoTGV2ZWw.action.Y3JlYXRlLXRhc2s.option.YXNzaWduZWRUbw.short_desc": {
+          "source": "Assigned user",
+          "message": "Usuario asignado"
+        },
+        "app.R29IaWdoTGV2ZWw.action.Y3JlYXRlLXRhc2s.option.Ym9keQ.desc": {
+          "source": "Description or body text of the task",
+          "message": "Descripción o texto del cuerpo de la tarea"
+        },
+        "app.R29IaWdoTGV2ZWw.action.Y3JlYXRlLXRhc2s.option.Ym9keQ.display_name": {
+          "source": "Body",
+          "message": "Cuerpo"
+        },
+        "app.R29IaWdoTGV2ZWw.action.Y3JlYXRlLXRhc2s.option.Ym9keQ.short_desc": {
+          "source": "Task description",
+          "message": "Descripción de la tarea"
+        },
+        "app.R29IaWdoTGV2ZWw.action.Y3JlYXRlLXRhc2s.option.ZHVlRGF0ZQ.desc": {
+          "source": "Due date for the task (ISO 8601 format)",
+          "message": "Fecha de vencimiento de la tarea (formato ISO 8601)"
+        },
+        "app.R29IaWdoTGV2ZWw.action.Y3JlYXRlLXRhc2s.option.ZHVlRGF0ZQ.display_name": {
+          "source": "Due Date",
+          "message": "Fecha de vencimiento"
+        },
+        "app.R29IaWdoTGV2ZWw.action.Y3JlYXRlLXRhc2s.option.ZHVlRGF0ZQ.short_desc": {
+          "source": "Due date",
+          "message": "Fecha de vencimiento"
+        },
+        "app.R29IaWdoTGV2ZWw.action.Y3JlYXRlLXRhc2s.option.dGl0bGU.desc": {
+          "source": "Title of the task",
+          "message": "Título de la tarea"
+        },
+        "app.R29IaWdoTGV2ZWw.action.Y3JlYXRlLXRhc2s.option.dGl0bGU.display_name": {
+          "source": "Title",
+          "message": "Título"
+        },
+        "app.R29IaWdoTGV2ZWw.action.Y3JlYXRlLXRhc2s.option.dGl0bGU.short_desc": {
+          "source": "Task title",
+          "message": "Título de la tarea"
+        },
+        "app.R29IaWdoTGV2ZWw.action.Y3JlYXRlLXRhc2s.short_desc": {
+          "source": "Create a new task",
+          "message": "Crear una nueva tarea"
+        },
+        "app.R29IaWdoTGV2ZWw.action.YWRkLW5vdGU.desc": {
+          "source": "Add a note to a contact in GoHighLevel",
+          "message": "Añadir una nota a un contacto en GoHighLevel"
+        },
+        "app.R29IaWdoTGV2ZWw.action.YWRkLW5vdGU.display_name": {
+          "source": "Add a Note to the Contact",
+          "message": "Añadir una nota al contacto"
+        },
+        "app.R29IaWdoTGV2ZWw.action.YWRkLW5vdGU.option.Y29udGFjdF9pZA.display_name": {
+          "source": "Contact ID",
+          "message": "ID de contacto"
+        },
+        "app.R29IaWdoTGV2ZWw.action.YWRkLW5vdGU.option.Y29udGFjdF9pZA.short_desc": {
+          "source": "The contact",
+          "message": "El contacto"
+        },
+        "app.R29IaWdoTGV2ZWw.action.YWRkLW5vdGU.option.Ym9keQ.desc": {
+          "source": "The body text of the note",
+          "message": "El texto del cuerpo de la nota"
+        },
+        "app.R29IaWdoTGV2ZWw.action.YWRkLW5vdGU.option.Ym9keQ.display_name": {
+          "source": "Note Body",
+          "message": "Cuerpo de la nota"
+        },
+        "app.R29IaWdoTGV2ZWw.action.YWRkLW5vdGU.option.Ym9keQ.short_desc": {
+          "source": "Note content",
+          "message": "Contenido de la nota"
+        },
+        "app.R29IaWdoTGV2ZWw.action.YWRkLW5vdGU.option.dXNlcklk.desc": {
+          "source": "The user ID of the note author",
+          "message": "El ID de usuario del autor de la nota"
+        },
+        "app.R29IaWdoTGV2ZWw.action.YWRkLW5vdGU.option.dXNlcklk.display_name": {
+          "source": "User ID",
+          "message": "ID de usuario"
+        },
+        "app.R29IaWdoTGV2ZWw.action.YWRkLW5vdGU.option.dXNlcklk.short_desc": {
+          "source": "Note author",
+          "message": "Autor de la nota"
+        },
+        "app.R29IaWdoTGV2ZWw.action.YWRkLW5vdGU.short_desc": {
+          "source": "Add a note to a contact",
+          "message": "Añadir una nota a un contacto"
+        },
+        "app.R29IaWdoTGV2ZWw.action.YWRkLWNvbnRhY3QtdG8tY2FtcGFpZ24.desc": {
+          "source": "Add a contact to a campaign in GoHighLevel",
+          "message": "Añadir un contacto a una campaña en GoHighLevel"
+        },
+        "app.R29IaWdoTGV2ZWw.action.YWRkLWNvbnRhY3QtdG8tY2FtcGFpZ24.display_name": {
+          "source": "Add a Contact to a Campaign",
+          "message": "Añadir un contacto a una campaña"
+        },
+        "app.R29IaWdoTGV2ZWw.action.YWRkLWNvbnRhY3QtdG8tY2FtcGFpZ24.option.Y29udGFjdF9pZA.display_name": {
+          "source": "Contact ID",
+          "message": "ID de contacto"
+        },
+        "app.R29IaWdoTGV2ZWw.action.YWRkLWNvbnRhY3QtdG8tY2FtcGFpZ24.option.Y29udGFjdF9pZA.short_desc": {
+          "source": "The contact",
+          "message": "El contacto"
+        },
+        "app.R29IaWdoTGV2ZWw.action.YWRkLWNvbnRhY3QtdG8tY2FtcGFpZ24.option.Y2FtcGFpZ25faWQ.desc": {
+          "source": "The ID of the campaign to add the contact to",
+          "message": "El ID de la campaña a la que añadir el contacto"
+        },
+        "app.R29IaWdoTGV2ZWw.action.YWRkLWNvbnRhY3QtdG8tY2FtcGFpZ24.option.Y2FtcGFpZ25faWQ.display_name": {
+          "source": "Campaign ID",
+          "message": "ID de campaña"
+        },
+        "app.R29IaWdoTGV2ZWw.action.YWRkLWNvbnRhY3QtdG8tY2FtcGFpZ24.option.Y2FtcGFpZ25faWQ.short_desc": {
+          "source": "The campaign",
+          "message": "La campaña"
+        },
+        "app.R29IaWdoTGV2ZWw.action.YWRkLWNvbnRhY3QtdG8tY2FtcGFpZ24.short_desc": {
+          "source": "Add a contact to a campaign",
+          "message": "Añadir un contacto a una campaña"
+        },
+        "app.R29IaWdoTGV2ZWw.action.Z2V0LW9wcG9ydHVuaXR5.desc": {
+          "source": "Retrieve a single opportunity by ID from GoHighLevel",
+          "message": "Recuperar una oportunidad individual por ID de GoHighLevel"
+        },
+        "app.R29IaWdoTGV2ZWw.action.Z2V0LW9wcG9ydHVuaXR5.display_name": {
+          "source": "Get an Opportunity",
+          "message": "Obtener una oportunidad"
+        },
+        "app.R29IaWdoTGV2ZWw.action.Z2V0LW9wcG9ydHVuaXR5.option.b3Bwb3J0dW5pdHlfaWQ.display_name": {
+          "source": "Opportunity ID",
+          "message": "ID de oportunidad"
+        },
+        "app.R29IaWdoTGV2ZWw.action.Z2V0LW9wcG9ydHVuaXR5.option.b3Bwb3J0dW5pdHlfaWQ.short_desc": {
+          "source": "The opportunity ID",
+          "message": "El ID de la oportunidad"
+        },
+        "app.R29IaWdoTGV2ZWw.action.Z2V0LW9wcG9ydHVuaXR5.short_desc": {
+          "source": "Get a single opportunity by ID",
+          "message": "Obtener una oportunidad individual por ID"
+        },
+        "app.R29IaWdoTGV2ZWw.action.Z2V0LWNvbnRhY3Q.desc": {
+          "source": "Retrieve a single contact by ID from GoHighLevel",
+          "message": "Recuperar un contacto individual por ID de GoHighLevel"
+        },
+        "app.R29IaWdoTGV2ZWw.action.Z2V0LWNvbnRhY3Q.display_name": {
+          "source": "Get a Contact",
+          "message": "Obtener un contacto"
+        },
+        "app.R29IaWdoTGV2ZWw.action.Z2V0LWNvbnRhY3Q.option.Y29udGFjdF9pZA.display_name": {
+          "source": "Contact ID",
+          "message": "ID de contacto"
+        },
+        "app.R29IaWdoTGV2ZWw.action.Z2V0LWNvbnRhY3Q.option.Y29udGFjdF9pZA.short_desc": {
+          "source": "The contact ID",
+          "message": "El ID del contacto"
+        },
+        "app.R29IaWdoTGV2ZWw.action.Z2V0LWNvbnRhY3Q.short_desc": {
+          "source": "Get a single contact by ID",
+          "message": "Obtener un solo contacto por ID"
+        },
+        "app.R29IaWdoTGV2ZWw.action.Z2V0LXRhc2s.desc": {
+          "source": "Retrieve a single task by ID from GoHighLevel",
+          "message": "Recuperar una tarea individual por ID de GoHighLevel"
+        },
+        "app.R29IaWdoTGV2ZWw.action.Z2V0LXRhc2s.display_name": {
+          "source": "Get a Task",
+          "message": "Obtener una tarea"
+        },
+        "app.R29IaWdoTGV2ZWw.action.Z2V0LXRhc2s.option.Y29udGFjdF9pZA.desc": {
+          "source": "The contact ID the task belongs to",
+          "message": "El ID de contacto al que pertenece la tarea"
+        },
+        "app.R29IaWdoTGV2ZWw.action.Z2V0LXRhc2s.option.Y29udGFjdF9pZA.display_name": {
+          "source": "Contact ID",
+          "message": "ID de contacto"
+        },
+        "app.R29IaWdoTGV2ZWw.action.Z2V0LXRhc2s.option.Y29udGFjdF9pZA.short_desc": {
+          "source": "The contact",
+          "message": "El contacto"
+        },
+        "app.R29IaWdoTGV2ZWw.action.Z2V0LXRhc2s.option.dGFza19pZA.desc": {
+          "source": "The ID of the task to retrieve",
+          "message": "El ID de la tarea que se va a recuperar"
+        },
+        "app.R29IaWdoTGV2ZWw.action.Z2V0LXRhc2s.option.dGFza19pZA.display_name": {
+          "source": "Task ID",
+          "message": "ID de tarea"
+        },
+        "app.R29IaWdoTGV2ZWw.action.Z2V0LXRhc2s.option.dGFza19pZA.short_desc": {
+          "source": "The task ID",
+          "message": "El ID de la tarea"
+        },
+        "app.R29IaWdoTGV2ZWw.action.Z2V0LXRhc2s.short_desc": {
+          "source": "Get a single task by ID",
+          "message": "Obtener una tarea individual por ID"
+        },
+        "app.R29IaWdoTGV2ZWw.action.ZGVsZXRlLW9wcG9ydHVuaXR5.desc": {
+          "source": "Delete an opportunity from GoHighLevel",
+          "message": "Eliminar una oportunidad de GoHighLevel"
+        },
+        "app.R29IaWdoTGV2ZWw.action.ZGVsZXRlLW9wcG9ydHVuaXR5.display_name": {
+          "source": "Delete an Opportunity",
+          "message": "Eliminar una oportunidad"
+        },
+        "app.R29IaWdoTGV2ZWw.action.ZGVsZXRlLW9wcG9ydHVuaXR5.option.b3Bwb3J0dW5pdHlfaWQ.display_name": {
+          "source": "Opportunity ID",
+          "message": "ID de oportunidad"
+        },
+        "app.R29IaWdoTGV2ZWw.action.ZGVsZXRlLW9wcG9ydHVuaXR5.option.b3Bwb3J0dW5pdHlfaWQ.short_desc": {
+          "source": "The opportunity to delete",
+          "message": "La oportunidad a eliminar"
+        },
+        "app.R29IaWdoTGV2ZWw.action.ZGVsZXRlLW9wcG9ydHVuaXR5.short_desc": {
+          "source": "Delete an opportunity",
+          "message": "Eliminar una oportunidad"
+        },
+        "app.R29IaWdoTGV2ZWw.action.ZGVsZXRlLWNvbnRhY3Q.desc": {
+          "source": "Delete a contact from GoHighLevel",
+          "message": "Eliminar un contacto de GoHighLevel"
+        },
+        "app.R29IaWdoTGV2ZWw.action.ZGVsZXRlLWNvbnRhY3Q.display_name": {
+          "source": "Delete a Contact",
+          "message": "Eliminar un contacto"
+        },
+        "app.R29IaWdoTGV2ZWw.action.ZGVsZXRlLWNvbnRhY3Q.option.Y29udGFjdF9pZA.display_name": {
+          "source": "Contact ID",
+          "message": "ID de contacto"
+        },
+        "app.R29IaWdoTGV2ZWw.action.ZGVsZXRlLWNvbnRhY3Q.option.Y29udGFjdF9pZA.short_desc": {
+          "source": "The contact to delete",
+          "message": "El contacto que se eliminará"
+        },
+        "app.R29IaWdoTGV2ZWw.action.ZGVsZXRlLWNvbnRhY3Q.short_desc": {
+          "source": "Delete a contact",
+          "message": "Eliminar un contacto"
+        },
+        "app.R29IaWdoTGV2ZWw.action.ZGVsZXRlLXRhc2s.desc": {
+          "source": "Delete a task from GoHighLevel",
+          "message": "Eliminar una tarea de GoHighLevel"
+        },
+        "app.R29IaWdoTGV2ZWw.action.ZGVsZXRlLXRhc2s.display_name": {
+          "source": "Delete a Task",
+          "message": "Eliminar una tarea"
+        },
+        "app.R29IaWdoTGV2ZWw.action.ZGVsZXRlLXRhc2s.option.Y29udGFjdF9pZA.desc": {
+          "source": "The contact ID the task belongs to",
+          "message": "El ID de contacto al que pertenece la tarea"
+        },
+        "app.R29IaWdoTGV2ZWw.action.ZGVsZXRlLXRhc2s.option.Y29udGFjdF9pZA.display_name": {
+          "source": "Contact ID",
+          "message": "ID de contacto"
+        },
+        "app.R29IaWdoTGV2ZWw.action.ZGVsZXRlLXRhc2s.option.Y29udGFjdF9pZA.short_desc": {
+          "source": "The contact",
+          "message": "El contacto"
+        },
+        "app.R29IaWdoTGV2ZWw.action.ZGVsZXRlLXRhc2s.option.dGFza19pZA.desc": {
+          "source": "The ID of the task to delete",
+          "message": "El ID de la tarea a eliminar"
+        },
+        "app.R29IaWdoTGV2ZWw.action.ZGVsZXRlLXRhc2s.option.dGFza19pZA.display_name": {
+          "source": "Task ID",
+          "message": "ID de tarea"
+        },
+        "app.R29IaWdoTGV2ZWw.action.ZGVsZXRlLXRhc2s.option.dGFza19pZA.short_desc": {
+          "source": "The task to delete",
+          "message": "La tarea a eliminar"
+        },
+        "app.R29IaWdoTGV2ZWw.action.ZGVsZXRlLXRhc2s.short_desc": {
+          "source": "Delete a task",
+          "message": "Eliminar una tarea"
+        },
+        "app.R29IaWdoTGV2ZWw.action.bGlzdC10YXNrcw.desc": {
+          "source": "List tasks for a contact in GoHighLevel",
+          "message": "Listar tareas de un contacto en GoHighLevel"
+        },
+        "app.R29IaWdoTGV2ZWw.action.bGlzdC10YXNrcw.display_name": {
+          "source": "List Tasks",
+          "message": "Listar tareas"
+        },
+        "app.R29IaWdoTGV2ZWw.action.bGlzdC10YXNrcw.option.Y29udGFjdF9pZA.desc": {
+          "source": "The contact ID to list tasks for",
+          "message": "El ID de contacto para el cual listar tareas"
+        },
+        "app.R29IaWdoTGV2ZWw.action.bGlzdC10YXNrcw.option.Y29udGFjdF9pZA.display_name": {
+          "source": "Contact ID",
+          "message": "ID de contacto"
+        },
+        "app.R29IaWdoTGV2ZWw.action.bGlzdC10YXNrcw.option.Y29udGFjdF9pZA.short_desc": {
+          "source": "The contact",
+          "message": "El contacto"
+        },
+        "app.R29IaWdoTGV2ZWw.action.bGlzdC10YXNrcw.option.bGltaXQ.desc": {
+          "source": "Maximum number of results to return",
+          "message": "Número máximo de resultados a devolver"
+        },
+        "app.R29IaWdoTGV2ZWw.action.bGlzdC10YXNrcw.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "Límite"
+        },
+        "app.R29IaWdoTGV2ZWw.action.bGlzdC10YXNrcw.option.bGltaXQ.short_desc": {
+          "source": "Maximum results",
+          "message": "Resultados máximos"
+        },
+        "app.R29IaWdoTGV2ZWw.action.bGlzdC10YXNrcw.option.dGFza19pZA.desc": {
+          "source": "Filter results by a specific task ID",
+          "message": "Filtrar resultados por un ID de tarea específico"
+        },
+        "app.R29IaWdoTGV2ZWw.action.bGlzdC10YXNrcw.option.dGFza19pZA.display_name": {
+          "source": "Task ID",
+          "message": "ID de tarea"
+        },
+        "app.R29IaWdoTGV2ZWw.action.bGlzdC10YXNrcw.option.dGFza19pZA.short_desc": {
+          "source": "Filter by task ID",
+          "message": "Filtrar por ID de tarea"
+        },
+        "app.R29IaWdoTGV2ZWw.action.bGlzdC10YXNrcw.short_desc": {
+          "source": "List tasks for a contact",
+          "message": "Listar tareas de un contacto"
+        },
+        "app.R29IaWdoTGV2ZWw.action.bWFrZS1hcGktY2FsbA.desc": {
+          "source": "Make a custom HTTP / REST API call to **GoHighLevel** using the configured connection's authentication.\n\nSpecify the HTTP method, the URI path (relative to the connection's API base URL), optional query parameters, headers, and request body. The response is returned as a hash containing the status code, response headers, and response body.\n\nUse this action for endpoints that are not yet exposed as first-class actions on this app.",
+          "message": "Realiza una llamada personalizada a la API HTTP / REST de **GoHighLevel** utilizando la autenticación de la conexión configurada.\n\nEspecifica el método HTTP, la ruta URI (relativa a la URL base de la API de la conexión), parámetros de consulta opcionales, encabezados y el cuerpo de la solicitud. La respuesta se devuelve como un hash que contiene el código de estado, los encabezados de respuesta y el cuerpo de la respuesta.\n\nUtiliza esta acción para endpoints que aún no estén disponibles como acciones de primer nivel en esta aplicación."
+        },
+        "app.R29IaWdoTGV2ZWw.action.bWFrZS1hcGktY2FsbA.display_name": {
+          "source": "Make an API call",
+          "message": "Realizar una llamada a la API"
+        },
+        "app.R29IaWdoTGV2ZWw.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.desc": {
+          "source": "The request body. The effective type depends on `body_type`: JSON/form/YAML expect a hash, XML/text expect a string, multipart expects a file structure, binary expects raw bytes.",
+          "message": "El cuerpo de la solicitud. El tipo efectivo depende de `body_type`: JSON/formulario/YAML esperan un hash, XML/texto esperan una cadena, multipart espera una estructura de archivo y binario espera bytes sin procesar."
+        },
+        "app.R29IaWdoTGV2ZWw.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.display_name": {
+          "source": "Body",
+          "message": "Cuerpo"
+        },
+        "app.R29IaWdoTGV2ZWw.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.short_desc": {
+          "source": "The request body",
+          "message": "El cuerpo de la solicitud"
+        },
+        "app.R29IaWdoTGV2ZWw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.desc": {
+          "source": "Upload a file using `multipart/form-data`. The body must be a @ref DataProvider::FileDataType \"FileDataType\" structure (filename + content + mime_type). The framework builds the multipart envelope and sets the boundary header.",
+          "message": "Cargue un archivo usando `multipart/form-data`. El cuerpo debe ser una estructura @ref DataProvider::FileDataType \"FileDataType\" (filename + content + mime_type). El marco construye el sobre multipart y establece el encabezado boundary."
+        },
+        "app.R29IaWdoTGV2ZWw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.display_name": {
+          "source": "Multipart Form",
+          "message": "Formulario multipart"
+        },
+        "app.R29IaWdoTGV2ZWw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.short_desc": {
+          "source": "Upload a file using multipart/form-data",
+          "message": "Cargar un archivo usando multipart/form-data"
+        },
+        "app.R29IaWdoTGV2ZWw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.desc": {
+          "source": "Pass the body to the REST client unchanged; the client decides serialization based on its configured `data` option and the value type",
+          "message": "Pasa el cuerpo al cliente REST sin cambios; el cliente decide la serialización según su opción `data` configurada y el tipo de valor"
+        },
+        "app.R29IaWdoTGV2ZWw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.display_name": {
+          "source": "Auto",
+          "message": "Auto"
+        },
+        "app.R29IaWdoTGV2ZWw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.short_desc": {
+          "source": "Pass-through; use connection serialization and let the REST client decide",
+          "message": "Paso directo; utiliza la serialización de la conexión y deja que el cliente REST decida"
+        },
+        "app.R29IaWdoTGV2ZWw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.desc": {
+          "source": "Send the body as raw bytes. The body must be a binary value. Sets `Content-Type: application/octet-stream` unless overridden by `hdr`.",
+          "message": "Envía el cuerpo como bytes sin procesar. El cuerpo debe ser un valor binario. Establece `Content-Type: application/octet-stream` a menos que `hdr` lo anule."
+        },
+        "app.R29IaWdoTGV2ZWw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.display_name": {
+          "source": "Raw Binary",
+          "message": "Binario sin procesar"
+        },
+        "app.R29IaWdoTGV2ZWw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.short_desc": {
+          "source": "Send body as raw bytes",
+          "message": "Enviar el cuerpo como bytes sin procesar"
+        },
+        "app.R29IaWdoTGV2ZWw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.desc": {
+          "source": "Serialize a hash of form fields as `application/x-www-form-urlencoded`. The body must be a hash whose values are scalars (strings/numbers/booleans).",
+          "message": "Serializa un hash de campos de formulario como `application/x-www-form-urlencoded`. El cuerpo debe ser un hash cuyos valores sean escalares (cadenas/números/booleanos)."
+        },
+        "app.R29IaWdoTGV2ZWw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.display_name": {
+          "source": "Form (URL-encoded)",
+          "message": "Formulario (codificado en URL)"
+        },
+        "app.R29IaWdoTGV2ZWw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.short_desc": {
+          "source": "Serialize body as application/x-www-form-urlencoded form fields",
+          "message": "Serializar el cuerpo como campos de formulario application/x-www-form-urlencoded"
+        },
+        "app.R29IaWdoTGV2ZWw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.desc": {
+          "source": "Serialize the body as JSON; sets `Content-Type: application/json`. The body should be a hash, list, or scalar value.",
+          "message": "Serializa el cuerpo como JSON; establece `Content-Type: application/json`. El cuerpo debe ser un hash, lista o valor escalar."
+        },
+        "app.R29IaWdoTGV2ZWw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.display_name": {
+          "source": "JSON",
+          "message": "JSON"
+        },
+        "app.R29IaWdoTGV2ZWw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.short_desc": {
+          "source": "Serialize body as JSON",
+          "message": "Serializar el cuerpo como JSON"
+        },
+        "app.R29IaWdoTGV2ZWw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.desc": {
+          "source": "Send the body as plain text. The body must be a string. Sets `Content-Type: text/plain`.",
+          "message": "Envía el cuerpo como texto plano. El cuerpo debe ser una cadena. Establece `Content-Type: text/plain`."
+        },
+        "app.R29IaWdoTGV2ZWw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.display_name": {
+          "source": "Plain Text",
+          "message": "Texto plano"
+        },
+        "app.R29IaWdoTGV2ZWw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.short_desc": {
+          "source": "Send body as text/plain",
+          "message": "Enviar el cuerpo como text/plain"
+        },
+        "app.R29IaWdoTGV2ZWw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.desc": {
+          "source": "Send the body as XML. If the body is a hash it is serialized to XML; if it is a string it is sent verbatim. Sets `Content-Type: application/xml`.",
+          "message": "Envía el cuerpo como XML. Si el cuerpo es un hash, se serializa a XML; si es una cadena, se envía textualmente. Establece `Content-Type: application/xml`."
+        },
+        "app.R29IaWdoTGV2ZWw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.display_name": {
+          "source": "XML",
+          "message": "XML"
+        },
+        "app.R29IaWdoTGV2ZWw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.short_desc": {
+          "source": "Send body as XML",
+          "message": "Enviar el cuerpo como XML"
+        },
+        "app.R29IaWdoTGV2ZWw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.desc": {
+          "source": "Send the body as YAML. If the body is a hash it is serialized to YAML; if it is a string it is sent verbatim. Sets `Content-Type: application/x-yaml`.",
+          "message": "Envía el cuerpo como YAML. Si el cuerpo es un hash, se serializa a YAML; si es una cadena, se envía textualmente. Establece `Content-Type: application/x-yaml`."
+        },
+        "app.R29IaWdoTGV2ZWw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.display_name": {
+          "source": "YAML",
+          "message": "YAML"
+        },
+        "app.R29IaWdoTGV2ZWw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.short_desc": {
+          "source": "Send body as YAML",
+          "message": "Enviar el cuerpo como YAML"
+        },
+        "app.R29IaWdoTGV2ZWw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.desc": {
+          "source": "Selects the body serialization mode and the corresponding `Content-Type` header. Changing this field reshapes the `body` editor - selecting JSON exposes a JSON editor, selecting Multipart Form exposes a file picker, and so on.",
+          "message": "Selecciona el modo de serialización del cuerpo y el encabezado `Content-Type` correspondiente. Cambiar este campo modifica la forma del editor `body`: seleccionar JSON expone un editor JSON, seleccionar Formulario multipart expone un selector de archivos, y así sucesivamente."
+        },
+        "app.R29IaWdoTGV2ZWw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.display_name": {
+          "source": "Body Type",
+          "message": "Tipo de cuerpo"
+        },
+        "app.R29IaWdoTGV2ZWw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.short_desc": {
+          "source": "How the body is serialized and what Content-Type is sent",
+          "message": "Cómo se serializa el cuerpo y qué Content-Type se envía"
+        },
+        "app.R29IaWdoTGV2ZWw.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.desc": {
+          "source": "If `True`, non-2xx HTTP responses return as the normal response hash (with the actual status code) instead of raising `REST-RESPONSE-ERROR`. Useful for handling 4xx/5xx as data - e.g. checking whether a resource exists. Overrides the connection's `error_passthru` setting for this call only.",
+          "message": "Si es `True`, las respuestas HTTP que no sean 2xx se devuelven como el hash de respuesta normal (con el código de estado real) en lugar de generar `REST-RESPONSE-ERROR`. Útil para manejar 4xx/5xx como datos, por ejemplo, para comprobar si un recurso existe. Anula la configuración `error_passthru` de la conexión solo para esta llamada."
+        },
+        "app.R29IaWdoTGV2ZWw.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.display_name": {
+          "source": "Return Errors as Data",
+          "message": "Devolver errores como datos"
+        },
+        "app.R29IaWdoTGV2ZWw.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.short_desc": {
+          "source": "Return non-2xx responses normally instead of throwing",
+          "message": "Devolver respuestas que no sean 2xx normalmente en lugar de lanzar una excepción"
+        },
+        "app.R29IaWdoTGV2ZWw.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.desc": {
+          "source": "Optional list of HTTP status codes treated as success. If set and the response status is not in this list, the action throws `REST-STATUS-ERROR`. When unset, the REST client's default behavior applies (typically: 2xx is success, non-2xx throws).",
+          "message": "Lista opcional de códigos de estado HTTP tratados como éxito. Si se establece y el estado de la respuesta no está en esta lista, la acción lanza `REST-STATUS-ERROR`. Cuando no se establece, se aplica el comportamiento predeterminado del cliente REST (típicamente: 2xx es éxito, no 2xx lanza una excepción)."
+        },
+        "app.R29IaWdoTGV2ZWw.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.display_name": {
+          "source": "Expected Status Codes",
+          "message": "Códigos de estado esperados"
+        },
+        "app.R29IaWdoTGV2ZWw.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.short_desc": {
+          "source": "Response status codes treated as success",
+          "message": "Códigos de estado de respuesta tratados como éxito"
+        },
+        "app.R29IaWdoTGV2ZWw.action.bWFrZS1hcGktY2FsbA.option.aGRy.desc": {
+          "source": "Hash of custom headers added to the request. These override any default headers set by `body_type` (e.g. supplying `Content-Type` here wins over the body-type default).",
+          "message": "Hash de encabezados personalizados agregados a la solicitud. Estos anulan cualquier encabezado predeterminado establecido por `body_type` (por ejemplo, proporcionar `Content-Type` aquí prevalece sobre el valor predeterminado según el tipo de cuerpo)."
+        },
+        "app.R29IaWdoTGV2ZWw.action.bWFrZS1hcGktY2FsbA.option.aGRy.display_name": {
+          "source": "Custom Headers",
+          "message": "Encabezados personalizados"
+        },
+        "app.R29IaWdoTGV2ZWw.action.bWFrZS1hcGktY2FsbA.option.aGRy.short_desc": {
+          "source": "Extra request headers",
+          "message": "Encabezados de solicitud adicionales"
+        },
+        "app.R29IaWdoTGV2ZWw.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.desc": {
+          "source": "If `True`, the response hash includes a `debug` sub-hash containing the request method/URL/headers (with sensitive values redacted), request and response sizes, and round-trip duration. Useful when investigating slow or failing calls. Off by default to keep responses lean.",
+          "message": "Si es `True`, el hash de respuesta incluye un sub-hash `debug` que contiene el método/URL/encabezados de la solicitud (con valores confidenciales redactados), tamaños de solicitud y respuesta, y la duración del viaje de ida y vuelta. Útil para investigar llamadas lentas o con fallos. Desactivado de forma predeterminada para mantener las respuestas ligeras."
+        },
+        "app.R29IaWdoTGV2ZWw.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.display_name": {
+          "source": "Include Debug Info",
+          "message": "Incluir información de depuración"
+        },
+        "app.R29IaWdoTGV2ZWw.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.short_desc": {
+          "source": "Include request/timing/size debug info in the response",
+          "message": "Incluir información de depuración de solicitud/tiempo/tamaño en la respuesta"
+        },
+        "app.R29IaWdoTGV2ZWw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.desc": {
+          "source": "HTTP `OPTIONS`",
+          "message": "HTTP `OPTIONS`"
+        },
+        "app.R29IaWdoTGV2ZWw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.display_name": {
+          "source": "OPTIONS",
+          "message": "OPTIONS"
+        },
+        "app.R29IaWdoTGV2ZWw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.short_desc": {
+          "source": "HTTP OPTIONS",
+          "message": "HTTP OPTIONS"
+        },
+        "app.R29IaWdoTGV2ZWw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.desc": {
+          "source": "HTTP `DELETE`",
+          "message": "HTTP `DELETE`"
+        },
+        "app.R29IaWdoTGV2ZWw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.display_name": {
+          "source": "DELETE",
+          "message": "DELETE"
+        },
+        "app.R29IaWdoTGV2ZWw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.short_desc": {
+          "source": "HTTP DELETE",
+          "message": "HTTP DELETE"
+        },
+        "app.R29IaWdoTGV2ZWw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.desc": {
+          "source": "HTTP `GET`",
+          "message": "HTTP `GET`"
+        },
+        "app.R29IaWdoTGV2ZWw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.display_name": {
+          "source": "GET",
+          "message": "GET"
+        },
+        "app.R29IaWdoTGV2ZWw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.short_desc": {
+          "source": "HTTP GET",
+          "message": "HTTP GET"
+        },
+        "app.R29IaWdoTGV2ZWw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.desc": {
+          "source": "HTTP `HEAD`",
+          "message": "HTTP `HEAD`"
+        },
+        "app.R29IaWdoTGV2ZWw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.display_name": {
+          "source": "HEAD",
+          "message": "HEAD"
+        },
+        "app.R29IaWdoTGV2ZWw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.short_desc": {
+          "source": "HTTP HEAD",
+          "message": "HTTP HEAD"
+        },
+        "app.R29IaWdoTGV2ZWw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.desc": {
+          "source": "HTTP `PATCH`",
+          "message": "HTTP `PATCH`"
+        },
+        "app.R29IaWdoTGV2ZWw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.display_name": {
+          "source": "PATCH",
+          "message": "PATCH"
+        },
+        "app.R29IaWdoTGV2ZWw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.short_desc": {
+          "source": "HTTP PATCH",
+          "message": "HTTP PATCH"
+        },
+        "app.R29IaWdoTGV2ZWw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.desc": {
+          "source": "HTTP `POST`",
+          "message": "HTTP `POST`"
+        },
+        "app.R29IaWdoTGV2ZWw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.display_name": {
+          "source": "POST",
+          "message": "POST"
+        },
+        "app.R29IaWdoTGV2ZWw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.short_desc": {
+          "source": "HTTP POST",
+          "message": "HTTP POST"
+        },
+        "app.R29IaWdoTGV2ZWw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.desc": {
+          "source": "HTTP `PUT`",
+          "message": "HTTP `PUT`"
+        },
+        "app.R29IaWdoTGV2ZWw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.display_name": {
+          "source": "PUT",
+          "message": "PUT"
+        },
+        "app.R29IaWdoTGV2ZWw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.short_desc": {
+          "source": "HTTP PUT",
+          "message": "HTTP PUT"
+        },
+        "app.R29IaWdoTGV2ZWw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.desc": {
+          "source": "HTTP `TRACE`",
+          "message": "HTTP `TRACE`"
+        },
+        "app.R29IaWdoTGV2ZWw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.display_name": {
+          "source": "TRACE",
+          "message": "TRACE"
+        },
+        "app.R29IaWdoTGV2ZWw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.short_desc": {
+          "source": "HTTP TRACE",
+          "message": "HTTP TRACE"
+        },
+        "app.R29IaWdoTGV2ZWw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "El método HTTP que se utilizará para la solicitud"
+        },
+        "app.R29IaWdoTGV2ZWw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.display_name": {
+          "source": "HTTP Method",
+          "message": "Método HTTP"
+        },
+        "app.R29IaWdoTGV2ZWw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.short_desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "El método HTTP que se utilizará para la solicitud"
+        },
+        "app.R29IaWdoTGV2ZWw.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain `{name}` placeholders that are replaced from `path_vars`. Example: `/users/{id}/comments`.",
+          "message": "La ruta URI relativa a la URL base de la API de la conexión. Puede contener marcadores de posición `{name}` que se reemplazan desde `path_vars`. Ejemplo: `/users/{id}/comments`."
+        },
+        "app.R29IaWdoTGV2ZWw.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.display_name": {
+          "source": "URI Path",
+          "message": "Ruta URI"
+        },
+        "app.R29IaWdoTGV2ZWw.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.short_desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain '{name}' placeholders that are replaced from 'path_vars'. Example: '/users/{id}/comments'",
+          "message": "La ruta URI relativa a la URL base de la API de la conexión. Puede contener marcadores de posición '{name}' que se reemplazan desde 'path_vars'. Ejemplo: '/users/{id}/comments'"
+        },
+        "app.R29IaWdoTGV2ZWw.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.desc": {
+          "source": "Hash of values substituted into `{name}` placeholders in the URI path. Example: with `path = /users/{id}` and `path_vars = {id: 123}` the framework sends `/users/123`. Values are URL-encoded.",
+          "message": "Hash de valores sustituidos en los marcadores de posición `{name}` en la ruta URI. Ejemplo: con `path = /users/{id}` y `path_vars = {id: 123}`, el framework envía `/users/123`. Los valores están codificados en URL."
+        },
+        "app.R29IaWdoTGV2ZWw.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.display_name": {
+          "source": "Path Variables",
+          "message": "Variables de ruta"
+        },
+        "app.R29IaWdoTGV2ZWw.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.short_desc": {
+          "source": "Values for {name} placeholders in path",
+          "message": "Valores para los marcadores de posición {name} en la ruta"
+        },
+        "app.R29IaWdoTGV2ZWw.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.desc": {
+          "source": "Hash of query string parameters to append to the URI path. Values are URL-encoded; list values are joined with `,`.",
+          "message": "Hash de parámetros de cadena de consulta para adjuntar a la ruta URI. Los valores están codificados en URL; los valores de lista se unen con `,`."
+        },
+        "app.R29IaWdoTGV2ZWw.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.display_name": {
+          "source": "Query Arguments",
+          "message": "Argumentos de consulta"
+        },
+        "app.R29IaWdoTGV2ZWw.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.short_desc": {
+          "source": "Query string parameters",
+          "message": "Parámetros de cadena de consulta"
+        },
+        "app.R29IaWdoTGV2ZWw.action.bWFrZS1hcGktY2FsbA.short_desc": {
+          "source": "Make a custom API call to GoHighLevel",
+          "message": "Realizar una llamada personalizada a la API de GoHighLevel"
+        },
+        "app.R29IaWdoTGV2ZWw.action.bmV3LW1lc3NhZ2U.desc": {
+          "source": "Fires when a new message is received in GoHighLevel. Uses polling to detect new records.",
+          "message": "Se activa cuando se recibe un nuevo mensaje en GoHighLevel. Utiliza sondeo para detectar nuevos registros."
+        },
+        "app.R29IaWdoTGV2ZWw.action.bmV3LW1lc3NhZ2U.display_name": {
+          "source": "New Message",
+          "message": "Nuevo mensaje"
+        },
+        "app.R29IaWdoTGV2ZWw.action.bmV3LW1lc3NhZ2U.option.cG9sbF9pbnRlcnZhbA.desc": {
+          "source": "How often to check for new records (minimum 30 seconds)",
+          "message": "Con qué frecuencia buscar nuevos registros (mínimo 30 segundos)"
+        },
+        "app.R29IaWdoTGV2ZWw.action.bmV3LW1lc3NhZ2U.option.cG9sbF9pbnRlcnZhbA.display_name": {
+          "source": "Poll Interval",
+          "message": "Intervalo de sondeo"
+        },
+        "app.R29IaWdoTGV2ZWw.action.bmV3LW1lc3NhZ2U.option.cG9sbF9pbnRlcnZhbA.short_desc": {
+          "source": "Polling interval in seconds",
+          "message": "Intervalo de sondeo en segundos"
+        },
+        "app.R29IaWdoTGV2ZWw.action.bmV3LW1lc3NhZ2U.short_desc": {
+          "source": "Trigger when a new message is received",
+          "message": "Activar cuando se reciba un nuevo mensaje"
+        },
+        "app.R29IaWdoTGV2ZWw.action.bmV3LWFwcG9pbnRtZW50.desc": {
+          "source": "Fires when a new appointment is created in GoHighLevel. Uses polling to detect new records.",
+          "message": "Se activa cuando se crea una nueva cita en GoHighLevel. Utiliza sondeo para detectar nuevos registros."
+        },
+        "app.R29IaWdoTGV2ZWw.action.bmV3LWFwcG9pbnRtZW50.display_name": {
+          "source": "New Appointment",
+          "message": "Nueva cita"
+        },
+        "app.R29IaWdoTGV2ZWw.action.bmV3LWFwcG9pbnRtZW50.option.cG9sbF9pbnRlcnZhbA.desc": {
+          "source": "How often to check for new records (minimum 30 seconds)",
+          "message": "Con qué frecuencia buscar nuevos registros (mínimo 30 segundos)"
+        },
+        "app.R29IaWdoTGV2ZWw.action.bmV3LWFwcG9pbnRtZW50.option.cG9sbF9pbnRlcnZhbA.display_name": {
+          "source": "Poll Interval",
+          "message": "Intervalo de sondeo"
+        },
+        "app.R29IaWdoTGV2ZWw.action.bmV3LWFwcG9pbnRtZW50.option.cG9sbF9pbnRlcnZhbA.short_desc": {
+          "source": "Polling interval in seconds",
+          "message": "Intervalo de sondeo en segundos"
+        },
+        "app.R29IaWdoTGV2ZWw.action.bmV3LWFwcG9pbnRtZW50.short_desc": {
+          "source": "Trigger when a new appointment is created",
+          "message": "Activar cuando se cree una nueva cita"
+        },
+        "app.R29IaWdoTGV2ZWw.action.bmV3LWNvbnRhY3Q.desc": {
+          "source": "Fires when a new contact is created in GoHighLevel. Uses polling to detect new records.",
+          "message": "Se activa cuando se crea un nuevo contacto en GoHighLevel. Utiliza sondeo para detectar nuevos registros."
+        },
+        "app.R29IaWdoTGV2ZWw.action.bmV3LWNvbnRhY3Q.display_name": {
+          "source": "New Contact",
+          "message": "Nuevo contacto"
+        },
+        "app.R29IaWdoTGV2ZWw.action.bmV3LWNvbnRhY3Q.option.cG9sbF9pbnRlcnZhbA.desc": {
+          "source": "How often to check for new records (minimum 30 seconds)",
+          "message": "Con qué frecuencia buscar nuevos registros (mínimo 30 segundos)"
+        },
+        "app.R29IaWdoTGV2ZWw.action.bmV3LWNvbnRhY3Q.option.cG9sbF9pbnRlcnZhbA.display_name": {
+          "source": "Poll Interval",
+          "message": "Intervalo de sondeo"
+        },
+        "app.R29IaWdoTGV2ZWw.action.bmV3LWNvbnRhY3Q.option.cG9sbF9pbnRlcnZhbA.short_desc": {
+          "source": "Polling interval in seconds",
+          "message": "Intervalo de sondeo en segundos"
+        },
+        "app.R29IaWdoTGV2ZWw.action.bmV3LWNvbnRhY3Q.short_desc": {
+          "source": "Trigger when a new contact is created",
+          "message": "Activar cuando se crea un nuevo contacto"
+        },
+        "app.R29IaWdoTGV2ZWw.action.c2VhcmNoLW9wcG9ydHVuaXRpZXM.desc": {
+          "source": "Search for opportunities in GoHighLevel with optional filtering",
+          "message": "Buscar oportunidades en GoHighLevel con filtrado opcional"
+        },
+        "app.R29IaWdoTGV2ZWw.action.c2VhcmNoLW9wcG9ydHVuaXRpZXM.display_name": {
+          "source": "Search Opportunities",
+          "message": "Buscar oportunidades"
+        },
+        "app.R29IaWdoTGV2ZWw.action.c2VhcmNoLW9wcG9ydHVuaXRpZXM.option.Y29udGFjdF9pZA.desc": {
+          "source": "Filter by contact ID",
+          "message": "Filtrar por ID de contacto"
+        },
+        "app.R29IaWdoTGV2ZWw.action.c2VhcmNoLW9wcG9ydHVuaXRpZXM.option.Y29udGFjdF9pZA.display_name": {
+          "source": "Contact ID",
+          "message": "ID de contacto"
+        },
+        "app.R29IaWdoTGV2ZWw.action.c2VhcmNoLW9wcG9ydHVuaXRpZXM.option.Y29udGFjdF9pZA.short_desc": {
+          "source": "Filter by contact",
+          "message": "Filtrar por contacto"
+        },
+        "app.R29IaWdoTGV2ZWw.action.c2VhcmNoLW9wcG9ydHVuaXRpZXM.option.YXNzaWduZWRfdG8.desc": {
+          "source": "Filter by assigned user ID",
+          "message": "Filtrar por ID de usuario asignado"
+        },
+        "app.R29IaWdoTGV2ZWw.action.c2VhcmNoLW9wcG9ydHVuaXRpZXM.option.YXNzaWduZWRfdG8.display_name": {
+          "source": "Assigned To",
+          "message": "Asignado a"
+        },
+        "app.R29IaWdoTGV2ZWw.action.c2VhcmNoLW9wcG9ydHVuaXRpZXM.option.YXNzaWduZWRfdG8.short_desc": {
+          "source": "Filter by assignee",
+          "message": "Filtrar por asignado"
+        },
+        "app.R29IaWdoTGV2ZWw.action.c2VhcmNoLW9wcG9ydHVuaXRpZXM.option.b3Bwb3J0dW5pdHlfaWQ.desc": {
+          "source": "Filter results by a specific opportunity ID",
+          "message": "Filtrar resultados por un ID de oportunidad específico"
+        },
+        "app.R29IaWdoTGV2ZWw.action.c2VhcmNoLW9wcG9ydHVuaXRpZXM.option.b3Bwb3J0dW5pdHlfaWQ.display_name": {
+          "source": "Opportunity ID",
+          "message": "ID de oportunidad"
+        },
+        "app.R29IaWdoTGV2ZWw.action.c2VhcmNoLW9wcG9ydHVuaXRpZXM.option.b3Bwb3J0dW5pdHlfaWQ.short_desc": {
+          "source": "Filter by opportunity ID",
+          "message": "Filtrar por ID de oportunidad"
+        },
+        "app.R29IaWdoTGV2ZWw.action.c2VhcmNoLW9wcG9ydHVuaXRpZXM.option.bGltaXQ.desc": {
+          "source": "Maximum number of results to return",
+          "message": "Número máximo de resultados a devolver"
+        },
+        "app.R29IaWdoTGV2ZWw.action.c2VhcmNoLW9wcG9ydHVuaXRpZXM.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "Límite"
+        },
+        "app.R29IaWdoTGV2ZWw.action.c2VhcmNoLW9wcG9ydHVuaXRpZXM.option.bGltaXQ.short_desc": {
+          "source": "Maximum results",
+          "message": "Resultados máximos"
+        },
+        "app.R29IaWdoTGV2ZWw.action.c2VhcmNoLW9wcG9ydHVuaXRpZXM.option.c3RhdHVz.allowed-value.c3RyaW5nOm9wZW4.display_name": {
+          "source": "Open",
+          "message": "Abierta"
+        },
+        "app.R29IaWdoTGV2ZWw.action.c2VhcmNoLW9wcG9ydHVuaXRpZXM.option.c3RhdHVz.allowed-value.c3RyaW5nOmFiYW5kb25lZA.display_name": {
+          "source": "Abandoned",
+          "message": "Abandonada"
+        },
+        "app.R29IaWdoTGV2ZWw.action.c2VhcmNoLW9wcG9ydHVuaXRpZXM.option.c3RhdHVz.allowed-value.c3RyaW5nOmFsbA.display_name": {
+          "source": "All",
+          "message": "Todos"
+        },
+        "app.R29IaWdoTGV2ZWw.action.c2VhcmNoLW9wcG9ydHVuaXRpZXM.option.c3RhdHVz.allowed-value.c3RyaW5nOmxvc3Q.display_name": {
+          "source": "Lost",
+          "message": "Perdida"
+        },
+        "app.R29IaWdoTGV2ZWw.action.c2VhcmNoLW9wcG9ydHVuaXRpZXM.option.c3RhdHVz.allowed-value.c3RyaW5nOndvbg.display_name": {
+          "source": "Won",
+          "message": "Ganada"
+        },
+        "app.R29IaWdoTGV2ZWw.action.c2VhcmNoLW9wcG9ydHVuaXRpZXM.option.c3RhdHVz.desc": {
+          "source": "Filter by opportunity status",
+          "message": "Filtrar por estado de la oportunidad"
+        },
+        "app.R29IaWdoTGV2ZWw.action.c2VhcmNoLW9wcG9ydHVuaXRpZXM.option.c3RhdHVz.display_name": {
+          "source": "Status",
+          "message": "Estado"
+        },
+        "app.R29IaWdoTGV2ZWw.action.c2VhcmNoLW9wcG9ydHVuaXRpZXM.option.c3RhdHVz.short_desc": {
+          "source": "Filter by status",
+          "message": "Filtrar por estado"
+        },
+        "app.R29IaWdoTGV2ZWw.action.c2VhcmNoLW9wcG9ydHVuaXRpZXM.option.cGlwZWxpbmVfaWQ.desc": {
+          "source": "Filter by pipeline ID",
+          "message": "Filtrar por ID de pipeline"
+        },
+        "app.R29IaWdoTGV2ZWw.action.c2VhcmNoLW9wcG9ydHVuaXRpZXM.option.cGlwZWxpbmVfaWQ.display_name": {
+          "source": "Pipeline ID",
+          "message": "ID del pipeline"
+        },
+        "app.R29IaWdoTGV2ZWw.action.c2VhcmNoLW9wcG9ydHVuaXRpZXM.option.cGlwZWxpbmVfaWQ.short_desc": {
+          "source": "Filter by pipeline",
+          "message": "Filtrar por pipeline"
+        },
+        "app.R29IaWdoTGV2ZWw.action.c2VhcmNoLW9wcG9ydHVuaXRpZXM.option.cGlwZWxpbmVfc3RhZ2VfaWQ.desc": {
+          "source": "Filter by pipeline stage ID",
+          "message": "Filtrar por ID de etapa del pipeline"
+        },
+        "app.R29IaWdoTGV2ZWw.action.c2VhcmNoLW9wcG9ydHVuaXRpZXM.option.cGlwZWxpbmVfc3RhZ2VfaWQ.display_name": {
+          "source": "Pipeline Stage ID",
+          "message": "ID de etapa del pipeline"
+        },
+        "app.R29IaWdoTGV2ZWw.action.c2VhcmNoLW9wcG9ydHVuaXRpZXM.option.cGlwZWxpbmVfc3RhZ2VfaWQ.short_desc": {
+          "source": "Filter by pipeline stage",
+          "message": "Filtrar por etapa del pipeline"
+        },
+        "app.R29IaWdoTGV2ZWw.action.c2VhcmNoLW9wcG9ydHVuaXRpZXM.option.cQ.desc": {
+          "source": "Search query to filter opportunities",
+          "message": "Consulta de búsqueda para filtrar oportunidades"
+        },
+        "app.R29IaWdoTGV2ZWw.action.c2VhcmNoLW9wcG9ydHVuaXRpZXM.option.cQ.display_name": {
+          "source": "Search Query",
+          "message": "Consulta de búsqueda"
+        },
+        "app.R29IaWdoTGV2ZWw.action.c2VhcmNoLW9wcG9ydHVuaXRpZXM.option.cQ.short_desc": {
+          "source": "Search query",
+          "message": "Consulta de búsqueda"
+        },
+        "app.R29IaWdoTGV2ZWw.action.c2VhcmNoLW9wcG9ydHVuaXRpZXM.short_desc": {
+          "source": "Search for opportunities",
+          "message": "Buscar oportunidades"
+        },
+        "app.R29IaWdoTGV2ZWw.action.c2VhcmNoLWNvbnRhY3Rz.desc": {
+          "source": "Search for contacts in GoHighLevel with optional filtering",
+          "message": "Buscar contactos en GoHighLevel con filtrado opcional"
+        },
+        "app.R29IaWdoTGV2ZWw.action.c2VhcmNoLWNvbnRhY3Rz.display_name": {
+          "source": "Search Contacts",
+          "message": "Buscar contactos"
+        },
+        "app.R29IaWdoTGV2ZWw.action.c2VhcmNoLWNvbnRhY3Rz.option.Y29udGFjdF9pZA.desc": {
+          "source": "Filter results by a specific contact ID",
+          "message": "Filtrar resultados por un ID de contacto específico"
+        },
+        "app.R29IaWdoTGV2ZWw.action.c2VhcmNoLWNvbnRhY3Rz.option.Y29udGFjdF9pZA.display_name": {
+          "source": "Contact ID",
+          "message": "ID de contacto"
+        },
+        "app.R29IaWdoTGV2ZWw.action.c2VhcmNoLWNvbnRhY3Rz.option.Y29udGFjdF9pZA.short_desc": {
+          "source": "Filter by contact ID",
+          "message": "Filtrar por ID de contacto"
+        },
+        "app.R29IaWdoTGV2ZWw.action.c2VhcmNoLWNvbnRhY3Rz.option.bGltaXQ.desc": {
+          "source": "Maximum number of results to return",
+          "message": "Número máximo de resultados a devolver"
+        },
+        "app.R29IaWdoTGV2ZWw.action.c2VhcmNoLWNvbnRhY3Rz.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "Límite"
+        },
+        "app.R29IaWdoTGV2ZWw.action.c2VhcmNoLWNvbnRhY3Rz.option.bGltaXQ.short_desc": {
+          "source": "Maximum results",
+          "message": "Resultados máximos"
+        },
+        "app.R29IaWdoTGV2ZWw.action.c2VhcmNoLWNvbnRhY3Rz.option.cXVlcnk.desc": {
+          "source": "Search query to filter contacts by name, email, or phone",
+          "message": "Consulta de búsqueda para filtrar contactos por nombre, correo electrónico o teléfono"
+        },
+        "app.R29IaWdoTGV2ZWw.action.c2VhcmNoLWNvbnRhY3Rz.option.cXVlcnk.display_name": {
+          "source": "Search Query",
+          "message": "Consulta de búsqueda"
+        },
+        "app.R29IaWdoTGV2ZWw.action.c2VhcmNoLWNvbnRhY3Rz.option.cXVlcnk.short_desc": {
+          "source": "Search query string",
+          "message": "Cadena de consulta de búsqueda"
+        },
+        "app.R29IaWdoTGV2ZWw.action.c2VhcmNoLWNvbnRhY3Rz.short_desc": {
+          "source": "Search for contacts",
+          "message": "Buscar contactos"
+        },
+        "app.R29IaWdoTGV2ZWw.action.cmVtb3ZlLWNvbnRhY3QtZnJvbS1jYW1wYWlnbg.desc": {
+          "source": "Remove a contact from a campaign in GoHighLevel",
+          "message": "Eliminar un contacto de una campaña en GoHighLevel"
+        },
+        "app.R29IaWdoTGV2ZWw.action.cmVtb3ZlLWNvbnRhY3QtZnJvbS1jYW1wYWlnbg.display_name": {
+          "source": "Remove a Contact from a Campaign",
+          "message": "Eliminar un contacto de una campaña"
+        },
+        "app.R29IaWdoTGV2ZWw.action.cmVtb3ZlLWNvbnRhY3QtZnJvbS1jYW1wYWlnbg.option.Y29udGFjdF9pZA.display_name": {
+          "source": "Contact ID",
+          "message": "ID de contacto"
+        },
+        "app.R29IaWdoTGV2ZWw.action.cmVtb3ZlLWNvbnRhY3QtZnJvbS1jYW1wYWlnbg.option.Y29udGFjdF9pZA.short_desc": {
+          "source": "The contact",
+          "message": "El contacto"
+        },
+        "app.R29IaWdoTGV2ZWw.action.cmVtb3ZlLWNvbnRhY3QtZnJvbS1jYW1wYWlnbg.option.Y2FtcGFpZ25faWQ.desc": {
+          "source": "The ID of the campaign to remove the contact from",
+          "message": "El ID de la campaña de la que se eliminará el contacto"
+        },
+        "app.R29IaWdoTGV2ZWw.action.cmVtb3ZlLWNvbnRhY3QtZnJvbS1jYW1wYWlnbg.option.Y2FtcGFpZ25faWQ.display_name": {
+          "source": "Campaign ID",
+          "message": "ID de campaña"
+        },
+        "app.R29IaWdoTGV2ZWw.action.cmVtb3ZlLWNvbnRhY3QtZnJvbS1jYW1wYWlnbg.option.Y2FtcGFpZ25faWQ.short_desc": {
+          "source": "The campaign",
+          "message": "La campaña"
+        },
+        "app.R29IaWdoTGV2ZWw.action.cmVtb3ZlLWNvbnRhY3QtZnJvbS1jYW1wYWlnbg.short_desc": {
+          "source": "Remove a contact from a campaign",
+          "message": "Eliminar un contacto de una campaña"
+        },
+        "app.R29IaWdoTGV2ZWw.action.dXBkYXRlLW9wcG9ydHVuaXR5.desc": {
+          "source": "Update an existing opportunity in GoHighLevel",
+          "message": "Actualizar una oportunidad existente en GoHighLevel"
+        },
+        "app.R29IaWdoTGV2ZWw.action.dXBkYXRlLW9wcG9ydHVuaXR5.display_name": {
+          "source": "Update an Opportunity",
+          "message": "Actualizar una oportunidad"
+        },
+        "app.R29IaWdoTGV2ZWw.action.dXBkYXRlLW9wcG9ydHVuaXR5.option.YXNzaWduZWRUbw.desc": {
+          "source": "User ID to assign the opportunity to",
+          "message": "ID de usuario al que asignar la oportunidad"
+        },
+        "app.R29IaWdoTGV2ZWw.action.dXBkYXRlLW9wcG9ydHVuaXR5.option.YXNzaWduZWRUbw.display_name": {
+          "source": "Assigned To",
+          "message": "Asignado a"
+        },
+        "app.R29IaWdoTGV2ZWw.action.dXBkYXRlLW9wcG9ydHVuaXR5.option.YXNzaWduZWRUbw.short_desc": {
+          "source": "Assigned user",
+          "message": "Usuario asignado"
+        },
+        "app.R29IaWdoTGV2ZWw.action.dXBkYXRlLW9wcG9ydHVuaXR5.option.b3Bwb3J0dW5pdHlfaWQ.display_name": {
+          "source": "Opportunity ID",
+          "message": "ID de oportunidad"
+        },
+        "app.R29IaWdoTGV2ZWw.action.dXBkYXRlLW9wcG9ydHVuaXR5.option.b3Bwb3J0dW5pdHlfaWQ.short_desc": {
+          "source": "The opportunity to update",
+          "message": "La oportunidad a actualizar"
+        },
+        "app.R29IaWdoTGV2ZWw.action.dXBkYXRlLW9wcG9ydHVuaXR5.option.bW9uZXRhcnlWYWx1ZQ.desc": {
+          "source": "Monetary value of the opportunity",
+          "message": "Valor monetario de la oportunidad"
+        },
+        "app.R29IaWdoTGV2ZWw.action.dXBkYXRlLW9wcG9ydHVuaXR5.option.bW9uZXRhcnlWYWx1ZQ.display_name": {
+          "source": "Monetary Value",
+          "message": "Valor monetario"
+        },
+        "app.R29IaWdoTGV2ZWw.action.dXBkYXRlLW9wcG9ydHVuaXR5.option.bW9uZXRhcnlWYWx1ZQ.short_desc": {
+          "source": "Deal value",
+          "message": "Valor del trato"
+        },
+        "app.R29IaWdoTGV2ZWw.action.dXBkYXRlLW9wcG9ydHVuaXR5.option.bmFtZQ.desc": {
+          "source": "Name of the opportunity",
+          "message": "Nombre de la oportunidad"
+        },
+        "app.R29IaWdoTGV2ZWw.action.dXBkYXRlLW9wcG9ydHVuaXR5.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "Nombre"
+        },
+        "app.R29IaWdoTGV2ZWw.action.dXBkYXRlLW9wcG9ydHVuaXR5.option.bmFtZQ.short_desc": {
+          "source": "Opportunity name",
+          "message": "Nombre de la oportunidad"
+        },
+        "app.R29IaWdoTGV2ZWw.action.dXBkYXRlLW9wcG9ydHVuaXR5.option.c3RhdHVz.allowed-value.c3RyaW5nOm9wZW4.display_name": {
+          "source": "Open",
+          "message": "Abierta"
+        },
+        "app.R29IaWdoTGV2ZWw.action.dXBkYXRlLW9wcG9ydHVuaXR5.option.c3RhdHVz.allowed-value.c3RyaW5nOmFiYW5kb25lZA.display_name": {
+          "source": "Abandoned",
+          "message": "Abandonada"
+        },
+        "app.R29IaWdoTGV2ZWw.action.dXBkYXRlLW9wcG9ydHVuaXR5.option.c3RhdHVz.allowed-value.c3RyaW5nOmxvc3Q.display_name": {
+          "source": "Lost",
+          "message": "Perdida"
+        },
+        "app.R29IaWdoTGV2ZWw.action.dXBkYXRlLW9wcG9ydHVuaXR5.option.c3RhdHVz.allowed-value.c3RyaW5nOndvbg.display_name": {
+          "source": "Won",
+          "message": "Ganada"
+        },
+        "app.R29IaWdoTGV2ZWw.action.dXBkYXRlLW9wcG9ydHVuaXR5.option.c3RhdHVz.desc": {
+          "source": "Status of the opportunity",
+          "message": "Estado de la oportunidad"
+        },
+        "app.R29IaWdoTGV2ZWw.action.dXBkYXRlLW9wcG9ydHVuaXR5.option.c3RhdHVz.display_name": {
+          "source": "Status",
+          "message": "Estado"
+        },
+        "app.R29IaWdoTGV2ZWw.action.dXBkYXRlLW9wcG9ydHVuaXR5.option.c3RhdHVz.short_desc": {
+          "source": "Opportunity status",
+          "message": "Estado de la oportunidad"
+        },
+        "app.R29IaWdoTGV2ZWw.action.dXBkYXRlLW9wcG9ydHVuaXR5.option.cGlwZWxpbmVTdGFnZUlk.desc": {
+          "source": "The ID of the pipeline stage",
+          "message": "El ID de la etapa del pipeline"
+        },
+        "app.R29IaWdoTGV2ZWw.action.dXBkYXRlLW9wcG9ydHVuaXR5.option.cGlwZWxpbmVTdGFnZUlk.display_name": {
+          "source": "Pipeline Stage ID",
+          "message": "ID de etapa del pipeline"
+        },
+        "app.R29IaWdoTGV2ZWw.action.dXBkYXRlLW9wcG9ydHVuaXR5.option.cGlwZWxpbmVTdGFnZUlk.short_desc": {
+          "source": "Pipeline stage",
+          "message": "Etapa del pipeline"
+        },
+        "app.R29IaWdoTGV2ZWw.action.dXBkYXRlLW9wcG9ydHVuaXR5.short_desc": {
+          "source": "Update an existing opportunity",
+          "message": "Actualizar una oportunidad existente"
+        },
+        "app.R29IaWdoTGV2ZWw.action.dXBkYXRlLWNvbnRhY3Q.desc": {
+          "source": "Update an existing contact in GoHighLevel",
+          "message": "Actualizar un contacto existente en GoHighLevel"
+        },
+        "app.R29IaWdoTGV2ZWw.action.dXBkYXRlLWNvbnRhY3Q.display_name": {
+          "source": "Update a Contact",
+          "message": "Actualizar un contacto"
+        },
+        "app.R29IaWdoTGV2ZWw.action.dXBkYXRlLWNvbnRhY3Q.option.Y291bnRyeQ.desc": {
+          "source": "Country of the contact",
+          "message": "País del contacto"
+        },
+        "app.R29IaWdoTGV2ZWw.action.dXBkYXRlLWNvbnRhY3Q.option.Y291bnRyeQ.display_name": {
+          "source": "Country",
+          "message": "País"
+        },
+        "app.R29IaWdoTGV2ZWw.action.dXBkYXRlLWNvbnRhY3Q.option.Y291bnRyeQ.short_desc": {
+          "source": "Country",
+          "message": "País"
+        },
+        "app.R29IaWdoTGV2ZWw.action.dXBkYXRlLWNvbnRhY3Q.option.Y29tcGFueU5hbWU.desc": {
+          "source": "Company name of the contact",
+          "message": "Nombre de la empresa del contacto"
+        },
+        "app.R29IaWdoTGV2ZWw.action.dXBkYXRlLWNvbnRhY3Q.option.Y29tcGFueU5hbWU.display_name": {
+          "source": "Company Name",
+          "message": "Nombre de la empresa"
+        },
+        "app.R29IaWdoTGV2ZWw.action.dXBkYXRlLWNvbnRhY3Q.option.Y29tcGFueU5hbWU.short_desc": {
+          "source": "Company name",
+          "message": "Nombre de la empresa"
+        },
+        "app.R29IaWdoTGV2ZWw.action.dXBkYXRlLWNvbnRhY3Q.option.Y29udGFjdF9pZA.display_name": {
+          "source": "Contact ID",
+          "message": "ID de contacto"
+        },
+        "app.R29IaWdoTGV2ZWw.action.dXBkYXRlLWNvbnRhY3Q.option.Y29udGFjdF9pZA.short_desc": {
+          "source": "The contact to update",
+          "message": "El contacto a actualizar"
+        },
+        "app.R29IaWdoTGV2ZWw.action.dXBkYXRlLWNvbnRhY3Q.option.Y2l0eQ.desc": {
+          "source": "City of the contact",
+          "message": "Ciudad del contacto"
+        },
+        "app.R29IaWdoTGV2ZWw.action.dXBkYXRlLWNvbnRhY3Q.option.Y2l0eQ.display_name": {
+          "source": "City",
+          "message": "Ciudad"
+        },
+        "app.R29IaWdoTGV2ZWw.action.dXBkYXRlLWNvbnRhY3Q.option.Y2l0eQ.short_desc": {
+          "source": "City",
+          "message": "Ciudad"
+        },
+        "app.R29IaWdoTGV2ZWw.action.dXBkYXRlLWNvbnRhY3Q.option.Y3VzdG9tRmllbGRz.desc": {
+          "source": "Custom field values for the contact; each entry has an `id` (custom field ID) and `field_value`",
+          "message": "Valores de campos personalizados para el contacto; cada entrada tiene un `id` (ID del campo personalizado) y `field_value`"
+        },
+        "app.R29IaWdoTGV2ZWw.action.dXBkYXRlLWNvbnRhY3Q.option.Y3VzdG9tRmllbGRz.display_name": {
+          "source": "Custom Fields",
+          "message": "Campos personalizados"
+        },
+        "app.R29IaWdoTGV2ZWw.action.dXBkYXRlLWNvbnRhY3Q.option.Y3VzdG9tRmllbGRz.short_desc": {
+          "source": "Custom field values for the contact",
+          "message": "Valores de campos personalizados para el contacto"
+        },
+        "app.R29IaWdoTGV2ZWw.action.dXBkYXRlLWNvbnRhY3Q.option.YWRkcmVzczE.desc": {
+          "source": "Street address of the contact",
+          "message": "Dirección del contacto"
+        },
+        "app.R29IaWdoTGV2ZWw.action.dXBkYXRlLWNvbnRhY3Q.option.YWRkcmVzczE.display_name": {
+          "source": "Address",
+          "message": "Dirección"
+        },
+        "app.R29IaWdoTGV2ZWw.action.dXBkYXRlLWNvbnRhY3Q.option.YWRkcmVzczE.short_desc": {
+          "source": "Street address",
+          "message": "Dirección"
+        },
+        "app.R29IaWdoTGV2ZWw.action.dXBkYXRlLWNvbnRhY3Q.option.YXNzaWduZWRUbw.desc": {
+          "source": "User ID to assign the contact to",
+          "message": "ID de usuario al que asignar el contacto"
+        },
+        "app.R29IaWdoTGV2ZWw.action.dXBkYXRlLWNvbnRhY3Q.option.YXNzaWduZWRUbw.display_name": {
+          "source": "Assigned To",
+          "message": "Asignado a"
+        },
+        "app.R29IaWdoTGV2ZWw.action.dXBkYXRlLWNvbnRhY3Q.option.YXNzaWduZWRUbw.short_desc": {
+          "source": "Assigned user",
+          "message": "Usuario asignado"
+        },
+        "app.R29IaWdoTGV2ZWw.action.dXBkYXRlLWNvbnRhY3Q.option.ZG5k.desc": {
+          "source": "Whether the contact is on Do Not Disturb (`True` or `False`)",
+          "message": "Indica si el contacto está en No molestar (`True` o `False`)"
+        },
+        "app.R29IaWdoTGV2ZWw.action.dXBkYXRlLWNvbnRhY3Q.option.ZG5k.display_name": {
+          "source": "Do Not Disturb",
+          "message": "No molestar"
+        },
+        "app.R29IaWdoTGV2ZWw.action.dXBkYXRlLWNvbnRhY3Q.option.ZG5k.short_desc": {
+          "source": "DND status",
+          "message": "Estado de DND"
+        },
+        "app.R29IaWdoTGV2ZWw.action.dXBkYXRlLWNvbnRhY3Q.option.ZW1haWw.desc": {
+          "source": "Email address of the contact",
+          "message": "Dirección de correo electrónico del contacto"
+        },
+        "app.R29IaWdoTGV2ZWw.action.dXBkYXRlLWNvbnRhY3Q.option.ZW1haWw.display_name": {
+          "source": "Email",
+          "message": "Correo electrónico"
+        },
+        "app.R29IaWdoTGV2ZWw.action.dXBkYXRlLWNvbnRhY3Q.option.ZW1haWw.short_desc": {
+          "source": "Contact email",
+          "message": "Correo electrónico del contacto"
+        },
+        "app.R29IaWdoTGV2ZWw.action.dXBkYXRlLWNvbnRhY3Q.option.Zmlyc3ROYW1l.desc": {
+          "source": "First name of the contact",
+          "message": "Nombre del contacto"
+        },
+        "app.R29IaWdoTGV2ZWw.action.dXBkYXRlLWNvbnRhY3Q.option.Zmlyc3ROYW1l.display_name": {
+          "source": "First Name",
+          "message": "Nombre"
+        },
+        "app.R29IaWdoTGV2ZWw.action.dXBkYXRlLWNvbnRhY3Q.option.Zmlyc3ROYW1l.short_desc": {
+          "source": "Contact first name",
+          "message": "Nombre del contacto"
+        },
+        "app.R29IaWdoTGV2ZWw.action.dXBkYXRlLWNvbnRhY3Q.option.bGFzdE5hbWU.desc": {
+          "source": "Last name of the contact",
+          "message": "Apellido del contacto"
+        },
+        "app.R29IaWdoTGV2ZWw.action.dXBkYXRlLWNvbnRhY3Q.option.bGFzdE5hbWU.display_name": {
+          "source": "Last Name",
+          "message": "Apellido"
+        },
+        "app.R29IaWdoTGV2ZWw.action.dXBkYXRlLWNvbnRhY3Q.option.bGFzdE5hbWU.short_desc": {
+          "source": "Contact last name",
+          "message": "Apellido del contacto"
+        },
+        "app.R29IaWdoTGV2ZWw.action.dXBkYXRlLWNvbnRhY3Q.option.bmFtZQ.desc": {
+          "source": "Full name of the contact",
+          "message": "Nombre completo del contacto"
+        },
+        "app.R29IaWdoTGV2ZWw.action.dXBkYXRlLWNvbnRhY3Q.option.bmFtZQ.display_name": {
+          "source": "Full Name",
+          "message": "Nombre completo"
+        },
+        "app.R29IaWdoTGV2ZWw.action.dXBkYXRlLWNvbnRhY3Q.option.bmFtZQ.short_desc": {
+          "source": "Contact full name",
+          "message": "Nombre completo del contacto"
+        },
+        "app.R29IaWdoTGV2ZWw.action.dXBkYXRlLWNvbnRhY3Q.option.c291cmNl.desc": {
+          "source": "Source of the contact",
+          "message": "Origen del contacto"
+        },
+        "app.R29IaWdoTGV2ZWw.action.dXBkYXRlLWNvbnRhY3Q.option.c291cmNl.display_name": {
+          "source": "Source",
+          "message": "Origen"
+        },
+        "app.R29IaWdoTGV2ZWw.action.dXBkYXRlLWNvbnRhY3Q.option.c291cmNl.short_desc": {
+          "source": "Lead source",
+          "message": "Origen del cliente potencial"
+        },
+        "app.R29IaWdoTGV2ZWw.action.dXBkYXRlLWNvbnRhY3Q.option.c3RhdGU.desc": {
+          "source": "State or province of the contact",
+          "message": "Estado o provincia del contacto"
+        },
+        "app.R29IaWdoTGV2ZWw.action.dXBkYXRlLWNvbnRhY3Q.option.c3RhdGU.display_name": {
+          "source": "State",
+          "message": "Estado"
+        },
+        "app.R29IaWdoTGV2ZWw.action.dXBkYXRlLWNvbnRhY3Q.option.c3RhdGU.short_desc": {
+          "source": "State or province",
+          "message": "Estado o provincia"
+        },
+        "app.R29IaWdoTGV2ZWw.action.dXBkYXRlLWNvbnRhY3Q.option.cG9zdGFsQ29kZQ.desc": {
+          "source": "Postal or ZIP code of the contact",
+          "message": "Código postal del contacto"
+        },
+        "app.R29IaWdoTGV2ZWw.action.dXBkYXRlLWNvbnRhY3Q.option.cG9zdGFsQ29kZQ.display_name": {
+          "source": "Postal Code",
+          "message": "Código postal"
+        },
+        "app.R29IaWdoTGV2ZWw.action.dXBkYXRlLWNvbnRhY3Q.option.cG9zdGFsQ29kZQ.short_desc": {
+          "source": "Postal/ZIP code",
+          "message": "Código postal"
+        },
+        "app.R29IaWdoTGV2ZWw.action.dXBkYXRlLWNvbnRhY3Q.option.cGhvbmU.desc": {
+          "source": "Phone number of the contact",
+          "message": "Número de teléfono del contacto"
+        },
+        "app.R29IaWdoTGV2ZWw.action.dXBkYXRlLWNvbnRhY3Q.option.cGhvbmU.display_name": {
+          "source": "Phone",
+          "message": "Teléfono"
+        },
+        "app.R29IaWdoTGV2ZWw.action.dXBkYXRlLWNvbnRhY3Q.option.cGhvbmU.short_desc": {
+          "source": "Phone number",
+          "message": "Número de teléfono"
+        },
+        "app.R29IaWdoTGV2ZWw.action.dXBkYXRlLWNvbnRhY3Q.option.d2Vic2l0ZQ.desc": {
+          "source": "Website URL of the contact",
+          "message": "URL del sitio web del contacto"
+        },
+        "app.R29IaWdoTGV2ZWw.action.dXBkYXRlLWNvbnRhY3Q.option.d2Vic2l0ZQ.display_name": {
+          "source": "Website",
+          "message": "Sitio web"
+        },
+        "app.R29IaWdoTGV2ZWw.action.dXBkYXRlLWNvbnRhY3Q.option.d2Vic2l0ZQ.short_desc": {
+          "source": "Website URL",
+          "message": "URL del sitio web"
+        },
+        "app.R29IaWdoTGV2ZWw.action.dXBkYXRlLWNvbnRhY3Q.option.dGFncw.desc": {
+          "source": "List of tags to assign to the contact",
+          "message": "Lista de etiquetas para asignar al contacto"
+        },
+        "app.R29IaWdoTGV2ZWw.action.dXBkYXRlLWNvbnRhY3Q.option.dGFncw.display_name": {
+          "source": "Tags",
+          "message": "Etiquetas"
+        },
+        "app.R29IaWdoTGV2ZWw.action.dXBkYXRlLWNvbnRhY3Q.option.dGFncw.short_desc": {
+          "source": "Contact tags",
+          "message": "Etiquetas del contacto"
+        },
+        "app.R29IaWdoTGV2ZWw.action.dXBkYXRlLWNvbnRhY3Q.option.dGltZXpvbmU.desc": {
+          "source": "Timezone of the contact (e.g. `America/New_York`)",
+          "message": "Zona horaria del contacto (p. ej. `America/New_York`)"
+        },
+        "app.R29IaWdoTGV2ZWw.action.dXBkYXRlLWNvbnRhY3Q.option.dGltZXpvbmU.display_name": {
+          "source": "Timezone",
+          "message": "Zona horaria"
+        },
+        "app.R29IaWdoTGV2ZWw.action.dXBkYXRlLWNvbnRhY3Q.option.dGltZXpvbmU.short_desc": {
+          "source": "Timezone",
+          "message": "Zona horaria"
+        },
+        "app.R29IaWdoTGV2ZWw.action.dXBkYXRlLWNvbnRhY3Q.short_desc": {
+          "source": "Update an existing contact",
+          "message": "Actualizar un contacto existente"
+        },
+        "app.R29IaWdoTGV2ZWw.action.dXBkYXRlLXRhc2s.desc": {
+          "source": "Update an existing task in GoHighLevel",
+          "message": "Actualizar una tarea existente en GoHighLevel"
+        },
+        "app.R29IaWdoTGV2ZWw.action.dXBkYXRlLXRhc2s.display_name": {
+          "source": "Update a Task",
+          "message": "Actualizar una tarea"
+        },
+        "app.R29IaWdoTGV2ZWw.action.dXBkYXRlLXRhc2s.option.Y29tcGxldGVk.desc": {
+          "source": "Whether the task is completed (`True` or `False`)",
+          "message": "Indica si la tarea está completada (`True` o `False`)"
+        },
+        "app.R29IaWdoTGV2ZWw.action.dXBkYXRlLXRhc2s.option.Y29tcGxldGVk.display_name": {
+          "source": "Completed",
+          "message": "Completada"
+        },
+        "app.R29IaWdoTGV2ZWw.action.dXBkYXRlLXRhc2s.option.Y29tcGxldGVk.short_desc": {
+          "source": "Completion status",
+          "message": "Estado de finalización"
+        },
+        "app.R29IaWdoTGV2ZWw.action.dXBkYXRlLXRhc2s.option.Y29udGFjdF9pZA.desc": {
+          "source": "The contact ID the task belongs to",
+          "message": "El ID de contacto al que pertenece la tarea"
+        },
+        "app.R29IaWdoTGV2ZWw.action.dXBkYXRlLXRhc2s.option.Y29udGFjdF9pZA.display_name": {
+          "source": "Contact ID",
+          "message": "ID de contacto"
+        },
+        "app.R29IaWdoTGV2ZWw.action.dXBkYXRlLXRhc2s.option.Y29udGFjdF9pZA.short_desc": {
+          "source": "The contact",
+          "message": "El contacto"
+        },
+        "app.R29IaWdoTGV2ZWw.action.dXBkYXRlLXRhc2s.option.YXNzaWduZWRUbw.desc": {
+          "source": "User ID to assign the task to",
+          "message": "ID de usuario al que asignar la tarea"
+        },
+        "app.R29IaWdoTGV2ZWw.action.dXBkYXRlLXRhc2s.option.YXNzaWduZWRUbw.display_name": {
+          "source": "Assigned To",
+          "message": "Asignado a"
+        },
+        "app.R29IaWdoTGV2ZWw.action.dXBkYXRlLXRhc2s.option.YXNzaWduZWRUbw.short_desc": {
+          "source": "Assigned user",
+          "message": "Usuario asignado"
+        },
+        "app.R29IaWdoTGV2ZWw.action.dXBkYXRlLXRhc2s.option.Ym9keQ.desc": {
+          "source": "Description or body text of the task",
+          "message": "Descripción o texto del cuerpo de la tarea"
+        },
+        "app.R29IaWdoTGV2ZWw.action.dXBkYXRlLXRhc2s.option.Ym9keQ.display_name": {
+          "source": "Body",
+          "message": "Cuerpo"
+        },
+        "app.R29IaWdoTGV2ZWw.action.dXBkYXRlLXRhc2s.option.Ym9keQ.short_desc": {
+          "source": "Task description",
+          "message": "Descripción de la tarea"
+        },
+        "app.R29IaWdoTGV2ZWw.action.dXBkYXRlLXRhc2s.option.ZHVlRGF0ZQ.desc": {
+          "source": "Due date for the task (ISO 8601 format)",
+          "message": "Fecha de vencimiento de la tarea (formato ISO 8601)"
+        },
+        "app.R29IaWdoTGV2ZWw.action.dXBkYXRlLXRhc2s.option.ZHVlRGF0ZQ.display_name": {
+          "source": "Due Date",
+          "message": "Fecha de vencimiento"
+        },
+        "app.R29IaWdoTGV2ZWw.action.dXBkYXRlLXRhc2s.option.ZHVlRGF0ZQ.short_desc": {
+          "source": "Due date",
+          "message": "Fecha de vencimiento"
+        },
+        "app.R29IaWdoTGV2ZWw.action.dXBkYXRlLXRhc2s.option.dGFza19pZA.desc": {
+          "source": "The ID of the task to update",
+          "message": "El ID de la tarea a actualizar"
+        },
+        "app.R29IaWdoTGV2ZWw.action.dXBkYXRlLXRhc2s.option.dGFza19pZA.display_name": {
+          "source": "Task ID",
+          "message": "ID de tarea"
+        },
+        "app.R29IaWdoTGV2ZWw.action.dXBkYXRlLXRhc2s.option.dGFza19pZA.short_desc": {
+          "source": "The task to update",
+          "message": "La tarea que se va a actualizar"
+        },
+        "app.R29IaWdoTGV2ZWw.action.dXBkYXRlLXRhc2s.option.dGl0bGU.desc": {
+          "source": "Title of the task",
+          "message": "Título de la tarea"
+        },
+        "app.R29IaWdoTGV2ZWw.action.dXBkYXRlLXRhc2s.option.dGl0bGU.display_name": {
+          "source": "Title",
+          "message": "Título"
+        },
+        "app.R29IaWdoTGV2ZWw.action.dXBkYXRlLXRhc2s.option.dGl0bGU.short_desc": {
+          "source": "Task title",
+          "message": "Título de la tarea"
+        },
+        "app.R29IaWdoTGV2ZWw.action.dXBkYXRlLXRhc2s.short_desc": {
+          "source": "Update an existing task",
+          "message": "Actualizar una tarea existente"
+        },
+        "app.R29IaWdoTGV2ZWw.desc": {
+          "source": "GoHighLevel is a comprehensive CRM and marketing automation platform for contacts, opportunities, tasks, calendars, conversations, and campaigns.\n\nThis integration supports contact management, opportunity tracking, task management, campaign automation, and event triggers.",
+          "message": "GoHighLevel es una plataforma integral de CRM y automatización de marketing para contactos, oportunidades, tareas, calendarios, conversaciones y campañas.\n\nEsta integración admite la gestión de contactos, el seguimiento de oportunidades, la gestión de tareas, la automatización de campañas y los disparadores de eventos."
+        },
+        "app.R29IaWdoTGV2ZWw.display_name": {
+          "source": "GoHighLevel",
+          "message": "GoHighLevel"
+        },
+        "app.R29IaWdoTGV2ZWw.short_desc": {
+          "source": "GoHighLevel CRM and marketing automation platform",
+          "message": "Plataforma de CRM y automatización de marketing GoHighLevel"
+        }
+      }
+    }
+  }
+}

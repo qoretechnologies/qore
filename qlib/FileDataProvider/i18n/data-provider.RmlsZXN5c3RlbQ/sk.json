@@ -1,0 +1,357 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "sk": {
+      "messages": {
+        "app.RmlsZXN5c3RlbQ.action.Y29weQ.desc": {
+          "source": "Copy a file on the server filesystem",
+          "message": "Kopírovať súbor v súborovom systéme servera"
+        },
+        "app.RmlsZXN5c3RlbQ.action.Y29weQ.display_name": {
+          "source": "Copy File",
+          "message": "Kopírovať súbor"
+        },
+        "app.RmlsZXN5c3RlbQ.action.Y29weQ.option.Zm9sbG93X3N5bWxpbmtz.desc": {
+          "source": "Should symbolic links be followed?",
+          "message": "Majú sa nasledovať symbolické odkazy?"
+        },
+        "app.RmlsZXN5c3RlbQ.action.Y29weQ.option.Zm9sbG93X3N5bWxpbmtz.display_name": {
+          "source": "Follow Symlinks",
+          "message": "Nasledovať symbolické odkazy"
+        },
+        "app.RmlsZXN5c3RlbQ.action.Y29weQ.option.Zm9sbG93X3N5bWxpbmtz.short_desc": {
+          "source": "Should symbolic links be followed?",
+          "message": "Majú sa nasledovať symbolické odkazy?"
+        },
+        "app.RmlsZXN5c3RlbQ.action.Y29weQ.option.b3ZlcndyaXRl.desc": {
+          "source": "Should existing target files be overwritten?",
+          "message": "Majú sa existujúce cieľové súbory prepísať?"
+        },
+        "app.RmlsZXN5c3RlbQ.action.Y29weQ.option.b3ZlcndyaXRl.display_name": {
+          "source": "Overwrite",
+          "message": "Prepísať"
+        },
+        "app.RmlsZXN5c3RlbQ.action.Y29weQ.option.b3ZlcndyaXRl.short_desc": {
+          "source": "Should existing target files be overwritten?",
+          "message": "Majú sa existujúce cieľové súbory prepísať?"
+        },
+        "app.RmlsZXN5c3RlbQ.action.Y29weQ.option.c291cmNl.desc": {
+          "source": "The source file path",
+          "message": "Cesta k zdrojovému súboru"
+        },
+        "app.RmlsZXN5c3RlbQ.action.Y29weQ.option.c291cmNl.display_name": {
+          "source": "Source",
+          "message": "Zdroj"
+        },
+        "app.RmlsZXN5c3RlbQ.action.Y29weQ.option.c291cmNl.short_desc": {
+          "source": "The source file path",
+          "message": "Cesta k zdrojovému súboru"
+        },
+        "app.RmlsZXN5c3RlbQ.action.Y29weQ.option.dGFyZ2V0.desc": {
+          "source": "The target file path",
+          "message": "Cesta k cieľovému súboru"
+        },
+        "app.RmlsZXN5c3RlbQ.action.Y29weQ.option.dGFyZ2V0.display_name": {
+          "source": "Target",
+          "message": "Cieľ"
+        },
+        "app.RmlsZXN5c3RlbQ.action.Y29weQ.option.dGFyZ2V0.short_desc": {
+          "source": "The target file path",
+          "message": "Cesta k cieľovému súboru"
+        },
+        "app.RmlsZXN5c3RlbQ.action.Y29weQ.short_desc": {
+          "source": "Copy a file on the server filesystem",
+          "message": "Kopírovať súbor v súborovom systéme servera"
+        },
+        "app.RmlsZXN5c3RlbQ.action.Y3JlYXRl.desc": {
+          "source": "Create a file on the server filesystem",
+          "message": "Vytvoriť súbor v súborovom systéme servera"
+        },
+        "app.RmlsZXN5c3RlbQ.action.Y3JlYXRl.display_name": {
+          "source": "Create File",
+          "message": "Vytvoriť súbor"
+        },
+        "app.RmlsZXN5c3RlbQ.action.Y3JlYXRl.option.ZGF0YQ.desc": {
+          "source": "The string or binary data for the file",
+          "message": "Reťazcové alebo binárne dáta pre súbor"
+        },
+        "app.RmlsZXN5c3RlbQ.action.Y3JlYXRl.option.ZGF0YQ.display_name": {
+          "source": "Data",
+          "message": "Dáta"
+        },
+        "app.RmlsZXN5c3RlbQ.action.Y3JlYXRl.option.ZGF0YQ.short_desc": {
+          "source": "The string or binary data for the file",
+          "message": "Reťazcové alebo binárne dáta pre súbor"
+        },
+        "app.RmlsZXN5c3RlbQ.action.Y3JlYXRl.option.bW9kZQ.desc": {
+          "source": "The mode for the new file (default `0664`)",
+          "message": "Režim (mode) pre nový súbor (predvolené `0664`)"
+        },
+        "app.RmlsZXN5c3RlbQ.action.Y3JlYXRl.option.bW9kZQ.display_name": {
+          "source": "Mode",
+          "message": "Režim"
+        },
+        "app.RmlsZXN5c3RlbQ.action.Y3JlYXRl.option.bW9kZQ.short_desc": {
+          "source": "The mode for the new file (default '0664')",
+          "message": "Režim (mode) pre nový súbor (predvolené '0664')"
+        },
+        "app.RmlsZXN5c3RlbQ.action.Y3JlYXRl.option.cGF0aA.desc": {
+          "source": "The file path",
+          "message": "Cesta k súboru"
+        },
+        "app.RmlsZXN5c3RlbQ.action.Y3JlYXRl.option.cGF0aA.display_name": {
+          "source": "Path",
+          "message": "Cesta"
+        },
+        "app.RmlsZXN5c3RlbQ.action.Y3JlYXRl.option.cGF0aA.short_desc": {
+          "source": "The file path",
+          "message": "Cesta k súboru"
+        },
+        "app.RmlsZXN5c3RlbQ.action.Y3JlYXRl.short_desc": {
+          "source": "Create a file on the server filesystem",
+          "message": "Vytvoriť súbor v súborovom systéme servera"
+        },
+        "app.RmlsZXN5c3RlbQ.action.Z2V0.desc": {
+          "source": "Get a file on the server filesystem",
+          "message": "Získať súbor v súborovom systéme servera"
+        },
+        "app.RmlsZXN5c3RlbQ.action.Z2V0.display_name": {
+          "source": "Get File",
+          "message": "Získať súbor"
+        },
+        "app.RmlsZXN5c3RlbQ.action.Z2V0.option.ZW5jb2Rpbmc.desc": {
+          "source": "The string encoding to use if `text` = `True` (default: `UTF-8`)",
+          "message": "Kódovanie reťazca, ktoré sa má použiť, ak `text` = `True` (predvolené: `UTF-8`)"
+        },
+        "app.RmlsZXN5c3RlbQ.action.Z2V0.option.ZW5jb2Rpbmc.display_name": {
+          "source": "Encoding",
+          "message": "Kódovanie"
+        },
+        "app.RmlsZXN5c3RlbQ.action.Z2V0.option.ZW5jb2Rpbmc.short_desc": {
+          "source": "The string encoding to use if 'text' = 'True' (default: 'UTF-8')",
+          "message": "Kódovanie reťazca, ktoré sa má použiť, ak 'text' = 'True' (predvolené: 'UTF-8')"
+        },
+        "app.RmlsZXN5c3RlbQ.action.Z2V0.option.bWF4X2xlbg.desc": {
+          "source": "The maximum length of the data returned in bytes",
+          "message": "Maximálna dĺžka vrátených dát v bajtoch"
+        },
+        "app.RmlsZXN5c3RlbQ.action.Z2V0.option.bWF4X2xlbg.display_name": {
+          "source": "Max Len",
+          "message": "Maximálna dĺžka"
+        },
+        "app.RmlsZXN5c3RlbQ.action.Z2V0.option.bWF4X2xlbg.short_desc": {
+          "source": "The maximum length of the data returned in bytes",
+          "message": "Maximálna dĺžka vrátených dát v bajtoch"
+        },
+        "app.RmlsZXN5c3RlbQ.action.Z2V0.option.cGF0aA.desc": {
+          "source": "The path to the file",
+          "message": "Cesta k súboru"
+        },
+        "app.RmlsZXN5c3RlbQ.action.Z2V0.option.cGF0aA.display_name": {
+          "source": "Path",
+          "message": "Cesta"
+        },
+        "app.RmlsZXN5c3RlbQ.action.Z2V0.option.cGF0aA.short_desc": {
+          "source": "The path to the file",
+          "message": "Cesta k súboru"
+        },
+        "app.RmlsZXN5c3RlbQ.action.Z2V0.option.dGV4dA.desc": {
+          "source": "If `True` the file will be returned as a string, `False` (the default) as binary data",
+          "message": "Ak `True`, súbor sa vráti ako reťazec, `False` (predvolené) ako binárne dáta"
+        },
+        "app.RmlsZXN5c3RlbQ.action.Z2V0.option.dGV4dA.display_name": {
+          "source": "Text",
+          "message": "Text"
+        },
+        "app.RmlsZXN5c3RlbQ.action.Z2V0.option.dGV4dA.short_desc": {
+          "source": "If 'True' the file will be returned as a string, 'False' (the default) as binary data",
+          "message": "Ak je 'True', súbor sa vráti ako reťazec, ak 'False' (predvolené), ako binárne dáta"
+        },
+        "app.RmlsZXN5c3RlbQ.action.Z2V0.short_desc": {
+          "source": "Get a file on the server filesystem",
+          "message": "Získať súbor v súborovom systéme servera"
+        },
+        "app.RmlsZXN5c3RlbQ.action.ZGVsZXRl.desc": {
+          "source": "Delete a file on the server filesystem",
+          "message": "Odstrániť súbor v súborovom systéme servera"
+        },
+        "app.RmlsZXN5c3RlbQ.action.ZGVsZXRl.display_name": {
+          "source": "Delete File",
+          "message": "Odstrániť súbor"
+        },
+        "app.RmlsZXN5c3RlbQ.action.ZGVsZXRl.option.cGF0aA.desc": {
+          "source": "The file path",
+          "message": "Cesta k súboru"
+        },
+        "app.RmlsZXN5c3RlbQ.action.ZGVsZXRl.option.cGF0aA.display_name": {
+          "source": "Path",
+          "message": "Cesta"
+        },
+        "app.RmlsZXN5c3RlbQ.action.ZGVsZXRl.option.cGF0aA.short_desc": {
+          "source": "The file path",
+          "message": "Cesta k súboru"
+        },
+        "app.RmlsZXN5c3RlbQ.action.ZGVsZXRl.short_desc": {
+          "source": "Delete a file on the server filesystem",
+          "message": "Odstrániť súbor v súborovom systéme servera"
+        },
+        "app.RmlsZXN5c3RlbQ.action.bGlzdA.desc": {
+          "source": "List files and subdirectories in a folder on the server filesystem",
+          "message": "Zoznam súborov a podadresárov v priečinku v súborovom systéme servera"
+        },
+        "app.RmlsZXN5c3RlbQ.action.bGlzdA.display_name": {
+          "source": "List Files",
+          "message": "Zoznam súborov"
+        },
+        "app.RmlsZXN5c3RlbQ.action.bGlzdA.option.cGF0aA.desc": {
+          "source": "The file path",
+          "message": "Cesta k súboru"
+        },
+        "app.RmlsZXN5c3RlbQ.action.bGlzdA.option.cGF0aA.display_name": {
+          "source": "Path",
+          "message": "Cesta"
+        },
+        "app.RmlsZXN5c3RlbQ.action.bGlzdA.option.cGF0aA.short_desc": {
+          "source": "The file path",
+          "message": "Cesta k súboru"
+        },
+        "app.RmlsZXN5c3RlbQ.action.bGlzdA.short_desc": {
+          "source": "List files and subdirectories in a folder on the server filesystem",
+          "message": "Zoznam súborov a podadresárov v priečinku v súborovom systéme servera"
+        },
+        "app.RmlsZXN5c3RlbQ.action.bW92ZQ.desc": {
+          "source": "Move a file or directory on the server filesystem",
+          "message": "Presunúť súbor alebo adresár v súborovom systéme servera"
+        },
+        "app.RmlsZXN5c3RlbQ.action.bW92ZQ.display_name": {
+          "source": "Move File",
+          "message": "Presunúť súbor"
+        },
+        "app.RmlsZXN5c3RlbQ.action.bW92ZQ.option.b3ZlcndyaXRl.desc": {
+          "source": "Should existing target files be overwritten?",
+          "message": "Majú sa existujúce cieľové súbory prepísať?"
+        },
+        "app.RmlsZXN5c3RlbQ.action.bW92ZQ.option.b3ZlcndyaXRl.display_name": {
+          "source": "Overwrite",
+          "message": "Prepísať"
+        },
+        "app.RmlsZXN5c3RlbQ.action.bW92ZQ.option.b3ZlcndyaXRl.short_desc": {
+          "source": "Should existing target files be overwritten?",
+          "message": "Majú sa existujúce cieľové súbory prepísať?"
+        },
+        "app.RmlsZXN5c3RlbQ.action.bW92ZQ.option.c291cmNl.desc": {
+          "source": "The source file path",
+          "message": "Cesta k zdrojovému súboru"
+        },
+        "app.RmlsZXN5c3RlbQ.action.bW92ZQ.option.c291cmNl.display_name": {
+          "source": "Source",
+          "message": "Zdroj"
+        },
+        "app.RmlsZXN5c3RlbQ.action.bW92ZQ.option.c291cmNl.short_desc": {
+          "source": "The source file path",
+          "message": "Cesta k zdrojovému súboru"
+        },
+        "app.RmlsZXN5c3RlbQ.action.bW92ZQ.option.dGFyZ2V0.desc": {
+          "source": "The target file path",
+          "message": "Cesta k cieľovému súboru"
+        },
+        "app.RmlsZXN5c3RlbQ.action.bW92ZQ.option.dGFyZ2V0.display_name": {
+          "source": "Target",
+          "message": "Cieľ"
+        },
+        "app.RmlsZXN5c3RlbQ.action.bW92ZQ.option.dGFyZ2V0.short_desc": {
+          "source": "The target file path",
+          "message": "Cesta k cieľovému súboru"
+        },
+        "app.RmlsZXN5c3RlbQ.action.bW92ZQ.short_desc": {
+          "source": "Move a file or directory on the server filesystem",
+          "message": "Presunúť súbor alebo adresár v súborovom systéme servera"
+        },
+        "app.RmlsZXN5c3RlbQ.action.bWtkaXI.desc": {
+          "source": "Create a directory on the server filesystem",
+          "message": "Vytvoriť adresár v súborovom systéme servera"
+        },
+        "app.RmlsZXN5c3RlbQ.action.bWtkaXI.display_name": {
+          "source": "Create Directory",
+          "message": "Vytvoriť adresár"
+        },
+        "app.RmlsZXN5c3RlbQ.action.bWtkaXI.option.bW9kZQ.desc": {
+          "source": "The mode for the new file (default `0775`)",
+          "message": "Režim pre nový súbor (predvolené `0775`)"
+        },
+        "app.RmlsZXN5c3RlbQ.action.bWtkaXI.option.bW9kZQ.display_name": {
+          "source": "Mode",
+          "message": "Režim"
+        },
+        "app.RmlsZXN5c3RlbQ.action.bWtkaXI.option.bW9kZQ.short_desc": {
+          "source": "The mode for the new file (default '0775')",
+          "message": "Režim pre nový súbor (predvolené '0775')"
+        },
+        "app.RmlsZXN5c3RlbQ.action.bWtkaXI.option.cGF0aA.desc": {
+          "source": "The file path",
+          "message": "Cesta k súboru"
+        },
+        "app.RmlsZXN5c3RlbQ.action.bWtkaXI.option.cGF0aA.display_name": {
+          "source": "Path",
+          "message": "Cesta"
+        },
+        "app.RmlsZXN5c3RlbQ.action.bWtkaXI.option.cGF0aA.short_desc": {
+          "source": "The file path",
+          "message": "Cesta k súboru"
+        },
+        "app.RmlsZXN5c3RlbQ.action.bWtkaXI.short_desc": {
+          "source": "Create a directory on the server filesystem",
+          "message": "Vytvoriť adresár v súborovom systéme servera"
+        },
+        "app.RmlsZXN5c3RlbQ.action.c3RhdA.desc": {
+          "source": "Get details about a file or directory on the server filesystem",
+          "message": "Získať podrobnosti o súbore alebo adresári v súborovom systéme servera"
+        },
+        "app.RmlsZXN5c3RlbQ.action.c3RhdA.display_name": {
+          "source": "Get Info",
+          "message": "Získať informácie"
+        },
+        "app.RmlsZXN5c3RlbQ.action.c3RhdA.option.c3ltbGluaw.desc": {
+          "source": "If `True`, then if the target path is a symbolic link, information about the link itself will be returned instead of the target",
+          "message": "Ak je nastavené `True` a cieľová cesta je symbolický odkaz, vrátia sa informácie o samotnom odkaze namiesto cieľa"
+        },
+        "app.RmlsZXN5c3RlbQ.action.c3RhdA.option.c3ltbGluaw.display_name": {
+          "source": "Symlink",
+          "message": "Symbolický odkaz"
+        },
+        "app.RmlsZXN5c3RlbQ.action.c3RhdA.option.c3ltbGluaw.short_desc": {
+          "source": "If 'True', then if the target path is a symbolic link, information about the link itself will be returned instead of the target",
+          "message": "Ak je 'True' a cieľová cesta je symbolický odkaz, vrátia sa informácie o samotnom odkaze namiesto cieľa"
+        },
+        "app.RmlsZXN5c3RlbQ.action.c3RhdA.option.cGF0aA.desc": {
+          "source": "The file path",
+          "message": "Cesta k súboru"
+        },
+        "app.RmlsZXN5c3RlbQ.action.c3RhdA.option.cGF0aA.display_name": {
+          "source": "Path",
+          "message": "Cesta"
+        },
+        "app.RmlsZXN5c3RlbQ.action.c3RhdA.option.cGF0aA.short_desc": {
+          "source": "The file path",
+          "message": "Cesta k súboru"
+        },
+        "app.RmlsZXN5c3RlbQ.action.c3RhdA.short_desc": {
+          "source": "Get details about a file or directory on the server filesystem",
+          "message": "Získať podrobnosti o súbore alebo adresári v súborovom systéme servera"
+        },
+        "app.RmlsZXN5c3RlbQ.desc": {
+          "source": "Access to the server filesystem",
+          "message": "Prístup k súborovému systému servera"
+        },
+        "app.RmlsZXN5c3RlbQ.display_name": {
+          "source": "Server Filesystem",
+          "message": "Súborový systém servera"
+        },
+        "app.RmlsZXN5c3RlbQ.short_desc": {
+          "source": "Access to the server filesystem",
+          "message": "Prístup k súborovému systému servera"
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,489 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "es": {
+      "messages": {
+        "app.QmxhY2tGb3Jlc3RMYWJz.action.Z2VuZXJhdGUtaW1hZ2U.desc": {
+          "source": "Generates an image from a text prompt via the BFL FLUX API.  BFL is asynchronous: submit returns a `polling_url`, and this action drives the polling loop via @ref qoreasyncjobutilsintro \"QoreAsyncJobUtils\" until the job reaches the `Ready` terminal state.\n\nThe response contains `result.sample` — a CDN URL of the generated image.  Download the image promptly; BFL CDN URLs are temporary.",
+          "message": "Genera una imagen a partir de una descripción de texto mediante la API FLUX de BFL. BFL es asíncrono: el envío devuelve un `polling_url`, y esta acción controla el bucle de sondeo mediante @ref qoreasyncjobutilsintro \"QoreAsyncJobUtils\" hasta que el trabajo alcance el estado terminal `Ready`.\n\nLa respuesta contiene `result.sample`, una URL de CDN de la imagen generada. Descargue la imagen a la brevedad; las URL de CDN de BFL son temporales."
+        },
+        "app.QmxhY2tGb3Jlc3RMYWJz.action.Z2VuZXJhdGUtaW1hZ2U.display_name": {
+          "source": "Generate Image",
+          "message": "Generar imagen"
+        },
+        "app.QmxhY2tGb3Jlc3RMYWJz.action.Z2VuZXJhdGUtaW1hZ2U.option.YXNwZWN0X3JhdGlv.desc": {
+          "source": "Output aspect ratio.",
+          "message": "Relación de aspecto de salida."
+        },
+        "app.QmxhY2tGb3Jlc3RMYWJz.action.Z2VuZXJhdGUtaW1hZ2U.option.YXNwZWN0X3JhdGlv.display_name": {
+          "source": "Aspect Ratio",
+          "message": "Relación de aspecto"
+        },
+        "app.QmxhY2tGb3Jlc3RMYWJz.action.Z2VuZXJhdGUtaW1hZ2U.option.YXNwZWN0X3JhdGlv.short_desc": {
+          "source": "Output aspect ratio",
+          "message": "Relación de aspecto de salida"
+        },
+        "app.QmxhY2tGb3Jlc3RMYWJz.action.Z2VuZXJhdGUtaW1hZ2U.option.aGVpZ2h0.desc": {
+          "source": "Output image height in pixels (model-specific limits).",
+          "message": "Altura de la imagen de salida en píxeles (límites específicos del modelo)."
+        },
+        "app.QmxhY2tGb3Jlc3RMYWJz.action.Z2VuZXJhdGUtaW1hZ2U.option.aGVpZ2h0.display_name": {
+          "source": "Height",
+          "message": "Altura"
+        },
+        "app.QmxhY2tGb3Jlc3RMYWJz.action.Z2VuZXJhdGUtaW1hZ2U.option.aGVpZ2h0.short_desc": {
+          "source": "Output image height in pixels",
+          "message": "Altura de la imagen de salida en píxeles"
+        },
+        "app.QmxhY2tGb3Jlc3RMYWJz.action.Z2VuZXJhdGUtaW1hZ2U.option.aW5wdXRfaW1hZ2U.desc": {
+          "source": "Base64-encoded input image, used by the `flux-kontext-pro` and `flux-kontext-max` models for image-to-image editing.",
+          "message": "Imagen de entrada codificada en Base64, utilizada por los modelos `flux-kontext-pro` y `flux-kontext-max` para la edición de imagen a imagen."
+        },
+        "app.QmxhY2tGb3Jlc3RMYWJz.action.Z2VuZXJhdGUtaW1hZ2U.option.aW5wdXRfaW1hZ2U.display_name": {
+          "source": "Input Image (base64)",
+          "message": "Imagen de entrada (base64)"
+        },
+        "app.QmxhY2tGb3Jlc3RMYWJz.action.Z2VuZXJhdGUtaW1hZ2U.option.aW5wdXRfaW1hZ2U.short_desc": {
+          "source": "Base64-encoded input image (for `flux-kontext-*` models)",
+          "message": "Imagen de entrada codificada en Base64 (para modelos `flux-kontext-*`)"
+        },
+        "app.QmxhY2tGb3Jlc3RMYWJz.action.Z2VuZXJhdGUtaW1hZ2U.option.bW9kZWw.allowed-value.c3RyaW5nOmZsdXgtZGV2.display_name": {
+          "source": "FLUX Dev",
+          "message": "FLUX Dev"
+        },
+        "app.QmxhY2tGb3Jlc3RMYWJz.action.Z2VuZXJhdGUtaW1hZ2U.option.bW9kZWw.allowed-value.c3RyaW5nOmZsdXgta29udGV4dC1tYXg.display_name": {
+          "source": "FLUX Kontext Max (image edit)",
+          "message": "FLUX Kontext Max (edición de imagen)"
+        },
+        "app.QmxhY2tGb3Jlc3RMYWJz.action.Z2VuZXJhdGUtaW1hZ2U.option.bW9kZWw.allowed-value.c3RyaW5nOmZsdXgta29udGV4dC1wcm8.display_name": {
+          "source": "FLUX Kontext Pro (image edit)",
+          "message": "FLUX Kontext Pro (edición de imagen)"
+        },
+        "app.QmxhY2tGb3Jlc3RMYWJz.action.Z2VuZXJhdGUtaW1hZ2U.option.bW9kZWw.allowed-value.c3RyaW5nOmZsdXgtcHJv.display_name": {
+          "source": "FLUX Pro",
+          "message": "FLUX Pro"
+        },
+        "app.QmxhY2tGb3Jlc3RMYWJz.action.Z2VuZXJhdGUtaW1hZ2U.option.bW9kZWw.allowed-value.c3RyaW5nOmZsdXgtcHJvLTEuMQ.display_name": {
+          "source": "FLUX Pro 1.1",
+          "message": "FLUX Pro 1.1"
+        },
+        "app.QmxhY2tGb3Jlc3RMYWJz.action.Z2VuZXJhdGUtaW1hZ2U.option.bW9kZWw.allowed-value.c3RyaW5nOmZsdXgtcHJvLTEuMS11bHRyYQ.display_name": {
+          "source": "FLUX Pro 1.1 Ultra",
+          "message": "FLUX Pro 1.1 Ultra"
+        },
+        "app.QmxhY2tGb3Jlc3RMYWJz.action.Z2VuZXJhdGUtaW1hZ2U.option.bW9kZWw.desc": {
+          "source": "FLUX model identifier — `flux-pro-1.1`, `flux-pro-1.1-ultra` (highest quality), `flux-pro`, `flux-dev`, `flux-kontext-pro` / `flux-kontext-max` (image-to-image edit).",
+          "message": "Identificador de modelo FLUX: `flux-pro-1.1`, `flux-pro-1.1-ultra` (máxima calidad), `flux-pro`, `flux-dev`, `flux-kontext-pro` / `flux-kontext-max` (edición de imagen a imagen)."
+        },
+        "app.QmxhY2tGb3Jlc3RMYWJz.action.Z2VuZXJhdGUtaW1hZ2U.option.bW9kZWw.display_name": {
+          "source": "Model",
+          "message": "Modelo"
+        },
+        "app.QmxhY2tGb3Jlc3RMYWJz.action.Z2VuZXJhdGUtaW1hZ2U.option.bW9kZWw.short_desc": {
+          "source": "FLUX model identifier",
+          "message": "Identificador de modelo FLUX"
+        },
+        "app.QmxhY2tGb3Jlc3RMYWJz.action.Z2VuZXJhdGUtaW1hZ2U.option.bmVnYXRpdmVfcHJvbXB0.desc": {
+          "source": "Text describing what to avoid in the image.",
+          "message": "Texto que describe qué evitar en la imagen."
+        },
+        "app.QmxhY2tGb3Jlc3RMYWJz.action.Z2VuZXJhdGUtaW1hZ2U.option.bmVnYXRpdmVfcHJvbXB0.display_name": {
+          "source": "Negative Prompt",
+          "message": "Prompt negativo"
+        },
+        "app.QmxhY2tGb3Jlc3RMYWJz.action.Z2VuZXJhdGUtaW1hZ2U.option.bmVnYXRpdmVfcHJvbXB0.short_desc": {
+          "source": "What to avoid in the image",
+          "message": "Qué evitar en la imagen"
+        },
+        "app.QmxhY2tGb3Jlc3RMYWJz.action.Z2VuZXJhdGUtaW1hZ2U.option.c2VlZA.desc": {
+          "source": "Random seed for reproducibility — same seed + prompt should produce the same image.",
+          "message": "Semilla aleatoria para reproducibilidad: la misma semilla + prompt debería producir la misma imagen."
+        },
+        "app.QmxhY2tGb3Jlc3RMYWJz.action.Z2VuZXJhdGUtaW1hZ2U.option.c2VlZA.display_name": {
+          "source": "Seed",
+          "message": "Semilla"
+        },
+        "app.QmxhY2tGb3Jlc3RMYWJz.action.Z2VuZXJhdGUtaW1hZ2U.option.c2VlZA.short_desc": {
+          "source": "Random seed for reproducibility",
+          "message": "Semilla aleatoria para reproducibilidad"
+        },
+        "app.QmxhY2tGb3Jlc3RMYWJz.action.Z2VuZXJhdGUtaW1hZ2U.option.cHJvbXB0.desc": {
+          "source": "Text prompt describing the desired image.",
+          "message": "Prompt de texto que describe la imagen deseada."
+        },
+        "app.QmxhY2tGb3Jlc3RMYWJz.action.Z2VuZXJhdGUtaW1hZ2U.option.cHJvbXB0.display_name": {
+          "source": "Prompt",
+          "message": "Prompt"
+        },
+        "app.QmxhY2tGb3Jlc3RMYWJz.action.Z2VuZXJhdGUtaW1hZ2U.option.cHJvbXB0.short_desc": {
+          "source": "Text prompt describing the image",
+          "message": "Prompt de texto que describe la imagen"
+        },
+        "app.QmxhY2tGb3Jlc3RMYWJz.action.Z2VuZXJhdGUtaW1hZ2U.option.cHJvbXB0X3Vwc2FtcGxpbmc.desc": {
+          "source": "When `True`, BFL rewrites the prompt server-side for improved quality.  Off by default.",
+          "message": "Cuando es `True`, BFL reescribe el prompt en el servidor para mejorar la calidad. Desactivado de forma predeterminada."
+        },
+        "app.QmxhY2tGb3Jlc3RMYWJz.action.Z2VuZXJhdGUtaW1hZ2U.option.cHJvbXB0X3Vwc2FtcGxpbmc.display_name": {
+          "source": "Prompt Upsampling",
+          "message": "Sobremuestreo de prompt"
+        },
+        "app.QmxhY2tGb3Jlc3RMYWJz.action.Z2VuZXJhdGUtaW1hZ2U.option.cHJvbXB0X3Vwc2FtcGxpbmc.short_desc": {
+          "source": "Let BFL rewrite the prompt for better quality",
+          "message": "Permitir que BFL reescriba el prompt para obtener una mejor calidad"
+        },
+        "app.QmxhY2tGb3Jlc3RMYWJz.action.Z2VuZXJhdGUtaW1hZ2U.option.d2lkdGg.desc": {
+          "source": "Output image width in pixels (model-specific limits).",
+          "message": "Ancho de la imagen de salida en píxeles (límites específicos del modelo)."
+        },
+        "app.QmxhY2tGb3Jlc3RMYWJz.action.Z2VuZXJhdGUtaW1hZ2U.option.d2lkdGg.display_name": {
+          "source": "Width",
+          "message": "Ancho"
+        },
+        "app.QmxhY2tGb3Jlc3RMYWJz.action.Z2VuZXJhdGUtaW1hZ2U.option.d2lkdGg.short_desc": {
+          "source": "Output image width in pixels",
+          "message": "Ancho de la imagen de salida en píxeles"
+        },
+        "app.QmxhY2tGb3Jlc3RMYWJz.action.Z2VuZXJhdGUtaW1hZ2U.short_desc": {
+          "source": "Generate an image from a text prompt (async)",
+          "message": "Generar una imagen a partir de un prompt de texto (asíncrono)"
+        },
+        "app.QmxhY2tGb3Jlc3RMYWJz.action.bWFrZS1hcGktY2FsbA.desc": {
+          "source": "Make a custom HTTP / REST API call to **Black Forest Labs** using the configured connection's authentication.\n\nSpecify the HTTP method, the URI path (relative to the connection's API base URL), optional query parameters, headers, and request body. The response is returned as a hash containing the status code, response headers, and response body.\n\nUse this action for endpoints that are not yet exposed as first-class actions on this app.",
+          "message": "Realiza una llamada personalizada a la API HTTP / REST a **Black Forest Labs** utilizando la autenticación de la conexión configurada.\n\nEspecifica el método HTTP, la ruta URI (relativa a la URL base de la API de la conexión), los parámetros de consulta opcionales, los encabezados y el cuerpo de la solicitud. La respuesta se devuelve como un hash que contiene el código de estado, los encabezados de respuesta y el cuerpo de la respuesta.\n\nUtiliza esta acción para extremos que aún no están expuestos como acciones de primer nivel en esta aplicación."
+        },
+        "app.QmxhY2tGb3Jlc3RMYWJz.action.bWFrZS1hcGktY2FsbA.display_name": {
+          "source": "Make an API call",
+          "message": "Realizar una llamada a la API"
+        },
+        "app.QmxhY2tGb3Jlc3RMYWJz.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.desc": {
+          "source": "The request body. The effective type depends on `body_type`: JSON/form/YAML expect a hash, XML/text expect a string, multipart expects a file structure, binary expects raw bytes.",
+          "message": "El cuerpo de la solicitud. El tipo efectivo depende de `body_type`: JSON/formulario/YAML esperan un hash, XML/texto esperan una cadena, multipart espera una estructura de archivo y binario espera bytes sin procesar."
+        },
+        "app.QmxhY2tGb3Jlc3RMYWJz.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.display_name": {
+          "source": "Body",
+          "message": "Cuerpo"
+        },
+        "app.QmxhY2tGb3Jlc3RMYWJz.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.short_desc": {
+          "source": "The request body",
+          "message": "El cuerpo de la solicitud"
+        },
+        "app.QmxhY2tGb3Jlc3RMYWJz.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.desc": {
+          "source": "Upload a file using `multipart/form-data`. The body must be a @ref DataProvider::FileDataType \"FileDataType\" structure (filename + content + mime_type). The framework builds the multipart envelope and sets the boundary header.",
+          "message": "Cargue un archivo usando `multipart/form-data`. El cuerpo debe ser una estructura @ref DataProvider::FileDataType \"FileDataType\" (filename + content + mime_type). El marco construye el sobre multipart y establece el encabezado boundary."
+        },
+        "app.QmxhY2tGb3Jlc3RMYWJz.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.display_name": {
+          "source": "Multipart Form",
+          "message": "Formulario multipart"
+        },
+        "app.QmxhY2tGb3Jlc3RMYWJz.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.short_desc": {
+          "source": "Upload a file using multipart/form-data",
+          "message": "Cargar un archivo usando multipart/form-data"
+        },
+        "app.QmxhY2tGb3Jlc3RMYWJz.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.desc": {
+          "source": "Pass the body to the REST client unchanged; the client decides serialization based on its configured `data` option and the value type",
+          "message": "Pasa el cuerpo al cliente REST sin cambios; el cliente decide la serialización según su opción `data` configurada y el tipo de valor"
+        },
+        "app.QmxhY2tGb3Jlc3RMYWJz.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.display_name": {
+          "source": "Auto",
+          "message": "Auto"
+        },
+        "app.QmxhY2tGb3Jlc3RMYWJz.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.short_desc": {
+          "source": "Pass-through; use connection serialization and let the REST client decide",
+          "message": "Paso directo; utiliza la serialización de la conexión y deja que el cliente REST decida"
+        },
+        "app.QmxhY2tGb3Jlc3RMYWJz.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.desc": {
+          "source": "Send the body as raw bytes. The body must be a binary value. Sets `Content-Type: application/octet-stream` unless overridden by `hdr`.",
+          "message": "Envía el cuerpo como bytes sin procesar. El cuerpo debe ser un valor binario. Establece `Content-Type: application/octet-stream` a menos que `hdr` lo anule."
+        },
+        "app.QmxhY2tGb3Jlc3RMYWJz.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.display_name": {
+          "source": "Raw Binary",
+          "message": "Binario sin procesar"
+        },
+        "app.QmxhY2tGb3Jlc3RMYWJz.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.short_desc": {
+          "source": "Send body as raw bytes",
+          "message": "Enviar el cuerpo como bytes sin procesar"
+        },
+        "app.QmxhY2tGb3Jlc3RMYWJz.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.desc": {
+          "source": "Serialize a hash of form fields as `application/x-www-form-urlencoded`. The body must be a hash whose values are scalars (strings/numbers/booleans).",
+          "message": "Serializa un hash de campos de formulario como `application/x-www-form-urlencoded`. El cuerpo debe ser un hash cuyos valores sean escalares (cadenas/números/booleanos)."
+        },
+        "app.QmxhY2tGb3Jlc3RMYWJz.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.display_name": {
+          "source": "Form (URL-encoded)",
+          "message": "Formulario (codificado en URL)"
+        },
+        "app.QmxhY2tGb3Jlc3RMYWJz.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.short_desc": {
+          "source": "Serialize body as application/x-www-form-urlencoded form fields",
+          "message": "Serializar el cuerpo como campos de formulario application/x-www-form-urlencoded"
+        },
+        "app.QmxhY2tGb3Jlc3RMYWJz.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.desc": {
+          "source": "Serialize the body as JSON; sets `Content-Type: application/json`. The body should be a hash, list, or scalar value.",
+          "message": "Serializa el cuerpo como JSON; establece `Content-Type: application/json`. El cuerpo debe ser un hash, lista o valor escalar."
+        },
+        "app.QmxhY2tGb3Jlc3RMYWJz.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.display_name": {
+          "source": "JSON",
+          "message": "JSON"
+        },
+        "app.QmxhY2tGb3Jlc3RMYWJz.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.short_desc": {
+          "source": "Serialize body as JSON",
+          "message": "Serializar el cuerpo como JSON"
+        },
+        "app.QmxhY2tGb3Jlc3RMYWJz.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.desc": {
+          "source": "Send the body as plain text. The body must be a string. Sets `Content-Type: text/plain`.",
+          "message": "Envía el cuerpo como texto plano. El cuerpo debe ser una cadena. Establece `Content-Type: text/plain`."
+        },
+        "app.QmxhY2tGb3Jlc3RMYWJz.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.display_name": {
+          "source": "Plain Text",
+          "message": "Texto plano"
+        },
+        "app.QmxhY2tGb3Jlc3RMYWJz.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.short_desc": {
+          "source": "Send body as text/plain",
+          "message": "Enviar el cuerpo como text/plain"
+        },
+        "app.QmxhY2tGb3Jlc3RMYWJz.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.desc": {
+          "source": "Send the body as XML. If the body is a hash it is serialized to XML; if it is a string it is sent verbatim. Sets `Content-Type: application/xml`.",
+          "message": "Envía el cuerpo como XML. Si el cuerpo es un hash, se serializa a XML; si es una cadena, se envía textualmente. Establece `Content-Type: application/xml`."
+        },
+        "app.QmxhY2tGb3Jlc3RMYWJz.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.display_name": {
+          "source": "XML",
+          "message": "XML"
+        },
+        "app.QmxhY2tGb3Jlc3RMYWJz.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.short_desc": {
+          "source": "Send body as XML",
+          "message": "Enviar el cuerpo como XML"
+        },
+        "app.QmxhY2tGb3Jlc3RMYWJz.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.desc": {
+          "source": "Send the body as YAML. If the body is a hash it is serialized to YAML; if it is a string it is sent verbatim. Sets `Content-Type: application/x-yaml`.",
+          "message": "Envía el cuerpo como YAML. Si el cuerpo es un hash, se serializa a YAML; si es una cadena, se envía textualmente. Establece `Content-Type: application/x-yaml`."
+        },
+        "app.QmxhY2tGb3Jlc3RMYWJz.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.display_name": {
+          "source": "YAML",
+          "message": "YAML"
+        },
+        "app.QmxhY2tGb3Jlc3RMYWJz.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.short_desc": {
+          "source": "Send body as YAML",
+          "message": "Enviar el cuerpo como YAML"
+        },
+        "app.QmxhY2tGb3Jlc3RMYWJz.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.desc": {
+          "source": "Selects the body serialization mode and the corresponding `Content-Type` header. Changing this field reshapes the `body` editor - selecting JSON exposes a JSON editor, selecting Multipart Form exposes a file picker, and so on.",
+          "message": "Selecciona el modo de serialización del cuerpo y el encabezado `Content-Type` correspondiente. Cambiar este campo modifica la forma del editor `body`: seleccionar JSON expone un editor JSON, seleccionar Formulario multipart expone un selector de archivos, y así sucesivamente."
+        },
+        "app.QmxhY2tGb3Jlc3RMYWJz.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.display_name": {
+          "source": "Body Type",
+          "message": "Tipo de cuerpo"
+        },
+        "app.QmxhY2tGb3Jlc3RMYWJz.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.short_desc": {
+          "source": "How the body is serialized and what Content-Type is sent",
+          "message": "Cómo se serializa el cuerpo y qué Content-Type se envía"
+        },
+        "app.QmxhY2tGb3Jlc3RMYWJz.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.desc": {
+          "source": "If `True`, non-2xx HTTP responses return as the normal response hash (with the actual status code) instead of raising `REST-RESPONSE-ERROR`. Useful for handling 4xx/5xx as data - e.g. checking whether a resource exists. Overrides the connection's `error_passthru` setting for this call only.",
+          "message": "Si es `True`, las respuestas HTTP que no sean 2xx se devuelven como el hash de respuesta normal (con el código de estado real) en lugar de generar `REST-RESPONSE-ERROR`. Útil para manejar 4xx/5xx como datos, por ejemplo, para comprobar si un recurso existe. Anula la configuración `error_passthru` de la conexión solo para esta llamada."
+        },
+        "app.QmxhY2tGb3Jlc3RMYWJz.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.display_name": {
+          "source": "Return Errors as Data",
+          "message": "Devolver errores como datos"
+        },
+        "app.QmxhY2tGb3Jlc3RMYWJz.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.short_desc": {
+          "source": "Return non-2xx responses normally instead of throwing",
+          "message": "Devolver respuestas que no sean 2xx normalmente en lugar de lanzar una excepción"
+        },
+        "app.QmxhY2tGb3Jlc3RMYWJz.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.desc": {
+          "source": "Optional list of HTTP status codes treated as success. If set and the response status is not in this list, the action throws `REST-STATUS-ERROR`. When unset, the REST client's default behavior applies (typically: 2xx is success, non-2xx throws).",
+          "message": "Lista opcional de códigos de estado HTTP tratados como éxito. Si se establece y el estado de la respuesta no está en esta lista, la acción lanza `REST-STATUS-ERROR`. Cuando no se establece, se aplica el comportamiento predeterminado del cliente REST (típicamente: 2xx es éxito, no 2xx lanza una excepción)."
+        },
+        "app.QmxhY2tGb3Jlc3RMYWJz.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.display_name": {
+          "source": "Expected Status Codes",
+          "message": "Códigos de estado esperados"
+        },
+        "app.QmxhY2tGb3Jlc3RMYWJz.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.short_desc": {
+          "source": "Response status codes treated as success",
+          "message": "Códigos de estado de respuesta tratados como éxito"
+        },
+        "app.QmxhY2tGb3Jlc3RMYWJz.action.bWFrZS1hcGktY2FsbA.option.aGRy.desc": {
+          "source": "Hash of custom headers added to the request. These override any default headers set by `body_type` (e.g. supplying `Content-Type` here wins over the body-type default).",
+          "message": "Hash de encabezados personalizados agregados a la solicitud. Estos anulan cualquier encabezado predeterminado establecido por `body_type` (por ejemplo, proporcionar `Content-Type` aquí prevalece sobre el valor predeterminado según el tipo de cuerpo)."
+        },
+        "app.QmxhY2tGb3Jlc3RMYWJz.action.bWFrZS1hcGktY2FsbA.option.aGRy.display_name": {
+          "source": "Custom Headers",
+          "message": "Encabezados personalizados"
+        },
+        "app.QmxhY2tGb3Jlc3RMYWJz.action.bWFrZS1hcGktY2FsbA.option.aGRy.short_desc": {
+          "source": "Extra request headers",
+          "message": "Encabezados de solicitud adicionales"
+        },
+        "app.QmxhY2tGb3Jlc3RMYWJz.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.desc": {
+          "source": "If `True`, the response hash includes a `debug` sub-hash containing the request method/URL/headers (with sensitive values redacted), request and response sizes, and round-trip duration. Useful when investigating slow or failing calls. Off by default to keep responses lean.",
+          "message": "Si es `True`, el hash de respuesta incluye un sub-hash `debug` que contiene el método/URL/encabezados de la solicitud (con valores confidenciales redactados), tamaños de solicitud y respuesta, y la duración del viaje de ida y vuelta. Útil para investigar llamadas lentas o con fallos. Desactivado de forma predeterminada para mantener las respuestas ligeras."
+        },
+        "app.QmxhY2tGb3Jlc3RMYWJz.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.display_name": {
+          "source": "Include Debug Info",
+          "message": "Incluir información de depuración"
+        },
+        "app.QmxhY2tGb3Jlc3RMYWJz.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.short_desc": {
+          "source": "Include request/timing/size debug info in the response",
+          "message": "Incluir información de depuración de solicitud/tiempo/tamaño en la respuesta"
+        },
+        "app.QmxhY2tGb3Jlc3RMYWJz.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.desc": {
+          "source": "HTTP `OPTIONS`",
+          "message": "HTTP `OPTIONS`"
+        },
+        "app.QmxhY2tGb3Jlc3RMYWJz.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.display_name": {
+          "source": "OPTIONS",
+          "message": "OPTIONS"
+        },
+        "app.QmxhY2tGb3Jlc3RMYWJz.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.short_desc": {
+          "source": "HTTP OPTIONS",
+          "message": "HTTP OPTIONS"
+        },
+        "app.QmxhY2tGb3Jlc3RMYWJz.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.desc": {
+          "source": "HTTP `DELETE`",
+          "message": "HTTP `DELETE`"
+        },
+        "app.QmxhY2tGb3Jlc3RMYWJz.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.display_name": {
+          "source": "DELETE",
+          "message": "DELETE"
+        },
+        "app.QmxhY2tGb3Jlc3RMYWJz.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.short_desc": {
+          "source": "HTTP DELETE",
+          "message": "HTTP DELETE"
+        },
+        "app.QmxhY2tGb3Jlc3RMYWJz.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.desc": {
+          "source": "HTTP `GET`",
+          "message": "HTTP `GET`"
+        },
+        "app.QmxhY2tGb3Jlc3RMYWJz.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.display_name": {
+          "source": "GET",
+          "message": "GET"
+        },
+        "app.QmxhY2tGb3Jlc3RMYWJz.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.short_desc": {
+          "source": "HTTP GET",
+          "message": "HTTP GET"
+        },
+        "app.QmxhY2tGb3Jlc3RMYWJz.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.desc": {
+          "source": "HTTP `HEAD`",
+          "message": "HTTP `HEAD`"
+        },
+        "app.QmxhY2tGb3Jlc3RMYWJz.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.display_name": {
+          "source": "HEAD",
+          "message": "HEAD"
+        },
+        "app.QmxhY2tGb3Jlc3RMYWJz.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.short_desc": {
+          "source": "HTTP HEAD",
+          "message": "HTTP HEAD"
+        },
+        "app.QmxhY2tGb3Jlc3RMYWJz.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.desc": {
+          "source": "HTTP `PATCH`",
+          "message": "HTTP `PATCH`"
+        },
+        "app.QmxhY2tGb3Jlc3RMYWJz.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.display_name": {
+          "source": "PATCH",
+          "message": "PATCH"
+        },
+        "app.QmxhY2tGb3Jlc3RMYWJz.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.short_desc": {
+          "source": "HTTP PATCH",
+          "message": "HTTP PATCH"
+        },
+        "app.QmxhY2tGb3Jlc3RMYWJz.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.desc": {
+          "source": "HTTP `POST`",
+          "message": "HTTP `POST`"
+        },
+        "app.QmxhY2tGb3Jlc3RMYWJz.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.display_name": {
+          "source": "POST",
+          "message": "POST"
+        },
+        "app.QmxhY2tGb3Jlc3RMYWJz.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.short_desc": {
+          "source": "HTTP POST",
+          "message": "HTTP POST"
+        },
+        "app.QmxhY2tGb3Jlc3RMYWJz.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.desc": {
+          "source": "HTTP `PUT`",
+          "message": "HTTP `PUT`"
+        },
+        "app.QmxhY2tGb3Jlc3RMYWJz.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.display_name": {
+          "source": "PUT",
+          "message": "PUT"
+        },
+        "app.QmxhY2tGb3Jlc3RMYWJz.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.short_desc": {
+          "source": "HTTP PUT",
+          "message": "HTTP PUT"
+        },
+        "app.QmxhY2tGb3Jlc3RMYWJz.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.desc": {
+          "source": "HTTP `TRACE`",
+          "message": "HTTP `TRACE`"
+        },
+        "app.QmxhY2tGb3Jlc3RMYWJz.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.display_name": {
+          "source": "TRACE",
+          "message": "TRACE"
+        },
+        "app.QmxhY2tGb3Jlc3RMYWJz.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.short_desc": {
+          "source": "HTTP TRACE",
+          "message": "HTTP TRACE"
+        },
+        "app.QmxhY2tGb3Jlc3RMYWJz.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "El método HTTP que se utilizará para la solicitud"
+        },
+        "app.QmxhY2tGb3Jlc3RMYWJz.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.display_name": {
+          "source": "HTTP Method",
+          "message": "Método HTTP"
+        },
+        "app.QmxhY2tGb3Jlc3RMYWJz.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.short_desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "El método HTTP que se utilizará para la solicitud"
+        },
+        "app.QmxhY2tGb3Jlc3RMYWJz.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain `{name}` placeholders that are replaced from `path_vars`. Example: `/users/{id}/comments`.",
+          "message": "La ruta URI relativa a la URL base de la API de la conexión. Puede contener marcadores de posición `{name}` que se reemplazan desde `path_vars`. Ejemplo: `/users/{id}/comments`."
+        },
+        "app.QmxhY2tGb3Jlc3RMYWJz.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.display_name": {
+          "source": "URI Path",
+          "message": "Ruta URI"
+        },
+        "app.QmxhY2tGb3Jlc3RMYWJz.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.short_desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain '{name}' placeholders that are replaced from 'path_vars'. Example: '/users/{id}/comments'",
+          "message": "La ruta URI relativa a la URL base de la API de la conexión. Puede contener marcadores de posición '{name}' que se reemplazan desde 'path_vars'. Ejemplo: '/users/{id}/comments'"
+        },
+        "app.QmxhY2tGb3Jlc3RMYWJz.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.desc": {
+          "source": "Hash of values substituted into `{name}` placeholders in the URI path. Example: with `path = /users/{id}` and `path_vars = {id: 123}` the framework sends `/users/123`. Values are URL-encoded.",
+          "message": "Hash de valores sustituidos en los marcadores de posición `{name}` en la ruta URI. Ejemplo: con `path = /users/{id}` y `path_vars = {id: 123}`, el framework envía `/users/123`. Los valores están codificados en URL."
+        },
+        "app.QmxhY2tGb3Jlc3RMYWJz.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.display_name": {
+          "source": "Path Variables",
+          "message": "Variables de ruta"
+        },
+        "app.QmxhY2tGb3Jlc3RMYWJz.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.short_desc": {
+          "source": "Values for {name} placeholders in path",
+          "message": "Valores para los marcadores de posición {name} en la ruta"
+        },
+        "app.QmxhY2tGb3Jlc3RMYWJz.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.desc": {
+          "source": "Hash of query string parameters to append to the URI path. Values are URL-encoded; list values are joined with `,`.",
+          "message": "Hash de parámetros de cadena de consulta para adjuntar a la ruta URI. Los valores están codificados en URL; los valores de lista se unen con `,`."
+        },
+        "app.QmxhY2tGb3Jlc3RMYWJz.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.display_name": {
+          "source": "Query Arguments",
+          "message": "Argumentos de consulta"
+        },
+        "app.QmxhY2tGb3Jlc3RMYWJz.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.short_desc": {
+          "source": "Query string parameters",
+          "message": "Parámetros de cadena de consulta"
+        },
+        "app.QmxhY2tGb3Jlc3RMYWJz.action.bWFrZS1hcGktY2FsbA.short_desc": {
+          "source": "Make a custom API call to Black Forest Labs",
+          "message": "Realizar una llamada a la API personalizada a Black Forest Labs"
+        },
+        "app.QmxhY2tGb3Jlc3RMYWJz.desc": {
+          "source": "Provides access to [Black Forest Labs](https://bfl.ai) — the company behind the FLUX image generation models.\n\n**Image models** (selectable via the `model` action option):\n- `flux-pro-1.1` (default) — production text-to-image\n- `flux-pro-1.1-ultra` — highest quality, 4MP output\n- `flux-pro` — original FLUX Pro\n- `flux-dev` — faster + cheaper development model\n- `flux-kontext-pro` / `flux-kontext-max` — image-to-image edit (needs an `input_image`)\n\n**Video generation** is exposed only via the @ref qoremediautilsintro \"QoreMediaUtils\" `bfl` video-generator backend or the @ref bflrestclientintro \"BflRestClient\" `submitAndWait()` method directly — not as an action in this data provider.",
+          "message": "Proporciona acceso a [Black Forest Labs](https://bfl.ai), la empresa detrás de los modelos de generación de imágenes FLUX.\n\n**Modelos de imagen** (seleccionables mediante la opción de acción `model`):\n- `flux-pro-1.1` (predeterminado): texto a imagen para producción\n- `flux-pro-1.1-ultra`: máxima calidad, salida de 4 MP\n- `flux-pro`: FLUX Pro original\n- `flux-dev`: modelo de desarrollo más rápido y económico\n- `flux-kontext-pro` / `flux-kontext-max`: edición de imagen a imagen (requiere un `input_image`)\n\nLa **generación de video** se expone únicamente a través del backend generador de video `bfl` de @ref qoremediautilsintro \"QoreMediaUtils\" o directamente mediante el método `submitAndWait()` de @ref bflrestclientintro \"BflRestClient\", no como una acción en este proveedor de datos."
+        },
+        "app.QmxhY2tGb3Jlc3RMYWJz.display_name": {
+          "source": "Black Forest Labs",
+          "message": "Black Forest Labs"
+        },
+        "app.QmxhY2tGb3Jlc3RMYWJz.short_desc": {
+          "source": "Black Forest Labs FLUX text-to-image generation",
+          "message": "Generación de texto a imagen FLUX de Black Forest Labs"
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,637 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "sk": {
+      "messages": {
+        "app.RGVlcGdyYW0.action.bWFrZS1hcGktY2FsbA.desc": {
+          "source": "Make a custom HTTP / REST API call to **Deepgram** using the configured connection's authentication.\n\nSpecify the HTTP method, the URI path (relative to the connection's API base URL), optional query parameters, headers, and request body. The response is returned as a hash containing the status code, response headers, and response body.\n\nUse this action for endpoints that are not yet exposed as first-class actions on this app.",
+          "message": "Vykonať vlastné volanie HTTP / REST API do **Deepgram** pomocou overenia nakonfigurovaného pripojenia.\n\nZadajte metódu HTTP, cestu URI (relatívnu k základnej adrese URL rozhrania API pripojenia), voliteľné parametre dotazu, hlavičky a telo požiadavky. Odpoveď sa vracia ako hash obsahujúci stavový kód, hlavičky odpovede a telo odpovede.\n\nTúto akciu použite pre koncové body, ktoré ešte nie sú vystavené ako prvotriedne akcie v tejto aplikácii."
+        },
+        "app.RGVlcGdyYW0.action.bWFrZS1hcGktY2FsbA.display_name": {
+          "source": "Make an API call",
+          "message": "Urobiť volanie API"
+        },
+        "app.RGVlcGdyYW0.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.desc": {
+          "source": "The request body. The effective type depends on `body_type`: JSON/form/YAML expect a hash, XML/text expect a string, multipart expects a file structure, binary expects raw bytes.",
+          "message": "Telo požiadavky. Efektívny typ závisí od `body_type`: JSON/formulár/YAML očakávajú hash, XML/text očakávajú reťazec, multipart očakáva štruktúru súboru, binárny typ očakáva neopracované bajty."
+        },
+        "app.RGVlcGdyYW0.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.display_name": {
+          "source": "Body",
+          "message": "Telo"
+        },
+        "app.RGVlcGdyYW0.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.short_desc": {
+          "source": "The request body",
+          "message": "Telo požiadavky"
+        },
+        "app.RGVlcGdyYW0.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.desc": {
+          "source": "Upload a file using `multipart/form-data`. The body must be a @ref DataProvider::FileDataType \"FileDataType\" structure (filename + content + mime_type). The framework builds the multipart envelope and sets the boundary header.",
+          "message": "Odoslať súbor pomocou `multipart/form-data`. Telo musí byť štruktúra @ref DataProvider::FileDataType \"FileDataType\" (filename + content + mime_type). Rámec vytvorí obálku multipart a nastaví hlavičku boundary."
+        },
+        "app.RGVlcGdyYW0.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.display_name": {
+          "source": "Multipart Form",
+          "message": "Multipart formulár"
+        },
+        "app.RGVlcGdyYW0.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.short_desc": {
+          "source": "Upload a file using multipart/form-data",
+          "message": "Odoslať súbor pomocou multipart/form-data"
+        },
+        "app.RGVlcGdyYW0.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.desc": {
+          "source": "Pass the body to the REST client unchanged; the client decides serialization based on its configured `data` option and the value type",
+          "message": "Odovzdať telo klientovi REST bez zmeny; klient rozhodne o serializácii na základe svojej konfigurovanej možnosti `data` a typu hodnoty"
+        },
+        "app.RGVlcGdyYW0.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.display_name": {
+          "source": "Auto",
+          "message": "Auto"
+        },
+        "app.RGVlcGdyYW0.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.short_desc": {
+          "source": "Pass-through; use connection serialization and let the REST client decide",
+          "message": "Priamy prechod; použiť serializáciu spojenia a nechať rozhodnúť klienta REST"
+        },
+        "app.RGVlcGdyYW0.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.desc": {
+          "source": "Send the body as raw bytes. The body must be a binary value. Sets `Content-Type: application/octet-stream` unless overridden by `hdr`.",
+          "message": "Odoslať telo ako neopracované bajty. Telo musí byť binárna hodnota. Nastavuje `Content-Type: application/octet-stream`, pokiaľ nie je prepísané pomocou `hdr`."
+        },
+        "app.RGVlcGdyYW0.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.display_name": {
+          "source": "Raw Binary",
+          "message": "Surové binárne dáta"
+        },
+        "app.RGVlcGdyYW0.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.short_desc": {
+          "source": "Send body as raw bytes",
+          "message": "Odoslať telo ako neopracované bajty"
+        },
+        "app.RGVlcGdyYW0.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.desc": {
+          "source": "Serialize a hash of form fields as `application/x-www-form-urlencoded`. The body must be a hash whose values are scalars (strings/numbers/booleans).",
+          "message": "Serializovať hash polí formulára ako `application/x-www-form-urlencoded`. Telo musí byť hash, ktorého hodnoty sú skaláre (reťazce/čísla/booleovské hodnoty)."
+        },
+        "app.RGVlcGdyYW0.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.display_name": {
+          "source": "Form (URL-encoded)",
+          "message": "Formulár (kódovaný v URL)"
+        },
+        "app.RGVlcGdyYW0.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.short_desc": {
+          "source": "Serialize body as application/x-www-form-urlencoded form fields",
+          "message": "Serializovať telo ako polia formulára application/x-www-form-urlencoded"
+        },
+        "app.RGVlcGdyYW0.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.desc": {
+          "source": "Serialize the body as JSON; sets `Content-Type: application/json`. The body should be a hash, list, or scalar value.",
+          "message": "Serializovať telo ako JSON; nastavuje `Content-Type: application/json`. Telo by malo byť hash, zoznam alebo skalárna hodnota."
+        },
+        "app.RGVlcGdyYW0.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.display_name": {
+          "source": "JSON",
+          "message": "JSON"
+        },
+        "app.RGVlcGdyYW0.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.short_desc": {
+          "source": "Serialize body as JSON",
+          "message": "Serializovať telo ako JSON"
+        },
+        "app.RGVlcGdyYW0.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.desc": {
+          "source": "Send the body as plain text. The body must be a string. Sets `Content-Type: text/plain`.",
+          "message": "Odoslať telo ako čistý text. Telo musí byť reťazec. Nastavuje `Content-Type: text/plain`."
+        },
+        "app.RGVlcGdyYW0.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.display_name": {
+          "source": "Plain Text",
+          "message": "Čistý text"
+        },
+        "app.RGVlcGdyYW0.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.short_desc": {
+          "source": "Send body as text/plain",
+          "message": "Odoslať telo ako text/plain"
+        },
+        "app.RGVlcGdyYW0.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.desc": {
+          "source": "Send the body as XML. If the body is a hash it is serialized to XML; if it is a string it is sent verbatim. Sets `Content-Type: application/xml`.",
+          "message": "Odoslať telo ako XML. Ak je telo hash, serializuje sa do XML; ak je to reťazec, odosiela sa doslovne. Nastavuje `Content-Type: application/xml`."
+        },
+        "app.RGVlcGdyYW0.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.display_name": {
+          "source": "XML",
+          "message": "XML"
+        },
+        "app.RGVlcGdyYW0.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.short_desc": {
+          "source": "Send body as XML",
+          "message": "Odoslať telo ako XML"
+        },
+        "app.RGVlcGdyYW0.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.desc": {
+          "source": "Send the body as YAML. If the body is a hash it is serialized to YAML; if it is a string it is sent verbatim. Sets `Content-Type: application/x-yaml`.",
+          "message": "Odoslať telo ako YAML. Ak je telo hash, serializuje sa do YAML; ak je to reťazec, odosiela sa doslovne. Nastavuje `Content-Type: application/x-yaml`."
+        },
+        "app.RGVlcGdyYW0.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.display_name": {
+          "source": "YAML",
+          "message": "YAML"
+        },
+        "app.RGVlcGdyYW0.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.short_desc": {
+          "source": "Send body as YAML",
+          "message": "Odoslať telo ako YAML"
+        },
+        "app.RGVlcGdyYW0.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.desc": {
+          "source": "Selects the body serialization mode and the corresponding `Content-Type` header. Changing this field reshapes the `body` editor - selecting JSON exposes a JSON editor, selecting Multipart Form exposes a file picker, and so on.",
+          "message": "Vyberie režim serializácie tela a zodpovedajúcu hlavičku `Content-Type`. Zmena tohto poľa zmení editor `body` - výber JSON zobrazí editor JSON, výber Multipart Form zobrazí výber súborov a podobne."
+        },
+        "app.RGVlcGdyYW0.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.display_name": {
+          "source": "Body Type",
+          "message": "Typ tela"
+        },
+        "app.RGVlcGdyYW0.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.short_desc": {
+          "source": "How the body is serialized and what Content-Type is sent",
+          "message": "Ako sa telo serializuje a aký Content-Type sa odosiela"
+        },
+        "app.RGVlcGdyYW0.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.desc": {
+          "source": "If `True`, non-2xx HTTP responses return as the normal response hash (with the actual status code) instead of raising `REST-RESPONSE-ERROR`. Useful for handling 4xx/5xx as data - e.g. checking whether a resource exists. Overrides the connection's `error_passthru` setting for this call only.",
+          "message": "Ak je `True`, odpovede HTTP iné ako 2xx sa vrátia ako normálny hash odpovede (s reálnym stavovým kódom) namiesto vyvolania `REST-RESPONSE-ERROR`. Užitočné na spracovanie 4xx/5xx ako dát – napr. kontrola, či zdroj existuje. Prepíše nastavenie `error_passthru` spojenia len pre toto volanie."
+        },
+        "app.RGVlcGdyYW0.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.display_name": {
+          "source": "Return Errors as Data",
+          "message": "Vrátiť chyby ako dáta"
+        },
+        "app.RGVlcGdyYW0.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.short_desc": {
+          "source": "Return non-2xx responses normally instead of throwing",
+          "message": "Vrátiť odpovede iné ako 2xx normálne namiesto vyvolania výnimky"
+        },
+        "app.RGVlcGdyYW0.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.desc": {
+          "source": "Optional list of HTTP status codes treated as success. If set and the response status is not in this list, the action throws `REST-STATUS-ERROR`. When unset, the REST client's default behavior applies (typically: 2xx is success, non-2xx throws).",
+          "message": "Voliteľný zoznam stavových kódov HTTP považovaných za úspech. Ak je nastavený a stav odpovede nie je v tomto zozname, akcia vyvolá `REST-STATUS-ERROR`. Ak nie je nastavený, uplatní sa predvolené správanie klienta REST (zvyčajne: 2xx je úspech, iné ako 2xx vyvolá výnimku)."
+        },
+        "app.RGVlcGdyYW0.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.display_name": {
+          "source": "Expected Status Codes",
+          "message": "Očakávané stavové kódy"
+        },
+        "app.RGVlcGdyYW0.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.short_desc": {
+          "source": "Response status codes treated as success",
+          "message": "Stavové kódy odpovede považované za úspech"
+        },
+        "app.RGVlcGdyYW0.action.bWFrZS1hcGktY2FsbA.option.aGRy.desc": {
+          "source": "Hash of custom headers added to the request. These override any default headers set by `body_type` (e.g. supplying `Content-Type` here wins over the body-type default).",
+          "message": "Hash vlastných hlavičiek pridaných k požiadavke. Tie prepíšu akékoľvek predvolené hlavičky nastavené pomocou `body_type` (napr. zadanie `Content-Type` na tomto mieste má prednosť pred predvolenou hodnotou typu tela)."
+        },
+        "app.RGVlcGdyYW0.action.bWFrZS1hcGktY2FsbA.option.aGRy.display_name": {
+          "source": "Custom Headers",
+          "message": "Vlastné hlavičky"
+        },
+        "app.RGVlcGdyYW0.action.bWFrZS1hcGktY2FsbA.option.aGRy.short_desc": {
+          "source": "Extra request headers",
+          "message": "Dodatočné hlavičky požiadavky"
+        },
+        "app.RGVlcGdyYW0.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.desc": {
+          "source": "If `True`, the response hash includes a `debug` sub-hash containing the request method/URL/headers (with sensitive values redacted), request and response sizes, and round-trip duration. Useful when investigating slow or failing calls. Off by default to keep responses lean.",
+          "message": "Ak je `True`, hash odpovede obsahuje pod-hash `debug` obsahujúci metódu/URL/hlavičky požiadavky (so skrytými citlivými hodnotami), veľkosti požiadavky a odpovede a trvanie celého cyklu. Užitočné pri vyšetrovaní pomalých alebo zlyhávajúcich volaní. Predvolene vypnuté, aby odpovede zostali stručné."
+        },
+        "app.RGVlcGdyYW0.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.display_name": {
+          "source": "Include Debug Info",
+          "message": "Zahrnúť ladiace informácie"
+        },
+        "app.RGVlcGdyYW0.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.short_desc": {
+          "source": "Include request/timing/size debug info in the response",
+          "message": "Zahrnúť ladiace informácie o požiadavke/časovaní/veľkosti do odpovede"
+        },
+        "app.RGVlcGdyYW0.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.desc": {
+          "source": "HTTP `OPTIONS`",
+          "message": "HTTP `OPTIONS`"
+        },
+        "app.RGVlcGdyYW0.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.display_name": {
+          "source": "OPTIONS",
+          "message": "OPTIONS"
+        },
+        "app.RGVlcGdyYW0.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.short_desc": {
+          "source": "HTTP OPTIONS",
+          "message": "HTTP OPTIONS"
+        },
+        "app.RGVlcGdyYW0.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.desc": {
+          "source": "HTTP `DELETE`",
+          "message": "HTTP `DELETE`"
+        },
+        "app.RGVlcGdyYW0.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.display_name": {
+          "source": "DELETE",
+          "message": "DELETE"
+        },
+        "app.RGVlcGdyYW0.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.short_desc": {
+          "source": "HTTP DELETE",
+          "message": "HTTP DELETE"
+        },
+        "app.RGVlcGdyYW0.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.desc": {
+          "source": "HTTP `GET`",
+          "message": "HTTP `GET`"
+        },
+        "app.RGVlcGdyYW0.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.display_name": {
+          "source": "GET",
+          "message": "GET"
+        },
+        "app.RGVlcGdyYW0.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.short_desc": {
+          "source": "HTTP GET",
+          "message": "HTTP GET"
+        },
+        "app.RGVlcGdyYW0.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.desc": {
+          "source": "HTTP `HEAD`",
+          "message": "HTTP `HEAD`"
+        },
+        "app.RGVlcGdyYW0.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.display_name": {
+          "source": "HEAD",
+          "message": "HEAD"
+        },
+        "app.RGVlcGdyYW0.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.short_desc": {
+          "source": "HTTP HEAD",
+          "message": "HTTP HEAD"
+        },
+        "app.RGVlcGdyYW0.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.desc": {
+          "source": "HTTP `PATCH`",
+          "message": "HTTP `PATCH`"
+        },
+        "app.RGVlcGdyYW0.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.display_name": {
+          "source": "PATCH",
+          "message": "PATCH"
+        },
+        "app.RGVlcGdyYW0.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.short_desc": {
+          "source": "HTTP PATCH",
+          "message": "HTTP PATCH"
+        },
+        "app.RGVlcGdyYW0.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.desc": {
+          "source": "HTTP `POST`",
+          "message": "HTTP `POST`"
+        },
+        "app.RGVlcGdyYW0.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.display_name": {
+          "source": "POST",
+          "message": "POST"
+        },
+        "app.RGVlcGdyYW0.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.short_desc": {
+          "source": "HTTP POST",
+          "message": "HTTP POST"
+        },
+        "app.RGVlcGdyYW0.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.desc": {
+          "source": "HTTP `PUT`",
+          "message": "HTTP `PUT`"
+        },
+        "app.RGVlcGdyYW0.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.display_name": {
+          "source": "PUT",
+          "message": "PUT"
+        },
+        "app.RGVlcGdyYW0.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.short_desc": {
+          "source": "HTTP PUT",
+          "message": "HTTP PUT"
+        },
+        "app.RGVlcGdyYW0.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.desc": {
+          "source": "HTTP `TRACE`",
+          "message": "HTTP `TRACE`"
+        },
+        "app.RGVlcGdyYW0.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.display_name": {
+          "source": "TRACE",
+          "message": "TRACE"
+        },
+        "app.RGVlcGdyYW0.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.short_desc": {
+          "source": "HTTP TRACE",
+          "message": "HTTP TRACE"
+        },
+        "app.RGVlcGdyYW0.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "Metóda HTTP, ktorá sa má použiť pre požiadavku"
+        },
+        "app.RGVlcGdyYW0.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.display_name": {
+          "source": "HTTP Method",
+          "message": "Metóda HTTP"
+        },
+        "app.RGVlcGdyYW0.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.short_desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "Metóda HTTP, ktorá sa má použiť pre požiadavku"
+        },
+        "app.RGVlcGdyYW0.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain `{name}` placeholders that are replaced from `path_vars`. Example: `/users/{id}/comments`.",
+          "message": "Cesta URI relatívna k základnej adrese URL API spojenia. Môže obsahovať žolíky `{name}`, ktoré sú nahradené z `path_vars`. Príklad: `/users/{id}/comments`."
+        },
+        "app.RGVlcGdyYW0.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.display_name": {
+          "source": "URI Path",
+          "message": "Cesta URI"
+        },
+        "app.RGVlcGdyYW0.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.short_desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain '{name}' placeholders that are replaced from 'path_vars'. Example: '/users/{id}/comments'",
+          "message": "Cesta URI relatívna k základnej URL adrese API pripojenia. Môže obsahovať zastupiteľné objekty '{name}', ktoré sa nahradia z 'path_vars'. Príklad: '/users/{id}/comments'"
+        },
+        "app.RGVlcGdyYW0.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.desc": {
+          "source": "Hash of values substituted into `{name}` placeholders in the URI path. Example: with `path = /users/{id}` and `path_vars = {id: 123}` the framework sends `/users/123`. Values are URL-encoded.",
+          "message": "Hash hodnôt nahradených do zastupiteľných objektov `{name}` v ceste URI. Príklad: s `path = /users/{id}` a `path_vars = {id: 123}` rozhranie odosiela `/users/123`. Hodnoty sú zakódované v URL."
+        },
+        "app.RGVlcGdyYW0.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.display_name": {
+          "source": "Path Variables",
+          "message": "Premenné cesty"
+        },
+        "app.RGVlcGdyYW0.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.short_desc": {
+          "source": "Values for {name} placeholders in path",
+          "message": "Hodnoty pre zastupiteľné objekty {name} v ceste"
+        },
+        "app.RGVlcGdyYW0.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.desc": {
+          "source": "Hash of query string parameters to append to the URI path. Values are URL-encoded; list values are joined with `,`.",
+          "message": "Hash parametrov reťazca dopytu na pripojenie k ceste URI. Hodnoty sú zakódované v URL; hodnoty zoznamu sú spojené pomocou `,`."
+        },
+        "app.RGVlcGdyYW0.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.display_name": {
+          "source": "Query Arguments",
+          "message": "Argumenty dopytu"
+        },
+        "app.RGVlcGdyYW0.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.short_desc": {
+          "source": "Query string parameters",
+          "message": "Parametre reťazca dopytu"
+        },
+        "app.RGVlcGdyYW0.action.bWFrZS1hcGktY2FsbA.short_desc": {
+          "source": "Make a custom API call to Deepgram",
+          "message": "Vykonať vlastné volanie API do Deepgram"
+        },
+        "app.RGVlcGdyYW0.action.c3ludGhlc2l6ZS1zcGVlY2g.desc": {
+          "source": "Posts text to Deepgram's `/v1/speak` endpoint and returns the audio bytes in the requested encoding.  Uses the Aura voice model family (12+ voices in English plus other languages).",
+          "message": "Odošle text do koncového bodu `/v1/speak` služby Deepgram a vráti bajty zvuku v požadovanom kódovaní. Používa rodinu hlasových modelov Aura (12+ hlasov v angličtine a ďalších jazykoch)."
+        },
+        "app.RGVlcGdyYW0.action.c3ludGhlc2l6ZS1zcGVlY2g.display_name": {
+          "source": "Synthesize Speech",
+          "message": "Syntetizovať reč"
+        },
+        "app.RGVlcGdyYW0.action.c3ludGhlc2l6ZS1zcGVlY2g.option.Y29udGFpbmVy.allowed-value.c3RyaW5nOm5vbmU.display_name": {
+          "source": "None (raw)",
+          "message": "Žiadny (raw)"
+        },
+        "app.RGVlcGdyYW0.action.c3ludGhlc2l6ZS1zcGVlY2g.option.Y29udGFpbmVy.allowed-value.c3RyaW5nOm9nZw.display_name": {
+          "source": "OGG",
+          "message": "OGG"
+        },
+        "app.RGVlcGdyYW0.action.c3ludGhlc2l6ZS1zcGVlY2g.option.Y29udGFpbmVy.allowed-value.c3RyaW5nOndhdg.display_name": {
+          "source": "WAV",
+          "message": "WAV"
+        },
+        "app.RGVlcGdyYW0.action.c3ludGhlc2l6ZS1zcGVlY2g.option.Y29udGFpbmVy.desc": {
+          "source": "Container format wrapping the audio (e.g., `wav`, `ogg`, `none`).  Defaults to a sensible value for each encoding.",
+          "message": "Formát kontajnera obaľujúci zvuk (napr. `wav`, `ogg`, `none`). Predvolená hodnota je primeraná pre každé kódovanie."
+        },
+        "app.RGVlcGdyYW0.action.c3ludGhlc2l6ZS1zcGVlY2g.option.Y29udGFpbmVy.display_name": {
+          "source": "Container",
+          "message": "Kontajner"
+        },
+        "app.RGVlcGdyYW0.action.c3ludGhlc2l6ZS1zcGVlY2g.option.Y29udGFpbmVy.short_desc": {
+          "source": "Container format wrapping the audio",
+          "message": "Formát kontajnera obaľujúci zvuk"
+        },
+        "app.RGVlcGdyYW0.action.c3ludGhlc2l6ZS1zcGVlY2g.option.Yml0X3JhdGU.desc": {
+          "source": "Output bit rate in bits/second.  Applies to compressed encodings (`mp3`, `opus`, `aac`).  Typical values: `32000`, `48000`, `64000`, `128000`.",
+          "message": "Výstupný dátový tok v bitoch za sekundu. Vzťahuje sa na komprimované kódovania (`mp3`, `opus`, `aac`). Typické hodnoty: `32000`, `48000`, `64000`, `128000`."
+        },
+        "app.RGVlcGdyYW0.action.c3ludGhlc2l6ZS1zcGVlY2g.option.Yml0X3JhdGU.display_name": {
+          "source": "Bit Rate",
+          "message": "Dátový tok"
+        },
+        "app.RGVlcGdyYW0.action.c3ludGhlc2l6ZS1zcGVlY2g.option.Yml0X3JhdGU.short_desc": {
+          "source": "Output bit rate (for compressed encodings)",
+          "message": "Výstupný dátový tok (pre komprimované kódovania)"
+        },
+        "app.RGVlcGdyYW0.action.c3ludGhlc2l6ZS1zcGVlY2g.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOm11bGF3.display_name": {
+          "source": "Mu-law",
+          "message": "Mu-law"
+        },
+        "app.RGVlcGdyYW0.action.c3ludGhlc2l6ZS1zcGVlY2g.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOm1wMw.display_name": {
+          "source": "MP3",
+          "message": "MP3"
+        },
+        "app.RGVlcGdyYW0.action.c3ludGhlc2l6ZS1zcGVlY2g.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOm9wdXM.display_name": {
+          "source": "Opus",
+          "message": "Opus"
+        },
+        "app.RGVlcGdyYW0.action.c3ludGhlc2l6ZS1zcGVlY2g.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOmFhYw.display_name": {
+          "source": "AAC",
+          "message": "AAC"
+        },
+        "app.RGVlcGdyYW0.action.c3ludGhlc2l6ZS1zcGVlY2g.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOmFsYXc.display_name": {
+          "source": "A-law",
+          "message": "A-law"
+        },
+        "app.RGVlcGdyYW0.action.c3ludGhlc2l6ZS1zcGVlY2g.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOmZsYWM.display_name": {
+          "source": "FLAC",
+          "message": "FLAC"
+        },
+        "app.RGVlcGdyYW0.action.c3ludGhlc2l6ZS1zcGVlY2g.option.ZW5jb2Rpbmc.allowed-value.c3RyaW5nOmxpbmVhcjE2.display_name": {
+          "source": "Linear 16 (PCM)",
+          "message": "Linear 16 (PCM)"
+        },
+        "app.RGVlcGdyYW0.action.c3ludGhlc2l6ZS1zcGVlY2g.option.ZW5jb2Rpbmc.desc": {
+          "source": "Output audio encoding.  `mp3` (default), `linear16` (16-bit PCM), `flac`, `mulaw`, `alaw`, `opus`, or `aac`.",
+          "message": "Kódovanie výstupného zvuku. `mp3` (predvolené), `linear16` (16-bitové PCM), `flac`, `mulaw`, `alaw`, `opus` alebo `aac`."
+        },
+        "app.RGVlcGdyYW0.action.c3ludGhlc2l6ZS1zcGVlY2g.option.ZW5jb2Rpbmc.display_name": {
+          "source": "Audio Encoding",
+          "message": "Kódovanie zvuku"
+        },
+        "app.RGVlcGdyYW0.action.c3ludGhlc2l6ZS1zcGVlY2g.option.ZW5jb2Rpbmc.short_desc": {
+          "source": "Output audio encoding",
+          "message": "Kódovanie výstupného zvuku"
+        },
+        "app.RGVlcGdyYW0.action.c3ludGhlc2l6ZS1zcGVlY2g.option.bW9kZWw.desc": {
+          "source": "The Deepgram TTS voice model — e.g. `aura-asteria-en` (female, English), `aura-luna-en`, `aura-stella-en`, `aura-athena-en`, `aura-hera-en`, `aura-orion-en` (male), `aura-arcas-en`, `aura-perseus-en`, `aura-angus-en` (Irish English), `aura-orpheus-en`, `aura-helios-en`, `aura-zeus-en`.",
+          "message": "Hlasový model Deepgram TTS — napr. `aura-asteria-en` (ženský, angličtina), `aura-luna-en`, `aura-stella-en`, `aura-athena-en`, `aura-hera-en`, `aura-orion-en` (mužský), `aura-arcas-en`, `aura-perseus-en`, `aura-angus-en` (írska angličtina), `aura-orpheus-en`, `aura-helios-en`, `aura-zeus-en`."
+        },
+        "app.RGVlcGdyYW0.action.c3ludGhlc2l6ZS1zcGVlY2g.option.bW9kZWw.display_name": {
+          "source": "Voice Model",
+          "message": "Hlasový model"
+        },
+        "app.RGVlcGdyYW0.action.c3ludGhlc2l6ZS1zcGVlY2g.option.bW9kZWw.short_desc": {
+          "source": "Deepgram TTS voice model",
+          "message": "Hlasový model Deepgram TTS"
+        },
+        "app.RGVlcGdyYW0.action.c3ludGhlc2l6ZS1zcGVlY2g.option.c2FtcGxlX3JhdGU.desc": {
+          "source": "Output sample rate in Hz.  Valid values depend on the selected encoding — e.g. `8000`, `16000`, `24000`, `32000`, `48000` for linear16.",
+          "message": "Výstupná vzorkovacia frekvencia v Hz. Platné hodnoty závisia od vybraného kódovania — napr. `8000`, `16000`, `24000`, `32000`, `48000` pre linear16."
+        },
+        "app.RGVlcGdyYW0.action.c3ludGhlc2l6ZS1zcGVlY2g.option.c2FtcGxlX3JhdGU.display_name": {
+          "source": "Sample Rate",
+          "message": "Vzorkovacia frekvencia"
+        },
+        "app.RGVlcGdyYW0.action.c3ludGhlc2l6ZS1zcGVlY2g.option.c2FtcGxlX3JhdGU.short_desc": {
+          "source": "Output sample rate in Hz (encoding-specific)",
+          "message": "Výstupná vzorkovacia frekvencia v Hz (špecifická pre kódovanie)"
+        },
+        "app.RGVlcGdyYW0.action.c3ludGhlc2l6ZS1zcGVlY2g.option.dGV4dA.desc": {
+          "source": "The text to synthesize into speech.  Maximum length depends on the model — typically up to ~2000 characters per request.",
+          "message": "Text na syntetizovanie do reči. Maximálna dĺžka závisí od modelu — zvyčajne do ~2000 znakov na požiadavku."
+        },
+        "app.RGVlcGdyYW0.action.c3ludGhlc2l6ZS1zcGVlY2g.option.dGV4dA.display_name": {
+          "source": "Text",
+          "message": "Text"
+        },
+        "app.RGVlcGdyYW0.action.c3ludGhlc2l6ZS1zcGVlY2g.option.dGV4dA.short_desc": {
+          "source": "Text to synthesize",
+          "message": "Text na syntetizovanie"
+        },
+        "app.RGVlcGdyYW0.action.c3ludGhlc2l6ZS1zcGVlY2g.short_desc": {
+          "source": "Synthesize speech from text via Deepgram TTS (Aura models)",
+          "message": "Syntetizovať reč z textu cez Deepgram TTS (modely Aura)"
+        },
+        "app.RGVlcGdyYW0.action.dHJhbnNjcmliZS1maWxl.desc": {
+          "source": "Submits a public audio URL to Deepgram's `/v1/listen` endpoint and returns the JSON transcript.  Supports the Nova model family with smart formatting, diarization, summarization, and language detection.\n\n**Note**: this action submits via URL only.  For raw-audio uploads and realtime WebSocket streaming, use @ref DeepgramRestClient::DeepgramRestClientIo \"DeepgramRestClientIo\" directly.",
+          "message": "Odošle verejnú URL adresu zvuku na koncový bod `/v1/listen` služby Deepgram a vráti prepis vo formáte JSON. Podporuje rodinu modelov Nova s inteligentným formátovaním, diarizáciou, sumarizáciou a detekciou jazyka.\n\n**Poznámka**: táto akcia odosiela údaje iba cez URL adresu. Pre nahrávanie nespracovaného zvuku a streamovanie cez WebSocket v reálnom čase použite priamo @ref DeepgramRestClient::DeepgramRestClientIo \"DeepgramRestClientIo\"."
+        },
+        "app.RGVlcGdyYW0.action.dHJhbnNjcmliZS1maWxl.display_name": {
+          "source": "Transcribe File",
+          "message": "Prepísať súbor"
+        },
+        "app.RGVlcGdyYW0.action.dHJhbnNjcmliZS1maWxl.option.Y2FsbGJhY2s.desc": {
+          "source": "When provided, Deepgram returns immediately and POSTs the final transcript to this URL when ready.  Use for long files.",
+          "message": "Ak je zadané, Deepgram vráti odpoveď okamžite a po dokončení odošle konečný prepis metódou POST na túto URL adresu. Použite pre dlhé súbory."
+        },
+        "app.RGVlcGdyYW0.action.dHJhbnNjcmliZS1maWxl.option.Y2FsbGJhY2s.display_name": {
+          "source": "Callback URL",
+          "message": "Callback URL"
+        },
+        "app.RGVlcGdyYW0.action.dHJhbnNjcmliZS1maWxl.option.Y2FsbGJhY2s.short_desc": {
+          "source": "Webhook URL for async transcript delivery",
+          "message": "URL adresa webhooku pre asynchrónne doručenie prepisu"
+        },
+        "app.RGVlcGdyYW0.action.dHJhbnNjcmliZS1maWxl.option.ZGV0ZWN0X2xhbmd1YWdl.desc": {
+          "source": "When `True`, ignores the `language` parameter and detects the language automatically.",
+          "message": "Ak je nastavené na `True`, ignoruje parameter `language` a automaticky rozpozná jazyk."
+        },
+        "app.RGVlcGdyYW0.action.dHJhbnNjcmliZS1maWxl.option.ZGV0ZWN0X2xhbmd1YWdl.display_name": {
+          "source": "Detect Language",
+          "message": "Rozpoznať jazyk"
+        },
+        "app.RGVlcGdyYW0.action.dHJhbnNjcmliZS1maWxl.option.ZGV0ZWN0X2xhbmd1YWdl.short_desc": {
+          "source": "Auto-detect the spoken language",
+          "message": "Automaticky rozpoznať hovorený jazyk"
+        },
+        "app.RGVlcGdyYW0.action.dHJhbnNjcmliZS1maWxl.option.ZGlhcml6ZQ.desc": {
+          "source": "When `True`, attempts speaker diarization — labels segments with `speaker: 0`, `speaker: 1`, etc.",
+          "message": "Ak je nastavené na `True`, pokúsi sa o diarizáciu hovoriacich — označí segmenty pomocou `speaker: 0`, `speaker: 1` atď."
+        },
+        "app.RGVlcGdyYW0.action.dHJhbnNjcmliZS1maWxl.option.ZGlhcml6ZQ.display_name": {
+          "source": "Diarize",
+          "message": "Diarizovať"
+        },
+        "app.RGVlcGdyYW0.action.dHJhbnNjcmliZS1maWxl.option.ZGlhcml6ZQ.short_desc": {
+          "source": "Identify distinct speakers in the audio",
+          "message": "Identifikovať jednotlivých rečníkov v zvuku"
+        },
+        "app.RGVlcGdyYW0.action.dHJhbnNjcmliZS1maWxl.option.a2V5d29yZHM.desc": {
+          "source": "List of keywords to boost during recognition.  Each entry may also include a `:<intensity>` suffix (e.g., `Qore:2`).",
+          "message": "Zoznam kľúčových slov na posilnenie počas rozpoznávania. Každá položka môže obsahovať aj príponu `:<intensity>` (napr. `Qore:2`)."
+        },
+        "app.RGVlcGdyYW0.action.dHJhbnNjcmliZS1maWxl.option.a2V5d29yZHM.display_name": {
+          "source": "Keywords",
+          "message": "Kľúčové slová"
+        },
+        "app.RGVlcGdyYW0.action.dHJhbnNjcmliZS1maWxl.option.a2V5d29yZHM.short_desc": {
+          "source": "Keywords to boost during recognition (list of strings)",
+          "message": "Kľúčové slová na posilnenie počas rozpoznávania (zoznam reťazcov)"
+        },
+        "app.RGVlcGdyYW0.action.dHJhbnNjcmliZS1maWxl.option.bGFuZ3VhZ2U.desc": {
+          "source": "BCP-47 language code.  Pass `multi` to enable Nova-3's multilingual mode.  Default is `en` (English).",
+          "message": "Jazykový kód BCP-47. Zadajte `multi` pre povolenie viacjazyčného režimu modelu Nova-3. Predvolená hodnota je `en` (angličtina)."
+        },
+        "app.RGVlcGdyYW0.action.dHJhbnNjcmliZS1maWxl.option.bGFuZ3VhZ2U.display_name": {
+          "source": "Language",
+          "message": "Jazyk"
+        },
+        "app.RGVlcGdyYW0.action.dHJhbnNjcmliZS1maWxl.option.bGFuZ3VhZ2U.short_desc": {
+          "source": "BCP-47 language code (e.g., `en-US`, `de`, `fr`)",
+          "message": "Jazykový kód BCP-47 (napr. `en-US`, `de`, `fr`)"
+        },
+        "app.RGVlcGdyYW0.action.dHJhbnNjcmliZS1maWxl.option.bW9kZWw.allowed-value.c3RyaW5nOm5vdmE.display_name": {
+          "source": "Nova",
+          "message": "Nova"
+        },
+        "app.RGVlcGdyYW0.action.dHJhbnNjcmliZS1maWxl.option.bW9kZWw.allowed-value.c3RyaW5nOm5vdmEtMg.display_name": {
+          "source": "Nova 2",
+          "message": "Nova 2"
+        },
+        "app.RGVlcGdyYW0.action.dHJhbnNjcmliZS1maWxl.option.bW9kZWw.allowed-value.c3RyaW5nOm5vdmEtMw.display_name": {
+          "source": "Nova 3 (latest)",
+          "message": "Nova 3 (najnovšia)"
+        },
+        "app.RGVlcGdyYW0.action.dHJhbnNjcmliZS1maWxl.option.bW9kZWw.allowed-value.c3RyaW5nOmJhc2U.display_name": {
+          "source": "Base",
+          "message": "Báza"
+        },
+        "app.RGVlcGdyYW0.action.dHJhbnNjcmliZS1maWxl.option.bW9kZWw.allowed-value.c3RyaW5nOmVuaGFuY2Vk.display_name": {
+          "source": "Enhanced",
+          "message": "Enhanced"
+        },
+        "app.RGVlcGdyYW0.action.dHJhbnNjcmliZS1maWxl.option.bW9kZWw.desc": {
+          "source": "The Deepgram ASR model — one of `nova-3` (latest), `nova-2`, `nova`, `enhanced`, or `base`.  `nova-3` offers the best accuracy for general-purpose transcription.",
+          "message": "Model Deepgram ASR — jeden z `nova-3` (najnovší), `nova-2`, `nova`, `enhanced` alebo `base`. `nova-3` ponúka najlepšiu presnosť pre všeobecný prepis."
+        },
+        "app.RGVlcGdyYW0.action.dHJhbnNjcmliZS1maWxl.option.bW9kZWw.display_name": {
+          "source": "Model",
+          "message": "Model"
+        },
+        "app.RGVlcGdyYW0.action.dHJhbnNjcmliZS1maWxl.option.bW9kZWw.short_desc": {
+          "source": "Deepgram ASR model name",
+          "message": "Názov modelu Deepgram ASR"
+        },
+        "app.RGVlcGdyYW0.action.dHJhbnNjcmliZS1maWxl.option.c21hcnRfZm9ybWF0.desc": {
+          "source": "When `True`, applies smart formatting (punctuation, capitalization, dates, currency, etc.) to the transcript.",
+          "message": "Ak je nastavené na `True`, použije na prepis inteligentné formátovanie (interpunkcia, veľké písmená, dátumy, mena atď.)."
+        },
+        "app.RGVlcGdyYW0.action.dHJhbnNjcmliZS1maWxl.option.c21hcnRfZm9ybWF0.display_name": {
+          "source": "Smart Format",
+          "message": "Inteligentné formátovanie"
+        },
+        "app.RGVlcGdyYW0.action.dHJhbnNjcmliZS1maWxl.option.c21hcnRfZm9ybWF0.short_desc": {
+          "source": "Apply punctuation, capitalization, and number formatting",
+          "message": "Použiť interpunkciu, veľké písmená a formátovanie čísel"
+        },
+        "app.RGVlcGdyYW0.action.dHJhbnNjcmliZS1maWxl.option.c3VtbWFyaXpl.allowed-value.c3RyaW5nOnYy.display_name": {
+          "source": "v2 (abstractive)",
+          "message": "v2 (abstraktívne)"
+        },
+        "app.RGVlcGdyYW0.action.dHJhbnNjcmliZS1maWxl.option.c3VtbWFyaXpl.desc": {
+          "source": "When set to `v2`, returns an abstractive summary of the transcript in addition to the words.",
+          "message": "Ak je nastavené na `v2`, vráti okrem slov aj abstraktívne zhrnutie prepisu."
+        },
+        "app.RGVlcGdyYW0.action.dHJhbnNjcmliZS1maWxl.option.c3VtbWFyaXpl.display_name": {
+          "source": "Summarize",
+          "message": "Zhrnúť"
+        },
+        "app.RGVlcGdyYW0.action.dHJhbnNjcmliZS1maWxl.option.c3VtbWFyaXpl.short_desc": {
+          "source": "Return a summary of the transcript",
+          "message": "Vrátiť zhrnutie prepisu"
+        },
+        "app.RGVlcGdyYW0.action.dHJhbnNjcmliZS1maWxl.option.cHVuY3R1YXRl.desc": {
+          "source": "Add punctuation to the transcript.  Implied by `smart_format`.",
+          "message": "Pridať do prepisu interpunkciu. Implikované voľbou `smart_format`."
+        },
+        "app.RGVlcGdyYW0.action.dHJhbnNjcmliZS1maWxl.option.cHVuY3R1YXRl.display_name": {
+          "source": "Punctuate",
+          "message": "Pridať interpunkciu"
+        },
+        "app.RGVlcGdyYW0.action.dHJhbnNjcmliZS1maWxl.option.cHVuY3R1YXRl.short_desc": {
+          "source": "Add punctuation to the transcript",
+          "message": "Pridať do prepisu interpunkciu"
+        },
+        "app.RGVlcGdyYW0.action.dHJhbnNjcmliZS1maWxl.option.dXJs.desc": {
+          "source": "Public URL of the audio file to transcribe.  Deepgram fetches the file from this URL; it must be reachable from the public internet.",
+          "message": "Verejná URL adresa zvukového súboru na prepis. Deepgram získa súbor z tejto URL adresy; musí byť dostupná z verejného internetu."
+        },
+        "app.RGVlcGdyYW0.action.dHJhbnNjcmliZS1maWxl.option.dXJs.display_name": {
+          "source": "Audio URL",
+          "message": "URL adresa zvuku"
+        },
+        "app.RGVlcGdyYW0.action.dHJhbnNjcmliZS1maWxl.option.dXJs.short_desc": {
+          "source": "Public URL of the audio file to transcribe",
+          "message": "Verejná URL adresa zvukového súboru na prepis"
+        },
+        "app.RGVlcGdyYW0.action.dHJhbnNjcmliZS1maWxl.option.dXR0ZXJhbmNlcw.desc": {
+          "source": "When `True`, groups words into utterances based on natural speech pauses.",
+          "message": "Ak je nastavené na `True`, zoskupí slová do prehovorov na základe prirodzených prestávok v reči."
+        },
+        "app.RGVlcGdyYW0.action.dHJhbnNjcmliZS1maWxl.option.dXR0ZXJhbmNlcw.display_name": {
+          "source": "Utterances",
+          "message": "Prehovory"
+        },
+        "app.RGVlcGdyYW0.action.dHJhbnNjcmliZS1maWxl.option.dXR0ZXJhbmNlcw.short_desc": {
+          "source": "Group transcript words into utterances",
+          "message": "Zoskupiť slová prepisu do prehovorov"
+        },
+        "app.RGVlcGdyYW0.action.dHJhbnNjcmliZS1maWxl.short_desc": {
+          "source": "Transcribe an audio file by URL via Deepgram ASR",
+          "message": "Prepísať zvukový súbor z URL adresy cez Deepgram ASR"
+        },
+        "app.RGVlcGdyYW0.desc": {
+          "source": "Provides access to [Deepgram](https://deepgram.com) — a speech AI platform offering automatic speech recognition (ASR) and text-to-speech (TTS) APIs.\n\n**Common use cases**:\n- **Transcription**: convert recorded audio (PSTN calls, meeting recordings, podcasts) into searchable text with the Nova model family\n- **Voice synthesis**: generate natural-sounding speech from text via the Aura voice models — for voice agents, IVR, and accessibility\n- **Conversational AI**: pair Deepgram TTS with any LLM to build end-to-end voice conversation pipelines",
+          "message": "Poskytuje prístup k službe [Deepgram](https://deepgram.com) — platforme hlasovej umelej inteligencie, ktorá ponúka rozhrania API pre automatické rozpoznávanie reči (ASR) a prevod textu na reč (TTS).\n\n**Bežné prípady použitia**:\n- **Prepis**: prevod nahraného zvuku (hovory PSTN, záznamy stretnutí, podcasty) na vyhľadávateľný text pomocou rodiny modelov Nova\n- **Syntéza hlasu**: generovanie prirodzene znejúcej reči z textu pomocou hlasových modelov Aura — pre hlasových agentov, IVR a prístupnosť\n- **Konverzačná AI**: prepojenie Deepgram TTS s akýmkoľvek LLM pre vytvorenie ucelených hlasových konverzačných procesov"
+        },
+        "app.RGVlcGdyYW0.display_name": {
+          "source": "Deepgram",
+          "message": "Deepgram"
+        },
+        "app.RGVlcGdyYW0.short_desc": {
+          "source": "Deepgram speech (ASR + TTS) services",
+          "message": "Hlasové služby Deepgram (ASR + TTS)"
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,481 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "ko": {
+      "messages": {
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YW5hbHl6ZS1kb2N1bWVudA.desc": {
+          "source": "Submits a document to a Document Intelligence model and waits for the analysis to complete.  The lifecycle is internally driven by @ref qoreasyncjobutilsintro \"QoreAsyncJobUtils\" via `AsyncJobPoller`: POST submit → poll the `Operation-Location` URL → return the parsed `analyzeResult`.\n\nPass the document via one of:\n- `document_url` — public URL (Azure fetches the document)\n- `document_bytes` — raw bytes (base64-encoded automatically)\n- `document_path` — local file path (read and base64-encoded)",
+          "message": "Document Intelligence 모델에 문서를 제출하고 분석이 완료될 때까지 대기합니다. 수명 주기는 `AsyncJobPoller`을 통해 내부적으로 @ref qoreasyncjobutilsintro \"QoreAsyncJobUtils\"에 의해 구동됩니다: POST 제출 → `Operation-Location` URL 폴링 → 파싱된 `analyzeResult` 반환.\n\n다음 중 하나를 통해 문서를 전달하세요:\n- `document_url` — 공개 URL (Azure가 문서를 가져옴)\n- `document_bytes` — 원시 바이트 (자동으로 base64 인코딩됨)\n- `document_path` — 로컬 파일 경로 (읽어서 base64 인코딩됨)"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YW5hbHl6ZS1kb2N1bWVudA.display_name": {
+          "source": "Analyze Document",
+          "message": "문서 분석"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YW5hbHl6ZS1kb2N1bWVudA.option.YW5hbHlzaXNfdGltZW91dA.desc": {
+          "source": "Maximum total wait time.  Defaults to `10m`.  When exceeded, the action raises `AZURE-DOCUMENT-INTELLIGENCE-ERROR`.",
+          "message": "최대 총 대기 시간입니다. 기본값은 `10m`입니다. 초과 시 작업에서 `AZURE-DOCUMENT-INTELLIGENCE-ERROR` 오류가 발생합니다."
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YW5hbHl6ZS1kb2N1bWVudA.option.YW5hbHlzaXNfdGltZW91dA.display_name": {
+          "source": "Overall Analysis Timeout",
+          "message": "전체 분석 타임아웃"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YW5hbHl6ZS1kb2N1bWVudA.option.YW5hbHlzaXNfdGltZW91dA.short_desc": {
+          "source": "Maximum total wait time for the polling loop",
+          "message": "폴링 루프의 최대 총 대기 시간"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YW5hbHl6ZS1kb2N1bWVudA.option.YXBpX3ZlcnNpb24.desc": {
+          "source": "Document Intelligence API version (e.g. `2024-11-30`).",
+          "message": "Document Intelligence API 버전(예: `2024-11-30`)."
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YW5hbHl6ZS1kb2N1bWVudA.option.YXBpX3ZlcnNpb24.display_name": {
+          "source": "API Version",
+          "message": "API 버전"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YW5hbHl6ZS1kb2N1bWVudA.option.YXBpX3ZlcnNpb24.short_desc": {
+          "source": "Document Intelligence API version",
+          "message": "Document Intelligence API 버전"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YW5hbHl6ZS1kb2N1bWVudA.option.ZG9jdW1lbnRfYnl0ZXM.desc": {
+          "source": "Raw document bytes — sent as base64-encoded `base64Source`.",
+          "message": "원시 문서 바이트 — base64로 인코딩된 `base64Source`(으)로 전송됩니다."
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YW5hbHl6ZS1kb2N1bWVudA.option.ZG9jdW1lbnRfYnl0ZXM.display_name": {
+          "source": "Document Bytes",
+          "message": "문서 바이트"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YW5hbHl6ZS1kb2N1bWVudA.option.ZG9jdW1lbnRfYnl0ZXM.short_desc": {
+          "source": "Raw document bytes (base64-encoded automatically)",
+          "message": "원시 문서 바이트(자동으로 base64 인코딩됨)"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YW5hbHl6ZS1kb2N1bWVudA.option.ZG9jdW1lbnRfcGF0aA.desc": {
+          "source": "Local file path to read.  Mutually exclusive with `document_url` and `document_bytes`.",
+          "message": "읽을 로컬 파일 경로입니다. `document_url` 및 `document_bytes`과(와) 상호 배타적입니다."
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YW5hbHl6ZS1kb2N1bWVudA.option.ZG9jdW1lbnRfcGF0aA.display_name": {
+          "source": "Document Path",
+          "message": "문서 경로"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YW5hbHl6ZS1kb2N1bWVudA.option.ZG9jdW1lbnRfcGF0aA.short_desc": {
+          "source": "Local file path to read and base64-encode",
+          "message": "읽어서 base64로 인코딩할 로컬 파일 경로"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YW5hbHl6ZS1kb2N1bWVudA.option.ZG9jdW1lbnRfdXJs.desc": {
+          "source": "Public URL of the document to analyze.  Azure fetches the document from this URL.  Mutually exclusive with `document_bytes` and `document_path`.",
+          "message": "분석할 문서의 공개 URL입니다. Azure가 이 URL에서 문서를 가져옵니다. `document_bytes` 및 `document_path`과(와) 상호 배타적입니다."
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YW5hbHl6ZS1kb2N1bWVudA.option.ZG9jdW1lbnRfdXJs.display_name": {
+          "source": "Document URL",
+          "message": "문서 URL"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YW5hbHl6ZS1kb2N1bWVudA.option.ZG9jdW1lbnRfdXJs.short_desc": {
+          "source": "Public URL of the document to analyze",
+          "message": "분석할 문서의 공개 URL"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YW5hbHl6ZS1kb2N1bWVudA.option.bW9kZWxfaWQ.allowed-value.c3RyaW5nOnByZWJ1aWx0LWJ1c2luZXNzQ2FyZA.display_name": {
+          "source": "Business Card",
+          "message": "명함"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YW5hbHl6ZS1kb2N1bWVudA.option.bW9kZWxfaWQ.allowed-value.c3RyaW5nOnByZWJ1aWx0LWNvbnRyYWN0.display_name": {
+          "source": "Contract",
+          "message": "계약서"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YW5hbHl6ZS1kb2N1bWVudA.option.bW9kZWxfaWQ.allowed-value.c3RyaW5nOnByZWJ1aWx0LWRvY3VtZW50.display_name": {
+          "source": "Document (general layout)",
+          "message": "문서(일반 레이아웃)"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YW5hbHl6ZS1kb2N1bWVudA.option.bW9kZWxfaWQ.allowed-value.c3RyaW5nOnByZWJ1aWx0LWhlYWx0aEluc3VyYW5jZUNhcmQudXM.display_name": {
+          "source": "US Health Insurance Card",
+          "message": "미국 건강보험증"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YW5hbHl6ZS1kb2N1bWVudA.option.bW9kZWxfaWQ.allowed-value.c3RyaW5nOnByZWJ1aWx0LWlkRG9jdW1lbnQ.display_name": {
+          "source": "ID Document",
+          "message": "신분증 문서"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YW5hbHl6ZS1kb2N1bWVudA.option.bW9kZWxfaWQ.allowed-value.c3RyaW5nOnByZWJ1aWx0LWludm9pY2U.display_name": {
+          "source": "Invoice",
+          "message": "인보이스"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YW5hbHl6ZS1kb2N1bWVudA.option.bW9kZWxfaWQ.allowed-value.c3RyaW5nOnByZWJ1aWx0LWxheW91dA.display_name": {
+          "source": "Layout (tables + lines)",
+          "message": "레이아웃(표 + 선)"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YW5hbHl6ZS1kb2N1bWVudA.option.bW9kZWxfaWQ.allowed-value.c3RyaW5nOnByZWJ1aWx0LXJlY2VpcHQ.display_name": {
+          "source": "Receipt",
+          "message": "영수증"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YW5hbHl6ZS1kb2N1bWVudA.option.bW9kZWxfaWQ.allowed-value.c3RyaW5nOnByZWJ1aWx0LXRheC51cy4xMDk4.display_name": {
+          "source": "US 1098 Tax Form",
+          "message": "미국 1098 세금 양식"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YW5hbHl6ZS1kb2N1bWVudA.option.bW9kZWxfaWQ.allowed-value.c3RyaW5nOnByZWJ1aWx0LXRheC51cy53Mg.display_name": {
+          "source": "US W-2 Tax Form",
+          "message": "미국 W-2 세금 양식"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YW5hbHl6ZS1kb2N1bWVudA.option.bW9kZWxfaWQ.desc": {
+          "source": "Document Intelligence model identifier — prebuilt or custom.  The dropdown lists the documented prebuilt models; custom-model GUIDs trained in the [Azure portal](https://portal.azure.com) can be entered as free-form text (`allowed_values_creatable: True`).",
+          "message": "Document Intelligence 모델 식별자 — 사전 구축 또는 커스텀. 드롭다운에는 문서화된 사전 구축 모델이 나열되며, [Azure portal](https://portal.azure.com)에서 학습된 커스텀 모델 GUID는 자유 형식 텍스트(`allowed_values_creatable: True`)로 입력할 수 있습니다."
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YW5hbHl6ZS1kb2N1bWVudA.option.bW9kZWxfaWQ.display_name": {
+          "source": "Model ID",
+          "message": "모델 ID"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YW5hbHl6ZS1kb2N1bWVudA.option.bW9kZWxfaWQ.short_desc": {
+          "source": "Document Intelligence model identifier",
+          "message": "Document Intelligence 모델 식별자"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YW5hbHl6ZS1kb2N1bWVudA.option.cG9sbF9pbnRlcnZhbA.desc": {
+          "source": "Interval between job-status polls.  Defaults to `2s`.",
+          "message": "작업 상태 폴링 간격입니다. 기본값은 `2s`입니다."
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YW5hbHl6ZS1kb2N1bWVudA.option.cG9sbF9pbnRlcnZhbA.display_name": {
+          "source": "Polling Interval",
+          "message": "폴링 간격"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YW5hbHl6ZS1kb2N1bWVudA.option.cG9sbF9pbnRlcnZhbA.short_desc": {
+          "source": "Time between status polls",
+          "message": "상태 폴링 간격 시간"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.YW5hbHl6ZS1kb2N1bWVudA.short_desc": {
+          "source": "Run a Document Intelligence model over a document (async)",
+          "message": "문서에 대해 Document Intelligence 모델 실행(비동기)"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.bWFrZS1hcGktY2FsbA.desc": {
+          "source": "Make a custom HTTP / REST API call to **Azure Document Intelligence** using the configured connection's authentication.\n\nSpecify the HTTP method, the URI path (relative to the connection's API base URL), optional query parameters, headers, and request body. The response is returned as a hash containing the status code, response headers, and response body.\n\nUse this action for endpoints that are not yet exposed as first-class actions on this app.",
+          "message": "구성된 연결의 인증을 사용하여 **Azure Document Intelligence**에 커스텀 HTTP / REST API 호출을 수행합니다.\n\nHTTP 메서드, URI 경로(연결의 API 기본 URL 기준 상대 경로), 선택적 쿼리 매개변수, 헤더 및 요청 본문을 지정합니다. 응답은 상태 코드, 응답 헤더 및 응답 본문을 포함하는 해시로 반환됩니다.\n\n이 앱에서 기본 액션으로 아직 제공되지 않는 엔드포인트에 이 액션을 사용하세요."
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.bWFrZS1hcGktY2FsbA.display_name": {
+          "source": "Make an API call",
+          "message": "API 호출 실행"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.desc": {
+          "source": "The request body. The effective type depends on `body_type`: JSON/form/YAML expect a hash, XML/text expect a string, multipart expects a file structure, binary expects raw bytes.",
+          "message": "요청 본문입니다. 유효한 유형은 `body_type`에 따라 달라집니다. JSON/form/YAML은 해시를, XML/text는 문자열을, multipart는 파일 구조를, binary는 원시 바이트를 요구합니다."
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.display_name": {
+          "source": "Body",
+          "message": "본문"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.short_desc": {
+          "source": "The request body",
+          "message": "요청 본문"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.desc": {
+          "source": "Upload a file using `multipart/form-data`. The body must be a @ref DataProvider::FileDataType \"FileDataType\" structure (filename + content + mime_type). The framework builds the multipart envelope and sets the boundary header.",
+          "message": "`multipart/form-data`을(를) 사용하여 파일을 업로드합니다. 본문은 @ref DataProvider::FileDataType \"FileDataType\" 구조(filename + content + mime_type)여야 합니다. 프레임워크가 multipart 봉투를 작성하고 boundary 헤더를 설정합니다."
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.display_name": {
+          "source": "Multipart Form",
+          "message": "멀티파트 폼"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.short_desc": {
+          "source": "Upload a file using multipart/form-data",
+          "message": "multipart/form-data를 사용하여 파일 업로드"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.desc": {
+          "source": "Pass the body to the REST client unchanged; the client decides serialization based on its configured `data` option and the value type",
+          "message": "본문을 변경하지 않고 REST 클라이언트에 전달합니다. 클라이언트는 구성된 `data` 옵션과 값 유형을 기반으로 직렬화를 결정합니다."
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.display_name": {
+          "source": "Auto",
+          "message": "자동"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.short_desc": {
+          "source": "Pass-through; use connection serialization and let the REST client decide",
+          "message": "패스스루: 연결 직렬화를 사용하고 REST 클라이언트가 결정하도록 합니다."
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.desc": {
+          "source": "Send the body as raw bytes. The body must be a binary value. Sets `Content-Type: application/octet-stream` unless overridden by `hdr`.",
+          "message": "본문을 원시 바이트로 전송합니다. 본문은 바이너리 값이어야 합니다. `hdr`에 의해 재정의되지 않는 한 `Content-Type: application/octet-stream`을(를) 설정합니다."
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.display_name": {
+          "source": "Raw Binary",
+          "message": "원시 바이너리"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.short_desc": {
+          "source": "Send body as raw bytes",
+          "message": "본문을 원시 바이트로 전송"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.desc": {
+          "source": "Serialize a hash of form fields as `application/x-www-form-urlencoded`. The body must be a hash whose values are scalars (strings/numbers/booleans).",
+          "message": "폼 필드의 해시를 `application/x-www-form-urlencoded`(으)로 직렬화합니다. 본문은 값이 스칼라(문자열/숫자/불리언)인 해시여야 합니다."
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.display_name": {
+          "source": "Form (URL-encoded)",
+          "message": "폼 (URL 인코딩)"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.short_desc": {
+          "source": "Serialize body as application/x-www-form-urlencoded form fields",
+          "message": "본문을 application/x-www-form-urlencoded 폼 필드로 직렬화"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.desc": {
+          "source": "Serialize the body as JSON; sets `Content-Type: application/json`. The body should be a hash, list, or scalar value.",
+          "message": "본문을 JSON으로 직렬화하며, `Content-Type: application/json`을(를) 설정합니다. 본문은 해시, 리스트 또는 스칼라 값이어야 합니다."
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.display_name": {
+          "source": "JSON",
+          "message": "JSON"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.short_desc": {
+          "source": "Serialize body as JSON",
+          "message": "본문을 JSON으로 직렬화"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.desc": {
+          "source": "Send the body as plain text. The body must be a string. Sets `Content-Type: text/plain`.",
+          "message": "본문을 일반 텍스트로 전송합니다. 본문은 문자열이어야 합니다. `Content-Type: text/plain`을(를) 설정합니다."
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.display_name": {
+          "source": "Plain Text",
+          "message": "일반 텍스트"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.short_desc": {
+          "source": "Send body as text/plain",
+          "message": "본문을 text/plain으로 전송"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.desc": {
+          "source": "Send the body as XML. If the body is a hash it is serialized to XML; if it is a string it is sent verbatim. Sets `Content-Type: application/xml`.",
+          "message": "본문을 XML로 전송합니다. 본문이 해시인 경우 XML로 직렬화되고, 문자열인 경우 그대로 전송됩니다. `Content-Type: application/xml`을(를) 설정합니다."
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.display_name": {
+          "source": "XML",
+          "message": "XML"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.short_desc": {
+          "source": "Send body as XML",
+          "message": "본문을 XML로 전송"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.desc": {
+          "source": "Send the body as YAML. If the body is a hash it is serialized to YAML; if it is a string it is sent verbatim. Sets `Content-Type: application/x-yaml`.",
+          "message": "본문을 YAML로 전송합니다. 본문이 해시인 경우 YAML로 직렬화되고, 문자열인 경우 그대로 전송됩니다. `Content-Type: application/x-yaml`을(를) 설정합니다."
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.display_name": {
+          "source": "YAML",
+          "message": "YAML"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.short_desc": {
+          "source": "Send body as YAML",
+          "message": "본문을 YAML로 전송"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.desc": {
+          "source": "Selects the body serialization mode and the corresponding `Content-Type` header. Changing this field reshapes the `body` editor - selecting JSON exposes a JSON editor, selecting Multipart Form exposes a file picker, and so on.",
+          "message": "본문 직렬화 모드 및 해당되는 `Content-Type` 헤더를 선택합니다. 이 필드를 변경하면 `body` 에디터의 형태가 변경됩니다. JSON을 선택하면 JSON 에디터가 표시되고, 멀티파트 폼을 선택하면 파일 선택기가 표시되는 방식입니다."
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.display_name": {
+          "source": "Body Type",
+          "message": "본문 유형"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.short_desc": {
+          "source": "How the body is serialized and what Content-Type is sent",
+          "message": "본문이 직렬화되는 방식 및 전송되는 Content-Type"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.desc": {
+          "source": "If `True`, non-2xx HTTP responses return as the normal response hash (with the actual status code) instead of raising `REST-RESPONSE-ERROR`. Useful for handling 4xx/5xx as data - e.g. checking whether a resource exists. Overrides the connection's `error_passthru` setting for this call only.",
+          "message": "`True`인 경우, 2xx가 아닌 HTTP 응답은 `REST-RESPONSE-ERROR`을(를) 발생시키는 대신 (실제 상태 코드와 함께) 일반 응답 해시로 반환됩니다. 리소스 존재 여부 확인 등 4xx/5xx를 데이터로 처리할 때 유용합니다. 이 호출에 대해서만 연결의 `error_passthru` 설정을 재정의합니다."
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.display_name": {
+          "source": "Return Errors as Data",
+          "message": "오류를 데이터로 반환"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.short_desc": {
+          "source": "Return non-2xx responses normally instead of throwing",
+          "message": "예외를 발생시키는 대신 2xx가 아닌 응답을 정상적으로 반환"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.desc": {
+          "source": "Optional list of HTTP status codes treated as success. If set and the response status is not in this list, the action throws `REST-STATUS-ERROR`. When unset, the REST client's default behavior applies (typically: 2xx is success, non-2xx throws).",
+          "message": "성공으로 처리되는 HTTP 상태 코드의 선택적 목록입니다. 설정되어 있고 응답 상태가 이 목록에 없는 경우 작업이 `REST-STATUS-ERROR` 예외를 발생시킵니다. 설정되지 않은 경우 REST 클라이언트의 기본 동작이 적용됩니다(일반적으로 2xx는 성공, 2xx 이외는 예외 발생)."
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.display_name": {
+          "source": "Expected Status Codes",
+          "message": "예상되는 상태 코드"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.short_desc": {
+          "source": "Response status codes treated as success",
+          "message": "성공으로 처리되는 응답 상태 코드"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.bWFrZS1hcGktY2FsbA.option.aGRy.desc": {
+          "source": "Hash of custom headers added to the request. These override any default headers set by `body_type` (e.g. supplying `Content-Type` here wins over the body-type default).",
+          "message": "요청에 추가되는 사용자 지정 헤더의 해시입니다. 이는 `body_type`에 의해 설정된 기본 헤더보다 우선합니다(예: 여기에 `Content-Type`을(를) 제공하면 본문 유형 기본값보다 우선 적용됨)."
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.bWFrZS1hcGktY2FsbA.option.aGRy.display_name": {
+          "source": "Custom Headers",
+          "message": "사용자 지정 헤더"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.bWFrZS1hcGktY2FsbA.option.aGRy.short_desc": {
+          "source": "Extra request headers",
+          "message": "추가 요청 헤더"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.desc": {
+          "source": "If `True`, the response hash includes a `debug` sub-hash containing the request method/URL/headers (with sensitive values redacted), request and response sizes, and round-trip duration. Useful when investigating slow or failing calls. Off by default to keep responses lean.",
+          "message": "`True`인 경우 응답 해시에 요청 메서드/URL/헤더(민감한 값은 가려짐), 요청 및 응답 크기, 왕복 시간이 포함된 `debug` 하위 해시가 포함됩니다. 느리거나 실패한 호출을 조사할 때 유용합니다. 응답을 가볍게 유지하기 위해 기본적으로 비활성화되어 있습니다."
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.display_name": {
+          "source": "Include Debug Info",
+          "message": "디버그 정보 포함"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.short_desc": {
+          "source": "Include request/timing/size debug info in the response",
+          "message": "응답에 요청/타이밍/크기 디버그 정보 포함"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.desc": {
+          "source": "HTTP `OPTIONS`",
+          "message": "HTTP `OPTIONS`"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.display_name": {
+          "source": "OPTIONS",
+          "message": "OPTIONS"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.short_desc": {
+          "source": "HTTP OPTIONS",
+          "message": "HTTP OPTIONS"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.desc": {
+          "source": "HTTP `DELETE`",
+          "message": "HTTP `DELETE`"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.display_name": {
+          "source": "DELETE",
+          "message": "DELETE"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.short_desc": {
+          "source": "HTTP DELETE",
+          "message": "HTTP DELETE"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.desc": {
+          "source": "HTTP `GET`",
+          "message": "HTTP `GET`"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.display_name": {
+          "source": "GET",
+          "message": "GET"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.short_desc": {
+          "source": "HTTP GET",
+          "message": "HTTP GET"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.desc": {
+          "source": "HTTP `HEAD`",
+          "message": "HTTP `HEAD`"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.display_name": {
+          "source": "HEAD",
+          "message": "HEAD"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.short_desc": {
+          "source": "HTTP HEAD",
+          "message": "HTTP HEAD"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.desc": {
+          "source": "HTTP `PATCH`",
+          "message": "HTTP `PATCH`"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.display_name": {
+          "source": "PATCH",
+          "message": "PATCH"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.short_desc": {
+          "source": "HTTP PATCH",
+          "message": "HTTP PATCH"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.desc": {
+          "source": "HTTP `POST`",
+          "message": "HTTP `POST`"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.display_name": {
+          "source": "POST",
+          "message": "POST"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.short_desc": {
+          "source": "HTTP POST",
+          "message": "HTTP POST"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.desc": {
+          "source": "HTTP `PUT`",
+          "message": "HTTP `PUT`"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.display_name": {
+          "source": "PUT",
+          "message": "PUT"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.short_desc": {
+          "source": "HTTP PUT",
+          "message": "HTTP PUT"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.desc": {
+          "source": "HTTP `TRACE`",
+          "message": "HTTP `TRACE`"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.display_name": {
+          "source": "TRACE",
+          "message": "TRACE"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.short_desc": {
+          "source": "HTTP TRACE",
+          "message": "HTTP TRACE"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "요청에 사용할 HTTP 메서드"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.display_name": {
+          "source": "HTTP Method",
+          "message": "HTTP 메서드"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.short_desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "요청에 사용할 HTTP 메서드"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain `{name}` placeholders that are replaced from `path_vars`. Example: `/users/{id}/comments`.",
+          "message": "연결의 API 기본 URL에 대한 상대 URI 경로입니다. `path_vars`에서 대체되는 `{name}` 자리 표시자가 포함될 수 있습니다. 예: `/users/{id}/comments`."
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.display_name": {
+          "source": "URI Path",
+          "message": "URI 경로"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.short_desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain '{name}' placeholders that are replaced from 'path_vars'. Example: '/users/{id}/comments'",
+          "message": "연결의 API 기본 URL에 대한 상대 URI 경로입니다. 'path_vars'에서 대체되는 '{name}' 자리 표시자를 포함할 수 있습니다. 예: '/users/{id}/comments'"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.desc": {
+          "source": "Hash of values substituted into `{name}` placeholders in the URI path. Example: with `path = /users/{id}` and `path_vars = {id: 123}` the framework sends `/users/123`. Values are URL-encoded.",
+          "message": "URI 경로의 `{name}` 자리 표시자에 대체되는 값의 해시입니다. 예: `path = /users/{id}` 및 `path_vars = {id: 123}`이 있으면 프레임워크가 `/users/123`을(를) 전송합니다. 값은 URL 인코딩됩니다."
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.display_name": {
+          "source": "Path Variables",
+          "message": "경로 변수"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.short_desc": {
+          "source": "Values for {name} placeholders in path",
+          "message": "경로 내 {name} 자리 표시자의 값"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.desc": {
+          "source": "Hash of query string parameters to append to the URI path. Values are URL-encoded; list values are joined with `,`.",
+          "message": "URI 경로에 추가할 쿼리 문자열 매개변수 해시입니다. 값은 URL 인코딩되며, 목록 값은 `,`(으)로 연결됩니다."
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.display_name": {
+          "source": "Query Arguments",
+          "message": "쿼리 인수"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.short_desc": {
+          "source": "Query string parameters",
+          "message": "쿼리 문자열 매개변수"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.action.bWFrZS1hcGktY2FsbA.short_desc": {
+          "source": "Make a custom API call to Azure Document Intelligence",
+          "message": "Azure Document Intelligence에 커스텀 API 호출 수행"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.desc": {
+          "source": "Provides access to [Azure Document Intelligence](https://azure.microsoft.com/products/ai-services/ai-document-intelligence) (formerly Form Recognizer) — Microsoft's managed document extraction service.\n\n**Prebuilt models**:\n- `prebuilt-document` — general key/value extraction\n- `prebuilt-layout` — layout, tables, paragraphs\n- `prebuilt-invoice` / `prebuilt-receipt` — typed invoice / receipt entities\n- `prebuilt-idDocument` — driver's licenses, passports, national IDs\n- `prebuilt-businessCard` — business card extraction\n- `prebuilt-tax.us.w2` / `prebuilt-tax.us.1098` — US tax forms\n- `prebuilt-contract` — contract clauses + parties\n\n**Custom models** trained in the Azure portal are referenced by their GUID identifier.",
+          "message": "[Azure Document Intelligence](https://azure.microsoft.com/products/ai-services/ai-document-intelligence)(이전 Form Recognizer)에 대한 액세스를 제공합니다 — Microsoft의 관리형 문서 추출 서비스입니다.\n\n**사전 구축 모델**:\n- `prebuilt-document` — 일반 키/값 추출\n- `prebuilt-layout` — 레이아웃, 표, 단락\n- `prebuilt-invoice` / `prebuilt-receipt` — 유형별 인보이스 / 영수증 엔터티\n- `prebuilt-idDocument` — 운전면허증, 여권, 주민등록증/국가 신분증\n- `prebuilt-businessCard` — 명함 추출\n- `prebuilt-tax.us.w2` / `prebuilt-tax.us.1098` — 미국 세금 양식\n- `prebuilt-contract` — 계약서 조항 + 당사자\n\nAzure 포털에서 학습된 **커스텀 모델**은 GUID 식별자로 참조됩니다."
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.display_name": {
+          "source": "Azure Document Intelligence",
+          "message": "Azure Document Intelligence"
+        },
+        "app.QXp1cmVEb2N1bWVudEludGVsbGlnZW5jZQ.short_desc": {
+          "source": "Azure Document Intelligence (formerly Form Recognizer)",
+          "message": "Azure Document Intelligence(이전 Form Recognizer)"
+        }
+      }
+    }
+  }
+}

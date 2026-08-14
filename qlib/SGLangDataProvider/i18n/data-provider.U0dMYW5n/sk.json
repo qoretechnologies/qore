@@ -1,0 +1,809 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "sk": {
+      "messages": {
+        "app.U0dMYW5n.action.Y2hhdC1jb21wbGV0aW9u.desc": {
+          "source": "Sends a list of chat messages to a local SGLang model server using the OpenAI-compatible `/v1/chat/completions` endpoint and returns the generated response.\n\n**Example use cases**:\n- Local chat assistants with data residency guarantees\n- Bulk text generation on internal infrastructure without per-token billing\n- Tool-calling agents (pass `tools` and `tool_choice` in the request)\n\nThe `model` is taken from the connection by default; override per-request with the `model` field.",
+          "message": "Odošle zoznam správ chatu na lokálny modelový server SGLang pomocou koncového bodu `/v1/chat/completions` kompatibilného s OpenAI a vráti vygenerovanú odpoveď.\n\n**Príklady použitia**:\n- Lokálni chatoví asistenti so zárukami rezidencie údajov\n- Hromadné generovanie textu na internej infraštruktúre bez účtovania za tokeny\n- Agenti volajúci nástroje (v požiadavke odovzdajte `tools` a `tool_choice`)\n\n`model` sa predvolene preberá z pripojenia; prepíšte ho pre každú požiadavku pomocou poľa `model`."
+        },
+        "app.U0dMYW5n.action.Y2hhdC1jb21wbGV0aW9u.display_name": {
+          "source": "Chat Completion",
+          "message": "Dopĺňanie chatu"
+        },
+        "app.U0dMYW5n.action.Y2hhdC1jb21wbGV0aW9u.option.ZnJlcXVlbmN5X3BlbmFsdHk.desc": {
+          "source": "Penalizes tokens based on how often they have already appeared in the output. Range `-2.0` to `2.0`.  Positive values reduce verbatim repetition.",
+          "message": "Penalizuje tokeny na základe toho, ako často sa už objavili vo výstupe. Rozsah `-2.0` až `2.0`. Kladné hodnoty znižujú doslovné opakovanie."
+        },
+        "app.U0dMYW5n.action.Y2hhdC1jb21wbGV0aW9u.option.ZnJlcXVlbmN5X3BlbmFsdHk.display_name": {
+          "source": "Frequency Penalty",
+          "message": "Penalizácia frekvencie"
+        },
+        "app.U0dMYW5n.action.Y2hhdC1jb21wbGV0aW9u.option.ZnJlcXVlbmN5X3BlbmFsdHk.short_desc": {
+          "source": "Penalize repeated tokens proportional to their frequency",
+          "message": "Penalizovať opakované tokeny úmerne k ich frekvencii"
+        },
+        "app.U0dMYW5n.action.Y2hhdC1jb21wbGV0aW9u.option.bW9kZWw.desc": {
+          "source": "Name of the model to use for this request.  Optional; defaults to the model configured on the SGLang connection via `getModel()`.\n\n**Note**: SGLang serves exactly one model per server, so overriding `model` only makes sense when routing to a multi-model gateway.",
+          "message": "Názov modelu, ktorý sa má použiť pre túto požiadavku. Voliteľné; predvolene sa použije model nakonfigurovaný v pripojení SGLang prostredníctvom `getModel()`.\n\n**Poznámka**: SGLang poskytuje presne jeden model na server, takže prepísanie `model` má zmysel len pri smerovaní na bránu s viacerými modelmi."
+        },
+        "app.U0dMYW5n.action.Y2hhdC1jb21wbGV0aW9u.option.bW9kZWw.display_name": {
+          "source": "Model",
+          "message": "Model"
+        },
+        "app.U0dMYW5n.action.Y2hhdC1jb21wbGV0aW9u.option.bW9kZWw.short_desc": {
+          "source": "Override the model served by the SGLang connection",
+          "message": "Prepísať model poskytovaný pripojením SGLang"
+        },
+        "app.U0dMYW5n.action.Y2hhdC1jb21wbGV0aW9u.option.bWF4X3Rva2Vucw.desc": {
+          "source": "Maximum number of tokens to generate in the completion.  The total token count (prompt + completion) must fit within the model's context window; if it doesn't, the server returns an error.",
+          "message": "Maximálny počet tokenov na vygenerovanie v dokončení. Celkový počet tokenov (výzva + dokončenie) sa musí zmestiť do kontextového okna modelu; ak sa nezmestí, server vráti chybu."
+        },
+        "app.U0dMYW5n.action.Y2hhdC1jb21wbGV0aW9u.option.bWF4X3Rva2Vucw.display_name": {
+          "source": "Max Tokens",
+          "message": "Maximálny počet tokenov"
+        },
+        "app.U0dMYW5n.action.Y2hhdC1jb21wbGV0aW9u.option.bWF4X3Rva2Vucw.short_desc": {
+          "source": "Maximum tokens to emit in the completion",
+          "message": "Maximálny počet tokenov na vygenerovanie v dokončení"
+        },
+        "app.U0dMYW5n.action.Y2hhdC1jb21wbGV0aW9u.option.bWVzc2FnZXM.desc": {
+          "source": "The conversation history as a list of message objects.  Each message has a `role` (`system`, `user`, `assistant`, or `tool`) and `content` (text).\n\n**Typical patterns**:\n- Single user turn: `[{role: \"user\", content: \"...\"}]`\n- With system prompt: `[{role: \"system\", content: \"...\"}, {role: \"user\", content: \"...\"}]`\n- Multi-turn: include prior `assistant` messages to preserve context\n- Tool calling: `assistant` messages carry `tool_calls`; `tool` messages return results keyed by `tool_call_id`",
+          "message": "História konverzácie ako zoznam objektov správ. Každá správa má `role` (`system`, `user`, `assistant` alebo `tool`) a `content` (text).\n\n**Typické vzory**:\n- Jeden ťah používateľa: `[{role: \"user\", content: \"...\"}]`\n- So systémovou výzvou: `[{role: \"system\", content: \"...\"}, {role: \"user\", content: \"...\"}]`\n- Viacťahové: zahrňte predchádzajúce správy `assistant` na zachovanie kontextu\n- Volanie nástrojov: správy `assistant` nesú `tool_calls`; správy `tool` vracajú výsledky s kľúčom `tool_call_id`"
+        },
+        "app.U0dMYW5n.action.Y2hhdC1jb21wbGV0aW9u.option.bWVzc2FnZXM.display_name": {
+          "source": "Messages",
+          "message": "Správy"
+        },
+        "app.U0dMYW5n.action.Y2hhdC1jb21wbGV0aW9u.option.bWVzc2FnZXM.short_desc": {
+          "source": "List of chat messages forming the conversation",
+          "message": "Zoznam správ chatu tvoriacich konverzáciu"
+        },
+        "app.U0dMYW5n.action.Y2hhdC1jb21wbGV0aW9u.option.c2VlZA.desc": {
+          "source": "Integer seed for deterministic sampling.  With a fixed `seed`, `temperature`, and prompt, the same request returns the same output (useful for tests and reproducibility).",
+          "message": "Celočíselný seed pre deterministické vzorkovanie. S pevným `seed`, `temperature` a výzvou rovnaká požiadavka vráti rovnaký výstup (užitočné pre testy a reprodukovateľnosť)."
+        },
+        "app.U0dMYW5n.action.Y2hhdC1jb21wbGV0aW9u.option.c2VlZA.display_name": {
+          "source": "Seed",
+          "message": "Seed"
+        },
+        "app.U0dMYW5n.action.Y2hhdC1jb21wbGV0aW9u.option.c2VlZA.short_desc": {
+          "source": "Deterministic sampling seed",
+          "message": "Seed pre deterministické vzorkovanie"
+        },
+        "app.U0dMYW5n.action.Y2hhdC1jb21wbGV0aW9u.option.c3RvcA.desc": {
+          "source": "One or more stop sequences.  Generation halts as soon as the model emits any of them.  Can be a single string or a list of strings.\n\n**Examples**: `\"\\n\\n\"`, `[\"END\", \"STOP\"]`",
+          "message": "Jedna alebo viac stop sekvencií. Generovanie sa zastaví, len čo model vygeneruje ktorúkoľvek z nich. Môže ísť o jeden reťazec alebo zoznam reťazcov.\n\n**Príklady**: `\"\\n\\n\"`, `[\"END\", \"STOP\"]`"
+        },
+        "app.U0dMYW5n.action.Y2hhdC1jb21wbGV0aW9u.option.c3RvcA.display_name": {
+          "source": "Stop Sequences",
+          "message": "Sekvencie zastavenia"
+        },
+        "app.U0dMYW5n.action.Y2hhdC1jb21wbGV0aW9u.option.c3RvcA.short_desc": {
+          "source": "String or list of strings; generation halts when emitted",
+          "message": "Reťazec alebo zoznam reťazcov; generovanie sa zastaví pri ich vygenerovaní"
+        },
+        "app.U0dMYW5n.action.Y2hhdC1jb21wbGV0aW9u.option.c3RyZWFt.desc": {
+          "source": "When `True`, the server streams partial completions as Server-Sent Events (SSE) instead of returning a single response.  Most data provider flows expect non-streaming (`False` / omitted); enable only when wiring into a streaming consumer.",
+          "message": "Keď je `True`, server streamuje čiastočné dokončenia ako Server-Sent Events (SSE) namiesto vrátenia jednej odpovede. Väčšina tokov poskytovateľov údajov očakáva nestreamovanú prevádzku (`False` / vynechané); povoľte iba pri pripájaní k streamovaciemu spotrebiteľovi."
+        },
+        "app.U0dMYW5n.action.Y2hhdC1jb21wbGV0aW9u.option.c3RyZWFt.display_name": {
+          "source": "Stream",
+          "message": "Stream"
+        },
+        "app.U0dMYW5n.action.Y2hhdC1jb21wbGV0aW9u.option.c3RyZWFt.short_desc": {
+          "source": "Stream partial completions as server-sent events",
+          "message": "Streamovať čiastočné dokončenia ako Server-Sent Events"
+        },
+        "app.U0dMYW5n.action.Y2hhdC1jb21wbGV0aW9u.option.cHJlc2VuY2VfcGVuYWx0eQ.desc": {
+          "source": "Penalizes tokens that have already appeared in the output, regardless of frequency.  Range `-2.0` to `2.0`.  Positive values encourage topic diversity.",
+          "message": "Penalizuje tokeny, ktoré sa už objavili vo výstupe, bez ohľadu na frekvenciu. Rozsah `-2.0` až `2.0`. Kladné hodnoty podporujú tematickú rozmanitosť."
+        },
+        "app.U0dMYW5n.action.Y2hhdC1jb21wbGV0aW9u.option.cHJlc2VuY2VfcGVuYWx0eQ.display_name": {
+          "source": "Presence Penalty",
+          "message": "Penalizácia prítomnosti"
+        },
+        "app.U0dMYW5n.action.Y2hhdC1jb21wbGV0aW9u.option.cHJlc2VuY2VfcGVuYWx0eQ.short_desc": {
+          "source": "Penalize any token that has already appeared",
+          "message": "Penalizovať akýkoľvek token, ktorý sa už objavil"
+        },
+        "app.U0dMYW5n.action.Y2hhdC1jb21wbGV0aW9u.option.cmVzcG9uc2VfZm9ybWF0.desc": {
+          "source": "Hash that forces a structured response shape.  The most common use is JSON mode: `{type: \"json_object\"}`.\n\nFor stricter schema enforcement, consider the `/generate` action with `json_schema` — SGLang's constrained decoding guarantees schema conformance at the token-sampling level.",
+          "message": "Haš, ktorý vynucuje štruktúrovaný tvar odpovede. Najbežnejším použitím je režim JSON: `{type: \"json_object\"}`.\n\nPre prísnejšie vynútenie schémy zvážte akciu `/generate` s `json_schema` — obmedzené dekódovanie SGLang zaručuje zhodu so schémou na úrovni vzorkovania tokenov."
+        },
+        "app.U0dMYW5n.action.Y2hhdC1jb21wbGV0aW9u.option.cmVzcG9uc2VfZm9ybWF0.display_name": {
+          "source": "Response Format",
+          "message": "Formát odpovede"
+        },
+        "app.U0dMYW5n.action.Y2hhdC1jb21wbGV0aW9u.option.cmVzcG9uc2VfZm9ybWF0.short_desc": {
+          "source": "Force structured (e.g. JSON) output",
+          "message": "Vynútiť štruktúrovaný výstup (napr. JSON)"
+        },
+        "app.U0dMYW5n.action.Y2hhdC1jb21wbGV0aW9u.option.dG9vbF9jaG9pY2U.allowed-value.c3RyaW5nOm5vbmU.display_name": {
+          "source": "None - never call a tool",
+          "message": "Žiadne – nikdy nevolať nástroj"
+        },
+        "app.U0dMYW5n.action.Y2hhdC1jb21wbGV0aW9u.option.dG9vbF9jaG9pY2U.allowed-value.c3RyaW5nOmF1dG8.display_name": {
+          "source": "Auto - model decides",
+          "message": "Auto – rozhoduje model"
+        },
+        "app.U0dMYW5n.action.Y2hhdC1jb21wbGV0aW9u.option.dG9vbF9jaG9pY2U.allowed-value.c3RyaW5nOnJlcXVpcmVk.display_name": {
+          "source": "Required - must call a tool",
+          "message": "Povinné – musí zavolať nástroj"
+        },
+        "app.U0dMYW5n.action.Y2hhdC1jb21wbGV0aW9u.option.dG9vbF9jaG9pY2U.desc": {
+          "source": "Controls tool invocation.\n\n- `none` — never call a tool (text-only reply)\n- `auto` — model decides (default when `tools` is set)\n- `required` — model must call at least one tool",
+          "message": "Riadi volanie nástrojov.\n\n- `none` – nikdy nevolať nástroj (iba textová odpoveď)\n- `auto` – rozhodne model (predvolené, keď je nastavené `tools`)\n- `required` – model musí zavolať aspoň jeden nástroj"
+        },
+        "app.U0dMYW5n.action.Y2hhdC1jb21wbGV0aW9u.option.dG9vbF9jaG9pY2U.display_name": {
+          "source": "Tool Choice",
+          "message": "Výber nástroja"
+        },
+        "app.U0dMYW5n.action.Y2hhdC1jb21wbGV0aW9u.option.dG9vbF9jaG9pY2U.short_desc": {
+          "source": "Whether and which tool the model must invoke",
+          "message": "Či a aký nástroj musí model zavolať"
+        },
+        "app.U0dMYW5n.action.Y2hhdC1jb21wbGV0aW9u.option.dG9vbHM.desc": {
+          "source": "List of tool definitions the model may invoke.  Each entry is a hash with a `type` field (`function`) and a `function` hash containing `name`, `description`, and a JSON-schema `parameters` object.\n\n**Example**:\n```\n[{type: \"function\", function: {\n  name: \"get_weather\",\n  description: \"Get the weather for a location\",\n  parameters: {type: \"object\", properties: {...}, required: [\"location\"]}\n}}]\n```",
+          "message": "Zoznam definícií nástrojov, ktoré môže model vyvolať. Každá položka je haš s poľom `type` (`function`) a hašom `function` obsahujúcim `name`, `description` a objekt `parameters` typu JSON schema.\n\n**Príklad**:\n```\n[{type: \"function\", function: {\n  name: \"get_weather\",\n  description: \"Get the weather for a location\",\n  parameters: {type: \"object\", properties: {...}, required: [\"location\"]}\n}}]\n```"
+        },
+        "app.U0dMYW5n.action.Y2hhdC1jb21wbGV0aW9u.option.dG9vbHM.display_name": {
+          "source": "Tools",
+          "message": "Nástroje"
+        },
+        "app.U0dMYW5n.action.Y2hhdC1jb21wbGV0aW9u.option.dG9vbHM.short_desc": {
+          "source": "OpenAI-style tool definitions the model may call",
+          "message": "Definície nástrojov v štýle OpenAI, ktoré model môže volať"
+        },
+        "app.U0dMYW5n.action.Y2hhdC1jb21wbGV0aW9u.option.dG9wX2s.desc": {
+          "source": "Restrict sampling to the K most likely next tokens.  SGLang-specific extension to the OpenAI chat API; useful for reducing low-probability token noise.  Set to `-1` or omit to disable.",
+          "message": "Obmedziť vzorkovanie na K najpravdepodobnejších nasledujúcich tokenov. Rozšírenie špecifické pre SGLang k API OpenAI chat; užitočné na zníženie šumu tokenov s nízkou pravdepodobnosťou. Nastavte na `-1` alebo vynechajte pre deaktiváciu."
+        },
+        "app.U0dMYW5n.action.Y2hhdC1jb21wbGV0aW9u.option.dG9wX2s.display_name": {
+          "source": "Top-K",
+          "message": "Top-K"
+        },
+        "app.U0dMYW5n.action.Y2hhdC1jb21wbGV0aW9u.option.dG9wX2s.short_desc": {
+          "source": "Sample only from the K most likely next tokens (SGLang extension)",
+          "message": "Vzorkovať iba z K najpravdepodobnejších nasledujúcich tokenov (rozšírenie SGLang)"
+        },
+        "app.U0dMYW5n.action.Y2hhdC1jb21wbGV0aW9u.option.dG9wX3A.desc": {
+          "source": "Nucleus sampling — restrict sampling to tokens whose cumulative probability exceeds this threshold.  Range `0.0` to `1.0`.  Usually left at `1.0` and varied only in combination with `top_k` or lower `temperature`.",
+          "message": "Nucleus vzorkovanie — obmedzí vzorkovanie na tokeny, ktorých kumulatívna pravdepodobnosť prekračuje túto prahovú hodnotu. Rozsah `0.0` až `1.0`. Zvyčajne sa ponecháva na `1.0` a mení sa len v kombinácii s `top_k` alebo nižším `temperature`."
+        },
+        "app.U0dMYW5n.action.Y2hhdC1jb21wbGV0aW9u.option.dG9wX3A.display_name": {
+          "source": "Top-P",
+          "message": "Top-P"
+        },
+        "app.U0dMYW5n.action.Y2hhdC1jb21wbGV0aW9u.option.dG9wX3A.short_desc": {
+          "source": "Nucleus sampling cutoff (0-1)",
+          "message": "Hranica vzorkovania nucleus (0-1)"
+        },
+        "app.U0dMYW5n.action.Y2hhdC1jb21wbGV0aW9u.option.dGVtcGVyYXR1cmU.desc": {
+          "source": "Controls randomness of the output.  Range `0.0` to `2.0`.\n\n- `0.0` — deterministic (greedy decoding)\n- `0.7` — balanced creativity (typical default for chat)\n- `1.5`+ — highly varied / creative\n\nDefaults to `1.0` on most SGLang deployments.",
+          "message": "Riadi náhodnosť výstupu. Rozsah `0.0` až `2.0`.\n\n- `0.0` — deterministické (greedy dekódovanie)\n- `0.7` — vyvážená kreativita (typické predvolené nastavenie pre chat)\n- `1.5`+ — vysoko variabilné / kreatívne\n\nPredvolená hodnota je `1.0` na väčšine nasadení SGLang."
+        },
+        "app.U0dMYW5n.action.Y2hhdC1jb21wbGV0aW9u.option.dGVtcGVyYXR1cmU.display_name": {
+          "source": "Temperature",
+          "message": "Teplota"
+        },
+        "app.U0dMYW5n.action.Y2hhdC1jb21wbGV0aW9u.option.dGVtcGVyYXR1cmU.short_desc": {
+          "source": "Sampling temperature (0-2); higher values give more varied output",
+          "message": "Teplota vzorkovania (0 – 2); vyššie hodnoty poskytujú rozmanitejší výstup"
+        },
+        "app.U0dMYW5n.action.Y2hhdC1jb21wbGV0aW9u.option.dXNlcg.desc": {
+          "source": "Opaque identifier representing the end user.  Logged server-side for abuse tracking and usage attribution; does not affect generation.",
+          "message": "Netransparentný identifikátor reprezentujúci koncového používateľa. Zaznamenáva sa na strane servera na sledovanie zneužitia a priradenie využitia; neovplyvňuje generovanie."
+        },
+        "app.U0dMYW5n.action.Y2hhdC1jb21wbGV0aW9u.option.dXNlcg.display_name": {
+          "source": "User ID",
+          "message": "ID používateľa"
+        },
+        "app.U0dMYW5n.action.Y2hhdC1jb21wbGV0aW9u.option.dXNlcg.short_desc": {
+          "source": "Opaque end-user identifier for abuse tracking",
+          "message": "Netransparentný identifikátor koncového používateľa na sledovanie zneužitia"
+        },
+        "app.U0dMYW5n.action.Y2hhdC1jb21wbGV0aW9u.short_desc": {
+          "source": "Generate a chat completion from a local SGLang model server",
+          "message": "Vygenerovať dokončenie chatu z lokálneho modelového servera SGLang"
+        },
+        "app.U0dMYW5n.action.Y3JlYXRlLWVtYmVkZGluZ3M.desc": {
+          "source": "Converts text inputs into embedding vectors using the local SGLang model via the OpenAI-compatible `/v1/embeddings` endpoint.\n\nThe SGLang server must be configured with an embedding model (e.g. `bge-m3`).\n\n**Example use cases**:\n- RAG vector index population using local inference\n- On-prem semantic search without cloud dependency",
+          "message": "Konvertuje textové vstupy na vkladacie vektory (embeddingy) pomocou lokálneho modelu SGLang prostredníctvom koncového bodu `/v1/embeddings` kompatibilného s OpenAI.\n\nServer SGLang musí byť nakonfigurovaný s modelom vkladania (napr. `bge-m3`).\n\n**Príklady použitia**:\n- Napĺňanie vektorového indexu RAG pomocou lokálnej inferencie\n- On-premise sémantické vyhľadávanie bez závislosti od cloudu"
+        },
+        "app.U0dMYW5n.action.Y3JlYXRlLWVtYmVkZGluZ3M.display_name": {
+          "source": "Create Embeddings",
+          "message": "Vytvoriť embeddingy"
+        },
+        "app.U0dMYW5n.action.Y3JlYXRlLWVtYmVkZGluZ3M.option.ZW5jb2RpbmdfZm9ybWF0.allowed-value.c3RyaW5nOmJhc2U2NA.display_name": {
+          "source": "Base64 - encoded binary (smaller transfer)",
+          "message": "Base64 – kódovaný binárny formát (menší prenos)"
+        },
+        "app.U0dMYW5n.action.Y3JlYXRlLWVtYmVkZGluZ3M.option.ZW5jb2RpbmdfZm9ybWF0.allowed-value.c3RyaW5nOmZsb2F0.display_name": {
+          "source": "Float - plain number array (default)",
+          "message": "Float – obyčajné pole čísel (predvolené)"
+        },
+        "app.U0dMYW5n.action.Y3JlYXRlLWVtYmVkZGluZ3M.option.ZW5jb2RpbmdfZm9ybWF0.desc": {
+          "source": "Controls how embedding vectors are returned.\n\n- `float` — plain JSON number array (default, easiest to consume)\n- `base64` — base64-encoded binary blob (smaller on the wire; decode before use)",
+          "message": "Riadi spôsob vrátenia vkladacích vektorov (embeddingov).\n\n- `float` — obyčajné JSON pole čísel (predvolené, najjednoduchšie na spracovanie)\n- `base64` — binárny blob kódovaný v base64 (menší objem prenášaných dát; pred použitím dekódujte)"
+        },
+        "app.U0dMYW5n.action.Y3JlYXRlLWVtYmVkZGluZ3M.option.ZW5jb2RpbmdfZm9ybWF0.display_name": {
+          "source": "Encoding Format",
+          "message": "Formát kódovania"
+        },
+        "app.U0dMYW5n.action.Y3JlYXRlLWVtYmVkZGluZ3M.option.ZW5jb2RpbmdfZm9ybWF0.short_desc": {
+          "source": "How embedding values are encoded in the response",
+          "message": "Ako sú hodnoty embeddingov kódované v odpovedi"
+        },
+        "app.U0dMYW5n.action.Y3JlYXRlLWVtYmVkZGluZ3M.option.aW5wdXQ.desc": {
+          "source": "The text content to embed.  Can be a single string or a list of strings for batch processing.\n\n**Examples**:\n- Single text: `\"How do I reset my password?\"`\n- Batch: `[\"Product A description\", \"Product B description\"]`\n\nThe SGLang server must be running an embedding model (e.g. `bge-m3`, `nomic-embed-text-v1.5`).",
+          "message": "Textový obsah na vytvorenie embeddingu. Môže ísť o jeden reťazec alebo zoznam reťazcov pre dávkové spracovanie.\n\n**Príklady**:\n- Jeden text: `\"How do I reset my password?\"`\n- Dávka: `[\"Product A description\", \"Product B description\"]`\n\nNa serveri SGLang musí bežať model na vkladanie (napr. `bge-m3`, `nomic-embed-text-v1.5`)."
+        },
+        "app.U0dMYW5n.action.Y3JlYXRlLWVtYmVkZGluZ3M.option.aW5wdXQ.display_name": {
+          "source": "Input Text",
+          "message": "Vstupný text"
+        },
+        "app.U0dMYW5n.action.Y3JlYXRlLWVtYmVkZGluZ3M.option.aW5wdXQ.short_desc": {
+          "source": "The text or list of texts to convert into embeddings",
+          "message": "Text alebo zoznam textov na konverziu na embeddingy"
+        },
+        "app.U0dMYW5n.action.Y3JlYXRlLWVtYmVkZGluZ3M.option.bW9kZWw.desc": {
+          "source": "Name of the embedding model to use.  Optional; defaults to the model configured on the SGLang connection via `getModel()`.\n\n**Note**: SGLang serves exactly one model per server, so overriding `model` only makes sense when routing to a multi-model gateway.",
+          "message": "Názov embeddingového modelu, ktorý sa má použiť. Voliteľné; predvolene sa použije model nakonfigurovaný v pripojení SGLang cez `getModel()`.\n\n**Poznámka**: SGLang obsluhuje presne jeden model na server, takže prepísanie `model` má zmysel len pri smerovaní na viacmodelovú bránu."
+        },
+        "app.U0dMYW5n.action.Y3JlYXRlLWVtYmVkZGluZ3M.option.bW9kZWw.display_name": {
+          "source": "Model",
+          "message": "Model"
+        },
+        "app.U0dMYW5n.action.Y3JlYXRlLWVtYmVkZGluZ3M.option.bW9kZWw.short_desc": {
+          "source": "Override the model served by the SGLang connection",
+          "message": "Prepísať model poskytovaný pripojením SGLang"
+        },
+        "app.U0dMYW5n.action.Y3JlYXRlLWVtYmVkZGluZ3M.option.dXNlcg.desc": {
+          "source": "Opaque identifier representing the end user.  Logged server-side for abuse tracking and usage attribution; does not affect output.",
+          "message": "Nepriehľadný identifikátor reprezentujúci koncového používateľa. Zaznamenáva sa na strane servera na sledovanie zneužitia a priradenie využitia; neovplyvňuje výstup."
+        },
+        "app.U0dMYW5n.action.Y3JlYXRlLWVtYmVkZGluZ3M.option.dXNlcg.display_name": {
+          "source": "User ID",
+          "message": "ID používateľa"
+        },
+        "app.U0dMYW5n.action.Y3JlYXRlLWVtYmVkZGluZ3M.option.dXNlcg.short_desc": {
+          "source": "Opaque end-user identifier for abuse tracking",
+          "message": "Netransparentný identifikátor koncového používateľa na sledovanie zneužitia"
+        },
+        "app.U0dMYW5n.action.Y3JlYXRlLWVtYmVkZGluZ3M.short_desc": {
+          "source": "Generate embedding vectors from a local SGLang model server",
+          "message": "Generovať embeddingové vektory z lokálneho modelového servera SGLang"
+        },
+        "app.U0dMYW5n.action.Z2VuZXJhdGU.desc": {
+          "source": "Uses SGLang's native `/generate` endpoint with constrained decoding — the model is guaranteed to emit output matching a JSON schema, regex pattern, or EBNF grammar.\n\nThis eliminates the retry loops common to OpenAI-style schema enforcement because constraints are applied at the token-sampling step, not post-hoc.\n\n**Example use cases**:\n- Typed field extraction (invoices, receipts, contracts) with guaranteed schema conformance\n- Classification tasks where the output must be exactly one of N labels\n- Tool-call argument generation where the arguments must match a precise shape\n\nSupply exactly one of `json_schema`, `regex`, or `ebnf` to constrain the output.",
+          "message": "Používa natívny koncový bod `/generate` služby SGLang s obmedzeným dekódovaním – je zaručené, že model vygeneruje výstup zodpovedajúci schéme JSON, vzoru regex alebo gramatike EBNF.\n\nTým sa eliminujú slučky opakovaných pokusov bežné pri vynucovaní schém v štýle OpenAI, pretože obmedzenia sa uplatňujú v kroku vzorkovania tokenov, nie dodatočne.\n\n**Príklady použitia**:\n- Extrakcia typovaných polí (faktúry, účtenky, zmluvy) so zaručenou zhodou so schémou\n- Klasifikačné úlohy, kde výstup musí byť presne jeden z N štítkov\n- Generovanie argumentov volania nástrojov, kde argumenty musia zodpovedať presnej štruktúre\n\nZadajte presne jedno z `json_schema`, `regex` alebo `ebnf` na obmedzenie výstupu."
+        },
+        "app.U0dMYW5n.action.Z2VuZXJhdGU.display_name": {
+          "source": "Constrained Generation",
+          "message": "Obmedzené generovanie"
+        },
+        "app.U0dMYW5n.action.Z2VuZXJhdGU.option.ZWJuZg.desc": {
+          "source": "Convenience field merged into `sampling_params.ebnf`.\n\nAn EBNF grammar that the generated output must conform to.  Useful for structured outputs that don't fit naturally into JSON schema (SQL queries, domain-specific languages, arithmetic expressions).\n\nMutually exclusive with `json_schema`, `regex`, and `structural_tag`.",
+          "message": "Praktické pole zlúčené do `sampling_params.ebnf`.\n\nGramatika EBNF, ktorej musí generovaný výstup zodpovedať. Užitočné pre štruktúrované výstupy, ktoré sa prirodzene nehodia do schémy JSON (SQL dotazy, doménovo špecifické jazyky, aritmetické výrazy).\n\nVzájomne sa vylučuje s `json_schema`, `regex` a `structural_tag`."
+        },
+        "app.U0dMYW5n.action.Z2VuZXJhdGU.option.ZWJuZg.display_name": {
+          "source": "EBNF Grammar Constraint",
+          "message": "Obmedzenie gramatikou EBNF"
+        },
+        "app.U0dMYW5n.action.Z2VuZXJhdGU.option.ZWJuZg.short_desc": {
+          "source": "EBNF grammar the output must conform to",
+          "message": "Gramatika EBNF, ktorej musí výstup zodpovedať"
+        },
+        "app.U0dMYW5n.action.Z2VuZXJhdGU.option.aW5wdXRfaWRz.desc": {
+          "source": "Alternative to `text` — pass a pre-tokenized list of integer token IDs directly.  Useful when you've already run the tokenizer yourself and want to skip re-tokenization.  Provide exactly one of `text` or `input_ids`.",
+          "message": "Alternatíva k `text` – odovzdajte priamo predtokenizovaný zoznam celočíselných ID tokenov. Užitočné, keď ste už tokenizér spustili sami a chcete preskočiť opätovnú tokenizáciu. Zadajte presne jedno z `text` alebo `input_ids`."
+        },
+        "app.U0dMYW5n.action.Z2VuZXJhdGU.option.aW5wdXRfaWRz.display_name": {
+          "source": "Input Token IDs",
+          "message": "Vstupné ID tokenov"
+        },
+        "app.U0dMYW5n.action.Z2VuZXJhdGU.option.aW5wdXRfaWRz.short_desc": {
+          "source": "Pre-tokenized input as a list of integer token IDs",
+          "message": "Predtokenizovaný vstup ako zoznam celočíselných ID tokenov"
+        },
+        "app.U0dMYW5n.action.Z2VuZXJhdGU.option.anNvbl9zY2hlbWE.desc": {
+          "source": "Convenience field merged into `sampling_params.json_schema`.\n\nA JSON schema, serialized as a string, that the output is guaranteed to match. SGLang enforces the schema at the token-sampling level, so the output is **always** valid JSON conforming to the schema — no parse errors, no retries.\n\n**Example** (extract an invoice total):\n```\n{\n  \"type\": \"object\",\n  \"properties\": {\n    \"amount\": {\"type\": \"number\"},\n    \"currency\": {\"type\": \"string\"}\n  },\n  \"required\": [\"amount\", \"currency\"]\n}\n```\n\nMutually exclusive with `regex`, `ebnf`, and `structural_tag`.",
+          "message": "Praktické pole zlúčené do `sampling_params.json_schema`.\n\nSchéma JSON, serializovaná ako reťazec, ktorej výstup zaručene zodpovedá. SGLang vynucuje schému na úrovni vzorkovania tokenov, takže výstup je **vždy** platný JSON zodpovedajúci schéme – žiadne chyby pri analýze, žiadne opakované pokusy.\n\n**Príklad** (extrakcia celkovej sumy faktúry):\n```\n{\n  \"type\": \"object\",\n  \"properties\": {\n    \"amount\": {\"type\": \"number\"},\n    \"currency\": {\"type\": \"string\"}\n  },\n  \"required\": [\"amount\", \"currency\"]\n}\n```\n\nVzájomne sa vylučuje s `regex`, `ebnf` a `structural_tag`."
+        },
+        "app.U0dMYW5n.action.Z2VuZXJhdGU.option.anNvbl9zY2hlbWE.display_name": {
+          "source": "JSON Schema Constraint",
+          "message": "Obmedzenie schémou JSON"
+        },
+        "app.U0dMYW5n.action.Z2VuZXJhdGU.option.anNvbl9zY2hlbWE.short_desc": {
+          "source": "JSON schema (as a string) the output must conform to",
+          "message": "Schéma JSON (ako reťazec), ktorej musí výstup zodpovedať"
+        },
+        "app.U0dMYW5n.action.Z2VuZXJhdGU.option.bG9ncHJvYl9zdGFydF9sZW4.desc": {
+          "source": "Token offset at which log-probability reporting begins.  Use `-1` to report from the first generated token onward (typical).  Has no effect unless `return_logprob` is `True`.",
+          "message": "Offset tokenu, od ktorého sa začína hlásenie logaritmických pravdepodobností. Použite `-1` na hlásenie od prvého vygenerovaného tokenu ďalej (typické). Nemá žiadny účinok, pokiaľ `return_logprob` nie je `True`."
+        },
+        "app.U0dMYW5n.action.Z2VuZXJhdGU.option.bG9ncHJvYl9zdGFydF9sZW4.display_name": {
+          "source": "Log Probability Start Length",
+          "message": "Počiatočná dĺžka logaritmickej pravdepodobnosti"
+        },
+        "app.U0dMYW5n.action.Z2VuZXJhdGU.option.bG9ncHJvYl9zdGFydF9sZW4.short_desc": {
+          "source": "Token offset at which log-probability reporting begins",
+          "message": "Offset tokenu, od ktorého sa začína hlásenie logaritmických pravdepodobností"
+        },
+        "app.U0dMYW5n.action.Z2VuZXJhdGU.option.bWF4X25ld190b2tlbnM.desc": {
+          "source": "Convenience field merged into `sampling_params.max_new_tokens`.  Maximum number of tokens to generate.  Increase for long-form output; decrease to cap cost.",
+          "message": "Praktické pole zlúčené do `sampling_params.max_new_tokens`. Maximálny počet tokenov na vygenerovanie. Zvýšte pre dlhší výstup; znížte pre obmedzenie nákladov."
+        },
+        "app.U0dMYW5n.action.Z2VuZXJhdGU.option.bWF4X25ld190b2tlbnM.display_name": {
+          "source": "Max New Tokens",
+          "message": "Maximálny počet nových tokenov"
+        },
+        "app.U0dMYW5n.action.Z2VuZXJhdGU.option.bWF4X25ld190b2tlbnM.short_desc": {
+          "source": "Maximum tokens to emit (merged into sampling_params)",
+          "message": "Maximálny počet emitovaných tokenov (zlúčené do sampling_params)"
+        },
+        "app.U0dMYW5n.action.Z2VuZXJhdGU.option.c2FtcGxpbmdfcGFyYW1z.desc": {
+          "source": "Hash of sampling parameters controlling how the model generates tokens.\n\n**Decoding controls**:\n- `temperature` — sampling temperature (`0.0` = deterministic, `1.0` = default)\n- `top_p` — nucleus sampling cutoff (`0.0`-`1.0`)\n- `top_k` — sample only from the K most likely tokens\n- `max_new_tokens` — hard cap on generated tokens\n- `stop` — string or list of stop sequences\n- `n` — number of completions to return\n\n**Constraint modes** (mutually exclusive — pick at most one):\n- `json_schema` — force output to match a JSON schema (passed as a JSON string)\n- `regex` — force output to match a regular expression\n- `ebnf` — force output to match an EBNF grammar\n- `structural_tag` — constrain output with XML-like structural tags\n\nConstraints are enforced at the token-sampling step — the model cannot emit tokens that would violate the constraint, so no retry loop is needed.\n\nThe convenience fields `temperature`, `max_new_tokens`, `json_schema`, `regex`, and `ebnf` at the top level of the request are automatically merged into `sampling_params` by the provider, so you usually don't need to build this hash manually.",
+          "message": "Hash vzorkovacích parametrov riadiacich spôsob, akým model generuje tokeny.\n\n**Ovládanie dekódovania**:\n- `temperature` — teplota vzorkovania (`0.0` = deterministické, `1.0` = predvolené)\n- `top_p` — prah nucleus samplingu (`0.0` – `1.0`)\n- `top_k` — vzorkovať len z K najpravdepodobnejších tokenov\n- `max_new_tokens` — pevný limit pre generované tokeny\n- `stop` — reťazec alebo zoznam stop sekvencií\n- `n` — počet dokončení, ktoré sa majú vrátiť\n\n**Režimy obmedzenia** (vzájomne sa vylučujú – vyberte najviac jeden):\n- `json_schema` — vynútiť zhodu výstupu so schémou JSON (odovzdanou ako reťazec JSON)\n- `regex` — vynútiť zhodu výstupu s regulárnym výrazom\n- `ebnf` — vynútiť zhodu výstupu s gramatikou EBNF\n- `structural_tag` — obmedziť výstup pomocou štrukturálnych značiek podobných XML\n\nObmedzenia sa vynucujú v kroku vzorkovania tokenov – model nemôže vygenerovať tokeny, ktoré by porušili obmedzenie, takže nie je potrebná žiadna slučka opakovaných pokusov.\n\nPraktické polia `temperature`, `max_new_tokens`, `json_schema`, `regex` a `ebnf` na najvyššej úrovni požiadavky sú poskytovateľom automaticky zlúčené do `sampling_params`, takže tento hash zvyčajne nemusíte zostavovať manuálne."
+        },
+        "app.U0dMYW5n.action.Z2VuZXJhdGU.option.c2FtcGxpbmdfcGFyYW1z.display_name": {
+          "source": "Sampling Parameters",
+          "message": "Parametre vzorkovania"
+        },
+        "app.U0dMYW5n.action.Z2VuZXJhdGU.option.c2FtcGxpbmdfcGFyYW1z.short_desc": {
+          "source": "Sampling configuration (temperature, max_new_tokens, constraints)",
+          "message": "Konfigurácia vzorkovania (teplota, max_new_tokens, obmedzenia)"
+        },
+        "app.U0dMYW5n.action.Z2VuZXJhdGU.option.c3RyZWFt.desc": {
+          "source": "When `True`, the server streams partial output as Server-Sent Events instead of returning a single response.  Most action flows expect non-streaming; enable only when wiring into a streaming consumer.",
+          "message": "Keď je nastavené `True`, server streamuje čiastočný výstup ako Server-Sent Events namiesto vrátenia jedinej odpovede. Väčšina tokov akcií očakáva nestreamovanú odpoveď; povoľte len pri pripájaní ku konzumentovi streamovania."
+        },
+        "app.U0dMYW5n.action.Z2VuZXJhdGU.option.c3RyZWFt.display_name": {
+          "source": "Stream",
+          "message": "Stream"
+        },
+        "app.U0dMYW5n.action.Z2VuZXJhdGU.option.c3RyZWFt.short_desc": {
+          "source": "Stream partial output as server-sent events",
+          "message": "Streamovať čiastočný výstup ako Server-Sent Events"
+        },
+        "app.U0dMYW5n.action.Z2VuZXJhdGU.option.cmV0dXJuX2xvZ3Byb2I.desc": {
+          "source": "When `True`, the response's `meta_info` includes per-token log probabilities.  Useful for calibration and confidence estimation; adds response size.",
+          "message": "Keď je nastavené `True`, pole `meta_info` odpovede obsahuje logaritmické pravdepodobnosti jednotlivých tokenov. Užitočné na kalibráciu a odhad istoty; zväčšuje veľkosť odpovede."
+        },
+        "app.U0dMYW5n.action.Z2VuZXJhdGU.option.cmV0dXJuX2xvZ3Byb2I.display_name": {
+          "source": "Return Log Probabilities",
+          "message": "Vrátiť logaritmické pravdepodobnosti"
+        },
+        "app.U0dMYW5n.action.Z2VuZXJhdGU.option.cmV0dXJuX2xvZ3Byb2I.short_desc": {
+          "source": "Include per-token log probabilities in the response",
+          "message": "Zahrnúť logaritmické pravdepodobnosti pre jednotlivé tokeny do odpovede"
+        },
+        "app.U0dMYW5n.action.Z2VuZXJhdGU.option.cmV0dXJuX3RleHRfaW5fbG9ncHJvYnM.desc": {
+          "source": "When `True`, each log-probability entry includes the decoded token text in addition to the token ID.  Easier to inspect but larger payload.",
+          "message": "Keď je nastavené `True`, každý záznam logaritmickej pravdepodobnosti obsahuje okrem ID tokenu aj dekódovaný text tokenu. Jednoduchšie na kontrolu, ale väčší dátový objem."
+        },
+        "app.U0dMYW5n.action.Z2VuZXJhdGU.option.cmV0dXJuX3RleHRfaW5fbG9ncHJvYnM.display_name": {
+          "source": "Return Text in Log Probabilities",
+          "message": "Vrátiť text v logaritmických pravdepodobnostiach"
+        },
+        "app.U0dMYW5n.action.Z2VuZXJhdGU.option.cmV0dXJuX3RleHRfaW5fbG9ncHJvYnM.short_desc": {
+          "source": "Include decoded token text alongside each logprob",
+          "message": "Zahrnúť dekódovaný text tokenu ku každému logprob"
+        },
+        "app.U0dMYW5n.action.Z2VuZXJhdGU.option.cmVnZXg.desc": {
+          "source": "Convenience field merged into `sampling_params.regex`.\n\nA regular expression that the generated output is guaranteed to match.  Useful for tight single-value extraction (dates, identifiers, classifications).\n\n**Example** (classify as exactly one of three labels):\n`\"^(positive|negative|neutral)$\"`\n\nMutually exclusive with `json_schema`, `ebnf`, and `structural_tag`.",
+          "message": "Praktické pole zlúčené do `sampling_params.regex`.\n\nRegulárny výraz, ktorému generovaný výstup zaručene zodpovedá. Užitočné pre presnú extrakciu jednotlivých hodnôt (dátumy, identifikátory, klasifikácie).\n\n**Príklad** (klasifikovať presne ako jeden z troch štítkov):\n`\"^(positive|negative|neutral)$\"`\n\nVzájomne sa vylučuje s `json_schema`, `ebnf` a `structural_tag`."
+        },
+        "app.U0dMYW5n.action.Z2VuZXJhdGU.option.cmVnZXg.display_name": {
+          "source": "Regex Constraint",
+          "message": "Obmedzenie regulárnym výrazom"
+        },
+        "app.U0dMYW5n.action.Z2VuZXJhdGU.option.cmVnZXg.short_desc": {
+          "source": "Regular expression the output must match",
+          "message": "Regulárny výraz, ktorému musí výstup zodpovedať"
+        },
+        "app.U0dMYW5n.action.Z2VuZXJhdGU.option.dG9wX2xvZ3Byb2JzX251bQ.desc": {
+          "source": "For each generated token, include the top N alternative tokens and their log probabilities.  Has no effect unless `return_logprob` is `True`.",
+          "message": "Pre každý vygenerovaný token zahrnúť N najlepších alternatívnych tokenov a ich logaritmické pravdepodobnosti. Nemá žiadny účinok, pokiaľ `return_logprob` nie je `True`."
+        },
+        "app.U0dMYW5n.action.Z2VuZXJhdGU.option.dG9wX2xvZ3Byb2JzX251bQ.display_name": {
+          "source": "Top Log Probabilities Count",
+          "message": "Počet najlepších logaritmických pravdepodobností"
+        },
+        "app.U0dMYW5n.action.Z2VuZXJhdGU.option.dG9wX2xvZ3Byb2JzX251bQ.short_desc": {
+          "source": "Number of alternative tokens to include in each logprob entry",
+          "message": "Počet alternatívnych tokenov, ktoré sa majú zahrnúť do každého záznamu logprob"
+        },
+        "app.U0dMYW5n.action.Z2VuZXJhdGU.option.dGV4dA.desc": {
+          "source": "The raw prompt(s) to send to the model.  Can be a single string or a list of strings for batch completion.\n\nUnlike the chat endpoint, `/generate` does not apply a chat template — the text is tokenized and fed directly to the model.  Include any role markers or formatting the model expects yourself.\n\n**Example**: `\"Extract the invoice number from: Invoice #INV-2026-0041 ...\"`",
+          "message": "Nespracovaný prompt (alebo prompty), ktorý sa má odoslať modelu. Môže to byť jeden reťazec alebo zoznam reťazcov pre dávkové dokončenie.\n\nNa rozdiel od koncového bodu chatu, `/generate` nepoužíva šablónu chatu – text sa tokenizuje a posiela priamo do modelu. Všetky značky rolí alebo formátovanie, ktoré model očakáva, uveďte sami.\n\n**Príklad**: `\"Extract the invoice number from: Invoice #INV-2026-0041 ...\"`"
+        },
+        "app.U0dMYW5n.action.Z2VuZXJhdGU.option.dGV4dA.display_name": {
+          "source": "Prompt Text",
+          "message": "Text promptu"
+        },
+        "app.U0dMYW5n.action.Z2VuZXJhdGU.option.dGV4dA.short_desc": {
+          "source": "Raw prompt text (or list of prompts) to complete",
+          "message": "Nespracovaný text promptu (alebo zoznam promptov) na dokončenie"
+        },
+        "app.U0dMYW5n.action.Z2VuZXJhdGU.option.dGVtcGVyYXR1cmU.desc": {
+          "source": "Convenience field merged into `sampling_params.temperature`.\n\n- `0.0` — deterministic (greedy decoding; recommended for extraction tasks)\n- `0.7` — balanced\n- `1.0`+ — more varied output",
+          "message": "Praktické pole zlúčené do `sampling_params.temperature`.\n\n- `0.0` — deterministické (greedy dekódovanie; odporúčané pre extrakčné úlohy)\n- `0.7` — vyvážené\n- `1.0`+ — rôznorodejší výstup"
+        },
+        "app.U0dMYW5n.action.Z2VuZXJhdGU.option.dGVtcGVyYXR1cmU.display_name": {
+          "source": "Temperature",
+          "message": "Teplota"
+        },
+        "app.U0dMYW5n.action.Z2VuZXJhdGU.option.dGVtcGVyYXR1cmU.short_desc": {
+          "source": "Sampling temperature (merged into sampling_params)",
+          "message": "Teplota vzorkovania (zlúčené do sampling_params)"
+        },
+        "app.U0dMYW5n.action.Z2VuZXJhdGU.short_desc": {
+          "source": "Generate text with schema/regex/grammar-enforced output structure",
+          "message": "Generovať text s výstupnou štruktúrou vynútenou schémou/regulárnym výrazom/gramatikou"
+        },
+        "app.U0dMYW5n.action.Zmx1c2gtY2FjaGU.desc": {
+          "source": "Instructs the SGLang server to flush its KV cache.  Useful after switching workloads or for freeing memory.  Safe to call at any time; does not interrupt in-flight requests.",
+          "message": "Inštruuje server SGLang, aby vyprázdnil svoju vyrovnávaciu pamäť KV. Užitočné po zmene pracovného zaťaženia alebo na uvoľnenie pamäte. Bezpečné volať kedykoľvek; nepreruší prebiehajúce požiadavky."
+        },
+        "app.U0dMYW5n.action.Zmx1c2gtY2FjaGU.display_name": {
+          "source": "Flush KV Cache",
+          "message": "Vyprázdniť KV Cache"
+        },
+        "app.U0dMYW5n.action.Zmx1c2gtY2FjaGU.short_desc": {
+          "source": "Flush the SGLang server's KV cache",
+          "message": "Vyprázdniť vyrovnávaciu pamäť KV na serveri SGLang"
+        },
+        "app.U0dMYW5n.action.bWFrZS1hcGktY2FsbA.desc": {
+          "source": "Make a custom HTTP / REST API call to **SGLang** using the configured connection's authentication.\n\nSpecify the HTTP method, the URI path (relative to the connection's API base URL), optional query parameters, headers, and request body. The response is returned as a hash containing the status code, response headers, and response body.\n\nUse this action for endpoints that are not yet exposed as first-class actions on this app.",
+          "message": "Vytvorte vlastné volanie HTTP / REST API do **SGLang** pomocou autentifikácie nakonfigurovaného pripojenia.\n\nZadajte metódu HTTP, cestu URI (relatívnu k základnej adrese URL rozhrania API pripojenia), voliteľné parametre dotazu, hlavičky a telo požiadavky. Odpoveď sa vráti ako hash obsahujúci stavový kód, hlavičky odpovede a telo odpovede.\n\nTúto akciu použite pre koncové body, ktoré ešte nie sú v tejto aplikácii sprístupnené ako prvotriedne akcie."
+        },
+        "app.U0dMYW5n.action.bWFrZS1hcGktY2FsbA.display_name": {
+          "source": "Make an API call",
+          "message": "Urobiť volanie API"
+        },
+        "app.U0dMYW5n.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.desc": {
+          "source": "The request body. The effective type depends on `body_type`: JSON/form/YAML expect a hash, XML/text expect a string, multipart expects a file structure, binary expects raw bytes.",
+          "message": "Telo požiadavky. Efektívny typ závisí od `body_type`: JSON/formulár/YAML očakávajú hash, XML/text očakávajú reťazec, multipart očakáva štruktúru súboru, binárny typ očakáva neopracované bajty."
+        },
+        "app.U0dMYW5n.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.display_name": {
+          "source": "Body",
+          "message": "Telo"
+        },
+        "app.U0dMYW5n.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.short_desc": {
+          "source": "The request body",
+          "message": "Telo požiadavky"
+        },
+        "app.U0dMYW5n.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.desc": {
+          "source": "Upload a file using `multipart/form-data`. The body must be a @ref DataProvider::FileDataType \"FileDataType\" structure (filename + content + mime_type). The framework builds the multipart envelope and sets the boundary header.",
+          "message": "Odoslať súbor pomocou `multipart/form-data`. Telo musí byť štruktúra @ref DataProvider::FileDataType \"FileDataType\" (filename + content + mime_type). Rámec vytvorí obálku multipart a nastaví hlavičku boundary."
+        },
+        "app.U0dMYW5n.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.display_name": {
+          "source": "Multipart Form",
+          "message": "Multipart formulár"
+        },
+        "app.U0dMYW5n.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.short_desc": {
+          "source": "Upload a file using multipart/form-data",
+          "message": "Odoslať súbor pomocou multipart/form-data"
+        },
+        "app.U0dMYW5n.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.desc": {
+          "source": "Pass the body to the REST client unchanged; the client decides serialization based on its configured `data` option and the value type",
+          "message": "Odovzdať telo klientovi REST bez zmeny; klient rozhodne o serializácii na základe svojej konfigurovanej možnosti `data` a typu hodnoty"
+        },
+        "app.U0dMYW5n.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.display_name": {
+          "source": "Auto",
+          "message": "Auto"
+        },
+        "app.U0dMYW5n.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.short_desc": {
+          "source": "Pass-through; use connection serialization and let the REST client decide",
+          "message": "Priamy prechod; použiť serializáciu spojenia a nechať rozhodnúť klienta REST"
+        },
+        "app.U0dMYW5n.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.desc": {
+          "source": "Send the body as raw bytes. The body must be a binary value. Sets `Content-Type: application/octet-stream` unless overridden by `hdr`.",
+          "message": "Odoslať telo ako neopracované bajty. Telo musí byť binárna hodnota. Nastavuje `Content-Type: application/octet-stream`, pokiaľ nie je prepísané pomocou `hdr`."
+        },
+        "app.U0dMYW5n.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.display_name": {
+          "source": "Raw Binary",
+          "message": "Surové binárne dáta"
+        },
+        "app.U0dMYW5n.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.short_desc": {
+          "source": "Send body as raw bytes",
+          "message": "Odoslať telo ako neopracované bajty"
+        },
+        "app.U0dMYW5n.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.desc": {
+          "source": "Serialize a hash of form fields as `application/x-www-form-urlencoded`. The body must be a hash whose values are scalars (strings/numbers/booleans).",
+          "message": "Serializovať hash polí formulára ako `application/x-www-form-urlencoded`. Telo musí byť hash, ktorého hodnoty sú skaláre (reťazce/čísla/booleovské hodnoty)."
+        },
+        "app.U0dMYW5n.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.display_name": {
+          "source": "Form (URL-encoded)",
+          "message": "Formulár (kódovaný v URL)"
+        },
+        "app.U0dMYW5n.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.short_desc": {
+          "source": "Serialize body as application/x-www-form-urlencoded form fields",
+          "message": "Serializovať telo ako polia formulára application/x-www-form-urlencoded"
+        },
+        "app.U0dMYW5n.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.desc": {
+          "source": "Serialize the body as JSON; sets `Content-Type: application/json`. The body should be a hash, list, or scalar value.",
+          "message": "Serializovať telo ako JSON; nastavuje `Content-Type: application/json`. Telo by malo byť hash, zoznam alebo skalárna hodnota."
+        },
+        "app.U0dMYW5n.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.display_name": {
+          "source": "JSON",
+          "message": "JSON"
+        },
+        "app.U0dMYW5n.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.short_desc": {
+          "source": "Serialize body as JSON",
+          "message": "Serializovať telo ako JSON"
+        },
+        "app.U0dMYW5n.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.desc": {
+          "source": "Send the body as plain text. The body must be a string. Sets `Content-Type: text/plain`.",
+          "message": "Odoslať telo ako čistý text. Telo musí byť reťazec. Nastavuje `Content-Type: text/plain`."
+        },
+        "app.U0dMYW5n.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.display_name": {
+          "source": "Plain Text",
+          "message": "Čistý text"
+        },
+        "app.U0dMYW5n.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.short_desc": {
+          "source": "Send body as text/plain",
+          "message": "Odoslať telo ako text/plain"
+        },
+        "app.U0dMYW5n.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.desc": {
+          "source": "Send the body as XML. If the body is a hash it is serialized to XML; if it is a string it is sent verbatim. Sets `Content-Type: application/xml`.",
+          "message": "Odoslať telo ako XML. Ak je telo hash, serializuje sa do XML; ak je to reťazec, odosiela sa doslovne. Nastavuje `Content-Type: application/xml`."
+        },
+        "app.U0dMYW5n.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.display_name": {
+          "source": "XML",
+          "message": "XML"
+        },
+        "app.U0dMYW5n.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.short_desc": {
+          "source": "Send body as XML",
+          "message": "Odoslať telo ako XML"
+        },
+        "app.U0dMYW5n.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.desc": {
+          "source": "Send the body as YAML. If the body is a hash it is serialized to YAML; if it is a string it is sent verbatim. Sets `Content-Type: application/x-yaml`.",
+          "message": "Odoslať telo ako YAML. Ak je telo hash, serializuje sa do YAML; ak je to reťazec, odosiela sa doslovne. Nastavuje `Content-Type: application/x-yaml`."
+        },
+        "app.U0dMYW5n.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.display_name": {
+          "source": "YAML",
+          "message": "YAML"
+        },
+        "app.U0dMYW5n.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.short_desc": {
+          "source": "Send body as YAML",
+          "message": "Odoslať telo ako YAML"
+        },
+        "app.U0dMYW5n.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.desc": {
+          "source": "Selects the body serialization mode and the corresponding `Content-Type` header. Changing this field reshapes the `body` editor - selecting JSON exposes a JSON editor, selecting Multipart Form exposes a file picker, and so on.",
+          "message": "Vyberie režim serializácie tela a zodpovedajúcu hlavičku `Content-Type`. Zmena tohto poľa zmení editor `body` - výber JSON zobrazí editor JSON, výber Multipart Form zobrazí výber súborov a podobne."
+        },
+        "app.U0dMYW5n.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.display_name": {
+          "source": "Body Type",
+          "message": "Typ tela"
+        },
+        "app.U0dMYW5n.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.short_desc": {
+          "source": "How the body is serialized and what Content-Type is sent",
+          "message": "Ako sa telo serializuje a aký Content-Type sa odosiela"
+        },
+        "app.U0dMYW5n.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.desc": {
+          "source": "If `True`, non-2xx HTTP responses return as the normal response hash (with the actual status code) instead of raising `REST-RESPONSE-ERROR`. Useful for handling 4xx/5xx as data - e.g. checking whether a resource exists. Overrides the connection's `error_passthru` setting for this call only.",
+          "message": "Ak je `True`, odpovede HTTP iné ako 2xx sa vrátia ako normálny hash odpovede (s reálnym stavovým kódom) namiesto vyvolania `REST-RESPONSE-ERROR`. Užitočné na spracovanie 4xx/5xx ako dát – napr. kontrola, či zdroj existuje. Prepíše nastavenie `error_passthru` spojenia len pre toto volanie."
+        },
+        "app.U0dMYW5n.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.display_name": {
+          "source": "Return Errors as Data",
+          "message": "Vrátiť chyby ako dáta"
+        },
+        "app.U0dMYW5n.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.short_desc": {
+          "source": "Return non-2xx responses normally instead of throwing",
+          "message": "Vrátiť odpovede iné ako 2xx normálne namiesto vyvolania výnimky"
+        },
+        "app.U0dMYW5n.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.desc": {
+          "source": "Optional list of HTTP status codes treated as success. If set and the response status is not in this list, the action throws `REST-STATUS-ERROR`. When unset, the REST client's default behavior applies (typically: 2xx is success, non-2xx throws).",
+          "message": "Voliteľný zoznam stavových kódov HTTP považovaných za úspech. Ak je nastavený a stav odpovede nie je v tomto zozname, akcia vyvolá `REST-STATUS-ERROR`. Ak nie je nastavený, uplatní sa predvolené správanie klienta REST (zvyčajne: 2xx je úspech, iné ako 2xx vyvolá výnimku)."
+        },
+        "app.U0dMYW5n.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.display_name": {
+          "source": "Expected Status Codes",
+          "message": "Očakávané stavové kódy"
+        },
+        "app.U0dMYW5n.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.short_desc": {
+          "source": "Response status codes treated as success",
+          "message": "Stavové kódy odpovede považované za úspech"
+        },
+        "app.U0dMYW5n.action.bWFrZS1hcGktY2FsbA.option.aGRy.desc": {
+          "source": "Hash of custom headers added to the request. These override any default headers set by `body_type` (e.g. supplying `Content-Type` here wins over the body-type default).",
+          "message": "Hash vlastných hlavičiek pridaných k požiadavke. Tie prepíšu akékoľvek predvolené hlavičky nastavené pomocou `body_type` (napr. zadanie `Content-Type` na tomto mieste má prednosť pred predvolenou hodnotou typu tela)."
+        },
+        "app.U0dMYW5n.action.bWFrZS1hcGktY2FsbA.option.aGRy.display_name": {
+          "source": "Custom Headers",
+          "message": "Vlastné hlavičky"
+        },
+        "app.U0dMYW5n.action.bWFrZS1hcGktY2FsbA.option.aGRy.short_desc": {
+          "source": "Extra request headers",
+          "message": "Dodatočné hlavičky požiadavky"
+        },
+        "app.U0dMYW5n.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.desc": {
+          "source": "If `True`, the response hash includes a `debug` sub-hash containing the request method/URL/headers (with sensitive values redacted), request and response sizes, and round-trip duration. Useful when investigating slow or failing calls. Off by default to keep responses lean.",
+          "message": "Ak je `True`, hash odpovede obsahuje pod-hash `debug` obsahujúci metódu/URL/hlavičky požiadavky (so skrytými citlivými hodnotami), veľkosti požiadavky a odpovede a trvanie celého cyklu. Užitočné pri vyšetrovaní pomalých alebo zlyhávajúcich volaní. Predvolene vypnuté, aby odpovede zostali stručné."
+        },
+        "app.U0dMYW5n.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.display_name": {
+          "source": "Include Debug Info",
+          "message": "Zahrnúť ladiace informácie"
+        },
+        "app.U0dMYW5n.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.short_desc": {
+          "source": "Include request/timing/size debug info in the response",
+          "message": "Zahrnúť ladiace informácie o požiadavke/časovaní/veľkosti do odpovede"
+        },
+        "app.U0dMYW5n.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.desc": {
+          "source": "HTTP `OPTIONS`",
+          "message": "HTTP `OPTIONS`"
+        },
+        "app.U0dMYW5n.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.display_name": {
+          "source": "OPTIONS",
+          "message": "OPTIONS"
+        },
+        "app.U0dMYW5n.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.short_desc": {
+          "source": "HTTP OPTIONS",
+          "message": "HTTP OPTIONS"
+        },
+        "app.U0dMYW5n.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.desc": {
+          "source": "HTTP `DELETE`",
+          "message": "HTTP `DELETE`"
+        },
+        "app.U0dMYW5n.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.display_name": {
+          "source": "DELETE",
+          "message": "DELETE"
+        },
+        "app.U0dMYW5n.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.short_desc": {
+          "source": "HTTP DELETE",
+          "message": "HTTP DELETE"
+        },
+        "app.U0dMYW5n.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.desc": {
+          "source": "HTTP `GET`",
+          "message": "HTTP `GET`"
+        },
+        "app.U0dMYW5n.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.display_name": {
+          "source": "GET",
+          "message": "GET"
+        },
+        "app.U0dMYW5n.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.short_desc": {
+          "source": "HTTP GET",
+          "message": "HTTP GET"
+        },
+        "app.U0dMYW5n.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.desc": {
+          "source": "HTTP `HEAD`",
+          "message": "HTTP `HEAD`"
+        },
+        "app.U0dMYW5n.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.display_name": {
+          "source": "HEAD",
+          "message": "HEAD"
+        },
+        "app.U0dMYW5n.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.short_desc": {
+          "source": "HTTP HEAD",
+          "message": "HTTP HEAD"
+        },
+        "app.U0dMYW5n.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.desc": {
+          "source": "HTTP `PATCH`",
+          "message": "HTTP `PATCH`"
+        },
+        "app.U0dMYW5n.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.display_name": {
+          "source": "PATCH",
+          "message": "PATCH"
+        },
+        "app.U0dMYW5n.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.short_desc": {
+          "source": "HTTP PATCH",
+          "message": "HTTP PATCH"
+        },
+        "app.U0dMYW5n.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.desc": {
+          "source": "HTTP `POST`",
+          "message": "HTTP `POST`"
+        },
+        "app.U0dMYW5n.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.display_name": {
+          "source": "POST",
+          "message": "POST"
+        },
+        "app.U0dMYW5n.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.short_desc": {
+          "source": "HTTP POST",
+          "message": "HTTP POST"
+        },
+        "app.U0dMYW5n.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.desc": {
+          "source": "HTTP `PUT`",
+          "message": "HTTP `PUT`"
+        },
+        "app.U0dMYW5n.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.display_name": {
+          "source": "PUT",
+          "message": "PUT"
+        },
+        "app.U0dMYW5n.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.short_desc": {
+          "source": "HTTP PUT",
+          "message": "HTTP PUT"
+        },
+        "app.U0dMYW5n.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.desc": {
+          "source": "HTTP `TRACE`",
+          "message": "HTTP `TRACE`"
+        },
+        "app.U0dMYW5n.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.display_name": {
+          "source": "TRACE",
+          "message": "TRACE"
+        },
+        "app.U0dMYW5n.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.short_desc": {
+          "source": "HTTP TRACE",
+          "message": "HTTP TRACE"
+        },
+        "app.U0dMYW5n.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "Metóda HTTP, ktorá sa má použiť pre požiadavku"
+        },
+        "app.U0dMYW5n.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.display_name": {
+          "source": "HTTP Method",
+          "message": "Metóda HTTP"
+        },
+        "app.U0dMYW5n.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.short_desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "Metóda HTTP, ktorá sa má použiť pre požiadavku"
+        },
+        "app.U0dMYW5n.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain `{name}` placeholders that are replaced from `path_vars`. Example: `/users/{id}/comments`.",
+          "message": "Cesta URI relatívna k základnej adrese URL API spojenia. Môže obsahovať žolíky `{name}`, ktoré sú nahradené z `path_vars`. Príklad: `/users/{id}/comments`."
+        },
+        "app.U0dMYW5n.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.display_name": {
+          "source": "URI Path",
+          "message": "Cesta URI"
+        },
+        "app.U0dMYW5n.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.short_desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain '{name}' placeholders that are replaced from 'path_vars'. Example: '/users/{id}/comments'",
+          "message": "Cesta URI relatívna k základnej URL adrese API pripojenia. Môže obsahovať zastupiteľné objekty '{name}', ktoré sa nahradia z 'path_vars'. Príklad: '/users/{id}/comments'"
+        },
+        "app.U0dMYW5n.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.desc": {
+          "source": "Hash of values substituted into `{name}` placeholders in the URI path. Example: with `path = /users/{id}` and `path_vars = {id: 123}` the framework sends `/users/123`. Values are URL-encoded.",
+          "message": "Hash hodnôt nahradených do zastupiteľných objektov `{name}` v ceste URI. Príklad: s `path = /users/{id}` a `path_vars = {id: 123}` rozhranie odosiela `/users/123`. Hodnoty sú zakódované v URL."
+        },
+        "app.U0dMYW5n.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.display_name": {
+          "source": "Path Variables",
+          "message": "Premenné cesty"
+        },
+        "app.U0dMYW5n.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.short_desc": {
+          "source": "Values for {name} placeholders in path",
+          "message": "Hodnoty pre zastupiteľné objekty {name} v ceste"
+        },
+        "app.U0dMYW5n.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.desc": {
+          "source": "Hash of query string parameters to append to the URI path. Values are URL-encoded; list values are joined with `,`.",
+          "message": "Hash parametrov reťazca dopytu na pripojenie k ceste URI. Hodnoty sú zakódované v URL; hodnoty zoznamu sú spojené pomocou `,`."
+        },
+        "app.U0dMYW5n.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.display_name": {
+          "source": "Query Arguments",
+          "message": "Argumenty dopytu"
+        },
+        "app.U0dMYW5n.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.short_desc": {
+          "source": "Query string parameters",
+          "message": "Parametre reťazca dopytu"
+        },
+        "app.U0dMYW5n.action.bWFrZS1hcGktY2FsbA.short_desc": {
+          "source": "Make a custom API call to SGLang",
+          "message": "Vykonať vlastné volanie API do SGLang"
+        },
+        "app.U0dMYW5n.action.c2VydmVyLWluZm8.desc": {
+          "source": "Returns the SGLang server's configuration (model name, tokenizer path, max_total_tokens, chat_template, etc.) and runtime state (version, CUDA device, number of GPUs).  Useful for health checks and configuration validation.",
+          "message": "Vráti konfiguráciu servera SGLang (názov modelu, cesta k tokenizéru, max_total_tokens, chat_template atď.) a stav behu (verzia, zariadenie CUDA, počet GPU). Užitočné na kontrolu stavu a overenie konfigurácie."
+        },
+        "app.U0dMYW5n.action.c2VydmVyLWluZm8.display_name": {
+          "source": "Get Server Info",
+          "message": "Získať informácie o serveri"
+        },
+        "app.U0dMYW5n.action.c2VydmVyLWluZm8.short_desc": {
+          "source": "Retrieve SGLang server configuration and runtime metadata",
+          "message": "Získať konfiguráciu servera SGLang a metaúdaje o behu"
+        },
+        "app.U0dMYW5n.desc": {
+          "source": "Provides access to [SGLang](https://github.com/sgl-project/sglang) — a fast serving framework for large language models and vision language models.\n\nSGLang exposes both OpenAI-compatible endpoints (`/v1/chat/completions`, `/v1/embeddings`) and SGLang-native endpoints including `/generate` with constrained decoding (JSON schema, regex, EBNF grammars) for reliable structured extraction without retry loops.\n\n**Common use cases**:\n- **Local LLM chat and completions** with no per-token cost and data residency control\n- **Structured extraction** using constrained decoding — the model is guaranteed to emit output matching a JSON schema, regex, or grammar, eliminating output-parsing retries\n- **Embeddings generation** for RAG pipelines using the same backend that serves chat\n- **Edge / on-prem inference** where data must not leave the organization",
+          "message": "Poskytuje prístup k [SGLang](https://github.com/sgl-project/sglang) – rýchlemu obslužnému frameworku pre veľké jazykové modely a vizuálno-jazykové modely.\n\nSGLang sprístupňuje koncové body kompatibilné s OpenAI (`/v1/chat/completions`, `/v1/embeddings`) aj natívne koncové body SGLang vrátane `/generate` s obmedzeným dekódovaním (schéma JSON, regex, gramatiky EBNF) pre spoľahlivú štruktúrovanú extrakciu bez slučiek opakovaných pokusov.\n\n**Bežné prípady použitia**:\n- **Lokálny LLM chat a dokončovania** bez nákladov za token a s kontrolou rezidencie dát\n- **Štruktúrovaná extrakcia** pomocou obmedzeného dekódovania – model zaručene vygeneruje výstup zodpovedajúci schéme JSON, regulárnemu výrazu alebo gramatike, čím sa eliminujú opakované pokusy o analýzu výstupu\n- **Generovanie embeddingov** pre RAG pipeliny s použitím rovnakého backendu, ktorý obsluhuje chat\n- **Edge / on-prem inferencia**, kde dáta nesmú opustiť organizáciu"
+        },
+        "app.U0dMYW5n.display_name": {
+          "source": "SGLang",
+          "message": "SGLang"
+        },
+        "app.U0dMYW5n.short_desc": {
+          "source": "SGLang model server for local LLM inference with constrained decoding",
+          "message": "Modelový server SGLang pre lokálnu LLM inferenciu s obmedzeným dekódovaním"
+        }
+      }
+    }
+  }
+}

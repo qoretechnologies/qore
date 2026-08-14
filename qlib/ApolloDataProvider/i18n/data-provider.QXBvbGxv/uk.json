@@ -1,0 +1,1301 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "uk": {
+      "messages": {
+        "app.QXBvbGxv.action.Y29udGFjdC11cGRhdGVk.desc": {
+          "source": "Triggers when a contact is updated in Apollo",
+          "message": "Спрацьовує, коли контакт оновлюється в Apollo"
+        },
+        "app.QXBvbGxv.action.Y29udGFjdC11cGRhdGVk.display_name": {
+          "source": "Contact Updated",
+          "message": "Контакт оновлено"
+        },
+        "app.QXBvbGxv.action.Y29udGFjdC11cGRhdGVk.short_desc": {
+          "source": "Watch for contact updates",
+          "message": "Відстежувати оновлення контактів"
+        },
+        "app.QXBvbGxv.action.Y29udGFjdC1jcmVhdGVk.desc": {
+          "source": "Triggers when a new contact is created in Apollo",
+          "message": "Спрацьовує, коли створюється новий контакт в Apollo"
+        },
+        "app.QXBvbGxv.action.Y29udGFjdC1jcmVhdGVk.display_name": {
+          "source": "Contact Created",
+          "message": "Контакт створено"
+        },
+        "app.QXBvbGxv.action.Y29udGFjdC1jcmVhdGVk.short_desc": {
+          "source": "Watch for new contacts",
+          "message": "Відстежувати нові контакти"
+        },
+        "app.QXBvbGxv.action.Y3JlYXRlLWFjY291bnQ.desc": {
+          "source": "Create a new account in Apollo",
+          "message": "Створити новий обліковий запис в Apollo"
+        },
+        "app.QXBvbGxv.action.Y3JlYXRlLWFjY291bnQ.display_name": {
+          "source": "Create an Account",
+          "message": "Створити обліковий запис"
+        },
+        "app.QXBvbGxv.action.Y3JlYXRlLWFjY291bnQ.option.ZG9tYWlu.display_name": {
+          "source": "Domain",
+          "message": "Домен"
+        },
+        "app.QXBvbGxv.action.Y3JlYXRlLWFjY291bnQ.option.ZG9tYWlu.short_desc": {
+          "source": "Company domain",
+          "message": "Домен компанії"
+        },
+        "app.QXBvbGxv.action.Y3JlYXRlLWFjY291bnQ.option.b3duZXJfaWQ.display_name": {
+          "source": "Owner ID",
+          "message": "ID власника"
+        },
+        "app.QXBvbGxv.action.Y3JlYXRlLWFjY291bnQ.option.b3duZXJfaWQ.short_desc": {
+          "source": "Owner user ID",
+          "message": "ID користувача-власника"
+        },
+        "app.QXBvbGxv.action.Y3JlYXRlLWFjY291bnQ.option.bmFtZQ.desc": {
+          "source": "The name of the account",
+          "message": "Назва облікового запису"
+        },
+        "app.QXBvbGxv.action.Y3JlYXRlLWFjY291bnQ.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "Назва"
+        },
+        "app.QXBvbGxv.action.Y3JlYXRlLWFjY291bnQ.option.bmFtZQ.short_desc": {
+          "source": "Account name",
+          "message": "Назва облікового запису"
+        },
+        "app.QXBvbGxv.action.Y3JlYXRlLWFjY291bnQ.option.cGhvbmU.display_name": {
+          "source": "Phone",
+          "message": "Телефон"
+        },
+        "app.QXBvbGxv.action.Y3JlYXRlLWFjY291bnQ.option.cGhvbmU.short_desc": {
+          "source": "Company phone number",
+          "message": "Номер телефону компанії"
+        },
+        "app.QXBvbGxv.action.Y3JlYXRlLWFjY291bnQ.option.d2Vic2l0ZV91cmw.display_name": {
+          "source": "Website URL",
+          "message": "URL-адреса вебсайту"
+        },
+        "app.QXBvbGxv.action.Y3JlYXRlLWFjY291bnQ.option.d2Vic2l0ZV91cmw.short_desc": {
+          "source": "Company website URL",
+          "message": "URL-адреса вебсайту компанії"
+        },
+        "app.QXBvbGxv.action.Y3JlYXRlLWFjY291bnQ.short_desc": {
+          "source": "Create a new account",
+          "message": "Створити новий обліковий запис"
+        },
+        "app.QXBvbGxv.action.Y3JlYXRlLWNvbnRhY3Q.desc": {
+          "source": "Create a new contact in Apollo",
+          "message": "Створити новий контакт в Apollo"
+        },
+        "app.QXBvbGxv.action.Y3JlYXRlLWNvbnRhY3Q.display_name": {
+          "source": "Create a Contact",
+          "message": "Створити контакт"
+        },
+        "app.QXBvbGxv.action.Y3JlYXRlLWNvbnRhY3Q.option.ZW1haWw.desc": {
+          "source": "The contact's email address",
+          "message": "Адреса електронної пошти контакту"
+        },
+        "app.QXBvbGxv.action.Y3JlYXRlLWNvbnRhY3Q.option.ZW1haWw.display_name": {
+          "source": "Email",
+          "message": "Електронна пошта"
+        },
+        "app.QXBvbGxv.action.Y3JlYXRlLWNvbnRhY3Q.option.ZW1haWw.short_desc": {
+          "source": "Contact email address",
+          "message": "Адреса електронної пошти контакту"
+        },
+        "app.QXBvbGxv.action.Y3JlYXRlLWNvbnRhY3Q.option.Zmlyc3RfbmFtZQ.desc": {
+          "source": "The contact's first name",
+          "message": "Ім'я контакту"
+        },
+        "app.QXBvbGxv.action.Y3JlYXRlLWNvbnRhY3Q.option.Zmlyc3RfbmFtZQ.display_name": {
+          "source": "First Name",
+          "message": "Ім'я"
+        },
+        "app.QXBvbGxv.action.Y3JlYXRlLWNvbnRhY3Q.option.Zmlyc3RfbmFtZQ.short_desc": {
+          "source": "Contact first name",
+          "message": "Ім'я контакту"
+        },
+        "app.QXBvbGxv.action.Y3JlYXRlLWNvbnRhY3Q.option.b3JnYW5pemF0aW9uX25hbWU.display_name": {
+          "source": "Organization Name",
+          "message": "Назва організації"
+        },
+        "app.QXBvbGxv.action.Y3JlYXRlLWNvbnRhY3Q.option.b3JnYW5pemF0aW9uX25hbWU.short_desc": {
+          "source": "The company name",
+          "message": "Назва компанії"
+        },
+        "app.QXBvbGxv.action.Y3JlYXRlLWNvbnRhY3Q.option.b3duZXJfaWQ.desc": {
+          "source": "The ID of the user who owns this contact",
+          "message": "ID користувача, якому належить цей контакт"
+        },
+        "app.QXBvbGxv.action.Y3JlYXRlLWNvbnRhY3Q.option.b3duZXJfaWQ.display_name": {
+          "source": "Owner ID",
+          "message": "ID власника"
+        },
+        "app.QXBvbGxv.action.Y3JlYXRlLWNvbnRhY3Q.option.b3duZXJfaWQ.short_desc": {
+          "source": "Owner user ID",
+          "message": "ID користувача-власника"
+        },
+        "app.QXBvbGxv.action.Y3JlYXRlLWNvbnRhY3Q.option.bGFzdF9uYW1l.desc": {
+          "source": "The contact's last name",
+          "message": "Прізвище контакту"
+        },
+        "app.QXBvbGxv.action.Y3JlYXRlLWNvbnRhY3Q.option.bGFzdF9uYW1l.display_name": {
+          "source": "Last Name",
+          "message": "Прізвище"
+        },
+        "app.QXBvbGxv.action.Y3JlYXRlLWNvbnRhY3Q.option.bGFzdF9uYW1l.short_desc": {
+          "source": "Contact last name",
+          "message": "Прізвище контакту"
+        },
+        "app.QXBvbGxv.action.Y3JlYXRlLWNvbnRhY3Q.option.cGhvbmVfbnVtYmVy.display_name": {
+          "source": "Phone Number",
+          "message": "Номер телефону"
+        },
+        "app.QXBvbGxv.action.Y3JlYXRlLWNvbnRhY3Q.option.cGhvbmVfbnVtYmVy.short_desc": {
+          "source": "Contact phone number",
+          "message": "Номер телефону контакту"
+        },
+        "app.QXBvbGxv.action.Y3JlYXRlLWNvbnRhY3Q.option.cHJlc2VudF9yYXdfYWRkcmVzcw.display_name": {
+          "source": "Address",
+          "message": "Адреса"
+        },
+        "app.QXBvbGxv.action.Y3JlYXRlLWNvbnRhY3Q.option.cHJlc2VudF9yYXdfYWRkcmVzcw.short_desc": {
+          "source": "Contact address",
+          "message": "Адреса контакту"
+        },
+        "app.QXBvbGxv.action.Y3JlYXRlLWNvbnRhY3Q.option.dGl0bGU.display_name": {
+          "source": "Job Title",
+          "message": "Посада"
+        },
+        "app.QXBvbGxv.action.Y3JlYXRlLWNvbnRhY3Q.option.dGl0bGU.short_desc": {
+          "source": "Contact job title",
+          "message": "Посада контакту"
+        },
+        "app.QXBvbGxv.action.Y3JlYXRlLWNvbnRhY3Q.short_desc": {
+          "source": "Create a new contact",
+          "message": "Створити новий контакт"
+        },
+        "app.QXBvbGxv.action.Y3JlYXRlLWRlYWw.desc": {
+          "source": "Create a new deal (opportunity) in Apollo",
+          "message": "Створити нову угоду (можливість) в Apollo"
+        },
+        "app.QXBvbGxv.action.Y3JlYXRlLWRlYWw.display_name": {
+          "source": "Create a Deal",
+          "message": "Створити угоду"
+        },
+        "app.QXBvbGxv.action.Y3JlYXRlLWRlYWw.option.Y2xvc2VkX2RhdGU.desc": {
+          "source": "Expected close date in ISO 8601 format",
+          "message": "Очікувана дата закриття у форматі ISO 8601"
+        },
+        "app.QXBvbGxv.action.Y3JlYXRlLWRlYWw.option.Y2xvc2VkX2RhdGU.display_name": {
+          "source": "Close Date",
+          "message": "Дата закриття"
+        },
+        "app.QXBvbGxv.action.Y3JlYXRlLWRlYWw.option.Y2xvc2VkX2RhdGU.short_desc": {
+          "source": "Expected close date",
+          "message": "Очікувана дата закриття"
+        },
+        "app.QXBvbGxv.action.Y3JlYXRlLWRlYWw.option.YW1vdW50.display_name": {
+          "source": "Amount",
+          "message": "Величина"
+        },
+        "app.QXBvbGxv.action.Y3JlYXRlLWRlYWw.option.YW1vdW50.short_desc": {
+          "source": "Deal amount",
+          "message": "Сума угоди"
+        },
+        "app.QXBvbGxv.action.Y3JlYXRlLWRlYWw.option.YWNjb3VudF9pZA.display_name": {
+          "source": "Account ID",
+          "message": "ID облікового запису"
+        },
+        "app.QXBvbGxv.action.Y3JlYXRlLWRlYWw.option.YWNjb3VudF9pZA.short_desc": {
+          "source": "Associated account ID",
+          "message": "ID пов'язаного облікового запису"
+        },
+        "app.QXBvbGxv.action.Y3JlYXRlLWRlYWw.option.b3duZXJfaWQ.display_name": {
+          "source": "Owner ID",
+          "message": "ID власника"
+        },
+        "app.QXBvbGxv.action.Y3JlYXRlLWRlYWw.option.b3duZXJfaWQ.short_desc": {
+          "source": "Owner user ID",
+          "message": "ID користувача-власника"
+        },
+        "app.QXBvbGxv.action.Y3JlYXRlLWRlYWw.option.bmFtZQ.desc": {
+          "source": "The name of the deal",
+          "message": "Назва угоди"
+        },
+        "app.QXBvbGxv.action.Y3JlYXRlLWRlYWw.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "Назва"
+        },
+        "app.QXBvbGxv.action.Y3JlYXRlLWRlYWw.option.bmFtZQ.short_desc": {
+          "source": "Deal name",
+          "message": "Назва угоди"
+        },
+        "app.QXBvbGxv.action.Y3JlYXRlLWRlYWw.option.c3RhZ2VfbmFtZQ.display_name": {
+          "source": "Stage",
+          "message": "Стадія"
+        },
+        "app.QXBvbGxv.action.Y3JlYXRlLWRlYWw.option.c3RhZ2VfbmFtZQ.short_desc": {
+          "source": "Deal stage name",
+          "message": "Назва етапу угоди"
+        },
+        "app.QXBvbGxv.action.Y3JlYXRlLWRlYWw.option.c3RhdHVz.desc": {
+          "source": "The deal status: `open`, `won`, or `lost`",
+          "message": "Статус угоди: `open`, `won` або `lost`"
+        },
+        "app.QXBvbGxv.action.Y3JlYXRlLWRlYWw.option.c3RhdHVz.display_name": {
+          "source": "Status",
+          "message": "Статус"
+        },
+        "app.QXBvbGxv.action.Y3JlYXRlLWRlYWw.option.c3RhdHVz.short_desc": {
+          "source": "Deal status",
+          "message": "Статус угоди"
+        },
+        "app.QXBvbGxv.action.Y3JlYXRlLWRlYWw.short_desc": {
+          "source": "Create a new deal",
+          "message": "Створити нову угоду"
+        },
+        "app.QXBvbGxv.action.YWNjb3VudC1jcmVhdGVk.desc": {
+          "source": "Triggers when a new account is created in Apollo",
+          "message": "Спрацьовує, коли в Apollo створюється новий обліковий запис"
+        },
+        "app.QXBvbGxv.action.YWNjb3VudC1jcmVhdGVk.display_name": {
+          "source": "Account Created",
+          "message": "Обліковий запис створено"
+        },
+        "app.QXBvbGxv.action.YWNjb3VudC1jcmVhdGVk.short_desc": {
+          "source": "Watch for new accounts",
+          "message": "Відстежувати нові облікові записи"
+        },
+        "app.QXBvbGxv.action.YnVsay1lbnJpY2gtb3JnYW5pemF0aW9ucw.desc": {
+          "source": "Bulk enrich multiple organizations using Apollo",
+          "message": "Масово збагатити дані кількох організацій за допомогою Apollo"
+        },
+        "app.QXBvbGxv.action.YnVsay1lbnJpY2gtb3JnYW5pemF0aW9ucw.display_name": {
+          "source": "Bulk Enrich Organizations",
+          "message": "Масове збагачення даних організацій"
+        },
+        "app.QXBvbGxv.action.YnVsay1lbnJpY2gtb3JnYW5pemF0aW9ucw.option.ZG9tYWlucw.desc": {
+          "source": "List of organization domains to enrich",
+          "message": "Список доменів організацій для збагачення"
+        },
+        "app.QXBvbGxv.action.YnVsay1lbnJpY2gtb3JnYW5pemF0aW9ucw.option.ZG9tYWlucw.display_name": {
+          "source": "Domains",
+          "message": "Домени"
+        },
+        "app.QXBvbGxv.action.YnVsay1lbnJpY2gtb3JnYW5pemF0aW9ucw.option.ZG9tYWlucw.short_desc": {
+          "source": "List of domains to enrich",
+          "message": "Список доменів для збагачення"
+        },
+        "app.QXBvbGxv.action.YnVsay1lbnJpY2gtb3JnYW5pemF0aW9ucw.short_desc": {
+          "source": "Bulk enrich organizations",
+          "message": "Масово збагатити дані організацій"
+        },
+        "app.QXBvbGxv.action.YnVsay1lbnJpY2gtcGVvcGxl.desc": {
+          "source": "Bulk enrich multiple people's data using Apollo",
+          "message": "Масово збагатити дані кількох людей за допомогою Apollo"
+        },
+        "app.QXBvbGxv.action.YnVsay1lbnJpY2gtcGVvcGxl.display_name": {
+          "source": "Bulk Enrich People",
+          "message": "Масове збагачення даних людей"
+        },
+        "app.QXBvbGxv.action.YnVsay1lbnJpY2gtcGVvcGxl.option.ZGV0YWlscw.desc": {
+          "source": "List of person detail objects, each containing fields like `email`, `first_name`, `last_name`, `organization_name`, `domain`",
+          "message": "Список об'єктів відомостей про людей, кожен із яких містить такі поля, як `email`, `first_name`, `last_name`, `organization_name`, `domain`"
+        },
+        "app.QXBvbGxv.action.YnVsay1lbnJpY2gtcGVvcGxl.option.ZGV0YWlscw.display_name": {
+          "source": "Details",
+          "message": "Деталі"
+        },
+        "app.QXBvbGxv.action.YnVsay1lbnJpY2gtcGVvcGxl.option.ZGV0YWlscw.short_desc": {
+          "source": "List of person details to enrich",
+          "message": "Список відомостей про людей для збагачення"
+        },
+        "app.QXBvbGxv.action.YnVsay1lbnJpY2gtcGVvcGxl.short_desc": {
+          "source": "Bulk enrich people data",
+          "message": "Масово збагатити дані людей"
+        },
+        "app.QXBvbGxv.action.Z2V0LWFjY291bnQ.desc": {
+          "source": "Retrieve a single account by ID from Apollo",
+          "message": "Отримати один обліковий запис за ID з Apollo"
+        },
+        "app.QXBvbGxv.action.Z2V0LWFjY291bnQ.display_name": {
+          "source": "Get an Account",
+          "message": "Отримати обліковий запис"
+        },
+        "app.QXBvbGxv.action.Z2V0LWFjY291bnQ.option.YWNjb3VudF9pZA.display_name": {
+          "source": "Account ID",
+          "message": "ID облікового запису"
+        },
+        "app.QXBvbGxv.action.Z2V0LWFjY291bnQ.option.YWNjb3VudF9pZA.short_desc": {
+          "source": "The account ID",
+          "message": "ID облікового запису"
+        },
+        "app.QXBvbGxv.action.Z2V0LWFjY291bnQ.short_desc": {
+          "source": "Get a single account by ID",
+          "message": "Отримати один обліковий запис за ID"
+        },
+        "app.QXBvbGxv.action.Z2V0LWNvbnRhY3Q.desc": {
+          "source": "Retrieve a single contact by ID from Apollo",
+          "message": "Отримати один контакт за ID з Apollo"
+        },
+        "app.QXBvbGxv.action.Z2V0LWNvbnRhY3Q.display_name": {
+          "source": "Get a Contact",
+          "message": "Отримати контакт"
+        },
+        "app.QXBvbGxv.action.Z2V0LWNvbnRhY3Q.option.Y29udGFjdF9pZA.display_name": {
+          "source": "Contact ID",
+          "message": "ID контакту"
+        },
+        "app.QXBvbGxv.action.Z2V0LWNvbnRhY3Q.option.Y29udGFjdF9pZA.short_desc": {
+          "source": "The contact ID",
+          "message": "ID контакту"
+        },
+        "app.QXBvbGxv.action.Z2V0LWNvbnRhY3Q.short_desc": {
+          "source": "Get a single contact by ID",
+          "message": "Отримати один контакт за ID"
+        },
+        "app.QXBvbGxv.action.Z2V0LWRlYWw.desc": {
+          "source": "Retrieve a single deal by ID from Apollo",
+          "message": "Отримати одну угоду за ID з Apollo"
+        },
+        "app.QXBvbGxv.action.Z2V0LWRlYWw.display_name": {
+          "source": "Get a Deal",
+          "message": "Отримати угоду"
+        },
+        "app.QXBvbGxv.action.Z2V0LWRlYWw.option.ZGVhbF9pZA.display_name": {
+          "source": "Deal ID",
+          "message": "ID угоди"
+        },
+        "app.QXBvbGxv.action.Z2V0LWRlYWw.option.ZGVhbF9pZA.short_desc": {
+          "source": "The deal ID",
+          "message": "ID угоди"
+        },
+        "app.QXBvbGxv.action.Z2V0LWRlYWw.short_desc": {
+          "source": "Get a single deal by ID",
+          "message": "Отримати одну угоду за ID"
+        },
+        "app.QXBvbGxv.action.ZGVhbC1jcmVhdGVk.desc": {
+          "source": "Triggers when a new deal is created in Apollo",
+          "message": "Спрацьовує, коли в Apollo створюється нова угода"
+        },
+        "app.QXBvbGxv.action.ZGVhbC1jcmVhdGVk.display_name": {
+          "source": "Deal Created",
+          "message": "Угоду створено"
+        },
+        "app.QXBvbGxv.action.ZGVhbC1jcmVhdGVk.short_desc": {
+          "source": "Watch for new deals",
+          "message": "Відстежувати нові угоди"
+        },
+        "app.QXBvbGxv.action.ZW5yaWNoLW9yZ2FuaXphdGlvbg.desc": {
+          "source": "Enrich an organization's data using Apollo's database",
+          "message": "Збагатити дані організації за допомогою бази даних Apollo"
+        },
+        "app.QXBvbGxv.action.ZW5yaWNoLW9yZ2FuaXphdGlvbg.display_name": {
+          "source": "Enrich Organization",
+          "message": "Збагатити дані організації"
+        },
+        "app.QXBvbGxv.action.ZW5yaWNoLW9yZ2FuaXphdGlvbg.option.ZG9tYWlu.desc": {
+          "source": "The organization domain to enrich",
+          "message": "Домен організації для збагачення"
+        },
+        "app.QXBvbGxv.action.ZW5yaWNoLW9yZ2FuaXphdGlvbg.option.ZG9tYWlu.display_name": {
+          "source": "Domain",
+          "message": "Домен"
+        },
+        "app.QXBvbGxv.action.ZW5yaWNoLW9yZ2FuaXphdGlvbg.option.ZG9tYWlu.short_desc": {
+          "source": "Organization domain",
+          "message": "Домен організації"
+        },
+        "app.QXBvbGxv.action.ZW5yaWNoLW9yZ2FuaXphdGlvbg.short_desc": {
+          "source": "Enrich an organization's data",
+          "message": "Збагатити дані організації"
+        },
+        "app.QXBvbGxv.action.ZW5yaWNoLXBlcnNvbg.desc": {
+          "source": "Enrich a person's data using Apollo's database of 210M+ contacts",
+          "message": "Збагатити дані людини за допомогою бази даних Apollo з понад 210 млн контактів"
+        },
+        "app.QXBvbGxv.action.ZW5yaWNoLXBlcnNvbg.display_name": {
+          "source": "Enrich Person",
+          "message": "Збагатити дані людини"
+        },
+        "app.QXBvbGxv.action.ZW5yaWNoLXBlcnNvbg.option.ZG9tYWlu.display_name": {
+          "source": "Domain",
+          "message": "Домен"
+        },
+        "app.QXBvbGxv.action.ZW5yaWNoLXBlcnNvbg.option.ZG9tYWlu.short_desc": {
+          "source": "Person company domain",
+          "message": "Домен компанії людини"
+        },
+        "app.QXBvbGxv.action.ZW5yaWNoLXBlcnNvbg.option.ZW1haWw.desc": {
+          "source": "The person's email address for enrichment",
+          "message": "Електронна адреса особи для збагачення даних"
+        },
+        "app.QXBvbGxv.action.ZW5yaWNoLXBlcnNvbg.option.ZW1haWw.display_name": {
+          "source": "Email",
+          "message": "Електронна пошта"
+        },
+        "app.QXBvbGxv.action.ZW5yaWNoLXBlcnNvbg.option.ZW1haWw.short_desc": {
+          "source": "Person email for enrichment",
+          "message": "Електронна пошта особи для збагачення"
+        },
+        "app.QXBvbGxv.action.ZW5yaWNoLXBlcnNvbg.option.Zmlyc3RfbmFtZQ.display_name": {
+          "source": "First Name",
+          "message": "Ім'я"
+        },
+        "app.QXBvbGxv.action.ZW5yaWNoLXBlcnNvbg.option.Zmlyc3RfbmFtZQ.short_desc": {
+          "source": "Person first name",
+          "message": "Ім'я особи"
+        },
+        "app.QXBvbGxv.action.ZW5yaWNoLXBlcnNvbg.option.b3JnYW5pemF0aW9uX25hbWU.display_name": {
+          "source": "Organization Name",
+          "message": "Назва організації"
+        },
+        "app.QXBvbGxv.action.ZW5yaWNoLXBlcnNvbg.option.b3JnYW5pemF0aW9uX25hbWU.short_desc": {
+          "source": "Person company name",
+          "message": "Назва компанії особи"
+        },
+        "app.QXBvbGxv.action.ZW5yaWNoLXBlcnNvbg.option.bGFzdF9uYW1l.display_name": {
+          "source": "Last Name",
+          "message": "Прізвище"
+        },
+        "app.QXBvbGxv.action.ZW5yaWNoLXBlcnNvbg.option.bGFzdF9uYW1l.short_desc": {
+          "source": "Person last name",
+          "message": "Прізвище особи"
+        },
+        "app.QXBvbGxv.action.ZW5yaWNoLXBlcnNvbg.option.bGlua2VkaW5fdXJs.display_name": {
+          "source": "LinkedIn URL",
+          "message": "URL LinkedIn"
+        },
+        "app.QXBvbGxv.action.ZW5yaWNoLXBlcnNvbg.option.bGlua2VkaW5fdXJs.short_desc": {
+          "source": "Person LinkedIn URL",
+          "message": "URL LinkedIn особи"
+        },
+        "app.QXBvbGxv.action.ZW5yaWNoLXBlcnNvbg.short_desc": {
+          "source": "Enrich a person's data",
+          "message": "Збагатити дані особи"
+        },
+        "app.QXBvbGxv.action.bGlzdC1kZWFscw.desc": {
+          "source": "List deals (opportunities) in Apollo",
+          "message": "Отримати список угод (можливостей) в Apollo"
+        },
+        "app.QXBvbGxv.action.bGlzdC1kZWFscw.display_name": {
+          "source": "List Deals",
+          "message": "Список угод"
+        },
+        "app.QXBvbGxv.action.bGlzdC1kZWFscw.option.ZGVhbF9pZA.display_name": {
+          "source": "Deal ID",
+          "message": "ID угоди"
+        },
+        "app.QXBvbGxv.action.bGlzdC1kZWFscw.option.ZGVhbF9pZA.short_desc": {
+          "source": "Filter by deal ID",
+          "message": "Фільтрувати за ID угоди"
+        },
+        "app.QXBvbGxv.action.bGlzdC1kZWFscw.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "Ліміт"
+        },
+        "app.QXBvbGxv.action.bGlzdC1kZWFscw.option.bGltaXQ.short_desc": {
+          "source": "Maximum results",
+          "message": "Максимальна кількість результатів"
+        },
+        "app.QXBvbGxv.action.bGlzdC1kZWFscw.short_desc": {
+          "source": "List deals",
+          "message": "Отримати список угод"
+        },
+        "app.QXBvbGxv.action.bWFrZS1hcGktY2FsbA.desc": {
+          "source": "Make a custom HTTP / REST API call to **Apollo** using the configured connection's authentication.\n\nSpecify the HTTP method, the URI path (relative to the connection's API base URL), optional query parameters, headers, and request body. The response is returned as a hash containing the status code, response headers, and response body.\n\nUse this action for endpoints that are not yet exposed as first-class actions on this app.",
+          "message": "Виконати спеціальний виклик HTTP / REST API до **Apollo**, використовуючи автентифікацію налаштованого з'єднання.\n\nВкажіть метод HTTP, шлях URI (відносно базової URL-адреси API з'єднання), необов'язкові параметри запиту, заголовки та тіло запиту. Відповідь повертається у вигляді хешу, що містить код стану, заголовки відповіді та тіло відповіді.\n\nВикористовуйте цю дію для кінцевих точок, які ще не представлені як окремі дії в цьому додатку."
+        },
+        "app.QXBvbGxv.action.bWFrZS1hcGktY2FsbA.display_name": {
+          "source": "Make an API call",
+          "message": "Зробити виклик API"
+        },
+        "app.QXBvbGxv.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.desc": {
+          "source": "The request body. The effective type depends on `body_type`: JSON/form/YAML expect a hash, XML/text expect a string, multipart expects a file structure, binary expects raw bytes.",
+          "message": "Тіло запиту. Ефективний тип залежить від `body_type`: JSON/form/YAML очікують хеш, XML/text очікують рядок, multipart очікує структуру файлу, binary очікує необроблені байти."
+        },
+        "app.QXBvbGxv.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.display_name": {
+          "source": "Body",
+          "message": "Тіло"
+        },
+        "app.QXBvbGxv.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.short_desc": {
+          "source": "The request body",
+          "message": "Тіло запиту"
+        },
+        "app.QXBvbGxv.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.desc": {
+          "source": "Upload a file using `multipart/form-data`. The body must be a @ref DataProvider::FileDataType \"FileDataType\" structure (filename + content + mime_type). The framework builds the multipart envelope and sets the boundary header.",
+          "message": "Завантажити файл за допомогою `multipart/form-data`. Тіло має бути структурою @ref DataProvider::FileDataType \"FileDataType\" (filename + content + mime_type). Фреймворк створює конверт multipart і встановлює заголовок boundary."
+        },
+        "app.QXBvbGxv.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.display_name": {
+          "source": "Multipart Form",
+          "message": "Форма Multipart"
+        },
+        "app.QXBvbGxv.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.short_desc": {
+          "source": "Upload a file using multipart/form-data",
+          "message": "Завантажити файл за допомогою multipart/form-data"
+        },
+        "app.QXBvbGxv.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.desc": {
+          "source": "Pass the body to the REST client unchanged; the client decides serialization based on its configured `data` option and the value type",
+          "message": "Передати тіло REST-клієнту без змін; клієнт визначає серіалізацію на основі налаштованого параметра `data` та типу значення"
+        },
+        "app.QXBvbGxv.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.display_name": {
+          "source": "Auto",
+          "message": "Авто"
+        },
+        "app.QXBvbGxv.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.short_desc": {
+          "source": "Pass-through; use connection serialization and let the REST client decide",
+          "message": "Пряма передача; використовувати серіалізацію з'єднання та дозволити REST-клієнту приймати рішення"
+        },
+        "app.QXBvbGxv.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.desc": {
+          "source": "Send the body as raw bytes. The body must be a binary value. Sets `Content-Type: application/octet-stream` unless overridden by `hdr`.",
+          "message": "Надіслати тіло як необроблені байти. Тіло має бути бінарним значенням. Установлює `Content-Type: application/octet-stream`, якщо не перевизначено через `hdr`."
+        },
+        "app.QXBvbGxv.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.display_name": {
+          "source": "Raw Binary",
+          "message": "Необроблені бінарні дані"
+        },
+        "app.QXBvbGxv.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.short_desc": {
+          "source": "Send body as raw bytes",
+          "message": "Надіслати тіло як необроблені байти"
+        },
+        "app.QXBvbGxv.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.desc": {
+          "source": "Serialize a hash of form fields as `application/x-www-form-urlencoded`. The body must be a hash whose values are scalars (strings/numbers/booleans).",
+          "message": "Серіалізувати хеш полів форми як `application/x-www-form-urlencoded`. Тіло має бути хешем, значеннями якого є скаляри (рядки/числа/булеві значення)."
+        },
+        "app.QXBvbGxv.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.display_name": {
+          "source": "Form (URL-encoded)",
+          "message": "Форма (URL-encoded)"
+        },
+        "app.QXBvbGxv.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.short_desc": {
+          "source": "Serialize body as application/x-www-form-urlencoded form fields",
+          "message": "Серіалізувати тіло як поля форми application/x-www-form-urlencoded"
+        },
+        "app.QXBvbGxv.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.desc": {
+          "source": "Serialize the body as JSON; sets `Content-Type: application/json`. The body should be a hash, list, or scalar value.",
+          "message": "Серіалізувати тіло як JSON; встановлює `Content-Type: application/json`. Тіло має бути хешем, списком або скалярним значенням."
+        },
+        "app.QXBvbGxv.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.display_name": {
+          "source": "JSON",
+          "message": "JSON"
+        },
+        "app.QXBvbGxv.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.short_desc": {
+          "source": "Serialize body as JSON",
+          "message": "Серіалізувати тіло як JSON"
+        },
+        "app.QXBvbGxv.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.desc": {
+          "source": "Send the body as plain text. The body must be a string. Sets `Content-Type: text/plain`.",
+          "message": "Надіслати тіло як простий текст. Тіло має бути рядком. Установлює `Content-Type: text/plain`."
+        },
+        "app.QXBvbGxv.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.display_name": {
+          "source": "Plain Text",
+          "message": "Простий текст"
+        },
+        "app.QXBvbGxv.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.short_desc": {
+          "source": "Send body as text/plain",
+          "message": "Надіслати тіло як text/plain"
+        },
+        "app.QXBvbGxv.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.desc": {
+          "source": "Send the body as XML. If the body is a hash it is serialized to XML; if it is a string it is sent verbatim. Sets `Content-Type: application/xml`.",
+          "message": "Надіслати тіло як XML. Якщо тіло є хешем, воно серіалізується в XML; якщо це рядок, воно надсилається без змін. Установлює `Content-Type: application/xml`."
+        },
+        "app.QXBvbGxv.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.display_name": {
+          "source": "XML",
+          "message": "XML"
+        },
+        "app.QXBvbGxv.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.short_desc": {
+          "source": "Send body as XML",
+          "message": "Надіслати тіло як XML"
+        },
+        "app.QXBvbGxv.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.desc": {
+          "source": "Send the body as YAML. If the body is a hash it is serialized to YAML; if it is a string it is sent verbatim. Sets `Content-Type: application/x-yaml`.",
+          "message": "Надіслати тіло як YAML. Якщо тіло є хешем, воно серіалізується в YAML; якщо це рядок, воно надсилається без змін. Установлює `Content-Type: application/x-yaml`."
+        },
+        "app.QXBvbGxv.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.display_name": {
+          "source": "YAML",
+          "message": "YAML"
+        },
+        "app.QXBvbGxv.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.short_desc": {
+          "source": "Send body as YAML",
+          "message": "Надіслати тіло як YAML"
+        },
+        "app.QXBvbGxv.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.desc": {
+          "source": "Selects the body serialization mode and the corresponding `Content-Type` header. Changing this field reshapes the `body` editor - selecting JSON exposes a JSON editor, selecting Multipart Form exposes a file picker, and so on.",
+          "message": "Вибирає режим серіалізації тіла та відповідний заголовок `Content-Type`. Зміна цього поля змінює вигляд редактора `body` — вибір JSON відкриває редактор JSON, вибір Multipart Form відкриває вибір файлу тощо."
+        },
+        "app.QXBvbGxv.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.display_name": {
+          "source": "Body Type",
+          "message": "Тип тіла"
+        },
+        "app.QXBvbGxv.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.short_desc": {
+          "source": "How the body is serialized and what Content-Type is sent",
+          "message": "Як серіалізується тіло та який Content-Type надсилається"
+        },
+        "app.QXBvbGxv.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.desc": {
+          "source": "If `True`, non-2xx HTTP responses return as the normal response hash (with the actual status code) instead of raising `REST-RESPONSE-ERROR`. Useful for handling 4xx/5xx as data - e.g. checking whether a resource exists. Overrides the connection's `error_passthru` setting for this call only.",
+          "message": "Якщо `True`, HTTP-відповіді з кодом, відмінним від 2xx, повертаються як звичайний хеш відповіді (з фактичним кодом стану) замість генерації `REST-RESPONSE-ERROR`. Корисно для обробки 4xx/5xx як даних — наприклад, перевірки існування ресурсу. Перевизначає налаштування `error_passthru` з'єднання лише для цього виклику."
+        },
+        "app.QXBvbGxv.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.display_name": {
+          "source": "Return Errors as Data",
+          "message": "Повертати помилки як дані"
+        },
+        "app.QXBvbGxv.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.short_desc": {
+          "source": "Return non-2xx responses normally instead of throwing",
+          "message": "Повертати відповіді з кодом, відмінним від 2xx, у звичайному режимі замість генерації помилки"
+        },
+        "app.QXBvbGxv.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.desc": {
+          "source": "Optional list of HTTP status codes treated as success. If set and the response status is not in this list, the action throws `REST-STATUS-ERROR`. When unset, the REST client's default behavior applies (typically: 2xx is success, non-2xx throws).",
+          "message": "Необов'язковий список кодів стану HTTP, які вважаються успішними. Якщо задано і код стану відповіді відсутній у цьому списку, дія генерує `REST-STATUS-ERROR`. Якщо не задано, застосовується поведінка REST-клієнта за замовчуванням (зазвичай: 2xx — успіх, не-2xx генерує помилку)."
+        },
+        "app.QXBvbGxv.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.display_name": {
+          "source": "Expected Status Codes",
+          "message": "Очікувані коди стану"
+        },
+        "app.QXBvbGxv.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.short_desc": {
+          "source": "Response status codes treated as success",
+          "message": "Коди стану відповіді, які вважаються успішними"
+        },
+        "app.QXBvbGxv.action.bWFrZS1hcGktY2FsbA.option.aGRy.desc": {
+          "source": "Hash of custom headers added to the request. These override any default headers set by `body_type` (e.g. supplying `Content-Type` here wins over the body-type default).",
+          "message": "Хеш користувацьких заголовків, доданих до запиту. Вони перевизначають будь-які заголовки за замовчуванням, встановлені `body_type` (наприклад, передання `Content-Type` тут має перевагу над замовчуваним значенням для типу тіла)."
+        },
+        "app.QXBvbGxv.action.bWFrZS1hcGktY2FsbA.option.aGRy.display_name": {
+          "source": "Custom Headers",
+          "message": "Користувацькі заголовки"
+        },
+        "app.QXBvbGxv.action.bWFrZS1hcGktY2FsbA.option.aGRy.short_desc": {
+          "source": "Extra request headers",
+          "message": "Додаткові заголовки запиту"
+        },
+        "app.QXBvbGxv.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.desc": {
+          "source": "If `True`, the response hash includes a `debug` sub-hash containing the request method/URL/headers (with sensitive values redacted), request and response sizes, and round-trip duration. Useful when investigating slow or failing calls. Off by default to keep responses lean.",
+          "message": "Якщо `True`, хеш відповіді містить підхеш `debug`, що містить метод/URL/заголовки запиту (з відредагованими конфіденційними значеннями), розміри запиту та відповіді, а також тривалість виконання. Корисно під час дослідження повільних або невдалих викликів. Вимкнено за замовчуванням для зменшення обсягу відповідей."
+        },
+        "app.QXBvbGxv.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.display_name": {
+          "source": "Include Debug Info",
+          "message": "Включати зневаджувальну інформацію"
+        },
+        "app.QXBvbGxv.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.short_desc": {
+          "source": "Include request/timing/size debug info in the response",
+          "message": "Включати зневаджувальну інформацію про запит/час/розмір у відповідь"
+        },
+        "app.QXBvbGxv.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.desc": {
+          "source": "HTTP `OPTIONS`",
+          "message": "HTTP `OPTIONS`"
+        },
+        "app.QXBvbGxv.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.display_name": {
+          "source": "OPTIONS",
+          "message": "OPTIONS"
+        },
+        "app.QXBvbGxv.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.short_desc": {
+          "source": "HTTP OPTIONS",
+          "message": "HTTP OPTIONS"
+        },
+        "app.QXBvbGxv.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.desc": {
+          "source": "HTTP `DELETE`",
+          "message": "HTTP `DELETE`"
+        },
+        "app.QXBvbGxv.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.display_name": {
+          "source": "DELETE",
+          "message": "DELETE"
+        },
+        "app.QXBvbGxv.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.short_desc": {
+          "source": "HTTP DELETE",
+          "message": "HTTP DELETE"
+        },
+        "app.QXBvbGxv.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.desc": {
+          "source": "HTTP `GET`",
+          "message": "HTTP `GET`"
+        },
+        "app.QXBvbGxv.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.display_name": {
+          "source": "GET",
+          "message": "GET"
+        },
+        "app.QXBvbGxv.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.short_desc": {
+          "source": "HTTP GET",
+          "message": "HTTP GET"
+        },
+        "app.QXBvbGxv.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.desc": {
+          "source": "HTTP `HEAD`",
+          "message": "HTTP `HEAD`"
+        },
+        "app.QXBvbGxv.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.display_name": {
+          "source": "HEAD",
+          "message": "HEAD"
+        },
+        "app.QXBvbGxv.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.short_desc": {
+          "source": "HTTP HEAD",
+          "message": "HTTP HEAD"
+        },
+        "app.QXBvbGxv.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.desc": {
+          "source": "HTTP `PATCH`",
+          "message": "HTTP `PATCH`"
+        },
+        "app.QXBvbGxv.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.display_name": {
+          "source": "PATCH",
+          "message": "PATCH"
+        },
+        "app.QXBvbGxv.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.short_desc": {
+          "source": "HTTP PATCH",
+          "message": "HTTP PATCH"
+        },
+        "app.QXBvbGxv.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.desc": {
+          "source": "HTTP `POST`",
+          "message": "HTTP `POST`"
+        },
+        "app.QXBvbGxv.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.display_name": {
+          "source": "POST",
+          "message": "POST"
+        },
+        "app.QXBvbGxv.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.short_desc": {
+          "source": "HTTP POST",
+          "message": "HTTP POST"
+        },
+        "app.QXBvbGxv.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.desc": {
+          "source": "HTTP `PUT`",
+          "message": "HTTP `PUT`"
+        },
+        "app.QXBvbGxv.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.display_name": {
+          "source": "PUT",
+          "message": "PUT"
+        },
+        "app.QXBvbGxv.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.short_desc": {
+          "source": "HTTP PUT",
+          "message": "HTTP PUT"
+        },
+        "app.QXBvbGxv.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.desc": {
+          "source": "HTTP `TRACE`",
+          "message": "HTTP `TRACE`"
+        },
+        "app.QXBvbGxv.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.display_name": {
+          "source": "TRACE",
+          "message": "TRACE"
+        },
+        "app.QXBvbGxv.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.short_desc": {
+          "source": "HTTP TRACE",
+          "message": "HTTP TRACE"
+        },
+        "app.QXBvbGxv.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "Метод HTTP для використання в запиті"
+        },
+        "app.QXBvbGxv.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.display_name": {
+          "source": "HTTP Method",
+          "message": "Метод HTTP"
+        },
+        "app.QXBvbGxv.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.short_desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "Метод HTTP для використання в запиті"
+        },
+        "app.QXBvbGxv.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain `{name}` placeholders that are replaced from `path_vars`. Example: `/users/{id}/comments`.",
+          "message": "Шлях URI відносно базового URL API з'єднання. Може містити заповнювачі `{name}`, які замінюються з `path_vars`. Приклад: `/users/{id}/comments`."
+        },
+        "app.QXBvbGxv.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.display_name": {
+          "source": "URI Path",
+          "message": "Шлях URI"
+        },
+        "app.QXBvbGxv.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.short_desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain '{name}' placeholders that are replaced from 'path_vars'. Example: '/users/{id}/comments'",
+          "message": "Шлях URI відносно базового URL API підключення. Може містити заповнювачі '{name}', які замінюються з 'path_vars'. Приклад: '/users/{id}/comments'"
+        },
+        "app.QXBvbGxv.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.desc": {
+          "source": "Hash of values substituted into `{name}` placeholders in the URI path. Example: with `path = /users/{id}` and `path_vars = {id: 123}` the framework sends `/users/123`. Values are URL-encoded.",
+          "message": "Хеш значень, що підставляються замість заповнювачів `{name}` у шляху URI. Приклад: із `path = /users/{id}` та `path_vars = {id: 123}` фреймворк надсилає `/users/123`. Значення кодуються у форматі URL."
+        },
+        "app.QXBvbGxv.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.display_name": {
+          "source": "Path Variables",
+          "message": "Змінні шляху"
+        },
+        "app.QXBvbGxv.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.short_desc": {
+          "source": "Values for {name} placeholders in path",
+          "message": "Значення для заповнювачів {name} у шляху"
+        },
+        "app.QXBvbGxv.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.desc": {
+          "source": "Hash of query string parameters to append to the URI path. Values are URL-encoded; list values are joined with `,`.",
+          "message": "Хеш параметрів рядка запиту для додавання до шляху URI. Значення кодуються у форматі URL; значення списку об'єднуються за допомогою `,`."
+        },
+        "app.QXBvbGxv.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.display_name": {
+          "source": "Query Arguments",
+          "message": "Аргументи запиту"
+        },
+        "app.QXBvbGxv.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.short_desc": {
+          "source": "Query string parameters",
+          "message": "Параметри рядка запиту"
+        },
+        "app.QXBvbGxv.action.bWFrZS1hcGktY2FsbA.short_desc": {
+          "source": "Make a custom API call to Apollo",
+          "message": "Виконати спеціальний виклик API до Apollo"
+        },
+        "app.QXBvbGxv.action.c2VhcmNoLW9yZ2FuaXphdGlvbnM.desc": {
+          "source": "Search Apollo's global database of 35M+ companies",
+          "message": "Пошук у глобальній базі даних Apollo, що містить понад 35 млн компаній"
+        },
+        "app.QXBvbGxv.action.c2VhcmNoLW9yZ2FuaXphdGlvbnM.display_name": {
+          "source": "Search Organizations",
+          "message": "Пошук організацій"
+        },
+        "app.QXBvbGxv.action.c2VhcmNoLW9yZ2FuaXphdGlvbnM.option.b3JnYW5pemF0aW9uX251bV9lbXBsb3llZXNfcmFuZ2Vz.desc": {
+          "source": "Employee count ranges (e.g., `1,10` or `1001,5000`)",
+          "message": "Діапазони кількості працівників (наприклад, `1,10` або `1001,5000`)"
+        },
+        "app.QXBvbGxv.action.c2VhcmNoLW9yZ2FuaXphdGlvbnM.option.b3JnYW5pemF0aW9uX251bV9lbXBsb3llZXNfcmFuZ2Vz.display_name": {
+          "source": "Employee Ranges",
+          "message": "Діапазони кількості працівників"
+        },
+        "app.QXBvbGxv.action.c2VhcmNoLW9yZ2FuaXphdGlvbnM.option.b3JnYW5pemF0aW9uX251bV9lbXBsb3llZXNfcmFuZ2Vz.short_desc": {
+          "source": "Filter by employee count",
+          "message": "Фільтрувати за кількістю працівників"
+        },
+        "app.QXBvbGxv.action.c2VhcmNoLW9yZ2FuaXphdGlvbnM.option.b3JnYW5pemF0aW9uX2RvbWFpbnM.desc": {
+          "source": "List of company domains to search for",
+          "message": "Список доменів компаній для пошуку"
+        },
+        "app.QXBvbGxv.action.c2VhcmNoLW9yZ2FuaXphdGlvbnM.option.b3JnYW5pemF0aW9uX2RvbWFpbnM.display_name": {
+          "source": "Domains",
+          "message": "Домени"
+        },
+        "app.QXBvbGxv.action.c2VhcmNoLW9yZ2FuaXphdGlvbnM.option.b3JnYW5pemF0aW9uX2RvbWFpbnM.short_desc": {
+          "source": "Filter by domains",
+          "message": "Фільтрувати за доменами"
+        },
+        "app.QXBvbGxv.action.c2VhcmNoLW9yZ2FuaXphdGlvbnM.option.b3JnYW5pemF0aW9uX2xvY2F0aW9ucw.display_name": {
+          "source": "Locations",
+          "message": "Розташування"
+        },
+        "app.QXBvbGxv.action.c2VhcmNoLW9yZ2FuaXphdGlvbnM.option.b3JnYW5pemF0aW9uX2xvY2F0aW9ucw.short_desc": {
+          "source": "Filter by locations",
+          "message": "Фільтрувати за розташуванням"
+        },
+        "app.QXBvbGxv.action.c2VhcmNoLW9yZ2FuaXphdGlvbnM.option.cGFnZQ.display_name": {
+          "source": "Page",
+          "message": "Сторінка"
+        },
+        "app.QXBvbGxv.action.c2VhcmNoLW9yZ2FuaXphdGlvbnM.option.cGFnZQ.short_desc": {
+          "source": "Page number",
+          "message": "Номер сторінки"
+        },
+        "app.QXBvbGxv.action.c2VhcmNoLW9yZ2FuaXphdGlvbnM.option.cGVyX3BhZ2U.display_name": {
+          "source": "Per Page",
+          "message": "На сторінку"
+        },
+        "app.QXBvbGxv.action.c2VhcmNoLW9yZ2FuaXphdGlvbnM.option.cGVyX3BhZ2U.short_desc": {
+          "source": "Results per page (max 100)",
+          "message": "Результатів на сторінку (макс. 100)"
+        },
+        "app.QXBvbGxv.action.c2VhcmNoLW9yZ2FuaXphdGlvbnM.option.cV9rZXl3b3Jkcw.display_name": {
+          "source": "Keywords",
+          "message": "Ключові слова"
+        },
+        "app.QXBvbGxv.action.c2VhcmNoLW9yZ2FuaXphdGlvbnM.option.cV9rZXl3b3Jkcw.short_desc": {
+          "source": "Search keywords",
+          "message": "Ключові слова для пошуку"
+        },
+        "app.QXBvbGxv.action.c2VhcmNoLW9yZ2FuaXphdGlvbnM.short_desc": {
+          "source": "Search Apollo's organization database",
+          "message": "Пошук у базі даних організацій Apollo"
+        },
+        "app.QXBvbGxv.action.c2VhcmNoLWFjY291bnRz.desc": {
+          "source": "Search accounts in Apollo with optional filtering",
+          "message": "Пошук акаунтів в Apollo з можливістю фільтрації"
+        },
+        "app.QXBvbGxv.action.c2VhcmNoLWFjY291bnRz.display_name": {
+          "source": "Search Accounts",
+          "message": "Пошук акаунтів"
+        },
+        "app.QXBvbGxv.action.c2VhcmNoLWFjY291bnRz.option.YWNjb3VudF9pZA.display_name": {
+          "source": "Account ID",
+          "message": "ID облікового запису"
+        },
+        "app.QXBvbGxv.action.c2VhcmNoLWFjY291bnRz.option.YWNjb3VudF9pZA.short_desc": {
+          "source": "Filter by account ID",
+          "message": "Фільтрувати за ID акаунта"
+        },
+        "app.QXBvbGxv.action.c2VhcmNoLWFjY291bnRz.option.ZG9tYWlu.display_name": {
+          "source": "Domain",
+          "message": "Домен"
+        },
+        "app.QXBvbGxv.action.c2VhcmNoLWFjY291bnRz.option.ZG9tYWlu.short_desc": {
+          "source": "Filter by domain",
+          "message": "Фільтрувати за доменом"
+        },
+        "app.QXBvbGxv.action.c2VhcmNoLWFjY291bnRz.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "Ліміт"
+        },
+        "app.QXBvbGxv.action.c2VhcmNoLWFjY291bnRz.option.bGltaXQ.short_desc": {
+          "source": "Maximum results",
+          "message": "Максимальна кількість результатів"
+        },
+        "app.QXBvbGxv.action.c2VhcmNoLWFjY291bnRz.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "Назва"
+        },
+        "app.QXBvbGxv.action.c2VhcmNoLWFjY291bnRz.option.bmFtZQ.short_desc": {
+          "source": "Filter by account name",
+          "message": "Фільтрувати за назвою акаунта"
+        },
+        "app.QXBvbGxv.action.c2VhcmNoLWFjY291bnRz.short_desc": {
+          "source": "Search accounts",
+          "message": "Пошук акаунтів"
+        },
+        "app.QXBvbGxv.action.c2VhcmNoLWNvbnRhY3Rz.desc": {
+          "source": "Search contacts in Apollo with optional filtering",
+          "message": "Пошук контактів в Apollo з можливістю фільтрації"
+        },
+        "app.QXBvbGxv.action.c2VhcmNoLWNvbnRhY3Rz.display_name": {
+          "source": "Search Contacts",
+          "message": "Пошук контактів"
+        },
+        "app.QXBvbGxv.action.c2VhcmNoLWNvbnRhY3Rz.option.Y29udGFjdF9pZA.display_name": {
+          "source": "Contact ID",
+          "message": "ID контакту"
+        },
+        "app.QXBvbGxv.action.c2VhcmNoLWNvbnRhY3Rz.option.Y29udGFjdF9pZA.short_desc": {
+          "source": "Filter by contact ID",
+          "message": "Фільтрувати за ID контакту"
+        },
+        "app.QXBvbGxv.action.c2VhcmNoLWNvbnRhY3Rz.option.ZW1haWw.display_name": {
+          "source": "Email",
+          "message": "Електронна пошта"
+        },
+        "app.QXBvbGxv.action.c2VhcmNoLWNvbnRhY3Rz.option.ZW1haWw.short_desc": {
+          "source": "Filter by email",
+          "message": "Фільтрувати за електронною поштою"
+        },
+        "app.QXBvbGxv.action.c2VhcmNoLWNvbnRhY3Rz.option.Zmlyc3RfbmFtZQ.display_name": {
+          "source": "First Name",
+          "message": "Ім'я"
+        },
+        "app.QXBvbGxv.action.c2VhcmNoLWNvbnRhY3Rz.option.Zmlyc3RfbmFtZQ.short_desc": {
+          "source": "Filter by first name",
+          "message": "Фільтрувати за ім'ям"
+        },
+        "app.QXBvbGxv.action.c2VhcmNoLWNvbnRhY3Rz.option.bGFzdF9uYW1l.display_name": {
+          "source": "Last Name",
+          "message": "Прізвище"
+        },
+        "app.QXBvbGxv.action.c2VhcmNoLWNvbnRhY3Rz.option.bGFzdF9uYW1l.short_desc": {
+          "source": "Filter by last name",
+          "message": "Фільтрувати за прізвищем"
+        },
+        "app.QXBvbGxv.action.c2VhcmNoLWNvbnRhY3Rz.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "Ліміт"
+        },
+        "app.QXBvbGxv.action.c2VhcmNoLWNvbnRhY3Rz.option.bGltaXQ.short_desc": {
+          "source": "Maximum results",
+          "message": "Максимальна кількість результатів"
+        },
+        "app.QXBvbGxv.action.c2VhcmNoLWNvbnRhY3Rz.short_desc": {
+          "source": "Search contacts",
+          "message": "Пошук контактів"
+        },
+        "app.QXBvbGxv.action.c2VhcmNoLXBlb3BsZQ.desc": {
+          "source": "Search Apollo's global database of 210M+ people",
+          "message": "Пошук у глобальній базі даних Apollo, що містить понад 210 млн осіб"
+        },
+        "app.QXBvbGxv.action.c2VhcmNoLXBlb3BsZQ.display_name": {
+          "source": "Search People",
+          "message": "Пошук людей"
+        },
+        "app.QXBvbGxv.action.c2VhcmNoLXBlb3BsZQ.option.b3JnYW5pemF0aW9uX2RvbWFpbnM.display_name": {
+          "source": "Organization Domains",
+          "message": "Домени організацій"
+        },
+        "app.QXBvbGxv.action.c2VhcmNoLXBlb3BsZQ.option.b3JnYW5pemF0aW9uX2RvbWFpbnM.short_desc": {
+          "source": "Filter by company domains",
+          "message": "Фільтрувати за доменами компаній"
+        },
+        "app.QXBvbGxv.action.c2VhcmNoLXBlb3BsZQ.option.cGFnZQ.display_name": {
+          "source": "Page",
+          "message": "Сторінка"
+        },
+        "app.QXBvbGxv.action.c2VhcmNoLXBlb3BsZQ.option.cGFnZQ.short_desc": {
+          "source": "Page number",
+          "message": "Номер сторінки"
+        },
+        "app.QXBvbGxv.action.c2VhcmNoLXBlb3BsZQ.option.cGVyX3BhZ2U.display_name": {
+          "source": "Per Page",
+          "message": "На сторінку"
+        },
+        "app.QXBvbGxv.action.c2VhcmNoLXBlb3BsZQ.option.cGVyX3BhZ2U.short_desc": {
+          "source": "Results per page (max 100)",
+          "message": "Результатів на сторінку (макс. 100)"
+        },
+        "app.QXBvbGxv.action.c2VhcmNoLXBlb3BsZQ.option.cGVyc29uX2xvY2F0aW9ucw.desc": {
+          "source": "List of locations to filter by",
+          "message": "Список розташувань для фільтрації"
+        },
+        "app.QXBvbGxv.action.c2VhcmNoLXBlb3BsZQ.option.cGVyc29uX2xvY2F0aW9ucw.display_name": {
+          "source": "Locations",
+          "message": "Розташування"
+        },
+        "app.QXBvbGxv.action.c2VhcmNoLXBlb3BsZQ.option.cGVyc29uX2xvY2F0aW9ucw.short_desc": {
+          "source": "Filter by locations",
+          "message": "Фільтрувати за розташуванням"
+        },
+        "app.QXBvbGxv.action.c2VhcmNoLXBlb3BsZQ.option.cGVyc29uX3Nlbmlvcml0aWVz.desc": {
+          "source": "List of seniority levels (e.g., `senior`, `manager`)",
+          "message": "Список рівнів посади (наприклад, `senior`, `manager`)"
+        },
+        "app.QXBvbGxv.action.c2VhcmNoLXBlb3BsZQ.option.cGVyc29uX3Nlbmlvcml0aWVz.display_name": {
+          "source": "Seniorities",
+          "message": "Рівні посад"
+        },
+        "app.QXBvbGxv.action.c2VhcmNoLXBlb3BsZQ.option.cGVyc29uX3Nlbmlvcml0aWVz.short_desc": {
+          "source": "Filter by seniority levels",
+          "message": "Фільтрувати за рівнем посади"
+        },
+        "app.QXBvbGxv.action.c2VhcmNoLXBlb3BsZQ.option.cGVyc29uX3RpdGxlcw.desc": {
+          "source": "List of job titles to search for",
+          "message": "Список посад для пошуку"
+        },
+        "app.QXBvbGxv.action.c2VhcmNoLXBlb3BsZQ.option.cGVyc29uX3RpdGxlcw.display_name": {
+          "source": "Job Titles",
+          "message": "Посади"
+        },
+        "app.QXBvbGxv.action.c2VhcmNoLXBlb3BsZQ.option.cGVyc29uX3RpdGxlcw.short_desc": {
+          "source": "Filter by job titles",
+          "message": "Фільтрувати за посадами"
+        },
+        "app.QXBvbGxv.action.c2VhcmNoLXBlb3BsZQ.option.cV9rZXl3b3Jkcw.display_name": {
+          "source": "Keywords",
+          "message": "Ключові слова"
+        },
+        "app.QXBvbGxv.action.c2VhcmNoLXBlb3BsZQ.option.cV9rZXl3b3Jkcw.short_desc": {
+          "source": "Search keywords",
+          "message": "Ключові слова для пошуку"
+        },
+        "app.QXBvbGxv.action.c2VhcmNoLXBlb3BsZQ.short_desc": {
+          "source": "Search Apollo's people database",
+          "message": "Пошук у базі даних осіб Apollo"
+        },
+        "app.QXBvbGxv.action.dXBkYXRlLWFjY291bnQ.desc": {
+          "source": "Update an existing account in Apollo",
+          "message": "Оновити наявний акаунт в Apollo"
+        },
+        "app.QXBvbGxv.action.dXBkYXRlLWFjY291bnQ.display_name": {
+          "source": "Update an Account",
+          "message": "Оновити акаунт"
+        },
+        "app.QXBvbGxv.action.dXBkYXRlLWFjY291bnQ.option.YWNjb3VudF9pZA.display_name": {
+          "source": "Account ID",
+          "message": "ID облікового запису"
+        },
+        "app.QXBvbGxv.action.dXBkYXRlLWFjY291bnQ.option.YWNjb3VudF9pZA.short_desc": {
+          "source": "The account to update",
+          "message": "Обліковий запис для оновлення"
+        },
+        "app.QXBvbGxv.action.dXBkYXRlLWFjY291bnQ.option.ZG9tYWlu.display_name": {
+          "source": "Domain",
+          "message": "Домен"
+        },
+        "app.QXBvbGxv.action.dXBkYXRlLWFjY291bnQ.option.ZG9tYWlu.short_desc": {
+          "source": "Company domain",
+          "message": "Домен компанії"
+        },
+        "app.QXBvbGxv.action.dXBkYXRlLWFjY291bnQ.option.b3duZXJfaWQ.display_name": {
+          "source": "Owner ID",
+          "message": "ID власника"
+        },
+        "app.QXBvbGxv.action.dXBkYXRlLWFjY291bnQ.option.b3duZXJfaWQ.short_desc": {
+          "source": "Owner user ID",
+          "message": "ID користувача-власника"
+        },
+        "app.QXBvbGxv.action.dXBkYXRlLWFjY291bnQ.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "Назва"
+        },
+        "app.QXBvbGxv.action.dXBkYXRlLWFjY291bnQ.option.bmFtZQ.short_desc": {
+          "source": "Account name",
+          "message": "Назва облікового запису"
+        },
+        "app.QXBvbGxv.action.dXBkYXRlLWFjY291bnQ.option.cGhvbmU.display_name": {
+          "source": "Phone",
+          "message": "Телефон"
+        },
+        "app.QXBvbGxv.action.dXBkYXRlLWFjY291bnQ.option.cGhvbmU.short_desc": {
+          "source": "Company phone number",
+          "message": "Номер телефону компанії"
+        },
+        "app.QXBvbGxv.action.dXBkYXRlLWFjY291bnQ.option.d2Vic2l0ZV91cmw.display_name": {
+          "source": "Website URL",
+          "message": "URL-адреса вебсайту"
+        },
+        "app.QXBvbGxv.action.dXBkYXRlLWFjY291bnQ.option.d2Vic2l0ZV91cmw.short_desc": {
+          "source": "Company website URL",
+          "message": "URL-адреса вебсайту компанії"
+        },
+        "app.QXBvbGxv.action.dXBkYXRlLWFjY291bnQ.short_desc": {
+          "source": "Update an existing account",
+          "message": "Оновити існуючий обліковий запис"
+        },
+        "app.QXBvbGxv.action.dXBkYXRlLWNvbnRhY3Q.desc": {
+          "source": "Update an existing contact in Apollo",
+          "message": "Оновити наявний контакт в Apollo"
+        },
+        "app.QXBvbGxv.action.dXBkYXRlLWNvbnRhY3Q.display_name": {
+          "source": "Update a Contact",
+          "message": "Оновити контакт"
+        },
+        "app.QXBvbGxv.action.dXBkYXRlLWNvbnRhY3Q.option.Y29udGFjdF9pZA.display_name": {
+          "source": "Contact ID",
+          "message": "ID контакту"
+        },
+        "app.QXBvbGxv.action.dXBkYXRlLWNvbnRhY3Q.option.Y29udGFjdF9pZA.short_desc": {
+          "source": "The contact to update",
+          "message": "Контакт для оновлення"
+        },
+        "app.QXBvbGxv.action.dXBkYXRlLWNvbnRhY3Q.option.ZW1haWw.display_name": {
+          "source": "Email",
+          "message": "Електронна пошта"
+        },
+        "app.QXBvbGxv.action.dXBkYXRlLWNvbnRhY3Q.option.ZW1haWw.short_desc": {
+          "source": "Contact email address",
+          "message": "Адреса електронної пошти контакту"
+        },
+        "app.QXBvbGxv.action.dXBkYXRlLWNvbnRhY3Q.option.Zmlyc3RfbmFtZQ.display_name": {
+          "source": "First Name",
+          "message": "Ім'я"
+        },
+        "app.QXBvbGxv.action.dXBkYXRlLWNvbnRhY3Q.option.Zmlyc3RfbmFtZQ.short_desc": {
+          "source": "Contact first name",
+          "message": "Ім'я контакту"
+        },
+        "app.QXBvbGxv.action.dXBkYXRlLWNvbnRhY3Q.option.b3JnYW5pemF0aW9uX25hbWU.display_name": {
+          "source": "Organization Name",
+          "message": "Назва організації"
+        },
+        "app.QXBvbGxv.action.dXBkYXRlLWNvbnRhY3Q.option.b3JnYW5pemF0aW9uX25hbWU.short_desc": {
+          "source": "The company name",
+          "message": "Назва компанії"
+        },
+        "app.QXBvbGxv.action.dXBkYXRlLWNvbnRhY3Q.option.b3duZXJfaWQ.display_name": {
+          "source": "Owner ID",
+          "message": "ID власника"
+        },
+        "app.QXBvbGxv.action.dXBkYXRlLWNvbnRhY3Q.option.b3duZXJfaWQ.short_desc": {
+          "source": "Owner user ID",
+          "message": "ID користувача-власника"
+        },
+        "app.QXBvbGxv.action.dXBkYXRlLWNvbnRhY3Q.option.bGFzdF9uYW1l.display_name": {
+          "source": "Last Name",
+          "message": "Прізвище"
+        },
+        "app.QXBvbGxv.action.dXBkYXRlLWNvbnRhY3Q.option.bGFzdF9uYW1l.short_desc": {
+          "source": "Contact last name",
+          "message": "Прізвище контакту"
+        },
+        "app.QXBvbGxv.action.dXBkYXRlLWNvbnRhY3Q.option.cGhvbmVfbnVtYmVy.display_name": {
+          "source": "Phone Number",
+          "message": "Номер телефону"
+        },
+        "app.QXBvbGxv.action.dXBkYXRlLWNvbnRhY3Q.option.cGhvbmVfbnVtYmVy.short_desc": {
+          "source": "Contact phone number",
+          "message": "Номер телефону контакту"
+        },
+        "app.QXBvbGxv.action.dXBkYXRlLWNvbnRhY3Q.option.cHJlc2VudF9yYXdfYWRkcmVzcw.display_name": {
+          "source": "Present Address",
+          "message": "Поточна адреса"
+        },
+        "app.QXBvbGxv.action.dXBkYXRlLWNvbnRhY3Q.option.cHJlc2VudF9yYXdfYWRkcmVzcw.short_desc": {
+          "source": "Contact current location",
+          "message": "Поточне розташування контакту"
+        },
+        "app.QXBvbGxv.action.dXBkYXRlLWNvbnRhY3Q.option.dGl0bGU.display_name": {
+          "source": "Job Title",
+          "message": "Посада"
+        },
+        "app.QXBvbGxv.action.dXBkYXRlLWNvbnRhY3Q.option.dGl0bGU.short_desc": {
+          "source": "Contact job title",
+          "message": "Посада контакту"
+        },
+        "app.QXBvbGxv.action.dXBkYXRlLWNvbnRhY3Q.short_desc": {
+          "source": "Update an existing contact",
+          "message": "Оновити існуючий контакт"
+        },
+        "app.QXBvbGxv.action.dXBkYXRlLWRlYWw.desc": {
+          "source": "Update an existing deal (opportunity) in Apollo",
+          "message": "Оновити наявну угоду (можливість) в Apollo"
+        },
+        "app.QXBvbGxv.action.dXBkYXRlLWRlYWw.display_name": {
+          "source": "Update a Deal",
+          "message": "Оновити угоду"
+        },
+        "app.QXBvbGxv.action.dXBkYXRlLWRlYWw.option.Y2xvc2VkX2RhdGU.display_name": {
+          "source": "Close Date",
+          "message": "Дата закриття"
+        },
+        "app.QXBvbGxv.action.dXBkYXRlLWRlYWw.option.Y2xvc2VkX2RhdGU.short_desc": {
+          "source": "Expected close date",
+          "message": "Очікувана дата закриття"
+        },
+        "app.QXBvbGxv.action.dXBkYXRlLWRlYWw.option.YW1vdW50.display_name": {
+          "source": "Amount",
+          "message": "Величина"
+        },
+        "app.QXBvbGxv.action.dXBkYXRlLWRlYWw.option.YW1vdW50.short_desc": {
+          "source": "Deal amount",
+          "message": "Сума угоди"
+        },
+        "app.QXBvbGxv.action.dXBkYXRlLWRlYWw.option.ZGVhbF9pZA.display_name": {
+          "source": "Deal ID",
+          "message": "ID угоди"
+        },
+        "app.QXBvbGxv.action.dXBkYXRlLWRlYWw.option.ZGVhbF9pZA.short_desc": {
+          "source": "The deal to update",
+          "message": "Угода для оновлення"
+        },
+        "app.QXBvbGxv.action.dXBkYXRlLWRlYWw.option.b3duZXJfaWQ.display_name": {
+          "source": "Owner ID",
+          "message": "ID власника"
+        },
+        "app.QXBvbGxv.action.dXBkYXRlLWRlYWw.option.b3duZXJfaWQ.short_desc": {
+          "source": "Owner user ID",
+          "message": "ID користувача-власника"
+        },
+        "app.QXBvbGxv.action.dXBkYXRlLWRlYWw.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "Назва"
+        },
+        "app.QXBvbGxv.action.dXBkYXRlLWRlYWw.option.bmFtZQ.short_desc": {
+          "source": "Deal name",
+          "message": "Назва угоди"
+        },
+        "app.QXBvbGxv.action.dXBkYXRlLWRlYWw.option.c3RhZ2VfbmFtZQ.display_name": {
+          "source": "Stage",
+          "message": "Стадія"
+        },
+        "app.QXBvbGxv.action.dXBkYXRlLWRlYWw.option.c3RhZ2VfbmFtZQ.short_desc": {
+          "source": "Deal stage name",
+          "message": "Назва етапу угоди"
+        },
+        "app.QXBvbGxv.action.dXBkYXRlLWRlYWw.option.c3RhdHVz.display_name": {
+          "source": "Status",
+          "message": "Статус"
+        },
+        "app.QXBvbGxv.action.dXBkYXRlLWRlYWw.option.c3RhdHVz.short_desc": {
+          "source": "Deal status",
+          "message": "Статус угоди"
+        },
+        "app.QXBvbGxv.action.dXBkYXRlLWRlYWw.short_desc": {
+          "source": "Update an existing deal",
+          "message": "Оновити існуючу угоду"
+        },
+        "app.QXBvbGxv.desc": {
+          "source": "Apollo is a B2B sales intelligence and engagement platform providing access to 210M+ contacts and 35M+ companies for prospecting, enrichment, and deal management.\n\nThis integration supports CRUD operations on contacts, accounts, and deals, plus people and organization enrichment and search.",
+          "message": "Apollo — це платформа для аналітики та взаємодії у сфері B2B-продажів, яка надає доступ до понад 210 млн контактів і понад 35 млн компаній для пошуку потенційних клієнтів, збагачення даних та управління угодами.\n\nЦя інтеграція підтримує операції CRUD для контактів, акаунтів та угод, а також збагачення й пошук людей та організацій."
+        },
+        "app.QXBvbGxv.display_name": {
+          "source": "Apollo",
+          "message": "Apollo"
+        },
+        "app.QXBvbGxv.short_desc": {
+          "source": "Apollo B2B sales intelligence and engagement platform",
+          "message": "Платформа для аналітики та взаємодії у сфері B2B-продажів Apollo"
+        }
+      }
+    }
+  }
+}

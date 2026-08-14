@@ -1,0 +1,2577 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "zh-TW": {
+      "messages": {
+        "app.Qml0YnVja2V0.action.Y3JlYXRl.desc": {
+          "source": "Creates new records in the given table",
+          "message": "在指定的資料表中建立新記錄"
+        },
+        "app.Qml0YnVja2V0.action.Y3JlYXRl.display_name": {
+          "source": "Create Records",
+          "message": "建立記錄"
+        },
+        "app.Qml0YnVja2V0.action.Y3JlYXRl.option.dGFibGU.desc": {
+          "source": "The table to work with: `repositories`, `pullrequests`, `pullrequest-comments`, `commit-comments`, `workspaces`, `workspace-members`, `commits` or `branches`",
+          "message": "要操作的資料表：`repositories`、`pullrequests`、`pullrequest-comments`、`commit-comments`、`workspaces`、`workspace-members`、`commits` 或 `branches`"
+        },
+        "app.Qml0YnVja2V0.action.Y3JlYXRl.option.dGFibGU.display_name": {
+          "source": "Table",
+          "message": "表格"
+        },
+        "app.Qml0YnVja2V0.action.Y3JlYXRl.option.dGFibGU.short_desc": {
+          "source": "The name of the table to work with",
+          "message": "要操作的資料表名稱"
+        },
+        "app.Qml0YnVja2V0.action.Y3JlYXRl.short_desc": {
+          "source": "Create new records in the given table",
+          "message": "在指定的資料表中建立新記錄"
+        },
+        "app.Qml0YnVja2V0.action.Z2V0RGVwbG95bWVudHNGb3JSZXBvc2l0b3J5.desc": {
+          "source": "Lists deployments, newest first, with the environment each went to, the state it reached and the commit it deployed.",
+          "message": "列出部署（由新到舊），包含每個部署的目標環境、達到的狀態以及部署的提交。"
+        },
+        "app.Qml0YnVja2V0.action.Z2V0RGVwbG95bWVudHNGb3JSZXBvc2l0b3J5.display_name": {
+          "source": "List Deployments",
+          "message": "列出部署"
+        },
+        "app.Qml0YnVja2V0.action.Z2V0RGVwbG95bWVudHNGb3JSZXBvc2l0b3J5.option.cGFnZQ.desc": {
+          "source": "Which page of results to return, starting at 1. Bitbucket documents this for every collection but declares it on almost none of them.",
+          "message": "要傳回的結果頁碼，從 1 開始。Bitbucket 在所有集合的文件中皆有說明此項，但幾乎未在任何集合中宣告。"
+        },
+        "app.Qml0YnVja2V0.action.Z2V0RGVwbG95bWVudHNGb3JSZXBvc2l0b3J5.option.cGFnZQ.display_name": {
+          "source": "Page",
+          "message": "頁碼"
+        },
+        "app.Qml0YnVja2V0.action.Z2V0RGVwbG95bWVudHNGb3JSZXBvc2l0b3J5.option.cGFnZQ.short_desc": {
+          "source": "Which page of results to return, starting at 1",
+          "message": "要傳回的結果頁碼，從 1 開始"
+        },
+        "app.Qml0YnVja2V0.action.Z2V0RGVwbG95bWVudHNGb3JSZXBvc2l0b3J5.option.cGFnZWxlbg.desc": {
+          "source": "How many records to return in one request, up to Bitbucket's maximum of `100`.\n\n`next` in the response is the URL of the following page; page on its presence rather than on `size`, which Bitbucket does not report for every collection.",
+          "message": "單次請求中要傳回的記錄數量，最高可達 Bitbucket 的上限 `100`。\n\n回應中的 `next` 是下一頁的 URL；請依其是否存在來進行分頁，而非依據 `size`，因為 Bitbucket 並非針對所有集合都會回報此項。"
+        },
+        "app.Qml0YnVja2V0.action.Z2V0RGVwbG95bWVudHNGb3JSZXBvc2l0b3J5.option.cGFnZWxlbg.display_name": {
+          "source": "Page Length",
+          "message": "每頁筆數"
+        },
+        "app.Qml0YnVja2V0.action.Z2V0RGVwbG95bWVudHNGb3JSZXBvc2l0b3J5.option.cGFnZWxlbg.short_desc": {
+          "source": "How many records to return, up to 100",
+          "message": "要傳回的記錄數量，最多 100 筆"
+        },
+        "app.Qml0YnVja2V0.action.Z2V0RGVwbG95bWVudHNGb3JSZXBvc2l0b3J5.option.cmVwb19zbHVn.desc": {
+          "source": "The repository to work on, given as its slug or as its UUID in braces.\n\nEverything else scoped by a repository - commits, branches, pull requests - is listed from this repository, so changing it re-reads them.",
+          "message": "要操作的存放庫，指定為其別名或括號中的 UUID。\n\n所有限定於存放庫範圍的項目（提交、分支、拉取請求）皆以此存放庫為準列出，因此變更此項會重新讀取它們。"
+        },
+        "app.Qml0YnVja2V0.action.Z2V0RGVwbG95bWVudHNGb3JSZXBvc2l0b3J5.option.cmVwb19zbHVn.display_name": {
+          "source": "Repository",
+          "message": "存放庫"
+        },
+        "app.Qml0YnVja2V0.action.Z2V0RGVwbG95bWVudHNGb3JSZXBvc2l0b3J5.option.cmVwb19zbHVn.short_desc": {
+          "source": "The repository to work on",
+          "message": "要操作的存放庫"
+        },
+        "app.Qml0YnVja2V0.action.Z2V0RGVwbG95bWVudHNGb3JSZXBvc2l0b3J5.option.d29ya3NwYWNl.desc": {
+          "source": "The workspace to work in, given as its slug or as its UUID in braces.\n\nEverything else scoped by a workspace - repositories, members - is listed from this workspace, so changing it re-reads them.",
+          "message": "要操作的工作區，指定為其別名或括號中的 UUID。\n\n所有限定於工作區範圍的項目（存放庫、成員）皆以此工作區為準列出，因此變更此項會重新讀取它們。"
+        },
+        "app.Qml0YnVja2V0.action.Z2V0RGVwbG95bWVudHNGb3JSZXBvc2l0b3J5.option.d29ya3NwYWNl.display_name": {
+          "source": "Workspace",
+          "message": "工作區"
+        },
+        "app.Qml0YnVja2V0.action.Z2V0RGVwbG95bWVudHNGb3JSZXBvc2l0b3J5.option.d29ya3NwYWNl.short_desc": {
+          "source": "The workspace to work in",
+          "message": "要操作的工作區"
+        },
+        "app.Qml0YnVja2V0.action.Z2V0RGVwbG95bWVudHNGb3JSZXBvc2l0b3J5.short_desc": {
+          "source": "List a repository's deployments",
+          "message": "列出存放庫的部署"
+        },
+        "app.Qml0YnVja2V0.action.Z2V0UmVwb3J0c0ZvckNvbW1pdA.desc": {
+          "source": "Lists the Code Insights reports attached to a commit - the results a linter, a test run or a security scan posted against it.",
+          "message": "列出附加至提交的 Code Insights 報告 — 包括 linter、測試執行或安全性掃描針對該提交所回報的結果。"
+        },
+        "app.Qml0YnVja2V0.action.Z2V0UmVwb3J0c0ZvckNvbW1pdA.display_name": {
+          "source": "List Commit Reports",
+          "message": "列出提交報告"
+        },
+        "app.Qml0YnVja2V0.action.Z2V0UmVwb3J0c0ZvckNvbW1pdA.option.Y29tbWl0.desc": {
+          "source": "The commit's SHA1.",
+          "message": "提交的 SHA1。"
+        },
+        "app.Qml0YnVja2V0.action.Z2V0UmVwb3J0c0ZvckNvbW1pdA.option.Y29tbWl0.display_name": {
+          "source": "Commit",
+          "message": "提交"
+        },
+        "app.Qml0YnVja2V0.action.Z2V0UmVwb3J0c0ZvckNvbW1pdA.option.Y29tbWl0.short_desc": {
+          "source": "A commit hash, a branch name or a tag",
+          "message": "提交雜湊、分支名稱或標籤"
+        },
+        "app.Qml0YnVja2V0.action.Z2V0UmVwb3J0c0ZvckNvbW1pdA.option.cGFnZQ.desc": {
+          "source": "Which page of results to return, starting at 1. Bitbucket documents this for every collection but declares it on almost none of them.",
+          "message": "要傳回的結果頁碼，從 1 開始。Bitbucket 在所有集合的文件中皆有說明此項，但幾乎未在任何集合中宣告。"
+        },
+        "app.Qml0YnVja2V0.action.Z2V0UmVwb3J0c0ZvckNvbW1pdA.option.cGFnZQ.display_name": {
+          "source": "Page",
+          "message": "頁碼"
+        },
+        "app.Qml0YnVja2V0.action.Z2V0UmVwb3J0c0ZvckNvbW1pdA.option.cGFnZQ.short_desc": {
+          "source": "Which page of results to return, starting at 1",
+          "message": "要傳回的結果頁碼，從 1 開始"
+        },
+        "app.Qml0YnVja2V0.action.Z2V0UmVwb3J0c0ZvckNvbW1pdA.option.cGFnZWxlbg.desc": {
+          "source": "How many records to return in one request, up to Bitbucket's maximum of `100`.\n\n`next` in the response is the URL of the following page; page on its presence rather than on `size`, which Bitbucket does not report for every collection.",
+          "message": "單次請求中要傳回的記錄數量，最高可達 Bitbucket 的上限 `100`。\n\n回應中的 `next` 是下一頁的 URL；請依其是否存在來進行分頁，而非依據 `size`，因為 Bitbucket 並非針對所有集合都會回報此項。"
+        },
+        "app.Qml0YnVja2V0.action.Z2V0UmVwb3J0c0ZvckNvbW1pdA.option.cGFnZWxlbg.display_name": {
+          "source": "Page Length",
+          "message": "每頁筆數"
+        },
+        "app.Qml0YnVja2V0.action.Z2V0UmVwb3J0c0ZvckNvbW1pdA.option.cGFnZWxlbg.short_desc": {
+          "source": "How many records to return, up to 100",
+          "message": "要傳回的記錄數量，最多 100 筆"
+        },
+        "app.Qml0YnVja2V0.action.Z2V0UmVwb3J0c0ZvckNvbW1pdA.option.cmVwb19zbHVn.desc": {
+          "source": "The repository to work on, given as its slug or as its UUID in braces.\n\nEverything else scoped by a repository - commits, branches, pull requests - is listed from this repository, so changing it re-reads them.",
+          "message": "要操作的存放庫，指定為其別名或括號中的 UUID。\n\n所有限定於存放庫範圍的項目（提交、分支、拉取請求）皆以此存放庫為準列出，因此變更此項會重新讀取它們。"
+        },
+        "app.Qml0YnVja2V0.action.Z2V0UmVwb3J0c0ZvckNvbW1pdA.option.cmVwb19zbHVn.display_name": {
+          "source": "Repository",
+          "message": "存放庫"
+        },
+        "app.Qml0YnVja2V0.action.Z2V0UmVwb3J0c0ZvckNvbW1pdA.option.cmVwb19zbHVn.short_desc": {
+          "source": "The repository to work on",
+          "message": "要操作的存放庫"
+        },
+        "app.Qml0YnVja2V0.action.Z2V0UmVwb3J0c0ZvckNvbW1pdA.option.d29ya3NwYWNl.desc": {
+          "source": "The workspace to work in, given as its slug or as its UUID in braces.\n\nEverything else scoped by a workspace - repositories, members - is listed from this workspace, so changing it re-reads them.",
+          "message": "要操作的工作區，指定為其別名或括號中的 UUID。\n\n所有限定於工作區範圍的項目（存放庫、成員）皆以此工作區為準列出，因此變更此項會重新讀取它們。"
+        },
+        "app.Qml0YnVja2V0.action.Z2V0UmVwb3J0c0ZvckNvbW1pdA.option.d29ya3NwYWNl.display_name": {
+          "source": "Workspace",
+          "message": "工作區"
+        },
+        "app.Qml0YnVja2V0.action.Z2V0UmVwb3J0c0ZvckNvbW1pdA.option.d29ya3NwYWNl.short_desc": {
+          "source": "The workspace to work in",
+          "message": "要操作的工作區"
+        },
+        "app.Qml0YnVja2V0.action.Z2V0UmVwb3J0c0ZvckNvbW1pdA.short_desc": {
+          "source": "List the code insights reports on a commit",
+          "message": "列出提交上的 Code Insights 報告"
+        },
+        "app.Qml0YnVja2V0.action.ZGVsZXRl.desc": {
+          "source": "Deletes every record in the given table matching the search criteria",
+          "message": "刪除指定資料表中符合搜尋條件的所有記錄"
+        },
+        "app.Qml0YnVja2V0.action.ZGVsZXRl.display_name": {
+          "source": "Delete Records",
+          "message": "刪除記錄"
+        },
+        "app.Qml0YnVja2V0.action.ZGVsZXRl.option.dGFibGU.desc": {
+          "source": "The table to work with: `repositories`, `pullrequests`, `pullrequest-comments`, `commit-comments`, `workspaces`, `workspace-members`, `commits` or `branches`",
+          "message": "要操作的資料表：`repositories`、`pullrequests`、`pullrequest-comments`、`commit-comments`、`workspaces`、`workspace-members`、`commits` 或 `branches`"
+        },
+        "app.Qml0YnVja2V0.action.ZGVsZXRl.option.dGFibGU.display_name": {
+          "source": "Table",
+          "message": "表格"
+        },
+        "app.Qml0YnVja2V0.action.ZGVsZXRl.option.dGFibGU.short_desc": {
+          "source": "The name of the table to work with",
+          "message": "要操作的資料表名稱"
+        },
+        "app.Qml0YnVja2V0.action.ZGVsZXRl.short_desc": {
+          "source": "Delete the records matching the search criteria",
+          "message": "刪除符合搜尋條件的記錄"
+        },
+        "app.Qml0YnVja2V0.action.bWFrZS1hcGktY2FsbA.desc": {
+          "source": "Make a custom HTTP / REST API call to **Bitbucket** using the configured connection's authentication.\n\nSpecify the HTTP method, the URI path (relative to the connection's API base URL), optional query parameters, headers, and request body. The response is returned as a hash containing the status code, response headers, and response body.\n\nUse this action for endpoints that are not yet exposed as first-class actions on this app.",
+          "message": "使用已設定連線的驗證向 **Bitbucket** 進行自訂 HTTP / REST API 呼叫。\n\n指定 HTTP 方法、URI 路徑（相對於連線的 API 基礎 URL）、選填的查詢參數、標頭和請求主體。回應將以包含狀態碼、回應標頭和回應主體的雜湊返回。\n\n當端點尚未在此應用程式中公開為一級動作時，請使用此動作。"
+        },
+        "app.Qml0YnVja2V0.action.bWFrZS1hcGktY2FsbA.display_name": {
+          "source": "Make an API call",
+          "message": "進行 API 呼叫"
+        },
+        "app.Qml0YnVja2V0.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.desc": {
+          "source": "The request body. The effective type depends on `body_type`: JSON/form/YAML expect a hash, XML/text expect a string, multipart expects a file structure, binary expects raw bytes.",
+          "message": "請求主體。有效類型取決於 `body_type`：JSON/表單/YAML 預期為雜湊，XML/文字預期為字串，multipart 預期為檔案結構，二進位預期為原始位元組。"
+        },
+        "app.Qml0YnVja2V0.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.display_name": {
+          "source": "Body",
+          "message": "內文"
+        },
+        "app.Qml0YnVja2V0.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.short_desc": {
+          "source": "The request body",
+          "message": "請求主體"
+        },
+        "app.Qml0YnVja2V0.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.desc": {
+          "source": "Upload a file using `multipart/form-data`. The body must be a @ref DataProvider::FileDataType \"FileDataType\" structure (filename + content + mime_type). The framework builds the multipart envelope and sets the boundary header.",
+          "message": "使用 `multipart/form-data` 上傳檔案。主體必須是 @ref DataProvider::FileDataType \"FileDataType\" 結構 (filename + content + mime_type)。框架會建立 multipart 信封並設定 boundary 標頭。"
+        },
+        "app.Qml0YnVja2V0.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.display_name": {
+          "source": "Multipart Form",
+          "message": "Multipart 表單"
+        },
+        "app.Qml0YnVja2V0.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.short_desc": {
+          "source": "Upload a file using multipart/form-data",
+          "message": "使用 multipart/form-data 上傳檔案"
+        },
+        "app.Qml0YnVja2V0.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.desc": {
+          "source": "Pass the body to the REST client unchanged; the client decides serialization based on its configured `data` option and the value type",
+          "message": "將主體原封不動地傳遞給 REST 用戶端；用戶端會根據其設定的 `data` 選項與數值類型來決定序列化方式"
+        },
+        "app.Qml0YnVja2V0.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.display_name": {
+          "source": "Auto",
+          "message": "自動"
+        },
+        "app.Qml0YnVja2V0.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.short_desc": {
+          "source": "Pass-through; use connection serialization and let the REST client decide",
+          "message": "透傳；使用連線序列化並由 REST 用戶端決定"
+        },
+        "app.Qml0YnVja2V0.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.desc": {
+          "source": "Send the body as raw bytes. The body must be a binary value. Sets `Content-Type: application/octet-stream` unless overridden by `hdr`.",
+          "message": "將主體作為原始位元組傳送。主體必須是二進位值。除非被 `hdr` 覆寫，否則會設定 `Content-Type: application/octet-stream`。"
+        },
+        "app.Qml0YnVja2V0.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.display_name": {
+          "source": "Raw Binary",
+          "message": "原始二進位"
+        },
+        "app.Qml0YnVja2V0.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.short_desc": {
+          "source": "Send body as raw bytes",
+          "message": "將主體作為原始位元組傳送"
+        },
+        "app.Qml0YnVja2V0.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.desc": {
+          "source": "Serialize a hash of form fields as `application/x-www-form-urlencoded`. The body must be a hash whose values are scalars (strings/numbers/booleans).",
+          "message": "將表單欄位的雜湊序列化為 `application/x-www-form-urlencoded`。主體必須是值為純量 (字串/數字/布林值) 的雜湊。"
+        },
+        "app.Qml0YnVja2V0.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.display_name": {
+          "source": "Form (URL-encoded)",
+          "message": "表單 (URL 編碼)"
+        },
+        "app.Qml0YnVja2V0.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.short_desc": {
+          "source": "Serialize body as application/x-www-form-urlencoded form fields",
+          "message": "將主體序列化為 application/x-www-form-urlencoded 表單欄位"
+        },
+        "app.Qml0YnVja2V0.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.desc": {
+          "source": "Serialize the body as JSON; sets `Content-Type: application/json`. The body should be a hash, list, or scalar value.",
+          "message": "將主體序列化為 JSON；設定 `Content-Type: application/json`。主體應為雜湊、清單或純量值。"
+        },
+        "app.Qml0YnVja2V0.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.display_name": {
+          "source": "JSON",
+          "message": "JSON"
+        },
+        "app.Qml0YnVja2V0.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.short_desc": {
+          "source": "Serialize body as JSON",
+          "message": "將主體序列化為 JSON"
+        },
+        "app.Qml0YnVja2V0.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.desc": {
+          "source": "Send the body as plain text. The body must be a string. Sets `Content-Type: text/plain`.",
+          "message": "將主體作為純文字傳送。主體必須是字串。設定 `Content-Type: text/plain`。"
+        },
+        "app.Qml0YnVja2V0.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.display_name": {
+          "source": "Plain Text",
+          "message": "純文字"
+        },
+        "app.Qml0YnVja2V0.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.short_desc": {
+          "source": "Send body as text/plain",
+          "message": "將主體作為 text/plain 傳送"
+        },
+        "app.Qml0YnVja2V0.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.desc": {
+          "source": "Send the body as XML. If the body is a hash it is serialized to XML; if it is a string it is sent verbatim. Sets `Content-Type: application/xml`.",
+          "message": "將主體作為 XML 傳送。若主體為雜湊，則會序列化為 XML；若為字串，則原樣傳送。設定 `Content-Type: application/xml`。"
+        },
+        "app.Qml0YnVja2V0.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.display_name": {
+          "source": "XML",
+          "message": "XML"
+        },
+        "app.Qml0YnVja2V0.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.short_desc": {
+          "source": "Send body as XML",
+          "message": "將主體作為 XML 傳送"
+        },
+        "app.Qml0YnVja2V0.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.desc": {
+          "source": "Send the body as YAML. If the body is a hash it is serialized to YAML; if it is a string it is sent verbatim. Sets `Content-Type: application/x-yaml`.",
+          "message": "將主體作為 YAML 傳送。若主體為雜湊，則會序列化為 YAML；若為字串，則原樣傳送。設定 `Content-Type: application/x-yaml`。"
+        },
+        "app.Qml0YnVja2V0.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.display_name": {
+          "source": "YAML",
+          "message": "YAML"
+        },
+        "app.Qml0YnVja2V0.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.short_desc": {
+          "source": "Send body as YAML",
+          "message": "將主體作為 YAML 傳送"
+        },
+        "app.Qml0YnVja2V0.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.desc": {
+          "source": "Selects the body serialization mode and the corresponding `Content-Type` header. Changing this field reshapes the `body` editor - selecting JSON exposes a JSON editor, selecting Multipart Form exposes a file picker, and so on.",
+          "message": "選擇主體序列化模式與相應的 `Content-Type` 標頭。變更此欄位會重塑 `body` 編輯器 - 選擇 JSON 會顯示 JSON 編輯器，選擇 Multipart Form 會顯示檔案選擇器，依此類推。"
+        },
+        "app.Qml0YnVja2V0.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.display_name": {
+          "source": "Body Type",
+          "message": "主體類型"
+        },
+        "app.Qml0YnVja2V0.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.short_desc": {
+          "source": "How the body is serialized and what Content-Type is sent",
+          "message": "主體如何序列化以及傳送何種 Content-Type"
+        },
+        "app.Qml0YnVja2V0.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.desc": {
+          "source": "If `True`, non-2xx HTTP responses return as the normal response hash (with the actual status code) instead of raising `REST-RESPONSE-ERROR`. Useful for handling 4xx/5xx as data - e.g. checking whether a resource exists. Overrides the connection's `error_passthru` setting for this call only.",
+          "message": "若為 `True`，非 2xx 的 HTTP 回應將作為正常的回應雜湊 (包含實際狀態碼) 返回，而不是引發 `REST-RESPONSE-ERROR`。適用於將 4xx/5xx 作為資料處理 - 例如檢查資源是否存在。僅針對本次呼叫覆寫連線的 `error_passthru` 設定。"
+        },
+        "app.Qml0YnVja2V0.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.display_name": {
+          "source": "Return Errors as Data",
+          "message": "將錯誤作為資料返回"
+        },
+        "app.Qml0YnVja2V0.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.short_desc": {
+          "source": "Return non-2xx responses normally instead of throwing",
+          "message": "正常返回非 2xx 回應，而不是拋出例外"
+        },
+        "app.Qml0YnVja2V0.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.desc": {
+          "source": "Optional list of HTTP status codes treated as success. If set and the response status is not in this list, the action throws `REST-STATUS-ERROR`. When unset, the REST client's default behavior applies (typically: 2xx is success, non-2xx throws).",
+          "message": "視為成功的選擇性 HTTP 狀態碼清單。若已設定且回應狀態不在此清單中，該動作將拋出 `REST-STATUS-ERROR`。未設定時，套用 REST 用戶端的預設行為 (通常：2xx 代表成功，非 2xx 拋出例外)。"
+        },
+        "app.Qml0YnVja2V0.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.display_name": {
+          "source": "Expected Status Codes",
+          "message": "預期的狀態碼"
+        },
+        "app.Qml0YnVja2V0.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.short_desc": {
+          "source": "Response status codes treated as success",
+          "message": "視為成功的回應狀態碼"
+        },
+        "app.Qml0YnVja2V0.action.bWFrZS1hcGktY2FsbA.option.aGRy.desc": {
+          "source": "Hash of custom headers added to the request. These override any default headers set by `body_type` (e.g. supplying `Content-Type` here wins over the body-type default).",
+          "message": "新增至請求的自訂標頭雜湊。這些會覆寫由 `body_type` 設定的任何預設標頭 (例如：在此處提供 `Content-Type` 會優先於主體類型的預設值)。"
+        },
+        "app.Qml0YnVja2V0.action.bWFrZS1hcGktY2FsbA.option.aGRy.display_name": {
+          "source": "Custom Headers",
+          "message": "自訂標頭"
+        },
+        "app.Qml0YnVja2V0.action.bWFrZS1hcGktY2FsbA.option.aGRy.short_desc": {
+          "source": "Extra request headers",
+          "message": "額外的請求標頭"
+        },
+        "app.Qml0YnVja2V0.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.desc": {
+          "source": "If `True`, the response hash includes a `debug` sub-hash containing the request method/URL/headers (with sensitive values redacted), request and response sizes, and round-trip duration. Useful when investigating slow or failing calls. Off by default to keep responses lean.",
+          "message": "若為 `True`，回應雜湊包含一個 `debug` 子雜湊，其中包含請求方法/URL/標頭 (敏感值已遮蔽)、請求與回應大小以及來回時間。在調查過慢或失敗的呼叫時很有用。預設關閉以維持回應精簡。"
+        },
+        "app.Qml0YnVja2V0.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.display_name": {
+          "source": "Include Debug Info",
+          "message": "包含除錯資訊"
+        },
+        "app.Qml0YnVja2V0.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.short_desc": {
+          "source": "Include request/timing/size debug info in the response",
+          "message": "在回應中包含請求/時序/大小除錯資訊"
+        },
+        "app.Qml0YnVja2V0.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.desc": {
+          "source": "HTTP `OPTIONS`",
+          "message": "HTTP `OPTIONS`"
+        },
+        "app.Qml0YnVja2V0.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.display_name": {
+          "source": "OPTIONS",
+          "message": "OPTIONS"
+        },
+        "app.Qml0YnVja2V0.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.short_desc": {
+          "source": "HTTP OPTIONS",
+          "message": "HTTP OPTIONS"
+        },
+        "app.Qml0YnVja2V0.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.desc": {
+          "source": "HTTP `DELETE`",
+          "message": "HTTP `DELETE`"
+        },
+        "app.Qml0YnVja2V0.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.display_name": {
+          "source": "DELETE",
+          "message": "DELETE"
+        },
+        "app.Qml0YnVja2V0.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.short_desc": {
+          "source": "HTTP DELETE",
+          "message": "HTTP DELETE"
+        },
+        "app.Qml0YnVja2V0.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.desc": {
+          "source": "HTTP `GET`",
+          "message": "HTTP `GET`"
+        },
+        "app.Qml0YnVja2V0.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.display_name": {
+          "source": "GET",
+          "message": "GET"
+        },
+        "app.Qml0YnVja2V0.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.short_desc": {
+          "source": "HTTP GET",
+          "message": "HTTP GET"
+        },
+        "app.Qml0YnVja2V0.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.desc": {
+          "source": "HTTP `HEAD`",
+          "message": "HTTP `HEAD`"
+        },
+        "app.Qml0YnVja2V0.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.display_name": {
+          "source": "HEAD",
+          "message": "HEAD"
+        },
+        "app.Qml0YnVja2V0.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.short_desc": {
+          "source": "HTTP HEAD",
+          "message": "HTTP HEAD"
+        },
+        "app.Qml0YnVja2V0.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.desc": {
+          "source": "HTTP `PATCH`",
+          "message": "HTTP `PATCH`"
+        },
+        "app.Qml0YnVja2V0.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.display_name": {
+          "source": "PATCH",
+          "message": "PATCH"
+        },
+        "app.Qml0YnVja2V0.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.short_desc": {
+          "source": "HTTP PATCH",
+          "message": "HTTP PATCH"
+        },
+        "app.Qml0YnVja2V0.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.desc": {
+          "source": "HTTP `POST`",
+          "message": "HTTP `POST`"
+        },
+        "app.Qml0YnVja2V0.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.display_name": {
+          "source": "POST",
+          "message": "POST"
+        },
+        "app.Qml0YnVja2V0.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.short_desc": {
+          "source": "HTTP POST",
+          "message": "HTTP POST"
+        },
+        "app.Qml0YnVja2V0.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.desc": {
+          "source": "HTTP `PUT`",
+          "message": "HTTP `PUT`"
+        },
+        "app.Qml0YnVja2V0.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.display_name": {
+          "source": "PUT",
+          "message": "PUT"
+        },
+        "app.Qml0YnVja2V0.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.short_desc": {
+          "source": "HTTP PUT",
+          "message": "HTTP PUT"
+        },
+        "app.Qml0YnVja2V0.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.desc": {
+          "source": "HTTP `TRACE`",
+          "message": "HTTP `TRACE`"
+        },
+        "app.Qml0YnVja2V0.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.display_name": {
+          "source": "TRACE",
+          "message": "TRACE"
+        },
+        "app.Qml0YnVja2V0.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.short_desc": {
+          "source": "HTTP TRACE",
+          "message": "HTTP TRACE"
+        },
+        "app.Qml0YnVja2V0.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "用於請求的 HTTP 方法"
+        },
+        "app.Qml0YnVja2V0.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.display_name": {
+          "source": "HTTP Method",
+          "message": "HTTP 方法"
+        },
+        "app.Qml0YnVja2V0.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.short_desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "用於請求的 HTTP 方法"
+        },
+        "app.Qml0YnVja2V0.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain `{name}` placeholders that are replaced from `path_vars`. Example: `/users/{id}/comments`.",
+          "message": "相於連線 API 基本 URL 的 URI 路徑。可能包含從 `path_vars` 替換的 `{name}` 預留位置。範例：`/users/{id}/comments`。"
+        },
+        "app.Qml0YnVja2V0.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.display_name": {
+          "source": "URI Path",
+          "message": "URI 路徑"
+        },
+        "app.Qml0YnVja2V0.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.short_desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain '{name}' placeholders that are replaced from 'path_vars'. Example: '/users/{id}/comments'",
+          "message": "相對於連線 API 基底 URL 的 URI 路徑。可能包含從 'path_vars' 替換的 '{name}' 預留位置。範例：'/users/{id}/comments'"
+        },
+        "app.Qml0YnVja2V0.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.desc": {
+          "source": "Hash of values substituted into `{name}` placeholders in the URI path. Example: with `path = /users/{id}` and `path_vars = {id: 123}` the framework sends `/users/123`. Values are URL-encoded.",
+          "message": "替換至 URI 路徑中 `{name}` 預留位置的值 Hash。範例：使用 `path = /users/{id}` 與 `path_vars = {id: 123}` 時，框架會傳送 `/users/123`。數值均經過 URL 編碼。"
+        },
+        "app.Qml0YnVja2V0.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.display_name": {
+          "source": "Path Variables",
+          "message": "路徑變數"
+        },
+        "app.Qml0YnVja2V0.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.short_desc": {
+          "source": "Values for {name} placeholders in path",
+          "message": "路徑中 {name} 預留位置的值"
+        },
+        "app.Qml0YnVja2V0.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.desc": {
+          "source": "Hash of query string parameters to append to the URI path. Values are URL-encoded; list values are joined with `,`.",
+          "message": "要附加至 URI 路徑的查詢字串參數 Hash。數值均經過 URL 編碼；清單值會使用 `,` 連接。"
+        },
+        "app.Qml0YnVja2V0.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.display_name": {
+          "source": "Query Arguments",
+          "message": "查詢引數"
+        },
+        "app.Qml0YnVja2V0.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.short_desc": {
+          "source": "Query string parameters",
+          "message": "查詢字串參數"
+        },
+        "app.Qml0YnVja2V0.action.bWFrZS1hcGktY2FsbA.short_desc": {
+          "source": "Make a custom API call to Bitbucket",
+          "message": "向 Bitbucket 進行自訂 API 呼叫"
+        },
+        "app.Qml0YnVja2V0.action.bmV3X2NvbW1pdA.desc": {
+          "source": "Fires for each new commit in the watched repository, across every branch.\n\nThe event carries the commit record Bitbucket returns, including its hash, message, author and date.",
+          "message": "在監視頻道存放庫中的每個新提交（跨所有分支）時觸發。\n\n此事件攜帶 Bitbucket 返回的提交記錄，包括其雜湊、訊息、作者和日期。"
+        },
+        "app.Qml0YnVja2V0.action.bmV3X2NvbW1pdA.display_name": {
+          "source": "New Commit",
+          "message": "新提交"
+        },
+        "app.Qml0YnVja2V0.action.bmV3X2NvbW1pdA.short_desc": {
+          "source": "Fires when a commit is pushed to the watched repository",
+          "message": "當提交推送到受監視的存放庫時觸發"
+        },
+        "app.Qml0YnVja2V0.action.bmV3X2RlcGxveW1lbnQ.desc": {
+          "source": "Fires for each new deployment in the watched repository.\n\nThe event carries the deployment record Bitbucket returns, including the environment it went to, the state it reached and the release it deployed.",
+          "message": "在受監視存放庫中每次建立新部署時觸發。\n\n此事件攜帶 Bitbucket 返回的部署記錄，包括部署到的環境、達到的狀態以及部署的發行版本。"
+        },
+        "app.Qml0YnVja2V0.action.bmV3X2RlcGxveW1lbnQ.display_name": {
+          "source": "New Deployment",
+          "message": "新部署"
+        },
+        "app.Qml0YnVja2V0.action.bmV3X2RlcGxveW1lbnQ.short_desc": {
+          "source": "Fires when a deployment is created for the watched repository",
+          "message": "為受監視的存放庫建立部署時觸發"
+        },
+        "app.Qml0YnVja2V0.action.bmV3X3B1bGxfcmVxdWVzdA.desc": {
+          "source": "Fires for each new pull request in the watched repository.\n\n`state` restricts which pull requests are watched, and defaults to `OPEN`. The event carries the pull request record Bitbucket returns, including its source and destination branches, author and reviewers.",
+          "message": "在受監視存放庫中每個新 Pull Request 建立時觸發。\n\n`state` 用於限制監視哪些 Pull Request，預設為 `OPEN`。此事件攜帶 Bitbucket 返回的 Pull Request 記錄，包括其來源分支與目標分支、作者和審查者。"
+        },
+        "app.Qml0YnVja2V0.action.bmV3X3B1bGxfcmVxdWVzdA.display_name": {
+          "source": "New Pull Request",
+          "message": "新 Pull Request"
+        },
+        "app.Qml0YnVja2V0.action.bmV3X3B1bGxfcmVxdWVzdA.short_desc": {
+          "source": "Fires when a pull request is opened in the watched repository",
+          "message": "在受監視存放庫中開啟 Pull Request 時觸發"
+        },
+        "app.Qml0YnVja2V0.action.c2VhcmNo.desc": {
+          "source": "Returns every record in the given table matching the search criteria",
+          "message": "返回給定資料表中符合搜尋條件的每筆記錄"
+        },
+        "app.Qml0YnVja2V0.action.c2VhcmNo.display_name": {
+          "source": "Search Records",
+          "message": "搜尋記錄"
+        },
+        "app.Qml0YnVja2V0.action.c2VhcmNo.option.dGFibGU.desc": {
+          "source": "The table to work with: `repositories`, `pullrequests`, `pullrequest-comments`, `commit-comments`, `workspaces`, `workspace-members`, `commits` or `branches`",
+          "message": "要操作的資料表：`repositories`、`pullrequests`、`pullrequest-comments`、`commit-comments`、`workspaces`、`workspace-members`、`commits` 或 `branches`"
+        },
+        "app.Qml0YnVja2V0.action.c2VhcmNo.option.dGFibGU.display_name": {
+          "source": "Table",
+          "message": "表格"
+        },
+        "app.Qml0YnVja2V0.action.c2VhcmNo.option.dGFibGU.short_desc": {
+          "source": "The name of the table to work with",
+          "message": "要操作的資料表名稱"
+        },
+        "app.Qml0YnVja2V0.action.c2VhcmNo.short_desc": {
+          "source": "Search for matching records in the given table",
+          "message": "在給定資料表中搜尋相符的記錄"
+        },
+        "app.Qml0YnVja2V0.action.c2VhcmNoLXNpbmdsZQ.desc": {
+          "source": "Returns the one record in the given table matching the search criteria; it is an error if more than one matches",
+          "message": "返回給定資料表中符合搜尋條件的一筆記錄；若有多筆符合則視為錯誤"
+        },
+        "app.Qml0YnVja2V0.action.c2VhcmNoLXNpbmdsZQ.display_name": {
+          "source": "Find a Single Record",
+          "message": "尋找單筆記錄"
+        },
+        "app.Qml0YnVja2V0.action.c2VhcmNoLXNpbmdsZQ.option.dGFibGU.desc": {
+          "source": "The table to work with: `repositories`, `pullrequests`, `pullrequest-comments`, `commit-comments`, `workspaces`, `workspace-members`, `commits` or `branches`",
+          "message": "要操作的資料表：`repositories`、`pullrequests`、`pullrequest-comments`、`commit-comments`、`workspaces`、`workspace-members`、`commits` 或 `branches`"
+        },
+        "app.Qml0YnVja2V0.action.c2VhcmNoLXNpbmdsZQ.option.dGFibGU.display_name": {
+          "source": "Table",
+          "message": "表格"
+        },
+        "app.Qml0YnVja2V0.action.c2VhcmNoLXNpbmdsZQ.option.dGFibGU.short_desc": {
+          "source": "The name of the table to work with",
+          "message": "要操作的資料表名稱"
+        },
+        "app.Qml0YnVja2V0.action.c2VhcmNoLXNpbmdsZQ.short_desc": {
+          "source": "Search for a single matching record in the given table",
+          "message": "在給定資料表中搜尋單筆相符記錄"
+        },
+        "app.Qml0YnVja2V0.action.c2VhcmNoQWNjb3VudA.desc": {
+          "source": "Searches the code in the repositories of one user account.",
+          "message": "搜尋單一使用者帳戶存放庫中的程式碼。"
+        },
+        "app.Qml0YnVja2V0.action.c2VhcmNoQWNjb3VudA.display_name": {
+          "source": "Search Code in a User's Repositories",
+          "message": "搜尋使用者存放庫中的程式碼"
+        },
+        "app.Qml0YnVja2V0.action.c2VhcmNoQWNjb3VudA.option.c2VhcmNoX3F1ZXJ5.desc": {
+          "source": "The search query",
+          "message": "搜尋查詢"
+        },
+        "app.Qml0YnVja2V0.action.c2VhcmNoQWNjb3VudA.option.c2VhcmNoX3F1ZXJ5.display_name": {
+          "source": "Search Query",
+          "message": "搜尋查詢"
+        },
+        "app.Qml0YnVja2V0.action.c2VhcmNoQWNjb3VudA.option.c2VhcmNoX3F1ZXJ5.short_desc": {
+          "source": "The search query",
+          "message": "搜尋查詢"
+        },
+        "app.Qml0YnVja2V0.action.c2VhcmNoQWNjb3VudA.option.c2VsZWN0ZWRfdXNlcg.desc": {
+          "source": "Either the UUID of the account surrounded by curly-braces, for example `{account UUID}`, OR an Atlassian Account ID.",
+          "message": "以大括號包圍的帳戶 UUID（例如 `{account UUID}`），或 Atlassian 帳戶識別碼。"
+        },
+        "app.Qml0YnVja2V0.action.c2VhcmNoQWNjb3VudA.option.c2VsZWN0ZWRfdXNlcg.display_name": {
+          "source": "User",
+          "message": "使用者"
+        },
+        "app.Qml0YnVja2V0.action.c2VhcmNoQWNjb3VudA.option.c2VsZWN0ZWRfdXNlcg.short_desc": {
+          "source": "The account UUID in braces, or the account ID",
+          "message": "大括號中的帳戶 UUID 或帳戶識別碼"
+        },
+        "app.Qml0YnVja2V0.action.c2VhcmNoQWNjb3VudA.option.cGFnZQ.desc": {
+          "source": "Which page of the search results to retrieve",
+          "message": "要擷取搜尋結果的哪一頁"
+        },
+        "app.Qml0YnVja2V0.action.c2VhcmNoQWNjb3VudA.option.cGFnZQ.display_name": {
+          "source": "Page",
+          "message": "頁碼"
+        },
+        "app.Qml0YnVja2V0.action.c2VhcmNoQWNjb3VudA.option.cGFnZQ.short_desc": {
+          "source": "Which page of results to return, starting at 1",
+          "message": "要傳回的結果頁碼，從 1 開始"
+        },
+        "app.Qml0YnVja2V0.action.c2VhcmNoQWNjb3VudA.option.cGFnZWxlbg.desc": {
+          "source": "How many records to return in one request, up to Bitbucket's maximum of `100`.\n\n`next` in the response is the URL of the following page; page on its presence rather than on `size`, which Bitbucket does not report for every collection.",
+          "message": "單次請求中要傳回的記錄數量，最高可達 Bitbucket 的上限 `100`。\n\n回應中的 `next` 是下一頁的 URL；請依其是否存在來進行分頁，而非依據 `size`，因為 Bitbucket 並非針對所有集合都會回報此項。"
+        },
+        "app.Qml0YnVja2V0.action.c2VhcmNoQWNjb3VudA.option.cGFnZWxlbg.display_name": {
+          "source": "Page Length",
+          "message": "每頁筆數"
+        },
+        "app.Qml0YnVja2V0.action.c2VhcmNoQWNjb3VudA.option.cGFnZWxlbg.short_desc": {
+          "source": "How many records to return, up to 100",
+          "message": "要傳回的記錄數量，最多 100 筆"
+        },
+        "app.Qml0YnVja2V0.action.c2VhcmNoQWNjb3VudA.short_desc": {
+          "source": "Search the code in one user's repositories",
+          "message": "搜尋單一使用者存放庫中的程式碼"
+        },
+        "app.Qml0YnVja2V0.action.c2VhcmNoV29ya3NwYWNl.desc": {
+          "source": "Searches the code in every repository of a workspace.\n\n`search_query` takes Bitbucket's code search syntax, ex: `foo lang:python` or `\"exact phrase\" repo:my-repo`.",
+          "message": "搜尋工作區每個存放庫中的程式碼。\n\n`search_query` 接受 Bitbucket 的程式碼搜尋語法，例如：`foo lang:python` 或 `\"exact phrase\" repo:my-repo`。"
+        },
+        "app.Qml0YnVja2V0.action.c2VhcmNoV29ya3NwYWNl.display_name": {
+          "source": "Search Code in a Workspace",
+          "message": "搜尋工作區中的程式碼"
+        },
+        "app.Qml0YnVja2V0.action.c2VhcmNoV29ya3NwYWNl.option.c2VhcmNoX3F1ZXJ5.desc": {
+          "source": "The search query",
+          "message": "搜尋查詢"
+        },
+        "app.Qml0YnVja2V0.action.c2VhcmNoV29ya3NwYWNl.option.c2VhcmNoX3F1ZXJ5.display_name": {
+          "source": "Search Query",
+          "message": "搜尋查詢"
+        },
+        "app.Qml0YnVja2V0.action.c2VhcmNoV29ya3NwYWNl.option.c2VhcmNoX3F1ZXJ5.short_desc": {
+          "source": "Bitbucket code search syntax, ex: \"foo lang:python\"",
+          "message": "Bitbucket 程式碼搜尋語法，例如：\"foo lang:python\""
+        },
+        "app.Qml0YnVja2V0.action.c2VhcmNoV29ya3NwYWNl.option.cGFnZQ.desc": {
+          "source": "Which page of the search results to retrieve",
+          "message": "要擷取搜尋結果的哪一頁"
+        },
+        "app.Qml0YnVja2V0.action.c2VhcmNoV29ya3NwYWNl.option.cGFnZQ.display_name": {
+          "source": "Page",
+          "message": "頁碼"
+        },
+        "app.Qml0YnVja2V0.action.c2VhcmNoV29ya3NwYWNl.option.cGFnZQ.short_desc": {
+          "source": "Which page of results to return, starting at 1",
+          "message": "要傳回的結果頁碼，從 1 開始"
+        },
+        "app.Qml0YnVja2V0.action.c2VhcmNoV29ya3NwYWNl.option.cGFnZWxlbg.desc": {
+          "source": "How many records to return in one request, up to Bitbucket's maximum of `100`.\n\n`next` in the response is the URL of the following page; page on its presence rather than on `size`, which Bitbucket does not report for every collection.",
+          "message": "單次請求中要傳回的記錄數量，最高可達 Bitbucket 的上限 `100`。\n\n回應中的 `next` 是下一頁的 URL；請依其是否存在來進行分頁，而非依據 `size`，因為 Bitbucket 並非針對所有集合都會回報此項。"
+        },
+        "app.Qml0YnVja2V0.action.c2VhcmNoV29ya3NwYWNl.option.cGFnZWxlbg.display_name": {
+          "source": "Page Length",
+          "message": "每頁筆數"
+        },
+        "app.Qml0YnVja2V0.action.c2VhcmNoV29ya3NwYWNl.option.cGFnZWxlbg.short_desc": {
+          "source": "How many records to return, up to 100",
+          "message": "要傳回的記錄數量，最多 100 筆"
+        },
+        "app.Qml0YnVja2V0.action.c2VhcmNoV29ya3NwYWNl.option.d29ya3NwYWNl.desc": {
+          "source": "The workspace to work in, given as its slug or as its UUID in braces.\n\nEverything else scoped by a workspace - repositories, members - is listed from this workspace, so changing it re-reads them.",
+          "message": "要操作的工作區，指定為其別名或括號中的 UUID。\n\n所有限定於工作區範圍的項目（存放庫、成員）皆以此工作區為準列出，因此變更此項會重新讀取它們。"
+        },
+        "app.Qml0YnVja2V0.action.c2VhcmNoV29ya3NwYWNl.option.d29ya3NwYWNl.display_name": {
+          "source": "Workspace",
+          "message": "工作區"
+        },
+        "app.Qml0YnVja2V0.action.c2VhcmNoV29ya3NwYWNl.option.d29ya3NwYWNl.short_desc": {
+          "source": "The workspace to work in",
+          "message": "要操作的工作區"
+        },
+        "app.Qml0YnVja2V0.action.c2VhcmNoV29ya3NwYWNl.short_desc": {
+          "source": "Search the code in a workspace's repositories",
+          "message": "搜尋工作區存放庫中的程式碼"
+        },
+        "app.Qml0YnVja2V0.action.c2VhcmNoVGVhbQ.desc": {
+          "source": "Searches the code in a team's repositories.\n\n**Bitbucket has replaced teams with workspaces**, and this endpoint is deprecated; use **Search Code in a Workspace** instead. It is exported because the application this module replaces exported it, and removing an action silently breaks whatever still calls it.",
+          "message": "搜尋團隊存放庫中的程式碼。\n\n**Bitbucket 已將團隊替換為工作區**，此端點已棄用；請改用**搜尋工作區中的程式碼**。導出此端點是因為此模組替換的應用程式已將其導出，若直接移除動作會無提示地中斷仍呼叫它的項目。"
+        },
+        "app.Qml0YnVja2V0.action.c2VhcmNoVGVhbQ.display_name": {
+          "source": "Search Code in a Team's Repositories",
+          "message": "搜尋團隊存放庫中的程式碼"
+        },
+        "app.Qml0YnVja2V0.action.c2VhcmNoVGVhbQ.option.c2VhcmNoX3F1ZXJ5.desc": {
+          "source": "The search query",
+          "message": "搜尋查詢"
+        },
+        "app.Qml0YnVja2V0.action.c2VhcmNoVGVhbQ.option.c2VhcmNoX3F1ZXJ5.display_name": {
+          "source": "Search Query",
+          "message": "搜尋查詢"
+        },
+        "app.Qml0YnVja2V0.action.c2VhcmNoVGVhbQ.option.c2VhcmNoX3F1ZXJ5.short_desc": {
+          "source": "The search query",
+          "message": "搜尋查詢"
+        },
+        "app.Qml0YnVja2V0.action.c2VhcmNoVGVhbQ.option.cGFnZQ.desc": {
+          "source": "Which page of the search results to retrieve",
+          "message": "要擷取搜尋結果的哪一頁"
+        },
+        "app.Qml0YnVja2V0.action.c2VhcmNoVGVhbQ.option.cGFnZQ.display_name": {
+          "source": "Page",
+          "message": "頁碼"
+        },
+        "app.Qml0YnVja2V0.action.c2VhcmNoVGVhbQ.option.cGFnZQ.short_desc": {
+          "source": "Which page of results to return, starting at 1",
+          "message": "要傳回的結果頁碼，從 1 開始"
+        },
+        "app.Qml0YnVja2V0.action.c2VhcmNoVGVhbQ.option.cGFnZWxlbg.desc": {
+          "source": "How many records to return in one request, up to Bitbucket's maximum of `100`.\n\n`next` in the response is the URL of the following page; page on its presence rather than on `size`, which Bitbucket does not report for every collection.",
+          "message": "單次請求中要傳回的記錄數量，最高可達 Bitbucket 的上限 `100`。\n\n回應中的 `next` 是下一頁的 URL；請依其是否存在來進行分頁，而非依據 `size`，因為 Bitbucket 並非針對所有集合都會回報此項。"
+        },
+        "app.Qml0YnVja2V0.action.c2VhcmNoVGVhbQ.option.cGFnZWxlbg.display_name": {
+          "source": "Page Length",
+          "message": "每頁筆數"
+        },
+        "app.Qml0YnVja2V0.action.c2VhcmNoVGVhbQ.option.cGFnZWxlbg.short_desc": {
+          "source": "How many records to return, up to 100",
+          "message": "要傳回的記錄數量，最多 100 筆"
+        },
+        "app.Qml0YnVja2V0.action.c2VhcmNoVGVhbQ.option.dXNlcm5hbWU.desc": {
+          "source": "The account to search in; either the username or the UUID in curly braces",
+          "message": "要搜尋的帳戶；使用者名稱或大括號中的 UUID"
+        },
+        "app.Qml0YnVja2V0.action.c2VhcmNoVGVhbQ.option.dXNlcm5hbWU.display_name": {
+          "source": "Team",
+          "message": "團隊"
+        },
+        "app.Qml0YnVja2V0.action.c2VhcmNoVGVhbQ.option.dXNlcm5hbWU.short_desc": {
+          "source": "The team name; teams are Bitbucket's superseded name for workspaces",
+          "message": "團隊名稱；團隊是 Bitbucket 工作區的舊有名稱"
+        },
+        "app.Qml0YnVja2V0.action.c2VhcmNoVGVhbQ.short_desc": {
+          "source": "Search the code in a team's repositories (deprecated by Bitbucket)",
+          "message": "搜尋團隊存放庫中的程式碼（已被 Bitbucket 棄用）"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9nZXQ.desc": {
+          "source": "Lists the repositories in a workspace.\n\n`role` restricts the listing to repositories the credential has a given relationship with - `member`, `contributor`, `admin` or `owner` - which is how a listing is kept to what the user actually works on.",
+          "message": "列出工作區中的存放庫。\n\n`role` 將清單限制在該憑證具有指定關聯的存放庫——`member`、`contributor`、`admin` 或 `owner`——這可將清單維持在使用者實際處理的項目。"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9nZXQ.display_name": {
+          "source": "List Workspace Repositories",
+          "message": "列出工作區存放庫"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9nZXQ.option.c29ydA.desc": {
+          "source": "\nField by which the results should be sorted as per [filtering and sorting](/cloud/bitbucket/rest/intro/#filtering).\n        ",
+          "message": "\n依據[篩選與排序](/cloud/bitbucket/rest/intro/#filtering)對結果進行排序的欄位。\n        "
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9nZXQ.option.c29ydA.display_name": {
+          "source": "Sort By",
+          "message": "排序依據"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9nZXQ.option.c29ydA.short_desc": {
+          "source": "A field to sort by; prefix with \"-\" to reverse",
+          "message": "用於排序的欄位；加上前綴 \"-\" 可反向排序"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9nZXQ.option.cGFnZQ.desc": {
+          "source": "Which page of results to return, starting at 1. Bitbucket documents this for every collection but declares it on almost none of them.",
+          "message": "要傳回的結果頁碼，從 1 開始。Bitbucket 在所有集合的文件中皆有說明此項，但幾乎未在任何集合中宣告。"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9nZXQ.option.cGFnZQ.display_name": {
+          "source": "Page",
+          "message": "頁碼"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9nZXQ.option.cGFnZQ.short_desc": {
+          "source": "Which page of results to return, starting at 1",
+          "message": "要傳回的結果頁碼，從 1 開始"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9nZXQ.option.cGFnZWxlbg.desc": {
+          "source": "How many records to return in one request, up to Bitbucket's maximum of `100`.\n\n`next` in the response is the URL of the following page; page on its presence rather than on `size`, which Bitbucket does not report for every collection.",
+          "message": "單次請求中要傳回的記錄數量，最高可達 Bitbucket 的上限 `100`。\n\n回應中的 `next` 是下一頁的 URL；請依其是否存在來進行分頁，而非依據 `size`，因為 Bitbucket 並非針對所有集合都會回報此項。"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9nZXQ.option.cGFnZWxlbg.display_name": {
+          "source": "Page Length",
+          "message": "每頁筆數"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9nZXQ.option.cGFnZWxlbg.short_desc": {
+          "source": "How many records to return, up to 100",
+          "message": "要傳回的記錄數量，最多 100 筆"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9nZXQ.option.cQ.desc": {
+          "source": "A Bitbucket [filter expression](https://developer.atlassian.com/cloud/bitbucket/rest/intro/#filtering), ex: `state = \"OPEN\"` or `updated_on > 2026-01-01`.\n\nThe fields a filter may name differ per collection and are documented with the endpoint.",
+          "message": "Bitbucket [篩選表達式](https://developer.atlassian.com/cloud/bitbucket/rest/intro/#filtering)，例如：`state = \"OPEN\"` 或 `updated_on > 2026-01-01`。\n\n篩選器中可命名的欄位因集合而異，並記錄於相應端點中。"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9nZXQ.option.cQ.display_name": {
+          "source": "Filter",
+          "message": "濾波器"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9nZXQ.option.cQ.short_desc": {
+          "source": "A Bitbucket filter expression, ex: 'state = \"OPEN\"'",
+          "message": "Bitbucket 篩選表達式，例如：'state = \"OPEN\"'"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9nZXQ.option.cm9sZQ.allowed-value.c3RyaW5nOm1lbWJlcg.display_name": {
+          "source": "member",
+          "message": "成員"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9nZXQ.option.cm9sZQ.allowed-value.c3RyaW5nOm93bmVy.display_name": {
+          "source": "owner",
+          "message": "擁有者"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9nZXQ.option.cm9sZQ.allowed-value.c3RyaW5nOmFkbWlu.display_name": {
+          "source": "admin",
+          "message": "管理員"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9nZXQ.option.cm9sZQ.allowed-value.c3RyaW5nOmNvbnRyaWJ1dG9y.display_name": {
+          "source": "contributor",
+          "message": "協作者"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9nZXQ.option.cm9sZQ.desc": {
+          "source": "\nFilters the result based on the authenticated user's role on each repository.\n\n* **member**: returns repositories to which the user has explicit read access\n* **contributor**: returns repositories to which the user has explicit write access\n* **admin**: returns repositories to which the user has explicit administrator access\n* **owner**: returns all repositories owned by the current user\n",
+          "message": "\n根據已驗證使用者在每個存放庫上的角色篩選結果。\n\n* **member**：返回使用者擁有明確讀取權限的存放庫\n* **contributor**：返回使用者擁有明確寫入權限的存放庫\n* **admin**：返回使用者擁有明確管理員權限的存放庫\n* **owner**：返回目前使用者所擁有的所有存放庫\n"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9nZXQ.option.cm9sZQ.display_name": {
+          "source": "Role",
+          "message": "角色"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9nZXQ.option.d29ya3NwYWNl.desc": {
+          "source": "The workspace to work in, given as its slug or as its UUID in braces.\n\nEverything else scoped by a workspace - repositories, members - is listed from this workspace, so changing it re-reads them.",
+          "message": "要操作的工作區，指定為其別名或括號中的 UUID。\n\n所有限定於工作區範圍的項目（存放庫、成員）皆以此工作區為準列出，因此變更此項會重新讀取它們。"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9nZXQ.option.d29ya3NwYWNl.display_name": {
+          "source": "Workspace",
+          "message": "工作區"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9nZXQ.option.d29ya3NwYWNl.short_desc": {
+          "source": "The workspace to work in",
+          "message": "要操作的工作區"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9nZXQ.short_desc": {
+          "source": "List the repositories in a workspace",
+          "message": "列出工作區中的存放庫"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfY29tbWl0X2NvbW1pdF9hcHByb3ZlX2RlbGV0ZQ.desc": {
+          "source": "Withdraws the authenticated user's approval of a commit. Another user's approval is untouched.",
+          "message": "撤回已驗證使用者對提交的核准。其他使用者的核准不受影響。"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfY29tbWl0X2NvbW1pdF9hcHByb3ZlX2RlbGV0ZQ.display_name": {
+          "source": "Unapprove Commit",
+          "message": "取消核准提交"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfY29tbWl0X2NvbW1pdF9hcHByb3ZlX2RlbGV0ZQ.option.Y29tbWl0.desc": {
+          "source": "The commit's SHA1.",
+          "message": "提交的 SHA1。"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfY29tbWl0X2NvbW1pdF9hcHByb3ZlX2RlbGV0ZQ.option.Y29tbWl0.display_name": {
+          "source": "Commit",
+          "message": "提交"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfY29tbWl0X2NvbW1pdF9hcHByb3ZlX2RlbGV0ZQ.option.Y29tbWl0.short_desc": {
+          "source": "A commit hash, a branch name or a tag",
+          "message": "提交雜湊、分支名稱或標籤"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfY29tbWl0X2NvbW1pdF9hcHByb3ZlX2RlbGV0ZQ.option.cmVwb19zbHVn.desc": {
+          "source": "The repository to work on, given as its slug or as its UUID in braces.\n\nEverything else scoped by a repository - commits, branches, pull requests - is listed from this repository, so changing it re-reads them.",
+          "message": "要操作的存放庫，指定為其別名或括號中的 UUID。\n\n所有限定於存放庫範圍的項目（提交、分支、拉取請求）皆以此存放庫為準列出，因此變更此項會重新讀取它們。"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfY29tbWl0X2NvbW1pdF9hcHByb3ZlX2RlbGV0ZQ.option.cmVwb19zbHVn.display_name": {
+          "source": "Repository",
+          "message": "存放庫"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfY29tbWl0X2NvbW1pdF9hcHByb3ZlX2RlbGV0ZQ.option.cmVwb19zbHVn.short_desc": {
+          "source": "The repository to work on",
+          "message": "要操作的存放庫"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfY29tbWl0X2NvbW1pdF9hcHByb3ZlX2RlbGV0ZQ.option.d29ya3NwYWNl.desc": {
+          "source": "The workspace to work in, given as its slug or as its UUID in braces.\n\nEverything else scoped by a workspace - repositories, members - is listed from this workspace, so changing it re-reads them.",
+          "message": "要操作的工作區，指定為其別名或括號中的 UUID。\n\n所有限定於工作區範圍的項目（存放庫、成員）皆以此工作區為準列出，因此變更此項會重新讀取它們。"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfY29tbWl0X2NvbW1pdF9hcHByb3ZlX2RlbGV0ZQ.option.d29ya3NwYWNl.display_name": {
+          "source": "Workspace",
+          "message": "工作區"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfY29tbWl0X2NvbW1pdF9hcHByb3ZlX2RlbGV0ZQ.option.d29ya3NwYWNl.short_desc": {
+          "source": "The workspace to work in",
+          "message": "要操作的工作區"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfY29tbWl0X2NvbW1pdF9hcHByb3ZlX2RlbGV0ZQ.short_desc": {
+          "source": "Withdraw the authenticated user's approval of a commit",
+          "message": "撤回已驗證使用者對提交的核准"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfY29tbWl0X2NvbW1pdF9hcHByb3ZlX3Bvc3Q.desc": {
+          "source": "Records the authenticated user's approval of a commit.",
+          "message": "記錄已驗證使用者對提交的核准。"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfY29tbWl0X2NvbW1pdF9hcHByb3ZlX3Bvc3Q.display_name": {
+          "source": "Approve Commit",
+          "message": "核准提交"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfY29tbWl0X2NvbW1pdF9hcHByb3ZlX3Bvc3Q.option.Y29tbWl0.desc": {
+          "source": "The commit's SHA1.",
+          "message": "提交的 SHA1。"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfY29tbWl0X2NvbW1pdF9hcHByb3ZlX3Bvc3Q.option.Y29tbWl0.display_name": {
+          "source": "Commit",
+          "message": "提交"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfY29tbWl0X2NvbW1pdF9hcHByb3ZlX3Bvc3Q.option.Y29tbWl0.short_desc": {
+          "source": "A commit hash, a branch name or a tag",
+          "message": "提交雜湊、分支名稱或標籤"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfY29tbWl0X2NvbW1pdF9hcHByb3ZlX3Bvc3Q.option.cmVwb19zbHVn.desc": {
+          "source": "The repository to work on, given as its slug or as its UUID in braces.\n\nEverything else scoped by a repository - commits, branches, pull requests - is listed from this repository, so changing it re-reads them.",
+          "message": "要操作的存放庫，指定為其別名或括號中的 UUID。\n\n所有限定於存放庫範圍的項目（提交、分支、拉取請求）皆以此存放庫為準列出，因此變更此項會重新讀取它們。"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfY29tbWl0X2NvbW1pdF9hcHByb3ZlX3Bvc3Q.option.cmVwb19zbHVn.display_name": {
+          "source": "Repository",
+          "message": "存放庫"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfY29tbWl0X2NvbW1pdF9hcHByb3ZlX3Bvc3Q.option.cmVwb19zbHVn.short_desc": {
+          "source": "The repository to work on",
+          "message": "要操作的存放庫"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfY29tbWl0X2NvbW1pdF9hcHByb3ZlX3Bvc3Q.option.d29ya3NwYWNl.desc": {
+          "source": "The workspace to work in, given as its slug or as its UUID in braces.\n\nEverything else scoped by a workspace - repositories, members - is listed from this workspace, so changing it re-reads them.",
+          "message": "要操作的工作區，指定為其別名或括號中的 UUID。\n\n所有限定於工作區範圍的項目（存放庫、成員）皆以此工作區為準列出，因此變更此項會重新讀取它們。"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfY29tbWl0X2NvbW1pdF9hcHByb3ZlX3Bvc3Q.option.d29ya3NwYWNl.display_name": {
+          "source": "Workspace",
+          "message": "工作區"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfY29tbWl0X2NvbW1pdF9hcHByb3ZlX3Bvc3Q.option.d29ya3NwYWNl.short_desc": {
+          "source": "The workspace to work in",
+          "message": "要操作的工作區"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfY29tbWl0X2NvbW1pdF9hcHByb3ZlX3Bvc3Q.short_desc": {
+          "source": "Approve a commit as the authenticated user",
+          "message": "以已驗證使用者身分核准提交"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfY29tbWl0X2NvbW1pdF9jb21tZW50c19nZXQ.desc": {
+          "source": "Lists the comments made on a commit, both standalone notes and those attached to a line of a diff.",
+          "message": "列出對提交所發表的評論，包括獨立註釋以及附加在 diff 行上的評論。"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfY29tbWl0X2NvbW1pdF9jb21tZW50c19nZXQ.display_name": {
+          "source": "List Commit Comments",
+          "message": "列出提交評論"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfY29tbWl0X2NvbW1pdF9jb21tZW50c19nZXQ.option.Y29tbWl0.desc": {
+          "source": "The commit's SHA1.",
+          "message": "提交的 SHA1。"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfY29tbWl0X2NvbW1pdF9jb21tZW50c19nZXQ.option.Y29tbWl0.display_name": {
+          "source": "Commit",
+          "message": "提交"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfY29tbWl0X2NvbW1pdF9jb21tZW50c19nZXQ.option.Y29tbWl0.short_desc": {
+          "source": "A commit hash, a branch name or a tag",
+          "message": "提交雜湊、分支名稱或標籤"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfY29tbWl0X2NvbW1pdF9jb21tZW50c19nZXQ.option.c29ydA.desc": {
+          "source": "\nField by which the results should be sorted as per [filtering and sorting](/cloud/bitbucket/rest/intro/#filtering).\n        ",
+          "message": "\n依據[篩選與排序](/cloud/bitbucket/rest/intro/#filtering)對結果進行排序的欄位。\n        "
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfY29tbWl0X2NvbW1pdF9jb21tZW50c19nZXQ.option.c29ydA.display_name": {
+          "source": "Sort By",
+          "message": "排序依據"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfY29tbWl0X2NvbW1pdF9jb21tZW50c19nZXQ.option.c29ydA.short_desc": {
+          "source": "A field to sort by; prefix with \"-\" to reverse",
+          "message": "用於排序的欄位；加上前綴 \"-\" 可反向排序"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfY29tbWl0X2NvbW1pdF9jb21tZW50c19nZXQ.option.cGFnZQ.desc": {
+          "source": "Which page of results to return, starting at 1. Bitbucket documents this for every collection but declares it on almost none of them.",
+          "message": "要傳回的結果頁碼，從 1 開始。Bitbucket 在所有集合的文件中皆有說明此項，但幾乎未在任何集合中宣告。"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfY29tbWl0X2NvbW1pdF9jb21tZW50c19nZXQ.option.cGFnZQ.display_name": {
+          "source": "Page",
+          "message": "頁碼"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfY29tbWl0X2NvbW1pdF9jb21tZW50c19nZXQ.option.cGFnZQ.short_desc": {
+          "source": "Which page of results to return, starting at 1",
+          "message": "要傳回的結果頁碼，從 1 開始"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfY29tbWl0X2NvbW1pdF9jb21tZW50c19nZXQ.option.cGFnZWxlbg.desc": {
+          "source": "How many records to return in one request, up to Bitbucket's maximum of `100`.\n\n`next` in the response is the URL of the following page; page on its presence rather than on `size`, which Bitbucket does not report for every collection.",
+          "message": "單次請求中要傳回的記錄數量，最高可達 Bitbucket 的上限 `100`。\n\n回應中的 `next` 是下一頁的 URL；請依其是否存在來進行分頁，而非依據 `size`，因為 Bitbucket 並非針對所有集合都會回報此項。"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfY29tbWl0X2NvbW1pdF9jb21tZW50c19nZXQ.option.cGFnZWxlbg.display_name": {
+          "source": "Page Length",
+          "message": "每頁筆數"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfY29tbWl0X2NvbW1pdF9jb21tZW50c19nZXQ.option.cGFnZWxlbg.short_desc": {
+          "source": "How many records to return, up to 100",
+          "message": "要傳回的記錄數量，最多 100 筆"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfY29tbWl0X2NvbW1pdF9jb21tZW50c19nZXQ.option.cQ.desc": {
+          "source": "A Bitbucket [filter expression](https://developer.atlassian.com/cloud/bitbucket/rest/intro/#filtering), ex: `state = \"OPEN\"` or `updated_on > 2026-01-01`.\n\nThe fields a filter may name differ per collection and are documented with the endpoint.",
+          "message": "Bitbucket [篩選表達式](https://developer.atlassian.com/cloud/bitbucket/rest/intro/#filtering)，例如：`state = \"OPEN\"` 或 `updated_on > 2026-01-01`。\n\n篩選器中可命名的欄位因集合而異，並記錄於相應端點中。"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfY29tbWl0X2NvbW1pdF9jb21tZW50c19nZXQ.option.cQ.display_name": {
+          "source": "Filter",
+          "message": "濾波器"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfY29tbWl0X2NvbW1pdF9jb21tZW50c19nZXQ.option.cQ.short_desc": {
+          "source": "A Bitbucket filter expression, ex: 'state = \"OPEN\"'",
+          "message": "Bitbucket 篩選表達式，例如：'state = \"OPEN\"'"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfY29tbWl0X2NvbW1pdF9jb21tZW50c19nZXQ.option.cmVwb19zbHVn.desc": {
+          "source": "The repository to work on, given as its slug or as its UUID in braces.\n\nEverything else scoped by a repository - commits, branches, pull requests - is listed from this repository, so changing it re-reads them.",
+          "message": "要操作的存放庫，指定為其別名或括號中的 UUID。\n\n所有限定於存放庫範圍的項目（提交、分支、拉取請求）皆以此存放庫為準列出，因此變更此項會重新讀取它們。"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfY29tbWl0X2NvbW1pdF9jb21tZW50c19nZXQ.option.cmVwb19zbHVn.display_name": {
+          "source": "Repository",
+          "message": "存放庫"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfY29tbWl0X2NvbW1pdF9jb21tZW50c19nZXQ.option.cmVwb19zbHVn.short_desc": {
+          "source": "The repository to work on",
+          "message": "要操作的存放庫"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfY29tbWl0X2NvbW1pdF9jb21tZW50c19nZXQ.option.d29ya3NwYWNl.desc": {
+          "source": "The workspace to work in, given as its slug or as its UUID in braces.\n\nEverything else scoped by a workspace - repositories, members - is listed from this workspace, so changing it re-reads them.",
+          "message": "要操作的工作區，指定為其別名或括號中的 UUID。\n\n所有限定於工作區範圍的項目（存放庫、成員）皆以此工作區為準列出，因此變更此項會重新讀取它們。"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfY29tbWl0X2NvbW1pdF9jb21tZW50c19nZXQ.option.d29ya3NwYWNl.display_name": {
+          "source": "Workspace",
+          "message": "工作區"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfY29tbWl0X2NvbW1pdF9jb21tZW50c19nZXQ.option.d29ya3NwYWNl.short_desc": {
+          "source": "The workspace to work in",
+          "message": "要操作的工作區"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfY29tbWl0X2NvbW1pdF9jb21tZW50c19nZXQ.short_desc": {
+          "source": "List the comments on a commit",
+          "message": "列出提交上的評論"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfY29tbWl0X2NvbW1pdF9jb21tZW50c19wb3N0.desc": {
+          "source": "Adds a comment to a commit.\n\n`content.raw` is the comment text in Bitbucket-flavored Markdown. Supplying `inline` attaches the comment to a line of the diff instead of the commit as a whole.",
+          "message": "在提交上新增評論。\n\n`content.raw` 是採用 Bitbucket 風格 Markdown 的評論文字。提供 `inline` 會將評論附加到 diff 的某一行，而不是整個提交。"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfY29tbWl0X2NvbW1pdF9jb21tZW50c19wb3N0.display_name": {
+          "source": "Comment on Commit",
+          "message": "評論提交"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfY29tbWl0X2NvbW1pdF9jb21tZW50c19wb3N0.option.Y29tbWl0.desc": {
+          "source": "The commit's SHA1.",
+          "message": "提交的 SHA1。"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfY29tbWl0X2NvbW1pdF9jb21tZW50c19wb3N0.option.Y29tbWl0.display_name": {
+          "source": "Commit",
+          "message": "提交"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfY29tbWl0X2NvbW1pdF9jb21tZW50c19wb3N0.option.Y29tbWl0.short_desc": {
+          "source": "A commit hash, a branch name or a tag",
+          "message": "提交雜湊、分支名稱或標籤"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfY29tbWl0X2NvbW1pdF9jb21tZW50c19wb3N0.option.Y29udGVudA.display_name": {
+          "source": "Comment",
+          "message": "評論"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfY29tbWl0X2NvbW1pdF9jb21tZW50c19wb3N0.option.Y29udGVudA.short_desc": {
+          "source": "The comment; put the text in \"raw\"",
+          "message": "評論內容；將文字放在 \"raw\" 中"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfY29tbWl0X2NvbW1pdF9jb21tZW50c19wb3N0.option.aW5saW5l.display_name": {
+          "source": "Inline",
+          "message": "行內"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfY29tbWl0X2NvbW1pdF9jb21tZW50c19wb3N0.option.cmVwb19zbHVn.desc": {
+          "source": "The repository to work on, given as its slug or as its UUID in braces.\n\nEverything else scoped by a repository - commits, branches, pull requests - is listed from this repository, so changing it re-reads them.",
+          "message": "要操作的存放庫，指定為其別名或括號中的 UUID。\n\n所有限定於存放庫範圍的項目（提交、分支、拉取請求）皆以此存放庫為準列出，因此變更此項會重新讀取它們。"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfY29tbWl0X2NvbW1pdF9jb21tZW50c19wb3N0.option.cmVwb19zbHVn.display_name": {
+          "source": "Repository",
+          "message": "存放庫"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfY29tbWl0X2NvbW1pdF9jb21tZW50c19wb3N0.option.cmVwb19zbHVn.short_desc": {
+          "source": "The repository to work on",
+          "message": "要操作的存放庫"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfY29tbWl0X2NvbW1pdF9jb21tZW50c19wb3N0.option.d29ya3NwYWNl.desc": {
+          "source": "The workspace to work in, given as its slug or as its UUID in braces.\n\nEverything else scoped by a workspace - repositories, members - is listed from this workspace, so changing it re-reads them.",
+          "message": "要操作的工作區，指定為其別名或括號中的 UUID。\n\n所有限定於工作區範圍的項目（存放庫、成員）皆以此工作區為準列出，因此變更此項會重新讀取它們。"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfY29tbWl0X2NvbW1pdF9jb21tZW50c19wb3N0.option.d29ya3NwYWNl.display_name": {
+          "source": "Workspace",
+          "message": "工作區"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfY29tbWl0X2NvbW1pdF9jb21tZW50c19wb3N0.option.d29ya3NwYWNl.short_desc": {
+          "source": "The workspace to work in",
+          "message": "要操作的工作區"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfY29tbWl0X2NvbW1pdF9jb21tZW50c19wb3N0.option.dHlwZQ.allowed-value.c3RyaW5nOmNvbW1pdF9jb21tZW50.display_name": {
+          "source": "commit_comment",
+          "message": "commit_comment"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfY29tbWl0X2NvbW1pdF9jb21tZW50c19wb3N0.option.dHlwZQ.display_name": {
+          "source": "Type",
+          "message": "類型"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfY29tbWl0X2NvbW1pdF9jb21tZW50c19wb3N0.option.dHlwZQ.short_desc": {
+          "source": "Bitbucket's object discriminator; always \"commit_comment\"",
+          "message": "Bitbucket 物件鑑別元；固定為 \"commit_comment\""
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfY29tbWl0X2NvbW1pdF9jb21tZW50c19wb3N0.short_desc": {
+          "source": "Add a comment to a commit",
+          "message": "新增評論至提交"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfY29tbWl0X2NvbW1pdF9nZXQ.desc": {
+          "source": "Retrieves a commit by hash, with its message, author, parents and participants.",
+          "message": "透過雜湊檢索提交，包含其訊息、作者、父提交及參與者。"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfY29tbWl0X2NvbW1pdF9nZXQ.display_name": {
+          "source": "Get Commit",
+          "message": "取得提交"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfY29tbWl0X2NvbW1pdF9nZXQ.option.Y29tbWl0.desc": {
+          "source": "The commit's SHA1.",
+          "message": "提交的 SHA1。"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfY29tbWl0X2NvbW1pdF9nZXQ.option.Y29tbWl0.display_name": {
+          "source": "Commit",
+          "message": "提交"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfY29tbWl0X2NvbW1pdF9nZXQ.option.Y29tbWl0.short_desc": {
+          "source": "A commit hash, a branch name or a tag",
+          "message": "提交雜湊、分支名稱或標籤"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfY29tbWl0X2NvbW1pdF9nZXQ.option.cmVwb19zbHVn.desc": {
+          "source": "The repository to work on, given as its slug or as its UUID in braces.\n\nEverything else scoped by a repository - commits, branches, pull requests - is listed from this repository, so changing it re-reads them.",
+          "message": "要操作的存放庫，指定為其別名或括號中的 UUID。\n\n所有限定於存放庫範圍的項目（提交、分支、拉取請求）皆以此存放庫為準列出，因此變更此項會重新讀取它們。"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfY29tbWl0X2NvbW1pdF9nZXQ.option.cmVwb19zbHVn.display_name": {
+          "source": "Repository",
+          "message": "存放庫"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfY29tbWl0X2NvbW1pdF9nZXQ.option.cmVwb19zbHVn.short_desc": {
+          "source": "The repository to work on",
+          "message": "要操作的存放庫"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfY29tbWl0X2NvbW1pdF9nZXQ.option.d29ya3NwYWNl.desc": {
+          "source": "The workspace to work in, given as its slug or as its UUID in braces.\n\nEverything else scoped by a workspace - repositories, members - is listed from this workspace, so changing it re-reads them.",
+          "message": "要操作的工作區，指定為其別名或括號中的 UUID。\n\n所有限定於工作區範圍的項目（存放庫、成員）皆以此工作區為準列出，因此變更此項會重新讀取它們。"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfY29tbWl0X2NvbW1pdF9nZXQ.option.d29ya3NwYWNl.display_name": {
+          "source": "Workspace",
+          "message": "工作區"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfY29tbWl0X2NvbW1pdF9nZXQ.option.d29ya3NwYWNl.short_desc": {
+          "source": "The workspace to work in",
+          "message": "要操作的工作區"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfY29tbWl0X2NvbW1pdF9nZXQ.short_desc": {
+          "source": "Retrieve one commit",
+          "message": "檢索單一提交"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfY29tbWl0c19nZXQ.desc": {
+          "source": "Lists commits, newest first, across every branch of the repository.",
+          "message": "列出存放庫所有分支中的提交，最新者排在最前。"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfY29tbWl0c19nZXQ.display_name": {
+          "source": "List Commits",
+          "message": "列出提交"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfY29tbWl0c19nZXQ.option.cGFnZQ.desc": {
+          "source": "Which page of results to return, starting at 1. Bitbucket documents this for every collection but declares it on almost none of them.",
+          "message": "要傳回的結果頁碼，從 1 開始。Bitbucket 在所有集合的文件中皆有說明此項，但幾乎未在任何集合中宣告。"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfY29tbWl0c19nZXQ.option.cGFnZQ.display_name": {
+          "source": "Page",
+          "message": "頁碼"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfY29tbWl0c19nZXQ.option.cGFnZQ.short_desc": {
+          "source": "Which page of results to return, starting at 1",
+          "message": "要傳回的結果頁碼，從 1 開始"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfY29tbWl0c19nZXQ.option.cGFnZWxlbg.desc": {
+          "source": "How many records to return in one request, up to Bitbucket's maximum of `100`.\n\n`next` in the response is the URL of the following page; page on its presence rather than on `size`, which Bitbucket does not report for every collection.",
+          "message": "單次請求中要傳回的記錄數量，最高可達 Bitbucket 的上限 `100`。\n\n回應中的 `next` 是下一頁的 URL；請依其是否存在來進行分頁，而非依據 `size`，因為 Bitbucket 並非針對所有集合都會回報此項。"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfY29tbWl0c19nZXQ.option.cGFnZWxlbg.display_name": {
+          "source": "Page Length",
+          "message": "每頁筆數"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfY29tbWl0c19nZXQ.option.cGFnZWxlbg.short_desc": {
+          "source": "How many records to return, up to 100",
+          "message": "要傳回的記錄數量，最多 100 筆"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfY29tbWl0c19nZXQ.option.cmVwb19zbHVn.desc": {
+          "source": "The repository to work on, given as its slug or as its UUID in braces.\n\nEverything else scoped by a repository - commits, branches, pull requests - is listed from this repository, so changing it re-reads them.",
+          "message": "要操作的存放庫，指定為其別名或括號中的 UUID。\n\n所有限定於存放庫範圍的項目（提交、分支、拉取請求）皆以此存放庫為準列出，因此變更此項會重新讀取它們。"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfY29tbWl0c19nZXQ.option.cmVwb19zbHVn.display_name": {
+          "source": "Repository",
+          "message": "存放庫"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfY29tbWl0c19nZXQ.option.cmVwb19zbHVn.short_desc": {
+          "source": "The repository to work on",
+          "message": "要操作的存放庫"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfY29tbWl0c19nZXQ.option.d29ya3NwYWNl.desc": {
+          "source": "The workspace to work in, given as its slug or as its UUID in braces.\n\nEverything else scoped by a workspace - repositories, members - is listed from this workspace, so changing it re-reads them.",
+          "message": "要操作的工作區，指定為其別名或括號中的 UUID。\n\n所有限定於工作區範圍的項目（存放庫、成員）皆以此工作區為準列出，因此變更此項會重新讀取它們。"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfY29tbWl0c19nZXQ.option.d29ya3NwYWNl.display_name": {
+          "source": "Workspace",
+          "message": "工作區"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfY29tbWl0c19nZXQ.option.d29ya3NwYWNl.short_desc": {
+          "source": "The workspace to work in",
+          "message": "要操作的工作區"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfY29tbWl0c19nZXQ.short_desc": {
+          "source": "List a repository's commits",
+          "message": "列出存放庫的提交"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfZ2V0.desc": {
+          "source": "Retrieves a repository, including its main branch, project, size and visibility.",
+          "message": "擷取存放庫，包括其 main 分支、專案、大小與瀏覽權限。"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfZ2V0.display_name": {
+          "source": "Get Repository",
+          "message": "取得存放庫"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfZ2V0.option.cmVwb19zbHVn.desc": {
+          "source": "The repository to work on, given as its slug or as its UUID in braces.\n\nEverything else scoped by a repository - commits, branches, pull requests - is listed from this repository, so changing it re-reads them.",
+          "message": "要操作的存放庫，指定為其別名或括號中的 UUID。\n\n所有限定於存放庫範圍的項目（提交、分支、拉取請求）皆以此存放庫為準列出，因此變更此項會重新讀取它們。"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfZ2V0.option.cmVwb19zbHVn.display_name": {
+          "source": "Repository",
+          "message": "存放庫"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfZ2V0.option.cmVwb19zbHVn.short_desc": {
+          "source": "The repository to work on",
+          "message": "要操作的存放庫"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfZ2V0.option.d29ya3NwYWNl.desc": {
+          "source": "The workspace to work in, given as its slug or as its UUID in braces.\n\nEverything else scoped by a workspace - repositories, members - is listed from this workspace, so changing it re-reads them.",
+          "message": "要操作的工作區，指定為其別名或括號中的 UUID。\n\n所有限定於工作區範圍的項目（存放庫、成員）皆以此工作區為準列出，因此變更此項會重新讀取它們。"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfZ2V0.option.d29ya3NwYWNl.display_name": {
+          "source": "Workspace",
+          "message": "工作區"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfZ2V0.option.d29ya3NwYWNl.short_desc": {
+          "source": "The workspace to work in",
+          "message": "要操作的工作區"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfZ2V0.short_desc": {
+          "source": "Retrieve one repository",
+          "message": "擷取單一存放庫"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfZGVsZXRl.desc": {
+          "source": "Deletes a repository, its pull requests and its issues.\n\n**This is immediate and permanent**; Bitbucket has no retention window for a deleted repository. `redirect_to` names a repository to redirect the old URL to.",
+          "message": "刪除存放庫及其 Pull Request 和問題 (Issue)。\n\n**此操作會立即生效且永久不可逆**；Bitbucket 不會為已刪除的存放庫保留任何寬限期。`redirect_to` 指定要將舊 URL 重新導向至的存放庫。"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfZGVsZXRl.display_name": {
+          "source": "Delete Repository",
+          "message": "刪除存放庫"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfZGVsZXRl.option.cmVkaXJlY3RfdG8.desc": {
+          "source": "If a repository has been moved to a new location, use this parameter to\nshow users a friendly message in the Bitbucket UI that the repository\nhas moved to a new location. However, a GET to this endpoint will still\nreturn a 404.\n",
+          "message": "若存放庫已移至新位置，請使用此參數在 Bitbucket UI 中向使用者顯示存放庫已移動的自訂訊息。然而，對此端點進行 GET 請求仍會傳回 404。\n"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfZGVsZXRl.option.cmVkaXJlY3RfdG8.display_name": {
+          "source": "Redirect To",
+          "message": "重新導向至"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfZGVsZXRl.option.cmVkaXJlY3RfdG8.short_desc": {
+          "source": "If a repository has been moved to a new location, use this parameter to",
+          "message": "若存放庫已移至新位置，請使用此參數來"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfZGVsZXRl.option.cmVwb19zbHVn.desc": {
+          "source": "The repository to work on, given as its slug or as its UUID in braces.\n\nEverything else scoped by a repository - commits, branches, pull requests - is listed from this repository, so changing it re-reads them.",
+          "message": "要操作的存放庫，指定為其別名或括號中的 UUID。\n\n所有限定於存放庫範圍的項目（提交、分支、拉取請求）皆以此存放庫為準列出，因此變更此項會重新讀取它們。"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfZGVsZXRl.option.cmVwb19zbHVn.display_name": {
+          "source": "Repository",
+          "message": "存放庫"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfZGVsZXRl.option.cmVwb19zbHVn.short_desc": {
+          "source": "The repository to work on",
+          "message": "要操作的存放庫"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfZGVsZXRl.option.d29ya3NwYWNl.desc": {
+          "source": "The workspace to work in, given as its slug or as its UUID in braces.\n\nEverything else scoped by a workspace - repositories, members - is listed from this workspace, so changing it re-reads them.",
+          "message": "要操作的工作區，指定為其別名或括號中的 UUID。\n\n所有限定於工作區範圍的項目（存放庫、成員）皆以此工作區為準列出，因此變更此項會重新讀取它們。"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfZGVsZXRl.option.d29ya3NwYWNl.display_name": {
+          "source": "Workspace",
+          "message": "工作區"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfZGVsZXRl.option.d29ya3NwYWNl.short_desc": {
+          "source": "The workspace to work in",
+          "message": "要操作的工作區"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfZGVsZXRl.short_desc": {
+          "source": "Delete a repository permanently",
+          "message": "永久刪除存放庫"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcG9zdA.desc": {
+          "source": "Creates a repository at the given workspace and slug.\n\nUnusually, the **URL decides the name**: the repository is created at the slug in the path, so there is no name to supply in the body. It is private unless `is_private` says otherwise.",
+          "message": "在指定的工作區與 slug 建立存放庫。\n\n不同尋常的是，**URL 決定了名稱**：存放庫會在路徑中的 slug 建立，因此主體中不需要提供名稱。除非 `is_private` 另有說明，否則它為私人存放庫。"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcG9zdA.display_name": {
+          "source": "Create Repository",
+          "message": "建立存放庫"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcG9zdA.option.ZGVzY3JpcHRpb24.display_name": {
+          "source": "Description",
+          "message": "說明"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcG9zdA.option.Zm9ya19wb2xpY3k.allowed-value.c3RyaW5nOm5vX2Zvcmtz.display_name": {
+          "source": "no_forks",
+          "message": "no_forks"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcG9zdA.option.Zm9ya19wb2xpY3k.allowed-value.c3RyaW5nOm5vX3B1YmxpY19mb3Jrcw.display_name": {
+          "source": "no_public_forks",
+          "message": "no_public_forks"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcG9zdA.option.Zm9ya19wb2xpY3k.allowed-value.c3RyaW5nOmFsbG93X2Zvcmtz.display_name": {
+          "source": "allow_forks",
+          "message": "allow_forks"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcG9zdA.option.Zm9ya19wb2xpY3k.desc": {
+          "source": "\nControls the rules for forking this repository.\n\n* **allow_forks**: unrestricted forking\n* **no_public_forks**: restrict forking to private forks (forks cannot\n  be made public later)\n* **no_forks**: deny all forking\n",
+          "message": "\n控制此存放庫的 Fork 規則。\n\n* **allow_forks**：無限制建立 Fork\n* **no_public_forks**：限制僅能建立私人 Fork（Fork 之後無法設為公開）\n* **no_forks**：拒絕所有 Fork 建立\n"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcG9zdA.option.Zm9ya19wb2xpY3k.display_name": {
+          "source": "Fork Policy",
+          "message": "Fork 政策"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcG9zdA.option.aGFzX2lzc3Vlcw.desc": {
+          "source": "\nThe issue tracker for this repository is enabled. Issue Tracker\nfeatures are not supported for repositories in workspaces\nadministered through admin.atlassian.com.\n",
+          "message": "\n已為此存放庫啟用問題追蹤器 (Issue Tracker)。透過 admin.atlassian.com 管理的工作區存放庫不支援問題追蹤器功能。\n"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcG9zdA.option.aGFzX2lzc3Vlcw.display_name": {
+          "source": "Has Issues",
+          "message": "具有 Issues"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcG9zdA.option.aGFzX3dpa2k.desc": {
+          "source": "\nThe wiki for this repository is enabled. Wiki\nfeatures are not supported for repositories in workspaces\nadministered through admin.atlassian.com.\n",
+          "message": "\n已為此存放庫啟用 Wiki。透過 admin.atlassian.com 管理的工作區存放庫不支援 Wiki 功能。\n"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcG9zdA.option.aGFzX3dpa2k.display_name": {
+          "source": "Has Wiki",
+          "message": "具有 Wiki"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcG9zdA.option.aXNfcHJpdmF0ZQ.display_name": {
+          "source": "Private",
+          "message": "私人"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcG9zdA.option.bGFuZ3VhZ2U.display_name": {
+          "source": "Language",
+          "message": "語言"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcG9zdA.option.cHJvamVjdA.display_name": {
+          "source": "Project",
+          "message": "專案"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcG9zdA.option.cmVwb19zbHVn.desc": {
+          "source": "The slug the repository is created at, which also decides its name",
+          "message": "建立存放庫時所使用的 slug，同時也決定其名稱"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcG9zdA.option.cmVwb19zbHVn.display_name": {
+          "source": "Repository Slug",
+          "message": "存放庫 Slug"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcG9zdA.option.cmVwb19zbHVn.short_desc": {
+          "source": "The slug to create the repository at",
+          "message": "用來建立存放庫的 slug"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcG9zdA.option.d29ya3NwYWNl.desc": {
+          "source": "The workspace to work in, given as its slug or as its UUID in braces.\n\nEverything else scoped by a workspace - repositories, members - is listed from this workspace, so changing it re-reads them.",
+          "message": "要操作的工作區，指定為其別名或括號中的 UUID。\n\n所有限定於工作區範圍的項目（存放庫、成員）皆以此工作區為準列出，因此變更此項會重新讀取它們。"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcG9zdA.option.d29ya3NwYWNl.display_name": {
+          "source": "Workspace",
+          "message": "工作區"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcG9zdA.option.d29ya3NwYWNl.short_desc": {
+          "source": "The workspace to work in",
+          "message": "要操作的工作區"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcG9zdA.option.dHlwZQ.allowed-value.c3RyaW5nOnJlcG9zaXRvcnk.display_name": {
+          "source": "repository",
+          "message": "repository"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcG9zdA.option.dHlwZQ.display_name": {
+          "source": "Type",
+          "message": "類型"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcG9zdA.option.dHlwZQ.short_desc": {
+          "source": "Bitbucket's object discriminator; always \"repository\"",
+          "message": "Bitbucket 的物件辨別元；一律為 \"repository\""
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcG9zdA.short_desc": {
+          "source": "Create a repository",
+          "message": "建立存放庫"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHV0.desc": {
+          "source": "Updates a repository's description, visibility, fork policy, language and the features it has enabled.\n\nOnly the fields supplied are changed.",
+          "message": "更新存放庫的說明、瀏覽權限、Fork 政策、語言以及已啟用的功能。\n\n僅會變更提供的欄位。"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHV0.display_name": {
+          "source": "Update Repository",
+          "message": "更新存放庫"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHV0.option.ZGVzY3JpcHRpb24.display_name": {
+          "source": "Description",
+          "message": "說明"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHV0.option.Zm9ya19wb2xpY3k.allowed-value.c3RyaW5nOm5vX2Zvcmtz.display_name": {
+          "source": "no_forks",
+          "message": "no_forks"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHV0.option.Zm9ya19wb2xpY3k.allowed-value.c3RyaW5nOm5vX3B1YmxpY19mb3Jrcw.display_name": {
+          "source": "no_public_forks",
+          "message": "no_public_forks"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHV0.option.Zm9ya19wb2xpY3k.allowed-value.c3RyaW5nOmFsbG93X2Zvcmtz.display_name": {
+          "source": "allow_forks",
+          "message": "allow_forks"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHV0.option.Zm9ya19wb2xpY3k.desc": {
+          "source": "\nControls the rules for forking this repository.\n\n* **allow_forks**: unrestricted forking\n* **no_public_forks**: restrict forking to private forks (forks cannot\n  be made public later)\n* **no_forks**: deny all forking\n",
+          "message": "\n控制此存放庫的 Fork 規則。\n\n* **allow_forks**：無限制建立 Fork\n* **no_public_forks**：限制僅能建立私人 Fork（Fork 之後無法設為公開）\n* **no_forks**：拒絕所有 Fork 建立\n"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHV0.option.Zm9ya19wb2xpY3k.display_name": {
+          "source": "Fork Policy",
+          "message": "Fork 政策"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHV0.option.aGFzX2lzc3Vlcw.desc": {
+          "source": "\nThe issue tracker for this repository is enabled. Issue Tracker\nfeatures are not supported for repositories in workspaces\nadministered through admin.atlassian.com.\n",
+          "message": "\n已為此存放庫啟用問題追蹤器 (Issue Tracker)。透過 admin.atlassian.com 管理的工作區存放庫不支援問題追蹤器功能。\n"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHV0.option.aGFzX2lzc3Vlcw.display_name": {
+          "source": "Has Issues",
+          "message": "具有 Issues"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHV0.option.aGFzX3dpa2k.desc": {
+          "source": "\nThe wiki for this repository is enabled. Wiki\nfeatures are not supported for repositories in workspaces\nadministered through admin.atlassian.com.\n",
+          "message": "\n已為此存放庫啟用 Wiki。透過 admin.atlassian.com 管理的工作區存放庫不支援 Wiki 功能。\n"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHV0.option.aGFzX3dpa2k.display_name": {
+          "source": "Has Wiki",
+          "message": "具有 Wiki"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHV0.option.aXNfcHJpdmF0ZQ.display_name": {
+          "source": "Is Private",
+          "message": "是否為私人"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHV0.option.bGFuZ3VhZ2U.display_name": {
+          "source": "Language",
+          "message": "語言"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHV0.option.bWFpbmJyYW5jaA.display_name": {
+          "source": "Mainbranch",
+          "message": "主要分支"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHV0.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "名稱"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHV0.option.cHJvamVjdA.display_name": {
+          "source": "Project",
+          "message": "專案"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHV0.option.cmVwb19zbHVn.desc": {
+          "source": "The repository to work on, given as its slug or as its UUID in braces.\n\nEverything else scoped by a repository - commits, branches, pull requests - is listed from this repository, so changing it re-reads them.",
+          "message": "要操作的存放庫，指定為其別名或括號中的 UUID。\n\n所有限定於存放庫範圍的項目（提交、分支、拉取請求）皆以此存放庫為準列出，因此變更此項會重新讀取它們。"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHV0.option.cmVwb19zbHVn.display_name": {
+          "source": "Repository",
+          "message": "存放庫"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHV0.option.cmVwb19zbHVn.short_desc": {
+          "source": "The repository to work on",
+          "message": "要操作的存放庫"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHV0.option.d29ya3NwYWNl.desc": {
+          "source": "The workspace to work in, given as its slug or as its UUID in braces.\n\nEverything else scoped by a workspace - repositories, members - is listed from this workspace, so changing it re-reads them.",
+          "message": "要操作的工作區，指定為其別名或括號中的 UUID。\n\n所有限定於工作區範圍的項目（存放庫、成員）皆以此工作區為準列出，因此變更此項會重新讀取它們。"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHV0.option.d29ya3NwYWNl.display_name": {
+          "source": "Workspace",
+          "message": "工作區"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHV0.option.d29ya3NwYWNl.short_desc": {
+          "source": "The workspace to work in",
+          "message": "要操作的工作區"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHV0.option.dHlwZQ.allowed-value.c3RyaW5nOnJlcG9zaXRvcnk.display_name": {
+          "source": "repository",
+          "message": "repository"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHV0.option.dHlwZQ.display_name": {
+          "source": "Type",
+          "message": "類型"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHV0.option.dHlwZQ.short_desc": {
+          "source": "Bitbucket's object discriminator; always \"repository\"",
+          "message": "Bitbucket 的物件辨別元；一律為 \"repository\""
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHV0.short_desc": {
+          "source": "Update a repository's settings",
+          "message": "更新存放庫的設定"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX2dldA.desc": {
+          "source": "Lists pull requests.\n\n`state` selects which - `OPEN`, `MERGED`, `DECLINED` or `SUPERSEDED` - and defaults to `OPEN`. It may be given more than once to include several states.",
+          "message": "列出 Pull Request。\n\n`state` 可選取狀態（`OPEN`、`MERGED`、`DECLINED` 或 `SUPERSEDED`），預設為 `OPEN`。可以指定多次以包含多種狀態。"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX2dldA.display_name": {
+          "source": "List Pull Requests",
+          "message": "列出 Pull Request"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX2dldA.option.c3RhdGU.allowed-value.c3RyaW5nOk1FUkdFRA.display_name": {
+          "source": "MERGED",
+          "message": "MERGED"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX2dldA.option.c3RhdGU.allowed-value.c3RyaW5nOk9QRU4.display_name": {
+          "source": "OPEN",
+          "message": "OPEN"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX2dldA.option.c3RhdGU.allowed-value.c3RyaW5nOkRFQ0xJTkVE.display_name": {
+          "source": "DECLINED",
+          "message": "DECLINED"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX2dldA.option.c3RhdGU.allowed-value.c3RyaW5nOlNVUEVSU0VERUQ.display_name": {
+          "source": "SUPERSEDED",
+          "message": "SUPERSEDED"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX2dldA.option.c3RhdGU.desc": {
+          "source": "Only return pull requests that are in this state. This parameter can be repeated.",
+          "message": "僅傳回處於此狀態的 Pull Request。此參數可重複指定。"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX2dldA.option.c3RhdGU.display_name": {
+          "source": "State",
+          "message": "州/省"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX2dldA.option.c3RhdGU.short_desc": {
+          "source": "Only return pull requests that are in this state",
+          "message": "僅傳回處於此狀態的 Pull Request"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX2dldA.option.cGFnZQ.desc": {
+          "source": "Which page of results to return, starting at 1. Bitbucket documents this for every collection but declares it on almost none of them.",
+          "message": "要傳回的結果頁碼，從 1 開始。Bitbucket 在所有集合的文件中皆有說明此項，但幾乎未在任何集合中宣告。"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX2dldA.option.cGFnZQ.display_name": {
+          "source": "Page",
+          "message": "頁碼"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX2dldA.option.cGFnZQ.short_desc": {
+          "source": "Which page of results to return, starting at 1",
+          "message": "要傳回的結果頁碼，從 1 開始"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX2dldA.option.cGFnZWxlbg.desc": {
+          "source": "How many records to return in one request, up to Bitbucket's maximum of `100`.\n\n`next` in the response is the URL of the following page; page on its presence rather than on `size`, which Bitbucket does not report for every collection.",
+          "message": "單次請求中要傳回的記錄數量，最高可達 Bitbucket 的上限 `100`。\n\n回應中的 `next` 是下一頁的 URL；請依其是否存在來進行分頁，而非依據 `size`，因為 Bitbucket 並非針對所有集合都會回報此項。"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX2dldA.option.cGFnZWxlbg.display_name": {
+          "source": "Page Length",
+          "message": "每頁筆數"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX2dldA.option.cGFnZWxlbg.short_desc": {
+          "source": "How many records to return, up to 100",
+          "message": "要傳回的記錄數量，最多 100 筆"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX2dldA.option.cmVwb19zbHVn.desc": {
+          "source": "The repository to work on, given as its slug or as its UUID in braces.\n\nEverything else scoped by a repository - commits, branches, pull requests - is listed from this repository, so changing it re-reads them.",
+          "message": "要操作的存放庫，指定為其別名或括號中的 UUID。\n\n所有限定於存放庫範圍的項目（提交、分支、拉取請求）皆以此存放庫為準列出，因此變更此項會重新讀取它們。"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX2dldA.option.cmVwb19zbHVn.display_name": {
+          "source": "Repository",
+          "message": "存放庫"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX2dldA.option.cmVwb19zbHVn.short_desc": {
+          "source": "The repository to work on",
+          "message": "要操作的存放庫"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX2dldA.option.d29ya3NwYWNl.desc": {
+          "source": "The workspace to work in, given as its slug or as its UUID in braces.\n\nEverything else scoped by a workspace - repositories, members - is listed from this workspace, so changing it re-reads them.",
+          "message": "要操作的工作區，指定為其別名或括號中的 UUID。\n\n所有限定於工作區範圍的項目（存放庫、成員）皆以此工作區為準列出，因此變更此項會重新讀取它們。"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX2dldA.option.d29ya3NwYWNl.display_name": {
+          "source": "Workspace",
+          "message": "工作區"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX2dldA.option.d29ya3NwYWNl.short_desc": {
+          "source": "The workspace to work in",
+          "message": "要操作的工作區"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX2dldA.short_desc": {
+          "source": "List a repository's pull requests",
+          "message": "列出存放庫的 Pull Request"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9jb21tZW50c19jb21tZW50X2lkX2RlbGV0ZQ.desc": {
+          "source": "Deletes a comment. Bitbucket keeps the comment and marks it deleted rather than removing it, so it still appears in a listing with `deleted` set.",
+          "message": "刪除留言。Bitbucket 會保留留言並將其標記為已刪除，而非直接移除，因此在設定了 `deleted` 的清單中仍會顯示。"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9jb21tZW50c19jb21tZW50X2lkX2RlbGV0ZQ.display_name": {
+          "source": "Delete Pull Request Comment",
+          "message": "刪除 Pull Request 留言"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9jb21tZW50c19jb21tZW50X2lkX2RlbGV0ZQ.option.Y29tbWVudF9pZA.desc": {
+          "source": "The id of the comment.",
+          "message": "留言的 ID。"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9jb21tZW50c19jb21tZW50X2lkX2RlbGV0ZQ.option.Y29tbWVudF9pZA.display_name": {
+          "source": "Comment",
+          "message": "評論"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9jb21tZW50c19jb21tZW50X2lkX2RlbGV0ZQ.option.Y29tbWVudF9pZA.short_desc": {
+          "source": "The id of the comment",
+          "message": "留言的 ID"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9jb21tZW50c19jb21tZW50X2lkX2RlbGV0ZQ.option.cHVsbF9yZXF1ZXN0X2lk.desc": {
+          "source": "The id of the pull request.",
+          "message": "Pull Request 的 ID。"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9jb21tZW50c19jb21tZW50X2lkX2RlbGV0ZQ.option.cHVsbF9yZXF1ZXN0X2lk.display_name": {
+          "source": "Pull Request",
+          "message": "Pull Request"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9jb21tZW50c19jb21tZW50X2lkX2RlbGV0ZQ.option.cHVsbF9yZXF1ZXN0X2lk.short_desc": {
+          "source": "The pull request ID, as shown in the web UI",
+          "message": "Web UI 中顯示的 Pull Request ID"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9jb21tZW50c19jb21tZW50X2lkX2RlbGV0ZQ.option.cmVwb19zbHVn.desc": {
+          "source": "The repository to work on, given as its slug or as its UUID in braces.\n\nEverything else scoped by a repository - commits, branches, pull requests - is listed from this repository, so changing it re-reads them.",
+          "message": "要操作的存放庫，指定為其別名或括號中的 UUID。\n\n所有限定於存放庫範圍的項目（提交、分支、拉取請求）皆以此存放庫為準列出，因此變更此項會重新讀取它們。"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9jb21tZW50c19jb21tZW50X2lkX2RlbGV0ZQ.option.cmVwb19zbHVn.display_name": {
+          "source": "Repository",
+          "message": "存放庫"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9jb21tZW50c19jb21tZW50X2lkX2RlbGV0ZQ.option.cmVwb19zbHVn.short_desc": {
+          "source": "The repository to work on",
+          "message": "要操作的存放庫"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9jb21tZW50c19jb21tZW50X2lkX2RlbGV0ZQ.option.d29ya3NwYWNl.desc": {
+          "source": "The workspace to work in, given as its slug or as its UUID in braces.\n\nEverything else scoped by a workspace - repositories, members - is listed from this workspace, so changing it re-reads them.",
+          "message": "要操作的工作區，指定為其別名或括號中的 UUID。\n\n所有限定於工作區範圍的項目（存放庫、成員）皆以此工作區為準列出，因此變更此項會重新讀取它們。"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9jb21tZW50c19jb21tZW50X2lkX2RlbGV0ZQ.option.d29ya3NwYWNl.display_name": {
+          "source": "Workspace",
+          "message": "工作區"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9jb21tZW50c19jb21tZW50X2lkX2RlbGV0ZQ.option.d29ya3NwYWNl.short_desc": {
+          "source": "The workspace to work in",
+          "message": "要操作的工作區"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9jb21tZW50c19jb21tZW50X2lkX2RlbGV0ZQ.short_desc": {
+          "source": "Delete a comment on a pull request",
+          "message": "刪除 Pull Request 上的留言"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9jb21tZW50c19jb21tZW50X2lkX2dldA.desc": {
+          "source": "Retrieves a single comment on a pull request.",
+          "message": "擷取 Pull Request 上的單一留言。"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9jb21tZW50c19jb21tZW50X2lkX2dldA.display_name": {
+          "source": "Get Pull Request Comment",
+          "message": "取得 Pull Request 留言"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9jb21tZW50c19jb21tZW50X2lkX2dldA.option.Y29tbWVudF9pZA.desc": {
+          "source": "The id of the comment.",
+          "message": "留言的 ID。"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9jb21tZW50c19jb21tZW50X2lkX2dldA.option.Y29tbWVudF9pZA.display_name": {
+          "source": "Comment",
+          "message": "評論"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9jb21tZW50c19jb21tZW50X2lkX2dldA.option.Y29tbWVudF9pZA.short_desc": {
+          "source": "The id of the comment",
+          "message": "留言的 ID"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9jb21tZW50c19jb21tZW50X2lkX2dldA.option.cHVsbF9yZXF1ZXN0X2lk.desc": {
+          "source": "The id of the pull request.",
+          "message": "Pull Request 的 ID。"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9jb21tZW50c19jb21tZW50X2lkX2dldA.option.cHVsbF9yZXF1ZXN0X2lk.display_name": {
+          "source": "Pull Request",
+          "message": "Pull Request"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9jb21tZW50c19jb21tZW50X2lkX2dldA.option.cHVsbF9yZXF1ZXN0X2lk.short_desc": {
+          "source": "The pull request ID, as shown in the web UI",
+          "message": "Web UI 中顯示的 Pull Request ID"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9jb21tZW50c19jb21tZW50X2lkX2dldA.option.cmVwb19zbHVn.desc": {
+          "source": "The repository to work on, given as its slug or as its UUID in braces.\n\nEverything else scoped by a repository - commits, branches, pull requests - is listed from this repository, so changing it re-reads them.",
+          "message": "要操作的存放庫，指定為其別名或括號中的 UUID。\n\n所有限定於存放庫範圍的項目（提交、分支、拉取請求）皆以此存放庫為準列出，因此變更此項會重新讀取它們。"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9jb21tZW50c19jb21tZW50X2lkX2dldA.option.cmVwb19zbHVn.display_name": {
+          "source": "Repository",
+          "message": "存放庫"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9jb21tZW50c19jb21tZW50X2lkX2dldA.option.cmVwb19zbHVn.short_desc": {
+          "source": "The repository to work on",
+          "message": "要操作的存放庫"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9jb21tZW50c19jb21tZW50X2lkX2dldA.option.d29ya3NwYWNl.desc": {
+          "source": "The workspace to work in, given as its slug or as its UUID in braces.\n\nEverything else scoped by a workspace - repositories, members - is listed from this workspace, so changing it re-reads them.",
+          "message": "要操作的工作區，指定為其別名或括號中的 UUID。\n\n所有限定於工作區範圍的項目（存放庫、成員）皆以此工作區為準列出，因此變更此項會重新讀取它們。"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9jb21tZW50c19jb21tZW50X2lkX2dldA.option.d29ya3NwYWNl.display_name": {
+          "source": "Workspace",
+          "message": "工作區"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9jb21tZW50c19jb21tZW50X2lkX2dldA.option.d29ya3NwYWNl.short_desc": {
+          "source": "The workspace to work in",
+          "message": "要操作的工作區"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9jb21tZW50c19jb21tZW50X2lkX2dldA.short_desc": {
+          "source": "Retrieve one comment on a pull request",
+          "message": "擷取 Pull Request 上的單一留言"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9jb21tZW50c19jb21tZW50X2lkX3B1dA.desc": {
+          "source": "Replaces the text of a comment. Only the comment's author may change it.",
+          "message": "取代留言文字。只有留言的作者才能修改。"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9jb21tZW50c19jb21tZW50X2lkX3B1dA.display_name": {
+          "source": "Update Pull Request Comment",
+          "message": "更新 Pull Request 留言"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9jb21tZW50c19jb21tZW50X2lkX3B1dA.option.Y29tbWVudF9pZA.desc": {
+          "source": "The id of the comment.",
+          "message": "留言的 ID。"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9jb21tZW50c19jb21tZW50X2lkX3B1dA.option.Y29tbWVudF9pZA.display_name": {
+          "source": "Comment",
+          "message": "評論"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9jb21tZW50c19jb21tZW50X2lkX3B1dA.option.Y29tbWVudF9pZA.short_desc": {
+          "source": "The id of the comment",
+          "message": "留言的 ID"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9jb21tZW50c19jb21tZW50X2lkX3B1dA.option.Y29udGVudA.display_name": {
+          "source": "Comment",
+          "message": "評論"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9jb21tZW50c19jb21tZW50X2lkX3B1dA.option.Y29udGVudA.short_desc": {
+          "source": "The replacement comment; put the text in \"raw\"",
+          "message": "替換的留言內容；請將文字填入 \"raw\""
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9jb21tZW50c19jb21tZW50X2lkX3B1dA.option.aW5saW5l.display_name": {
+          "source": "Inline",
+          "message": "行內"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9jb21tZW50c19jb21tZW50X2lkX3B1dA.option.cHVsbF9yZXF1ZXN0X2lk.desc": {
+          "source": "The id of the pull request.",
+          "message": "Pull Request 的 ID。"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9jb21tZW50c19jb21tZW50X2lkX3B1dA.option.cHVsbF9yZXF1ZXN0X2lk.display_name": {
+          "source": "Pull Request",
+          "message": "Pull Request"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9jb21tZW50c19jb21tZW50X2lkX3B1dA.option.cHVsbF9yZXF1ZXN0X2lk.short_desc": {
+          "source": "The pull request ID, as shown in the web UI",
+          "message": "Web UI 中顯示的 Pull Request ID"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9jb21tZW50c19jb21tZW50X2lkX3B1dA.option.cmVwb19zbHVn.desc": {
+          "source": "The repository to work on, given as its slug or as its UUID in braces.\n\nEverything else scoped by a repository - commits, branches, pull requests - is listed from this repository, so changing it re-reads them.",
+          "message": "要操作的存放庫，指定為其別名或括號中的 UUID。\n\n所有限定於存放庫範圍的項目（提交、分支、拉取請求）皆以此存放庫為準列出，因此變更此項會重新讀取它們。"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9jb21tZW50c19jb21tZW50X2lkX3B1dA.option.cmVwb19zbHVn.display_name": {
+          "source": "Repository",
+          "message": "存放庫"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9jb21tZW50c19jb21tZW50X2lkX3B1dA.option.cmVwb19zbHVn.short_desc": {
+          "source": "The repository to work on",
+          "message": "要操作的存放庫"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9jb21tZW50c19jb21tZW50X2lkX3B1dA.option.d29ya3NwYWNl.desc": {
+          "source": "The workspace to work in, given as its slug or as its UUID in braces.\n\nEverything else scoped by a workspace - repositories, members - is listed from this workspace, so changing it re-reads them.",
+          "message": "要操作的工作區，指定為其別名或括號中的 UUID。\n\n所有限定於工作區範圍的項目（存放庫、成員）皆以此工作區為準列出，因此變更此項會重新讀取它們。"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9jb21tZW50c19jb21tZW50X2lkX3B1dA.option.d29ya3NwYWNl.display_name": {
+          "source": "Workspace",
+          "message": "工作區"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9jb21tZW50c19jb21tZW50X2lkX3B1dA.option.d29ya3NwYWNl.short_desc": {
+          "source": "The workspace to work in",
+          "message": "要操作的工作區"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9jb21tZW50c19jb21tZW50X2lkX3B1dA.option.dHlwZQ.allowed-value.c3RyaW5nOnB1bGxyZXF1ZXN0X2NvbW1lbnQ.display_name": {
+          "source": "pullrequest_comment",
+          "message": "pullrequest_comment"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9jb21tZW50c19jb21tZW50X2lkX3B1dA.option.dHlwZQ.display_name": {
+          "source": "Type",
+          "message": "類型"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9jb21tZW50c19jb21tZW50X2lkX3B1dA.option.dHlwZQ.short_desc": {
+          "source": "Bitbucket's object discriminator; always \"pullrequest_comment\"",
+          "message": "Bitbucket 的物件辨別元；一律為 \"pullrequest_comment\""
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9jb21tZW50c19jb21tZW50X2lkX3B1dA.short_desc": {
+          "source": "Update a comment on a pull request",
+          "message": "更新 Pull Request 上的留言"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9jb21tZW50c19nZXQ.desc": {
+          "source": "Lists the comments on a pull request, including the ones attached to a line of the diff and the ones Bitbucket marks as deleted.",
+          "message": "列出 Pull Request 上的留言，包括附加至差異 (diff) 特定行號的留言，以及 Bitbucket 標記為已刪除的留言。"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9jb21tZW50c19nZXQ.display_name": {
+          "source": "List Pull Request Comments",
+          "message": "列出 Pull Request 留言"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9jb21tZW50c19nZXQ.option.cGFnZQ.desc": {
+          "source": "Which page of results to return, starting at 1. Bitbucket documents this for every collection but declares it on almost none of them.",
+          "message": "要傳回的結果頁碼，從 1 開始。Bitbucket 在所有集合的文件中皆有說明此項，但幾乎未在任何集合中宣告。"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9jb21tZW50c19nZXQ.option.cGFnZQ.display_name": {
+          "source": "Page",
+          "message": "頁碼"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9jb21tZW50c19nZXQ.option.cGFnZQ.short_desc": {
+          "source": "Which page of results to return, starting at 1",
+          "message": "要傳回的結果頁碼，從 1 開始"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9jb21tZW50c19nZXQ.option.cGFnZWxlbg.desc": {
+          "source": "How many records to return in one request, up to Bitbucket's maximum of `100`.\n\n`next` in the response is the URL of the following page; page on its presence rather than on `size`, which Bitbucket does not report for every collection.",
+          "message": "單次請求中要傳回的記錄數量，最高可達 Bitbucket 的上限 `100`。\n\n回應中的 `next` 是下一頁的 URL；請依其是否存在來進行分頁，而非依據 `size`，因為 Bitbucket 並非針對所有集合都會回報此項。"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9jb21tZW50c19nZXQ.option.cGFnZWxlbg.display_name": {
+          "source": "Page Length",
+          "message": "每頁筆數"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9jb21tZW50c19nZXQ.option.cGFnZWxlbg.short_desc": {
+          "source": "How many records to return, up to 100",
+          "message": "要傳回的記錄數量，最多 100 筆"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9jb21tZW50c19nZXQ.option.cHVsbF9yZXF1ZXN0X2lk.desc": {
+          "source": "The id of the pull request.",
+          "message": "Pull Request 的 ID。"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9jb21tZW50c19nZXQ.option.cHVsbF9yZXF1ZXN0X2lk.display_name": {
+          "source": "Pull Request",
+          "message": "Pull Request"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9jb21tZW50c19nZXQ.option.cHVsbF9yZXF1ZXN0X2lk.short_desc": {
+          "source": "The pull request ID, as shown in the web UI",
+          "message": "Web UI 中顯示的 Pull Request ID"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9jb21tZW50c19nZXQ.option.cmVwb19zbHVn.desc": {
+          "source": "The repository to work on, given as its slug or as its UUID in braces.\n\nEverything else scoped by a repository - commits, branches, pull requests - is listed from this repository, so changing it re-reads them.",
+          "message": "要操作的存放庫，指定為其別名或括號中的 UUID。\n\n所有限定於存放庫範圍的項目（提交、分支、拉取請求）皆以此存放庫為準列出，因此變更此項會重新讀取它們。"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9jb21tZW50c19nZXQ.option.cmVwb19zbHVn.display_name": {
+          "source": "Repository",
+          "message": "存放庫"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9jb21tZW50c19nZXQ.option.cmVwb19zbHVn.short_desc": {
+          "source": "The repository to work on",
+          "message": "要操作的存放庫"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9jb21tZW50c19nZXQ.option.d29ya3NwYWNl.desc": {
+          "source": "The workspace to work in, given as its slug or as its UUID in braces.\n\nEverything else scoped by a workspace - repositories, members - is listed from this workspace, so changing it re-reads them.",
+          "message": "要操作的工作區，指定為其別名或括號中的 UUID。\n\n所有限定於工作區範圍的項目（存放庫、成員）皆以此工作區為準列出，因此變更此項會重新讀取它們。"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9jb21tZW50c19nZXQ.option.d29ya3NwYWNl.display_name": {
+          "source": "Workspace",
+          "message": "工作區"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9jb21tZW50c19nZXQ.option.d29ya3NwYWNl.short_desc": {
+          "source": "The workspace to work in",
+          "message": "要操作的工作區"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9jb21tZW50c19nZXQ.short_desc": {
+          "source": "List the comments on a pull request",
+          "message": "列出 Pull Request 上的留言"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9jb21tZW50c19wb3N0.desc": {
+          "source": "Adds a comment to a pull request.\n\n`content.raw` is the comment text. Supplying `inline` with a `path` and a line number attaches it to that line of the diff; supplying `parent` makes it a reply.",
+          "message": "新增留言至 Pull Request。\n\n`content.raw` 為留言文字。提供 `inline` 與 `path` 以及行號可將其附加至差異 (diff) 的該行；提供 `parent` 則會將其設為回覆。"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9jb21tZW50c19wb3N0.display_name": {
+          "source": "Comment on Pull Request",
+          "message": "在 Pull Request 留言"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9jb21tZW50c19wb3N0.option.Y29udGVudA.display_name": {
+          "source": "Comment",
+          "message": "評論"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9jb21tZW50c19wb3N0.option.Y29udGVudA.short_desc": {
+          "source": "The comment; put the text in \"raw\"",
+          "message": "評論內容；將文字放在 \"raw\" 中"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9jb21tZW50c19wb3N0.option.aW5saW5l.display_name": {
+          "source": "Inline",
+          "message": "行內"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9jb21tZW50c19wb3N0.option.cGFyZW50.display_name": {
+          "source": "Parent",
+          "message": "父母"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9jb21tZW50c19wb3N0.option.cHVsbF9yZXF1ZXN0X2lk.desc": {
+          "source": "The id of the pull request.",
+          "message": "Pull Request 的 ID。"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9jb21tZW50c19wb3N0.option.cHVsbF9yZXF1ZXN0X2lk.display_name": {
+          "source": "Pull Request",
+          "message": "Pull Request"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9jb21tZW50c19wb3N0.option.cHVsbF9yZXF1ZXN0X2lk.short_desc": {
+          "source": "The pull request ID, as shown in the web UI",
+          "message": "Web UI 中顯示的 Pull Request ID"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9jb21tZW50c19wb3N0.option.cmVwb19zbHVn.desc": {
+          "source": "The repository to work on, given as its slug or as its UUID in braces.\n\nEverything else scoped by a repository - commits, branches, pull requests - is listed from this repository, so changing it re-reads them.",
+          "message": "要操作的存放庫，指定為其別名或括號中的 UUID。\n\n所有限定於存放庫範圍的項目（提交、分支、拉取請求）皆以此存放庫為準列出，因此變更此項會重新讀取它們。"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9jb21tZW50c19wb3N0.option.cmVwb19zbHVn.display_name": {
+          "source": "Repository",
+          "message": "存放庫"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9jb21tZW50c19wb3N0.option.cmVwb19zbHVn.short_desc": {
+          "source": "The repository to work on",
+          "message": "要操作的存放庫"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9jb21tZW50c19wb3N0.option.d29ya3NwYWNl.desc": {
+          "source": "The workspace to work in, given as its slug or as its UUID in braces.\n\nEverything else scoped by a workspace - repositories, members - is listed from this workspace, so changing it re-reads them.",
+          "message": "要操作的工作區，指定為其別名或括號中的 UUID。\n\n所有限定於工作區範圍的項目（存放庫、成員）皆以此工作區為準列出，因此變更此項會重新讀取它們。"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9jb21tZW50c19wb3N0.option.d29ya3NwYWNl.display_name": {
+          "source": "Workspace",
+          "message": "工作區"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9jb21tZW50c19wb3N0.option.d29ya3NwYWNl.short_desc": {
+          "source": "The workspace to work in",
+          "message": "要操作的工作區"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9jb21tZW50c19wb3N0.option.dHlwZQ.allowed-value.c3RyaW5nOnB1bGxyZXF1ZXN0X2NvbW1lbnQ.display_name": {
+          "source": "pullrequest_comment",
+          "message": "pullrequest_comment"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9jb21tZW50c19wb3N0.option.dHlwZQ.display_name": {
+          "source": "Type",
+          "message": "類型"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9jb21tZW50c19wb3N0.option.dHlwZQ.short_desc": {
+          "source": "Bitbucket's object discriminator; always \"pullrequest_comment\"",
+          "message": "Bitbucket 的物件辨別元；一律為 \"pullrequest_comment\""
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9jb21tZW50c19wb3N0.short_desc": {
+          "source": "Add a comment to a pull request",
+          "message": "新增留言至 Pull Request"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9nZXQ.desc": {
+          "source": "Retrieves a pull request with its state, participants and merge commit.",
+          "message": "擷取 Pull Request 及其狀態、參與者與合併提交 (merge commit)。"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9nZXQ.display_name": {
+          "source": "Get Pull Request",
+          "message": "取得 Pull Request"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9nZXQ.option.cHVsbF9yZXF1ZXN0X2lk.desc": {
+          "source": "The id of the pull request.",
+          "message": "Pull Request 的 ID。"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9nZXQ.option.cHVsbF9yZXF1ZXN0X2lk.display_name": {
+          "source": "Pull Request",
+          "message": "Pull Request"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9nZXQ.option.cHVsbF9yZXF1ZXN0X2lk.short_desc": {
+          "source": "The pull request ID, as shown in the web UI",
+          "message": "Web UI 中顯示的 Pull Request ID"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9nZXQ.option.cmVwb19zbHVn.desc": {
+          "source": "The repository to work on, given as its slug or as its UUID in braces.\n\nEverything else scoped by a repository - commits, branches, pull requests - is listed from this repository, so changing it re-reads them.",
+          "message": "要操作的存放庫，指定為其別名或括號中的 UUID。\n\n所有限定於存放庫範圍的項目（提交、分支、拉取請求）皆以此存放庫為準列出，因此變更此項會重新讀取它們。"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9nZXQ.option.cmVwb19zbHVn.display_name": {
+          "source": "Repository",
+          "message": "存放庫"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9nZXQ.option.cmVwb19zbHVn.short_desc": {
+          "source": "The repository to work on",
+          "message": "要操作的存放庫"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9nZXQ.option.d29ya3NwYWNl.desc": {
+          "source": "The workspace to work in, given as its slug or as its UUID in braces.\n\nEverything else scoped by a workspace - repositories, members - is listed from this workspace, so changing it re-reads them.",
+          "message": "要操作的工作區，指定為其別名或括號中的 UUID。\n\n所有限定於工作區範圍的項目（存放庫、成員）皆以此工作區為準列出，因此變更此項會重新讀取它們。"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9nZXQ.option.d29ya3NwYWNl.display_name": {
+          "source": "Workspace",
+          "message": "工作區"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9nZXQ.option.d29ya3NwYWNl.short_desc": {
+          "source": "The workspace to work in",
+          "message": "要操作的工作區"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9nZXQ.short_desc": {
+          "source": "Retrieve one pull request",
+          "message": "擷取單一 Pull Request"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9wdXQ.desc": {
+          "source": "Updates a pull request's title, description, destination branch or reviewers.\n\nOnly the fields supplied are changed. This does not merge, decline or approve the pull request; those are separate operations.",
+          "message": "更新 Pull Request 的標題、說明、目標分支或審閱者。\n\n僅會變更提供的欄位。此操作不會合併、拒絕或核准 Pull Request；這些是獨立的操作。"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9wdXQ.display_name": {
+          "source": "Update Pull Request",
+          "message": "更新 Pull Request"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9wdXQ.option.Y2xvc2Vfc291cmNlX2JyYW5jaA.desc": {
+          "source": "A boolean flag indicating if merging the pull request closes the source branch.",
+          "message": "布林值旗標，指出合併 Pull Request 是否關閉來源分支。"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9wdXQ.option.Y2xvc2Vfc291cmNlX2JyYW5jaA.display_name": {
+          "source": "Close Source Branch",
+          "message": "關閉來源分支"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9wdXQ.option.Y2xvc2Vfc291cmNlX2JyYW5jaA.short_desc": {
+          "source": "A boolean flag indicating if merging the pull request closes the source branch",
+          "message": "布林值旗標，指出合併 Pull Request 是否關閉來源分支"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9wdXQ.option.ZGVzdGluYXRpb24.desc": {
+          "source": "The branch the changes are merged into; the repository's main branch when unset.\n\nBitbucket declares this as a nested object; it is presented here as the branch name alone and sent in the shape the API expects.\n\nThis value is sent as Bitbucket's nested branch reference, `{\"branch\": {\"name\": …}}`.",
+          "message": "變更所要合併至的分支；未設定時為儲存庫的主要分支。\n\nBitbucket 將其宣告為巢狀物件；此處僅以分支名稱表示，並以 API 預期的結構發送。\n\n此值會以 Bitbucket 的巢狀分支參考 `{\"branch\": {\"name\": …}}` 發送。"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9wdXQ.option.ZGVzdGluYXRpb24.display_name": {
+          "source": "Destination Branch",
+          "message": "目標分支"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9wdXQ.option.ZGVzdGluYXRpb24.short_desc": {
+          "source": "The branch the changes are merged into",
+          "message": "變更所要合併至的分支"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9wdXQ.option.ZHJhZnQ.desc": {
+          "source": "A boolean flag indicating whether the pull request is a draft.",
+          "message": "布林值旗標，指出 Pull Request 是否為草稿。"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9wdXQ.option.ZHJhZnQ.display_name": {
+          "source": "Draft",
+          "message": "草稿"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9wdXQ.option.ZHJhZnQ.short_desc": {
+          "source": "A boolean flag indicating whether the pull request is a draft",
+          "message": "布林值旗標，指出 Pull Request 是否為草稿"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9wdXQ.option.c291cmNl.desc": {
+          "source": "The branch holding the changes to merge.\n\nBitbucket declares this as a nested object; it is presented here as the branch name alone and sent in the shape the API expects.\n\nThis value is sent as Bitbucket's nested branch reference, `{\"branch\": {\"name\": …}}`.",
+          "message": "包含要合併變更的分支。\n\nBitbucket 將其宣告為巢狀物件；此處僅以分支名稱表示，並以 API 預期的結構發送。\n\n此值會以 Bitbucket 的巢狀分支參考 `{\"branch\": {\"name\": …}}` 發送。"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9wdXQ.option.c291cmNl.display_name": {
+          "source": "Source Branch",
+          "message": "來源分支"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9wdXQ.option.c291cmNl.short_desc": {
+          "source": "The branch holding the changes",
+          "message": "包含變更的分支"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9wdXQ.option.cHVsbF9yZXF1ZXN0X2lk.desc": {
+          "source": "The id of the pull request.",
+          "message": "Pull Request 的 ID。"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9wdXQ.option.cHVsbF9yZXF1ZXN0X2lk.display_name": {
+          "source": "Pull Request",
+          "message": "Pull Request"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9wdXQ.option.cHVsbF9yZXF1ZXN0X2lk.short_desc": {
+          "source": "The pull request ID, as shown in the web UI",
+          "message": "Web UI 中顯示的 Pull Request ID"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9wdXQ.option.cmV2aWV3ZXJz.desc": {
+          "source": "The members to request a review from, as their account UUIDs.\n\nBitbucket declares this as a list of user objects; it is presented here as a list of IDs and sent in the shape the API expects.\n\nThis value is sent as Bitbucket's list of user objects, `[{\"type\": \"user\", \"uuid\": …}]`.",
+          "message": "要請求審查的成員（以其帳戶 UUID 表示）。\n\nBitbucket 將其宣告為使用者物件清單；此處以 ID 清單表示，並以 API 預期的結構發送。\n\n此值會以 Bitbucket 的使用者物件清單 `[{\"type\": \"user\", \"uuid\": …}]` 發送。"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9wdXQ.option.cmV2aWV3ZXJz.display_name": {
+          "source": "Reviewers",
+          "message": "審閱者"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9wdXQ.option.cmV2aWV3ZXJz.short_desc": {
+          "source": "The workspace members to request a review from",
+          "message": "要請求審查的工作區成員"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9wdXQ.option.cmVwb19zbHVn.desc": {
+          "source": "The repository to work on, given as its slug or as its UUID in braces.\n\nEverything else scoped by a repository - commits, branches, pull requests - is listed from this repository, so changing it re-reads them.",
+          "message": "要操作的存放庫，指定為其別名或括號中的 UUID。\n\n所有限定於存放庫範圍的項目（提交、分支、拉取請求）皆以此存放庫為準列出，因此變更此項會重新讀取它們。"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9wdXQ.option.cmVwb19zbHVn.display_name": {
+          "source": "Repository",
+          "message": "存放庫"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9wdXQ.option.cmVwb19zbHVn.short_desc": {
+          "source": "The repository to work on",
+          "message": "要操作的存放庫"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9wdXQ.option.d29ya3NwYWNl.desc": {
+          "source": "The workspace to work in, given as its slug or as its UUID in braces.\n\nEverything else scoped by a workspace - repositories, members - is listed from this workspace, so changing it re-reads them.",
+          "message": "要操作的工作區，指定為其別名或括號中的 UUID。\n\n所有限定於工作區範圍的項目（存放庫、成員）皆以此工作區為準列出，因此變更此項會重新讀取它們。"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9wdXQ.option.d29ya3NwYWNl.display_name": {
+          "source": "Workspace",
+          "message": "工作區"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9wdXQ.option.d29ya3NwYWNl.short_desc": {
+          "source": "The workspace to work in",
+          "message": "要操作的工作區"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9wdXQ.option.dGl0bGU.desc": {
+          "source": "Title of the pull request.",
+          "message": "Pull Request 的標題。"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9wdXQ.option.dGl0bGU.display_name": {
+          "source": "Title",
+          "message": "標題"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9wdXQ.option.dGl0bGU.short_desc": {
+          "source": "Title of the pull request",
+          "message": "Pull Request 的標題"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9wdXQ.option.dHlwZQ.allowed-value.c3RyaW5nOnB1bGxyZXF1ZXN0.display_name": {
+          "source": "pullrequest",
+          "message": "pullrequest"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9wdXQ.option.dHlwZQ.display_name": {
+          "source": "Type",
+          "message": "類型"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9wdXQ.option.dHlwZQ.short_desc": {
+          "source": "Bitbucket's object discriminator; always \"pullrequest\"",
+          "message": "Bitbucket 的物件鑑別器；一律為 \"pullrequest\""
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9wdXQ.short_desc": {
+          "source": "Update a pull request",
+          "message": "更新 Pull Request"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3Bvc3Q.desc": {
+          "source": "Opens a pull request from one branch into another.\n\nThe repository in the URL is the **destination**. `destination` defaults to the repository's main branch when unset. Setting `close_source_branch` deletes the source branch when the pull request is merged.",
+          "message": "建立從某個分支合併至另一個分支的 Pull Request。\n\nURL 中的儲存庫為**目的地**。未設定時，`destination` 預設為儲存庫的主要分支。設定 `close_source_branch` 會在 Pull Request 合併時刪除來源分支。"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3Bvc3Q.display_name": {
+          "source": "Create Pull Request",
+          "message": "建立 Pull Request"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3Bvc3Q.option.Y2xvc2Vfc291cmNlX2JyYW5jaA.desc": {
+          "source": "A boolean flag indicating if merging the pull request closes the source branch.",
+          "message": "布林值旗標，指出合併 Pull Request 是否關閉來源分支。"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3Bvc3Q.option.Y2xvc2Vfc291cmNlX2JyYW5jaA.display_name": {
+          "source": "Close Source Branch",
+          "message": "關閉來源分支"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3Bvc3Q.option.Y2xvc2Vfc291cmNlX2JyYW5jaA.short_desc": {
+          "source": "A boolean flag indicating if merging the pull request closes the source branch",
+          "message": "布林值旗標，指出合併 Pull Request 是否關閉來源分支"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3Bvc3Q.option.ZGVzdGluYXRpb24.desc": {
+          "source": "The branch the changes are merged into; the repository's main branch when unset.\n\nBitbucket declares this as a nested object; it is presented here as the branch name alone and sent in the shape the API expects.\n\nThis value is sent as Bitbucket's nested branch reference, `{\"branch\": {\"name\": …}}`.",
+          "message": "變更所要合併至的分支；未設定時為儲存庫的主要分支。\n\nBitbucket 將其宣告為巢狀物件；此處僅以分支名稱表示，並以 API 預期的結構發送。\n\n此值會以 Bitbucket 的巢狀分支參考 `{\"branch\": {\"name\": …}}` 發送。"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3Bvc3Q.option.ZGVzdGluYXRpb24.display_name": {
+          "source": "Destination Branch",
+          "message": "目標分支"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3Bvc3Q.option.ZGVzdGluYXRpb24.short_desc": {
+          "source": "The branch the changes are merged into",
+          "message": "變更所要合併至的分支"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3Bvc3Q.option.ZHJhZnQ.desc": {
+          "source": "A boolean flag indicating whether the pull request is a draft.",
+          "message": "布林值旗標，指出 Pull Request 是否為草稿。"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3Bvc3Q.option.ZHJhZnQ.display_name": {
+          "source": "Draft",
+          "message": "草稿"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3Bvc3Q.option.ZHJhZnQ.short_desc": {
+          "source": "A boolean flag indicating whether the pull request is a draft",
+          "message": "布林值旗標，指出 Pull Request 是否為草稿"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3Bvc3Q.option.c291cmNl.desc": {
+          "source": "The branch holding the changes to merge.\n\nBitbucket declares this as a nested object; it is presented here as the branch name alone and sent in the shape the API expects.\n\nThis value is sent as Bitbucket's nested branch reference, `{\"branch\": {\"name\": …}}`.",
+          "message": "包含要合併變更的分支。\n\nBitbucket 將其宣告為巢狀物件；此處僅以分支名稱表示，並以 API 預期的結構發送。\n\n此值會以 Bitbucket 的巢狀分支參考 `{\"branch\": {\"name\": …}}` 發送。"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3Bvc3Q.option.c291cmNl.display_name": {
+          "source": "Source Branch",
+          "message": "來源分支"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3Bvc3Q.option.c291cmNl.short_desc": {
+          "source": "The branch holding the changes",
+          "message": "包含變更的分支"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3Bvc3Q.option.cmV2aWV3ZXJz.desc": {
+          "source": "The members to request a review from, as their account UUIDs.\n\nBitbucket declares this as a list of user objects; it is presented here as a list of IDs and sent in the shape the API expects.\n\nThis value is sent as Bitbucket's list of user objects, `[{\"type\": \"user\", \"uuid\": …}]`.",
+          "message": "要請求審查的成員（以其帳戶 UUID 表示）。\n\nBitbucket 將其宣告為使用者物件清單；此處以 ID 清單表示，並以 API 預期的結構發送。\n\n此值會以 Bitbucket 的使用者物件清單 `[{\"type\": \"user\", \"uuid\": …}]` 發送。"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3Bvc3Q.option.cmV2aWV3ZXJz.display_name": {
+          "source": "Reviewers",
+          "message": "審閱者"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3Bvc3Q.option.cmV2aWV3ZXJz.short_desc": {
+          "source": "The workspace members to request a review from",
+          "message": "要請求審查的工作區成員"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3Bvc3Q.option.cmVwb19zbHVn.desc": {
+          "source": "The repository to work on, given as its slug or as its UUID in braces.\n\nEverything else scoped by a repository - commits, branches, pull requests - is listed from this repository, so changing it re-reads them.",
+          "message": "要操作的存放庫，指定為其別名或括號中的 UUID。\n\n所有限定於存放庫範圍的項目（提交、分支、拉取請求）皆以此存放庫為準列出，因此變更此項會重新讀取它們。"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3Bvc3Q.option.cmVwb19zbHVn.display_name": {
+          "source": "Repository",
+          "message": "存放庫"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3Bvc3Q.option.cmVwb19zbHVn.short_desc": {
+          "source": "The repository to work on",
+          "message": "要操作的存放庫"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3Bvc3Q.option.d29ya3NwYWNl.desc": {
+          "source": "The workspace to work in, given as its slug or as its UUID in braces.\n\nEverything else scoped by a workspace - repositories, members - is listed from this workspace, so changing it re-reads them.",
+          "message": "要操作的工作區，指定為其別名或括號中的 UUID。\n\n所有限定於工作區範圍的項目（存放庫、成員）皆以此工作區為準列出，因此變更此項會重新讀取它們。"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3Bvc3Q.option.d29ya3NwYWNl.display_name": {
+          "source": "Workspace",
+          "message": "工作區"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3Bvc3Q.option.d29ya3NwYWNl.short_desc": {
+          "source": "The workspace to work in",
+          "message": "要操作的工作區"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3Bvc3Q.option.dGl0bGU.desc": {
+          "source": "Title of the pull request.",
+          "message": "Pull Request 的標題。"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3Bvc3Q.option.dGl0bGU.display_name": {
+          "source": "Title",
+          "message": "標題"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3Bvc3Q.option.dGl0bGU.short_desc": {
+          "source": "Title of the pull request",
+          "message": "Pull Request 的標題"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3Bvc3Q.option.dHlwZQ.allowed-value.c3RyaW5nOnB1bGxyZXF1ZXN0.display_name": {
+          "source": "pullrequest",
+          "message": "pullrequest"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3Bvc3Q.option.dHlwZQ.display_name": {
+          "source": "Type",
+          "message": "類型"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3Bvc3Q.option.dHlwZQ.short_desc": {
+          "source": "Bitbucket's object discriminator; always \"pullrequest\"",
+          "message": "Bitbucket 的物件鑑別器；一律為 \"pullrequest\""
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3Bvc3Q.short_desc": {
+          "source": "Open a pull request",
+          "message": "建立 Pull Request"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcmVmc19icmFuY2hlc19nZXQ.desc": {
+          "source": "Lists the branches of a repository with the commit each one points at.\n\nThis is what backs the branch dropdowns on the pull request actions; the application this module replaces offered those dropdowns without exporting the endpoint that fills them.",
+          "message": "列出儲存庫的分支以及各自分支所指向的 commit。\n\n這為 Pull Request 動作中的分支下拉式選單提供支援；此模組所取代的應用程式提供了這些下拉式選單，但未匯出填入選單的端點。"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcmVmc19icmFuY2hlc19nZXQ.display_name": {
+          "source": "List Branches",
+          "message": "列出分支"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcmVmc19icmFuY2hlc19nZXQ.option.c29ydA.desc": {
+          "source": "\nField by which the results should be sorted as per [filtering and sorting](/cloud/bitbucket/rest/intro/#filtering).\n        ",
+          "message": "\n依據[篩選與排序](/cloud/bitbucket/rest/intro/#filtering)對結果進行排序的欄位。\n        "
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcmVmc19icmFuY2hlc19nZXQ.option.c29ydA.display_name": {
+          "source": "Sort By",
+          "message": "排序依據"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcmVmc19icmFuY2hlc19nZXQ.option.c29ydA.short_desc": {
+          "source": "A field to sort by; prefix with \"-\" to reverse",
+          "message": "用於排序的欄位；加上前綴 \"-\" 可反向排序"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcmVmc19icmFuY2hlc19nZXQ.option.cGFnZQ.desc": {
+          "source": "Which page of results to return, starting at 1. Bitbucket documents this for every collection but declares it on almost none of them.",
+          "message": "要傳回的結果頁碼，從 1 開始。Bitbucket 在所有集合的文件中皆有說明此項，但幾乎未在任何集合中宣告。"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcmVmc19icmFuY2hlc19nZXQ.option.cGFnZQ.display_name": {
+          "source": "Page",
+          "message": "頁碼"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcmVmc19icmFuY2hlc19nZXQ.option.cGFnZQ.short_desc": {
+          "source": "Which page of results to return, starting at 1",
+          "message": "要傳回的結果頁碼，從 1 開始"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcmVmc19icmFuY2hlc19nZXQ.option.cGFnZWxlbg.desc": {
+          "source": "How many records to return in one request, up to Bitbucket's maximum of `100`.\n\n`next` in the response is the URL of the following page; page on its presence rather than on `size`, which Bitbucket does not report for every collection.",
+          "message": "單次請求中要傳回的記錄數量，最高可達 Bitbucket 的上限 `100`。\n\n回應中的 `next` 是下一頁的 URL；請依其是否存在來進行分頁，而非依據 `size`，因為 Bitbucket 並非針對所有集合都會回報此項。"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcmVmc19icmFuY2hlc19nZXQ.option.cGFnZWxlbg.display_name": {
+          "source": "Page Length",
+          "message": "每頁筆數"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcmVmc19icmFuY2hlc19nZXQ.option.cGFnZWxlbg.short_desc": {
+          "source": "How many records to return, up to 100",
+          "message": "要傳回的記錄數量，最多 100 筆"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcmVmc19icmFuY2hlc19nZXQ.option.cQ.desc": {
+          "source": "A Bitbucket [filter expression](https://developer.atlassian.com/cloud/bitbucket/rest/intro/#filtering), ex: `state = \"OPEN\"` or `updated_on > 2026-01-01`.\n\nThe fields a filter may name differ per collection and are documented with the endpoint.",
+          "message": "Bitbucket [篩選表達式](https://developer.atlassian.com/cloud/bitbucket/rest/intro/#filtering)，例如：`state = \"OPEN\"` 或 `updated_on > 2026-01-01`。\n\n篩選器中可命名的欄位因集合而異，並記錄於相應端點中。"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcmVmc19icmFuY2hlc19nZXQ.option.cQ.display_name": {
+          "source": "Filter",
+          "message": "濾波器"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcmVmc19icmFuY2hlc19nZXQ.option.cQ.short_desc": {
+          "source": "A Bitbucket filter expression, ex: 'state = \"OPEN\"'",
+          "message": "Bitbucket 篩選表達式，例如：'state = \"OPEN\"'"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcmVmc19icmFuY2hlc19nZXQ.option.cmVwb19zbHVn.desc": {
+          "source": "The repository to work on, given as its slug or as its UUID in braces.\n\nEverything else scoped by a repository - commits, branches, pull requests - is listed from this repository, so changing it re-reads them.",
+          "message": "要操作的存放庫，指定為其別名或括號中的 UUID。\n\n所有限定於存放庫範圍的項目（提交、分支、拉取請求）皆以此存放庫為準列出，因此變更此項會重新讀取它們。"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcmVmc19icmFuY2hlc19nZXQ.option.cmVwb19zbHVn.display_name": {
+          "source": "Repository",
+          "message": "存放庫"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcmVmc19icmFuY2hlc19nZXQ.option.cmVwb19zbHVn.short_desc": {
+          "source": "The repository to work on",
+          "message": "要操作的存放庫"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcmVmc19icmFuY2hlc19nZXQ.option.d29ya3NwYWNl.desc": {
+          "source": "The workspace to work in, given as its slug or as its UUID in braces.\n\nEverything else scoped by a workspace - repositories, members - is listed from this workspace, so changing it re-reads them.",
+          "message": "要操作的工作區，指定為其別名或括號中的 UUID。\n\n所有限定於工作區範圍的項目（存放庫、成員）皆以此工作區為準列出，因此變更此項會重新讀取它們。"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcmVmc19icmFuY2hlc19nZXQ.option.d29ya3NwYWNl.display_name": {
+          "source": "Workspace",
+          "message": "工作區"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcmVmc19icmFuY2hlc19nZXQ.option.d29ya3NwYWNl.short_desc": {
+          "source": "The workspace to work in",
+          "message": "要操作的工作區"
+        },
+        "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcmVmc19icmFuY2hlc19nZXQ.short_desc": {
+          "source": "List a repository's branches",
+          "message": "列出儲存庫的分支"
+        },
+        "app.Qml0YnVja2V0.action.d29ya3NwYWNlc193b3Jrc3BhY2VfZ2V0.desc": {
+          "source": "Retrieves a workspace with its slug, name and whether it is private.",
+          "message": "擷取工作區及其代稱 (slug)、名稱以及是否為私有。"
+        },
+        "app.Qml0YnVja2V0.action.d29ya3NwYWNlc193b3Jrc3BhY2VfZ2V0.display_name": {
+          "source": "Get Workspace",
+          "message": "取得工作區"
+        },
+        "app.Qml0YnVja2V0.action.d29ya3NwYWNlc193b3Jrc3BhY2VfZ2V0.option.d29ya3NwYWNl.desc": {
+          "source": "The workspace to work in, given as its slug or as its UUID in braces.\n\nEverything else scoped by a workspace - repositories, members - is listed from this workspace, so changing it re-reads them.",
+          "message": "要操作的工作區，指定為其別名或括號中的 UUID。\n\n所有限定於工作區範圍的項目（存放庫、成員）皆以此工作區為準列出，因此變更此項會重新讀取它們。"
+        },
+        "app.Qml0YnVja2V0.action.d29ya3NwYWNlc193b3Jrc3BhY2VfZ2V0.option.d29ya3NwYWNl.display_name": {
+          "source": "Workspace",
+          "message": "工作區"
+        },
+        "app.Qml0YnVja2V0.action.d29ya3NwYWNlc193b3Jrc3BhY2VfZ2V0.option.d29ya3NwYWNl.short_desc": {
+          "source": "The workspace to work in",
+          "message": "要操作的工作區"
+        },
+        "app.Qml0YnVja2V0.action.d29ya3NwYWNlc193b3Jrc3BhY2VfZ2V0.short_desc": {
+          "source": "Retrieve one workspace",
+          "message": "擷取單一工作區"
+        },
+        "app.Qml0YnVja2V0.action.d29ya3NwYWNlc193b3Jrc3BhY2VfbWVtYmVyc19nZXQ.desc": {
+          "source": "Lists the members of a workspace.\n\nEach record is a **membership**, so the member is under `user` rather than at the top level: the account UUID is `user.uuid`.",
+          "message": "列出工作區的成員。\n\n每筆記錄都是一筆**成員資格 (membership)**，因此成員位於 `user` 下而非頂層：帳戶 UUID 為 `user.uuid`。"
+        },
+        "app.Qml0YnVja2V0.action.d29ya3NwYWNlc193b3Jrc3BhY2VfbWVtYmVyc19nZXQ.display_name": {
+          "source": "List Workspace Members",
+          "message": "列出工作區成員"
+        },
+        "app.Qml0YnVja2V0.action.d29ya3NwYWNlc193b3Jrc3BhY2VfbWVtYmVyc19nZXQ.option.cGFnZQ.desc": {
+          "source": "Which page of results to return, starting at 1. Bitbucket documents this for every collection but declares it on almost none of them.",
+          "message": "要傳回的結果頁碼，從 1 開始。Bitbucket 在所有集合的文件中皆有說明此項，但幾乎未在任何集合中宣告。"
+        },
+        "app.Qml0YnVja2V0.action.d29ya3NwYWNlc193b3Jrc3BhY2VfbWVtYmVyc19nZXQ.option.cGFnZQ.display_name": {
+          "source": "Page",
+          "message": "頁碼"
+        },
+        "app.Qml0YnVja2V0.action.d29ya3NwYWNlc193b3Jrc3BhY2VfbWVtYmVyc19nZXQ.option.cGFnZQ.short_desc": {
+          "source": "Which page of results to return, starting at 1",
+          "message": "要傳回的結果頁碼，從 1 開始"
+        },
+        "app.Qml0YnVja2V0.action.d29ya3NwYWNlc193b3Jrc3BhY2VfbWVtYmVyc19nZXQ.option.cGFnZWxlbg.desc": {
+          "source": "How many records to return in one request, up to Bitbucket's maximum of `100`.\n\n`next` in the response is the URL of the following page; page on its presence rather than on `size`, which Bitbucket does not report for every collection.",
+          "message": "單次請求中要傳回的記錄數量，最高可達 Bitbucket 的上限 `100`。\n\n回應中的 `next` 是下一頁的 URL；請依其是否存在來進行分頁，而非依據 `size`，因為 Bitbucket 並非針對所有集合都會回報此項。"
+        },
+        "app.Qml0YnVja2V0.action.d29ya3NwYWNlc193b3Jrc3BhY2VfbWVtYmVyc19nZXQ.option.cGFnZWxlbg.display_name": {
+          "source": "Page Length",
+          "message": "每頁筆數"
+        },
+        "app.Qml0YnVja2V0.action.d29ya3NwYWNlc193b3Jrc3BhY2VfbWVtYmVyc19nZXQ.option.cGFnZWxlbg.short_desc": {
+          "source": "How many records to return, up to 100",
+          "message": "要傳回的記錄數量，最多 100 筆"
+        },
+        "app.Qml0YnVja2V0.action.d29ya3NwYWNlc193b3Jrc3BhY2VfbWVtYmVyc19nZXQ.option.d29ya3NwYWNl.desc": {
+          "source": "The workspace to work in, given as its slug or as its UUID in braces.\n\nEverything else scoped by a workspace - repositories, members - is listed from this workspace, so changing it re-reads them.",
+          "message": "要操作的工作區，指定為其別名或括號中的 UUID。\n\n所有限定於工作區範圍的項目（存放庫、成員）皆以此工作區為準列出，因此變更此項會重新讀取它們。"
+        },
+        "app.Qml0YnVja2V0.action.d29ya3NwYWNlc193b3Jrc3BhY2VfbWVtYmVyc19nZXQ.option.d29ya3NwYWNl.display_name": {
+          "source": "Workspace",
+          "message": "工作區"
+        },
+        "app.Qml0YnVja2V0.action.d29ya3NwYWNlc193b3Jrc3BhY2VfbWVtYmVyc19nZXQ.option.d29ya3NwYWNl.short_desc": {
+          "source": "The workspace to work in",
+          "message": "要操作的工作區"
+        },
+        "app.Qml0YnVja2V0.action.d29ya3NwYWNlc193b3Jrc3BhY2VfbWVtYmVyc19nZXQ.short_desc": {
+          "source": "List the members of a workspace",
+          "message": "列出工作區的成員"
+        },
+        "app.Qml0YnVja2V0.action.d29ya3NwYWNlc193b3Jrc3BhY2VfcHJvamVjdHNfZ2V0.desc": {
+          "source": "Lists the projects in a workspace. A project groups repositories; it is not a Jira project.",
+          "message": "列出工作區中的專案。專案用於將儲存庫分組；並非 Jira 專案。"
+        },
+        "app.Qml0YnVja2V0.action.d29ya3NwYWNlc193b3Jrc3BhY2VfcHJvamVjdHNfZ2V0.display_name": {
+          "source": "List Workspace Projects",
+          "message": "列出工作區專案"
+        },
+        "app.Qml0YnVja2V0.action.d29ya3NwYWNlc193b3Jrc3BhY2VfcHJvamVjdHNfZ2V0.option.cGFnZQ.desc": {
+          "source": "Which page of results to return, starting at 1. Bitbucket documents this for every collection but declares it on almost none of them.",
+          "message": "要傳回的結果頁碼，從 1 開始。Bitbucket 在所有集合的文件中皆有說明此項，但幾乎未在任何集合中宣告。"
+        },
+        "app.Qml0YnVja2V0.action.d29ya3NwYWNlc193b3Jrc3BhY2VfcHJvamVjdHNfZ2V0.option.cGFnZQ.display_name": {
+          "source": "Page",
+          "message": "頁碼"
+        },
+        "app.Qml0YnVja2V0.action.d29ya3NwYWNlc193b3Jrc3BhY2VfcHJvamVjdHNfZ2V0.option.cGFnZQ.short_desc": {
+          "source": "Which page of results to return, starting at 1",
+          "message": "要傳回的結果頁碼，從 1 開始"
+        },
+        "app.Qml0YnVja2V0.action.d29ya3NwYWNlc193b3Jrc3BhY2VfcHJvamVjdHNfZ2V0.option.cGFnZWxlbg.desc": {
+          "source": "How many records to return in one request, up to Bitbucket's maximum of `100`.\n\n`next` in the response is the URL of the following page; page on its presence rather than on `size`, which Bitbucket does not report for every collection.",
+          "message": "單次請求中要傳回的記錄數量，最高可達 Bitbucket 的上限 `100`。\n\n回應中的 `next` 是下一頁的 URL；請依其是否存在來進行分頁，而非依據 `size`，因為 Bitbucket 並非針對所有集合都會回報此項。"
+        },
+        "app.Qml0YnVja2V0.action.d29ya3NwYWNlc193b3Jrc3BhY2VfcHJvamVjdHNfZ2V0.option.cGFnZWxlbg.display_name": {
+          "source": "Page Length",
+          "message": "每頁筆數"
+        },
+        "app.Qml0YnVja2V0.action.d29ya3NwYWNlc193b3Jrc3BhY2VfcHJvamVjdHNfZ2V0.option.cGFnZWxlbg.short_desc": {
+          "source": "How many records to return, up to 100",
+          "message": "要傳回的記錄數量，最多 100 筆"
+        },
+        "app.Qml0YnVja2V0.action.d29ya3NwYWNlc193b3Jrc3BhY2VfcHJvamVjdHNfZ2V0.option.d29ya3NwYWNl.desc": {
+          "source": "The workspace to work in, given as its slug or as its UUID in braces.\n\nEverything else scoped by a workspace - repositories, members - is listed from this workspace, so changing it re-reads them.",
+          "message": "要操作的工作區，指定為其別名或括號中的 UUID。\n\n所有限定於工作區範圍的項目（存放庫、成員）皆以此工作區為準列出，因此變更此項會重新讀取它們。"
+        },
+        "app.Qml0YnVja2V0.action.d29ya3NwYWNlc193b3Jrc3BhY2VfcHJvamVjdHNfZ2V0.option.d29ya3NwYWNl.display_name": {
+          "source": "Workspace",
+          "message": "工作區"
+        },
+        "app.Qml0YnVja2V0.action.d29ya3NwYWNlc193b3Jrc3BhY2VfcHJvamVjdHNfZ2V0.option.d29ya3NwYWNl.short_desc": {
+          "source": "The workspace to work in",
+          "message": "要操作的工作區"
+        },
+        "app.Qml0YnVja2V0.action.d29ya3NwYWNlc193b3Jrc3BhY2VfcHJvamVjdHNfZ2V0.short_desc": {
+          "source": "List the projects in a workspace",
+          "message": "列出工作區中的專案"
+        },
+        "app.Qml0YnVja2V0.action.d29ya3NwYWNlc19nZXQ.desc": {
+          "source": "Lists the workspaces the authenticated user can reach.\n\n`administrator` narrows the listing to the ones they administer.\n\nThis is the **only** listing Bitbucket still serves across workspaces, and it is what fills the workspace dropdown every other Bitbucket dropdown is scoped by. A record wraps its workspace - `{administrator, workspace: {slug, uuid, links}}` - and carries no display name, so a workspace is identified by its slug.",
+          "message": "列出已驗證使用者可存取的工作區。\n\n`administrator` 可將清單縮小為其管理的工作區。\n\n這是 Bitbucket 唯一跨工作區提供的清單，用於填入所有其他 Bitbucket 下拉式選單限定範圍的工作區下拉式選單。記錄會包裝其工作區 (`{administrator, workspace: {slug, uuid, links}}`) 且不帶有顯示名稱，因此工作區是透過其 slug 識別。"
+        },
+        "app.Qml0YnVja2V0.action.d29ya3NwYWNlc19nZXQ.display_name": {
+          "source": "List Workspaces",
+          "message": "列出工作區"
+        },
+        "app.Qml0YnVja2V0.action.d29ya3NwYWNlc19nZXQ.option.YWRtaW5pc3RyYXRvcg.desc": {
+          "source": "Filter workspaces based on which ones the caller has admin permissions or not.",
+          "message": "根據呼叫者是否具有管理員權限來篩選工作區。"
+        },
+        "app.Qml0YnVja2V0.action.d29ya3NwYWNlc19nZXQ.option.YWRtaW5pc3RyYXRvcg.display_name": {
+          "source": "Administrator Only",
+          "message": "僅限管理員"
+        },
+        "app.Qml0YnVja2V0.action.d29ya3NwYWNlc19nZXQ.option.YWRtaW5pc3RyYXRvcg.short_desc": {
+          "source": "Return only workspaces the credential administers",
+          "message": "僅傳回該憑證管理的工作區"
+        },
+        "app.Qml0YnVja2V0.action.d29ya3NwYWNlc19nZXQ.option.c29ydA.desc": {
+          "source": "\nField by which the results should be sorted as per [filtering and sorting](/cloud/bitbucket/rest/intro/#filtering).\n        ",
+          "message": "\n依據[篩選與排序](/cloud/bitbucket/rest/intro/#filtering)對結果進行排序的欄位。\n        "
+        },
+        "app.Qml0YnVja2V0.action.d29ya3NwYWNlc19nZXQ.option.c29ydA.display_name": {
+          "source": "Sort By",
+          "message": "排序依據"
+        },
+        "app.Qml0YnVja2V0.action.d29ya3NwYWNlc19nZXQ.option.c29ydA.short_desc": {
+          "source": "A field to sort by; prefix with \"-\" to reverse",
+          "message": "用於排序的欄位；加上前綴 \"-\" 可反向排序"
+        },
+        "app.Qml0YnVja2V0.action.d29ya3NwYWNlc19nZXQ.option.cGFnZQ.desc": {
+          "source": "Which page of results to return, starting at 1. Bitbucket documents this for every collection but declares it on almost none of them.",
+          "message": "要傳回的結果頁碼，從 1 開始。Bitbucket 在所有集合的文件中皆有說明此項，但幾乎未在任何集合中宣告。"
+        },
+        "app.Qml0YnVja2V0.action.d29ya3NwYWNlc19nZXQ.option.cGFnZQ.display_name": {
+          "source": "Page",
+          "message": "頁碼"
+        },
+        "app.Qml0YnVja2V0.action.d29ya3NwYWNlc19nZXQ.option.cGFnZQ.short_desc": {
+          "source": "Which page of results to return, starting at 1",
+          "message": "要傳回的結果頁碼，從 1 開始"
+        },
+        "app.Qml0YnVja2V0.action.d29ya3NwYWNlc19nZXQ.option.cGFnZWxlbg.desc": {
+          "source": "How many records to return in one page, up to 100. Bitbucket documents this for every collection but declares it on almost none of them.",
+          "message": "單頁傳回的記錄筆數，最多 100 筆。Bitbucket 為每個集合記錄了此參數，但幾乎沒有在任何集合上宣告它。"
+        },
+        "app.Qml0YnVja2V0.action.d29ya3NwYWNlc19nZXQ.option.cGFnZWxlbg.display_name": {
+          "source": "Pagelen",
+          "message": "Pagelen"
+        },
+        "app.Qml0YnVja2V0.action.d29ya3NwYWNlc19nZXQ.option.cGFnZWxlbg.short_desc": {
+          "source": "How many records to return in one page, up to 100",
+          "message": "單頁傳回的記錄筆數，最多 100 筆"
+        },
+        "app.Qml0YnVja2V0.action.d29ya3NwYWNlc19nZXQ.short_desc": {
+          "source": "List the workspaces the credential can see",
+          "message": "列出該憑證可見的工作區"
+        },
+        "app.Qml0YnVja2V0.action.dXBkYXRl.desc": {
+          "source": "Updates every record in the given table matching the search criteria",
+          "message": "更新指定資料表中符合搜尋條件的所有記錄"
+        },
+        "app.Qml0YnVja2V0.action.dXBkYXRl.display_name": {
+          "source": "Update Records",
+          "message": "更新記錄"
+        },
+        "app.Qml0YnVja2V0.action.dXBkYXRl.option.dGFibGU.desc": {
+          "source": "The table to work with: `repositories`, `pullrequests`, `pullrequest-comments`, `commit-comments`, `workspaces`, `workspace-members`, `commits` or `branches`",
+          "message": "要操作的資料表：`repositories`、`pullrequests`、`pullrequest-comments`、`commit-comments`、`workspaces`、`workspace-members`、`commits` 或 `branches`"
+        },
+        "app.Qml0YnVja2V0.action.dXBkYXRl.option.dGFibGU.display_name": {
+          "source": "Table",
+          "message": "表格"
+        },
+        "app.Qml0YnVja2V0.action.dXBkYXRl.option.dGFibGU.short_desc": {
+          "source": "The name of the table to work with",
+          "message": "要操作的資料表名稱"
+        },
+        "app.Qml0YnVja2V0.action.dXBkYXRl.short_desc": {
+          "source": "Update the records matching the search criteria",
+          "message": "更新符合搜尋條件的記錄"
+        },
+        "app.Qml0YnVja2V0.desc": {
+          "source": "Provides access to [Bitbucket Cloud](https://bitbucket.org), Atlassian's Git repository hosting.\n\n**Common use cases**:\n- **Repositories**: create, read, update and delete repositories, and list branches\n- **Pull requests**: open, update and comment on pull requests\n- **Commits**: read commits, approve them, and comment on them\n- **Deployments**: read what was deployed, where, and in what state\n- **Workspaces**: read workspaces, their members and their projects\n- **Search**: search code across a workspace's repositories\n\n**Authentication** is a repository, project or workspace access token, an app password, or the OAuth2 authorization code flow - the first two of which need no OAuth consumer and so no workspace administrator.\n\nThis application targets Bitbucket **Cloud**; Bitbucket Data Center is a different product with a different API.\n\nBitbucket is a trademark of Atlassian Pty Ltd.",
+          "message": "提供對 Atlassian 的 Git 儲存庫託管服務 [Bitbucket Cloud](https://bitbucket.org) 的存取權限。\n\n**常見使用案例**：\n- **儲存庫**：建立、讀取、更新和刪除儲存庫，以及列出分支\n- **Pull request**：建立、更新和評論 Pull Request\n- **Commit**：讀取 commit、核准 commit 及對其發表評論\n- **部署**：讀取部署的內容、位置及狀態\n- **工作區**：讀取工作區、其成員及其專案\n- **搜尋**：跨工作區的儲存庫搜尋程式碼\n\n**驗證方式**包括儲存庫、專案或工作區存取權杖、應用程式密碼 (App Password)，或 OAuth2 授權碼流程——前兩者不需要 OAuth 取用者，因此不需要工作區管理員。\n\n此應用程式以 Bitbucket **Cloud** 為目標；Bitbucket Data Center 是具有不同 API 的不同產品。\n\nBitbucket 是 Atlassian Pty Ltd 的商標。"
+        },
+        "app.Qml0YnVja2V0.display_name": {
+          "source": "Bitbucket",
+          "message": "Bitbucket"
+        },
+        "app.Qml0YnVja2V0.short_desc": {
+          "source": "Work with Bitbucket Cloud repositories, pull requests and deployments",
+          "message": "使用 Bitbucket Cloud 儲存庫、Pull Request 與部署"
+        }
+      }
+    }
+  }
+}

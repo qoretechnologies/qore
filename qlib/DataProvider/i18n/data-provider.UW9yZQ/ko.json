@@ -1,0 +1,905 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "ko": {
+      "messages": {
+        "app.UW9yZQ.action.Y29ycmVsYXRpb24.desc": {
+          "source": "Computes the Pearson correlation coefficient between all pairs of configured numeric fields to measure how strongly they move together. Values range from `-1.0` (perfect inverse relationship) to `1.0` (perfect direct relationship), with `0.0` meaning no linear relationship.\n\nFor example, it can show that temperature and ice cream sales are strongly correlated (`0.92`) while humidity and sales are weakly correlated (`-0.15`).",
+          "message": "구성된 모든 숫자 필드 쌍 간의 피어슨 상관계수를 계산하여 서로 얼마나 밀접하게 연관되어 변동하는지 측정합니다. 값의 범위는 `-1.0`(완전한 역의 상관관계)부터 `1.0`(완전한 양의 상관관계)까지이며, `0.0`는 선형 관계가 없음을 의미합니다.\n\n예를 들어, 기온과 아이스크림 매출은 강한 상관관계(`0.92`)를 보이지만 습도와 매출은 약한 상관관계(`-0.15`)를 보인다는 것을 확인할 수 있습니다."
+        },
+        "app.UW9yZQ.action.Y29ycmVsYXRpb24.display_name": {
+          "source": "Find Related Fields",
+          "message": "연관된 필드 찾기"
+        },
+        "app.UW9yZQ.action.Y29ycmVsYXRpb24.option.ZmllbGRz.desc": {
+          "source": "A list of numeric field names to compute correlations between; at least 2 fields are required; supports dot-notation for nested fields (e.g. `sensor.temperature`)",
+          "message": "상관관계를 계산할 숫자 필드 이름 목록입니다. 2개 이상의 필드가 필요하며 중첩 필드에 대한 점 표기법(예: `sensor.temperature`)을 지원합니다."
+        },
+        "app.UW9yZQ.action.Y29ycmVsYXRpb24.option.ZmllbGRz.display_name": {
+          "source": "Field Names",
+          "message": "필드 이름"
+        },
+        "app.UW9yZQ.action.Y29ycmVsYXRpb24.option.ZmllbGRz.short_desc": {
+          "source": "Numeric field names (at least 2)",
+          "message": "숫자 필드 이름(최소 2개)"
+        },
+        "app.UW9yZQ.action.Y29ycmVsYXRpb24.option.d2luZG93X3NpemU.desc": {
+          "source": "The number of records to accumulate before computing the correlation matrix; the window is cleared after each computation.\n\n**Sizing guidance**: correlation needs enough data for stable results; use at least `30` for basic correlation, `100`+ for reliable results",
+          "message": "상관관계 행렬을 계산하기 전에 누적할 레코드 수입니다. 계산 후에는 윈도우가 초기화됩니다.\n\n**크기 설정 가이드**: 상관관계는 안정적인 결과를 위해 충분한 데이터가 필요합니다. 기본 상관관계에는 최소 `30`개, 신뢰할 수 있는 결과에는 `100`개 이상을 사용하십시오."
+        },
+        "app.UW9yZQ.action.Y29ycmVsYXRpb24.option.d2luZG93X3NpemU.display_name": {
+          "source": "Window Size",
+          "message": "윈도우 크기"
+        },
+        "app.UW9yZQ.action.Y29ycmVsYXRpb24.option.d2luZG93X3NpemU.short_desc": {
+          "source": "Number of records per correlation window",
+          "message": "상관관계 윈도우당 레코드 수"
+        },
+        "app.UW9yZQ.action.Y29ycmVsYXRpb24.short_desc": {
+          "source": "Measures how strongly fields move together",
+          "message": "필드들이 서로 얼마나 밀접하게 연관되어 변동하는지 측정"
+        },
+        "app.UW9yZQ.action.Y3Jvc3MtY29ycmVsYXRpb24.desc": {
+          "source": "Computes time-lagged cross-correlation between two fields to discover whether changes in one field predict changes in another after a delay.\n\nFor example, it can show that a spike in marketing spend correlates with increased revenue 3 periods later (`lag = 3`, `correlation = 0.85`).",
+          "message": "두 필드 간의 시간 지연 교차 상관관계를 계산하여 한 필드의 변화가 일정 지연 후 다른 필드의 변화를 예측하는지 알아냅니다.\n\n예를 들어 마케팅 비용 급증이 3주기 후의 매출 증가와 상관관계가 있음(`lag = 3`, `correlation = 0.85`)을 보여줄 수 있습니다."
+        },
+        "app.UW9yZQ.action.Y3Jvc3MtY29ycmVsYXRpb24.display_name": {
+          "source": "Find Delayed Relationships",
+          "message": "지연된 관계 찾기"
+        },
+        "app.UW9yZQ.action.Y3Jvc3MtY29ycmVsYXRpb24.option.ZmllbGRfeA.desc": {
+          "source": "The first numeric field for cross-correlation analysis; supports dot-notation for nested fields (e.g. `sensor.temperature`)",
+          "message": "교차 상관관계 분석을 위한 첫 번째 숫자 필드입니다. 중첩 필드에 대한 점 표기법(예: `sensor.temperature`)을 지원합니다."
+        },
+        "app.UW9yZQ.action.Y3Jvc3MtY29ycmVsYXRpb24.option.ZmllbGRfeA.display_name": {
+          "source": "First Field",
+          "message": "첫 번째 필드"
+        },
+        "app.UW9yZQ.action.Y3Jvc3MtY29ycmVsYXRpb24.option.ZmllbGRfeA.short_desc": {
+          "source": "First numeric field name",
+          "message": "첫 번째 숫자 필드 이름"
+        },
+        "app.UW9yZQ.action.Y3Jvc3MtY29ycmVsYXRpb24.option.ZmllbGRfeQ.desc": {
+          "source": "The second numeric field; positive lag means this field is delayed relative to `field_x`; supports dot-notation for nested fields",
+          "message": "두 번째 숫자 필드입니다. 양수 시차는 이 필드가 `field_x`에 비해 지연됨을 의미합니다. 중첩 필드에 대한 점 표기법을 지원합니다."
+        },
+        "app.UW9yZQ.action.Y3Jvc3MtY29ycmVsYXRpb24.option.ZmllbGRfeQ.display_name": {
+          "source": "Second Field",
+          "message": "두 번째 필드"
+        },
+        "app.UW9yZQ.action.Y3Jvc3MtY29ycmVsYXRpb24.option.ZmllbGRfeQ.short_desc": {
+          "source": "Second numeric field name",
+          "message": "두 번째 숫자 필드 이름"
+        },
+        "app.UW9yZQ.action.Y3Jvc3MtY29ycmVsYXRpb24.option.bWF4X2xhZw.desc": {
+          "source": "The maximum number of time steps to shift one field relative to the other; set to `0` to use `window_size / 4` automatically; default: `0` (auto)",
+          "message": "한 필드를 다른 필드에 대해 이동할 최대 타임스텝 수입니다. `window_size / 4`을(를) 자동으로 사용하려면 `0`으(로) 설정하십시오. 기본값: `0`(자동)"
+        },
+        "app.UW9yZQ.action.Y3Jvc3MtY29ycmVsYXRpb24.option.bWF4X2xhZw.display_name": {
+          "source": "Maximum Lag",
+          "message": "최대 시차(Lag)"
+        },
+        "app.UW9yZQ.action.Y3Jvc3MtY29ycmVsYXRpb24.option.bWF4X2xhZw.short_desc": {
+          "source": "Maximum lag to compute (0 = auto)",
+          "message": "계산할 최대 시차(0 = 자동)"
+        },
+        "app.UW9yZQ.action.Y3Jvc3MtY29ycmVsYXRpb24.option.d2luZG93X3NpemU.desc": {
+          "source": "The number of records to accumulate before computing cross-correlations.\n\n**Sizing guidance**: use at least `50` for basic lag detection, `200`+ for reliable results; the window must be at least 4 times the maximum lag you expect to find",
+          "message": "교차 상관관계를 계산하기 전에 누적할 레코드 수입니다.\n\n**크기 설정 가이드**: 기본 시차 감지에는 최소 `50`개, 신뢰할 수 있는 결과에는 `200`개 이상을 사용하십시오. 윈도우는 찾고자 하는 최대 시차의 최소 4배 이상이어야 합니다."
+        },
+        "app.UW9yZQ.action.Y3Jvc3MtY29ycmVsYXRpb24.option.d2luZG93X3NpemU.display_name": {
+          "source": "Window Size",
+          "message": "윈도우 크기"
+        },
+        "app.UW9yZQ.action.Y3Jvc3MtY29ycmVsYXRpb24.option.d2luZG93X3NpemU.short_desc": {
+          "source": "Number of records per analysis window",
+          "message": "분석 윈도우당 레코드 수"
+        },
+        "app.UW9yZQ.action.Y3Jvc3MtY29ycmVsYXRpb24.short_desc": {
+          "source": "Discovers if changes in one field predict changes in another",
+          "message": "한 필드의 변화가 다른 필드의 변화를 예측하는지 감지"
+        },
+        "app.UW9yZQ.action.YW5vbWFseS1kZXRlY3Rpb24.desc": {
+          "source": "Detect anomalous values in each configured numeric field using z-score analysis against a sliding window; emits one analytics event per input record indicating whether the value exceeds the configured `threshold`",
+          "message": "슬라이딩 윈도우 기반 z-score 분석을 사용하여 구성된 각 숫자 필드의 이상값을 감지합니다. 값이 구성된 `threshold`을(를) 초과하는지 여부를 나타내는 분석 이벤트를 입력 레코드당 하나씩 발행합니다."
+        },
+        "app.UW9yZQ.action.YW5vbWFseS1kZXRlY3Rpb24.display_name": {
+          "source": "Anomaly Detection",
+          "message": "이상 감지"
+        },
+        "app.UW9yZQ.action.YW5vbWFseS1kZXRlY3Rpb24.option.ZmllbGRz.desc": {
+          "source": "A list of field names to compute analytics for; each field must contain numeric values in the input records; supports dot-notation for nested fields (e.g. `sensor.temperature`)",
+          "message": "분석을 계산할 필드 이름 목록입니다. 각 필드는 입력 레코드에서 숫자 값을 포함해야 합니다. 중첩 필드에 대한 점 표기법(예: `sensor.temperature`)을 지원합니다."
+        },
+        "app.UW9yZQ.action.YW5vbWFseS1kZXRlY3Rpb24.option.ZmllbGRz.display_name": {
+          "source": "Field Names",
+          "message": "필드 이름"
+        },
+        "app.UW9yZQ.action.YW5vbWFseS1kZXRlY3Rpb24.option.ZmllbGRz.short_desc": {
+          "source": "Field names to analyze",
+          "message": "분석할 필드 이름"
+        },
+        "app.UW9yZQ.action.YW5vbWFseS1kZXRlY3Rpb24.option.d2luZG93X3NpemU.desc": {
+          "source": "The number of records to accumulate in each analytics window; for window-level processors, an event is emitted when the window is full; for record-level processors, this controls the sliding window size.\n\n**Sizing guidance**: use `20`–`50` for real-time alerting where fast response matters, `100`–`500` for general trend and statistics analysis, or `1000`+ for high-frequency data where you need stable long-term statistics; the window must be large enough to capture at least one full cycle of any pattern you want to detect",
+          "message": "각 분석 윈도우에 누적할 레코드 수입니다. 윈도우 수준 프로세서의 경우 윈도우가 가득 차면 이벤트가 발행되며, 레코드 수준 프로세서의 경우 슬라이딩 윈도우 크기를 제어합니다.\n\n**크기 설정 가이드**: 빠른 응답이 중요한 실시간 알림에는 `20`–`50`개, 일반적인 추세 및 통계 분석에는 `100`–`500`개, 안정적인 장기 통계가 필요한 고주파 데이터에는 `1000`개 이상을 사용하십시오. 윈도우는 감지하려는 패턴의 최소 1회 전체 주기를 캡처할 수 있을 만큼 커야 합니다."
+        },
+        "app.UW9yZQ.action.YW5vbWFseS1kZXRlY3Rpb24.option.d2luZG93X3NpemU.display_name": {
+          "source": "Window Size",
+          "message": "윈도우 크기"
+        },
+        "app.UW9yZQ.action.YW5vbWFseS1kZXRlY3Rpb24.option.d2luZG93X3NpemU.short_desc": {
+          "source": "Number of records in each analytics window",
+          "message": "각 분석 윈도우의 레코드 수"
+        },
+        "app.UW9yZQ.action.YW5vbWFseS1kZXRlY3Rpb24.option.dGhyZXNob2xk.desc": {
+          "source": "How many standard deviations from the average a value must be to count as anomalous (this is called a *z-score*); for example, a threshold of `3.0` means a value must be more than 3 standard deviations away from the average to be flagged.\n\n**Typical values**: `2.0` (sensitive — flags ~5% of random data), `3.0` (standard — flags ~0.3%), `4.0` (conservative — only extreme outliers); must be greater than `0`; default: `3.0`",
+          "message": "이상값으로 간주하기 위해 값이 평균에서 몇 표준편차만큼 떨어져 있어야 하는지를 지정합니다(이를 *z-score*라고 합니다). 예를 들어 임계값 `3.0`은(는) 값이 평균에서 3 표준편차 이상 떨어져 있어야 감지됨을 의미합니다.\n\n**일반적인 값**: `2.0`(민감 — 무작위 데이터의 약 5% 감지), `3.0`(표준 — 약 0.3% 감지), `4.0`(보수적 — 극단적인 이상값만 감지). `0`보다 커야 합니다. 기본값: `3.0`"
+        },
+        "app.UW9yZQ.action.YW5vbWFseS1kZXRlY3Rpb24.option.dGhyZXNob2xk.display_name": {
+          "source": "Anomaly Threshold",
+          "message": "이상 임계값"
+        },
+        "app.UW9yZQ.action.YW5vbWFseS1kZXRlY3Rpb24.option.dGhyZXNob2xk.short_desc": {
+          "source": "Z-score threshold for flagging anomalies",
+          "message": "이상 감지를 위한 Z-score 임계값"
+        },
+        "app.UW9yZQ.action.YW5vbWFseS1kZXRlY3Rpb24.short_desc": {
+          "source": "Detect anomalous values using z-score analysis per record",
+          "message": "레코드별 z-score 분석을 사용하여 이상값 감지"
+        },
+        "app.UW9yZQ.action.Z3JvdXAtYnk.desc": {
+          "source": "Group records by one or more field values and compute aggregate functions per group; emits one output record per group on flush with the group field values and computed aggregates.\n\nSupported aggregate functions: `count()`, `sum(field)`, `avg(field)`, `min(field)`, `max(field)`, `first(field)`, `last(field)`",
+          "message": "하나 이상의 필드 값을 기준으로 레코드를 그룹화하고 그룹별로 집계 함수를 계산합니다. 플러시 시 그룹 필드 값 및 계산된 집계와 함께 그룹당 하나의 출력 레코드를 발행합니다.\n\n지원되는 집계 함수: `count()`, `sum(field)`, `avg(field)`, `min(field)`, `max(field)`, `first(field)`, `last(field)`"
+        },
+        "app.UW9yZQ.action.Z3JvdXAtYnk.display_name": {
+          "source": "Group By and Aggregate",
+          "message": "그룹화 및 집계"
+        },
+        "app.UW9yZQ.action.Z3JvdXAtYnk.option.YWdncmVnYXRlcw.desc": {
+          "source": "Comma-separated aggregate expressions in the format `name=op(field)` or `op(field)`.\n\nSupported operations: `count()`, `sum(field)`, `avg(field)`, `min(field)`, `max(field)`, `first(field)`, `last(field)`.\n\nOutput field name defaults to `op_field` (or `count` for `count()`). Example: `total=sum(amount),orders=count(),avg_price=avg(price)`",
+          "message": "`name=op(field)` 또는 `op(field)` 형식의 쉼표로 구분된 집계 표현식입니다.\n\n지원되는 연산: `count()`, `sum(field)`, `avg(field)`, `min(field)`, `max(field)`, `first(field)`, `last(field)`.\n\n출력 필드 이름의 기본값은 `op_field`(또는 `count()`의 경우 `count`)입니다. 예: `total=sum(amount),orders=count(),avg_price=avg(price)`"
+        },
+        "app.UW9yZQ.action.Z3JvdXAtYnk.option.YWdncmVnYXRlcw.display_name": {
+          "source": "Aggregate Expressions",
+          "message": "집계 표현식"
+        },
+        "app.UW9yZQ.action.Z3JvdXAtYnk.option.YWdncmVnYXRlcw.short_desc": {
+          "source": "Aggregate expressions to compute per group",
+          "message": "그룹별로 계산할 집계 표현식"
+        },
+        "app.UW9yZQ.action.Z3JvdXAtYnk.option.Z3JvdXBfYnk.desc": {
+          "source": "A list of field names to group records by; records with the same values for these fields are grouped together; if not provided, all records are aggregated into a single group; supports dot-notation for nested fields (e.g. `address.city`)",
+          "message": "레코드를 그룹화할 필드 이름 목록입니다. 이 필드들에 대해 동일한 값을 가진 레코드들이 함께 그룹화됩니다. 지정하지 않으면 모든 레코드가 단일 그룹으로 집계됩니다. 중첩 필드에 대한 점 표기법(예: `address.city`)을 지원합니다."
+        },
+        "app.UW9yZQ.action.Z3JvdXAtYnk.option.Z3JvdXBfYnk.display_name": {
+          "source": "Group By Fields",
+          "message": "그룹화 기준 필드"
+        },
+        "app.UW9yZQ.action.Z3JvdXAtYnk.option.Z3JvdXBfYnk.short_desc": {
+          "source": "Field names to group records by",
+          "message": "레코드를 그룹화할 필드 이름"
+        },
+        "app.UW9yZQ.action.Z3JvdXAtYnk.short_desc": {
+          "source": "Group records by field values and compute aggregates per group",
+          "message": "필드 값별로 레코드를 그룹화하고 그룹별 집계를 계산합니다"
+        },
+        "app.UW9yZQ.action.ZXdtYS1jb250cm9sLWNoYXJ0.desc": {
+          "source": "Monitors a process using an Exponentially Weighted Moving Average (EWMA) control chart to detect when values drift outside the normal operating range. The EWMA smooths out noise while detecting sustained shifts. Each record is classified as `normal`, `upper_violation`, or `lower_violation`.\n\nFor example, it can detect when a server's average response time gradually drifts upward beyond its normal range.",
+          "message": "지수 가중 이동 평균(EWMA) 관리도를 사용하여 프로세스를 모니터링하고 값이 정상 작동 범위를 벗어나는 시점을 감지합니다. EWMA는 노이즈를 완화하면서 지속적인 변화를 감지합니다. 각 레코드는 `normal`, `upper_violation` 또는 `lower_violation`(으)로 분류됩니다.\n\n예를 들어 서버의 평균 응답 시간이 정상 범위를 벗어나 점진적으로 증가하는 경우를 감지할 수 있습니다."
+        },
+        "app.UW9yZQ.action.ZXdtYS1jb250cm9sLWNoYXJ0.display_name": {
+          "source": "Monitor Process Stability",
+          "message": "프로세스 안정성 모니터링"
+        },
+        "app.UW9yZQ.action.ZXdtYS1jb250cm9sLWNoYXJ0.option.ZmllbGRz.desc": {
+          "source": "A list of field names to compute analytics for; each field must contain numeric values in the input records; supports dot-notation for nested fields (e.g. `sensor.temperature`)",
+          "message": "분석을 계산할 필드 이름 목록입니다. 각 필드는 입력 레코드에서 숫자 값을 포함해야 합니다. 중첩 필드에 대한 점 표기법(예: `sensor.temperature`)을 지원합니다."
+        },
+        "app.UW9yZQ.action.ZXdtYS1jb250cm9sLWNoYXJ0.option.ZmllbGRz.display_name": {
+          "source": "Field Names",
+          "message": "필드 이름"
+        },
+        "app.UW9yZQ.action.ZXdtYS1jb250cm9sLWNoYXJ0.option.ZmllbGRz.short_desc": {
+          "source": "Field names to analyze",
+          "message": "분석할 필드 이름"
+        },
+        "app.UW9yZQ.action.ZXdtYS1jb250cm9sLWNoYXJ0.option.bGFtYmRh.desc": {
+          "source": "How quickly the EWMA reacts to changes; higher values (closer to `1.0`) react faster but are more sensitive to noise; lower values produce smoother trends.\n\n**Typical values**: `0.1` (slow, smooth — best for detecting small persistent shifts), `0.2` (standard), `0.4` (responsive — closer to a raw signal); must be between `0` (exclusive) and `1` (inclusive); default: `0.2`",
+          "message": "EWMA가 변화에 반응하는 속도입니다. 값이 클수록(`1.0`에 가까울수록) 더 빠르게 반응하지만 노이즈에 더 민감하며, 값이 작을수록 더 매끄러운 추세를 생성합니다.\n\n**일반적인 값**: `0.1`(느리고 매끄러움 — 작고 지속적인 변화를 감지하는 데 가장 적합), `0.2`(표준), `0.4`(반응 빠름 — 원시 신호에 가까움); `0`(제외)와 `1`(포함) 사이의 값이어야 함; 기본값: `0.2`"
+        },
+        "app.UW9yZQ.action.ZXdtYS1jb250cm9sLWNoYXJ0.option.bGFtYmRh.display_name": {
+          "source": "Smoothing Factor",
+          "message": "평활화 계수"
+        },
+        "app.UW9yZQ.action.ZXdtYS1jb250cm9sLWNoYXJ0.option.bGFtYmRh.short_desc": {
+          "source": "EWMA smoothing parameter (0-1)",
+          "message": "EWMA 평활화 매개변수 (0-1)"
+        },
+        "app.UW9yZQ.action.ZXdtYS1jb250cm9sLWNoYXJ0.option.c2lnbWFfbXVsdGlwbGllcg.desc": {
+          "source": "How wide the control limits are as a multiple of the standard deviation; larger values mean fewer false alarms but slower detection of real shifts.\n\n**Typical values**: `2.0` (sensitive — catches small shifts quickly), `3.0` (standard — good balance of sensitivity and false alarms); default: `3.0`",
+          "message": "표준 편차의 배수로 표현되는 관리 한계의 너비입니다. 값이 클수록 오경보가 줄어들지만 실제 변화 감지가 느려집니다.\n\n**일반적인 값**: `2.0`(민감함 — 작은 변화를 빠르게 포착), `3.0`(표준 — 민감도와 오경보 간의 균형이 양호함); 기본값: `3.0`"
+        },
+        "app.UW9yZQ.action.ZXdtYS1jb250cm9sLWNoYXJ0.option.c2lnbWFfbXVsdGlwbGllcg.display_name": {
+          "source": "Control Limit Width",
+          "message": "관리 한계 너비"
+        },
+        "app.UW9yZQ.action.ZXdtYS1jb250cm9sLWNoYXJ0.option.c2lnbWFfbXVsdGlwbGllcg.short_desc": {
+          "source": "Number of standard deviations for control limits",
+          "message": "관리 한계의 표준 편차 수"
+        },
+        "app.UW9yZQ.action.ZXdtYS1jb250cm9sLWNoYXJ0.option.d2luZG93X3NpemU.desc": {
+          "source": "The number of records to accumulate in each analytics window; for window-level processors, an event is emitted when the window is full; for record-level processors, this controls the sliding window size.\n\n**Sizing guidance**: use `20`–`50` for real-time alerting where fast response matters, `100`–`500` for general trend and statistics analysis, or `1000`+ for high-frequency data where you need stable long-term statistics; the window must be large enough to capture at least one full cycle of any pattern you want to detect",
+          "message": "각 분석 윈도우에 누적할 레코드 수입니다. 윈도우 수준 프로세서의 경우 윈도우가 가득 차면 이벤트가 발행되며, 레코드 수준 프로세서의 경우 슬라이딩 윈도우 크기를 제어합니다.\n\n**크기 설정 가이드**: 빠른 응답이 중요한 실시간 알림에는 `20`–`50`개, 일반적인 추세 및 통계 분석에는 `100`–`500`개, 안정적인 장기 통계가 필요한 고주파 데이터에는 `1000`개 이상을 사용하십시오. 윈도우는 감지하려는 패턴의 최소 1회 전체 주기를 캡처할 수 있을 만큼 커야 합니다."
+        },
+        "app.UW9yZQ.action.ZXdtYS1jb250cm9sLWNoYXJ0.option.d2luZG93X3NpemU.display_name": {
+          "source": "Window Size",
+          "message": "윈도우 크기"
+        },
+        "app.UW9yZQ.action.ZXdtYS1jb250cm9sLWNoYXJ0.option.d2luZG93X3NpemU.short_desc": {
+          "source": "Number of records in each analytics window",
+          "message": "각 분석 윈도우의 레코드 수"
+        },
+        "app.UW9yZQ.action.ZXdtYS1jb250cm9sLWNoYXJ0.option.dGFyZ2V0.desc": {
+          "source": "The expected center/target value for the process; when not set, the mean of the sliding window history is used automatically; set to any value (including `0`) to use a fixed center line; default: auto (use window mean)",
+          "message": "프로세스의 예상 중심/목표 값입니다. 설정하지 않으면 슬라이딩 윈도우 기록의 평균이 자동으로 사용됩니다. 고정된 중심선을 사용하려면 임의의 값(`0` 포함)으로 설정하십시오. 기본값: auto(윈도우 평균 사용)"
+        },
+        "app.UW9yZQ.action.ZXdtYS1jb250cm9sLWNoYXJ0.option.dGFyZ2V0.display_name": {
+          "source": "Target Value",
+          "message": "목표 값"
+        },
+        "app.UW9yZQ.action.ZXdtYS1jb250cm9sLWNoYXJ0.option.dGFyZ2V0.short_desc": {
+          "source": "Center line target value (omit for auto from window mean)",
+          "message": "중심선 목표 값 (윈도우 평균에서 자동으로 계산하려면 생략)"
+        },
+        "app.UW9yZQ.action.ZXdtYS1jb250cm9sLWNoYXJ0.short_desc": {
+          "source": "Detects when values drift outside normal operating range",
+          "message": "값이 정상 작동 범위를 벗어나는 시점을 감지합니다"
+        },
+        "app.UW9yZQ.action.ZmlsdGVyLXJlY29yZHM.desc": {
+          "source": "Filter pipeline records using either a structured `where_cond` expression or a `dpql_where` string; matching records pass through, non-matching records are dropped",
+          "message": "구조화된 `where_cond` 표현식 또는 `dpql_where` 문자열을 사용하여 파이프라인 레코드를 필터링합니다. 일치하는 레코드는 통과하고 일치하지 않는 레코드는 삭제됩니다"
+        },
+        "app.UW9yZQ.action.ZmlsdGVyLXJlY29yZHM.display_name": {
+          "source": "Filter Records",
+          "message": "레코드 필터링"
+        },
+        "app.UW9yZQ.action.ZmlsdGVyLXJlY29yZHM.option.ZHBxbF93aGVyZQ.desc": {
+          "source": "A DPQL string expression to filter records; use this option when writing the predicate directly as text instead of using the expression builder",
+          "message": "레코드를 필터링하기 위한 DPQL 문자열 표현식입니다. 표현식 작성기를 사용하는 대신 조건자를 텍스트로 직접 작성할 때 이 옵션을 사용하십시오"
+        },
+        "app.UW9yZQ.action.ZmlsdGVyLXJlY29yZHM.option.ZHBxbF93aGVyZQ.display_name": {
+          "source": "DPQL Filter",
+          "message": "DPQL 필터"
+        },
+        "app.UW9yZQ.action.ZmlsdGVyLXJlY29yZHM.option.ZHBxbF93aGVyZQ.short_desc": {
+          "source": "A DPQL string filter expression",
+          "message": "DPQL 문자열 필터 표현식"
+        },
+        "app.UW9yZQ.action.ZmlsdGVyLXJlY29yZHM.option.d2hlcmVfY29uZA.desc": {
+          "source": "A boolean expression to filter records; matching records pass through, non-matching records are dropped",
+          "message": "레코드를 필터링하기 위한 불리언 표현식입니다. 일치하는 레코드는 통과하고 일치하지 않는 레코드는 삭제됩니다"
+        },
+        "app.UW9yZQ.action.ZmlsdGVyLXJlY29yZHM.option.d2hlcmVfY29uZA.display_name": {
+          "source": "Filter Expression",
+          "message": "필터 표현식"
+        },
+        "app.UW9yZQ.action.ZmlsdGVyLXJlY29yZHM.option.d2hlcmVfY29uZA.short_desc": {
+          "source": "A boolean filter expression",
+          "message": "불리언 필터 표현식"
+        },
+        "app.UW9yZQ.action.ZmlsdGVyLXJlY29yZHM.short_desc": {
+          "source": "Filter records by expression or DPQL string",
+          "message": "표현식 또는 DPQL 문자열로 레코드 필터링"
+        },
+        "app.UW9yZQ.action.aGlzdG9ncmFt.desc": {
+          "source": "Creates a frequency distribution by dividing the range of values into bins and counting how many values fall in each bin. Supports `uniform` (equal-width) and `quantile` (equal-count) binning.\n\nFor example, for response times it can show that 80% of requests complete in 0-100ms, 15% in 100-200ms, and 5% take over 200ms.",
+          "message": "값의 범위를 구간(bin)으로 나누고 각 구간에 속하는 값의 수를 세어 도수 분포를 생성합니다. `uniform`(동일 너비) 및 `quantile`(동일 개수) 구간화를 지원합니다.\n\n예를 들어 응답 시간의 경우 요청의 80%가 0-100ms 내에 완료되고, 15%가 100-200ms 내에 완료되며, 5%가 200ms 이상 소요됨을 보여줄 수 있습니다."
+        },
+        "app.UW9yZQ.action.aGlzdG9ncmFt.display_name": {
+          "source": "Count Value Ranges",
+          "message": "값 범위 개수 계산"
+        },
+        "app.UW9yZQ.action.aGlzdG9ncmFt.option.YmluX21ldGhvZA.allowed-value.c3RyaW5nOnF1YW50aWxl.display_name": {
+          "source": "Quantile (equal-count bins)",
+          "message": "분위수 (동일 개수 구간)"
+        },
+        "app.UW9yZQ.action.aGlzdG9ncmFt.option.YmluX21ldGhvZA.allowed-value.c3RyaW5nOnVuaWZvcm0.display_name": {
+          "source": "Uniform (equal-width bins)",
+          "message": "균등 (동일 너비 구간)"
+        },
+        "app.UW9yZQ.action.aGlzdG9ncmFt.option.YmluX21ldGhvZA.desc": {
+          "source": "How to determine bin boundaries: `uniform` (equal-width) or `quantile` (equal-count)",
+          "message": "구간 경계를 결정하는 방법: `uniform`(동일 너비) 또는 `quantile`(동일 개수)"
+        },
+        "app.UW9yZQ.action.aGlzdG9ncmFt.option.YmluX21ldGhvZA.display_name": {
+          "source": "Binning Method",
+          "message": "구간화 방법"
+        },
+        "app.UW9yZQ.action.aGlzdG9ncmFt.option.YmluX21ldGhvZA.short_desc": {
+          "source": "Method used to determine bin boundaries",
+          "message": "구간 경계를 결정하는 데 사용되는 방법"
+        },
+        "app.UW9yZQ.action.aGlzdG9ncmFt.option.ZmllbGRz.desc": {
+          "source": "A list of field names to compute analytics for; each field must contain numeric values in the input records; supports dot-notation for nested fields (e.g. `sensor.temperature`)",
+          "message": "분석을 계산할 필드 이름 목록입니다. 각 필드는 입력 레코드에서 숫자 값을 포함해야 합니다. 중첩 필드에 대한 점 표기법(예: `sensor.temperature`)을 지원합니다."
+        },
+        "app.UW9yZQ.action.aGlzdG9ncmFt.option.ZmllbGRz.display_name": {
+          "source": "Field Names",
+          "message": "필드 이름"
+        },
+        "app.UW9yZQ.action.aGlzdG9ncmFt.option.ZmllbGRz.short_desc": {
+          "source": "Field names to analyze",
+          "message": "분석할 필드 이름"
+        },
+        "app.UW9yZQ.action.aGlzdG9ncmFt.option.bl9iaW5z.desc": {
+          "source": "The number of bins to divide the value range into; more bins show finer detail but need more data to be meaningful; default: `10`",
+          "message": "값 범위를 나눌 구간의 수입니다. 구간이 많을수록 더 세부적인 정보를 표시하지만 의미가 있으려면 더 많은 데이터가 필요합니다. 기본값: `10`"
+        },
+        "app.UW9yZQ.action.aGlzdG9ncmFt.option.bl9iaW5z.display_name": {
+          "source": "Number of Bins",
+          "message": "구간 수"
+        },
+        "app.UW9yZQ.action.aGlzdG9ncmFt.option.bl9iaW5z.short_desc": {
+          "source": "Number of histogram bins",
+          "message": "히스토그램 구간 수"
+        },
+        "app.UW9yZQ.action.aGlzdG9ncmFt.option.d2luZG93X3NpemU.desc": {
+          "source": "The number of records to accumulate in each analytics window; for window-level processors, an event is emitted when the window is full; for record-level processors, this controls the sliding window size.\n\n**Sizing guidance**: use `20`–`50` for real-time alerting where fast response matters, `100`–`500` for general trend and statistics analysis, or `1000`+ for high-frequency data where you need stable long-term statistics; the window must be large enough to capture at least one full cycle of any pattern you want to detect",
+          "message": "각 분석 윈도우에 누적할 레코드 수입니다. 윈도우 수준 프로세서의 경우 윈도우가 가득 차면 이벤트가 발행되며, 레코드 수준 프로세서의 경우 슬라이딩 윈도우 크기를 제어합니다.\n\n**크기 설정 가이드**: 빠른 응답이 중요한 실시간 알림에는 `20`–`50`개, 일반적인 추세 및 통계 분석에는 `100`–`500`개, 안정적인 장기 통계가 필요한 고주파 데이터에는 `1000`개 이상을 사용하십시오. 윈도우는 감지하려는 패턴의 최소 1회 전체 주기를 캡처할 수 있을 만큼 커야 합니다."
+        },
+        "app.UW9yZQ.action.aGlzdG9ncmFt.option.d2luZG93X3NpemU.display_name": {
+          "source": "Window Size",
+          "message": "윈도우 크기"
+        },
+        "app.UW9yZQ.action.aGlzdG9ncmFt.option.d2luZG93X3NpemU.short_desc": {
+          "source": "Number of records in each analytics window",
+          "message": "각 분석 윈도우의 레코드 수"
+        },
+        "app.UW9yZQ.action.aGlzdG9ncmFt.short_desc": {
+          "source": "Groups values into ranges and counts how many fall in each",
+          "message": "값을 범위별로 그룹화하고 각 범위에 속하는 개수를 셉니다"
+        },
+        "app.UW9yZQ.action.bW92aW5nLWF2ZXJhZ2U.desc": {
+          "source": "Compute simple moving average (`SMA`) and exponential moving average (`EMA`) for each configured numeric field; emits one analytics event per input record with the current `SMA` and `EMA` values",
+          "message": "구성된 각 숫자 필드에 대해 단순 이동 평균(`SMA`) 및 지수 이동 평균(`EMA`)을 계산합니다. 현재 `SMA` 및 `EMA` 값이 포함된 입력 레코드당 하나의 분석 이벤트를 생성합니다"
+        },
+        "app.UW9yZQ.action.bW92aW5nLWF2ZXJhZ2U.display_name": {
+          "source": "Moving Average",
+          "message": "이동 평균"
+        },
+        "app.UW9yZQ.action.bW92aW5nLWF2ZXJhZ2U.option.ZW1hX2FscGhh.desc": {
+          "source": "Controls how much weight is given to the most recent value vs. historical values when computing the exponential moving average (EMA); higher values make the average respond faster to recent changes but also make it noisier.\n\n**Typical values**: `0.1` (smooth, slow to react), `0.2` (balanced, good default), `0.5` (responsive, tracks changes quickly); must be between `0.0` and `1.0` exclusive; default: `0.2`",
+          "message": "지수 이동 평균(EMA)을 계산할 때 과거 값 대비 최신 값에 부여할 가중치를 제어합니다. 값이 클수록 평균이 최근 변화에 더 빠르게 반응하지만 노이즈도 커집니다.\n\n**일반적인 값**: `0.1`(매끄러움, 느린 반응), `0.2`(균형 잡힘, 적절한 기본값), `0.5`(반응 빠름, 변화를 빠르게 추적); `0.0`와 `1.0` 사이(양 끝값 제외)여야 함; 기본값: `0.2`"
+        },
+        "app.UW9yZQ.action.bW92aW5nLWF2ZXJhZ2U.option.ZW1hX2FscGhh.display_name": {
+          "source": "EMA Smoothing Factor",
+          "message": "EMA 평활화 계수"
+        },
+        "app.UW9yZQ.action.bW92aW5nLWF2ZXJhZ2U.option.ZW1hX2FscGhh.short_desc": {
+          "source": "Smoothing factor for exponential moving average (0-1)",
+          "message": "지수 이동 평균 평활화 계수 (0-1)"
+        },
+        "app.UW9yZQ.action.bW92aW5nLWF2ZXJhZ2U.option.ZmllbGRz.desc": {
+          "source": "A list of field names to compute analytics for; each field must contain numeric values in the input records; supports dot-notation for nested fields (e.g. `sensor.temperature`)",
+          "message": "분석을 계산할 필드 이름 목록입니다. 각 필드는 입력 레코드에서 숫자 값을 포함해야 합니다. 중첩 필드에 대한 점 표기법(예: `sensor.temperature`)을 지원합니다."
+        },
+        "app.UW9yZQ.action.bW92aW5nLWF2ZXJhZ2U.option.ZmllbGRz.display_name": {
+          "source": "Field Names",
+          "message": "필드 이름"
+        },
+        "app.UW9yZQ.action.bW92aW5nLWF2ZXJhZ2U.option.ZmllbGRz.short_desc": {
+          "source": "Field names to analyze",
+          "message": "분석할 필드 이름"
+        },
+        "app.UW9yZQ.action.bW92aW5nLWF2ZXJhZ2U.option.d2luZG93X3NpemU.desc": {
+          "source": "The number of records to accumulate in each analytics window; for window-level processors, an event is emitted when the window is full; for record-level processors, this controls the sliding window size.\n\n**Sizing guidance**: use `20`–`50` for real-time alerting where fast response matters, `100`–`500` for general trend and statistics analysis, or `1000`+ for high-frequency data where you need stable long-term statistics; the window must be large enough to capture at least one full cycle of any pattern you want to detect",
+          "message": "각 분석 윈도우에 누적할 레코드 수입니다. 윈도우 수준 프로세서의 경우 윈도우가 가득 차면 이벤트가 발행되며, 레코드 수준 프로세서의 경우 슬라이딩 윈도우 크기를 제어합니다.\n\n**크기 설정 가이드**: 빠른 응답이 중요한 실시간 알림에는 `20`–`50`개, 일반적인 추세 및 통계 분석에는 `100`–`500`개, 안정적인 장기 통계가 필요한 고주파 데이터에는 `1000`개 이상을 사용하십시오. 윈도우는 감지하려는 패턴의 최소 1회 전체 주기를 캡처할 수 있을 만큼 커야 합니다."
+        },
+        "app.UW9yZQ.action.bW92aW5nLWF2ZXJhZ2U.option.d2luZG93X3NpemU.display_name": {
+          "source": "Window Size",
+          "message": "윈도우 크기"
+        },
+        "app.UW9yZQ.action.bW92aW5nLWF2ZXJhZ2U.option.d2luZG93X3NpemU.short_desc": {
+          "source": "Number of records in each analytics window",
+          "message": "각 분석 윈도우의 레코드 수"
+        },
+        "app.UW9yZQ.action.bW92aW5nLWF2ZXJhZ2U.short_desc": {
+          "source": "Compute simple and exponential moving averages per record",
+          "message": "레코드당 단순 및 지수 이동 평균 계산"
+        },
+        "app.UW9yZQ.action.c2V0LWZpZWxkcw.desc": {
+          "source": "Add or overwrite fields with constant values in each record passing through the pipeline",
+          "message": "파이프라인을 통과하는 각 레코드에서 필드를 상수 값으로 추가하거나 덮어씁니다"
+        },
+        "app.UW9yZQ.action.c2V0LWZpZWxkcw.display_name": {
+          "source": "Set Fields",
+          "message": "필드 설정"
+        },
+        "app.UW9yZQ.action.c2V0LWZpZWxkcw.option.ZmllbGRz.desc": {
+          "source": "A hash of field names and values to set on each record; existing fields are overwritten, new fields are added",
+          "message": "각 레코드에 설정할 필드 이름 및 값의 해시입니다. 기존 필드는 덮어쓰고 새 필드는 추가됩니다"
+        },
+        "app.UW9yZQ.action.c2V0LWZpZWxkcw.option.ZmllbGRz.display_name": {
+          "source": "Fields",
+          "message": "필드"
+        },
+        "app.UW9yZQ.action.c2V0LWZpZWxkcw.option.ZmllbGRz.short_desc": {
+          "source": "A hash of field names and values to set",
+          "message": "설정할 필드 이름 및 값의 해시"
+        },
+        "app.UW9yZQ.action.c2V0LWZpZWxkcw.short_desc": {
+          "source": "Set fields to constant values in each record",
+          "message": "각 레코드의 필드를 상수 값으로 설정"
+        },
+        "app.UW9yZQ.action.c2Vhc29uYWxpdHktZGV0ZWN0aW9u.desc": {
+          "source": "Detects repeating cyclical patterns in the data using autocorrelation analysis. It automatically identifies the dominant period without requiring the user to specify it upfront.\n\nFor example, it can discover that sales data has a weekly pattern (`period = 7`) with a correlation of `0.85`, or that a temperature sensor shows both daily (`period = 24`) and yearly patterns.",
+          "message": "자기상관 분석을 사용하여 데이터에서 반복되는 주기적 패턴을 감지합니다. 사용자가 미리 지정할 필요 없이 지배적인 주기를 자동으로 식별합니다.\n\n예를 들어 매출 데이터에 상관관계가 `0.85`인 주간 패턴(`period = 7`)이 있음을 발견하거나, 온도 센서가 일간 패턴(`period = 24`)과 연간 패턴을 모두 나타냄을 발견할 수 있습니다."
+        },
+        "app.UW9yZQ.action.c2Vhc29uYWxpdHktZGV0ZWN0aW9u.display_name": {
+          "source": "Detect Repeating Patterns",
+          "message": "반복 패턴 감지"
+        },
+        "app.UW9yZQ.action.c2Vhc29uYWxpdHktZGV0ZWN0aW9u.option.ZmllbGRz.desc": {
+          "source": "A list of field names to compute analytics for; each field must contain numeric values in the input records; supports dot-notation for nested fields (e.g. `sensor.temperature`)",
+          "message": "분석을 계산할 필드 이름 목록입니다. 각 필드는 입력 레코드에서 숫자 값을 포함해야 합니다. 중첩 필드에 대한 점 표기법(예: `sensor.temperature`)을 지원합니다."
+        },
+        "app.UW9yZQ.action.c2Vhc29uYWxpdHktZGV0ZWN0aW9u.option.ZmllbGRz.display_name": {
+          "source": "Field Names",
+          "message": "필드 이름"
+        },
+        "app.UW9yZQ.action.c2Vhc29uYWxpdHktZGV0ZWN0aW9u.option.ZmllbGRz.short_desc": {
+          "source": "Field names to analyze",
+          "message": "분석할 필드 이름"
+        },
+        "app.UW9yZQ.action.c2Vhc29uYWxpdHktZGV0ZWN0aW9u.option.bWF4X3BlcmlvZA.desc": {
+          "source": "The maximum period (in records) to search for; set to `0` to use `window_size / 3` automatically; the window size should be at least 3 times the expected maximum period; default: `0` (auto)",
+          "message": "검색할 최대 주기(레코드 수)입니다. `window_size / 3`을(를) 자동으로 사용하려면 `0`(으)로 설정하십시오. 윈도우 크기는 예상 최대 주기의 3배 이상이어야 합니다. 기본값: `0`(자동)"
+        },
+        "app.UW9yZQ.action.c2Vhc29uYWxpdHktZGV0ZWN0aW9u.option.bWF4X3BlcmlvZA.display_name": {
+          "source": "Maximum Period",
+          "message": "최대 주기"
+        },
+        "app.UW9yZQ.action.c2Vhc29uYWxpdHktZGV0ZWN0aW9u.option.bWF4X3BlcmlvZA.short_desc": {
+          "source": "Maximum seasonal period to search for",
+          "message": "검색할 최대 계절적 주기"
+        },
+        "app.UW9yZQ.action.c2Vhc29uYWxpdHktZGV0ZWN0aW9u.option.bWluX2NvcnJlbGF0aW9u.desc": {
+          "source": "The minimum strength of a repeating pattern (measured as autocorrelation, `0`–`1`) for it to be reported; autocorrelation measures how similar a data series is to a shifted copy of itself.\n\n**Typical values**: `0.2` (detect weak/noisy patterns), `0.3` (balanced default), `0.5` (only report strong, clear patterns); default: `0.3`",
+          "message": "보고 대상이 되기 위한 반복 패턴의 최소 강도(자기상관으로 측정, `0`~`1`)입니다. 자기상관은 데이터 계열이 자체의 이동된 복사본과 얼마나 유사한지를 측정합니다.\n\n**일반적인 값**: `0.2`(약하거나 노이즈가 있는 패턴 감지), `0.3`(균형 잡힌 기본값), `0.5`(강하고 명확한 패턴만 보고); 기본값: `0.3`"
+        },
+        "app.UW9yZQ.action.c2Vhc29uYWxpdHktZGV0ZWN0aW9u.option.bWluX2NvcnJlbGF0aW9u.display_name": {
+          "source": "Minimum Correlation",
+          "message": "최소 상관관계"
+        },
+        "app.UW9yZQ.action.c2Vhc29uYWxpdHktZGV0ZWN0aW9u.option.bWluX2NvcnJlbGF0aW9u.short_desc": {
+          "source": "Minimum autocorrelation to report as significant",
+          "message": "유의미한 것으로 보고할 최소 자기상관"
+        },
+        "app.UW9yZQ.action.c2Vhc29uYWxpdHktZGV0ZWN0aW9u.option.d2luZG93X3NpemU.desc": {
+          "source": "The number of records to accumulate in each analytics window; for window-level processors, an event is emitted when the window is full; for record-level processors, this controls the sliding window size.\n\n**Sizing guidance**: use `20`–`50` for real-time alerting where fast response matters, `100`–`500` for general trend and statistics analysis, or `1000`+ for high-frequency data where you need stable long-term statistics; the window must be large enough to capture at least one full cycle of any pattern you want to detect",
+          "message": "각 분석 윈도우에 누적할 레코드 수입니다. 윈도우 수준 프로세서의 경우 윈도우가 가득 차면 이벤트가 발행되며, 레코드 수준 프로세서의 경우 슬라이딩 윈도우 크기를 제어합니다.\n\n**크기 설정 가이드**: 빠른 응답이 중요한 실시간 알림에는 `20`–`50`개, 일반적인 추세 및 통계 분석에는 `100`–`500`개, 안정적인 장기 통계가 필요한 고주파 데이터에는 `1000`개 이상을 사용하십시오. 윈도우는 감지하려는 패턴의 최소 1회 전체 주기를 캡처할 수 있을 만큼 커야 합니다."
+        },
+        "app.UW9yZQ.action.c2Vhc29uYWxpdHktZGV0ZWN0aW9u.option.d2luZG93X3NpemU.display_name": {
+          "source": "Window Size",
+          "message": "윈도우 크기"
+        },
+        "app.UW9yZQ.action.c2Vhc29uYWxpdHktZGV0ZWN0aW9u.option.d2luZG93X3NpemU.short_desc": {
+          "source": "Number of records in each analytics window",
+          "message": "각 분석 윈도우의 레코드 수"
+        },
+        "app.UW9yZQ.action.c2Vhc29uYWxpdHktZGV0ZWN0aW9u.short_desc": {
+          "source": "Finds cyclical patterns in data automatically",
+          "message": "데이터에서 주기적 패턴을 자동으로 찾습니다"
+        },
+        "app.UW9yZQ.action.c2VhcmNoLXJlcGxhY2U.desc": {
+          "source": "Perform search and replace on a string field in each record; supports both literal string matching and regular expression patterns",
+          "message": "각 레코드의 문자열 필드에서 찾기 및 바꾸기를 수행합니다. 리터럴 문자열 일치 및 정규식 패턴을 모두 지원합니다"
+        },
+        "app.UW9yZQ.action.c2VhcmNoLXJlcGxhY2U.display_name": {
+          "source": "Search and Replace",
+          "message": "찾기 및 바꾸기"
+        },
+        "app.UW9yZQ.action.c2VhcmNoLXJlcGxhY2U.option.ZmllbGQ.desc": {
+          "source": "The name of the record field to apply the search and replace operation on; the field must contain a string value; supports dot-notation for nested fields (e.g. `address.street`)",
+          "message": "찾기 및 바꾸기 작업을 적용할 레코드 필드의 이름입니다. 해당 필드는 문자열 값을 포함해야 합니다. 중첩 필드에 대한 점 표기법을 지원합니다(예: `address.street`)"
+        },
+        "app.UW9yZQ.action.c2VhcmNoLXJlcGxhY2U.option.ZmllbGQ.display_name": {
+          "source": "Field Name",
+          "message": "필드 이름"
+        },
+        "app.UW9yZQ.action.c2VhcmNoLXJlcGxhY2U.option.ZmllbGQ.short_desc": {
+          "source": "Field to apply search and replace on",
+          "message": "찾기 및 바꾸기를 적용할 필드"
+        },
+        "app.UW9yZQ.action.c2VhcmNoLXJlcGxhY2U.option.aXNfcmVnZXg.desc": {
+          "source": "If `True`, the search pattern is treated as a regular expression; if `False`, it is treated as a literal string",
+          "message": "`True`인 경우 검색 패턴이 정규식으로 처리됩니다. `False`인 경우 리터럴 문자열로 처리됩니다"
+        },
+        "app.UW9yZQ.action.c2VhcmNoLXJlcGxhY2U.option.aXNfcmVnZXg.display_name": {
+          "source": "Use Regex",
+          "message": "정규식 사용"
+        },
+        "app.UW9yZQ.action.c2VhcmNoLXJlcGxhY2U.option.aXNfcmVnZXg.short_desc": {
+          "source": "Use regex matching instead of literal",
+          "message": "리터럴 대신 정규식 일치 사용"
+        },
+        "app.UW9yZQ.action.c2VhcmNoLXJlcGxhY2U.option.c2VhcmNo.desc": {
+          "source": "The search string or regular expression pattern to find in the field value; when regex mode is enabled, supports full Qore regular expression syntax",
+          "message": "필드 값에서 찾을 검색 문자열 또는 정규식 패턴입니다. 정규식 모드가 활성화된 경우 완전한 Qore 정규식 구문을 지원합니다"
+        },
+        "app.UW9yZQ.action.c2VhcmNoLXJlcGxhY2U.option.c2VhcmNo.display_name": {
+          "source": "Search Pattern",
+          "message": "검색 패턴"
+        },
+        "app.UW9yZQ.action.c2VhcmNoLXJlcGxhY2U.option.c2VhcmNo.short_desc": {
+          "source": "Text or regex pattern to search for",
+          "message": "검색할 텍스트 또는 정규식 패턴"
+        },
+        "app.UW9yZQ.action.c2VhcmNoLXJlcGxhY2U.option.cmVnZXhfb3B0aW9ucw.allowed-value.c3RyaW5nOlJFX011bHRpTGluZQ.desc": {
+          "source": "Makes start-of-line `^` or end-of-line `$` match after or before any newline in the subject string",
+          "message": "대상 문자열의 줄바꿈 문자 앞이나 뒤에서 줄 시작 `^` 또는 줄 끝 `$`이 일치하도록 설정합니다"
+        },
+        "app.UW9yZQ.action.c2VhcmNoLXJlcGxhY2U.option.cmVnZXhfb3B0aW9ucw.allowed-value.c3RyaW5nOlJFX011bHRpTGluZQ.display_name": {
+          "source": "Multiline?",
+          "message": "여러 줄?"
+        },
+        "app.UW9yZQ.action.c2VhcmNoLXJlcGxhY2U.option.cmVnZXhfb3B0aW9ucw.allowed-value.c3RyaW5nOlJFX011bHRpTGluZQ.short_desc": {
+          "source": "Makes start-of-line '^' or end-of-line '$' match after or before any newline in the subject string",
+          "message": "대상 문자열의 줄바꿈 문자 앞이나 뒤에서 줄 시작 '^' 또는 줄 끝 '$'이 일치하도록 설정합니다"
+        },
+        "app.UW9yZQ.action.c2VhcmNoLXJlcGxhY2U.option.cmVnZXhfb3B0aW9ucw.allowed-value.c3RyaW5nOlJFX0Nhc2VsZXNz.desc": {
+          "source": "Ignore case when matching",
+          "message": "일치 검색 시 대소문자를 무시합니다"
+        },
+        "app.UW9yZQ.action.c2VhcmNoLXJlcGxhY2U.option.cmVnZXhfb3B0aW9ucw.allowed-value.c3RyaW5nOlJFX0Nhc2VsZXNz.display_name": {
+          "source": "Ignore Case?",
+          "message": "대소문자 무시?"
+        },
+        "app.UW9yZQ.action.c2VhcmNoLXJlcGxhY2U.option.cmVnZXhfb3B0aW9ucw.allowed-value.c3RyaW5nOlJFX0Nhc2VsZXNz.short_desc": {
+          "source": "Ignore case when matching",
+          "message": "일치 검색 시 대소문자를 무시합니다"
+        },
+        "app.UW9yZQ.action.c2VhcmNoLXJlcGxhY2U.option.cmVnZXhfb3B0aW9ucw.allowed-value.c3RyaW5nOlJFX0RvdEFsbA.desc": {
+          "source": "The dot `.` character matches also a newline",
+          "message": "점 `.` 문자가 줄바꿈 문자에도 일치하도록 합니다"
+        },
+        "app.UW9yZQ.action.c2VhcmNoLXJlcGxhY2U.option.cmVnZXhfb3B0aW9ucw.allowed-value.c3RyaW5nOlJFX0RvdEFsbA.display_name": {
+          "source": "Dot Matches Newline?",
+          "message": "점(Dot)을 줄바꿈과 일치?"
+        },
+        "app.UW9yZQ.action.c2VhcmNoLXJlcGxhY2U.option.cmVnZXhfb3B0aW9ucw.allowed-value.c3RyaW5nOlJFX0RvdEFsbA.short_desc": {
+          "source": "The dot '.' character matches also a newline",
+          "message": "점 '.' 문자가 줄바꿈 문자에도 일치하도록 합니다"
+        },
+        "app.UW9yZQ.action.c2VhcmNoLXJlcGxhY2U.option.cmVnZXhfb3B0aW9ucw.allowed-value.c3RyaW5nOlJFX0V4dGVuZGVk.desc": {
+          "source": "Ignores whitespace characters and enables comments prefixed by `#`",
+          "message": "공백 문자를 무시하고 `#`(으)로 시작하는 주석을 활성화합니다"
+        },
+        "app.UW9yZQ.action.c2VhcmNoLXJlcGxhY2U.option.cmVnZXhfb3B0aW9ucw.allowed-value.c3RyaW5nOlJFX0V4dGVuZGVk.display_name": {
+          "source": "Extended Regex?",
+          "message": "확장 정규식?"
+        },
+        "app.UW9yZQ.action.c2VhcmNoLXJlcGxhY2U.option.cmVnZXhfb3B0aW9ucw.allowed-value.c3RyaW5nOlJFX0V4dGVuZGVk.short_desc": {
+          "source": "Ignores whitespace characters and enables comments prefixed by '#'",
+          "message": "공백 문자를 무시하고 '#'으로 시작하는 주석을 활성화합니다"
+        },
+        "app.UW9yZQ.action.c2VhcmNoLXJlcGxhY2U.option.cmVnZXhfb3B0aW9ucw.allowed-value.c3RyaW5nOlJFX0dsb2JhbA.desc": {
+          "source": "Match all occurrences, not just the first",
+          "message": "첫 번째 항목뿐만 아니라 일치하는 모든 항목을 찾습니다"
+        },
+        "app.UW9yZQ.action.c2VhcmNoLXJlcGxhY2U.option.cmVnZXhfb3B0aW9ucw.allowed-value.c3RyaW5nOlJFX0dsb2JhbA.display_name": {
+          "source": "Global?",
+          "message": "전체(Global)?"
+        },
+        "app.UW9yZQ.action.c2VhcmNoLXJlcGxhY2U.option.cmVnZXhfb3B0aW9ucw.allowed-value.c3RyaW5nOlJFX0dsb2JhbA.short_desc": {
+          "source": "Match all occurrences, not just the first",
+          "message": "첫 번째 항목뿐만 아니라 일치하는 모든 항목을 찾습니다"
+        },
+        "app.UW9yZQ.action.c2VhcmNoLXJlcGxhY2U.option.cmVnZXhfb3B0aW9ucw.allowed-value.c3RyaW5nOlJFX1VuaWNvZGU.desc": {
+          "source": "Character matches match the full Unicode character set",
+          "message": "전체 유니코드 문자 집합과 일치하도록 검색합니다"
+        },
+        "app.UW9yZQ.action.c2VhcmNoLXJlcGxhY2U.option.cmVnZXhfb3B0aW9ucw.allowed-value.c3RyaW5nOlJFX1VuaWNvZGU.display_name": {
+          "source": "Full Unicode?",
+          "message": "전체 유니코드?"
+        },
+        "app.UW9yZQ.action.c2VhcmNoLXJlcGxhY2U.option.cmVnZXhfb3B0aW9ucw.allowed-value.c3RyaW5nOlJFX1VuaWNvZGU.short_desc": {
+          "source": "Character matches match the full Unicode character set",
+          "message": "전체 유니코드 문자 집합과 일치하도록 검색합니다"
+        },
+        "app.UW9yZQ.action.c2VhcmNoLXJlcGxhY2U.option.cmVnZXhfb3B0aW9ucw.desc": {
+          "source": "A list of regular expression option names to apply when performing regex matching (e.g. `RE_Global`, `RE_Caseless`)",
+          "message": "정규식 일치 검색을 수행할 때 적용할 정규식 옵션 이름 목록 (예: `RE_Global`, `RE_Caseless`)"
+        },
+        "app.UW9yZQ.action.c2VhcmNoLXJlcGxhY2U.option.cmVnZXhfb3B0aW9ucw.display_name": {
+          "source": "Regex Options",
+          "message": "정규식 옵션"
+        },
+        "app.UW9yZQ.action.c2VhcmNoLXJlcGxhY2U.option.cmVnZXhfb3B0aW9ucw.short_desc": {
+          "source": "Regular expression options for matching",
+          "message": "일치 검색을 위한 정규식 옵션"
+        },
+        "app.UW9yZQ.action.c2VhcmNoLXJlcGxhY2U.option.cmVwbGFjZQ.desc": {
+          "source": "The replacement string to substitute for matches",
+          "message": "일치하는 항목을 대체할 문자열"
+        },
+        "app.UW9yZQ.action.c2VhcmNoLXJlcGxhY2U.option.cmVwbGFjZQ.display_name": {
+          "source": "Replacement String",
+          "message": "대체 문자열"
+        },
+        "app.UW9yZQ.action.c2VhcmNoLXJlcGxhY2U.option.cmVwbGFjZQ.short_desc": {
+          "source": "Replacement text",
+          "message": "대체 텍스트"
+        },
+        "app.UW9yZQ.action.c2VhcmNoLXJlcGxhY2U.short_desc": {
+          "source": "Search and replace text in a record field",
+          "message": "레코드 필드에서 텍스트 찾기 및 바꾸기"
+        },
+        "app.UW9yZQ.action.c2VsZWN0LWZpZWxkcw.desc": {
+          "source": "Select specific fields from each record and optionally rename them; only the selected fields appear in the output.\n\nUse `name` to keep a field as-is, or `new_name=old_name` to rename it",
+          "message": "각 레코드에서 특정 필드를 선택하고 선택적으로 이름을 변경합니다. 선택한 필드만 출력에 나타납니다.\n\n필드를 그대로 유지하려면 `name`(을)를 사용하고, 이름을 바꾸려면 `new_name=old_name`(을)를 사용하세요"
+        },
+        "app.UW9yZQ.action.c2VsZWN0LWZpZWxkcw.display_name": {
+          "source": "Select Fields",
+          "message": "필드 선택"
+        },
+        "app.UW9yZQ.action.c2VsZWN0LWZpZWxkcw.option.ZmllbGRz.desc": {
+          "source": "A list of field specifications; use `name` to keep a field as-is, or `new_name=old_name` to rename a field (e.g. `name`, `email`, `customer_name=name`)",
+          "message": "필드 지정 목록입니다. 필드를 그대로 유지하려면 `name`(을)를 사용하고, 필드 이름을 바꾸려면 `new_name=old_name`(을)를 사용하세요 (예: `name`, `email`, `customer_name=name`)"
+        },
+        "app.UW9yZQ.action.c2VsZWN0LWZpZWxkcw.option.ZmllbGRz.display_name": {
+          "source": "Field List",
+          "message": "필드 목록"
+        },
+        "app.UW9yZQ.action.c2VsZWN0LWZpZWxkcw.option.ZmllbGRz.short_desc": {
+          "source": "Field specs to select",
+          "message": "선택할 필드 규격"
+        },
+        "app.UW9yZQ.action.c2VsZWN0LWZpZWxkcw.short_desc": {
+          "source": "Select and optionally rename fields from records",
+          "message": "레코드에서 필드를 선택하고 선택적으로 이름을 변경합니다"
+        },
+        "app.UW9yZQ.action.cGVyY2VudGlsZQ.desc": {
+          "source": "Analyzes the distribution of numeric values in each window by computing percentiles (median, quartiles, and custom values), interquartile range (`iqr`), skewness (whether the data leans left or right), and kurtosis (whether values cluster tightly or spread out).\n\nFor example, for transaction amounts it can show that 50% are under $100, 90% are under $500, and the spread between the 25th and 75th percentile is $200.",
+          "message": "백분위수(중앙값, 사분위수 및 사용자 지정 값), 사분위수 범위(`iqr`), 왜도(데이터가 왼쪽 또는 오른쪽으로 치우쳐 있는지 여부), 첨도(값이 조밀하게 모여 있는지 분산되어 있는지 여부)를 계산하여 각 윈도우의 숫자 값 분포를 분석합니다.\n\n예를 들어 거래 금액의 경우 50%가 $100 미만이고 90%가 $500 미만이며 25번째 백분위수와 75번째 백분위수 사이의 스프레드가 $200임을 보여줄 수 있습니다."
+        },
+        "app.UW9yZQ.action.cGVyY2VudGlsZQ.display_name": {
+          "source": "Calculate Data Distribution",
+          "message": "데이터 분포 계산"
+        },
+        "app.UW9yZQ.action.cGVyY2VudGlsZQ.option.ZmllbGRz.desc": {
+          "source": "A list of field names to compute analytics for; each field must contain numeric values in the input records; supports dot-notation for nested fields (e.g. `sensor.temperature`)",
+          "message": "분석을 계산할 필드 이름 목록입니다. 각 필드는 입력 레코드에서 숫자 값을 포함해야 합니다. 중첩 필드에 대한 점 표기법(예: `sensor.temperature`)을 지원합니다."
+        },
+        "app.UW9yZQ.action.cGVyY2VudGlsZQ.option.ZmllbGRz.display_name": {
+          "source": "Field Names",
+          "message": "필드 이름"
+        },
+        "app.UW9yZQ.action.cGVyY2VudGlsZQ.option.ZmllbGRz.short_desc": {
+          "source": "Field names to analyze",
+          "message": "분석할 필드 이름"
+        },
+        "app.UW9yZQ.action.cGVyY2VudGlsZQ.option.cGVyY2VudGlsZXM.desc": {
+          "source": "A comma-separated list of percentile values to compute (`0`–`100`); for example, `50` is the median, `25` and `75` are the lower and upper quartiles; default: `\"25,50,75,90,95,99\"`",
+          "message": "계산할 백분위수 값의 쉼표로 구분된 목록입니다 (`0`–`100`). 예를 들어 `50`(은)는 중앙값이고, `25` 및 `75`(은)는 각각 하위 및 상위 사분위수입니다. 기본값: `\"25,50,75,90,95,99\"`"
+        },
+        "app.UW9yZQ.action.cGVyY2VudGlsZQ.option.cGVyY2VudGlsZXM.display_name": {
+          "source": "Percentile Values",
+          "message": "백분위수 값"
+        },
+        "app.UW9yZQ.action.cGVyY2VudGlsZQ.option.cGVyY2VudGlsZXM.short_desc": {
+          "source": "Comma-separated percentile values to compute",
+          "message": "계산할 쉼표로 구분된 백분위수 값"
+        },
+        "app.UW9yZQ.action.cGVyY2VudGlsZQ.option.d2luZG93X3NpemU.desc": {
+          "source": "The number of records to accumulate in each analytics window; for window-level processors, an event is emitted when the window is full; for record-level processors, this controls the sliding window size.\n\n**Sizing guidance**: use `20`–`50` for real-time alerting where fast response matters, `100`–`500` for general trend and statistics analysis, or `1000`+ for high-frequency data where you need stable long-term statistics; the window must be large enough to capture at least one full cycle of any pattern you want to detect",
+          "message": "각 분석 윈도우에 누적할 레코드 수입니다. 윈도우 수준 프로세서의 경우 윈도우가 가득 차면 이벤트가 발행되며, 레코드 수준 프로세서의 경우 슬라이딩 윈도우 크기를 제어합니다.\n\n**크기 설정 가이드**: 빠른 응답이 중요한 실시간 알림에는 `20`–`50`개, 일반적인 추세 및 통계 분석에는 `100`–`500`개, 안정적인 장기 통계가 필요한 고주파 데이터에는 `1000`개 이상을 사용하십시오. 윈도우는 감지하려는 패턴의 최소 1회 전체 주기를 캡처할 수 있을 만큼 커야 합니다."
+        },
+        "app.UW9yZQ.action.cGVyY2VudGlsZQ.option.d2luZG93X3NpemU.display_name": {
+          "source": "Window Size",
+          "message": "윈도우 크기"
+        },
+        "app.UW9yZQ.action.cGVyY2VudGlsZQ.option.d2luZG93X3NpemU.short_desc": {
+          "source": "Number of records in each analytics window",
+          "message": "각 분석 윈도우의 레코드 수"
+        },
+        "app.UW9yZQ.action.cGVyY2VudGlsZQ.short_desc": {
+          "source": "Computes median, quartiles, and spread of values",
+          "message": "중앙값, 사분위수 및 값의 분산을 계산합니다"
+        },
+        "app.UW9yZQ.action.cmF0ZS1vZi1jaGFuZ2U.desc": {
+          "source": "Computes the `rate_of_change` (first derivative), `acceleration` (second derivative), and `percent_change` for each record relative to its sliding window history.\n\nFor example, it can show that revenue is growing at $1,000/period and accelerating (the growth rate is itself increasing).",
+          "message": "슬라이딩 윈도우 이력을 기준으로 각 레코드의 `rate_of_change`(1차 도함수), `acceleration`(2차 도함수) 및 `percent_change`(을)를 계산합니다.\n\n예를 들어 수익이 주기당 $1,000씩 증가하고 있으며 가속화되고 있음(성장률 자체가 증가함)을 보여줄 수 있습니다."
+        },
+        "app.UW9yZQ.action.cmF0ZS1vZi1jaGFuZ2U.display_name": {
+          "source": "Measure Speed of Change",
+          "message": "변화 속도 측정"
+        },
+        "app.UW9yZQ.action.cmF0ZS1vZi1jaGFuZ2U.option.ZmllbGRz.desc": {
+          "source": "A list of field names to compute analytics for; each field must contain numeric values in the input records; supports dot-notation for nested fields (e.g. `sensor.temperature`)",
+          "message": "분석을 계산할 필드 이름 목록입니다. 각 필드는 입력 레코드에서 숫자 값을 포함해야 합니다. 중첩 필드에 대한 점 표기법(예: `sensor.temperature`)을 지원합니다."
+        },
+        "app.UW9yZQ.action.cmF0ZS1vZi1jaGFuZ2U.option.ZmllbGRz.display_name": {
+          "source": "Field Names",
+          "message": "필드 이름"
+        },
+        "app.UW9yZQ.action.cmF0ZS1vZi1jaGFuZ2U.option.ZmllbGRz.short_desc": {
+          "source": "Field names to analyze",
+          "message": "분석할 필드 이름"
+        },
+        "app.UW9yZQ.action.cmF0ZS1vZi1jaGFuZ2U.option.c21vb3RoaW5n.desc": {
+          "source": "When enabled, applies a simple moving average over the window before computing derivatives, reducing noise in the rate of change; disable for raw point-to-point rates; default: `True`",
+          "message": "활성화하면 도함수를 계산하기 전에 윈도우 전체에 단순 이동 평균을 적용하여 변화율의 노이즈를 줄입니다. 원시 포인트 간 변화율을 보려면 비활성화하세요. 기본값: `True`"
+        },
+        "app.UW9yZQ.action.cmF0ZS1vZi1jaGFuZ2U.option.c21vb3RoaW5n.display_name": {
+          "source": "Apply Smoothing",
+          "message": "평활화 적용"
+        },
+        "app.UW9yZQ.action.cmF0ZS1vZi1jaGFuZ2U.option.c21vb3RoaW5n.short_desc": {
+          "source": "Apply simple moving average smoothing before differentiation",
+          "message": "미분 전에 단순 이동 평균 평활화 적용"
+        },
+        "app.UW9yZQ.action.cmF0ZS1vZi1jaGFuZ2U.option.d2luZG93X3NpemU.desc": {
+          "source": "The number of records to accumulate in each analytics window; for window-level processors, an event is emitted when the window is full; for record-level processors, this controls the sliding window size.\n\n**Sizing guidance**: use `20`–`50` for real-time alerting where fast response matters, `100`–`500` for general trend and statistics analysis, or `1000`+ for high-frequency data where you need stable long-term statistics; the window must be large enough to capture at least one full cycle of any pattern you want to detect",
+          "message": "각 분석 윈도우에 누적할 레코드 수입니다. 윈도우 수준 프로세서의 경우 윈도우가 가득 차면 이벤트가 발행되며, 레코드 수준 프로세서의 경우 슬라이딩 윈도우 크기를 제어합니다.\n\n**크기 설정 가이드**: 빠른 응답이 중요한 실시간 알림에는 `20`–`50`개, 일반적인 추세 및 통계 분석에는 `100`–`500`개, 안정적인 장기 통계가 필요한 고주파 데이터에는 `1000`개 이상을 사용하십시오. 윈도우는 감지하려는 패턴의 최소 1회 전체 주기를 캡처할 수 있을 만큼 커야 합니다."
+        },
+        "app.UW9yZQ.action.cmF0ZS1vZi1jaGFuZ2U.option.d2luZG93X3NpemU.display_name": {
+          "source": "Window Size",
+          "message": "윈도우 크기"
+        },
+        "app.UW9yZQ.action.cmF0ZS1vZi1jaGFuZ2U.option.d2luZG93X3NpemU.short_desc": {
+          "source": "Number of records in each analytics window",
+          "message": "각 분석 윈도우의 레코드 수"
+        },
+        "app.UW9yZQ.action.cmF0ZS1vZi1jaGFuZ2U.short_desc": {
+          "source": "Tracks how fast values are changing and accelerating",
+          "message": "값이 얼마나 빠르게 변화하고 가속화되는지 추적합니다"
+        },
+        "app.UW9yZQ.action.cmVjb3JkLWxpbWl0.desc": {
+          "source": "Limit the number of records passing through the pipeline; the first N records pass through and all subsequent records are dropped",
+          "message": "파이프라인을 통과하는 레코드 수를 제한합니다. 처음 N개의 레코드는 통과하고 이후의 모든 레코드는 삭제됩니다"
+        },
+        "app.UW9yZQ.action.cmVjb3JkLWxpbWl0.display_name": {
+          "source": "Record Limit",
+          "message": "레코드 제한"
+        },
+        "app.UW9yZQ.action.cmVjb3JkLWxpbWl0.option.bGltaXQ.desc": {
+          "source": "The maximum number of records to pass through the pipeline; once the limit is reached, all subsequent records are dropped",
+          "message": "파이프라인을 통과할 최대 레코드 수입니다. 한도에 도달하면 이후의 모든 레코드는 삭제됩니다"
+        },
+        "app.UW9yZQ.action.cmVjb3JkLWxpbWl0.option.bGltaXQ.display_name": {
+          "source": "Record Limit",
+          "message": "레코드 제한"
+        },
+        "app.UW9yZQ.action.cmVjb3JkLWxpbWl0.option.bGltaXQ.short_desc": {
+          "source": "Maximum number of records to pass through",
+          "message": "통과할 최대 레코드 수"
+        },
+        "app.UW9yZQ.action.cmVjb3JkLWxpbWl0.short_desc": {
+          "source": "Limit the number of records passing through",
+          "message": "통과하는 레코드 수 제한"
+        },
+        "app.UW9yZQ.action.cmVtb3ZlLWZpZWxkcw.desc": {
+          "source": "Remove one or more fields from each record passing through the pipeline; fields not in the removal list are passed through unchanged",
+          "message": "파이프라인을 통과하는 각 레코드에서 하나 이상의 필드를 제거합니다. 제거 목록에 없는 필드는 변경되지 않고 그대로 전달됩니다"
+        },
+        "app.UW9yZQ.action.cmVtb3ZlLWZpZWxkcw.display_name": {
+          "source": "Remove Fields",
+          "message": "필드 제거"
+        },
+        "app.UW9yZQ.action.cmVtb3ZlLWZpZWxkcw.option.ZmllbGRz.desc": {
+          "source": "A list of field names to remove from each record",
+          "message": "각 레코드에서 제거할 필드 이름 목록"
+        },
+        "app.UW9yZQ.action.cmVtb3ZlLWZpZWxkcw.option.ZmllbGRz.display_name": {
+          "source": "Fields to Remove",
+          "message": "제거할 필드"
+        },
+        "app.UW9yZQ.action.cmVtb3ZlLWZpZWxkcw.option.ZmllbGRz.short_desc": {
+          "source": "Field names to remove",
+          "message": "제거할 필드 이름"
+        },
+        "app.UW9yZQ.action.cmVtb3ZlLWZpZWxkcw.short_desc": {
+          "source": "Remove specified fields from records",
+          "message": "레코드에서 지정된 필드 제거"
+        },
+        "app.UW9yZQ.action.cnVubmluZy1zdGF0cw.desc": {
+          "source": "Compute running statistics over a sliding window of records for each configured numeric field; emits one analytics event per field when each window is full.\n\nComputed statistics:\n- `count`, `sum`, `avg` (mean)\n- `min_val`, `max_val`\n- `stddev` (standard deviation), `variance`",
+          "message": "구성된 각 숫자 필드에 대해 레코드의 슬라이딩 윈도우에서 누적 통계를 계산합니다. 각 윈도우가 가득 차면 필드당 하나의 분석 이벤트를 생성합니다.\n\n계산되는 통계:\n- `count`, `sum`, `avg` (평균)\n- `min_val`, `max_val`\n- `stddev` (표준편차), `variance`"
+        },
+        "app.UW9yZQ.action.cnVubmluZy1zdGF0cw.display_name": {
+          "source": "Running Statistics",
+          "message": "누적 통계"
+        },
+        "app.UW9yZQ.action.cnVubmluZy1zdGF0cw.option.ZmllbGRz.desc": {
+          "source": "A list of field names to compute analytics for; each field must contain numeric values in the input records; supports dot-notation for nested fields (e.g. `sensor.temperature`)",
+          "message": "분석을 계산할 필드 이름 목록입니다. 각 필드는 입력 레코드에서 숫자 값을 포함해야 합니다. 중첩 필드에 대한 점 표기법(예: `sensor.temperature`)을 지원합니다."
+        },
+        "app.UW9yZQ.action.cnVubmluZy1zdGF0cw.option.ZmllbGRz.display_name": {
+          "source": "Field Names",
+          "message": "필드 이름"
+        },
+        "app.UW9yZQ.action.cnVubmluZy1zdGF0cw.option.ZmllbGRz.short_desc": {
+          "source": "Field names to analyze",
+          "message": "분석할 필드 이름"
+        },
+        "app.UW9yZQ.action.cnVubmluZy1zdGF0cw.option.d2luZG93X3NpemU.desc": {
+          "source": "The number of records to accumulate in each analytics window; for window-level processors, an event is emitted when the window is full; for record-level processors, this controls the sliding window size.\n\n**Sizing guidance**: use `20`–`50` for real-time alerting where fast response matters, `100`–`500` for general trend and statistics analysis, or `1000`+ for high-frequency data where you need stable long-term statistics; the window must be large enough to capture at least one full cycle of any pattern you want to detect",
+          "message": "각 분석 윈도우에 누적할 레코드 수입니다. 윈도우 수준 프로세서의 경우 윈도우가 가득 차면 이벤트가 발행되며, 레코드 수준 프로세서의 경우 슬라이딩 윈도우 크기를 제어합니다.\n\n**크기 설정 가이드**: 빠른 응답이 중요한 실시간 알림에는 `20`–`50`개, 일반적인 추세 및 통계 분석에는 `100`–`500`개, 안정적인 장기 통계가 필요한 고주파 데이터에는 `1000`개 이상을 사용하십시오. 윈도우는 감지하려는 패턴의 최소 1회 전체 주기를 캡처할 수 있을 만큼 커야 합니다."
+        },
+        "app.UW9yZQ.action.cnVubmluZy1zdGF0cw.option.d2luZG93X3NpemU.display_name": {
+          "source": "Window Size",
+          "message": "윈도우 크기"
+        },
+        "app.UW9yZQ.action.cnVubmluZy1zdGF0cw.option.d2luZG93X3NpemU.short_desc": {
+          "source": "Number of records in each analytics window",
+          "message": "각 분석 윈도우의 레코드 수"
+        },
+        "app.UW9yZQ.action.cnVubmluZy1zdGF0cw.short_desc": {
+          "source": "Compute running statistics over windows of numeric records",
+          "message": "숫자 레코드의 윈도우에서 누적 통계 계산"
+        },
+        "app.UW9yZQ.action.dHJlbmQtYW5hbHlzaXM.desc": {
+          "source": "Compute linear regression trend analysis (`slope`, `intercept`, `r_squared`, `direction`) over a window of records for each configured numeric field; emits one analytics event per field when each window is full with the trend direction (`rising`, `falling`, or `flat`)",
+          "message": "구성된 각 숫자 필드에 대해 레코드 윈도우에서 선형 회귀 추세 분석(`slope`, `intercept`, `r_squared`, `direction`)을 계산합니다. 각 윈도우가 가득 차면 추세 방향(`rising`, `falling` 또는 `flat`)과 함께 필드당 하나의 분석 이벤트를 생성합니다"
+        },
+        "app.UW9yZQ.action.dHJlbmQtYW5hbHlzaXM.display_name": {
+          "source": "Trend Analysis",
+          "message": "추세 분석"
+        },
+        "app.UW9yZQ.action.dHJlbmQtYW5hbHlzaXM.option.ZGlyZWN0aW9uX3RocmVzaG9sZA.desc": {
+          "source": "The minimum slope magnitude for the trend to be classified as `rising` or `falling`; slopes below this threshold are classified as `flat`.\n\n**Typical values**: `0.001` (sensitive — detects very gradual trends), `0.01` (moderate), `0.1` (only strong trends); use smaller values when your data has a large scale and meaningful trends have small slopes; must be >= `0`; default: `0.001`",
+          "message": "추세가 `rising` 또는 `falling`(으)로 분류되기 위한 최소 기울기 크기입니다. 이 임계값 미만의 기울기는 `flat`(으)로 분류됩니다.\n\n**일반적인 값**: `0.001` (민감함 — 매우 완만한 추세 감지), `0.01` (보통), `0.1` (강한 추세만); 데이터의 스케일이 크고 유의미한 추세의 기울기가 작은 경우 더 작은 값을 사용하세요. >= `0`이어야 합니다. 기본값: `0.001`"
+        },
+        "app.UW9yZQ.action.dHJlbmQtYW5hbHlzaXM.option.ZGlyZWN0aW9uX3RocmVzaG9sZA.display_name": {
+          "source": "Direction Threshold",
+          "message": "방향 임계값"
+        },
+        "app.UW9yZQ.action.dHJlbmQtYW5hbHlzaXM.option.ZGlyZWN0aW9uX3RocmVzaG9sZA.short_desc": {
+          "source": "Minimum absolute slope to classify as rising or falling",
+          "message": "상승 또는 하강으로 분류하기 위한 최소 절대 기울기"
+        },
+        "app.UW9yZQ.action.dHJlbmQtYW5hbHlzaXM.option.ZmllbGRz.desc": {
+          "source": "A list of field names to compute analytics for; each field must contain numeric values in the input records; supports dot-notation for nested fields (e.g. `sensor.temperature`)",
+          "message": "분석을 계산할 필드 이름 목록입니다. 각 필드는 입력 레코드에서 숫자 값을 포함해야 합니다. 중첩 필드에 대한 점 표기법(예: `sensor.temperature`)을 지원합니다."
+        },
+        "app.UW9yZQ.action.dHJlbmQtYW5hbHlzaXM.option.ZmllbGRz.display_name": {
+          "source": "Field Names",
+          "message": "필드 이름"
+        },
+        "app.UW9yZQ.action.dHJlbmQtYW5hbHlzaXM.option.ZmllbGRz.short_desc": {
+          "source": "Field names to analyze",
+          "message": "분석할 필드 이름"
+        },
+        "app.UW9yZQ.action.dHJlbmQtYW5hbHlzaXM.option.d2luZG93X3NpemU.desc": {
+          "source": "The number of records to accumulate in each analytics window; for window-level processors, an event is emitted when the window is full; for record-level processors, this controls the sliding window size.\n\n**Sizing guidance**: use `20`–`50` for real-time alerting where fast response matters, `100`–`500` for general trend and statistics analysis, or `1000`+ for high-frequency data where you need stable long-term statistics; the window must be large enough to capture at least one full cycle of any pattern you want to detect",
+          "message": "각 분석 윈도우에 누적할 레코드 수입니다. 윈도우 수준 프로세서의 경우 윈도우가 가득 차면 이벤트가 발행되며, 레코드 수준 프로세서의 경우 슬라이딩 윈도우 크기를 제어합니다.\n\n**크기 설정 가이드**: 빠른 응답이 중요한 실시간 알림에는 `20`–`50`개, 일반적인 추세 및 통계 분석에는 `100`–`500`개, 안정적인 장기 통계가 필요한 고주파 데이터에는 `1000`개 이상을 사용하십시오. 윈도우는 감지하려는 패턴의 최소 1회 전체 주기를 캡처할 수 있을 만큼 커야 합니다."
+        },
+        "app.UW9yZQ.action.dHJlbmQtYW5hbHlzaXM.option.d2luZG93X3NpemU.display_name": {
+          "source": "Window Size",
+          "message": "윈도우 크기"
+        },
+        "app.UW9yZQ.action.dHJlbmQtYW5hbHlzaXM.option.d2luZG93X3NpemU.short_desc": {
+          "source": "Number of records in each analytics window",
+          "message": "각 분석 윈도우의 레코드 수"
+        },
+        "app.UW9yZQ.action.dHJlbmQtYW5hbHlzaXM.short_desc": {
+          "source": "Detect trends using linear regression over windows of records",
+          "message": "레코드 윈도우에서 선형 회귀를 사용하여 추세 감지"
+        },
+        "app.UW9yZQ.desc": {
+          "source": "Built-in Qore data pipeline processors for filtering, transforming, and manipulating records in data pipelines",
+          "message": "데이터 파이프라인에서 레코드를 필터링, 변환 및 조작하기 위한 내장 Qore 데이터 파이프라인 프로세서"
+        },
+        "app.UW9yZQ.display_name": {
+          "source": "Qore",
+          "message": "Qore"
+        },
+        "app.UW9yZQ.short_desc": {
+          "source": "Built-in data pipeline processors",
+          "message": "내장 데이터 파이프라인 프로세서"
+        }
+      }
+    }
+  }
+}

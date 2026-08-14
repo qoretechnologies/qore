@@ -1,0 +1,21 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "it": {
+      "messages": {
+        "app.Q29ja3JvYWNoREI.desc": {
+          "source": "Create and manage connections to a CockroachDB distributed SQL database",
+          "message": "Crea e gestisci connessioni a un database SQL distribuito CockroachDB"
+        },
+        "app.Q29ja3JvYWNoREI.display_name": {
+          "source": "CockroachDB",
+          "message": "CockroachDB"
+        },
+        "app.Q29ja3JvYWNoREI.short_desc": {
+          "source": "CockroachDB distributed SQL database",
+          "message": "Database SQL distribuito CockroachDB"
+        }
+      }
+    }
+  }
+}

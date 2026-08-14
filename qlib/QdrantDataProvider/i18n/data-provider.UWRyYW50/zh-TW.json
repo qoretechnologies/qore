@@ -1,0 +1,597 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "zh-TW": {
+      "messages": {
+        "app.UWRyYW50.action.Y291bnQtcG9pbnRz.desc": {
+          "source": "Count the number of points in a Qdrant collection, optionally with a filter",
+          "message": "計算 Qdrant 集合中的點數量，可選擇搭配篩選條件"
+        },
+        "app.UWRyYW50.action.Y291bnQtcG9pbnRz.display_name": {
+          "source": "Count Points",
+          "message": "計算點數量"
+        },
+        "app.UWRyYW50.action.Y291bnQtcG9pbnRz.short_desc": {
+          "source": "Count points in a collection",
+          "message": "計算集合中的點數量"
+        },
+        "app.UWRyYW50.action.Y29sbGVjdGlvbi1leGlzdHM.desc": {
+          "source": "Check whether a specific collection exists in the Qdrant instance",
+          "message": "檢查 Qdrant 執行個體中是否存在特定集合"
+        },
+        "app.UWRyYW50.action.Y29sbGVjdGlvbi1leGlzdHM.display_name": {
+          "source": "Collection Exists",
+          "message": "集合存在"
+        },
+        "app.UWRyYW50.action.Y29sbGVjdGlvbi1leGlzdHM.short_desc": {
+          "source": "Check if a collection exists",
+          "message": "檢查集合是否存在"
+        },
+        "app.UWRyYW50.action.Y3JlYXRlLWNvbGxlY3Rpb24.desc": {
+          "source": "Create a new vector collection with configurable vector parameters and distance metrics",
+          "message": "建立具有可設定向量參數與距離度量的新向量集合"
+        },
+        "app.UWRyYW50.action.Y3JlYXRlLWNvbGxlY3Rpb24.display_name": {
+          "source": "Create Collection",
+          "message": "建立集合"
+        },
+        "app.UWRyYW50.action.Y3JlYXRlLWNvbGxlY3Rpb24.short_desc": {
+          "source": "Create a new Qdrant collection",
+          "message": "建立新的 Qdrant 集合"
+        },
+        "app.UWRyYW50.action.Y3JlYXRlLXBvaW50.desc": {
+          "source": "Create or upsert a point with a vector and optional payload in a Qdrant collection",
+          "message": "在 Qdrant 集合中建立或更新插入包含向量及選用負載的點"
+        },
+        "app.UWRyYW50.action.Y3JlYXRlLXBvaW50.display_name": {
+          "source": "Create/Upsert Point",
+          "message": "建立/更新插入點"
+        },
+        "app.UWRyYW50.action.Y3JlYXRlLXBvaW50.short_desc": {
+          "source": "Create or upsert a point in a collection",
+          "message": "在集合中建立或更新插入點"
+        },
+        "app.UWRyYW50.action.YmF0Y2gtdXBkYXRlLXBvaW50cw.desc": {
+          "source": "Execute a batch of heterogeneous point operations (upsert, delete, set/overwrite/delete/clear payload, update/delete vectors) in a single request for high-performance bulk updates",
+          "message": "在單一請求中執行批次異質點操作（更新插入、刪除、設定/覆寫/刪除/清除負載、更新/刪除向量），以實現高效能的大量更新"
+        },
+        "app.UWRyYW50.action.YmF0Y2gtdXBkYXRlLXBvaW50cw.display_name": {
+          "source": "Batch Update Points",
+          "message": "批次更新點"
+        },
+        "app.UWRyYW50.action.YmF0Y2gtdXBkYXRlLXBvaW50cw.short_desc": {
+          "source": "Apply multiple point operations in a single batch",
+          "message": "在單一批次中套用多個點操作"
+        },
+        "app.UWRyYW50.action.Z2V0LWNvbGxlY3Rpb24.desc": {
+          "source": "Retrieve detailed information about a specific Qdrant collection, including its configuration and status",
+          "message": "擷取特定 Qdrant 集合的詳細資訊，包含其設定與狀態"
+        },
+        "app.UWRyYW50.action.Z2V0LWNvbGxlY3Rpb24.display_name": {
+          "source": "Get Collection",
+          "message": "取得集合"
+        },
+        "app.UWRyYW50.action.Z2V0LWNvbGxlY3Rpb24.short_desc": {
+          "source": "Get collection info",
+          "message": "取得集合資訊"
+        },
+        "app.UWRyYW50.action.Z2V0LXBvaW50cw.desc": {
+          "source": "Retrieve specific points from a Qdrant collection by their IDs, including vectors and payloads",
+          "message": "依 ID 從 Qdrant 集合中擷取特定點，包含向量與負載"
+        },
+        "app.UWRyYW50.action.Z2V0LXBvaW50cw.display_name": {
+          "source": "Get Points",
+          "message": "取得點"
+        },
+        "app.UWRyYW50.action.Z2V0LXBvaW50cw.short_desc": {
+          "source": "Get specific points by ID",
+          "message": "依 ID 取得特定點"
+        },
+        "app.UWRyYW50.action.ZGVsZXRlLWNvbGxlY3Rpb24.desc": {
+          "source": "Delete a collection and all its data from the Qdrant instance",
+          "message": "從 Qdrant 執行個體中刪除集合及其所有資料"
+        },
+        "app.UWRyYW50.action.ZGVsZXRlLWNvbGxlY3Rpb24.display_name": {
+          "source": "Delete Collection",
+          "message": "刪除集合"
+        },
+        "app.UWRyYW50.action.ZGVsZXRlLWNvbGxlY3Rpb24.short_desc": {
+          "source": "Delete a Qdrant collection",
+          "message": "刪除 Qdrant 集合"
+        },
+        "app.UWRyYW50.action.ZGVsZXRlLXBvaW50cw.desc": {
+          "source": "Delete points from a Qdrant collection by point IDs or by filter conditions",
+          "message": "依點 ID 或篩選條件從 Qdrant 集合中刪除點"
+        },
+        "app.UWRyYW50.action.ZGVsZXRlLXBvaW50cw.display_name": {
+          "source": "Delete Points",
+          "message": "刪除點"
+        },
+        "app.UWRyYW50.action.ZGVsZXRlLXBvaW50cw.short_desc": {
+          "source": "Delete points from a collection",
+          "message": "從集合中刪除點"
+        },
+        "app.UWRyYW50.action.aGVhbHRoLWNoZWNr.desc": {
+          "source": "Check the health status of the Qdrant server",
+          "message": "檢查 Qdrant 伺服器的健全狀況"
+        },
+        "app.UWRyYW50.action.aGVhbHRoLWNoZWNr.display_name": {
+          "source": "Health Check",
+          "message": "健全狀況檢查"
+        },
+        "app.UWRyYW50.action.aGVhbHRoLWNoZWNr.short_desc": {
+          "source": "Check Qdrant server health",
+          "message": "檢查 Qdrant 伺服器健全狀況"
+        },
+        "app.UWRyYW50.action.bGl2ZW5lc3MtY2hlY2s.desc": {
+          "source": "Check if the Qdrant server is alive and responsive",
+          "message": "檢查 Qdrant 伺服器是否存活且有回應"
+        },
+        "app.UWRyYW50.action.bGl2ZW5lc3MtY2hlY2s.display_name": {
+          "source": "Liveness Check",
+          "message": "存活檢查"
+        },
+        "app.UWRyYW50.action.bGl2ZW5lc3MtY2hlY2s.short_desc": {
+          "source": "Check Qdrant server liveness",
+          "message": "檢查 Qdrant 伺服器存活狀態"
+        },
+        "app.UWRyYW50.action.bGlzdC1hbGwtYWxpYXNlcw.desc": {
+          "source": "Retrieve a list of all aliases and their associated collections in the Qdrant instance",
+          "message": "擷取 Qdrant 執行個體中所有別名及其關聯集合的清單"
+        },
+        "app.UWRyYW50.action.bGlzdC1hbGwtYWxpYXNlcw.display_name": {
+          "source": "List All Aliases",
+          "message": "列出所有別名"
+        },
+        "app.UWRyYW50.action.bGlzdC1hbGwtYWxpYXNlcw.short_desc": {
+          "source": "List all collection aliases",
+          "message": "列出所有集合別名"
+        },
+        "app.UWRyYW50.action.bGlzdC1jb2xsZWN0aW9ucw.desc": {
+          "source": "Retrieve a list of all collections in the Qdrant instance",
+          "message": "擷取 Qdrant 執行個體中所有集合的清單"
+        },
+        "app.UWRyYW50.action.bGlzdC1jb2xsZWN0aW9ucw.display_name": {
+          "source": "List Collections",
+          "message": "列出集合"
+        },
+        "app.UWRyYW50.action.bGlzdC1jb2xsZWN0aW9ucw.short_desc": {
+          "source": "List all Qdrant collections",
+          "message": "列出所有 Qdrant 集合"
+        },
+        "app.UWRyYW50.action.bWFrZS1hcGktY2FsbA.desc": {
+          "source": "Make a custom HTTP / REST API call to **Qdrant Vector Database** using the configured connection's authentication.\n\nSpecify the HTTP method, the URI path (relative to the connection's API base URL), optional query parameters, headers, and request body. The response is returned as a hash containing the status code, response headers, and response body.\n\nUse this action for endpoints that are not yet exposed as first-class actions on this app.",
+          "message": "使用已設定連線的驗證向 **Qdrant Vector Database** 發出自訂 HTTP / REST API 呼叫。\n\n指定 HTTP 方法、URI 路徑（相對於連線的 API 基礎 URL）、選用查詢參數、標頭和請求主體。回應將以包含狀態碼、回應標頭和回應主體的雜湊傳回。\n\n對於尚未在此應用程式中作為第一類動作公開的端點，請使用此動作。"
+        },
+        "app.UWRyYW50.action.bWFrZS1hcGktY2FsbA.display_name": {
+          "source": "Make an API call",
+          "message": "進行 API 呼叫"
+        },
+        "app.UWRyYW50.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.desc": {
+          "source": "The request body. The effective type depends on `body_type`: JSON/form/YAML expect a hash, XML/text expect a string, multipart expects a file structure, binary expects raw bytes.",
+          "message": "請求主體。有效類型取決於 `body_type`：JSON/表單/YAML 預期為雜湊，XML/文字預期為字串，multipart 預期為檔案結構，二進位預期為原始位元組。"
+        },
+        "app.UWRyYW50.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.display_name": {
+          "source": "Body",
+          "message": "內文"
+        },
+        "app.UWRyYW50.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.short_desc": {
+          "source": "The request body",
+          "message": "請求主體"
+        },
+        "app.UWRyYW50.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.desc": {
+          "source": "Upload a file using `multipart/form-data`. The body must be a @ref DataProvider::FileDataType \"FileDataType\" structure (filename + content + mime_type). The framework builds the multipart envelope and sets the boundary header.",
+          "message": "使用 `multipart/form-data` 上傳檔案。主體必須是 @ref DataProvider::FileDataType \"FileDataType\" 結構 (filename + content + mime_type)。框架會建立 multipart 信封並設定 boundary 標頭。"
+        },
+        "app.UWRyYW50.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.display_name": {
+          "source": "Multipart Form",
+          "message": "Multipart 表單"
+        },
+        "app.UWRyYW50.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.short_desc": {
+          "source": "Upload a file using multipart/form-data",
+          "message": "使用 multipart/form-data 上傳檔案"
+        },
+        "app.UWRyYW50.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.desc": {
+          "source": "Pass the body to the REST client unchanged; the client decides serialization based on its configured `data` option and the value type",
+          "message": "將主體原封不動地傳遞給 REST 用戶端；用戶端會根據其設定的 `data` 選項與數值類型來決定序列化方式"
+        },
+        "app.UWRyYW50.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.display_name": {
+          "source": "Auto",
+          "message": "自動"
+        },
+        "app.UWRyYW50.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.short_desc": {
+          "source": "Pass-through; use connection serialization and let the REST client decide",
+          "message": "透傳；使用連線序列化並由 REST 用戶端決定"
+        },
+        "app.UWRyYW50.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.desc": {
+          "source": "Send the body as raw bytes. The body must be a binary value. Sets `Content-Type: application/octet-stream` unless overridden by `hdr`.",
+          "message": "將主體作為原始位元組傳送。主體必須是二進位值。除非被 `hdr` 覆寫，否則會設定 `Content-Type: application/octet-stream`。"
+        },
+        "app.UWRyYW50.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.display_name": {
+          "source": "Raw Binary",
+          "message": "原始二進位"
+        },
+        "app.UWRyYW50.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.short_desc": {
+          "source": "Send body as raw bytes",
+          "message": "將主體作為原始位元組傳送"
+        },
+        "app.UWRyYW50.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.desc": {
+          "source": "Serialize a hash of form fields as `application/x-www-form-urlencoded`. The body must be a hash whose values are scalars (strings/numbers/booleans).",
+          "message": "將表單欄位的雜湊序列化為 `application/x-www-form-urlencoded`。主體必須是值為純量 (字串/數字/布林值) 的雜湊。"
+        },
+        "app.UWRyYW50.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.display_name": {
+          "source": "Form (URL-encoded)",
+          "message": "表單 (URL 編碼)"
+        },
+        "app.UWRyYW50.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.short_desc": {
+          "source": "Serialize body as application/x-www-form-urlencoded form fields",
+          "message": "將主體序列化為 application/x-www-form-urlencoded 表單欄位"
+        },
+        "app.UWRyYW50.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.desc": {
+          "source": "Serialize the body as JSON; sets `Content-Type: application/json`. The body should be a hash, list, or scalar value.",
+          "message": "將主體序列化為 JSON；設定 `Content-Type: application/json`。主體應為雜湊、清單或純量值。"
+        },
+        "app.UWRyYW50.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.display_name": {
+          "source": "JSON",
+          "message": "JSON"
+        },
+        "app.UWRyYW50.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.short_desc": {
+          "source": "Serialize body as JSON",
+          "message": "將主體序列化為 JSON"
+        },
+        "app.UWRyYW50.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.desc": {
+          "source": "Send the body as plain text. The body must be a string. Sets `Content-Type: text/plain`.",
+          "message": "將主體作為純文字傳送。主體必須是字串。設定 `Content-Type: text/plain`。"
+        },
+        "app.UWRyYW50.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.display_name": {
+          "source": "Plain Text",
+          "message": "純文字"
+        },
+        "app.UWRyYW50.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.short_desc": {
+          "source": "Send body as text/plain",
+          "message": "將主體作為 text/plain 傳送"
+        },
+        "app.UWRyYW50.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.desc": {
+          "source": "Send the body as XML. If the body is a hash it is serialized to XML; if it is a string it is sent verbatim. Sets `Content-Type: application/xml`.",
+          "message": "將主體作為 XML 傳送。若主體為雜湊，則會序列化為 XML；若為字串，則原樣傳送。設定 `Content-Type: application/xml`。"
+        },
+        "app.UWRyYW50.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.display_name": {
+          "source": "XML",
+          "message": "XML"
+        },
+        "app.UWRyYW50.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.short_desc": {
+          "source": "Send body as XML",
+          "message": "將主體作為 XML 傳送"
+        },
+        "app.UWRyYW50.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.desc": {
+          "source": "Send the body as YAML. If the body is a hash it is serialized to YAML; if it is a string it is sent verbatim. Sets `Content-Type: application/x-yaml`.",
+          "message": "將主體作為 YAML 傳送。若主體為雜湊，則會序列化為 YAML；若為字串，則原樣傳送。設定 `Content-Type: application/x-yaml`。"
+        },
+        "app.UWRyYW50.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.display_name": {
+          "source": "YAML",
+          "message": "YAML"
+        },
+        "app.UWRyYW50.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.short_desc": {
+          "source": "Send body as YAML",
+          "message": "將主體作為 YAML 傳送"
+        },
+        "app.UWRyYW50.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.desc": {
+          "source": "Selects the body serialization mode and the corresponding `Content-Type` header. Changing this field reshapes the `body` editor - selecting JSON exposes a JSON editor, selecting Multipart Form exposes a file picker, and so on.",
+          "message": "選擇主體序列化模式與相應的 `Content-Type` 標頭。變更此欄位會重塑 `body` 編輯器 - 選擇 JSON 會顯示 JSON 編輯器，選擇 Multipart Form 會顯示檔案選擇器，依此類推。"
+        },
+        "app.UWRyYW50.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.display_name": {
+          "source": "Body Type",
+          "message": "主體類型"
+        },
+        "app.UWRyYW50.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.short_desc": {
+          "source": "How the body is serialized and what Content-Type is sent",
+          "message": "主體如何序列化以及傳送何種 Content-Type"
+        },
+        "app.UWRyYW50.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.desc": {
+          "source": "If `True`, non-2xx HTTP responses return as the normal response hash (with the actual status code) instead of raising `REST-RESPONSE-ERROR`. Useful for handling 4xx/5xx as data - e.g. checking whether a resource exists. Overrides the connection's `error_passthru` setting for this call only.",
+          "message": "若為 `True`，非 2xx 的 HTTP 回應將作為正常的回應雜湊 (包含實際狀態碼) 返回，而不是引發 `REST-RESPONSE-ERROR`。適用於將 4xx/5xx 作為資料處理 - 例如檢查資源是否存在。僅針對本次呼叫覆寫連線的 `error_passthru` 設定。"
+        },
+        "app.UWRyYW50.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.display_name": {
+          "source": "Return Errors as Data",
+          "message": "將錯誤作為資料返回"
+        },
+        "app.UWRyYW50.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.short_desc": {
+          "source": "Return non-2xx responses normally instead of throwing",
+          "message": "正常返回非 2xx 回應，而不是拋出例外"
+        },
+        "app.UWRyYW50.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.desc": {
+          "source": "Optional list of HTTP status codes treated as success. If set and the response status is not in this list, the action throws `REST-STATUS-ERROR`. When unset, the REST client's default behavior applies (typically: 2xx is success, non-2xx throws).",
+          "message": "視為成功的選擇性 HTTP 狀態碼清單。若已設定且回應狀態不在此清單中，該動作將拋出 `REST-STATUS-ERROR`。未設定時，套用 REST 用戶端的預設行為 (通常：2xx 代表成功，非 2xx 拋出例外)。"
+        },
+        "app.UWRyYW50.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.display_name": {
+          "source": "Expected Status Codes",
+          "message": "預期的狀態碼"
+        },
+        "app.UWRyYW50.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.short_desc": {
+          "source": "Response status codes treated as success",
+          "message": "視為成功的回應狀態碼"
+        },
+        "app.UWRyYW50.action.bWFrZS1hcGktY2FsbA.option.aGRy.desc": {
+          "source": "Hash of custom headers added to the request. These override any default headers set by `body_type` (e.g. supplying `Content-Type` here wins over the body-type default).",
+          "message": "新增至請求的自訂標頭雜湊。這些會覆寫由 `body_type` 設定的任何預設標頭 (例如：在此處提供 `Content-Type` 會優先於主體類型的預設值)。"
+        },
+        "app.UWRyYW50.action.bWFrZS1hcGktY2FsbA.option.aGRy.display_name": {
+          "source": "Custom Headers",
+          "message": "自訂標頭"
+        },
+        "app.UWRyYW50.action.bWFrZS1hcGktY2FsbA.option.aGRy.short_desc": {
+          "source": "Extra request headers",
+          "message": "額外的請求標頭"
+        },
+        "app.UWRyYW50.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.desc": {
+          "source": "If `True`, the response hash includes a `debug` sub-hash containing the request method/URL/headers (with sensitive values redacted), request and response sizes, and round-trip duration. Useful when investigating slow or failing calls. Off by default to keep responses lean.",
+          "message": "若為 `True`，回應雜湊包含一個 `debug` 子雜湊，其中包含請求方法/URL/標頭 (敏感值已遮蔽)、請求與回應大小以及來回時間。在調查過慢或失敗的呼叫時很有用。預設關閉以維持回應精簡。"
+        },
+        "app.UWRyYW50.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.display_name": {
+          "source": "Include Debug Info",
+          "message": "包含除錯資訊"
+        },
+        "app.UWRyYW50.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.short_desc": {
+          "source": "Include request/timing/size debug info in the response",
+          "message": "在回應中包含請求/時序/大小除錯資訊"
+        },
+        "app.UWRyYW50.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.desc": {
+          "source": "HTTP `OPTIONS`",
+          "message": "HTTP `OPTIONS`"
+        },
+        "app.UWRyYW50.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.display_name": {
+          "source": "OPTIONS",
+          "message": "OPTIONS"
+        },
+        "app.UWRyYW50.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.short_desc": {
+          "source": "HTTP OPTIONS",
+          "message": "HTTP OPTIONS"
+        },
+        "app.UWRyYW50.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.desc": {
+          "source": "HTTP `DELETE`",
+          "message": "HTTP `DELETE`"
+        },
+        "app.UWRyYW50.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.display_name": {
+          "source": "DELETE",
+          "message": "DELETE"
+        },
+        "app.UWRyYW50.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.short_desc": {
+          "source": "HTTP DELETE",
+          "message": "HTTP DELETE"
+        },
+        "app.UWRyYW50.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.desc": {
+          "source": "HTTP `GET`",
+          "message": "HTTP `GET`"
+        },
+        "app.UWRyYW50.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.display_name": {
+          "source": "GET",
+          "message": "GET"
+        },
+        "app.UWRyYW50.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.short_desc": {
+          "source": "HTTP GET",
+          "message": "HTTP GET"
+        },
+        "app.UWRyYW50.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.desc": {
+          "source": "HTTP `HEAD`",
+          "message": "HTTP `HEAD`"
+        },
+        "app.UWRyYW50.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.display_name": {
+          "source": "HEAD",
+          "message": "HEAD"
+        },
+        "app.UWRyYW50.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.short_desc": {
+          "source": "HTTP HEAD",
+          "message": "HTTP HEAD"
+        },
+        "app.UWRyYW50.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.desc": {
+          "source": "HTTP `PATCH`",
+          "message": "HTTP `PATCH`"
+        },
+        "app.UWRyYW50.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.display_name": {
+          "source": "PATCH",
+          "message": "PATCH"
+        },
+        "app.UWRyYW50.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.short_desc": {
+          "source": "HTTP PATCH",
+          "message": "HTTP PATCH"
+        },
+        "app.UWRyYW50.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.desc": {
+          "source": "HTTP `POST`",
+          "message": "HTTP `POST`"
+        },
+        "app.UWRyYW50.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.display_name": {
+          "source": "POST",
+          "message": "POST"
+        },
+        "app.UWRyYW50.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.short_desc": {
+          "source": "HTTP POST",
+          "message": "HTTP POST"
+        },
+        "app.UWRyYW50.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.desc": {
+          "source": "HTTP `PUT`",
+          "message": "HTTP `PUT`"
+        },
+        "app.UWRyYW50.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.display_name": {
+          "source": "PUT",
+          "message": "PUT"
+        },
+        "app.UWRyYW50.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.short_desc": {
+          "source": "HTTP PUT",
+          "message": "HTTP PUT"
+        },
+        "app.UWRyYW50.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.desc": {
+          "source": "HTTP `TRACE`",
+          "message": "HTTP `TRACE`"
+        },
+        "app.UWRyYW50.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.display_name": {
+          "source": "TRACE",
+          "message": "TRACE"
+        },
+        "app.UWRyYW50.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.short_desc": {
+          "source": "HTTP TRACE",
+          "message": "HTTP TRACE"
+        },
+        "app.UWRyYW50.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "用於請求的 HTTP 方法"
+        },
+        "app.UWRyYW50.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.display_name": {
+          "source": "HTTP Method",
+          "message": "HTTP 方法"
+        },
+        "app.UWRyYW50.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.short_desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "用於請求的 HTTP 方法"
+        },
+        "app.UWRyYW50.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain `{name}` placeholders that are replaced from `path_vars`. Example: `/users/{id}/comments`.",
+          "message": "相於連線 API 基本 URL 的 URI 路徑。可能包含從 `path_vars` 替換的 `{name}` 預留位置。範例：`/users/{id}/comments`。"
+        },
+        "app.UWRyYW50.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.display_name": {
+          "source": "URI Path",
+          "message": "URI 路徑"
+        },
+        "app.UWRyYW50.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.short_desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain '{name}' placeholders that are replaced from 'path_vars'. Example: '/users/{id}/comments'",
+          "message": "相對於連線 API 基底 URL 的 URI 路徑。可能包含從 'path_vars' 替換的 '{name}' 預留位置。範例：'/users/{id}/comments'"
+        },
+        "app.UWRyYW50.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.desc": {
+          "source": "Hash of values substituted into `{name}` placeholders in the URI path. Example: with `path = /users/{id}` and `path_vars = {id: 123}` the framework sends `/users/123`. Values are URL-encoded.",
+          "message": "替換至 URI 路徑中 `{name}` 預留位置的值 Hash。範例：使用 `path = /users/{id}` 與 `path_vars = {id: 123}` 時，框架會傳送 `/users/123`。數值均經過 URL 編碼。"
+        },
+        "app.UWRyYW50.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.display_name": {
+          "source": "Path Variables",
+          "message": "路徑變數"
+        },
+        "app.UWRyYW50.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.short_desc": {
+          "source": "Values for {name} placeholders in path",
+          "message": "路徑中 {name} 預留位置的值"
+        },
+        "app.UWRyYW50.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.desc": {
+          "source": "Hash of query string parameters to append to the URI path. Values are URL-encoded; list values are joined with `,`.",
+          "message": "要附加至 URI 路徑的查詢字串參數 Hash。數值均經過 URL 編碼；清單值會使用 `,` 連接。"
+        },
+        "app.UWRyYW50.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.display_name": {
+          "source": "Query Arguments",
+          "message": "查詢引數"
+        },
+        "app.UWRyYW50.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.short_desc": {
+          "source": "Query string parameters",
+          "message": "查詢字串參數"
+        },
+        "app.UWRyYW50.action.bWFrZS1hcGktY2FsbA.short_desc": {
+          "source": "Make a custom API call to Qdrant Vector Database",
+          "message": "對 Qdrant Vector Database 進行自訂 API 呼叫"
+        },
+        "app.UWRyYW50.action.c2Nyb2xsLXBvaW50cw.desc": {
+          "source": "Iterate through all points in a Qdrant collection using scroll-based pagination with optional filtering",
+          "message": "使用基於捲動的分頁與選用篩選反覆查看 Qdrant 集合中的所有點"
+        },
+        "app.UWRyYW50.action.c2Nyb2xsLXBvaW50cw.display_name": {
+          "source": "Scroll Points",
+          "message": "捲動點"
+        },
+        "app.UWRyYW50.action.c2Nyb2xsLXBvaW50cw.short_desc": {
+          "source": "Scroll through points in a collection",
+          "message": "捲動查看集合中的點"
+        },
+        "app.UWRyYW50.action.c2V0LXBheWxvYWQ.desc": {
+          "source": "Set or update payload key-value pairs on points in a Qdrant collection by point IDs or filter conditions",
+          "message": "依點 ID 或篩選條件設定或更新 Qdrant 集合中點的負載鍵值組"
+        },
+        "app.UWRyYW50.action.c2V0LXBheWxvYWQ.display_name": {
+          "source": "Set Payload",
+          "message": "設定負載"
+        },
+        "app.UWRyYW50.action.c2V0LXBheWxvYWQ.short_desc": {
+          "source": "Set payload on points",
+          "message": "在點上設定負載"
+        },
+        "app.UWRyYW50.action.c2VhcmNoLXBvaW50cw.desc": {
+          "source": "Vector similarity search on a Qdrant collection returning results as a record stream for efficient pipeline processing",
+          "message": "在 Qdrant 集合上進行向量相似度搜尋，並以記錄串流形式傳回結果以進行高效能的管線處理"
+        },
+        "app.UWRyYW50.action.c2VhcmNoLXBvaW50cw.display_name": {
+          "source": "Search Points",
+          "message": "搜尋點"
+        },
+        "app.UWRyYW50.action.c2VhcmNoLXBvaW50cw.short_desc": {
+          "source": "Search points with record streaming",
+          "message": "透過記錄串流搜尋點"
+        },
+        "app.UWRyYW50.action.cXVlcnktYmF0Y2gtcG9pbnRz.desc": {
+          "source": "Execute multiple vector similarity search queries in a single batch request against a Qdrant collection",
+          "message": "針對 Qdrant 集合在單一批次請求中執行多個向量相似度搜尋查詢"
+        },
+        "app.UWRyYW50.action.cXVlcnktYmF0Y2gtcG9pbnRz.display_name": {
+          "source": "Query Batch Points",
+          "message": "批次查詢點"
+        },
+        "app.UWRyYW50.action.cXVlcnktYmF0Y2gtcG9pbnRz.short_desc": {
+          "source": "Perform batch vector similarity searches",
+          "message": "執行批次向量相似度搜尋"
+        },
+        "app.UWRyYW50.action.cXVlcnktZ3JvdXBzLXBvaW50cw.desc": {
+          "source": "Execute a vector similarity search on a Qdrant collection with results grouped by a specified payload field",
+          "message": "在 Qdrant 集合上執行向量相似度搜尋，並依指定的負載欄位對結果進行分組"
+        },
+        "app.UWRyYW50.action.cXVlcnktZ3JvdXBzLXBvaW50cw.display_name": {
+          "source": "Query Grouped Points",
+          "message": "查詢分組點"
+        },
+        "app.UWRyYW50.action.cXVlcnktZ3JvdXBzLXBvaW50cw.short_desc": {
+          "source": "Perform grouped vector similarity search",
+          "message": "執行分組向量相似度搜尋"
+        },
+        "app.UWRyYW50.action.cXVlcnktcG9pbnRz.desc": {
+          "source": "Perform vector similarity search, filtering, and hybrid search on a Qdrant collection",
+          "message": "在 Qdrant 集合上執行向量相似度搜尋、篩選和混合搜尋"
+        },
+        "app.UWRyYW50.action.cXVlcnktcG9pbnRz.display_name": {
+          "source": "Query Points",
+          "message": "查詢點"
+        },
+        "app.UWRyYW50.action.cXVlcnktcG9pbnRz.short_desc": {
+          "source": "Query points using vector similarity search",
+          "message": "使用向量相似度搜尋查詢點"
+        },
+        "app.UWRyYW50.action.dXBkYXRlLWFsaWFzZXM.desc": {
+          "source": "Create, rename, or delete collection aliases in the Qdrant instance",
+          "message": "在 Qdrant 執行個體中建立、重新命名或刪除集合別名"
+        },
+        "app.UWRyYW50.action.dXBkYXRlLWFsaWFzZXM.display_name": {
+          "source": "Update Aliases",
+          "message": "更新別名"
+        },
+        "app.UWRyYW50.action.dXBkYXRlLWFsaWFzZXM.short_desc": {
+          "source": "Update collection aliases",
+          "message": "更新集合別名"
+        },
+        "app.UWRyYW50.action.dXBzZXJ0LXBvaW50cw.desc": {
+          "source": "Insert or update points with vectors and optional payloads in a Qdrant collection",
+          "message": "在 Qdrant 集合中插入或更新包含向量及選用負載的點"
+        },
+        "app.UWRyYW50.action.dXBzZXJ0LXBvaW50cw.display_name": {
+          "source": "Upsert Points",
+          "message": "更新插入點"
+        },
+        "app.UWRyYW50.action.dXBzZXJ0LXBvaW50cw.short_desc": {
+          "source": "Insert or update points in a collection",
+          "message": "在集合中插入或更新點"
+        },
+        "app.UWRyYW50.desc": {
+          "source": "Qdrant vector database providing similarity search, hybrid search, and vector CRUD operations for AI/ML and RAG pipelines",
+          "message": "Qdrant 向量資料庫，為 AI/ML 和 RAG 管線提供相似度搜尋、混合搜尋及向量 CRUD 操作"
+        },
+        "app.UWRyYW50.display_name": {
+          "source": "Qdrant Vector Database",
+          "message": "Qdrant Vector Database"
+        },
+        "app.UWRyYW50.short_desc": {
+          "source": "Qdrant vector database for similarity search and RAG",
+          "message": "用於相似度搜尋與 RAG 的 Qdrant 向量資料庫"
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,2177 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "fr": {
+      "messages": {
+        "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLWN1c3RvbS1maWVsZA.desc": {
+          "source": "Create a new custom field in Constant Contact",
+          "message": "Créer un nouveau champ personnalisé dans Constant Contact"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLWN1c3RvbS1maWVsZA.display_name": {
+          "source": "Create a Custom Field",
+          "message": "Créer un champ personnalisé"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLWN1c3RvbS1maWVsZA.option.bGFiZWw.desc": {
+          "source": "The label for the custom field",
+          "message": "Le libellé du champ personnalisé"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLWN1c3RvbS1maWVsZA.option.bGFiZWw.display_name": {
+          "source": "Label",
+          "message": "Étiquette"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLWN1c3RvbS1maWVsZA.option.bGFiZWw.short_desc": {
+          "source": "Custom field label",
+          "message": "Libellé du champ personnalisé"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLWN1c3RvbS1maWVsZA.option.dHlwZQ.allowed-value.c3RyaW5nOmRhdGU.desc": {
+          "source": "Date field",
+          "message": "Champ de date"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLWN1c3RvbS1maWVsZA.option.dHlwZQ.allowed-value.c3RyaW5nOmRhdGU.display_name": {
+          "source": "Date",
+          "message": "Date"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLWN1c3RvbS1maWVsZA.option.dHlwZQ.allowed-value.c3RyaW5nOnN0cmluZw.desc": {
+          "source": "String field",
+          "message": "Champ de chaîne"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLWN1c3RvbS1maWVsZA.option.dHlwZQ.allowed-value.c3RyaW5nOnN0cmluZw.display_name": {
+          "source": "String",
+          "message": "String"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLWN1c3RvbS1maWVsZA.option.dHlwZQ.desc": {
+          "source": "The type of the custom field",
+          "message": "Le type du champ personnalisé"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLWN1c3RvbS1maWVsZA.option.dHlwZQ.display_name": {
+          "source": "Type",
+          "message": "Type"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLWN1c3RvbS1maWVsZA.option.dHlwZQ.short_desc": {
+          "source": "Custom field type",
+          "message": "Type de champ personnalisé"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLWN1c3RvbS1maWVsZA.short_desc": {
+          "source": "Create a new custom field",
+          "message": "Créer un nouveau champ personnalisé"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLWNvbnRhY3Q.desc": {
+          "source": "Create a new contact in Constant Contact",
+          "message": "Créer un nouveau contact dans Constant Contact"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLWNvbnRhY3Q.display_name": {
+          "source": "Create a Contact",
+          "message": "Créer un contact"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLWNvbnRhY3Q.option.Y29tcGFueV9uYW1l.desc": {
+          "source": "Company name of the contact",
+          "message": "Nom de l'entreprise du contact"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLWNvbnRhY3Q.option.Y29tcGFueV9uYW1l.display_name": {
+          "source": "Company Name",
+          "message": "Nom de l'entreprise"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLWNvbnRhY3Q.option.Y29tcGFueV9uYW1l.short_desc": {
+          "source": "Contact company name",
+          "message": "Nom de l'entreprise du contact"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLWNvbnRhY3Q.option.Y3JlYXRlX3NvdXJjZQ.allowed-value.c3RyaW5nOkFjY291bnQ.desc": {
+          "source": "Created by the account owner",
+          "message": "Créé par le propriétaire du compte"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLWNvbnRhY3Q.option.Y3JlYXRlX3NvdXJjZQ.allowed-value.c3RyaW5nOkFjY291bnQ.display_name": {
+          "source": "Account",
+          "message": "Compte"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLWNvbnRhY3Q.option.Y3JlYXRlX3NvdXJjZQ.allowed-value.c3RyaW5nOkNvbnRhY3Q.desc": {
+          "source": "Created by the contact themselves",
+          "message": "Créé par le contact lui-même"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLWNvbnRhY3Q.option.Y3JlYXRlX3NvdXJjZQ.allowed-value.c3RyaW5nOkNvbnRhY3Q.display_name": {
+          "source": "Contact",
+          "message": "Contact"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLWNvbnRhY3Q.option.Y3JlYXRlX3NvdXJjZQ.desc": {
+          "source": "The source of the contact creation",
+          "message": "La source de création du contact"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLWNvbnRhY3Q.option.Y3JlYXRlX3NvdXJjZQ.display_name": {
+          "source": "Create Source",
+          "message": "Source de création"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLWNvbnRhY3Q.option.Y3JlYXRlX3NvdXJjZQ.short_desc": {
+          "source": "Source of the contact creation",
+          "message": "Source de création du contact"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLWNvbnRhY3Q.option.Y3VzdG9tX2ZpZWxkcw.desc": {
+          "source": "A list of custom field value objects for the contact",
+          "message": "Une liste d'objets de valeur de champ personnalisé pour le contact"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLWNvbnRhY3Q.option.Y3VzdG9tX2ZpZWxkcw.display_name": {
+          "source": "Custom Fields",
+          "message": "Champs personnalisés"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLWNvbnRhY3Q.option.Y3VzdG9tX2ZpZWxkcw.short_desc": {
+          "source": "Custom field values",
+          "message": "Valeurs de champs personnalisés"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLWNvbnRhY3Q.option.YW5uaXZlcnNhcnk.desc": {
+          "source": "The anniversary date of the contact in `YYYY-MM-DD` format",
+          "message": "La date d'anniversaire du contact au format `YYYY-MM-DD`"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLWNvbnRhY3Q.option.YW5uaXZlcnNhcnk.display_name": {
+          "source": "Anniversary",
+          "message": "Anniversaire"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLWNvbnRhY3Q.option.YW5uaXZlcnNhcnk.short_desc": {
+          "source": "Anniversary date (YYYY-MM-DD)",
+          "message": "Date d'anniversaire (YYYY-MM-DD)"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLWNvbnRhY3Q.option.YmlydGhkYXlfZGF5.desc": {
+          "source": "The birthday day of the contact (`1`-`31`)",
+          "message": "Le jour de naissance du contact (`1`-`31`)"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLWNvbnRhY3Q.option.YmlydGhkYXlfZGF5.display_name": {
+          "source": "Birthday Day",
+          "message": "Jour de naissance"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLWNvbnRhY3Q.option.YmlydGhkYXlfZGF5.short_desc": {
+          "source": "Birthday day (1-31)",
+          "message": "Jour de naissance (1-31)"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLWNvbnRhY3Q.option.YmlydGhkYXlfbW9udGg.desc": {
+          "source": "The birthday month of the contact (`1`-`12`)",
+          "message": "Le mois de naissance du contact (`1`-`12`)"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLWNvbnRhY3Q.option.YmlydGhkYXlfbW9udGg.display_name": {
+          "source": "Birthday Month",
+          "message": "Mois de naissance"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLWNvbnRhY3Q.option.YmlydGhkYXlfbW9udGg.short_desc": {
+          "source": "Birthday month (1-12)",
+          "message": "Mois de naissance (1-12)"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLWNvbnRhY3Q.option.ZW1haWxfYWRkcmVzcw.desc": {
+          "source": "Email address object with `address` and optional `permission_to_send`",
+          "message": "Objet d'adresse e-mail avec `address` et `permission_to_send` facultatif"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLWNvbnRhY3Q.option.ZW1haWxfYWRkcmVzcw.display_name": {
+          "source": "Email Address",
+          "message": "Adresse e-mail"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLWNvbnRhY3Q.option.ZW1haWxfYWRkcmVzcw.short_desc": {
+          "source": "Email address object",
+          "message": "Objet d'adresse e-mail"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLWNvbnRhY3Q.option.Zmlyc3RfbmFtZQ.desc": {
+          "source": "First name of the contact",
+          "message": "Prénom du contact"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLWNvbnRhY3Q.option.Zmlyc3RfbmFtZQ.display_name": {
+          "source": "First Name",
+          "message": "Prénom"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLWNvbnRhY3Q.option.Zmlyc3RfbmFtZQ.short_desc": {
+          "source": "Contact first name",
+          "message": "Prénom du contact"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLWNvbnRhY3Q.option.am9iX3RpdGxl.desc": {
+          "source": "Job title of the contact",
+          "message": "Intitulé de poste du contact"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLWNvbnRhY3Q.option.am9iX3RpdGxl.display_name": {
+          "source": "Job Title",
+          "message": "Intitulé de poste"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLWNvbnRhY3Q.option.am9iX3RpdGxl.short_desc": {
+          "source": "Contact job title",
+          "message": "Intitulé de poste du contact"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLWNvbnRhY3Q.option.bGFzdF9uYW1l.desc": {
+          "source": "Last name of the contact",
+          "message": "Nom de famille du contact"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLWNvbnRhY3Q.option.bGFzdF9uYW1l.display_name": {
+          "source": "Last Name",
+          "message": "Nom de famille"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLWNvbnRhY3Q.option.bGFzdF9uYW1l.short_desc": {
+          "source": "Contact last name",
+          "message": "Nom de famille du contact"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLWNvbnRhY3Q.option.bGlzdF9tZW1iZXJzaGlwcw.desc": {
+          "source": "List of contact list IDs to add the contact to",
+          "message": "Liste des identifiants de liste de contacts auxquels ajouter le contact"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLWNvbnRhY3Q.option.bGlzdF9tZW1iZXJzaGlwcw.display_name": {
+          "source": "List Memberships",
+          "message": "Appartenances aux listes"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLWNvbnRhY3Q.option.bGlzdF9tZW1iZXJzaGlwcw.short_desc": {
+          "source": "Contact list IDs to add the contact to",
+          "message": "Identifiants de liste de contacts auxquels ajouter le contact"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLWNvbnRhY3Q.option.c3RyZWV0X2FkZHJlc3Nlcw.desc": {
+          "source": "A list of street address objects for the contact",
+          "message": "Une liste d'objets d'adresse postale pour le contact"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLWNvbnRhY3Q.option.c3RyZWV0X2FkZHJlc3Nlcw.display_name": {
+          "source": "Street Addresses",
+          "message": "Adresses postales"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLWNvbnRhY3Q.option.c3RyZWV0X2FkZHJlc3Nlcw.short_desc": {
+          "source": "Contact street addresses",
+          "message": "Adresses postales du contact"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLWNvbnRhY3Q.option.cGhvbmVfbnVtYmVycw.desc": {
+          "source": "A list of phone number objects for the contact",
+          "message": "Une liste d'objets de numéro de téléphone pour le contact"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLWNvbnRhY3Q.option.cGhvbmVfbnVtYmVycw.display_name": {
+          "source": "Phone Numbers",
+          "message": "Numéros de téléphone"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLWNvbnRhY3Q.option.cGhvbmVfbnVtYmVycw.short_desc": {
+          "source": "Contact phone numbers",
+          "message": "Numéros de téléphone du contact"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLWNvbnRhY3Q.option.dGFnZ2luZ3M.desc": {
+          "source": "List of tag IDs to apply to the contact",
+          "message": "Liste des identifiants d'étiquette à appliquer au contact"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLWNvbnRhY3Q.option.dGFnZ2luZ3M.display_name": {
+          "source": "Taggings",
+          "message": "Étiquetages"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLWNvbnRhY3Q.option.dGFnZ2luZ3M.short_desc": {
+          "source": "Tag IDs to apply to the contact",
+          "message": "Identifiants d'étiquette à appliquer au contact"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLWNvbnRhY3Q.short_desc": {
+          "source": "Create a new contact",
+          "message": "Créer un nouveau contact"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLWNvbnRhY3QtbGlzdA.desc": {
+          "source": "Create a new contact list in Constant Contact",
+          "message": "Créer une nouvelle liste de contacts dans Constant Contact"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLWNvbnRhY3QtbGlzdA.display_name": {
+          "source": "Create a Contact List",
+          "message": "Créer une liste de contacts"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLWNvbnRhY3QtbGlzdA.option.ZGVzY3JpcHRpb24.desc": {
+          "source": "Description of the contact list",
+          "message": "Description de la liste de contacts"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLWNvbnRhY3QtbGlzdA.option.ZGVzY3JpcHRpb24.display_name": {
+          "source": "Description",
+          "message": "Description"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLWNvbnRhY3QtbGlzdA.option.ZGVzY3JpcHRpb24.short_desc": {
+          "source": "Contact list description",
+          "message": "Description de la liste de contacts"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLWNvbnRhY3QtbGlzdA.option.ZmF2b3JpdGU.desc": {
+          "source": "Whether to mark this list as a favorite",
+          "message": "Indique s'il faut marquer cette liste comme favorite"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLWNvbnRhY3QtbGlzdA.option.ZmF2b3JpdGU.display_name": {
+          "source": "Favorite",
+          "message": "Favori"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLWNvbnRhY3QtbGlzdA.option.ZmF2b3JpdGU.short_desc": {
+          "source": "Mark as favorite",
+          "message": "Marquer comme favori"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLWNvbnRhY3QtbGlzdA.option.bmFtZQ.desc": {
+          "source": "The name of the contact list",
+          "message": "Le nom de la liste de contacts"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLWNvbnRhY3QtbGlzdA.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "Nom"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLWNvbnRhY3QtbGlzdA.option.bmFtZQ.short_desc": {
+          "source": "Contact list name",
+          "message": "Nom de la liste de contacts"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLWNvbnRhY3QtbGlzdA.short_desc": {
+          "source": "Create a new contact list",
+          "message": "Créer une nouvelle liste de contacts"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLWVtYWlsLWNhbXBhaWdu.desc": {
+          "source": "Create a new email campaign in Constant Contact",
+          "message": "Créer une nouvelle campagne d'e-mails dans Constant Contact"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLWVtYWlsLWNhbXBhaWdu.display_name": {
+          "source": "Create an Email Campaign",
+          "message": "Créer une campagne d'e-mails"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLWVtYWlsLWNhbXBhaWdu.option.ZW1haWxfY2FtcGFpZ25fYWN0aXZpdGllcw.desc": {
+          "source": "List of campaign activity configurations including sender, subject, HTML content, and target lists",
+          "message": "Liste des configurations d'activité de campagne incluant l'expéditeur, l'objet, le contenu HTML et les listes cibles"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLWVtYWlsLWNhbXBhaWdu.option.ZW1haWxfY2FtcGFpZ25fYWN0aXZpdGllcw.display_name": {
+          "source": "Campaign Activities",
+          "message": "Activités de campagne"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLWVtYWlsLWNhbXBhaWdu.option.ZW1haWxfY2FtcGFpZ25fYWN0aXZpdGllcw.short_desc": {
+          "source": "List of campaign activity configurations",
+          "message": "Liste des configurations d'activité de campagne"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLWVtYWlsLWNhbXBhaWdu.option.bmFtZQ.desc": {
+          "source": "The name of the email campaign",
+          "message": "Le nom de la campagne d'e-mails"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLWVtYWlsLWNhbXBhaWdu.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "Nom"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLWVtYWlsLWNhbXBhaWdu.option.bmFtZQ.short_desc": {
+          "source": "Campaign name",
+          "message": "Nom de la campagne"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLWVtYWlsLWNhbXBhaWdu.short_desc": {
+          "source": "Create a new email campaign",
+          "message": "Créer une nouvelle campagne d'e-mailing"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLXNlZ21lbnQ.desc": {
+          "source": "Create a new segment in Constant Contact",
+          "message": "Créer un nouveau segment dans Constant Contact"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLXNlZ21lbnQ.display_name": {
+          "source": "Create a Segment",
+          "message": "Créer un segment"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLXNlZ21lbnQ.option.bmFtZQ.desc": {
+          "source": "The name of the segment",
+          "message": "Le nom du segment"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLXNlZ21lbnQ.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "Nom"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLXNlZ21lbnQ.option.bmFtZQ.short_desc": {
+          "source": "Segment name",
+          "message": "Nom du segment"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLXNlZ21lbnQ.option.c2VnbWVudF9jcml0ZXJpYQ.desc": {
+          "source": "The criteria expression for the segment",
+          "message": "L'expression de critères pour le segment"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLXNlZ21lbnQ.option.c2VnbWVudF9jcml0ZXJpYQ.display_name": {
+          "source": "Segment Criteria",
+          "message": "Critères de segment"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLXNlZ21lbnQ.option.c2VnbWVudF9jcml0ZXJpYQ.short_desc": {
+          "source": "Segment criteria expression",
+          "message": "Expression des critères de segment"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLXNlZ21lbnQ.short_desc": {
+          "source": "Create a new segment",
+          "message": "Créer un nouveau segment"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLXRhZw.desc": {
+          "source": "Create a new tag in Constant Contact",
+          "message": "Créer une nouvelle étiquette dans Constant Contact"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLXRhZw.display_name": {
+          "source": "Create a Tag",
+          "message": "Créer une étiquette"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLXRhZw.option.bmFtZQ.desc": {
+          "source": "The name of the tag",
+          "message": "Le nom de l'étiquette"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLXRhZw.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "Nom"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLXRhZw.option.bmFtZQ.short_desc": {
+          "source": "Tag name",
+          "message": "Nom de l'étiquette"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLXRhZw.option.dGFnX3NvdXJjZQ.allowed-value.c3RyaW5nOkFjY291bnQ.desc": {
+          "source": "Tag created by the account owner",
+          "message": "Étiquette créée par le propriétaire du compte"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLXRhZw.option.dGFnX3NvdXJjZQ.allowed-value.c3RyaW5nOkFjY291bnQ.display_name": {
+          "source": "Account",
+          "message": "Compte"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLXRhZw.option.dGFnX3NvdXJjZQ.allowed-value.c3RyaW5nOkNvbnRhY3Q.desc": {
+          "source": "Tag created by the contact",
+          "message": "Étiquette créée par le contact"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLXRhZw.option.dGFnX3NvdXJjZQ.allowed-value.c3RyaW5nOkNvbnRhY3Q.display_name": {
+          "source": "Contact",
+          "message": "Contact"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLXRhZw.option.dGFnX3NvdXJjZQ.desc": {
+          "source": "The source of the tag",
+          "message": "La source de l'étiquette"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLXRhZw.option.dGFnX3NvdXJjZQ.display_name": {
+          "source": "Tag Source",
+          "message": "Source de l'étiquette"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLXRhZw.option.dGFnX3NvdXJjZQ.short_desc": {
+          "source": "Source of the tag",
+          "message": "Source de l'étiquette"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Y3JlYXRlLXRhZw.short_desc": {
+          "source": "Create a new tag",
+          "message": "Créer une nouvelle étiquette"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.YWRkLWxpc3QtbWVtYmVycw.desc": {
+          "source": "Add contacts to one or more contact lists in bulk",
+          "message": "Ajouter des contacts en masse à une ou plusieurs listes de contacts"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.YWRkLWxpc3QtbWVtYmVycw.display_name": {
+          "source": "Add List Members",
+          "message": "Ajouter des membres de liste"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.YWRkLWxpc3QtbWVtYmVycw.option.bGlzdF9pZHM.desc": {
+          "source": "List of contact list IDs to add the contacts to",
+          "message": "Liste des identifiants de liste de contacts auxquels ajouter les contacts"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.YWRkLWxpc3QtbWVtYmVycw.option.bGlzdF9pZHM.display_name": {
+          "source": "List IDs",
+          "message": "IDs de liste"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.YWRkLWxpc3QtbWVtYmVycw.option.bGlzdF9pZHM.short_desc": {
+          "source": "Contact list IDs",
+          "message": "Identifiants de liste de contacts"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.YWRkLWxpc3QtbWVtYmVycw.option.c291cmNl.desc": {
+          "source": "Source of contacts to add to the lists. Use one of the mutually exclusive fields: `contact_ids`, `list_ids`, `tag_ids`, `segment_id`, `all_active_contacts`, `new_subscriber`, or `engagement_level`",
+          "message": "Source des contacts à ajouter aux listes. Utilisez l'un des champs mutuellement exclusifs : `contact_ids`, `list_ids`, `tag_ids`, `segment_id`, `all_active_contacts`, `new_subscriber` ou `engagement_level`"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.YWRkLWxpc3QtbWVtYmVycw.option.c291cmNl.display_name": {
+          "source": "Source",
+          "message": "Source"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.YWRkLWxpc3QtbWVtYmVycw.option.c291cmNl.short_desc": {
+          "source": "Source of contacts",
+          "message": "Source des contacts"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.YWRkLWxpc3QtbWVtYmVycw.short_desc": {
+          "source": "Add contacts to lists in bulk",
+          "message": "Ajouter des contacts à des listes en masse"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Z2V0LWFjY291bnQ.desc": {
+          "source": "Get the Constant Contact account information",
+          "message": "Obtenir les informations du compte Constant Contact"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Z2V0LWFjY291bnQ.display_name": {
+          "source": "Get Account",
+          "message": "Obtenir le compte"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Z2V0LWFjY291bnQ.short_desc": {
+          "source": "Get account information",
+          "message": "Obtenir les informations du compte"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Z2V0LWN1c3RvbS1maWVsZA.desc": {
+          "source": "Retrieve a single custom field by ID from Constant Contact",
+          "message": "Récupérer un champ personnalisé par son identifiant depuis Constant Contact"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Z2V0LWN1c3RvbS1maWVsZA.display_name": {
+          "source": "Get a Custom Field",
+          "message": "Obtenir un champ personnalisé"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Z2V0LWN1c3RvbS1maWVsZA.option.Y3VzdG9tX2ZpZWxkX2lk.display_name": {
+          "source": "Custom Field ID",
+          "message": "Identifiant du champ personnalisé"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Z2V0LWN1c3RvbS1maWVsZA.option.Y3VzdG9tX2ZpZWxkX2lk.short_desc": {
+          "source": "The custom field ID",
+          "message": "L'identifiant du champ personnalisé"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Z2V0LWN1c3RvbS1maWVsZA.short_desc": {
+          "source": "Get a single custom field by ID",
+          "message": "Obtenir un champ personnalisé unique par son identifiant"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Z2V0LWNvbnRhY3Q.desc": {
+          "source": "Retrieve a single contact by ID from Constant Contact",
+          "message": "Récupérer un contact unique par son identifiant depuis Constant Contact"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Z2V0LWNvbnRhY3Q.display_name": {
+          "source": "Get a Contact",
+          "message": "Obtenir un contact"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Z2V0LWNvbnRhY3Q.option.Y29udGFjdF9pZA.display_name": {
+          "source": "Contact ID",
+          "message": "ID du contact"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Z2V0LWNvbnRhY3Q.option.Y29udGFjdF9pZA.short_desc": {
+          "source": "The contact ID",
+          "message": "L'ID du contact"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Z2V0LWNvbnRhY3Q.short_desc": {
+          "source": "Get a single contact by ID",
+          "message": "Obtenir un contact unique par ID"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Z2V0LWNvbnRhY3QtbGlzdA.desc": {
+          "source": "Retrieve a single contact list by ID from Constant Contact",
+          "message": "Récupérer une liste de contacts unique par son identifiant depuis Constant Contact"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Z2V0LWNvbnRhY3QtbGlzdA.display_name": {
+          "source": "Get a Contact List",
+          "message": "Obtenir une liste de contacts"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Z2V0LWNvbnRhY3QtbGlzdA.option.bGlzdF9pZA.display_name": {
+          "source": "List ID",
+          "message": "ID de la liste"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Z2V0LWNvbnRhY3QtbGlzdA.option.bGlzdF9pZA.short_desc": {
+          "source": "The contact list ID",
+          "message": "L'identifiant de la liste de contacts"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Z2V0LWNvbnRhY3QtbGlzdA.short_desc": {
+          "source": "Get a single contact list by ID",
+          "message": "Obtenir une liste de contacts unique par son identifiant"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Z2V0LWVtYWlsLWNhbXBhaWdu.desc": {
+          "source": "Retrieve a single email campaign by ID from Constant Contact",
+          "message": "Récupérer une campagne par e-mail unique par son identifiant depuis Constant Contact"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Z2V0LWVtYWlsLWNhbXBhaWdu.display_name": {
+          "source": "Get an Email Campaign",
+          "message": "Obtenir une campagne par e-mail"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Z2V0LWVtYWlsLWNhbXBhaWdu.option.Y2FtcGFpZ25faWQ.display_name": {
+          "source": "Campaign ID",
+          "message": "ID de la campagne"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Z2V0LWVtYWlsLWNhbXBhaWdu.option.Y2FtcGFpZ25faWQ.short_desc": {
+          "source": "The email campaign ID",
+          "message": "L'identifiant de la campagne par e-mail"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Z2V0LWVtYWlsLWNhbXBhaWdu.short_desc": {
+          "source": "Get a single email campaign by ID",
+          "message": "Obtenir une campagne par e-mail unique par son identifiant"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Z2V0LWVtYWlsLXN1bW1hcnk.desc": {
+          "source": "Get a summary report for email campaigns in Constant Contact",
+          "message": "Obtenir un rapport récapitulatif pour les campagnes par e-mail dans Constant Contact"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Z2V0LWVtYWlsLXN1bW1hcnk.display_name": {
+          "source": "Get Email Summary",
+          "message": "Obtenir le récapitulatif des e-mails"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Z2V0LWVtYWlsLXN1bW1hcnk.option.Y2FtcGFpZ25faWRz.desc": {
+          "source": "A list of email campaign IDs to get summaries for",
+          "message": "Une liste d'identifiants de campagnes par e-mail pour lesquelles obtenir des récapitulatifs"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Z2V0LWVtYWlsLXN1bW1hcnk.option.Y2FtcGFpZ25faWRz.display_name": {
+          "source": "Campaign IDs",
+          "message": "Identifiants de campagne"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Z2V0LWVtYWlsLXN1bW1hcnk.option.Y2FtcGFpZ25faWRz.short_desc": {
+          "source": "List of campaign IDs",
+          "message": "Liste d'identifiants de campagne"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Z2V0LWVtYWlsLXN1bW1hcnk.short_desc": {
+          "source": "Get email campaign summary report",
+          "message": "Obtenir le rapport récapitulatif de campagne par e-mail"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Z2V0LXNlZ21lbnQ.desc": {
+          "source": "Retrieve a single segment by ID from Constant Contact",
+          "message": "Récupérer un segment unique par son identifiant depuis Constant Contact"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Z2V0LXNlZ21lbnQ.display_name": {
+          "source": "Get a Segment",
+          "message": "Obtenir un segment"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Z2V0LXNlZ21lbnQ.option.c2VnbWVudF9pZA.display_name": {
+          "source": "Segment ID",
+          "message": "Identifiant du segment"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Z2V0LXNlZ21lbnQ.option.c2VnbWVudF9pZA.short_desc": {
+          "source": "The segment ID",
+          "message": "L'identifiant du segment"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Z2V0LXNlZ21lbnQ.short_desc": {
+          "source": "Get a single segment by ID",
+          "message": "Obtenir un segment unique par son identifiant"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Z2V0LXRhZw.desc": {
+          "source": "Retrieve a single tag by ID from Constant Contact",
+          "message": "Récupérer une étiquette unique par son identifiant depuis Constant Contact"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Z2V0LXRhZw.display_name": {
+          "source": "Get a Tag",
+          "message": "Obtenir une étiquette"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Z2V0LXRhZw.option.dGFnX2lk.display_name": {
+          "source": "Tag ID",
+          "message": "ID de l'étiquette"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Z2V0LXRhZw.option.dGFnX2lk.short_desc": {
+          "source": "The tag ID",
+          "message": "L'identifiant de l'étiquette"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.Z2V0LXRhZw.short_desc": {
+          "source": "Get a single tag by ID",
+          "message": "Obtenir une étiquette unique par son identifiant"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.ZGVsZXRlLWN1c3RvbS1maWVsZA.desc": {
+          "source": "Delete a custom field from Constant Contact",
+          "message": "Supprimer un champ personnalisé de Constant Contact"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.ZGVsZXRlLWN1c3RvbS1maWVsZA.display_name": {
+          "source": "Delete a Custom Field",
+          "message": "Supprimer un champ personnalisé"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.ZGVsZXRlLWN1c3RvbS1maWVsZA.option.Y3VzdG9tX2ZpZWxkX2lk.display_name": {
+          "source": "Custom Field ID",
+          "message": "Identifiant du champ personnalisé"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.ZGVsZXRlLWN1c3RvbS1maWVsZA.option.Y3VzdG9tX2ZpZWxkX2lk.short_desc": {
+          "source": "The custom field to delete",
+          "message": "Le champ personnalisé à supprimer"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.ZGVsZXRlLWN1c3RvbS1maWVsZA.short_desc": {
+          "source": "Delete a custom field",
+          "message": "Supprimer un champ personnalisé"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.ZGVsZXRlLWNvbnRhY3Q.desc": {
+          "source": "Delete a contact from Constant Contact",
+          "message": "Supprimer un contact de Constant Contact"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.ZGVsZXRlLWNvbnRhY3Q.display_name": {
+          "source": "Delete a Contact",
+          "message": "Supprimer un contact"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.ZGVsZXRlLWNvbnRhY3Q.option.Y29udGFjdF9pZA.display_name": {
+          "source": "Contact ID",
+          "message": "ID du contact"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.ZGVsZXRlLWNvbnRhY3Q.option.Y29udGFjdF9pZA.short_desc": {
+          "source": "The contact to delete",
+          "message": "Le contact à supprimer"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.ZGVsZXRlLWNvbnRhY3Q.short_desc": {
+          "source": "Delete a contact",
+          "message": "Supprimer un contact"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.ZGVsZXRlLWNvbnRhY3QtbGlzdA.desc": {
+          "source": "Delete a contact list from Constant Contact",
+          "message": "Supprimer une liste de contacts de Constant Contact"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.ZGVsZXRlLWNvbnRhY3QtbGlzdA.display_name": {
+          "source": "Delete a Contact List",
+          "message": "Supprimer une liste de contacts"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.ZGVsZXRlLWNvbnRhY3QtbGlzdA.option.bGlzdF9pZA.display_name": {
+          "source": "List ID",
+          "message": "ID de la liste"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.ZGVsZXRlLWNvbnRhY3QtbGlzdA.option.bGlzdF9pZA.short_desc": {
+          "source": "The contact list to delete",
+          "message": "La liste de contacts à supprimer"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.ZGVsZXRlLWNvbnRhY3QtbGlzdA.short_desc": {
+          "source": "Delete a contact list",
+          "message": "Supprimer une liste de contacts"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.ZGVsZXRlLWVtYWlsLWNhbXBhaWdu.desc": {
+          "source": "Delete an email campaign from Constant Contact",
+          "message": "Supprimer une campagne par e-mail de Constant Contact"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.ZGVsZXRlLWVtYWlsLWNhbXBhaWdu.display_name": {
+          "source": "Delete an Email Campaign",
+          "message": "Supprimer une campagne par e-mail"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.ZGVsZXRlLWVtYWlsLWNhbXBhaWdu.option.Y2FtcGFpZ25faWQ.display_name": {
+          "source": "Campaign ID",
+          "message": "ID de la campagne"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.ZGVsZXRlLWVtYWlsLWNhbXBhaWdu.option.Y2FtcGFpZ25faWQ.short_desc": {
+          "source": "The email campaign to delete",
+          "message": "La campagne par e-mail à supprimer"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.ZGVsZXRlLWVtYWlsLWNhbXBhaWdu.short_desc": {
+          "source": "Delete an email campaign",
+          "message": "Supprimer une campagne par e-mail"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.ZGVsZXRlLXNlZ21lbnQ.desc": {
+          "source": "Delete a segment from Constant Contact",
+          "message": "Supprimer un segment de Constant Contact"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.ZGVsZXRlLXNlZ21lbnQ.display_name": {
+          "source": "Delete a Segment",
+          "message": "Supprimer un segment"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.ZGVsZXRlLXNlZ21lbnQ.option.c2VnbWVudF9pZA.display_name": {
+          "source": "Segment ID",
+          "message": "Identifiant du segment"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.ZGVsZXRlLXNlZ21lbnQ.option.c2VnbWVudF9pZA.short_desc": {
+          "source": "The segment to delete",
+          "message": "Le segment à supprimer"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.ZGVsZXRlLXNlZ21lbnQ.short_desc": {
+          "source": "Delete a segment",
+          "message": "Supprimer un segment"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.ZGVsZXRlLXRhZw.desc": {
+          "source": "Delete a tag from Constant Contact",
+          "message": "Supprimer une étiquette de Constant Contact"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.ZGVsZXRlLXRhZw.display_name": {
+          "source": "Delete a Tag",
+          "message": "Supprimer une étiquette"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.ZGVsZXRlLXRhZw.option.dGFnX2lk.display_name": {
+          "source": "Tag ID",
+          "message": "ID de l'étiquette"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.ZGVsZXRlLXRhZw.option.dGFnX2lk.short_desc": {
+          "source": "The tag to delete",
+          "message": "L'étiquette à supprimer"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.ZGVsZXRlLXRhZw.short_desc": {
+          "source": "Delete a tag",
+          "message": "Supprimer une étiquette"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.ZXhwb3J0LWNvbnRhY3Rz.desc": {
+          "source": "Export contacts in bulk from Constant Contact",
+          "message": "Exporter des contacts en bloc depuis Constant Contact"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.ZXhwb3J0LWNvbnRhY3Rz.display_name": {
+          "source": "Export Contacts",
+          "message": "Exporter les contacts"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.ZXhwb3J0LWNvbnRhY3Rz.option.ZmllbGRz.desc": {
+          "source": "List of field names to include in the export",
+          "message": "Liste des noms de champs à inclure dans l'exportation"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.ZXhwb3J0LWNvbnRhY3Rz.option.ZmllbGRz.display_name": {
+          "source": "Fields",
+          "message": "Champs"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.ZXhwb3J0LWNvbnRhY3Rz.option.ZmllbGRz.short_desc": {
+          "source": "Fields to include in export",
+          "message": "Champs à inclure dans l'exportation"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.ZXhwb3J0LWNvbnRhY3Rz.option.bGlzdF9pZHM.desc": {
+          "source": "List of contact list IDs to export contacts from",
+          "message": "Liste des identifiants de liste de contacts à partir desquels exporter des contacts"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.ZXhwb3J0LWNvbnRhY3Rz.option.bGlzdF9pZHM.display_name": {
+          "source": "List IDs",
+          "message": "IDs de liste"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.ZXhwb3J0LWNvbnRhY3Rz.option.bGlzdF9pZHM.short_desc": {
+          "source": "Contact list IDs to export from",
+          "message": "Identifiants de liste de contacts sources de l'exportation"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.ZXhwb3J0LWNvbnRhY3Rz.option.c2VnbWVudF9pZA.desc": {
+          "source": "The segment ID to export contacts from",
+          "message": "L'identifiant de segment à partir duquel exporter les contacts"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.ZXhwb3J0LWNvbnRhY3Rz.option.c2VnbWVudF9pZA.display_name": {
+          "source": "Segment ID",
+          "message": "Identifiant du segment"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.ZXhwb3J0LWNvbnRhY3Rz.option.c2VnbWVudF9pZA.short_desc": {
+          "source": "Segment to export",
+          "message": "Segment à exporter"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.ZXhwb3J0LWNvbnRhY3Rz.short_desc": {
+          "source": "Export contacts in bulk",
+          "message": "Exporter des contacts en bloc"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.aW1wb3J0LWNvbnRhY3Rz.desc": {
+          "source": "Import contacts in bulk into Constant Contact",
+          "message": "Importer des contacts en bloc dans Constant Contact"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.aW1wb3J0LWNvbnRhY3Rz.display_name": {
+          "source": "Import Contacts",
+          "message": "Importer les contacts"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.aW1wb3J0LWNvbnRhY3Rz.option.aW1wb3J0X2RhdGE.desc": {
+          "source": "List of contact data hashes to import",
+          "message": "Liste des hachages de données de contact à importer"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.aW1wb3J0LWNvbnRhY3Rz.option.aW1wb3J0X2RhdGE.display_name": {
+          "source": "Import Data",
+          "message": "Données d'importation"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.aW1wb3J0LWNvbnRhY3Rz.option.aW1wb3J0X2RhdGE.short_desc": {
+          "source": "List of contact data to import",
+          "message": "Liste des données de contact à importer"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.aW1wb3J0LWNvbnRhY3Rz.option.bGlzdF9pZHM.desc": {
+          "source": "List of contact list IDs to add the imported contacts to",
+          "message": "Liste des identifiants de liste de contacts auxquels ajouter les contacts importés"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.aW1wb3J0LWNvbnRhY3Rz.option.bGlzdF9pZHM.display_name": {
+          "source": "List IDs",
+          "message": "IDs de liste"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.aW1wb3J0LWNvbnRhY3Rz.option.bGlzdF9pZHM.short_desc": {
+          "source": "Contact list IDs to add imported contacts to",
+          "message": "Identifiants de liste de contacts auxquels ajouter les contacts importés"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.aW1wb3J0LWNvbnRhY3Rz.short_desc": {
+          "source": "Import contacts in bulk",
+          "message": "Importer des contacts en bloc"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bGlzdC10YWdz.desc": {
+          "source": "List tags in Constant Contact",
+          "message": "Lister les tags dans Constant Contact"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bGlzdC10YWdz.display_name": {
+          "source": "List Tags",
+          "message": "Lister les étiquettes"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bGlzdC10YWdz.option.bGltaXQ.desc": {
+          "source": "Maximum number of results to return",
+          "message": "Nombre maximum de résultats à renvoyer"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bGlzdC10YWdz.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "Limite"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bGlzdC10YWdz.option.bGltaXQ.short_desc": {
+          "source": "Maximum results",
+          "message": "Résultats maximums"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bGlzdC10YWdz.option.dGFnX2lk.display_name": {
+          "source": "Tag ID",
+          "message": "ID de l'étiquette"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bGlzdC10YWdz.option.dGFnX2lk.short_desc": {
+          "source": "Filter by tag ID",
+          "message": "Filtrer par ID d'étiquette"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bGlzdC10YWdz.short_desc": {
+          "source": "List all tags",
+          "message": "Lister tous les tags"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bGlzdC1jb250YWN0LWxpc3Rz.desc": {
+          "source": "List contact lists in Constant Contact",
+          "message": "Lister les listes de contacts dans Constant Contact"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bGlzdC1jb250YWN0LWxpc3Rz.display_name": {
+          "source": "List Contact Lists",
+          "message": "Lister les listes de contacts"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bGlzdC1jb250YWN0LWxpc3Rz.option.bGltaXQ.desc": {
+          "source": "Maximum number of results to return",
+          "message": "Nombre maximum de résultats à renvoyer"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bGlzdC1jb250YWN0LWxpc3Rz.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "Limite"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bGlzdC1jb250YWN0LWxpc3Rz.option.bGltaXQ.short_desc": {
+          "source": "Maximum results",
+          "message": "Résultats maximums"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bGlzdC1jb250YWN0LWxpc3Rz.option.bGlzdF9pZA.display_name": {
+          "source": "List ID",
+          "message": "ID de la liste"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bGlzdC1jb250YWN0LWxpc3Rz.option.bGlzdF9pZA.short_desc": {
+          "source": "Filter by list ID",
+          "message": "Filtrer par identifiant de liste"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bGlzdC1jb250YWN0LWxpc3Rz.short_desc": {
+          "source": "List all contact lists",
+          "message": "Lister toutes les listes de contacts"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bGlzdC1jb250YWN0cw.desc": {
+          "source": "List contacts in Constant Contact with optional filtering",
+          "message": "Lister les contacts dans Constant Contact avec filtrage facultatif"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bGlzdC1jb250YWN0cw.display_name": {
+          "source": "List Contacts",
+          "message": "Lister les contacts"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bGlzdC1jb250YWN0cw.option.Y29udGFjdF9pZA.display_name": {
+          "source": "Contact ID",
+          "message": "ID du contact"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bGlzdC1jb250YWN0cw.option.Y29udGFjdF9pZA.short_desc": {
+          "source": "Filter by contact ID",
+          "message": "Filtrer par ID de contact"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bGlzdC1jb250YWN0cw.option.ZW1haWw.desc": {
+          "source": "Filter contacts by email address",
+          "message": "Filtrer les contacts par adresse e-mail"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bGlzdC1jb250YWN0cw.option.ZW1haWw.display_name": {
+          "source": "Email",
+          "message": "E-mail"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bGlzdC1jb250YWN0cw.option.ZW1haWw.short_desc": {
+          "source": "Filter by email address",
+          "message": "Filtrer par adresse e-mail"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bGlzdC1jb250YWN0cw.option.bGltaXQ.desc": {
+          "source": "Maximum number of results to return",
+          "message": "Nombre maximum de résultats à renvoyer"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bGlzdC1jb250YWN0cw.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "Limite"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bGlzdC1jb250YWN0cw.option.bGltaXQ.short_desc": {
+          "source": "Maximum results",
+          "message": "Résultats maximums"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bGlzdC1jb250YWN0cw.option.bGlzdF9pZA.desc": {
+          "source": "Filter contacts by contact list membership",
+          "message": "Filtrer les contacts par appartenance à une liste de contacts"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bGlzdC1jb250YWN0cw.option.bGlzdF9pZA.display_name": {
+          "source": "List ID",
+          "message": "ID de la liste"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bGlzdC1jb250YWN0cw.option.bGlzdF9pZA.short_desc": {
+          "source": "Filter by contact list ID",
+          "message": "Filtrer par identifiant de liste de contacts"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bGlzdC1jb250YWN0cw.option.c3RhdHVz.allowed-value.c3RyaW5nOm5vdF9zZXQ.desc": {
+          "source": "Contacts with no status set",
+          "message": "Contacts sans statut défini"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bGlzdC1jb250YWN0cw.option.c3RhdHVz.allowed-value.c3RyaW5nOm5vdF9zZXQ.display_name": {
+          "source": "Not Set",
+          "message": "Non défini"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bGlzdC1jb250YWN0cw.option.c3RhdHVz.allowed-value.c3RyaW5nOmFjdGl2ZQ.desc": {
+          "source": "Active contacts",
+          "message": "Contacts actifs"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bGlzdC1jb250YWN0cw.option.c3RhdHVz.allowed-value.c3RyaW5nOmFjdGl2ZQ.display_name": {
+          "source": "Active",
+          "message": "Actif"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bGlzdC1jb250YWN0cw.option.c3RhdHVz.allowed-value.c3RyaW5nOmFsbA.desc": {
+          "source": "All contacts",
+          "message": "Tous les contacts"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bGlzdC1jb250YWN0cw.option.c3RhdHVz.allowed-value.c3RyaW5nOmFsbA.display_name": {
+          "source": "All",
+          "message": "Tous"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bGlzdC1jb250YWN0cw.option.c3RhdHVz.allowed-value.c3RyaW5nOmRlbGV0ZWQ.desc": {
+          "source": "Deleted contacts",
+          "message": "Contacts supprimés"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bGlzdC1jb250YWN0cw.option.c3RhdHVz.allowed-value.c3RyaW5nOmRlbGV0ZWQ.display_name": {
+          "source": "Deleted",
+          "message": "Supprimé"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bGlzdC1jb250YWN0cw.option.c3RhdHVz.allowed-value.c3RyaW5nOnBlbmRpbmdfY29uZmlybWF0aW9u.desc": {
+          "source": "Contacts pending confirmation",
+          "message": "Contacts en attente de confirmation"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bGlzdC1jb250YWN0cw.option.c3RhdHVz.allowed-value.c3RyaW5nOnBlbmRpbmdfY29uZmlybWF0aW9u.display_name": {
+          "source": "Pending Confirmation",
+          "message": "En attente de confirmation"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bGlzdC1jb250YWN0cw.option.c3RhdHVz.allowed-value.c3RyaW5nOnRlbXBfaG9sZA.desc": {
+          "source": "Contacts on temporary hold",
+          "message": "Contacts en attente temporaire"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bGlzdC1jb250YWN0cw.option.c3RhdHVz.allowed-value.c3RyaW5nOnRlbXBfaG9sZA.display_name": {
+          "source": "Temporary Hold",
+          "message": "Attente temporaire"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bGlzdC1jb250YWN0cw.option.c3RhdHVz.allowed-value.c3RyaW5nOnVuc3Vic2NyaWJlZA.desc": {
+          "source": "Unsubscribed contacts",
+          "message": "Contacts désabonnés"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bGlzdC1jb250YWN0cw.option.c3RhdHVz.allowed-value.c3RyaW5nOnVuc3Vic2NyaWJlZA.display_name": {
+          "source": "Unsubscribed",
+          "message": "Désabonné"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bGlzdC1jb250YWN0cw.option.c3RhdHVz.desc": {
+          "source": "Filter contacts by status",
+          "message": "Filtrer les contacts par statut"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bGlzdC1jb250YWN0cw.option.c3RhdHVz.display_name": {
+          "source": "Status",
+          "message": "Statut"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bGlzdC1jb250YWN0cw.option.c3RhdHVz.short_desc": {
+          "source": "Filter by contact status",
+          "message": "Filtrer par statut de contact"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bGlzdC1jb250YWN0cw.option.dXBkYXRlZF9hZnRlcg.desc": {
+          "source": "Filter contacts updated after this date (ISO-8601)",
+          "message": "Filtrer les contacts mis à jour après cette date (ISO-8601)"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bGlzdC1jb250YWN0cw.option.dXBkYXRlZF9hZnRlcg.display_name": {
+          "source": "Updated After",
+          "message": "Mis à jour après"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bGlzdC1jb250YWN0cw.option.dXBkYXRlZF9hZnRlcg.short_desc": {
+          "source": "Filter by update date",
+          "message": "Filtrer par date de mise à jour"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bGlzdC1jb250YWN0cw.short_desc": {
+          "source": "List all contacts",
+          "message": "Lister tous les contacts"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bGlzdC1jdXN0b20tZmllbGRz.desc": {
+          "source": "List custom fields in Constant Contact",
+          "message": "Lister les champs personnalisés dans Constant Contact"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bGlzdC1jdXN0b20tZmllbGRz.display_name": {
+          "source": "List Custom Fields",
+          "message": "Lister les champs personnalisés"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bGlzdC1jdXN0b20tZmllbGRz.option.Y3VzdG9tX2ZpZWxkX2lk.display_name": {
+          "source": "Custom Field ID",
+          "message": "Identifiant du champ personnalisé"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bGlzdC1jdXN0b20tZmllbGRz.option.Y3VzdG9tX2ZpZWxkX2lk.short_desc": {
+          "source": "Filter by custom field ID",
+          "message": "Filtrer par identifiant de champ personnalisé"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bGlzdC1jdXN0b20tZmllbGRz.option.bGltaXQ.desc": {
+          "source": "Maximum number of results to return",
+          "message": "Nombre maximum de résultats à renvoyer"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bGlzdC1jdXN0b20tZmllbGRz.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "Limite"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bGlzdC1jdXN0b20tZmllbGRz.option.bGltaXQ.short_desc": {
+          "source": "Maximum results",
+          "message": "Résultats maximums"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bGlzdC1jdXN0b20tZmllbGRz.short_desc": {
+          "source": "List all custom fields",
+          "message": "Lister tous les champs personnalisés"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bGlzdC1lbWFpbC1jYW1wYWlnbnM.desc": {
+          "source": "List email campaigns in Constant Contact with optional filtering",
+          "message": "Lister les campagnes par e-mail dans Constant Contact avec filtrage facultatif"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bGlzdC1lbWFpbC1jYW1wYWlnbnM.display_name": {
+          "source": "List Email Campaigns",
+          "message": "Lister les campagnes par e-mail"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bGlzdC1lbWFpbC1jYW1wYWlnbnM.option.Y2FtcGFpZ25faWQ.display_name": {
+          "source": "Campaign ID",
+          "message": "ID de la campagne"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bGlzdC1lbWFpbC1jYW1wYWlnbnM.option.Y2FtcGFpZ25faWQ.short_desc": {
+          "source": "Filter by campaign ID",
+          "message": "Filtrer par identifiant de campagne"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bGlzdC1lbWFpbC1jYW1wYWlnbnM.option.bGltaXQ.desc": {
+          "source": "Maximum number of results to return",
+          "message": "Nombre maximum de résultats à renvoyer"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bGlzdC1lbWFpbC1jYW1wYWlnbnM.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "Limite"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bGlzdC1lbWFpbC1jYW1wYWlnbnM.option.bGltaXQ.short_desc": {
+          "source": "Maximum results",
+          "message": "Résultats maximums"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bGlzdC1lbWFpbC1jYW1wYWlnbnM.option.c3RhdHVz.allowed-value.c3RyaW5nOkRvbmU.desc": {
+          "source": "Completed campaigns",
+          "message": "Campagnes terminées"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bGlzdC1lbWFpbC1jYW1wYWlnbnM.option.c3RhdHVz.allowed-value.c3RyaW5nOkRvbmU.display_name": {
+          "source": "Done",
+          "message": "Terminé"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bGlzdC1lbWFpbC1jYW1wYWlnbnM.option.c3RhdHVz.allowed-value.c3RyaW5nOkRyYWZ0.desc": {
+          "source": "Draft campaigns",
+          "message": "Campagnes au statut de brouillon"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bGlzdC1lbWFpbC1jYW1wYWlnbnM.option.c3RhdHVz.allowed-value.c3RyaW5nOkRyYWZ0.display_name": {
+          "source": "Draft",
+          "message": "Brouillon"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bGlzdC1lbWFpbC1jYW1wYWlnbnM.option.c3RhdHVz.allowed-value.c3RyaW5nOkV4ZWN1dGluZw.desc": {
+          "source": "Currently sending campaigns",
+          "message": "Campagnes en cours d'envoi"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bGlzdC1lbWFpbC1jYW1wYWlnbnM.option.c3RhdHVz.allowed-value.c3RyaW5nOkV4ZWN1dGluZw.display_name": {
+          "source": "Executing",
+          "message": "En cours d'exécution"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bGlzdC1lbWFpbC1jYW1wYWlnbnM.option.c3RhdHVz.allowed-value.c3RyaW5nOkVycm9y.desc": {
+          "source": "Campaigns that encountered an error",
+          "message": "Campagnes ayant rencontré une erreur"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bGlzdC1lbWFpbC1jYW1wYWlnbnM.option.c3RhdHVz.allowed-value.c3RyaW5nOkVycm9y.display_name": {
+          "source": "Error",
+          "message": "Erreur"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bGlzdC1lbWFpbC1jYW1wYWlnbnM.option.c3RhdHVz.allowed-value.c3RyaW5nOlJlbW92ZWQ.desc": {
+          "source": "Removed campaigns",
+          "message": "Campagnes supprimées"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bGlzdC1lbWFpbC1jYW1wYWlnbnM.option.c3RhdHVz.allowed-value.c3RyaW5nOlJlbW92ZWQ.display_name": {
+          "source": "Removed",
+          "message": "Supprimé"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bGlzdC1lbWFpbC1jYW1wYWlnbnM.option.c3RhdHVz.allowed-value.c3RyaW5nOlNjaGVkdWxlZA.desc": {
+          "source": "Scheduled campaigns",
+          "message": "Campagnes planifiées"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bGlzdC1lbWFpbC1jYW1wYWlnbnM.option.c3RhdHVz.allowed-value.c3RyaW5nOlNjaGVkdWxlZA.display_name": {
+          "source": "Scheduled",
+          "message": "Planifié"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bGlzdC1lbWFpbC1jYW1wYWlnbnM.option.c3RhdHVz.desc": {
+          "source": "Filter campaigns by status",
+          "message": "Filtrer les campagnes par statut"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bGlzdC1lbWFpbC1jYW1wYWlnbnM.option.c3RhdHVz.display_name": {
+          "source": "Status",
+          "message": "Statut"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bGlzdC1lbWFpbC1jYW1wYWlnbnM.option.c3RhdHVz.short_desc": {
+          "source": "Filter by campaign status",
+          "message": "Filtrer par statut de campagne"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bGlzdC1lbWFpbC1jYW1wYWlnbnM.short_desc": {
+          "source": "List all email campaigns",
+          "message": "Lister toutes les campagnes par e-mail"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bGlzdC1zZWdtZW50cw.desc": {
+          "source": "List segments in Constant Contact",
+          "message": "Lister les segments dans Constant Contact"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bGlzdC1zZWdtZW50cw.display_name": {
+          "source": "List Segments",
+          "message": "Lister les segments"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bGlzdC1zZWdtZW50cw.option.bGltaXQ.desc": {
+          "source": "Maximum number of results to return",
+          "message": "Nombre maximum de résultats à renvoyer"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bGlzdC1zZWdtZW50cw.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "Limite"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bGlzdC1zZWdtZW50cw.option.bGltaXQ.short_desc": {
+          "source": "Maximum results",
+          "message": "Résultats maximums"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bGlzdC1zZWdtZW50cw.option.c29ydF9ieQ.allowed-value.c3RyaW5nOm1vZGlmaWVkX2RhdGU.desc": {
+          "source": "Sort by modified date",
+          "message": "Trier par date de modification"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bGlzdC1zZWdtZW50cw.option.c29ydF9ieQ.allowed-value.c3RyaW5nOm1vZGlmaWVkX2RhdGU.display_name": {
+          "source": "Modified Date",
+          "message": "Date de modification"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bGlzdC1zZWdtZW50cw.option.c29ydF9ieQ.allowed-value.c3RyaW5nOm5hbWU.desc": {
+          "source": "Sort by name",
+          "message": "Trier par nom"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bGlzdC1zZWdtZW50cw.option.c29ydF9ieQ.allowed-value.c3RyaW5nOm5hbWU.display_name": {
+          "source": "Name",
+          "message": "Nom"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bGlzdC1zZWdtZW50cw.option.c29ydF9ieQ.allowed-value.c3RyaW5nOmNyZWF0ZWRfZGF0ZQ.desc": {
+          "source": "Sort by created date",
+          "message": "Trier par date de création"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bGlzdC1zZWdtZW50cw.option.c29ydF9ieQ.allowed-value.c3RyaW5nOmNyZWF0ZWRfZGF0ZQ.display_name": {
+          "source": "Created Date",
+          "message": "Date de création"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bGlzdC1zZWdtZW50cw.option.c29ydF9ieQ.allowed-value.c3RyaW5nOmRhdGU.desc": {
+          "source": "Sort by date",
+          "message": "Trier par date"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bGlzdC1zZWdtZW50cw.option.c29ydF9ieQ.allowed-value.c3RyaW5nOmRhdGU.display_name": {
+          "source": "Date",
+          "message": "Date"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bGlzdC1zZWdtZW50cw.option.c29ydF9ieQ.desc": {
+          "source": "The field to sort results by",
+          "message": "Le champ selon lequel trier les résultats"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bGlzdC1zZWdtZW50cw.option.c29ydF9ieQ.display_name": {
+          "source": "Sort By",
+          "message": "Trier par"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bGlzdC1zZWdtZW50cw.option.c29ydF9ieQ.short_desc": {
+          "source": "Field to sort by",
+          "message": "Champ de tri"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bGlzdC1zZWdtZW50cw.option.c2VnbWVudF9pZA.display_name": {
+          "source": "Segment ID",
+          "message": "Identifiant du segment"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bGlzdC1zZWdtZW50cw.option.c2VnbWVudF9pZA.short_desc": {
+          "source": "Filter by segment ID",
+          "message": "Filtrer par identifiant de segment"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bGlzdC1zZWdtZW50cw.short_desc": {
+          "source": "List all segments",
+          "message": "Lister tous les segments"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bWFrZS1hcGktY2FsbA.desc": {
+          "source": "Make a custom HTTP / REST API call to **Constant Contact** using the configured connection's authentication.\n\nSpecify the HTTP method, the URI path (relative to the connection's API base URL), optional query parameters, headers, and request body. The response is returned as a hash containing the status code, response headers, and response body.\n\nUse this action for endpoints that are not yet exposed as first-class actions on this app.",
+          "message": "Effectuez un appel API HTTP / REST personnalisé à **Constant Contact** en utilisant l'authentification de la connexion configurée.\n\nSpécifiez la méthode HTTP, le chemin d'URI (relatif à l'URL de base de l'API de la connexion), les paramètres de requête facultatifs, les en-têtes et le corps de la requête. La réponse est renvoyée sous forme de hachage contenant le code de statut, les en-têtes de réponse et le corps de la réponse.\n\nUtilisez cette action pour les points de terminaison qui ne sont pas encore exposés en tant qu'actions de premier ordre sur cette application."
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bWFrZS1hcGktY2FsbA.display_name": {
+          "source": "Make an API call",
+          "message": "Effectuer un appel API"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.desc": {
+          "source": "The request body. The effective type depends on `body_type`: JSON/form/YAML expect a hash, XML/text expect a string, multipart expects a file structure, binary expects raw bytes.",
+          "message": "Le corps de la requête. Le type effectif dépend de `body_type` : JSON/form/YAML attendent un hash, XML/texte attendent une chaîne, multipart attend une structure de fichier, binaire attend des octets bruts."
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.display_name": {
+          "source": "Body",
+          "message": "Corps"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.short_desc": {
+          "source": "The request body",
+          "message": "Le corps de la requête"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.desc": {
+          "source": "Upload a file using `multipart/form-data`. The body must be a @ref DataProvider::FileDataType \"FileDataType\" structure (filename + content + mime_type). The framework builds the multipart envelope and sets the boundary header.",
+          "message": "Téléverser un fichier en utilisant `multipart/form-data`. Le corps doit être une structure @ref DataProvider::FileDataType \"FileDataType\" (filename + content + mime_type). Le framework construit l'enveloppe multipart et définit l'en-tête de limite (boundary)."
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.display_name": {
+          "source": "Multipart Form",
+          "message": "Formulaire multipart"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.short_desc": {
+          "source": "Upload a file using multipart/form-data",
+          "message": "Téléverser un fichier en utilisant multipart/form-data"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.desc": {
+          "source": "Pass the body to the REST client unchanged; the client decides serialization based on its configured `data` option and the value type",
+          "message": "Transmettre le corps au client REST sans modification ; le client décide de la sérialisation en fonction de son option `data` configurée et du type de valeur"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.display_name": {
+          "source": "Auto",
+          "message": "Auto"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.short_desc": {
+          "source": "Pass-through; use connection serialization and let the REST client decide",
+          "message": "Passe-plat ; utiliser la sérialisation de la connexion et laisser le client REST décider"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.desc": {
+          "source": "Send the body as raw bytes. The body must be a binary value. Sets `Content-Type: application/octet-stream` unless overridden by `hdr`.",
+          "message": "Envoyer le corps sous forme d'octets bruts. Le corps doit être une valeur binaire. Définit `Content-Type: application/octet-stream` sauf s'il est remplacé par `hdr`."
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.display_name": {
+          "source": "Raw Binary",
+          "message": "Binaire brut"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.short_desc": {
+          "source": "Send body as raw bytes",
+          "message": "Envoyer le corps sous forme d'octets bruts"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.desc": {
+          "source": "Serialize a hash of form fields as `application/x-www-form-urlencoded`. The body must be a hash whose values are scalars (strings/numbers/booleans).",
+          "message": "Sérialiser un hash de champs de formulaire sous forme de `application/x-www-form-urlencoded`. Le corps doit être un hash dont les valeurs sont des scalaires (chaînes/nombres/booléens)."
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.display_name": {
+          "source": "Form (URL-encoded)",
+          "message": "Formulaire (encodé URL)"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.short_desc": {
+          "source": "Serialize body as application/x-www-form-urlencoded form fields",
+          "message": "Sérialiser le corps sous forme de champs de formulaire application/x-www-form-urlencoded"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.desc": {
+          "source": "Serialize the body as JSON; sets `Content-Type: application/json`. The body should be a hash, list, or scalar value.",
+          "message": "Sérialiser le corps en JSON ; définit `Content-Type: application/json`. Le corps doit être un hash, une liste ou une valeur scalaire."
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.display_name": {
+          "source": "JSON",
+          "message": "JSON"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.short_desc": {
+          "source": "Serialize body as JSON",
+          "message": "Sérialiser le corps en JSON"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.desc": {
+          "source": "Send the body as plain text. The body must be a string. Sets `Content-Type: text/plain`.",
+          "message": "Envoyer le corps en texte brut. Le corps doit être une chaîne. Définit `Content-Type: text/plain`."
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.display_name": {
+          "source": "Plain Text",
+          "message": "Texte brut"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.short_desc": {
+          "source": "Send body as text/plain",
+          "message": "Envoyer le corps en text/plain"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.desc": {
+          "source": "Send the body as XML. If the body is a hash it is serialized to XML; if it is a string it is sent verbatim. Sets `Content-Type: application/xml`.",
+          "message": "Envoyer le corps en XML. Si le corps est un hash, il est sérialisé en XML ; s'il s'agit d'une chaîne, il est envoyé tel quel. Définit `Content-Type: application/xml`."
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.display_name": {
+          "source": "XML",
+          "message": "XML"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.short_desc": {
+          "source": "Send body as XML",
+          "message": "Envoyer le corps en XML"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.desc": {
+          "source": "Send the body as YAML. If the body is a hash it is serialized to YAML; if it is a string it is sent verbatim. Sets `Content-Type: application/x-yaml`.",
+          "message": "Envoyer le corps en YAML. Si le corps est un hash, il est sérialisé en YAML ; s'il s'agit d'une chaîne, il est envoyé tel quel. Définit `Content-Type: application/x-yaml`."
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.display_name": {
+          "source": "YAML",
+          "message": "YAML"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.short_desc": {
+          "source": "Send body as YAML",
+          "message": "Envoyer le corps en YAML"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.desc": {
+          "source": "Selects the body serialization mode and the corresponding `Content-Type` header. Changing this field reshapes the `body` editor - selecting JSON exposes a JSON editor, selecting Multipart Form exposes a file picker, and so on.",
+          "message": "Sélectionne le mode de sérialisation du corps et l'en-tête `Content-Type` correspondant. La modification de ce champ remanie l'éditeur `body` - sélectionner JSON affiche un éditeur JSON, sélectionner Formulaire multipart affiche un sélecteur de fichier, et ainsi de suite."
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.display_name": {
+          "source": "Body Type",
+          "message": "Type de corps"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.short_desc": {
+          "source": "How the body is serialized and what Content-Type is sent",
+          "message": "Comment le corps est sérialisé et quel Content-Type est envoyé"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.desc": {
+          "source": "If `True`, non-2xx HTTP responses return as the normal response hash (with the actual status code) instead of raising `REST-RESPONSE-ERROR`. Useful for handling 4xx/5xx as data - e.g. checking whether a resource exists. Overrides the connection's `error_passthru` setting for this call only.",
+          "message": "Si `True`, les réponses HTTP non-2xx sont retournées sous la forme du hash de réponse normal (avec le code d'état réel) au lieu de lever `REST-RESPONSE-ERROR`. Utile pour traiter les codes 4xx/5xx comme des données - par ex. vérifier si une ressource existe. Remplace le paramètre `error_passthru` de la connexion pour cet appel uniquement."
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.display_name": {
+          "source": "Return Errors as Data",
+          "message": "Retourner les erreurs sous forme de données"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.short_desc": {
+          "source": "Return non-2xx responses normally instead of throwing",
+          "message": "Retourner les réponses non-2xx normalement au lieu de lever une exception"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.desc": {
+          "source": "Optional list of HTTP status codes treated as success. If set and the response status is not in this list, the action throws `REST-STATUS-ERROR`. When unset, the REST client's default behavior applies (typically: 2xx is success, non-2xx throws).",
+          "message": "Liste optionnelle de codes d'état HTTP traités comme des succès. Si elle est définie et que le statut de la réponse n'est pas dans cette liste, l'action lève `REST-STATUS-ERROR`. Lorsqu'elle n'est pas définie, le comportement par défaut du client REST s'applique (généralement : 2xx est un succès, non-2xx lève une exception)."
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.display_name": {
+          "source": "Expected Status Codes",
+          "message": "Codes d'état attendus"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.short_desc": {
+          "source": "Response status codes treated as success",
+          "message": "Codes d'état de réponse traités comme un succès"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bWFrZS1hcGktY2FsbA.option.aGRy.desc": {
+          "source": "Hash of custom headers added to the request. These override any default headers set by `body_type` (e.g. supplying `Content-Type` here wins over the body-type default).",
+          "message": "Hash d'en-têtes personnalisés ajoutés à la requête. Ils remplacent tous les en-têtes par défaut définis par `body_type` (par ex. fournir `Content-Type` ici prévaut sur la valeur par défaut du type de corps)."
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bWFrZS1hcGktY2FsbA.option.aGRy.display_name": {
+          "source": "Custom Headers",
+          "message": "En-têtes personnalisés"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bWFrZS1hcGktY2FsbA.option.aGRy.short_desc": {
+          "source": "Extra request headers",
+          "message": "En-têtes de requête supplémentaires"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.desc": {
+          "source": "If `True`, the response hash includes a `debug` sub-hash containing the request method/URL/headers (with sensitive values redacted), request and response sizes, and round-trip duration. Useful when investigating slow or failing calls. Off by default to keep responses lean.",
+          "message": "Si `True`, le hash de réponse inclut un sous-hash `debug` contenant la méthode/URL/en-têtes de la requête (avec les valeurs sensibles masquées), les tailles de requête et de réponse, et la durée d'aller-retour. Utile lors de l'investigation d'appels lents ou en échec. Désactivé par défaut pour conserver des réponses légères."
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.display_name": {
+          "source": "Include Debug Info",
+          "message": "Inclure les informations de débogage"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.short_desc": {
+          "source": "Include request/timing/size debug info in the response",
+          "message": "Inclure les informations de débogage de requête/temps/taille dans la réponse"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.desc": {
+          "source": "HTTP `OPTIONS`",
+          "message": "HTTP `OPTIONS`"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.display_name": {
+          "source": "OPTIONS",
+          "message": "OPTIONS"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.short_desc": {
+          "source": "HTTP OPTIONS",
+          "message": "HTTP OPTIONS"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.desc": {
+          "source": "HTTP `DELETE`",
+          "message": "HTTP `DELETE`"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.display_name": {
+          "source": "DELETE",
+          "message": "DELETE"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.short_desc": {
+          "source": "HTTP DELETE",
+          "message": "HTTP DELETE"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.desc": {
+          "source": "HTTP `GET`",
+          "message": "HTTP `GET`"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.display_name": {
+          "source": "GET",
+          "message": "GET"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.short_desc": {
+          "source": "HTTP GET",
+          "message": "HTTP GET"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.desc": {
+          "source": "HTTP `HEAD`",
+          "message": "HTTP `HEAD`"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.display_name": {
+          "source": "HEAD",
+          "message": "HEAD"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.short_desc": {
+          "source": "HTTP HEAD",
+          "message": "HTTP HEAD"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.desc": {
+          "source": "HTTP `PATCH`",
+          "message": "HTTP `PATCH`"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.display_name": {
+          "source": "PATCH",
+          "message": "PATCH"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.short_desc": {
+          "source": "HTTP PATCH",
+          "message": "HTTP PATCH"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.desc": {
+          "source": "HTTP `POST`",
+          "message": "HTTP `POST`"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.display_name": {
+          "source": "POST",
+          "message": "POST"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.short_desc": {
+          "source": "HTTP POST",
+          "message": "HTTP POST"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.desc": {
+          "source": "HTTP `PUT`",
+          "message": "HTTP `PUT`"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.display_name": {
+          "source": "PUT",
+          "message": "PUT"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.short_desc": {
+          "source": "HTTP PUT",
+          "message": "HTTP PUT"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.desc": {
+          "source": "HTTP `TRACE`",
+          "message": "HTTP `TRACE`"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.display_name": {
+          "source": "TRACE",
+          "message": "TRACE"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.short_desc": {
+          "source": "HTTP TRACE",
+          "message": "HTTP TRACE"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "La méthode HTTP à utiliser pour la requête"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.display_name": {
+          "source": "HTTP Method",
+          "message": "Méthode HTTP"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.short_desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "La méthode HTTP à utiliser pour la requête"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain `{name}` placeholders that are replaced from `path_vars`. Example: `/users/{id}/comments`.",
+          "message": "Le chemin URI relatif à l'URL de base de l'API de la connexion. Peut contenir des espaces réservés `{name}` remplacés à partir de `path_vars`. Exemple : `/users/{id}/comments`."
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.display_name": {
+          "source": "URI Path",
+          "message": "Chemin URI"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.short_desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain '{name}' placeholders that are replaced from 'path_vars'. Example: '/users/{id}/comments'",
+          "message": "Le chemin URI relatif à l'URL de base de l'API de la connexion. Peut contenir des espaces réservés '{name}' qui sont remplacés à partir de 'path_vars'. Exemple : '/users/{id}/comments'"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.desc": {
+          "source": "Hash of values substituted into `{name}` placeholders in the URI path. Example: with `path = /users/{id}` and `path_vars = {id: 123}` the framework sends `/users/123`. Values are URL-encoded.",
+          "message": "Hachage des valeurs substituées dans les espaces réservés `{name}` dans le chemin URI. Exemple : avec `path = /users/{id}` et `path_vars = {id: 123}`, le framework envoie `/users/123`. Les valeurs sont encodées en URL."
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.display_name": {
+          "source": "Path Variables",
+          "message": "Variables de chemin"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.short_desc": {
+          "source": "Values for {name} placeholders in path",
+          "message": "Valeurs pour les espaces réservés {name} dans le chemin"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.desc": {
+          "source": "Hash of query string parameters to append to the URI path. Values are URL-encoded; list values are joined with `,`.",
+          "message": "Hachage des paramètres de chaîne de requête à ajouter au chemin URI. Les valeurs sont encodées en URL ; les valeurs de liste sont jointes avec `,`."
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.display_name": {
+          "source": "Query Arguments",
+          "message": "Arguments de la requête"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.short_desc": {
+          "source": "Query string parameters",
+          "message": "Paramètres de chaîne de requête"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bWFrZS1hcGktY2FsbA.short_desc": {
+          "source": "Make a custom API call to Constant Contact",
+          "message": "Effectuer un appel API personnalisé vers Constant Contact"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bmV3LWNvbnRhY3Q.desc": {
+          "source": "Fires when a new contact is created in Constant Contact. Uses polling to detect new records.",
+          "message": "Se déclenche lorsqu'un nouveau contact est créé dans Constant Contact. Utilise l'interrogation pour détecter les nouveaux enregistrements."
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bmV3LWNvbnRhY3Q.display_name": {
+          "source": "New Contact",
+          "message": "Nouveau contact"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bmV3LWNvbnRhY3Q.option.cG9sbF9pbnRlcnZhbA.desc": {
+          "source": "How often to check for new records (minimum 30 seconds)",
+          "message": "Fréquence de vérification des nouveaux enregistrements (minimum 30 secondes)"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bmV3LWNvbnRhY3Q.option.cG9sbF9pbnRlcnZhbA.display_name": {
+          "source": "Poll Interval",
+          "message": "Intervalle de sondage"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bmV3LWNvbnRhY3Q.option.cG9sbF9pbnRlcnZhbA.short_desc": {
+          "source": "Polling interval in seconds",
+          "message": "Intervalle de sondage en secondes"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bmV3LWNvbnRhY3Q.short_desc": {
+          "source": "Trigger when a new contact is created",
+          "message": "Déclencher lorsqu'un nouveau contact est créé"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bmV3LWNvbnRhY3QtbGlzdA.desc": {
+          "source": "Fires when a new contact list is created in Constant Contact. Uses polling to detect new records.",
+          "message": "Se déclenche lorsqu'une nouvelle liste de contacts est créée dans Constant Contact. Utilise l'interrogation pour détecter les nouveaux enregistrements."
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bmV3LWNvbnRhY3QtbGlzdA.display_name": {
+          "source": "New Contact List",
+          "message": "Nouvelle liste de contacts"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bmV3LWNvbnRhY3QtbGlzdA.option.cG9sbF9pbnRlcnZhbA.desc": {
+          "source": "How often to check for new records (minimum 30 seconds)",
+          "message": "Fréquence de vérification des nouveaux enregistrements (minimum 30 secondes)"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bmV3LWNvbnRhY3QtbGlzdA.option.cG9sbF9pbnRlcnZhbA.display_name": {
+          "source": "Poll Interval",
+          "message": "Intervalle de sondage"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bmV3LWNvbnRhY3QtbGlzdA.option.cG9sbF9pbnRlcnZhbA.short_desc": {
+          "source": "Polling interval in seconds",
+          "message": "Intervalle de sondage en secondes"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bmV3LWNvbnRhY3QtbGlzdA.short_desc": {
+          "source": "Trigger when a new contact list is created",
+          "message": "Déclencher lorsqu'une nouvelle liste de contacts est créée"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bmV3LWVtYWlsLWNhbXBhaWdu.desc": {
+          "source": "Fires when a new email campaign is created in Constant Contact. Uses polling to detect new records.",
+          "message": "Se déclenche lorsqu'une nouvelle campagne d'e-mails est créée dans Constant Contact. Utilise l'interrogation pour détecter les nouveaux enregistrements."
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bmV3LWVtYWlsLWNhbXBhaWdu.display_name": {
+          "source": "New Email Campaign",
+          "message": "Nouvelle campagne d'e-mails"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bmV3LWVtYWlsLWNhbXBhaWdu.option.cG9sbF9pbnRlcnZhbA.desc": {
+          "source": "How often to check for new records (minimum 30 seconds)",
+          "message": "Fréquence de vérification des nouveaux enregistrements (minimum 30 secondes)"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bmV3LWVtYWlsLWNhbXBhaWdu.option.cG9sbF9pbnRlcnZhbA.display_name": {
+          "source": "Poll Interval",
+          "message": "Intervalle de sondage"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bmV3LWVtYWlsLWNhbXBhaWdu.option.cG9sbF9pbnRlcnZhbA.short_desc": {
+          "source": "Polling interval in seconds",
+          "message": "Intervalle de sondage en secondes"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.bmV3LWVtYWlsLWNhbXBhaWdu.short_desc": {
+          "source": "Trigger when a new email campaign is created",
+          "message": "Déclencher lorsqu'une nouvelle campagne d'e-mails est créée"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.c2NoZWR1bGUtZW1haWwtY2FtcGFpZ24.desc": {
+          "source": "Schedule an email campaign activity for sending in Constant Contact",
+          "message": "Programmer l'envoi d'une activité de campagne d'e-mails dans Constant Contact"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.c2NoZWR1bGUtZW1haWwtY2FtcGFpZ24.display_name": {
+          "source": "Schedule an Email Campaign",
+          "message": "Programmer une campagne d'e-mails"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.c2NoZWR1bGUtZW1haWwtY2FtcGFpZ24.option.Y2FtcGFpZ25fYWN0aXZpdHlfaWQ.display_name": {
+          "source": "Campaign Activity ID",
+          "message": "ID d'activité de campagne"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.c2NoZWR1bGUtZW1haWwtY2FtcGFpZ24.option.Y2FtcGFpZ25fYWN0aXZpdHlfaWQ.short_desc": {
+          "source": "The campaign activity to schedule",
+          "message": "L'activité de campagne à programmer"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.c2NoZWR1bGUtZW1haWwtY2FtcGFpZ24.option.c2NoZWR1bGVkX2RhdGU.desc": {
+          "source": "The scheduled send date in ISO-8601 format",
+          "message": "La date d'envoi programmée au format ISO-8601"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.c2NoZWR1bGUtZW1haWwtY2FtcGFpZ24.option.c2NoZWR1bGVkX2RhdGU.display_name": {
+          "source": "Scheduled Date",
+          "message": "Date programmée"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.c2NoZWR1bGUtZW1haWwtY2FtcGFpZ24.option.c2NoZWR1bGVkX2RhdGU.short_desc": {
+          "source": "ISO-8601 date",
+          "message": "Date ISO-8601"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.c2NoZWR1bGUtZW1haWwtY2FtcGFpZ24.short_desc": {
+          "source": "Schedule an email campaign for sending",
+          "message": "Programmer l'envoi d'une campagne d'e-mails"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.cmVtb3ZlLWxpc3QtbWVtYmVycw.desc": {
+          "source": "Remove contacts from one or more contact lists in bulk",
+          "message": "Supprimer en masse des contacts d'une ou plusieurs listes de contacts"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.cmVtb3ZlLWxpc3QtbWVtYmVycw.display_name": {
+          "source": "Remove List Members",
+          "message": "Supprimer des membres de la liste"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.cmVtb3ZlLWxpc3QtbWVtYmVycw.option.bGlzdF9pZHM.desc": {
+          "source": "List of contact list IDs to remove the contacts from",
+          "message": "Liste des ID de listes de contacts dont supprimer les contacts"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.cmVtb3ZlLWxpc3QtbWVtYmVycw.option.bGlzdF9pZHM.display_name": {
+          "source": "List IDs",
+          "message": "IDs de liste"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.cmVtb3ZlLWxpc3QtbWVtYmVycw.option.bGlzdF9pZHM.short_desc": {
+          "source": "Contact list IDs",
+          "message": "Identifiants de liste de contacts"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.cmVtb3ZlLWxpc3QtbWVtYmVycw.option.c291cmNl.desc": {
+          "source": "Source of contacts to remove from the lists. Use one of the mutually exclusive fields: `contact_ids`, `list_ids`, `tag_ids`, `all_active_contacts`, or `engagement_level`",
+          "message": "Source des contacts à supprimer des listes. Utilisez l'un des champs mutuellement exclusifs : `contact_ids`, `list_ids`, `tag_ids`, `all_active_contacts` ou `engagement_level`"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.cmVtb3ZlLWxpc3QtbWVtYmVycw.option.c291cmNl.display_name": {
+          "source": "Source",
+          "message": "Source"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.cmVtb3ZlLWxpc3QtbWVtYmVycw.option.c291cmNl.short_desc": {
+          "source": "Source of contacts",
+          "message": "Source des contacts"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.cmVtb3ZlLWxpc3QtbWVtYmVycw.short_desc": {
+          "source": "Remove contacts from lists in bulk",
+          "message": "Supprimer en masse des contacts de listes"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLWFjY291bnQ.desc": {
+          "source": "Update the Constant Contact account information.\n\n**Important**: This uses PUT semantics (full replace). Any fields not included in the request will be cleared to their default values. Include all fields you want to preserve",
+          "message": "Mettre à jour les informations du compte Constant Contact.\n\n**Important** : cela utilise la sémantique PUT (remplacement complet). Tous les champs non inclus dans la requête seront réinitialisés à leurs valeurs par défaut. Incluez tous les champs que vous souhaitez conserver"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLWFjY291bnQ.display_name": {
+          "source": "Update Account",
+          "message": "Mettre à jour le compte"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLWFjY291bnQ.option.Y291bnRyeV9jb2Rl.desc": {
+          "source": "The two-letter ISO country code",
+          "message": "Le code pays ISO à deux lettres"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLWFjY291bnQ.option.Y291bnRyeV9jb2Rl.display_name": {
+          "source": "Country Code",
+          "message": "Code pays"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLWFjY291bnQ.option.Y291bnRyeV9jb2Rl.short_desc": {
+          "source": "Two-letter country code",
+          "message": "Code pays à deux lettres"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLWFjY291bnQ.option.Zmlyc3RfbmFtZQ.display_name": {
+          "source": "First Name",
+          "message": "Prénom"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLWFjY291bnQ.option.Zmlyc3RfbmFtZQ.short_desc": {
+          "source": "Account owner first name",
+          "message": "Prénom du propriétaire du compte"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLWFjY291bnQ.option.b3JnYW5pemF0aW9uX25hbWU.desc": {
+          "source": "The name of the organization",
+          "message": "Le nom de l'organisation"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLWFjY291bnQ.option.b3JnYW5pemF0aW9uX25hbWU.display_name": {
+          "source": "Organization Name",
+          "message": "Nom de l'organisation"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLWFjY291bnQ.option.b3JnYW5pemF0aW9uX25hbWU.short_desc": {
+          "source": "Organization name",
+          "message": "Nom de l'organisation"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLWFjY291bnQ.option.bGFzdF9uYW1l.display_name": {
+          "source": "Last Name",
+          "message": "Nom de famille"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLWFjY291bnQ.option.bGFzdF9uYW1l.short_desc": {
+          "source": "Account owner last name",
+          "message": "Nom de famille du propriétaire du compte"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLWFjY291bnQ.option.c3RhdGVfY29kZQ.desc": {
+          "source": "The state or province code",
+          "message": "Le code de l'État ou de la province"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLWFjY291bnQ.option.c3RhdGVfY29kZQ.display_name": {
+          "source": "State Code",
+          "message": "Code de l'État"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLWFjY291bnQ.option.c3RhdGVfY29kZQ.short_desc": {
+          "source": "State or province code",
+          "message": "Code de l'État ou de la province"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLWFjY291bnQ.option.cGhvbmU.display_name": {
+          "source": "Phone",
+          "message": "Téléphone"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLWFjY291bnQ.option.cGhvbmU.short_desc": {
+          "source": "Phone number",
+          "message": "Numéro de téléphone"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLWFjY291bnQ.option.d2Vic2l0ZQ.display_name": {
+          "source": "Website",
+          "message": "Site web"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLWFjY291bnQ.option.d2Vic2l0ZQ.short_desc": {
+          "source": "Website URL",
+          "message": "URL du site Web"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLWFjY291bnQ.option.dGltZV96b25lX2lk.desc": {
+          "source": "The time zone ID (e.g., `US/Eastern`)",
+          "message": "L'ID du fuseau horaire (par ex. `US/Eastern`)"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLWFjY291bnQ.option.dGltZV96b25lX2lk.display_name": {
+          "source": "Time Zone",
+          "message": "Fuseau horaire"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLWFjY291bnQ.option.dGltZV96b25lX2lk.short_desc": {
+          "source": "Account time zone ID",
+          "message": "ID du fuseau horaire du compte"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLWFjY291bnQ.short_desc": {
+          "source": "Update account information",
+          "message": "Mettre à jour les informations du compte"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLWN1c3RvbS1maWVsZA.desc": {
+          "source": "Update an existing custom field in Constant Contact",
+          "message": "Mettre à jour un champ personnalisé existant dans Constant Contact"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLWN1c3RvbS1maWVsZA.display_name": {
+          "source": "Update a Custom Field",
+          "message": "Mettre à jour un champ personnalisé"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLWN1c3RvbS1maWVsZA.option.Y3VzdG9tX2ZpZWxkX2lk.display_name": {
+          "source": "Custom Field ID",
+          "message": "Identifiant du champ personnalisé"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLWN1c3RvbS1maWVsZA.option.Y3VzdG9tX2ZpZWxkX2lk.short_desc": {
+          "source": "The custom field to update",
+          "message": "Le champ personnalisé à mettre à jour"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLWN1c3RvbS1maWVsZA.option.bGFiZWw.desc": {
+          "source": "The new label for the custom field",
+          "message": "Le nouveau libellé du champ personnalisé"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLWN1c3RvbS1maWVsZA.option.bGFiZWw.display_name": {
+          "source": "Label",
+          "message": "Étiquette"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLWN1c3RvbS1maWVsZA.option.bGFiZWw.short_desc": {
+          "source": "Custom field label",
+          "message": "Libellé du champ personnalisé"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLWN1c3RvbS1maWVsZA.short_desc": {
+          "source": "Update an existing custom field",
+          "message": "Mettre à jour un champ personnalisé existant"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLWNvbnRhY3Q.desc": {
+          "source": "Update an existing contact in Constant Contact.\n\n**Important**: This uses PUT semantics (full replace). Any fields not included in the request will be cleared to their default values. Include all fields you want to preserve",
+          "message": "Mettre à jour un contact existant dans Constant Contact.\n\n**Important** : cela utilise la sémantique PUT (remplacement complet). Tous les champs non inclus dans la requête seront réinitialisés à leurs valeurs par défaut. Incluez tous les champs que vous souhaitez conserver"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLWNvbnRhY3Q.display_name": {
+          "source": "Update a Contact",
+          "message": "Mettre à jour un contact"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLWNvbnRhY3Q.option.Y29tcGFueV9uYW1l.display_name": {
+          "source": "Company Name",
+          "message": "Nom de l'entreprise"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLWNvbnRhY3Q.option.Y29tcGFueV9uYW1l.short_desc": {
+          "source": "Contact company name",
+          "message": "Nom de l'entreprise du contact"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLWNvbnRhY3Q.option.Y29udGFjdF9pZA.display_name": {
+          "source": "Contact ID",
+          "message": "ID du contact"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLWNvbnRhY3Q.option.Y29udGFjdF9pZA.short_desc": {
+          "source": "The contact to update",
+          "message": "Le contact à mettre à jour"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLWNvbnRhY3Q.option.Y3VzdG9tX2ZpZWxkcw.desc": {
+          "source": "A list of custom field value objects for the contact",
+          "message": "Une liste d'objets de valeur de champ personnalisé pour le contact"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLWNvbnRhY3Q.option.Y3VzdG9tX2ZpZWxkcw.display_name": {
+          "source": "Custom Fields",
+          "message": "Champs personnalisés"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLWNvbnRhY3Q.option.Y3VzdG9tX2ZpZWxkcw.short_desc": {
+          "source": "Custom field values",
+          "message": "Valeurs de champs personnalisés"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLWNvbnRhY3Q.option.YW5uaXZlcnNhcnk.desc": {
+          "source": "The anniversary date of the contact in `YYYY-MM-DD` format",
+          "message": "La date d'anniversaire du contact au format `YYYY-MM-DD`"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLWNvbnRhY3Q.option.YW5uaXZlcnNhcnk.display_name": {
+          "source": "Anniversary",
+          "message": "Anniversaire"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLWNvbnRhY3Q.option.YW5uaXZlcnNhcnk.short_desc": {
+          "source": "Anniversary date (YYYY-MM-DD)",
+          "message": "Date d'anniversaire (YYYY-MM-DD)"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLWNvbnRhY3Q.option.YmlydGhkYXlfZGF5.desc": {
+          "source": "The birthday day of the contact (`1`-`31`)",
+          "message": "Le jour de naissance du contact (`1`-`31`)"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLWNvbnRhY3Q.option.YmlydGhkYXlfZGF5.display_name": {
+          "source": "Birthday Day",
+          "message": "Jour de naissance"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLWNvbnRhY3Q.option.YmlydGhkYXlfZGF5.short_desc": {
+          "source": "Birthday day (1-31)",
+          "message": "Jour de naissance (1-31)"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLWNvbnRhY3Q.option.YmlydGhkYXlfbW9udGg.desc": {
+          "source": "The birthday month of the contact (`1`-`12`)",
+          "message": "Le mois de naissance du contact (`1`-`12`)"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLWNvbnRhY3Q.option.YmlydGhkYXlfbW9udGg.display_name": {
+          "source": "Birthday Month",
+          "message": "Mois de naissance"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLWNvbnRhY3Q.option.YmlydGhkYXlfbW9udGg.short_desc": {
+          "source": "Birthday month (1-12)",
+          "message": "Mois de naissance (1-12)"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLWNvbnRhY3Q.option.ZW1haWxfYWRkcmVzcw.desc": {
+          "source": "Email address object with `address` and optional `permission_to_send`",
+          "message": "Objet d'adresse e-mail avec `address` et `permission_to_send` facultatif"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLWNvbnRhY3Q.option.ZW1haWxfYWRkcmVzcw.display_name": {
+          "source": "Email Address",
+          "message": "Adresse e-mail"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLWNvbnRhY3Q.option.ZW1haWxfYWRkcmVzcw.short_desc": {
+          "source": "Email address object",
+          "message": "Objet d'adresse e-mail"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLWNvbnRhY3Q.option.Zmlyc3RfbmFtZQ.display_name": {
+          "source": "First Name",
+          "message": "Prénom"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLWNvbnRhY3Q.option.Zmlyc3RfbmFtZQ.short_desc": {
+          "source": "Contact first name",
+          "message": "Prénom du contact"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLWNvbnRhY3Q.option.am9iX3RpdGxl.display_name": {
+          "source": "Job Title",
+          "message": "Intitulé de poste"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLWNvbnRhY3Q.option.am9iX3RpdGxl.short_desc": {
+          "source": "Contact job title",
+          "message": "Intitulé de poste du contact"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLWNvbnRhY3Q.option.bGFzdF9uYW1l.display_name": {
+          "source": "Last Name",
+          "message": "Nom de famille"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLWNvbnRhY3Q.option.bGFzdF9uYW1l.short_desc": {
+          "source": "Contact last name",
+          "message": "Nom de famille du contact"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLWNvbnRhY3Q.option.bGlzdF9tZW1iZXJzaGlwcw.desc": {
+          "source": "List of contact list IDs",
+          "message": "Liste des ID de listes de contacts"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLWNvbnRhY3Q.option.bGlzdF9tZW1iZXJzaGlwcw.display_name": {
+          "source": "List Memberships",
+          "message": "Appartenances aux listes"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLWNvbnRhY3Q.option.bGlzdF9tZW1iZXJzaGlwcw.short_desc": {
+          "source": "Contact list IDs",
+          "message": "Identifiants de liste de contacts"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLWNvbnRhY3Q.option.c3RyZWV0X2FkZHJlc3Nlcw.desc": {
+          "source": "A list of street address objects for the contact",
+          "message": "Une liste d'objets d'adresse postale pour le contact"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLWNvbnRhY3Q.option.c3RyZWV0X2FkZHJlc3Nlcw.display_name": {
+          "source": "Street Addresses",
+          "message": "Adresses postales"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLWNvbnRhY3Q.option.c3RyZWV0X2FkZHJlc3Nlcw.short_desc": {
+          "source": "Contact street addresses",
+          "message": "Adresses postales du contact"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLWNvbnRhY3Q.option.cGhvbmVfbnVtYmVycw.desc": {
+          "source": "A list of phone number objects for the contact",
+          "message": "Une liste d'objets de numéro de téléphone pour le contact"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLWNvbnRhY3Q.option.cGhvbmVfbnVtYmVycw.display_name": {
+          "source": "Phone Numbers",
+          "message": "Numéros de téléphone"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLWNvbnRhY3Q.option.cGhvbmVfbnVtYmVycw.short_desc": {
+          "source": "Contact phone numbers",
+          "message": "Numéros de téléphone du contact"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLWNvbnRhY3Q.option.dGFnZ2luZ3M.desc": {
+          "source": "List of tag IDs",
+          "message": "Liste des ID d'étiquettes"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLWNvbnRhY3Q.option.dGFnZ2luZ3M.display_name": {
+          "source": "Taggings",
+          "message": "Étiquetages"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLWNvbnRhY3Q.option.dGFnZ2luZ3M.short_desc": {
+          "source": "Tag IDs",
+          "message": "ID d'étiquettes"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLWNvbnRhY3Q.option.dXBkYXRlX3NvdXJjZQ.allowed-value.c3RyaW5nOkFjY291bnQ.desc": {
+          "source": "Updated by the account owner",
+          "message": "Mis à jour par le propriétaire du compte"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLWNvbnRhY3Q.option.dXBkYXRlX3NvdXJjZQ.allowed-value.c3RyaW5nOkFjY291bnQ.display_name": {
+          "source": "Account",
+          "message": "Compte"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLWNvbnRhY3Q.option.dXBkYXRlX3NvdXJjZQ.allowed-value.c3RyaW5nOkNvbnRhY3Q.desc": {
+          "source": "Updated by the contact themselves",
+          "message": "Mis à jour par le contact lui-même"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLWNvbnRhY3Q.option.dXBkYXRlX3NvdXJjZQ.allowed-value.c3RyaW5nOkNvbnRhY3Q.display_name": {
+          "source": "Contact",
+          "message": "Contact"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLWNvbnRhY3Q.option.dXBkYXRlX3NvdXJjZQ.desc": {
+          "source": "The source of the contact update",
+          "message": "La source de la mise à jour du contact"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLWNvbnRhY3Q.option.dXBkYXRlX3NvdXJjZQ.display_name": {
+          "source": "Update Source",
+          "message": "Source de mise à jour"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLWNvbnRhY3Q.option.dXBkYXRlX3NvdXJjZQ.short_desc": {
+          "source": "Source of the contact update",
+          "message": "Source de la mise à jour du contact"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLWNvbnRhY3Q.short_desc": {
+          "source": "Update an existing contact",
+          "message": "Mettre à jour un contact existant"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLWNvbnRhY3QtbGlzdA.desc": {
+          "source": "Update an existing contact list in Constant Contact",
+          "message": "Mettre à jour une liste de contacts existante dans Constant Contact"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLWNvbnRhY3QtbGlzdA.display_name": {
+          "source": "Update a Contact List",
+          "message": "Mettre à jour une liste de contacts"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLWNvbnRhY3QtbGlzdA.option.ZGVzY3JpcHRpb24.desc": {
+          "source": "Description of the contact list",
+          "message": "Description de la liste de contacts"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLWNvbnRhY3QtbGlzdA.option.ZGVzY3JpcHRpb24.display_name": {
+          "source": "Description",
+          "message": "Description"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLWNvbnRhY3QtbGlzdA.option.ZGVzY3JpcHRpb24.short_desc": {
+          "source": "Contact list description",
+          "message": "Description de la liste de contacts"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLWNvbnRhY3QtbGlzdA.option.ZmF2b3JpdGU.desc": {
+          "source": "Whether to mark this list as a favorite",
+          "message": "Indique s'il faut marquer cette liste comme favorite"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLWNvbnRhY3QtbGlzdA.option.ZmF2b3JpdGU.display_name": {
+          "source": "Favorite",
+          "message": "Favori"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLWNvbnRhY3QtbGlzdA.option.ZmF2b3JpdGU.short_desc": {
+          "source": "Mark as favorite",
+          "message": "Marquer comme favori"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLWNvbnRhY3QtbGlzdA.option.bGlzdF9pZA.display_name": {
+          "source": "List ID",
+          "message": "ID de la liste"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLWNvbnRhY3QtbGlzdA.option.bGlzdF9pZA.short_desc": {
+          "source": "The contact list to update",
+          "message": "La liste de contacts à mettre à jour"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLWNvbnRhY3QtbGlzdA.option.bmFtZQ.desc": {
+          "source": "The name of the contact list",
+          "message": "Le nom de la liste de contacts"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLWNvbnRhY3QtbGlzdA.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "Nom"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLWNvbnRhY3QtbGlzdA.option.bmFtZQ.short_desc": {
+          "source": "Contact list name",
+          "message": "Nom de la liste de contacts"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLWNvbnRhY3QtbGlzdA.short_desc": {
+          "source": "Update an existing contact list",
+          "message": "Mettre à jour une liste de contacts existante"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLWVtYWlsLWNhbXBhaWdu.desc": {
+          "source": "Update an existing email campaign in Constant Contact",
+          "message": "Mettre à jour une campagne d'e-mails existante dans Constant Contact"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLWVtYWlsLWNhbXBhaWdu.display_name": {
+          "source": "Update an Email Campaign",
+          "message": "Mettre à jour une campagne d'e-mails"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLWVtYWlsLWNhbXBhaWdu.option.Y2FtcGFpZ25faWQ.display_name": {
+          "source": "Campaign ID",
+          "message": "ID de la campagne"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLWVtYWlsLWNhbXBhaWdu.option.Y2FtcGFpZ25faWQ.short_desc": {
+          "source": "The email campaign to update",
+          "message": "La campagne d'e-mails à mettre à jour"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLWVtYWlsLWNhbXBhaWdu.option.bmFtZQ.desc": {
+          "source": "The new name of the email campaign",
+          "message": "Le nouveau nom de la campagne d'e-mails"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLWVtYWlsLWNhbXBhaWdu.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "Nom"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLWVtYWlsLWNhbXBhaWdu.option.bmFtZQ.short_desc": {
+          "source": "Campaign name",
+          "message": "Nom de la campagne"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLWVtYWlsLWNhbXBhaWdu.short_desc": {
+          "source": "Update an existing email campaign",
+          "message": "Mettre à jour une campagne d'e-mails existante"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLXNlZ21lbnQ.desc": {
+          "source": "Update an existing segment in Constant Contact",
+          "message": "Mettre à jour un segment existant dans Constant Contact"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLXNlZ21lbnQ.display_name": {
+          "source": "Update a Segment",
+          "message": "Mettre à jour un segment"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLXNlZ21lbnQ.option.bmFtZQ.desc": {
+          "source": "The new name of the segment",
+          "message": "Le nouveau nom du segment"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLXNlZ21lbnQ.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "Nom"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLXNlZ21lbnQ.option.bmFtZQ.short_desc": {
+          "source": "Segment name",
+          "message": "Nom du segment"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLXNlZ21lbnQ.option.c2VnbWVudF9jcml0ZXJpYQ.desc": {
+          "source": "The new criteria expression for the segment",
+          "message": "La nouvelle expression de critères pour le segment"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLXNlZ21lbnQ.option.c2VnbWVudF9jcml0ZXJpYQ.display_name": {
+          "source": "Segment Criteria",
+          "message": "Critères de segment"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLXNlZ21lbnQ.option.c2VnbWVudF9jcml0ZXJpYQ.short_desc": {
+          "source": "Segment criteria expression",
+          "message": "Expression des critères de segment"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLXNlZ21lbnQ.option.c2VnbWVudF9pZA.display_name": {
+          "source": "Segment ID",
+          "message": "Identifiant du segment"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLXNlZ21lbnQ.option.c2VnbWVudF9pZA.short_desc": {
+          "source": "The segment to update",
+          "message": "Le segment à mettre à jour"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLXNlZ21lbnQ.short_desc": {
+          "source": "Update an existing segment",
+          "message": "Mettre à jour un segment existant"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLXRhZw.desc": {
+          "source": "Update an existing tag in Constant Contact",
+          "message": "Mettre à jour une étiquette existante dans Constant Contact"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLXRhZw.display_name": {
+          "source": "Update a Tag",
+          "message": "Mettre à jour une étiquette"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLXRhZw.option.bmFtZQ.desc": {
+          "source": "The new name of the tag",
+          "message": "Le nouveau nom de l'étiquette"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLXRhZw.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "Nom"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLXRhZw.option.bmFtZQ.short_desc": {
+          "source": "Tag name",
+          "message": "Nom de l'étiquette"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLXRhZw.option.dGFnX2lk.display_name": {
+          "source": "Tag ID",
+          "message": "ID de l'étiquette"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLXRhZw.option.dGFnX2lk.short_desc": {
+          "source": "The tag to update",
+          "message": "L'étiquette à mettre à jour"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.action.dXBkYXRlLXRhZw.short_desc": {
+          "source": "Update an existing tag",
+          "message": "Mettre à jour une étiquette existante"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.desc": {
+          "source": "Constant Contact is an email marketing platform for creating campaigns, managing contacts, and tracking engagement.\n\nThis integration supports contacts, contact lists, tags, custom fields, segments, email campaigns, bulk activities, reports, and events.",
+          "message": "Constant Contact est une plateforme de marketing par e-mail permettant de créer des campagnes, de gérer des contacts et de suivre l'engagement.\n\nCette intégration prend en charge les contacts, les listes de contacts, les balises, les champs personnalisés, les segments, les campagnes par e-mail, les activités en masse, les rapports et les événements."
+        },
+        "app.Q29uc3RhbnRDb250YWN0.display_name": {
+          "source": "Constant Contact",
+          "message": "Constant Contact"
+        },
+        "app.Q29uc3RhbnRDb250YWN0.short_desc": {
+          "source": "Constant Contact email marketing platform",
+          "message": "Plateforme de marketing par e-mail Constant Contact"
+        }
+      }
+    }
+  }
+}

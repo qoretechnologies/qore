@@ -1,0 +1,933 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "es": {
+      "messages": {
+        "app.TWV3cw.action.Z2V0LW9yZGVyLWl0ZW1z.desc": {
+          "source": "Retrieve order item information from Mews",
+          "message": "Recuperar información de elementos de pedido de Mews"
+        },
+        "app.TWV3cw.action.Z2V0LW9yZGVyLWl0ZW1z.display_name": {
+          "source": "Retrieve Order Items",
+          "message": "Recuperar elementos de pedido"
+        },
+        "app.TWV3cw.action.Z2V0LW9yZGVyLWl0ZW1z.option.Q29uc3VtZWRVdGNFbmQ.desc": {
+          "source": "The upper limit of the consumed date (and time) range; i.e. `UpdatedUtc` < <this date>",
+          "message": "El límite superior del rango de fecha (y hora) de consumo; es decir, `UpdatedUtc` < <esta fecha>"
+        },
+        "app.TWV3cw.action.Z2V0LW9yZGVyLWl0ZW1z.option.Q29uc3VtZWRVdGNFbmQ.display_name": {
+          "source": "Updated Date End",
+          "message": "Fin de fecha de actualización"
+        },
+        "app.TWV3cw.action.Z2V0LW9yZGVyLWl0ZW1z.option.Q29uc3VtZWRVdGNFbmQ.short_desc": {
+          "source": "The upper limit of the consumed date (and time) range",
+          "message": "El límite superior del rango de fecha (y hora) de consumo"
+        },
+        "app.TWV3cw.action.Z2V0LW9yZGVyLWl0ZW1z.option.Q29uc3VtZWRVdGNTdGFydA.desc": {
+          "source": "The earliest date and time of the consumed date; i.e. `ConsumedUtc` >= <this date>",
+          "message": "La fecha y hora más temprana de la fecha de consumo; es decir, `ConsumedUtc` >= <esta fecha>"
+        },
+        "app.TWV3cw.action.Z2V0LW9yZGVyLWl0ZW1z.option.Q29uc3VtZWRVdGNTdGFydA.display_name": {
+          "source": "Consumed Date Start",
+          "message": "Inicio de fecha de consumo"
+        },
+        "app.TWV3cw.action.Z2V0LW9yZGVyLWl0ZW1z.option.Q29uc3VtZWRVdGNTdGFydA.short_desc": {
+          "source": "The earliest date and time of the consumed date",
+          "message": "La fecha y hora más temprana de la fecha de consumo"
+        },
+        "app.TWV3cw.action.Z2V0LW9yZGVyLWl0ZW1z.option.Q2FuY2VsZWRVdGNFbmQ.desc": {
+          "source": "The upper limit of the canceled date (and time) range; i.e. `CanceledUtc` < <this date>",
+          "message": "El límite superior del rango de fecha (y hora) de cancelación; es decir, `CanceledUtc` < <esta fecha>"
+        },
+        "app.TWV3cw.action.Z2V0LW9yZGVyLWl0ZW1z.option.Q2FuY2VsZWRVdGNFbmQ.display_name": {
+          "source": "Canceled Date End",
+          "message": "Fin de fecha de cancelación"
+        },
+        "app.TWV3cw.action.Z2V0LW9yZGVyLWl0ZW1z.option.Q2FuY2VsZWRVdGNFbmQ.short_desc": {
+          "source": "The upper limit of the canceled date (and time) range",
+          "message": "El límite superior del rango de fecha (y hora) de cancelación"
+        },
+        "app.TWV3cw.action.Z2V0LW9yZGVyLWl0ZW1z.option.Q2FuY2VsZWRVdGNTdGFydA.desc": {
+          "source": "The earliest date and time of the canceled date; i.e. `CanceledUtc` >= <this date>",
+          "message": "La fecha y hora más temprana de la fecha de cancelación; es decir, `CanceledUtc` >= <esta fecha>"
+        },
+        "app.TWV3cw.action.Z2V0LW9yZGVyLWl0ZW1z.option.Q2FuY2VsZWRVdGNTdGFydA.display_name": {
+          "source": "Canceled Date Start",
+          "message": "Inicio de fecha de cancelación"
+        },
+        "app.TWV3cw.action.Z2V0LW9yZGVyLWl0ZW1z.option.Q2FuY2VsZWRVdGNTdGFydA.short_desc": {
+          "source": "The earliest date and time of the canceled date",
+          "message": "La fecha y hora más temprana de la fecha de cancelación"
+        },
+        "app.TWV3cw.action.Z2V0LW9yZGVyLWl0ZW1z.option.Q2hhcmdlZFV0Y0VuZA.desc": {
+          "source": "The upper limit of the charged date (and time) range; i.e. `ChargedUtc` < <this date>",
+          "message": "El límite superior del rango de fecha (y hora) de cobro; es decir, `ChargedUtc` < <esta fecha>"
+        },
+        "app.TWV3cw.action.Z2V0LW9yZGVyLWl0ZW1z.option.Q2hhcmdlZFV0Y0VuZA.display_name": {
+          "source": "Charged Date End",
+          "message": "Fin de fecha de cobro"
+        },
+        "app.TWV3cw.action.Z2V0LW9yZGVyLWl0ZW1z.option.Q2hhcmdlZFV0Y0VuZA.short_desc": {
+          "source": "The upper limit of the charged date (and time) range",
+          "message": "El límite superior del rango de fecha (y hora) de cobro"
+        },
+        "app.TWV3cw.action.Z2V0LW9yZGVyLWl0ZW1z.option.Q2hhcmdlZFV0Y1N0YXJ0.desc": {
+          "source": "The earliest date and time of the charged date; i.e. `ChargedUtc` >= <this date>",
+          "message": "La fecha y hora más temprana de la fecha de cobro; es decir, `ChargedUtc` >= <esta fecha>"
+        },
+        "app.TWV3cw.action.Z2V0LW9yZGVyLWl0ZW1z.option.Q2hhcmdlZFV0Y1N0YXJ0.display_name": {
+          "source": "Charged Date Start",
+          "message": "Inicio de fecha de cobro"
+        },
+        "app.TWV3cw.action.Z2V0LW9yZGVyLWl0ZW1z.option.Q2hhcmdlZFV0Y1N0YXJ0.short_desc": {
+          "source": "The earliest date and time of the charged date",
+          "message": "La fecha y hora más temprana de la fecha de cobro"
+        },
+        "app.TWV3cw.action.Z2V0LW9yZGVyLWl0ZW1z.option.Q2xvc2VkVXRjRW5k.desc": {
+          "source": "The upper limit of the closed date (and time) range; i.e. `ClosedUtc` < <this date>",
+          "message": "El límite superior del rango de fecha (y hora) de cierre; es decir, `ClosedUtc` < <esta fecha>"
+        },
+        "app.TWV3cw.action.Z2V0LW9yZGVyLWl0ZW1z.option.Q2xvc2VkVXRjRW5k.display_name": {
+          "source": "Closed Date End",
+          "message": "Fin de fecha de cierre"
+        },
+        "app.TWV3cw.action.Z2V0LW9yZGVyLWl0ZW1z.option.Q2xvc2VkVXRjRW5k.short_desc": {
+          "source": "The upper limit of the closed date (and time) range",
+          "message": "El límite superior del rango de fecha (y hora) de cierre"
+        },
+        "app.TWV3cw.action.Z2V0LW9yZGVyLWl0ZW1z.option.Q2xvc2VkVXRjU3RhcnQ.desc": {
+          "source": "The earliest date and time of the closed date; i.e. `ClosedUtc` >= <this date>",
+          "message": "La fecha y hora más temprana de la fecha de cierre; es decir, `ClosedUtc` >= <esta fecha>"
+        },
+        "app.TWV3cw.action.Z2V0LW9yZGVyLWl0ZW1z.option.Q2xvc2VkVXRjU3RhcnQ.display_name": {
+          "source": "Closed Date Start",
+          "message": "Inicio de fecha de cierre"
+        },
+        "app.TWV3cw.action.Z2V0LW9yZGVyLWl0ZW1z.option.Q2xvc2VkVXRjU3RhcnQ.short_desc": {
+          "source": "The earliest date and time of the closed date",
+          "message": "La fecha y hora más temprana de la fecha de cierre"
+        },
+        "app.TWV3cw.action.Z2V0LW9yZGVyLWl0ZW1z.option.Q3JlYXRlZFV0Y0VuZA.desc": {
+          "source": "The upper limit of the created date (and time) range; i.e. `CreatedUtc` < <this date>",
+          "message": "El límite superior del rango de fecha (y hora) de creación; es decir, `CreatedUtc` < <esta fecha>"
+        },
+        "app.TWV3cw.action.Z2V0LW9yZGVyLWl0ZW1z.option.Q3JlYXRlZFV0Y0VuZA.display_name": {
+          "source": "Updated Date End",
+          "message": "Fin de fecha de actualización"
+        },
+        "app.TWV3cw.action.Z2V0LW9yZGVyLWl0ZW1z.option.Q3JlYXRlZFV0Y0VuZA.short_desc": {
+          "source": "The upper limit of the created date (and time) range",
+          "message": "El límite superior del rango de fecha (y hora) de creación"
+        },
+        "app.TWV3cw.action.Z2V0LW9yZGVyLWl0ZW1z.option.Q3JlYXRlZFV0Y1N0YXJ0.desc": {
+          "source": "The earliest date and time of the updated date; i.e. `CreatedUtc` >= <this date>",
+          "message": "La fecha y hora más temprana de la fecha de actualización; es decir, `CreatedUtc` >= <esta fecha>"
+        },
+        "app.TWV3cw.action.Z2V0LW9yZGVyLWl0ZW1z.option.Q3JlYXRlZFV0Y1N0YXJ0.display_name": {
+          "source": "Created Date Start",
+          "message": "Inicio de fecha de creación"
+        },
+        "app.TWV3cw.action.Z2V0LW9yZGVyLWl0ZW1z.option.Q3JlYXRlZFV0Y1N0YXJ0.short_desc": {
+          "source": "The earliest date and time of the updated date",
+          "message": "La fecha y hora más temprana de la fecha de actualización"
+        },
+        "app.TWV3cw.action.Z2V0LW9yZGVyLWl0ZW1z.option.Q3VycmVuY3k.desc": {
+          "source": "The currency code that amounts should be reported in",
+          "message": "El código de moneda en el que se deben reportar los importes"
+        },
+        "app.TWV3cw.action.Z2V0LW9yZGVyLWl0ZW1z.option.Q3VycmVuY3k.display_name": {
+          "source": "Currency",
+          "message": "Moneda"
+        },
+        "app.TWV3cw.action.Z2V0LW9yZGVyLWl0ZW1z.option.Q3VycmVuY3k.short_desc": {
+          "source": "The currency code that amounts should be reported in",
+          "message": "El código de moneda en el que se deben reportar los importes"
+        },
+        "app.TWV3cw.action.Z2V0LW9yZGVyLWl0ZW1z.option.QWNjb3VudGluZ1N0YXRl.desc": {
+          "source": "The accounting state(s) for the search; `Open`, `Closed`, `Inactive`, or `Canceled`",
+          "message": "El estado o estados contables para la búsqueda; `Open`, `Closed`, `Inactive` o `Canceled`"
+        },
+        "app.TWV3cw.action.Z2V0LW9yZGVyLWl0ZW1z.option.QWNjb3VudGluZ1N0YXRl.display_name": {
+          "source": "Accounting State",
+          "message": "Estado contable"
+        },
+        "app.TWV3cw.action.Z2V0LW9yZGVyLWl0ZW1z.option.QWNjb3VudGluZ1N0YXRl.short_desc": {
+          "source": "The accounting state(s) for the search",
+          "message": "El estado o estados contables para la búsqueda"
+        },
+        "app.TWV3cw.action.Z2V0LW9yZGVyLWl0ZW1z.option.QmlsbElk.desc": {
+          "source": "The bill ID(s) for the search",
+          "message": "El ID o los ID de factura para la búsqueda"
+        },
+        "app.TWV3cw.action.Z2V0LW9yZGVyLWl0ZW1z.option.QmlsbElk.display_name": {
+          "source": "Bill ID",
+          "message": "ID de factura"
+        },
+        "app.TWV3cw.action.Z2V0LW9yZGVyLWl0ZW1z.option.QmlsbElk.short_desc": {
+          "source": "The bill ID(s) for the search",
+          "message": "El ID o los ID de factura para la búsqueda"
+        },
+        "app.TWV3cw.action.Z2V0LW9yZGVyLWl0ZW1z.option.RW50ZXJwcmlzZUlk.desc": {
+          "source": "The enterprise ID(s) for the search",
+          "message": "El ID o los ID de empresa para la búsqueda"
+        },
+        "app.TWV3cw.action.Z2V0LW9yZGVyLWl0ZW1z.option.RW50ZXJwcmlzZUlk.display_name": {
+          "source": "Enterprise ID",
+          "message": "ID de empresa"
+        },
+        "app.TWV3cw.action.Z2V0LW9yZGVyLWl0ZW1z.option.RW50ZXJwcmlzZUlk.short_desc": {
+          "source": "The enterprise ID(s) for the search",
+          "message": "El ID o los ID de empresa para la búsqueda"
+        },
+        "app.TWV3cw.action.Z2V0LW9yZGVyLWl0ZW1z.option.T3JkZXJJdGVtSWQ.desc": {
+          "source": "The order item ID(s) for the search",
+          "message": "El ID o los ID de elemento de pedido para la búsqueda"
+        },
+        "app.TWV3cw.action.Z2V0LW9yZGVyLWl0ZW1z.option.T3JkZXJJdGVtSWQ.display_name": {
+          "source": "Order Item ID",
+          "message": "ID de elemento de pedido"
+        },
+        "app.TWV3cw.action.Z2V0LW9yZGVyLWl0ZW1z.option.T3JkZXJJdGVtSWQ.short_desc": {
+          "source": "The order item ID(s) for the search",
+          "message": "El ID o los ID de elemento de pedido para la búsqueda"
+        },
+        "app.TWV3cw.action.Z2V0LW9yZGVyLWl0ZW1z.option.U2VydmljZU9yZGVySWQ.desc": {
+          "source": "The service order ID(s) for the search",
+          "message": "El ID o los ID de orden de servicio para la búsqueda"
+        },
+        "app.TWV3cw.action.Z2V0LW9yZGVyLWl0ZW1z.option.U2VydmljZU9yZGVySWQ.display_name": {
+          "source": "Service Order ID",
+          "message": "Service Order ID"
+        },
+        "app.TWV3cw.action.Z2V0LW9yZGVyLWl0ZW1z.option.U2VydmljZU9yZGVySWQ.short_desc": {
+          "source": "The service order ID(s) for the search",
+          "message": "El ID o los ID de orden de servicio para la búsqueda"
+        },
+        "app.TWV3cw.action.Z2V0LW9yZGVyLWl0ZW1z.option.U2VydmljZUlk.desc": {
+          "source": "The service ID(s) for the search",
+          "message": "El ID o los ID de servicio para la búsqueda"
+        },
+        "app.TWV3cw.action.Z2V0LW9yZGVyLWl0ZW1z.option.U2VydmljZUlk.display_name": {
+          "source": "Service ID",
+          "message": "ID del servicio"
+        },
+        "app.TWV3cw.action.Z2V0LW9yZGVyLWl0ZW1z.option.U2VydmljZUlk.short_desc": {
+          "source": "The service ID(s) for the search",
+          "message": "El ID o los ID de servicio para la búsqueda"
+        },
+        "app.TWV3cw.action.Z2V0LW9yZGVyLWl0ZW1z.option.VHlwZQ.desc": {
+          "source": "The order item type(s) for the search",
+          "message": "El tipo o tipos de elemento de pedido para la búsqueda"
+        },
+        "app.TWV3cw.action.Z2V0LW9yZGVyLWl0ZW1z.option.VHlwZQ.display_name": {
+          "source": "Order Item Type",
+          "message": "Tipo de elemento de pedido"
+        },
+        "app.TWV3cw.action.Z2V0LW9yZGVyLWl0ZW1z.option.VHlwZQ.short_desc": {
+          "source": "The order item type(s) for the search",
+          "message": "El tipo o tipos de elemento de pedido para la búsqueda"
+        },
+        "app.TWV3cw.action.Z2V0LW9yZGVyLWl0ZW1z.option.VXBkYXRlZFV0Y0VuZA.desc": {
+          "source": "The upper limit of the updated date (and time) range; i.e. `UpdatedUtc` < <this date>",
+          "message": "El límite superior del rango de fecha (y hora) de actualización; es decir, `UpdatedUtc` < <esta fecha>"
+        },
+        "app.TWV3cw.action.Z2V0LW9yZGVyLWl0ZW1z.option.VXBkYXRlZFV0Y0VuZA.display_name": {
+          "source": "Updated Date End",
+          "message": "Fin de fecha de actualización"
+        },
+        "app.TWV3cw.action.Z2V0LW9yZGVyLWl0ZW1z.option.VXBkYXRlZFV0Y0VuZA.short_desc": {
+          "source": "The upper limit of the updated date (and time) range",
+          "message": "El límite superior del rango de fecha (y hora) de actualización"
+        },
+        "app.TWV3cw.action.Z2V0LW9yZGVyLWl0ZW1z.option.VXBkYXRlZFV0Y1N0YXJ0.desc": {
+          "source": "The earliest date and time of the updated date; i.e. `UpdatedUtc` >= <this date>",
+          "message": "La fecha y hora más temprana de la fecha de actualización; es decir, `UpdatedUtc` >= <esta fecha>"
+        },
+        "app.TWV3cw.action.Z2V0LW9yZGVyLWl0ZW1z.option.VXBkYXRlZFV0Y1N0YXJ0.display_name": {
+          "source": "Updated Date Start",
+          "message": "Fecha de inicio de actualización"
+        },
+        "app.TWV3cw.action.Z2V0LW9yZGVyLWl0ZW1z.option.VXBkYXRlZFV0Y1N0YXJ0.short_desc": {
+          "source": "The earliest date and time of the updated date",
+          "message": "La fecha y hora más temprana de la fecha de actualización"
+        },
+        "app.TWV3cw.action.Z2V0LW9yZGVyLWl0ZW1z.option.bGltaXQ.desc": {
+          "source": "Maximum number of records to return",
+          "message": "Número máximo de registros a devolver"
+        },
+        "app.TWV3cw.action.Z2V0LW9yZGVyLWl0ZW1z.option.bGltaXQ.display_name": {
+          "source": "Record Limit",
+          "message": "Límite de registros"
+        },
+        "app.TWV3cw.action.Z2V0LW9yZGVyLWl0ZW1z.option.bGltaXQ.short_desc": {
+          "source": "Maximum number of records to return",
+          "message": "Número máximo de registros a devolver"
+        },
+        "app.TWV3cw.action.Z2V0LW9yZGVyLWl0ZW1z.short_desc": {
+          "source": "Retrieve order item information from Mews",
+          "message": "Recuperar información de elementos de pedido de Mews"
+        },
+        "app.TWV3cw.action.Z2V0LWN1c3RvbWVycw.desc": {
+          "source": "Retrieve customer information from Mews",
+          "message": "Recuperar información de clientes de Mews"
+        },
+        "app.TWV3cw.action.Z2V0LWN1c3RvbWVycw.display_name": {
+          "source": "Retrieve Customer Information",
+          "message": "Recuperar información de clientes"
+        },
+        "app.TWV3cw.action.Z2V0LWN1c3RvbWVycw.option.Q2hhaW5JZA.desc": {
+          "source": "Limit the search to the given chain ID(s)",
+          "message": "Limitar la búsqueda al ID o ID de cadena indicados"
+        },
+        "app.TWV3cw.action.Z2V0LWN1c3RvbWVycw.option.Q2hhaW5JZA.display_name": {
+          "source": "Chain ID",
+          "message": "ID de cadena"
+        },
+        "app.TWV3cw.action.Z2V0LWN1c3RvbWVycw.option.Q2hhaW5JZA.short_desc": {
+          "source": "Limit the search to the given chain ID(s)",
+          "message": "Limitar la búsqueda al ID o ID de cadena indicados"
+        },
+        "app.TWV3cw.action.Z2V0LWN1c3RvbWVycw.option.Q3VzdG9tZXJJZA.desc": {
+          "source": "The customer ID(s) (UUID(s)) to find",
+          "message": "El o los ID de cliente (UUID) a buscar"
+        },
+        "app.TWV3cw.action.Z2V0LWN1c3RvbWVycw.option.Q3VzdG9tZXJJZA.display_name": {
+          "source": "Customer ID",
+          "message": "ID de cliente"
+        },
+        "app.TWV3cw.action.Z2V0LWN1c3RvbWVycw.option.Q3VzdG9tZXJJZA.short_desc": {
+          "source": "The customer ID(s) to find",
+          "message": "El o los ID de cliente a buscar"
+        },
+        "app.TWV3cw.action.Z2V0LWN1c3RvbWVycw.option.QWN0aXZpdHlTdGF0ZQ.desc": {
+          "source": "Search for customers with the given activity state(s) (`Active` or `Deleted`)",
+          "message": "Buscar clientes con el o los estados de actividad indicados (`Active` o `Deleted`)"
+        },
+        "app.TWV3cw.action.Z2V0LWN1c3RvbWVycw.option.QWN0aXZpdHlTdGF0ZQ.display_name": {
+          "source": "Activity State",
+          "message": "Estado de actividad"
+        },
+        "app.TWV3cw.action.Z2V0LWN1c3RvbWVycw.option.QWN0aXZpdHlTdGF0ZQ.short_desc": {
+          "source": "Search for customers with the given activity state(s)",
+          "message": "Buscar clientes con el o los estados de actividad indicados"
+        },
+        "app.TWV3cw.action.Z2V0LWN1c3RvbWVycw.option.RW1haWw.desc": {
+          "source": "Search for customers with the given email address(es)",
+          "message": "Buscar clientes con la(s) dirección(es) de correo electrónico indicada(s)"
+        },
+        "app.TWV3cw.action.Z2V0LWN1c3RvbWVycw.option.RW1haWw.display_name": {
+          "source": "EMail Address",
+          "message": "Dirección de correo electrónico"
+        },
+        "app.TWV3cw.action.Z2V0LWN1c3RvbWVycw.option.RW1haWw.short_desc": {
+          "source": "Search for customers with the given email address(es)",
+          "message": "Buscar clientes con la(s) dirección(es) de correo electrónico indicada(s)"
+        },
+        "app.TWV3cw.action.Z2V0LWN1c3RvbWVycw.option.Rmlyc3ROYW1l.desc": {
+          "source": "Search for customers with the given first name(s)",
+          "message": "Buscar clientes con el o los nombres indicados"
+        },
+        "app.TWV3cw.action.Z2V0LWN1c3RvbWVycw.option.Rmlyc3ROYW1l.display_name": {
+          "source": "First Name",
+          "message": "Nombre"
+        },
+        "app.TWV3cw.action.Z2V0LWN1c3RvbWVycw.option.Rmlyc3ROYW1l.short_desc": {
+          "source": "Search for customers with the given first name(s)",
+          "message": "Buscar clientes con el o los nombres indicados"
+        },
+        "app.TWV3cw.action.Z2V0LWN1c3RvbWVycw.option.TG95YWx0eUNvZGU.desc": {
+          "source": "Search for customers with the given loyalty code(s)",
+          "message": "Buscar clientes con el o los códigos de fidelidad indicados"
+        },
+        "app.TWV3cw.action.Z2V0LWN1c3RvbWVycw.option.TG95YWx0eUNvZGU.display_name": {
+          "source": "Loyalty Code",
+          "message": "Código de fidelidad"
+        },
+        "app.TWV3cw.action.Z2V0LWN1c3RvbWVycw.option.TG95YWx0eUNvZGU.short_desc": {
+          "source": "Search for customers with the given loyalty code(s)",
+          "message": "Buscar clientes con el o los códigos de fidelidad indicados"
+        },
+        "app.TWV3cw.action.Z2V0LWN1c3RvbWVycw.option.TGFzdE5hbWU.desc": {
+          "source": "Search for customers with the given last name(s)",
+          "message": "Buscar clientes con el o los apellidos indicados"
+        },
+        "app.TWV3cw.action.Z2V0LWN1c3RvbWVycw.option.TGFzdE5hbWU.display_name": {
+          "source": "Last Name",
+          "message": "Apellido"
+        },
+        "app.TWV3cw.action.Z2V0LWN1c3RvbWVycw.option.TGFzdE5hbWU.short_desc": {
+          "source": "Search for customers with the given last name(s)",
+          "message": "Buscar clientes con el o los apellidos indicados"
+        },
+        "app.TWV3cw.action.Z2V0LWN1c3RvbWVycw.short_desc": {
+          "source": "Retrieve customer information from Mews",
+          "message": "Recuperar información de clientes de Mews"
+        },
+        "app.TWV3cw.action.Z2V0LXBheW1lbnRz.desc": {
+          "source": "Retrieve payment information from Mews",
+          "message": "Recuperar información de pagos de Mews"
+        },
+        "app.TWV3cw.action.Z2V0LXBheW1lbnRz.display_name": {
+          "source": "Retrieve Payment Information",
+          "message": "Recuperar información de pagos"
+        },
+        "app.TWV3cw.action.Z2V0LXBheW1lbnRz.option.Q2hhcmdlZFV0Y0VuZA.desc": {
+          "source": "The upper limit of the charged date (and time) range; i.e. `ChargedUtc` < <this date>",
+          "message": "El límite superior del rango de fecha (y hora) de cobro; es decir, `ChargedUtc` < <esta fecha>"
+        },
+        "app.TWV3cw.action.Z2V0LXBheW1lbnRz.option.Q2hhcmdlZFV0Y0VuZA.display_name": {
+          "source": "Charged Date End",
+          "message": "Fin de fecha de cobro"
+        },
+        "app.TWV3cw.action.Z2V0LXBheW1lbnRz.option.Q2hhcmdlZFV0Y0VuZA.short_desc": {
+          "source": "The upper limit of the charged date (and time) range",
+          "message": "El límite superior del rango de fecha (y hora) de cobro"
+        },
+        "app.TWV3cw.action.Z2V0LXBheW1lbnRz.option.Q2hhcmdlZFV0Y1N0YXJ0.desc": {
+          "source": "The earliest date and time of the charged date; i.e. `ChargedUtc` >= <this date>",
+          "message": "La fecha y hora más temprana de la fecha de cobro; es decir, `ChargedUtc` >= <esta fecha>"
+        },
+        "app.TWV3cw.action.Z2V0LXBheW1lbnRz.option.Q2hhcmdlZFV0Y1N0YXJ0.display_name": {
+          "source": "Charged Date Start",
+          "message": "Inicio de fecha de cobro"
+        },
+        "app.TWV3cw.action.Z2V0LXBheW1lbnRz.option.Q2hhcmdlZFV0Y1N0YXJ0.short_desc": {
+          "source": "The earliest date and time of the charged date",
+          "message": "La fecha y hora más temprana de la fecha de cobro"
+        },
+        "app.TWV3cw.action.Z2V0LXBheW1lbnRz.option.Q2xvc2VkVXRjRW5k.desc": {
+          "source": "The upper limit of the closed date (and time) range; i.e. `ClosedUtc` < <this date>",
+          "message": "El límite superior del rango de fecha (y hora) de cierre; es decir, `ClosedUtc` < <esta fecha>"
+        },
+        "app.TWV3cw.action.Z2V0LXBheW1lbnRz.option.Q2xvc2VkVXRjRW5k.display_name": {
+          "source": "Closed Date End",
+          "message": "Fin de fecha de cierre"
+        },
+        "app.TWV3cw.action.Z2V0LXBheW1lbnRz.option.Q2xvc2VkVXRjRW5k.short_desc": {
+          "source": "The upper limit of the closed date (and time) range",
+          "message": "El límite superior del rango de fecha (y hora) de cierre"
+        },
+        "app.TWV3cw.action.Z2V0LXBheW1lbnRz.option.Q2xvc2VkVXRjU3RhcnQ.desc": {
+          "source": "The earliest date and time of the closed date; i.e. `ClosedUtc` >= <this date>",
+          "message": "La fecha y hora más temprana de la fecha de cierre; es decir, `ClosedUtc` >= <esta fecha>"
+        },
+        "app.TWV3cw.action.Z2V0LXBheW1lbnRz.option.Q2xvc2VkVXRjU3RhcnQ.display_name": {
+          "source": "Closed Date Start",
+          "message": "Inicio de fecha de cierre"
+        },
+        "app.TWV3cw.action.Z2V0LXBheW1lbnRz.option.Q2xvc2VkVXRjU3RhcnQ.short_desc": {
+          "source": "The earliest date and time of the closed date",
+          "message": "La fecha y hora más temprana de la fecha de cierre"
+        },
+        "app.TWV3cw.action.Z2V0LXBheW1lbnRz.option.Q3JlYXRlZFV0Y0VuZA.desc": {
+          "source": "The upper limit of the created date (and time) range; i.e. `CreatedUtc` < <this date>",
+          "message": "El límite superior del rango de fecha (y hora) de creación; es decir, `CreatedUtc` < <esta fecha>"
+        },
+        "app.TWV3cw.action.Z2V0LXBheW1lbnRz.option.Q3JlYXRlZFV0Y0VuZA.display_name": {
+          "source": "Updated Date End",
+          "message": "Fin de fecha de actualización"
+        },
+        "app.TWV3cw.action.Z2V0LXBheW1lbnRz.option.Q3JlYXRlZFV0Y0VuZA.short_desc": {
+          "source": "The upper limit of the created date (and time) range",
+          "message": "El límite superior del rango de fecha (y hora) de creación"
+        },
+        "app.TWV3cw.action.Z2V0LXBheW1lbnRz.option.Q3JlYXRlZFV0Y1N0YXJ0.desc": {
+          "source": "The earliest date and time of the updated date; i.e. `CreatedUtc` >= <this date>",
+          "message": "La fecha y hora más temprana de la fecha de actualización; es decir, `CreatedUtc` >= <esta fecha>"
+        },
+        "app.TWV3cw.action.Z2V0LXBheW1lbnRz.option.Q3JlYXRlZFV0Y1N0YXJ0.display_name": {
+          "source": "Created Date Start",
+          "message": "Inicio de fecha de creación"
+        },
+        "app.TWV3cw.action.Z2V0LXBheW1lbnRz.option.Q3JlYXRlZFV0Y1N0YXJ0.short_desc": {
+          "source": "The earliest date and time of the updated date",
+          "message": "La fecha y hora más temprana de la fecha de actualización"
+        },
+        "app.TWV3cw.action.Z2V0LXBheW1lbnRz.option.Q3VycmVuY3k.desc": {
+          "source": "The currency code that amounts should be reported in",
+          "message": "El código de moneda en el que se deben reportar los importes"
+        },
+        "app.TWV3cw.action.Z2V0LXBheW1lbnRz.option.Q3VycmVuY3k.display_name": {
+          "source": "Currency",
+          "message": "Moneda"
+        },
+        "app.TWV3cw.action.Z2V0LXBheW1lbnRz.option.Q3VycmVuY3k.short_desc": {
+          "source": "The currency code that amounts should be reported in",
+          "message": "El código de moneda en el que se deben reportar los importes"
+        },
+        "app.TWV3cw.action.Z2V0LXBheW1lbnRz.option.QWNjb3VudGluZ1N0YXRl.desc": {
+          "source": "The accounting state(s) for the search; `Open`, `Closed`, `Inactive`, or `Canceled`",
+          "message": "El estado o estados contables para la búsqueda; `Open`, `Closed`, `Inactive` o `Canceled`"
+        },
+        "app.TWV3cw.action.Z2V0LXBheW1lbnRz.option.QWNjb3VudGluZ1N0YXRl.display_name": {
+          "source": "Accounting State",
+          "message": "Estado contable"
+        },
+        "app.TWV3cw.action.Z2V0LXBheW1lbnRz.option.QWNjb3VudGluZ1N0YXRl.short_desc": {
+          "source": "The accounting state(s) for the search",
+          "message": "El estado o estados contables para la búsqueda"
+        },
+        "app.TWV3cw.action.Z2V0LXBheW1lbnRz.option.QmlsbElk.desc": {
+          "source": "The bill ID(s) for the search",
+          "message": "El ID o los ID de factura para la búsqueda"
+        },
+        "app.TWV3cw.action.Z2V0LXBheW1lbnRz.option.QmlsbElk.display_name": {
+          "source": "Bill ID",
+          "message": "ID de factura"
+        },
+        "app.TWV3cw.action.Z2V0LXBheW1lbnRz.option.QmlsbElk.short_desc": {
+          "source": "The bill ID(s) for the search",
+          "message": "El ID o los ID de factura para la búsqueda"
+        },
+        "app.TWV3cw.action.Z2V0LXBheW1lbnRz.option.RW50ZXJwcmlzZUlk.desc": {
+          "source": "The enterprise ID(s) for the search",
+          "message": "El ID o los ID de empresa para la búsqueda"
+        },
+        "app.TWV3cw.action.Z2V0LXBheW1lbnRz.option.RW50ZXJwcmlzZUlk.display_name": {
+          "source": "Enterprise ID",
+          "message": "ID de empresa"
+        },
+        "app.TWV3cw.action.Z2V0LXBheW1lbnRz.option.RW50ZXJwcmlzZUlk.short_desc": {
+          "source": "The enterprise ID(s) for the search",
+          "message": "El ID o los ID de empresa para la búsqueda"
+        },
+        "app.TWV3cw.action.Z2V0LXBheW1lbnRz.option.U2V0dGxlbWVudFV0Y0VuZA.desc": {
+          "source": "The upper limit of the settlement date (and time) range; i.e. `SettlementUtc` < <this date>",
+          "message": "El límite superior del rango de fecha (y hora) de liquidación; es decir, `SettlementUtc` < <esta fecha>"
+        },
+        "app.TWV3cw.action.Z2V0LXBheW1lbnRz.option.U2V0dGxlbWVudFV0Y0VuZA.display_name": {
+          "source": "Settlement Date End",
+          "message": "Fin de fecha de liquidación"
+        },
+        "app.TWV3cw.action.Z2V0LXBheW1lbnRz.option.U2V0dGxlbWVudFV0Y0VuZA.short_desc": {
+          "source": "The upper limit of the settlement date (and time) range",
+          "message": "El límite superior del rango de fecha (y hora) de liquidación"
+        },
+        "app.TWV3cw.action.Z2V0LXBheW1lbnRz.option.U2V0dGxlbWVudFV0Y1N0YXJ0.desc": {
+          "source": "The earliest date and time of the settlement date; i.e. `SettlementUtc` >= <this date>",
+          "message": "La fecha y hora más temprana de la fecha de liquidación; es decir, `SettlementUtc` >= <esta fecha>"
+        },
+        "app.TWV3cw.action.Z2V0LXBheW1lbnRz.option.U2V0dGxlbWVudFV0Y1N0YXJ0.display_name": {
+          "source": "Settlement Date Start",
+          "message": "Inicio de fecha de liquidación"
+        },
+        "app.TWV3cw.action.Z2V0LXBheW1lbnRz.option.U2V0dGxlbWVudFV0Y1N0YXJ0.short_desc": {
+          "source": "The earliest date and time of the settlement date",
+          "message": "La fecha y hora más temprana de la fecha de liquidación"
+        },
+        "app.TWV3cw.action.Z2V0LXBheW1lbnRz.option.U3RhdGU.desc": {
+          "source": "The payment state(s) for the search; `Charged`, `Canceled`, `Pending`, `Failed`, or `Verifying`",
+          "message": "El o los estados de pago para la búsqueda; `Charged`, `Canceled`, `Pending`, `Failed` o `Verifying`"
+        },
+        "app.TWV3cw.action.Z2V0LXBheW1lbnRz.option.U3RhdGU.display_name": {
+          "source": "Payment State",
+          "message": "Estado del pago"
+        },
+        "app.TWV3cw.action.Z2V0LXBheW1lbnRz.option.U3RhdGU.short_desc": {
+          "source": "The payment state(s) for the search",
+          "message": "El o los estados de pago para la búsqueda"
+        },
+        "app.TWV3cw.action.Z2V0LXBheW1lbnRz.option.UGF5bWVudElk.desc": {
+          "source": "One or more payment ID(s) for the search",
+          "message": "Uno o más ID de pago para la búsqueda"
+        },
+        "app.TWV3cw.action.Z2V0LXBheW1lbnRz.option.UGF5bWVudElk.display_name": {
+          "source": "Payment ID",
+          "message": "ID de pago"
+        },
+        "app.TWV3cw.action.Z2V0LXBheW1lbnRz.option.UGF5bWVudElk.short_desc": {
+          "source": "One or more payment ID(s) for the search",
+          "message": "Uno o más ID de pago para la búsqueda"
+        },
+        "app.TWV3cw.action.Z2V0LXBheW1lbnRz.option.VHlwZQ.desc": {
+          "source": "The payment type(s) for the search",
+          "message": "El o los tipos de pago para la búsqueda"
+        },
+        "app.TWV3cw.action.Z2V0LXBheW1lbnRz.option.VHlwZQ.display_name": {
+          "source": "Payment Type",
+          "message": "Tipo de pago"
+        },
+        "app.TWV3cw.action.Z2V0LXBheW1lbnRz.option.VHlwZQ.short_desc": {
+          "source": "The payment type(s) for the search",
+          "message": "El o los tipos de pago para la búsqueda"
+        },
+        "app.TWV3cw.action.Z2V0LXBheW1lbnRz.option.VXBkYXRlZFV0Y0VuZA.desc": {
+          "source": "The upper limit of the updated date (and time) range; i.e. `UpdatedUtc` < <this date>",
+          "message": "El límite superior del rango de fecha (y hora) de actualización; es decir, `UpdatedUtc` < <esta fecha>"
+        },
+        "app.TWV3cw.action.Z2V0LXBheW1lbnRz.option.VXBkYXRlZFV0Y0VuZA.display_name": {
+          "source": "Updated Date End",
+          "message": "Fin de fecha de actualización"
+        },
+        "app.TWV3cw.action.Z2V0LXBheW1lbnRz.option.VXBkYXRlZFV0Y0VuZA.short_desc": {
+          "source": "The upper limit of the updated date (and time) range",
+          "message": "El límite superior del rango de fecha (y hora) de actualización"
+        },
+        "app.TWV3cw.action.Z2V0LXBheW1lbnRz.option.VXBkYXRlZFV0Y1N0YXJ0.desc": {
+          "source": "The earliest date and time of the updated date; i.e. `UpdatedUtc` >= <this date>",
+          "message": "La fecha y hora más temprana de la fecha de actualización; es decir, `UpdatedUtc` >= <esta fecha>"
+        },
+        "app.TWV3cw.action.Z2V0LXBheW1lbnRz.option.VXBkYXRlZFV0Y1N0YXJ0.display_name": {
+          "source": "Updated Date Start",
+          "message": "Fecha de inicio de actualización"
+        },
+        "app.TWV3cw.action.Z2V0LXBheW1lbnRz.option.VXBkYXRlZFV0Y1N0YXJ0.short_desc": {
+          "source": "The earliest date and time of the updated date",
+          "message": "La fecha y hora más temprana de la fecha de actualización"
+        },
+        "app.TWV3cw.action.Z2V0LXBheW1lbnRz.option.bGltaXQ.desc": {
+          "source": "Maximum number of records to return",
+          "message": "Número máximo de registros a devolver"
+        },
+        "app.TWV3cw.action.Z2V0LXBheW1lbnRz.option.bGltaXQ.display_name": {
+          "source": "Record Limit",
+          "message": "Límite de registros"
+        },
+        "app.TWV3cw.action.Z2V0LXBheW1lbnRz.option.bGltaXQ.short_desc": {
+          "source": "Maximum number of records to return",
+          "message": "Número máximo de registros a devolver"
+        },
+        "app.TWV3cw.action.Z2V0LXBheW1lbnRz.short_desc": {
+          "source": "Retrieve payment information from Mews",
+          "message": "Recuperar información de pagos de Mews"
+        },
+        "app.TWV3cw.action.bWFrZS1hcGktY2FsbA.desc": {
+          "source": "Make a custom HTTP / REST API call to **Mews Server** using the configured connection's authentication.\n\nSpecify the HTTP method, the URI path (relative to the connection's API base URL), optional query parameters, headers, and request body. The response is returned as a hash containing the status code, response headers, and response body.\n\nUse this action for endpoints that are not yet exposed as first-class actions on this app.",
+          "message": "Realiza una llamada personalizada a la API HTTP / REST a **Mews Server** utilizando la autenticación de la conexión configurada.\n\nEspecifica el método HTTP, la ruta URI (relativa a la URL base de la API de la conexión), parámetros de consulta opcionales, encabezados y el cuerpo de la solicitud. La respuesta se devuelve como un hash que contiene el código de estado, los encabezados de respuesta y el cuerpo de la respuesta.\n\nUtiliza esta acción para endpoints que aún no estén expuestos como acciones de primer nivel en esta aplicación."
+        },
+        "app.TWV3cw.action.bWFrZS1hcGktY2FsbA.display_name": {
+          "source": "Make an API call",
+          "message": "Realizar una llamada a la API"
+        },
+        "app.TWV3cw.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.desc": {
+          "source": "The request body. The effective type depends on `body_type`: JSON/form/YAML expect a hash, XML/text expect a string, multipart expects a file structure, binary expects raw bytes.",
+          "message": "El cuerpo de la solicitud. El tipo efectivo depende de `body_type`: JSON/formulario/YAML esperan un hash, XML/texto esperan una cadena, multipart espera una estructura de archivo y binario espera bytes sin procesar."
+        },
+        "app.TWV3cw.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.display_name": {
+          "source": "Body",
+          "message": "Cuerpo"
+        },
+        "app.TWV3cw.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.short_desc": {
+          "source": "The request body",
+          "message": "El cuerpo de la solicitud"
+        },
+        "app.TWV3cw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.desc": {
+          "source": "Upload a file using `multipart/form-data`. The body must be a @ref DataProvider::FileDataType \"FileDataType\" structure (filename + content + mime_type). The framework builds the multipart envelope and sets the boundary header.",
+          "message": "Cargue un archivo usando `multipart/form-data`. El cuerpo debe ser una estructura @ref DataProvider::FileDataType \"FileDataType\" (filename + content + mime_type). El marco construye el sobre multipart y establece el encabezado boundary."
+        },
+        "app.TWV3cw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.display_name": {
+          "source": "Multipart Form",
+          "message": "Formulario multipart"
+        },
+        "app.TWV3cw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.short_desc": {
+          "source": "Upload a file using multipart/form-data",
+          "message": "Cargar un archivo usando multipart/form-data"
+        },
+        "app.TWV3cw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.desc": {
+          "source": "Pass the body to the REST client unchanged; the client decides serialization based on its configured `data` option and the value type",
+          "message": "Pasa el cuerpo al cliente REST sin cambios; el cliente decide la serialización según su opción `data` configurada y el tipo de valor"
+        },
+        "app.TWV3cw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.display_name": {
+          "source": "Auto",
+          "message": "Auto"
+        },
+        "app.TWV3cw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.short_desc": {
+          "source": "Pass-through; use connection serialization and let the REST client decide",
+          "message": "Paso directo; utiliza la serialización de la conexión y deja que el cliente REST decida"
+        },
+        "app.TWV3cw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.desc": {
+          "source": "Send the body as raw bytes. The body must be a binary value. Sets `Content-Type: application/octet-stream` unless overridden by `hdr`.",
+          "message": "Envía el cuerpo como bytes sin procesar. El cuerpo debe ser un valor binario. Establece `Content-Type: application/octet-stream` a menos que `hdr` lo anule."
+        },
+        "app.TWV3cw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.display_name": {
+          "source": "Raw Binary",
+          "message": "Binario sin procesar"
+        },
+        "app.TWV3cw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.short_desc": {
+          "source": "Send body as raw bytes",
+          "message": "Enviar el cuerpo como bytes sin procesar"
+        },
+        "app.TWV3cw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.desc": {
+          "source": "Serialize a hash of form fields as `application/x-www-form-urlencoded`. The body must be a hash whose values are scalars (strings/numbers/booleans).",
+          "message": "Serializa un hash de campos de formulario como `application/x-www-form-urlencoded`. El cuerpo debe ser un hash cuyos valores sean escalares (cadenas/números/booleanos)."
+        },
+        "app.TWV3cw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.display_name": {
+          "source": "Form (URL-encoded)",
+          "message": "Formulario (codificado en URL)"
+        },
+        "app.TWV3cw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.short_desc": {
+          "source": "Serialize body as application/x-www-form-urlencoded form fields",
+          "message": "Serializar el cuerpo como campos de formulario application/x-www-form-urlencoded"
+        },
+        "app.TWV3cw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.desc": {
+          "source": "Serialize the body as JSON; sets `Content-Type: application/json`. The body should be a hash, list, or scalar value.",
+          "message": "Serializa el cuerpo como JSON; establece `Content-Type: application/json`. El cuerpo debe ser un hash, lista o valor escalar."
+        },
+        "app.TWV3cw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.display_name": {
+          "source": "JSON",
+          "message": "JSON"
+        },
+        "app.TWV3cw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.short_desc": {
+          "source": "Serialize body as JSON",
+          "message": "Serializar el cuerpo como JSON"
+        },
+        "app.TWV3cw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.desc": {
+          "source": "Send the body as plain text. The body must be a string. Sets `Content-Type: text/plain`.",
+          "message": "Envía el cuerpo como texto plano. El cuerpo debe ser una cadena. Establece `Content-Type: text/plain`."
+        },
+        "app.TWV3cw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.display_name": {
+          "source": "Plain Text",
+          "message": "Texto plano"
+        },
+        "app.TWV3cw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.short_desc": {
+          "source": "Send body as text/plain",
+          "message": "Enviar el cuerpo como text/plain"
+        },
+        "app.TWV3cw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.desc": {
+          "source": "Send the body as XML. If the body is a hash it is serialized to XML; if it is a string it is sent verbatim. Sets `Content-Type: application/xml`.",
+          "message": "Envía el cuerpo como XML. Si el cuerpo es un hash, se serializa a XML; si es una cadena, se envía textualmente. Establece `Content-Type: application/xml`."
+        },
+        "app.TWV3cw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.display_name": {
+          "source": "XML",
+          "message": "XML"
+        },
+        "app.TWV3cw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.short_desc": {
+          "source": "Send body as XML",
+          "message": "Enviar el cuerpo como XML"
+        },
+        "app.TWV3cw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.desc": {
+          "source": "Send the body as YAML. If the body is a hash it is serialized to YAML; if it is a string it is sent verbatim. Sets `Content-Type: application/x-yaml`.",
+          "message": "Envía el cuerpo como YAML. Si el cuerpo es un hash, se serializa a YAML; si es una cadena, se envía textualmente. Establece `Content-Type: application/x-yaml`."
+        },
+        "app.TWV3cw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.display_name": {
+          "source": "YAML",
+          "message": "YAML"
+        },
+        "app.TWV3cw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.short_desc": {
+          "source": "Send body as YAML",
+          "message": "Enviar el cuerpo como YAML"
+        },
+        "app.TWV3cw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.desc": {
+          "source": "Selects the body serialization mode and the corresponding `Content-Type` header. Changing this field reshapes the `body` editor - selecting JSON exposes a JSON editor, selecting Multipart Form exposes a file picker, and so on.",
+          "message": "Selecciona el modo de serialización del cuerpo y el encabezado `Content-Type` correspondiente. Cambiar este campo modifica la forma del editor `body`: seleccionar JSON expone un editor JSON, seleccionar Formulario multipart expone un selector de archivos, y así sucesivamente."
+        },
+        "app.TWV3cw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.display_name": {
+          "source": "Body Type",
+          "message": "Tipo de cuerpo"
+        },
+        "app.TWV3cw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.short_desc": {
+          "source": "How the body is serialized and what Content-Type is sent",
+          "message": "Cómo se serializa el cuerpo y qué Content-Type se envía"
+        },
+        "app.TWV3cw.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.desc": {
+          "source": "If `True`, non-2xx HTTP responses return as the normal response hash (with the actual status code) instead of raising `REST-RESPONSE-ERROR`. Useful for handling 4xx/5xx as data - e.g. checking whether a resource exists. Overrides the connection's `error_passthru` setting for this call only.",
+          "message": "Si es `True`, las respuestas HTTP que no sean 2xx se devuelven como el hash de respuesta normal (con el código de estado real) en lugar de generar `REST-RESPONSE-ERROR`. Útil para manejar 4xx/5xx como datos, por ejemplo, para comprobar si un recurso existe. Anula la configuración `error_passthru` de la conexión solo para esta llamada."
+        },
+        "app.TWV3cw.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.display_name": {
+          "source": "Return Errors as Data",
+          "message": "Devolver errores como datos"
+        },
+        "app.TWV3cw.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.short_desc": {
+          "source": "Return non-2xx responses normally instead of throwing",
+          "message": "Devolver respuestas que no sean 2xx normalmente en lugar de lanzar una excepción"
+        },
+        "app.TWV3cw.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.desc": {
+          "source": "Optional list of HTTP status codes treated as success. If set and the response status is not in this list, the action throws `REST-STATUS-ERROR`. When unset, the REST client's default behavior applies (typically: 2xx is success, non-2xx throws).",
+          "message": "Lista opcional de códigos de estado HTTP tratados como éxito. Si se establece y el estado de la respuesta no está en esta lista, la acción lanza `REST-STATUS-ERROR`. Cuando no se establece, se aplica el comportamiento predeterminado del cliente REST (típicamente: 2xx es éxito, no 2xx lanza una excepción)."
+        },
+        "app.TWV3cw.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.display_name": {
+          "source": "Expected Status Codes",
+          "message": "Códigos de estado esperados"
+        },
+        "app.TWV3cw.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.short_desc": {
+          "source": "Response status codes treated as success",
+          "message": "Códigos de estado de respuesta tratados como éxito"
+        },
+        "app.TWV3cw.action.bWFrZS1hcGktY2FsbA.option.aGRy.desc": {
+          "source": "Hash of custom headers added to the request. These override any default headers set by `body_type` (e.g. supplying `Content-Type` here wins over the body-type default).",
+          "message": "Hash de encabezados personalizados agregados a la solicitud. Estos anulan cualquier encabezado predeterminado establecido por `body_type` (por ejemplo, proporcionar `Content-Type` aquí prevalece sobre el valor predeterminado según el tipo de cuerpo)."
+        },
+        "app.TWV3cw.action.bWFrZS1hcGktY2FsbA.option.aGRy.display_name": {
+          "source": "Custom Headers",
+          "message": "Encabezados personalizados"
+        },
+        "app.TWV3cw.action.bWFrZS1hcGktY2FsbA.option.aGRy.short_desc": {
+          "source": "Extra request headers",
+          "message": "Encabezados de solicitud adicionales"
+        },
+        "app.TWV3cw.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.desc": {
+          "source": "If `True`, the response hash includes a `debug` sub-hash containing the request method/URL/headers (with sensitive values redacted), request and response sizes, and round-trip duration. Useful when investigating slow or failing calls. Off by default to keep responses lean.",
+          "message": "Si es `True`, el hash de respuesta incluye un sub-hash `debug` que contiene el método/URL/encabezados de la solicitud (con valores confidenciales redactados), tamaños de solicitud y respuesta, y la duración del viaje de ida y vuelta. Útil para investigar llamadas lentas o con fallos. Desactivado de forma predeterminada para mantener las respuestas ligeras."
+        },
+        "app.TWV3cw.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.display_name": {
+          "source": "Include Debug Info",
+          "message": "Incluir información de depuración"
+        },
+        "app.TWV3cw.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.short_desc": {
+          "source": "Include request/timing/size debug info in the response",
+          "message": "Incluir información de depuración de solicitud/tiempo/tamaño en la respuesta"
+        },
+        "app.TWV3cw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.desc": {
+          "source": "HTTP `OPTIONS`",
+          "message": "HTTP `OPTIONS`"
+        },
+        "app.TWV3cw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.display_name": {
+          "source": "OPTIONS",
+          "message": "OPTIONS"
+        },
+        "app.TWV3cw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.short_desc": {
+          "source": "HTTP OPTIONS",
+          "message": "HTTP OPTIONS"
+        },
+        "app.TWV3cw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.desc": {
+          "source": "HTTP `DELETE`",
+          "message": "HTTP `DELETE`"
+        },
+        "app.TWV3cw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.display_name": {
+          "source": "DELETE",
+          "message": "DELETE"
+        },
+        "app.TWV3cw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.short_desc": {
+          "source": "HTTP DELETE",
+          "message": "HTTP DELETE"
+        },
+        "app.TWV3cw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.desc": {
+          "source": "HTTP `GET`",
+          "message": "HTTP `GET`"
+        },
+        "app.TWV3cw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.display_name": {
+          "source": "GET",
+          "message": "GET"
+        },
+        "app.TWV3cw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.short_desc": {
+          "source": "HTTP GET",
+          "message": "HTTP GET"
+        },
+        "app.TWV3cw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.desc": {
+          "source": "HTTP `HEAD`",
+          "message": "HTTP `HEAD`"
+        },
+        "app.TWV3cw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.display_name": {
+          "source": "HEAD",
+          "message": "HEAD"
+        },
+        "app.TWV3cw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.short_desc": {
+          "source": "HTTP HEAD",
+          "message": "HTTP HEAD"
+        },
+        "app.TWV3cw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.desc": {
+          "source": "HTTP `PATCH`",
+          "message": "HTTP `PATCH`"
+        },
+        "app.TWV3cw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.display_name": {
+          "source": "PATCH",
+          "message": "PATCH"
+        },
+        "app.TWV3cw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.short_desc": {
+          "source": "HTTP PATCH",
+          "message": "HTTP PATCH"
+        },
+        "app.TWV3cw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.desc": {
+          "source": "HTTP `POST`",
+          "message": "HTTP `POST`"
+        },
+        "app.TWV3cw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.display_name": {
+          "source": "POST",
+          "message": "POST"
+        },
+        "app.TWV3cw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.short_desc": {
+          "source": "HTTP POST",
+          "message": "HTTP POST"
+        },
+        "app.TWV3cw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.desc": {
+          "source": "HTTP `PUT`",
+          "message": "HTTP `PUT`"
+        },
+        "app.TWV3cw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.display_name": {
+          "source": "PUT",
+          "message": "PUT"
+        },
+        "app.TWV3cw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.short_desc": {
+          "source": "HTTP PUT",
+          "message": "HTTP PUT"
+        },
+        "app.TWV3cw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.desc": {
+          "source": "HTTP `TRACE`",
+          "message": "HTTP `TRACE`"
+        },
+        "app.TWV3cw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.display_name": {
+          "source": "TRACE",
+          "message": "TRACE"
+        },
+        "app.TWV3cw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.short_desc": {
+          "source": "HTTP TRACE",
+          "message": "HTTP TRACE"
+        },
+        "app.TWV3cw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "El método HTTP que se utilizará para la solicitud"
+        },
+        "app.TWV3cw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.display_name": {
+          "source": "HTTP Method",
+          "message": "Método HTTP"
+        },
+        "app.TWV3cw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.short_desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "El método HTTP que se utilizará para la solicitud"
+        },
+        "app.TWV3cw.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain `{name}` placeholders that are replaced from `path_vars`. Example: `/users/{id}/comments`.",
+          "message": "La ruta URI relativa a la URL base de la API de la conexión. Puede contener marcadores de posición `{name}` que se reemplazan desde `path_vars`. Ejemplo: `/users/{id}/comments`."
+        },
+        "app.TWV3cw.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.display_name": {
+          "source": "URI Path",
+          "message": "Ruta URI"
+        },
+        "app.TWV3cw.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.short_desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain '{name}' placeholders that are replaced from 'path_vars'. Example: '/users/{id}/comments'",
+          "message": "La ruta URI relativa a la URL base de la API de la conexión. Puede contener marcadores de posición '{name}' que se reemplazan desde 'path_vars'. Ejemplo: '/users/{id}/comments'"
+        },
+        "app.TWV3cw.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.desc": {
+          "source": "Hash of values substituted into `{name}` placeholders in the URI path. Example: with `path = /users/{id}` and `path_vars = {id: 123}` the framework sends `/users/123`. Values are URL-encoded.",
+          "message": "Hash de valores sustituidos en los marcadores de posición `{name}` en la ruta URI. Ejemplo: con `path = /users/{id}` y `path_vars = {id: 123}`, el framework envía `/users/123`. Los valores están codificados en URL."
+        },
+        "app.TWV3cw.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.display_name": {
+          "source": "Path Variables",
+          "message": "Variables de ruta"
+        },
+        "app.TWV3cw.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.short_desc": {
+          "source": "Values for {name} placeholders in path",
+          "message": "Valores para los marcadores de posición {name} en la ruta"
+        },
+        "app.TWV3cw.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.desc": {
+          "source": "Hash of query string parameters to append to the URI path. Values are URL-encoded; list values are joined with `,`.",
+          "message": "Hash de parámetros de cadena de consulta para adjuntar a la ruta URI. Los valores están codificados en URL; los valores de lista se unen con `,`."
+        },
+        "app.TWV3cw.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.display_name": {
+          "source": "Query Arguments",
+          "message": "Argumentos de consulta"
+        },
+        "app.TWV3cw.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.short_desc": {
+          "source": "Query string parameters",
+          "message": "Parámetros de cadena de consulta"
+        },
+        "app.TWV3cw.action.bWFrZS1hcGktY2FsbA.short_desc": {
+          "source": "Make a custom API call to Mews Server",
+          "message": "Realizar una llamada personalizada a la API a Mews Server"
+        },
+        "app.TWV3cw.desc": {
+          "source": "Mews server",
+          "message": "Servidor Mews"
+        },
+        "app.TWV3cw.display_name": {
+          "source": "Mews Server",
+          "message": "Mews Server"
+        },
+        "app.TWV3cw.short_desc": {
+          "source": "Mews server",
+          "message": "Servidor Mews"
+        }
+      }
+    }
+  }
+}

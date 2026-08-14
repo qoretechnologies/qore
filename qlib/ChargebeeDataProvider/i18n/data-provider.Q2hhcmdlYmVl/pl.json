@@ -1,0 +1,1337 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "pl": {
+      "messages": {
+        "app.Q2hhcmdlYmVl.action.Y29sbGVjdC1pbnZvaWNlLXBheW1lbnQ.desc": {
+          "source": "Collect payment for an outstanding invoice using the customer's payment method on file.",
+          "message": "Pobierz płatność za nieopłaconą fakturę przy użyciu zapisanej metody płatności klienta."
+        },
+        "app.Q2hhcmdlYmVl.action.Y29sbGVjdC1pbnZvaWNlLXBheW1lbnQ.display_name": {
+          "source": "Collect Invoice Payment",
+          "message": "Pobierz płatność za fakturę"
+        },
+        "app.Q2hhcmdlYmVl.action.Y29sbGVjdC1pbnZvaWNlLXBheW1lbnQ.option.YW1vdW50.display_name": {
+          "source": "Amount",
+          "message": "Wartość"
+        },
+        "app.Q2hhcmdlYmVl.action.Y29sbGVjdC1pbnZvaWNlLXBheW1lbnQ.option.YW1vdW50.short_desc": {
+          "source": "Payment amount in cents",
+          "message": "Kwota płatności w centach"
+        },
+        "app.Q2hhcmdlYmVl.action.Y29sbGVjdC1pbnZvaWNlLXBheW1lbnQ.option.aWQ.display_name": {
+          "source": "Invoice ID",
+          "message": "Identyfikator faktury"
+        },
+        "app.Q2hhcmdlYmVl.action.Y29sbGVjdC1pbnZvaWNlLXBheW1lbnQ.option.aWQ.short_desc": {
+          "source": "The invoice to collect payment for",
+          "message": "Faktura, za którą ma zostać pobrana płatność"
+        },
+        "app.Q2hhcmdlYmVl.action.Y29sbGVjdC1pbnZvaWNlLXBheW1lbnQ.short_desc": {
+          "source": "Collect payment for an invoice",
+          "message": "Pobierz płatność za fakturę"
+        },
+        "app.Q2hhcmdlYmVl.action.Y3JlYXRlLWN1c3RvbWVy.desc": {
+          "source": "Create a new customer in Chargebee with contact and billing information.",
+          "message": "Utwórz nowego klienta w Chargebee z danymi kontaktowymi i rozliczeniowymi."
+        },
+        "app.Q2hhcmdlYmVl.action.Y3JlYXRlLWN1c3RvbWVy.display_name": {
+          "source": "Create Customer",
+          "message": "Utwórz klienta"
+        },
+        "app.Q2hhcmdlYmVl.action.Y3JlYXRlLWN1c3RvbWVy.option.ZW1haWw.display_name": {
+          "source": "Email",
+          "message": "E-mail"
+        },
+        "app.Q2hhcmdlYmVl.action.Y3JlYXRlLWN1c3RvbWVy.option.ZW1haWw.short_desc": {
+          "source": "Customer email address",
+          "message": "Adres e-mail klienta"
+        },
+        "app.Q2hhcmdlYmVl.action.Y3JlYXRlLWN1c3RvbWVy.option.Zmlyc3RfbmFtZQ.display_name": {
+          "source": "First Name",
+          "message": "Imię"
+        },
+        "app.Q2hhcmdlYmVl.action.Y3JlYXRlLWN1c3RvbWVy.option.Zmlyc3RfbmFtZQ.short_desc": {
+          "source": "Customer first name",
+          "message": "Imię klienta"
+        },
+        "app.Q2hhcmdlYmVl.action.Y3JlYXRlLWN1c3RvbWVy.option.bGFzdF9uYW1l.display_name": {
+          "source": "Last Name",
+          "message": "Nazwisko"
+        },
+        "app.Q2hhcmdlYmVl.action.Y3JlYXRlLWN1c3RvbWVy.option.bGFzdF9uYW1l.short_desc": {
+          "source": "Customer last name",
+          "message": "Nazwisko klienta"
+        },
+        "app.Q2hhcmdlYmVl.action.Y3JlYXRlLWN1c3RvbWVy.short_desc": {
+          "source": "Create a new customer",
+          "message": "Utwórz nowego klienta"
+        },
+        "app.Q2hhcmdlYmVl.action.Y3JlYXRlLWNvdXBvbg.desc": {
+          "source": "Create a new coupon in Chargebee for discounts on subscriptions or invoices.",
+          "message": "Utwórz nowy kupon w Chargebee dla rabatów na subskrypcje lub faktury."
+        },
+        "app.Q2hhcmdlYmVl.action.Y3JlYXRlLWNvdXBvbg.display_name": {
+          "source": "Create Coupon",
+          "message": "Utwórz kupon"
+        },
+        "app.Q2hhcmdlYmVl.action.Y3JlYXRlLWNvdXBvbg.option.ZGlzY291bnRfdHlwZQ.allowed-value.c3RyaW5nOm9mZmVyX3F1YW50aXR5.desc": {
+          "source": "Offer Quantity",
+          "message": "Ilość w ofercie"
+        },
+        "app.Q2hhcmdlYmVl.action.Y3JlYXRlLWNvdXBvbg.option.ZGlzY291bnRfdHlwZQ.allowed-value.c3RyaW5nOmZpeGVkX2Ftb3VudA.desc": {
+          "source": "Fixed Amount",
+          "message": "Stała kwota"
+        },
+        "app.Q2hhcmdlYmVl.action.Y3JlYXRlLWNvdXBvbg.option.ZGlzY291bnRfdHlwZQ.allowed-value.c3RyaW5nOnBlcmNlbnRhZ2U.desc": {
+          "source": "Percentage",
+          "message": "Procent"
+        },
+        "app.Q2hhcmdlYmVl.action.Y3JlYXRlLWNvdXBvbg.option.ZGlzY291bnRfdHlwZQ.display_name": {
+          "source": "Discount Type",
+          "message": "Typ rabatu"
+        },
+        "app.Q2hhcmdlYmVl.action.Y3JlYXRlLWNvdXBvbg.option.ZGlzY291bnRfdHlwZQ.short_desc": {
+          "source": "Type of discount",
+          "message": "Typ rabatu"
+        },
+        "app.Q2hhcmdlYmVl.action.Y3JlYXRlLWNvdXBvbg.option.ZHVyYXRpb25fdHlwZQ.allowed-value.c3RyaW5nOm9uZV90aW1l.desc": {
+          "source": "One Time",
+          "message": "Jednorazowo"
+        },
+        "app.Q2hhcmdlYmVl.action.Y3JlYXRlLWNvdXBvbg.option.ZHVyYXRpb25fdHlwZQ.allowed-value.c3RyaW5nOmZvcmV2ZXI.desc": {
+          "source": "Forever",
+          "message": "Na stałe"
+        },
+        "app.Q2hhcmdlYmVl.action.Y3JlYXRlLWNvdXBvbg.option.ZHVyYXRpb25fdHlwZQ.allowed-value.c3RyaW5nOmxpbWl0ZWRfcGVyaW9k.desc": {
+          "source": "Limited Period",
+          "message": "Ograniczony czas"
+        },
+        "app.Q2hhcmdlYmVl.action.Y3JlYXRlLWNvdXBvbg.option.ZHVyYXRpb25fdHlwZQ.display_name": {
+          "source": "Duration Type",
+          "message": "Typ czasu trwania"
+        },
+        "app.Q2hhcmdlYmVl.action.Y3JlYXRlLWNvdXBvbg.option.ZHVyYXRpb25fdHlwZQ.short_desc": {
+          "source": "How long the discount lasts",
+          "message": "Jak długo obowiązuje rabat"
+        },
+        "app.Q2hhcmdlYmVl.action.Y3JlYXRlLWNvdXBvbg.option.aWQ.display_name": {
+          "source": "Coupon ID",
+          "message": "Identyfikator kuponu"
+        },
+        "app.Q2hhcmdlYmVl.action.Y3JlYXRlLWNvdXBvbg.option.aWQ.short_desc": {
+          "source": "Unique coupon code/identifier",
+          "message": "Unikalny kod/identyfikator kuponu"
+        },
+        "app.Q2hhcmdlYmVl.action.Y3JlYXRlLWNvdXBvbg.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "Nazwa"
+        },
+        "app.Q2hhcmdlYmVl.action.Y3JlYXRlLWNvdXBvbg.option.bmFtZQ.short_desc": {
+          "source": "Coupon display name",
+          "message": "Nazwa wyświetlana kuponu"
+        },
+        "app.Q2hhcmdlYmVl.action.Y3JlYXRlLWNvdXBvbg.short_desc": {
+          "source": "Create a new coupon",
+          "message": "Utwórz nowy kupon"
+        },
+        "app.Q2hhcmdlYmVl.action.Y3JlYXRlLWludm9pY2U.desc": {
+          "source": "Create a new invoice in Chargebee for a customer.",
+          "message": "Utwórz nową fakturę w Chargebee dla klienta."
+        },
+        "app.Q2hhcmdlYmVl.action.Y3JlYXRlLWludm9pY2U.display_name": {
+          "source": "Create Invoice",
+          "message": "Utwórz fakturę"
+        },
+        "app.Q2hhcmdlYmVl.action.Y3JlYXRlLWludm9pY2U.option.Y3VzdG9tZXJfaWQ.display_name": {
+          "source": "Customer",
+          "message": "Klient"
+        },
+        "app.Q2hhcmdlYmVl.action.Y3JlYXRlLWludm9pY2U.option.Y3VzdG9tZXJfaWQ.short_desc": {
+          "source": "The customer for the invoice",
+          "message": "Klient dla faktury"
+        },
+        "app.Q2hhcmdlYmVl.action.Y3JlYXRlLWludm9pY2U.short_desc": {
+          "source": "Create a new invoice",
+          "message": "Utwórz nową fakturę"
+        },
+        "app.Q2hhcmdlYmVl.action.Y3JlYXRlLXN1YnNjcmlwdGlvbg.desc": {
+          "source": "Create a new subscription in Chargebee for a customer with a specified plan.",
+          "message": "Utwórz nową subskrypcję w Chargebee dla klienta z określonym planem."
+        },
+        "app.Q2hhcmdlYmVl.action.Y3JlYXRlLXN1YnNjcmlwdGlvbg.display_name": {
+          "source": "Create Subscription",
+          "message": "Utwórz subskrypcję"
+        },
+        "app.Q2hhcmdlYmVl.action.Y3JlYXRlLXN1YnNjcmlwdGlvbg.option.Y3VzdG9tZXJfaWQ.display_name": {
+          "source": "Customer",
+          "message": "Klient"
+        },
+        "app.Q2hhcmdlYmVl.action.Y3JlYXRlLXN1YnNjcmlwdGlvbg.option.Y3VzdG9tZXJfaWQ.short_desc": {
+          "source": "The customer for the subscription",
+          "message": "Klient dla subskrypcji"
+        },
+        "app.Q2hhcmdlYmVl.action.Y3JlYXRlLXN1YnNjcmlwdGlvbg.short_desc": {
+          "source": "Create a new subscription",
+          "message": "Utwórz nową subskrypcję"
+        },
+        "app.Q2hhcmdlYmVl.action.YWRkLXByb21vdGlvbmFsLWNyZWRpdA.desc": {
+          "source": "Add promotional credits to a customer's account in Chargebee.",
+          "message": "Dodaj środki promocyjne do konta klienta w Chargebee."
+        },
+        "app.Q2hhcmdlYmVl.action.YWRkLXByb21vdGlvbmFsLWNyZWRpdA.display_name": {
+          "source": "Add Promotional Credit",
+          "message": "Dodaj środki promocyjne"
+        },
+        "app.Q2hhcmdlYmVl.action.YWRkLXByb21vdGlvbmFsLWNyZWRpdA.option.Y3VycmVuY3lfY29kZQ.display_name": {
+          "source": "Currency Code",
+          "message": "Kod waluty"
+        },
+        "app.Q2hhcmdlYmVl.action.YWRkLXByb21vdGlvbmFsLWNyZWRpdA.option.Y3VycmVuY3lfY29kZQ.short_desc": {
+          "source": "Currency for the credits",
+          "message": "Waluta środków"
+        },
+        "app.Q2hhcmdlYmVl.action.YWRkLXByb21vdGlvbmFsLWNyZWRpdA.option.Y3VzdG9tZXJfaWQ.display_name": {
+          "source": "Customer",
+          "message": "Klient"
+        },
+        "app.Q2hhcmdlYmVl.action.YWRkLXByb21vdGlvbmFsLWNyZWRpdA.option.Y3VzdG9tZXJfaWQ.short_desc": {
+          "source": "The customer to add credits to",
+          "message": "Klient, do którego mają zostać dodane środki"
+        },
+        "app.Q2hhcmdlYmVl.action.YWRkLXByb21vdGlvbmFsLWNyZWRpdA.option.YW1vdW50.display_name": {
+          "source": "Amount",
+          "message": "Wartość"
+        },
+        "app.Q2hhcmdlYmVl.action.YWRkLXByb21vdGlvbmFsLWNyZWRpdA.option.YW1vdW50.short_desc": {
+          "source": "Credit amount in cents",
+          "message": "Kwota środków w centach"
+        },
+        "app.Q2hhcmdlYmVl.action.YWRkLXByb21vdGlvbmFsLWNyZWRpdA.short_desc": {
+          "source": "Add promotional credits to a customer",
+          "message": "Dodaj środki promocyjne dla klienta"
+        },
+        "app.Q2hhcmdlYmVl.action.Z2V0LWN1c3RvbWVy.desc": {
+          "source": "Retrieve detailed information about a specific Chargebee customer.",
+          "message": "Pobierz szczegółowe informacje o określonym kliencie Chargebee."
+        },
+        "app.Q2hhcmdlYmVl.action.Z2V0LWN1c3RvbWVy.display_name": {
+          "source": "Get Customer",
+          "message": "Pobierz klienta"
+        },
+        "app.Q2hhcmdlYmVl.action.Z2V0LWN1c3RvbWVy.option.aWQ.display_name": {
+          "source": "Customer ID",
+          "message": "Identyfikator klienta"
+        },
+        "app.Q2hhcmdlYmVl.action.Z2V0LWN1c3RvbWVy.option.aWQ.short_desc": {
+          "source": "The customer ID",
+          "message": "Identyfikator klienta"
+        },
+        "app.Q2hhcmdlYmVl.action.Z2V0LWN1c3RvbWVy.short_desc": {
+          "source": "Get a single customer by ID",
+          "message": "Pobierz pojedynczego klienta według identyfikatora"
+        },
+        "app.Q2hhcmdlYmVl.action.Z2V0LWNvdXBvbg.desc": {
+          "source": "Retrieve detailed information about a specific Chargebee coupon.",
+          "message": "Pobierz szczegółowe informacje o określonym kuponie Chargebee."
+        },
+        "app.Q2hhcmdlYmVl.action.Z2V0LWNvdXBvbg.display_name": {
+          "source": "Get Coupon",
+          "message": "Pobierz kupon"
+        },
+        "app.Q2hhcmdlYmVl.action.Z2V0LWNvdXBvbg.option.aWQ.display_name": {
+          "source": "Coupon ID",
+          "message": "Identyfikator kuponu"
+        },
+        "app.Q2hhcmdlYmVl.action.Z2V0LWNvdXBvbg.option.aWQ.short_desc": {
+          "source": "The coupon ID",
+          "message": "Identyfikator kuponu"
+        },
+        "app.Q2hhcmdlYmVl.action.Z2V0LWNvdXBvbg.short_desc": {
+          "source": "Get a single coupon by ID",
+          "message": "Pobierz pojedynczy kupon według identyfikatora"
+        },
+        "app.Q2hhcmdlYmVl.action.Z2V0LWludm9pY2U.desc": {
+          "source": "Retrieve detailed information about a specific Chargebee invoice.",
+          "message": "Pobierz szczegółowe informacje o określonej fakturze Chargebee."
+        },
+        "app.Q2hhcmdlYmVl.action.Z2V0LWludm9pY2U.display_name": {
+          "source": "Get Invoice",
+          "message": "Pobierz fakturę"
+        },
+        "app.Q2hhcmdlYmVl.action.Z2V0LWludm9pY2U.option.aWQ.display_name": {
+          "source": "Invoice ID",
+          "message": "Identyfikator faktury"
+        },
+        "app.Q2hhcmdlYmVl.action.Z2V0LWludm9pY2U.option.aWQ.short_desc": {
+          "source": "The invoice ID",
+          "message": "Identyfikator faktury"
+        },
+        "app.Q2hhcmdlYmVl.action.Z2V0LWludm9pY2U.short_desc": {
+          "source": "Get a single invoice by ID",
+          "message": "Pobierz pojedynczą fakturę według identyfikatora"
+        },
+        "app.Q2hhcmdlYmVl.action.Z2V0LWludm9pY2UtbGluaw.desc": {
+          "source": "Retrieve a download link for a Chargebee invoice PDF.",
+          "message": "Pobierz link do pobrania pliku PDF faktury Chargebee."
+        },
+        "app.Q2hhcmdlYmVl.action.Z2V0LWludm9pY2UtbGluaw.display_name": {
+          "source": "Get Invoice Link",
+          "message": "Pobierz link do faktury"
+        },
+        "app.Q2hhcmdlYmVl.action.Z2V0LWludm9pY2UtbGluaw.option.aWQ.display_name": {
+          "source": "Invoice ID",
+          "message": "Identyfikator faktury"
+        },
+        "app.Q2hhcmdlYmVl.action.Z2V0LWludm9pY2UtbGluaw.option.aWQ.short_desc": {
+          "source": "The invoice to get the PDF link for",
+          "message": "Faktura, dla której ma zostać pobrany link do pliku PDF"
+        },
+        "app.Q2hhcmdlYmVl.action.Z2V0LWludm9pY2UtbGluaw.short_desc": {
+          "source": "Get a download link for an invoice",
+          "message": "Pobierz link do pobrania faktury"
+        },
+        "app.Q2hhcmdlYmVl.action.Z2V0LXByb21vdGlvbmFsLWNyZWRpdA.desc": {
+          "source": "Retrieve detailed information about a specific Chargebee promotional credit.",
+          "message": "Pobierz szczegółowe informacje o określonym kredycie promocyjnym Chargebee."
+        },
+        "app.Q2hhcmdlYmVl.action.Z2V0LXByb21vdGlvbmFsLWNyZWRpdA.display_name": {
+          "source": "Get Promotional Credit",
+          "message": "Pobierz kredyt promocyjny"
+        },
+        "app.Q2hhcmdlYmVl.action.Z2V0LXByb21vdGlvbmFsLWNyZWRpdA.option.aWQ.display_name": {
+          "source": "Promotional Credit ID",
+          "message": "ID kredytu promocyjnego"
+        },
+        "app.Q2hhcmdlYmVl.action.Z2V0LXByb21vdGlvbmFsLWNyZWRpdA.option.aWQ.short_desc": {
+          "source": "The promotional credit ID",
+          "message": "Identyfikator kredytu promocyjnego"
+        },
+        "app.Q2hhcmdlYmVl.action.Z2V0LXByb21vdGlvbmFsLWNyZWRpdA.short_desc": {
+          "source": "Get a single promotional credit by ID",
+          "message": "Pobierz pojedynczy kredyt promocyjny po ID"
+        },
+        "app.Q2hhcmdlYmVl.action.Z2V0LXN1YnNjcmlwdGlvbg.desc": {
+          "source": "Retrieve detailed information about a specific Chargebee subscription.",
+          "message": "Pobierz szczegółowe informacje o określonej subskrypcji Chargebee."
+        },
+        "app.Q2hhcmdlYmVl.action.Z2V0LXN1YnNjcmlwdGlvbg.display_name": {
+          "source": "Get Subscription",
+          "message": "Pobierz subskrypcję"
+        },
+        "app.Q2hhcmdlYmVl.action.Z2V0LXN1YnNjcmlwdGlvbg.option.aWQ.display_name": {
+          "source": "Subscription ID",
+          "message": "ID subskrypcji"
+        },
+        "app.Q2hhcmdlYmVl.action.Z2V0LXN1YnNjcmlwdGlvbg.option.aWQ.short_desc": {
+          "source": "The subscription ID",
+          "message": "Identyfikator subskrypcji"
+        },
+        "app.Q2hhcmdlYmVl.action.Z2V0LXN1YnNjcmlwdGlvbg.short_desc": {
+          "source": "Get a single subscription by ID",
+          "message": "Pobierz pojedynczą subskrypcję po ID"
+        },
+        "app.Q2hhcmdlYmVl.action.Z2V0LXRyYW5zYWN0aW9u.desc": {
+          "source": "Retrieve detailed information about a specific Chargebee transaction.",
+          "message": "Pobierz szczegółowe informacje o określonej transakcji Chargebee."
+        },
+        "app.Q2hhcmdlYmVl.action.Z2V0LXRyYW5zYWN0aW9u.display_name": {
+          "source": "Get Transaction",
+          "message": "Pobierz transakcję"
+        },
+        "app.Q2hhcmdlYmVl.action.Z2V0LXRyYW5zYWN0aW9u.option.aWQ.display_name": {
+          "source": "Transaction ID",
+          "message": "Identyfikator transakcji"
+        },
+        "app.Q2hhcmdlYmVl.action.Z2V0LXRyYW5zYWN0aW9u.option.aWQ.short_desc": {
+          "source": "The transaction to retrieve",
+          "message": "Transakcja do pobrania"
+        },
+        "app.Q2hhcmdlYmVl.action.Z2V0LXRyYW5zYWN0aW9u.short_desc": {
+          "source": "Get a transaction by ID",
+          "message": "Pobierz transakcję po ID"
+        },
+        "app.Q2hhcmdlYmVl.action.ZGVkdWN0LXByb21vdGlvbmFsLWNyZWRpdA.desc": {
+          "source": "Deduct promotional credits from a customer's account in Chargebee.",
+          "message": "Odejmij kredyty promocyjne z konta klienta w Chargebee."
+        },
+        "app.Q2hhcmdlYmVl.action.ZGVkdWN0LXByb21vdGlvbmFsLWNyZWRpdA.display_name": {
+          "source": "Deduct Promotional Credit",
+          "message": "Odejmij kredyt promocyjny"
+        },
+        "app.Q2hhcmdlYmVl.action.ZGVkdWN0LXByb21vdGlvbmFsLWNyZWRpdA.option.Y3VycmVuY3lfY29kZQ.display_name": {
+          "source": "Currency Code",
+          "message": "Kod waluty"
+        },
+        "app.Q2hhcmdlYmVl.action.ZGVkdWN0LXByb21vdGlvbmFsLWNyZWRpdA.option.Y3VycmVuY3lfY29kZQ.short_desc": {
+          "source": "Currency for the credits",
+          "message": "Waluta środków"
+        },
+        "app.Q2hhcmdlYmVl.action.ZGVkdWN0LXByb21vdGlvbmFsLWNyZWRpdA.option.Y3VzdG9tZXJfaWQ.display_name": {
+          "source": "Customer",
+          "message": "Klient"
+        },
+        "app.Q2hhcmdlYmVl.action.ZGVkdWN0LXByb21vdGlvbmFsLWNyZWRpdA.option.Y3VzdG9tZXJfaWQ.short_desc": {
+          "source": "The customer to deduct credits from",
+          "message": "Klient, od którego mają zostać odjęte kredyty"
+        },
+        "app.Q2hhcmdlYmVl.action.ZGVkdWN0LXByb21vdGlvbmFsLWNyZWRpdA.option.YW1vdW50.display_name": {
+          "source": "Amount",
+          "message": "Wartość"
+        },
+        "app.Q2hhcmdlYmVl.action.ZGVkdWN0LXByb21vdGlvbmFsLWNyZWRpdA.option.YW1vdW50.short_desc": {
+          "source": "Credit amount in cents",
+          "message": "Kwota środków w centach"
+        },
+        "app.Q2hhcmdlYmVl.action.ZGVkdWN0LXByb21vdGlvbmFsLWNyZWRpdA.short_desc": {
+          "source": "Deduct promotional credits from a customer",
+          "message": "Odejmij kredyty promocyjne od klienta"
+        },
+        "app.Q2hhcmdlYmVl.action.ZGVsZXRlLWN1c3RvbWVy.desc": {
+          "source": "Delete a customer from Chargebee. This action cannot be undone.",
+          "message": "Usuń klienta z Chargebee. Tej operacji nie można cofnąć."
+        },
+        "app.Q2hhcmdlYmVl.action.ZGVsZXRlLWN1c3RvbWVy.display_name": {
+          "source": "Delete Customer",
+          "message": "Usuń klienta"
+        },
+        "app.Q2hhcmdlYmVl.action.ZGVsZXRlLWN1c3RvbWVy.option.aWQ.display_name": {
+          "source": "Customer ID",
+          "message": "Identyfikator klienta"
+        },
+        "app.Q2hhcmdlYmVl.action.ZGVsZXRlLWN1c3RvbWVy.option.aWQ.short_desc": {
+          "source": "The customer to delete",
+          "message": "Klient do usunięcia"
+        },
+        "app.Q2hhcmdlYmVl.action.ZGVsZXRlLWN1c3RvbWVy.short_desc": {
+          "source": "Delete a customer",
+          "message": "Usuń klienta"
+        },
+        "app.Q2hhcmdlYmVl.action.ZGVsZXRlLWNvdXBvbg.desc": {
+          "source": "Delete a coupon from Chargebee. This action cannot be undone.",
+          "message": "Usuń kupon z Chargebee. Tej operacji nie można cofnąć."
+        },
+        "app.Q2hhcmdlYmVl.action.ZGVsZXRlLWNvdXBvbg.display_name": {
+          "source": "Delete Coupon",
+          "message": "Usuń kupon"
+        },
+        "app.Q2hhcmdlYmVl.action.ZGVsZXRlLWNvdXBvbg.option.aWQ.display_name": {
+          "source": "Coupon ID",
+          "message": "Identyfikator kuponu"
+        },
+        "app.Q2hhcmdlYmVl.action.ZGVsZXRlLWNvdXBvbg.option.aWQ.short_desc": {
+          "source": "The coupon to delete",
+          "message": "Kupon do usunięcia"
+        },
+        "app.Q2hhcmdlYmVl.action.ZGVsZXRlLWNvdXBvbg.short_desc": {
+          "source": "Delete a coupon",
+          "message": "Usuń kupon"
+        },
+        "app.Q2hhcmdlYmVl.action.ZGVsZXRlLWludm9pY2U.desc": {
+          "source": "Delete an invoice from Chargebee. This action cannot be undone.",
+          "message": "Usuń fakturę z Chargebee. Tej operacji nie można cofnąć."
+        },
+        "app.Q2hhcmdlYmVl.action.ZGVsZXRlLWludm9pY2U.display_name": {
+          "source": "Delete Invoice",
+          "message": "Usuń fakturę"
+        },
+        "app.Q2hhcmdlYmVl.action.ZGVsZXRlLWludm9pY2U.option.aWQ.display_name": {
+          "source": "Invoice ID",
+          "message": "Identyfikator faktury"
+        },
+        "app.Q2hhcmdlYmVl.action.ZGVsZXRlLWludm9pY2U.option.aWQ.short_desc": {
+          "source": "The invoice to delete",
+          "message": "Faktura do usunięcia"
+        },
+        "app.Q2hhcmdlYmVl.action.ZGVsZXRlLWludm9pY2U.short_desc": {
+          "source": "Delete an invoice",
+          "message": "Usuń fakturę"
+        },
+        "app.Q2hhcmdlYmVl.action.ZGVsZXRlLXN1YnNjcmlwdGlvbg.desc": {
+          "source": "Delete a subscription from Chargebee. This action cannot be undone.",
+          "message": "Usuń subskrypcję z Chargebee. Tej operacji nie można cofnąć."
+        },
+        "app.Q2hhcmdlYmVl.action.ZGVsZXRlLXN1YnNjcmlwdGlvbg.display_name": {
+          "source": "Delete Subscription",
+          "message": "Usuń subskrypcję"
+        },
+        "app.Q2hhcmdlYmVl.action.ZGVsZXRlLXN1YnNjcmlwdGlvbg.option.aWQ.display_name": {
+          "source": "Subscription ID",
+          "message": "ID subskrypcji"
+        },
+        "app.Q2hhcmdlYmVl.action.ZGVsZXRlLXN1YnNjcmlwdGlvbg.option.aWQ.short_desc": {
+          "source": "The subscription to delete",
+          "message": "Subskrypcja do usunięcia"
+        },
+        "app.Q2hhcmdlYmVl.action.ZGVsZXRlLXN1YnNjcmlwdGlvbg.short_desc": {
+          "source": "Delete a subscription",
+          "message": "Usuń subskrypcję"
+        },
+        "app.Q2hhcmdlYmVl.action.ZmluZC1jb3Vwb25z.desc": {
+          "source": "Retrieve a list of coupons from Chargebee.",
+          "message": "Pobierz listę kuponów z Chargebee."
+        },
+        "app.Q2hhcmdlYmVl.action.ZmluZC1jb3Vwb25z.display_name": {
+          "source": "Find Coupons",
+          "message": "Znajdź kupony"
+        },
+        "app.Q2hhcmdlYmVl.action.ZmluZC1jb3Vwb25z.option.ZGlzY291bnRfdHlwZQ.allowed-value.c3RyaW5nOm9mZmVyX3F1YW50aXR5.desc": {
+          "source": "Offer Quantity",
+          "message": "Ilość w ofercie"
+        },
+        "app.Q2hhcmdlYmVl.action.ZmluZC1jb3Vwb25z.option.ZGlzY291bnRfdHlwZQ.allowed-value.c3RyaW5nOmZpeGVkX2Ftb3VudA.desc": {
+          "source": "Fixed Amount",
+          "message": "Stała kwota"
+        },
+        "app.Q2hhcmdlYmVl.action.ZmluZC1jb3Vwb25z.option.ZGlzY291bnRfdHlwZQ.allowed-value.c3RyaW5nOnBlcmNlbnRhZ2U.desc": {
+          "source": "Percentage",
+          "message": "Procent"
+        },
+        "app.Q2hhcmdlYmVl.action.ZmluZC1jb3Vwb25z.option.ZGlzY291bnRfdHlwZQ.display_name": {
+          "source": "Discount Type",
+          "message": "Typ rabatu"
+        },
+        "app.Q2hhcmdlYmVl.action.ZmluZC1jb3Vwb25z.option.ZGlzY291bnRfdHlwZQ.short_desc": {
+          "source": "Filter by discount type",
+          "message": "Filtruj według typu zniżki"
+        },
+        "app.Q2hhcmdlYmVl.action.ZmluZC1jb3Vwb25z.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "Nazwa"
+        },
+        "app.Q2hhcmdlYmVl.action.ZmluZC1jb3Vwb25z.option.bmFtZQ.short_desc": {
+          "source": "Filter by coupon name",
+          "message": "Filtruj według nazwy kuponu"
+        },
+        "app.Q2hhcmdlYmVl.action.ZmluZC1jb3Vwb25z.option.c3RhdHVz.allowed-value.c3RyaW5nOmFjdGl2ZQ.desc": {
+          "source": "Active",
+          "message": "Aktywny"
+        },
+        "app.Q2hhcmdlYmVl.action.ZmluZC1jb3Vwb25z.option.c3RhdHVz.allowed-value.c3RyaW5nOmFyY2hpdmVk.desc": {
+          "source": "Archived",
+          "message": "Zarchiwizowane"
+        },
+        "app.Q2hhcmdlYmVl.action.ZmluZC1jb3Vwb25z.option.c3RhdHVz.allowed-value.c3RyaW5nOmRlbGV0ZWQ.desc": {
+          "source": "Deleted",
+          "message": "Usunięte"
+        },
+        "app.Q2hhcmdlYmVl.action.ZmluZC1jb3Vwb25z.option.c3RhdHVz.allowed-value.c3RyaW5nOmV4cGlyZWQ.desc": {
+          "source": "Expired",
+          "message": "Wygasłe"
+        },
+        "app.Q2hhcmdlYmVl.action.ZmluZC1jb3Vwb25z.option.c3RhdHVz.allowed-value.c3RyaW5nOmZ1dHVyZQ.desc": {
+          "source": "Future",
+          "message": "Przyszły"
+        },
+        "app.Q2hhcmdlYmVl.action.ZmluZC1jb3Vwb25z.option.c3RhdHVz.display_name": {
+          "source": "Status",
+          "message": "Status"
+        },
+        "app.Q2hhcmdlYmVl.action.ZmluZC1jb3Vwb25z.option.c3RhdHVz.short_desc": {
+          "source": "Filter by coupon status",
+          "message": "Filtruj według statusu kuponu"
+        },
+        "app.Q2hhcmdlYmVl.action.ZmluZC1jb3Vwb25z.short_desc": {
+          "source": "Find and search coupons",
+          "message": "Znajdź i wyszukaj kupony"
+        },
+        "app.Q2hhcmdlYmVl.action.ZmluZC1jdXN0b21lcnM.desc": {
+          "source": "Retrieve a list of customers from Chargebee with optional filtering by status, email, first name, and last name.",
+          "message": "Pobierz listę klientów z Chargebee z opcjonalnym filtrowaniem według statusu, adresu e-mail, imienia i nazwiska."
+        },
+        "app.Q2hhcmdlYmVl.action.ZmluZC1jdXN0b21lcnM.display_name": {
+          "source": "Find Customers",
+          "message": "Znajdź klientów"
+        },
+        "app.Q2hhcmdlYmVl.action.ZmluZC1jdXN0b21lcnM.option.ZW1haWw.desc": {
+          "source": "Filter customers by their email address",
+          "message": "Filtruj klientów według adresu e-mail"
+        },
+        "app.Q2hhcmdlYmVl.action.ZmluZC1jdXN0b21lcnM.option.ZW1haWw.display_name": {
+          "source": "Email",
+          "message": "E-mail"
+        },
+        "app.Q2hhcmdlYmVl.action.ZmluZC1jdXN0b21lcnM.option.ZW1haWw.short_desc": {
+          "source": "Filter by email",
+          "message": "Filtruj według adresu e-mail"
+        },
+        "app.Q2hhcmdlYmVl.action.ZmluZC1jdXN0b21lcnM.option.Zmlyc3RfbmFtZQ.desc": {
+          "source": "Filter customers by their first name",
+          "message": "Filtruj klientów według imienia"
+        },
+        "app.Q2hhcmdlYmVl.action.ZmluZC1jdXN0b21lcnM.option.Zmlyc3RfbmFtZQ.display_name": {
+          "source": "First Name",
+          "message": "Imię"
+        },
+        "app.Q2hhcmdlYmVl.action.ZmluZC1jdXN0b21lcnM.option.Zmlyc3RfbmFtZQ.short_desc": {
+          "source": "Filter by first name",
+          "message": "Filtruj według imienia"
+        },
+        "app.Q2hhcmdlYmVl.action.ZmluZC1jdXN0b21lcnM.option.bGFzdF9uYW1l.desc": {
+          "source": "Filter customers by their last name",
+          "message": "Filtruj klientów według nazwiska"
+        },
+        "app.Q2hhcmdlYmVl.action.ZmluZC1jdXN0b21lcnM.option.bGFzdF9uYW1l.display_name": {
+          "source": "Last Name",
+          "message": "Nazwisko"
+        },
+        "app.Q2hhcmdlYmVl.action.ZmluZC1jdXN0b21lcnM.option.bGFzdF9uYW1l.short_desc": {
+          "source": "Filter by last name",
+          "message": "Filtruj według nazwiska"
+        },
+        "app.Q2hhcmdlYmVl.action.ZmluZC1jdXN0b21lcnM.option.c3RhdHVz.allowed-value.c3RyaW5nOmFjdGl2ZQ.desc": {
+          "source": "Active",
+          "message": "Aktywny"
+        },
+        "app.Q2hhcmdlYmVl.action.ZmluZC1jdXN0b21lcnM.option.c3RhdHVz.desc": {
+          "source": "Filter customers by their status",
+          "message": "Filtruj klientów według statusu"
+        },
+        "app.Q2hhcmdlYmVl.action.ZmluZC1jdXN0b21lcnM.option.c3RhdHVz.display_name": {
+          "source": "Status",
+          "message": "Status"
+        },
+        "app.Q2hhcmdlYmVl.action.ZmluZC1jdXN0b21lcnM.option.c3RhdHVz.short_desc": {
+          "source": "Filter by customer status",
+          "message": "Filtruj według statusu klienta"
+        },
+        "app.Q2hhcmdlYmVl.action.ZmluZC1jdXN0b21lcnM.short_desc": {
+          "source": "Find and search customers",
+          "message": "Znajdź i wyszukaj klientów"
+        },
+        "app.Q2hhcmdlYmVl.action.ZmluZC1pbnZvaWNlcw.desc": {
+          "source": "Retrieve a list of invoices from Chargebee with optional filtering by status.",
+          "message": "Pobierz listę faktur z Chargebee z opcjonalnym filtrowaniem według statusu."
+        },
+        "app.Q2hhcmdlYmVl.action.ZmluZC1pbnZvaWNlcw.display_name": {
+          "source": "Find Invoices",
+          "message": "Znajdź faktury"
+        },
+        "app.Q2hhcmdlYmVl.action.ZmluZC1pbnZvaWNlcw.option.c3RhdHVz.allowed-value.c3RyaW5nOm5vdF9wYWlk.desc": {
+          "source": "Not Paid",
+          "message": "Nieopłacona"
+        },
+        "app.Q2hhcmdlYmVl.action.ZmluZC1pbnZvaWNlcw.option.c3RhdHVz.allowed-value.c3RyaW5nOnBhaWQ.desc": {
+          "source": "Paid",
+          "message": "Opłacone"
+        },
+        "app.Q2hhcmdlYmVl.action.ZmluZC1pbnZvaWNlcw.option.c3RhdHVz.allowed-value.c3RyaW5nOnBheW1lbnRfZHVl.desc": {
+          "source": "Payment Due",
+          "message": "Płatność należna"
+        },
+        "app.Q2hhcmdlYmVl.action.ZmluZC1pbnZvaWNlcw.option.c3RhdHVz.allowed-value.c3RyaW5nOnBlbmRpbmc.desc": {
+          "source": "Pending",
+          "message": "Oczekujące"
+        },
+        "app.Q2hhcmdlYmVl.action.ZmluZC1pbnZvaWNlcw.option.c3RhdHVz.allowed-value.c3RyaW5nOnBvc3RlZA.desc": {
+          "source": "Posted",
+          "message": "Zaksięgowana"
+        },
+        "app.Q2hhcmdlYmVl.action.ZmluZC1pbnZvaWNlcw.option.c3RhdHVz.allowed-value.c3RyaW5nOnZvaWRlZA.desc": {
+          "source": "Voided",
+          "message": "Unieważnione"
+        },
+        "app.Q2hhcmdlYmVl.action.ZmluZC1pbnZvaWNlcw.option.c3RhdHVz.desc": {
+          "source": "Filter invoices by their status",
+          "message": "Filtruj faktury według statusu"
+        },
+        "app.Q2hhcmdlYmVl.action.ZmluZC1pbnZvaWNlcw.option.c3RhdHVz.display_name": {
+          "source": "Status",
+          "message": "Status"
+        },
+        "app.Q2hhcmdlYmVl.action.ZmluZC1pbnZvaWNlcw.option.c3RhdHVz.short_desc": {
+          "source": "Filter by invoice status",
+          "message": "Filtruj według statusu faktury"
+        },
+        "app.Q2hhcmdlYmVl.action.ZmluZC1pbnZvaWNlcw.short_desc": {
+          "source": "Find and search invoices",
+          "message": "Znajdź i wyszukaj faktury"
+        },
+        "app.Q2hhcmdlYmVl.action.ZmluZC1wcm9tb3Rpb25hbC1jcmVkaXRz.desc": {
+          "source": "Retrieve a list of promotional credits from Chargebee.",
+          "message": "Pobierz listę kredytów promocyjnych z Chargebee."
+        },
+        "app.Q2hhcmdlYmVl.action.ZmluZC1wcm9tb3Rpb25hbC1jcmVkaXRz.display_name": {
+          "source": "Find Promotional Credits",
+          "message": "Znajdź kredyty promocyjne"
+        },
+        "app.Q2hhcmdlYmVl.action.ZmluZC1wcm9tb3Rpb25hbC1jcmVkaXRz.option.Y3VzdG9tZXJfaWQ.display_name": {
+          "source": "Customer",
+          "message": "Klient"
+        },
+        "app.Q2hhcmdlYmVl.action.ZmluZC1wcm9tb3Rpb25hbC1jcmVkaXRz.option.Y3VzdG9tZXJfaWQ.short_desc": {
+          "source": "Filter by customer",
+          "message": "Filtruj według klienta"
+        },
+        "app.Q2hhcmdlYmVl.action.ZmluZC1wcm9tb3Rpb25hbC1jcmVkaXRz.option.dHlwZQ.allowed-value.c3RyaW5nOmRlY3JlbWVudA.desc": {
+          "source": "Decrement",
+          "message": "Zmniejszenie"
+        },
+        "app.Q2hhcmdlYmVl.action.ZmluZC1wcm9tb3Rpb25hbC1jcmVkaXRz.option.dHlwZQ.allowed-value.c3RyaW5nOmluY3JlbWVudA.desc": {
+          "source": "Increment",
+          "message": "Zwiększenie"
+        },
+        "app.Q2hhcmdlYmVl.action.ZmluZC1wcm9tb3Rpb25hbC1jcmVkaXRz.option.dHlwZQ.allowed-value.c3RyaW5nOnNldA.desc": {
+          "source": "Set",
+          "message": "Ustaw"
+        },
+        "app.Q2hhcmdlYmVl.action.ZmluZC1wcm9tb3Rpb25hbC1jcmVkaXRz.option.dHlwZQ.display_name": {
+          "source": "Type",
+          "message": "Typ"
+        },
+        "app.Q2hhcmdlYmVl.action.ZmluZC1wcm9tb3Rpb25hbC1jcmVkaXRz.option.dHlwZQ.short_desc": {
+          "source": "Filter by credit type",
+          "message": "Filtruj według typu kredytu"
+        },
+        "app.Q2hhcmdlYmVl.action.ZmluZC1wcm9tb3Rpb25hbC1jcmVkaXRz.short_desc": {
+          "source": "Find and search promotional credits",
+          "message": "Znajdź i wyszukaj kredyty promocyjne"
+        },
+        "app.Q2hhcmdlYmVl.action.ZmluZC1zdWJzY3JpcHRpb25z.desc": {
+          "source": "Retrieve a list of subscriptions from Chargebee with optional filtering by status and customer.",
+          "message": "Pobierz listę subskrypcji z Chargebee z opcjonalnym filtrowaniem według statusu i klienta."
+        },
+        "app.Q2hhcmdlYmVl.action.ZmluZC1zdWJzY3JpcHRpb25z.display_name": {
+          "source": "Find Subscriptions",
+          "message": "Znajdź subskrypcje"
+        },
+        "app.Q2hhcmdlYmVl.action.ZmluZC1zdWJzY3JpcHRpb25z.option.Y3VzdG9tZXJfaWQ.desc": {
+          "source": "Filter subscriptions by the customer they belong to",
+          "message": "Filtruj subskrypcje według klienta, do którego należą"
+        },
+        "app.Q2hhcmdlYmVl.action.ZmluZC1zdWJzY3JpcHRpb25z.option.Y3VzdG9tZXJfaWQ.display_name": {
+          "source": "Customer",
+          "message": "Klient"
+        },
+        "app.Q2hhcmdlYmVl.action.ZmluZC1zdWJzY3JpcHRpb25z.option.Y3VzdG9tZXJfaWQ.short_desc": {
+          "source": "Filter by customer",
+          "message": "Filtruj według klienta"
+        },
+        "app.Q2hhcmdlYmVl.action.ZmluZC1zdWJzY3JpcHRpb25z.option.c3RhdHVz.allowed-value.c3RyaW5nOm5vbl9yZW5ld2luZw.desc": {
+          "source": "Non-Renewing",
+          "message": "Nieodnawiająca się"
+        },
+        "app.Q2hhcmdlYmVl.action.ZmluZC1zdWJzY3JpcHRpb25z.option.c3RhdHVz.allowed-value.c3RyaW5nOmFjdGl2ZQ.desc": {
+          "source": "Active",
+          "message": "Aktywny"
+        },
+        "app.Q2hhcmdlYmVl.action.ZmluZC1zdWJzY3JpcHRpb25z.option.c3RhdHVz.allowed-value.c3RyaW5nOmNhbmNlbGxlZA.desc": {
+          "source": "Cancelled",
+          "message": "Anulowane"
+        },
+        "app.Q2hhcmdlYmVl.action.ZmluZC1zdWJzY3JpcHRpb25z.option.c3RhdHVz.allowed-value.c3RyaW5nOmZ1dHVyZQ.desc": {
+          "source": "Future",
+          "message": "Przyszły"
+        },
+        "app.Q2hhcmdlYmVl.action.ZmluZC1zdWJzY3JpcHRpb25z.option.c3RhdHVz.allowed-value.c3RyaW5nOmluX3RyaWFs.desc": {
+          "source": "In Trial",
+          "message": "W okresie próbnym"
+        },
+        "app.Q2hhcmdlYmVl.action.ZmluZC1zdWJzY3JpcHRpb25z.option.c3RhdHVz.allowed-value.c3RyaW5nOnBhdXNlZA.desc": {
+          "source": "Paused",
+          "message": "Wstrzymana"
+        },
+        "app.Q2hhcmdlYmVl.action.ZmluZC1zdWJzY3JpcHRpb25z.option.c3RhdHVz.allowed-value.c3RyaW5nOnRyYW5zZmVycmVk.desc": {
+          "source": "Transferred",
+          "message": "Przeniesiona"
+        },
+        "app.Q2hhcmdlYmVl.action.ZmluZC1zdWJzY3JpcHRpb25z.option.c3RhdHVz.desc": {
+          "source": "Filter subscriptions by their status",
+          "message": "Filtruj subskrypcje według ich statusu"
+        },
+        "app.Q2hhcmdlYmVl.action.ZmluZC1zdWJzY3JpcHRpb25z.option.c3RhdHVz.display_name": {
+          "source": "Status",
+          "message": "Status"
+        },
+        "app.Q2hhcmdlYmVl.action.ZmluZC1zdWJzY3JpcHRpb25z.option.c3RhdHVz.short_desc": {
+          "source": "Filter by subscription status",
+          "message": "Filtruj według statusu subskrypcji"
+        },
+        "app.Q2hhcmdlYmVl.action.ZmluZC1zdWJzY3JpcHRpb25z.short_desc": {
+          "source": "Find and search subscriptions",
+          "message": "Wyszukuj i przeglądaj subskrypcje"
+        },
+        "app.Q2hhcmdlYmVl.action.bWFrZS1hcGktY2FsbA.desc": {
+          "source": "Make a custom HTTP / REST API call to **Chargebee** using the configured connection's authentication.\n\nSpecify the HTTP method, the URI path (relative to the connection's API base URL), optional query parameters, headers, and request body. The response is returned as a hash containing the status code, response headers, and response body.\n\nUse this action for endpoints that are not yet exposed as first-class actions on this app.",
+          "message": "Wykonaj niestandardowe wywołanie HTTP / REST API do **Chargebee** przy użyciu uwierzytelniania skonfigurowanego połączenia.\n\nOkreśl metodę HTTP, ścieżkę URI (względną wobec bazowego adresu URL API połączenia), opcjonalne parametry zapytania, nagłówki oraz treść żądania. Odpowiedź jest zwracana jako hash zawierający kod statusu, nagłówki odpowiedzi i treść odpowiedzi.\n\nUżyj tej akcji dla punktów końcowych, które nie są jeszcze udostępnione jako bezpośrednie akcje w tej aplikacji."
+        },
+        "app.Q2hhcmdlYmVl.action.bWFrZS1hcGktY2FsbA.display_name": {
+          "source": "Make an API call",
+          "message": "Wykonaj wywołanie API"
+        },
+        "app.Q2hhcmdlYmVl.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.desc": {
+          "source": "The request body. The effective type depends on `body_type`: JSON/form/YAML expect a hash, XML/text expect a string, multipart expects a file structure, binary expects raw bytes.",
+          "message": "Ciało żądania. Rzeczywisty typ zależy od `body_type`: JSON/form/YAML oczekują hasza, XML/text oczekują ciągu znaków, multipart oczekuje struktury pliku, binary oczekuje surowych bajtów."
+        },
+        "app.Q2hhcmdlYmVl.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.display_name": {
+          "source": "Body",
+          "message": "Treść"
+        },
+        "app.Q2hhcmdlYmVl.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.short_desc": {
+          "source": "The request body",
+          "message": "Ciało żądania"
+        },
+        "app.Q2hhcmdlYmVl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.desc": {
+          "source": "Upload a file using `multipart/form-data`. The body must be a @ref DataProvider::FileDataType \"FileDataType\" structure (filename + content + mime_type). The framework builds the multipart envelope and sets the boundary header.",
+          "message": "Przesyłanie pliku za pomocą `multipart/form-data`. Ciało żądania musi być strukturą @ref DataProvider::FileDataType \"FileDataType\" (filename + content + mime_type). Szablon buduje kopertę multipart i ustawia nagłówek boundary."
+        },
+        "app.Q2hhcmdlYmVl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.display_name": {
+          "source": "Multipart Form",
+          "message": "Formularz Multipart"
+        },
+        "app.Q2hhcmdlYmVl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.short_desc": {
+          "source": "Upload a file using multipart/form-data",
+          "message": "Przesyłanie pliku za pomocą multipart/form-data"
+        },
+        "app.Q2hhcmdlYmVl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.desc": {
+          "source": "Pass the body to the REST client unchanged; the client decides serialization based on its configured `data` option and the value type",
+          "message": "Przekaż ciało żądania do klienta REST bez zmian; klient decyduje o serializacji na podstawie skonfigurowanej opcji `data` i typu wartości"
+        },
+        "app.Q2hhcmdlYmVl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.display_name": {
+          "source": "Auto",
+          "message": "Auto"
+        },
+        "app.Q2hhcmdlYmVl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.short_desc": {
+          "source": "Pass-through; use connection serialization and let the REST client decide",
+          "message": "Przekazywanie bez zmian; użyj serializacji połączenia i pozwól klientowi REST zadecydować"
+        },
+        "app.Q2hhcmdlYmVl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.desc": {
+          "source": "Send the body as raw bytes. The body must be a binary value. Sets `Content-Type: application/octet-stream` unless overridden by `hdr`.",
+          "message": "Wyślij ciało jako surowe bajty. Ciało musi być wartością binarną. Ustawia `Content-Type: application/octet-stream`, chyba że zostanie nadpisane przez `hdr`."
+        },
+        "app.Q2hhcmdlYmVl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.display_name": {
+          "source": "Raw Binary",
+          "message": "Surowe dane binarne"
+        },
+        "app.Q2hhcmdlYmVl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.short_desc": {
+          "source": "Send body as raw bytes",
+          "message": "Wyślij ciało jako surowe bajty"
+        },
+        "app.Q2hhcmdlYmVl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.desc": {
+          "source": "Serialize a hash of form fields as `application/x-www-form-urlencoded`. The body must be a hash whose values are scalars (strings/numbers/booleans).",
+          "message": "Serializuj hasz pól formularza jako `application/x-www-form-urlencoded`. Ciało musi być haszem, którego wartości są skalarami (ciągi znaków/liczby/wartości logiczne)."
+        },
+        "app.Q2hhcmdlYmVl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.display_name": {
+          "source": "Form (URL-encoded)",
+          "message": "Formularz (zakodowany w URL)"
+        },
+        "app.Q2hhcmdlYmVl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.short_desc": {
+          "source": "Serialize body as application/x-www-form-urlencoded form fields",
+          "message": "Serializuj ciało jako pola formularza application/x-www-form-urlencoded"
+        },
+        "app.Q2hhcmdlYmVl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.desc": {
+          "source": "Serialize the body as JSON; sets `Content-Type: application/json`. The body should be a hash, list, or scalar value.",
+          "message": "Serializuj ciało jako JSON; ustawia `Content-Type: application/json`. Ciało powinno być haszem, listą lub wartością skalarną."
+        },
+        "app.Q2hhcmdlYmVl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.display_name": {
+          "source": "JSON",
+          "message": "JSON"
+        },
+        "app.Q2hhcmdlYmVl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.short_desc": {
+          "source": "Serialize body as JSON",
+          "message": "Serializuj ciało jako JSON"
+        },
+        "app.Q2hhcmdlYmVl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.desc": {
+          "source": "Send the body as plain text. The body must be a string. Sets `Content-Type: text/plain`.",
+          "message": "Wyślij ciało jako zwykły tekst. Ciało musi być ciągiem znaków. Ustawia `Content-Type: text/plain`."
+        },
+        "app.Q2hhcmdlYmVl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.display_name": {
+          "source": "Plain Text",
+          "message": "Czysty tekst"
+        },
+        "app.Q2hhcmdlYmVl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.short_desc": {
+          "source": "Send body as text/plain",
+          "message": "Wyślij ciało jako text/plain"
+        },
+        "app.Q2hhcmdlYmVl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.desc": {
+          "source": "Send the body as XML. If the body is a hash it is serialized to XML; if it is a string it is sent verbatim. Sets `Content-Type: application/xml`.",
+          "message": "Wyślij ciało jako XML. Jeśli ciało jest haszem, jest serializowane do XML; jeśli jest ciągiem znaków, jest wysyłane bez zmian. Ustawia `Content-Type: application/xml`."
+        },
+        "app.Q2hhcmdlYmVl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.display_name": {
+          "source": "XML",
+          "message": "XML"
+        },
+        "app.Q2hhcmdlYmVl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.short_desc": {
+          "source": "Send body as XML",
+          "message": "Wyślij ciało jako XML"
+        },
+        "app.Q2hhcmdlYmVl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.desc": {
+          "source": "Send the body as YAML. If the body is a hash it is serialized to YAML; if it is a string it is sent verbatim. Sets `Content-Type: application/x-yaml`.",
+          "message": "Wyślij ciało jako YAML. Jeśli ciało jest haszem, jest serializowane do YAML; jeśli jest ciągiem znaków, jest wysyłane bez zmian. Ustawia `Content-Type: application/x-yaml`."
+        },
+        "app.Q2hhcmdlYmVl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.display_name": {
+          "source": "YAML",
+          "message": "YAML"
+        },
+        "app.Q2hhcmdlYmVl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.short_desc": {
+          "source": "Send body as YAML",
+          "message": "Wyślij ciało jako YAML"
+        },
+        "app.Q2hhcmdlYmVl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.desc": {
+          "source": "Selects the body serialization mode and the corresponding `Content-Type` header. Changing this field reshapes the `body` editor - selecting JSON exposes a JSON editor, selecting Multipart Form exposes a file picker, and so on.",
+          "message": "Wybiera tryb serializacji ciała i odpowiadający mu nagłówek `Content-Type`. Zmiana tego pola zmienia edytor `body` - wybór JSON udostępnia edytor JSON, wybór Multipart Form udostępnia okno wyboru pliku i tak dalej."
+        },
+        "app.Q2hhcmdlYmVl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.display_name": {
+          "source": "Body Type",
+          "message": "Typ ciała"
+        },
+        "app.Q2hhcmdlYmVl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.short_desc": {
+          "source": "How the body is serialized and what Content-Type is sent",
+          "message": "Sposób serializacji ciała i wysyłany Content-Type"
+        },
+        "app.Q2hhcmdlYmVl.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.desc": {
+          "source": "If `True`, non-2xx HTTP responses return as the normal response hash (with the actual status code) instead of raising `REST-RESPONSE-ERROR`. Useful for handling 4xx/5xx as data - e.g. checking whether a resource exists. Overrides the connection's `error_passthru` setting for this call only.",
+          "message": "Jeśli `True`, odpowiedzi HTTP inne niż 2xx są zwracane jako zwykły hasz odpowiedzi (z rzeczywistym kodem stanu) zamiast zgłaszania `REST-RESPONSE-ERROR`. Przydatne do obsługi 4xx/5xx jako danych - np. do sprawdzania, czy zasób istnieje. Nadpisuje ustawienie połączenia `error_passthru` tylko dla tego wywołania."
+        },
+        "app.Q2hhcmdlYmVl.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.display_name": {
+          "source": "Return Errors as Data",
+          "message": "Zwracaj błędy jako dane"
+        },
+        "app.Q2hhcmdlYmVl.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.short_desc": {
+          "source": "Return non-2xx responses normally instead of throwing",
+          "message": "Zwracaj odpowiedzi inne niż 2xx normalnie zamiast zgłaszać błąd"
+        },
+        "app.Q2hhcmdlYmVl.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.desc": {
+          "source": "Optional list of HTTP status codes treated as success. If set and the response status is not in this list, the action throws `REST-STATUS-ERROR`. When unset, the REST client's default behavior applies (typically: 2xx is success, non-2xx throws).",
+          "message": "Opcjonalna lista kodów stanu HTTP traktowanych jako sukces. Jeśli ustawiono, a kod stanu odpowiedzi nie znajduje się na tej liście, akcja zgłasza `REST-STATUS-ERROR`. Gdy pole nie jest ustawione, stosowane jest domyślne zachowanie klienta REST (zwykle: 2xx to sukces, inne niż 2xx zgłaszają błąd)."
+        },
+        "app.Q2hhcmdlYmVl.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.display_name": {
+          "source": "Expected Status Codes",
+          "message": "Oczekiwane kody stanu"
+        },
+        "app.Q2hhcmdlYmVl.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.short_desc": {
+          "source": "Response status codes treated as success",
+          "message": "Kody stanu odpowiedzi traktowane jako sukces"
+        },
+        "app.Q2hhcmdlYmVl.action.bWFrZS1hcGktY2FsbA.option.aGRy.desc": {
+          "source": "Hash of custom headers added to the request. These override any default headers set by `body_type` (e.g. supplying `Content-Type` here wins over the body-type default).",
+          "message": "Hasz niestandardowych nagłówków dodawanych do żądania. Nadpisują one wszelkie domyślne nagłówki ustawione przez `body_type` (np. podanie tutaj `Content-Type` zastępuje domyślną wartość dla typu ciała)."
+        },
+        "app.Q2hhcmdlYmVl.action.bWFrZS1hcGktY2FsbA.option.aGRy.display_name": {
+          "source": "Custom Headers",
+          "message": "Niestandardowe nagłówki"
+        },
+        "app.Q2hhcmdlYmVl.action.bWFrZS1hcGktY2FsbA.option.aGRy.short_desc": {
+          "source": "Extra request headers",
+          "message": "Dodatkowe nagłówki żądania"
+        },
+        "app.Q2hhcmdlYmVl.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.desc": {
+          "source": "If `True`, the response hash includes a `debug` sub-hash containing the request method/URL/headers (with sensitive values redacted), request and response sizes, and round-trip duration. Useful when investigating slow or failing calls. Off by default to keep responses lean.",
+          "message": "Jeśli `True`, hasz odpowiedzi zawiera pod-hasz `debug` zawierający metodę/URL/nagłówki żądania (z zredagowanymi poufnymi wartościami), rozmiary żądania i odpowiedzi oraz czas trwania w obie strony. Przydatne podczas badania wolnych lub nieudanych wywołań. Domyślnie wyłączone, aby odpowiedzi były lekkie."
+        },
+        "app.Q2hhcmdlYmVl.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.display_name": {
+          "source": "Include Debug Info",
+          "message": "Dołącz informacje diagnostyczne"
+        },
+        "app.Q2hhcmdlYmVl.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.short_desc": {
+          "source": "Include request/timing/size debug info in the response",
+          "message": "Dołącz informacje diagnostyczne dotyczące żądania/czasu/rozmiaru w odpowiedzi"
+        },
+        "app.Q2hhcmdlYmVl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.desc": {
+          "source": "HTTP `OPTIONS`",
+          "message": "HTTP `OPTIONS`"
+        },
+        "app.Q2hhcmdlYmVl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.display_name": {
+          "source": "OPTIONS",
+          "message": "OPTIONS"
+        },
+        "app.Q2hhcmdlYmVl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.short_desc": {
+          "source": "HTTP OPTIONS",
+          "message": "HTTP OPTIONS"
+        },
+        "app.Q2hhcmdlYmVl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.desc": {
+          "source": "HTTP `DELETE`",
+          "message": "HTTP `DELETE`"
+        },
+        "app.Q2hhcmdlYmVl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.display_name": {
+          "source": "DELETE",
+          "message": "DELETE"
+        },
+        "app.Q2hhcmdlYmVl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.short_desc": {
+          "source": "HTTP DELETE",
+          "message": "HTTP DELETE"
+        },
+        "app.Q2hhcmdlYmVl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.desc": {
+          "source": "HTTP `GET`",
+          "message": "HTTP `GET`"
+        },
+        "app.Q2hhcmdlYmVl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.display_name": {
+          "source": "GET",
+          "message": "GET"
+        },
+        "app.Q2hhcmdlYmVl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.short_desc": {
+          "source": "HTTP GET",
+          "message": "HTTP GET"
+        },
+        "app.Q2hhcmdlYmVl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.desc": {
+          "source": "HTTP `HEAD`",
+          "message": "HTTP `HEAD`"
+        },
+        "app.Q2hhcmdlYmVl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.display_name": {
+          "source": "HEAD",
+          "message": "HEAD"
+        },
+        "app.Q2hhcmdlYmVl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.short_desc": {
+          "source": "HTTP HEAD",
+          "message": "HTTP HEAD"
+        },
+        "app.Q2hhcmdlYmVl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.desc": {
+          "source": "HTTP `PATCH`",
+          "message": "HTTP `PATCH`"
+        },
+        "app.Q2hhcmdlYmVl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.display_name": {
+          "source": "PATCH",
+          "message": "PATCH"
+        },
+        "app.Q2hhcmdlYmVl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.short_desc": {
+          "source": "HTTP PATCH",
+          "message": "HTTP PATCH"
+        },
+        "app.Q2hhcmdlYmVl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.desc": {
+          "source": "HTTP `POST`",
+          "message": "HTTP `POST`"
+        },
+        "app.Q2hhcmdlYmVl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.display_name": {
+          "source": "POST",
+          "message": "POST"
+        },
+        "app.Q2hhcmdlYmVl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.short_desc": {
+          "source": "HTTP POST",
+          "message": "HTTP POST"
+        },
+        "app.Q2hhcmdlYmVl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.desc": {
+          "source": "HTTP `PUT`",
+          "message": "HTTP `PUT`"
+        },
+        "app.Q2hhcmdlYmVl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.display_name": {
+          "source": "PUT",
+          "message": "PUT"
+        },
+        "app.Q2hhcmdlYmVl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.short_desc": {
+          "source": "HTTP PUT",
+          "message": "HTTP PUT"
+        },
+        "app.Q2hhcmdlYmVl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.desc": {
+          "source": "HTTP `TRACE`",
+          "message": "HTTP `TRACE`"
+        },
+        "app.Q2hhcmdlYmVl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.display_name": {
+          "source": "TRACE",
+          "message": "TRACE"
+        },
+        "app.Q2hhcmdlYmVl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.short_desc": {
+          "source": "HTTP TRACE",
+          "message": "HTTP TRACE"
+        },
+        "app.Q2hhcmdlYmVl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "Metoda HTTP do użycia w żądaniu"
+        },
+        "app.Q2hhcmdlYmVl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.display_name": {
+          "source": "HTTP Method",
+          "message": "Metoda HTTP"
+        },
+        "app.Q2hhcmdlYmVl.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.short_desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "Metoda HTTP do użycia w żądaniu"
+        },
+        "app.Q2hhcmdlYmVl.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain `{name}` placeholders that are replaced from `path_vars`. Example: `/users/{id}/comments`.",
+          "message": "Ścieżka URI względna wobec bazowego URL API połączenia. Może zawierać symbole zastępcze `{name}`, które zostaną zastąpione z `path_vars`. Przykład: `/users/{id}/comments`."
+        },
+        "app.Q2hhcmdlYmVl.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.display_name": {
+          "source": "URI Path",
+          "message": "Ścieżka URI"
+        },
+        "app.Q2hhcmdlYmVl.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.short_desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain '{name}' placeholders that are replaced from 'path_vars'. Example: '/users/{id}/comments'",
+          "message": "Ścieżka URI względna wobec bazowego adresu URL API połączenia. Może zawierać symbole zastępcze '{name}', które są zastępowane z 'path_vars'. Przykład: '/users/{id}/comments'"
+        },
+        "app.Q2hhcmdlYmVl.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.desc": {
+          "source": "Hash of values substituted into `{name}` placeholders in the URI path. Example: with `path = /users/{id}` and `path_vars = {id: 123}` the framework sends `/users/123`. Values are URL-encoded.",
+          "message": "Hash wartości podstawianych w miejsce symboli zastępczych `{name}` w ścieżce URI. Przykład: dla `path = /users/{id}` i `path_vars = {id: 123}` framework wysyła `/users/123`. Wartości są kodowane w formacie URL."
+        },
+        "app.Q2hhcmdlYmVl.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.display_name": {
+          "source": "Path Variables",
+          "message": "Zmienne ścieżki"
+        },
+        "app.Q2hhcmdlYmVl.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.short_desc": {
+          "source": "Values for {name} placeholders in path",
+          "message": "Wartości dla symboli zastępczych {name} w ścieżce"
+        },
+        "app.Q2hhcmdlYmVl.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.desc": {
+          "source": "Hash of query string parameters to append to the URI path. Values are URL-encoded; list values are joined with `,`.",
+          "message": "Hash parametrów zapytania do dołączenia do ścieżki URI. Wartości są kodowane w formacie URL; wartości list są łączone za pomocą `,`."
+        },
+        "app.Q2hhcmdlYmVl.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.display_name": {
+          "source": "Query Arguments",
+          "message": "Argumenty zapytania"
+        },
+        "app.Q2hhcmdlYmVl.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.short_desc": {
+          "source": "Query string parameters",
+          "message": "Parametry zapytania"
+        },
+        "app.Q2hhcmdlYmVl.action.bWFrZS1hcGktY2FsbA.short_desc": {
+          "source": "Make a custom API call to Chargebee",
+          "message": "Wykonaj niestandardowe wywołanie API do Chargebee"
+        },
+        "app.Q2hhcmdlYmVl.action.c2V0LXByb21vdGlvbmFsLWNyZWRpdA.desc": {
+          "source": "Set the promotional credit balance for a customer's account in Chargebee.",
+          "message": "Ustaw saldo kredytu promocyjnego dla konta klienta w Chargebee."
+        },
+        "app.Q2hhcmdlYmVl.action.c2V0LXByb21vdGlvbmFsLWNyZWRpdA.display_name": {
+          "source": "Set Promotional Credit",
+          "message": "Ustaw kredyt promocyjny"
+        },
+        "app.Q2hhcmdlYmVl.action.c2V0LXByb21vdGlvbmFsLWNyZWRpdA.option.Y3VycmVuY3lfY29kZQ.display_name": {
+          "source": "Currency Code",
+          "message": "Kod waluty"
+        },
+        "app.Q2hhcmdlYmVl.action.c2V0LXByb21vdGlvbmFsLWNyZWRpdA.option.Y3VycmVuY3lfY29kZQ.short_desc": {
+          "source": "Currency for the credits",
+          "message": "Waluta środków"
+        },
+        "app.Q2hhcmdlYmVl.action.c2V0LXByb21vdGlvbmFsLWNyZWRpdA.option.Y3VzdG9tZXJfaWQ.display_name": {
+          "source": "Customer",
+          "message": "Klient"
+        },
+        "app.Q2hhcmdlYmVl.action.c2V0LXByb21vdGlvbmFsLWNyZWRpdA.option.Y3VzdG9tZXJfaWQ.short_desc": {
+          "source": "The customer to set credits for",
+          "message": "Klient, dla którego mają zostać ustawione kredyty"
+        },
+        "app.Q2hhcmdlYmVl.action.c2V0LXByb21vdGlvbmFsLWNyZWRpdA.option.YW1vdW50.display_name": {
+          "source": "Amount",
+          "message": "Wartość"
+        },
+        "app.Q2hhcmdlYmVl.action.c2V0LXByb21vdGlvbmFsLWNyZWRpdA.option.YW1vdW50.short_desc": {
+          "source": "Credit amount in cents",
+          "message": "Kwota środków w centach"
+        },
+        "app.Q2hhcmdlYmVl.action.c2V0LXByb21vdGlvbmFsLWNyZWRpdA.short_desc": {
+          "source": "Set promotional credit balance for a customer",
+          "message": "Ustaw saldo kredytu promocyjnego dla klienta"
+        },
+        "app.Q2hhcmdlYmVl.action.cmVjb3JkLWludm9pY2UtcGF5bWVudA.desc": {
+          "source": "Record an offline payment for an invoice in Chargebee.",
+          "message": "Zarejestruj płatność offline dla faktury w Chargebee."
+        },
+        "app.Q2hhcmdlYmVl.action.cmVjb3JkLWludm9pY2UtcGF5bWVudA.display_name": {
+          "source": "Record Invoice Payment",
+          "message": "Zarejestruj płatność za fakturę"
+        },
+        "app.Q2hhcmdlYmVl.action.cmVjb3JkLWludm9pY2UtcGF5bWVudA.option.YW1vdW50.display_name": {
+          "source": "Amount",
+          "message": "Wartość"
+        },
+        "app.Q2hhcmdlYmVl.action.cmVjb3JkLWludm9pY2UtcGF5bWVudA.option.YW1vdW50.short_desc": {
+          "source": "Payment amount in cents",
+          "message": "Kwota płatności w centach"
+        },
+        "app.Q2hhcmdlYmVl.action.cmVjb3JkLWludm9pY2UtcGF5bWVudA.option.aWQ.display_name": {
+          "source": "Invoice ID",
+          "message": "Identyfikator faktury"
+        },
+        "app.Q2hhcmdlYmVl.action.cmVjb3JkLWludm9pY2UtcGF5bWVudA.option.aWQ.short_desc": {
+          "source": "The invoice to record payment for",
+          "message": "Faktura, dla której ma zostać zarejestrowana płatność"
+        },
+        "app.Q2hhcmdlYmVl.action.cmVjb3JkLWludm9pY2UtcGF5bWVudA.short_desc": {
+          "source": "Record a payment for an invoice",
+          "message": "Zarejestruj płatność dla faktury"
+        },
+        "app.Q2hhcmdlYmVl.action.cmVmdW5kLWludm9pY2U.desc": {
+          "source": "Process a refund for a paid invoice in Chargebee.",
+          "message": "Przetwórz zwrot dla opłaconej faktury w Chargebee."
+        },
+        "app.Q2hhcmdlYmVl.action.cmVmdW5kLWludm9pY2U.display_name": {
+          "source": "Refund Invoice",
+          "message": "Zwróć fakturę"
+        },
+        "app.Q2hhcmdlYmVl.action.cmVmdW5kLWludm9pY2U.option.aWQ.display_name": {
+          "source": "Invoice ID",
+          "message": "Identyfikator faktury"
+        },
+        "app.Q2hhcmdlYmVl.action.cmVmdW5kLWludm9pY2U.option.aWQ.short_desc": {
+          "source": "The invoice to refund",
+          "message": "Faktura do zwrotu"
+        },
+        "app.Q2hhcmdlYmVl.action.cmVmdW5kLWludm9pY2U.option.cmVmdW5kX2Ftb3VudA.display_name": {
+          "source": "Refund Amount",
+          "message": "Kwota zwrotu"
+        },
+        "app.Q2hhcmdlYmVl.action.cmVmdW5kLWludm9pY2U.option.cmVmdW5kX2Ftb3VudA.short_desc": {
+          "source": "Refund amount in cents",
+          "message": "Kwota zwrotu w centach"
+        },
+        "app.Q2hhcmdlYmVl.action.cmVmdW5kLWludm9pY2U.short_desc": {
+          "source": "Refund an invoice",
+          "message": "Zwróć fakturę"
+        },
+        "app.Q2hhcmdlYmVl.action.d2F0Y2gtY3VzdG9tZXJz.desc": {
+          "source": "Fires when a new customer is created in Chargebee. Provides customer event details.",
+          "message": "Uruchamia się po utworzeniu nowego klienta w Chargebee. Udostępnia szczegóły zdarzenia klienta."
+        },
+        "app.Q2hhcmdlYmVl.action.d2F0Y2gtY3VzdG9tZXJz.display_name": {
+          "source": "Customer Created",
+          "message": "Utworzono klienta"
+        },
+        "app.Q2hhcmdlYmVl.action.d2F0Y2gtY3VzdG9tZXJz.short_desc": {
+          "source": "Trigger when a customer is created",
+          "message": "Uruchom, gdy klient zostanie utworzony"
+        },
+        "app.Q2hhcmdlYmVl.action.d2F0Y2gtZXZlbnRz.desc": {
+          "source": "Fires on any event in Chargebee. Provides full event details for all event types.",
+          "message": "Uruchamia się przy dowolnym zdarzeniu w Chargebee. Udostępnia pełne szczegóły dla wszystkich typów zdarzeń."
+        },
+        "app.Q2hhcmdlYmVl.action.d2F0Y2gtZXZlbnRz.display_name": {
+          "source": "Any Event (Instant)",
+          "message": "Dowolne zdarzenie (natychmiastowe)"
+        },
+        "app.Q2hhcmdlYmVl.action.d2F0Y2gtZXZlbnRz.short_desc": {
+          "source": "Trigger on any Chargebee event",
+          "message": "Uruchom przy dowolnym zdarzeniu Chargebee"
+        },
+        "app.Q2hhcmdlYmVl.action.d2F0Y2gtaW52b2ljZXM.desc": {
+          "source": "Fires when a new invoice is generated in Chargebee. Provides invoice event details.",
+          "message": "Uruchamia się po wygenerowaniu nowej faktury w Chargebee. Udostępnia szczegóły zdarzenia faktury."
+        },
+        "app.Q2hhcmdlYmVl.action.d2F0Y2gtaW52b2ljZXM.display_name": {
+          "source": "Invoice Generated",
+          "message": "Wygenerowano fakturę"
+        },
+        "app.Q2hhcmdlYmVl.action.d2F0Y2gtaW52b2ljZXM.short_desc": {
+          "source": "Trigger when an invoice is generated",
+          "message": "Uruchom, gdy faktura zostanie wygenerowana"
+        },
+        "app.Q2hhcmdlYmVl.action.d2F0Y2gtc3Vic2NyaXB0aW9ucw.desc": {
+          "source": "Fires when a new subscription is created in Chargebee. Provides subscription event details.",
+          "message": "Uruchamia się po utworzeniu nowej subskrypcji w Chargebee. Udostępnia szczegóły zdarzenia subskrypcji."
+        },
+        "app.Q2hhcmdlYmVl.action.d2F0Y2gtc3Vic2NyaXB0aW9ucw.display_name": {
+          "source": "Subscription Created",
+          "message": "Subskrypcja utworzona"
+        },
+        "app.Q2hhcmdlYmVl.action.d2F0Y2gtc3Vic2NyaXB0aW9ucw.short_desc": {
+          "source": "Trigger when a subscription is created",
+          "message": "Uruchom, gdy subskrypcja zostanie utworzona"
+        },
+        "app.Q2hhcmdlYmVl.action.dXBkYXRlLWN1c3RvbWVy.desc": {
+          "source": "Update an existing customer in Chargebee. You can modify contact details, billing information, and other customer attributes.",
+          "message": "Zaktualizuj istniejącego klienta w Chargebee. Możesz modyfikować dane kontaktowe, informacje rozliczeniowe oraz inne atrybuty klienta."
+        },
+        "app.Q2hhcmdlYmVl.action.dXBkYXRlLWN1c3RvbWVy.display_name": {
+          "source": "Update Customer",
+          "message": "Zaktualizuj klienta"
+        },
+        "app.Q2hhcmdlYmVl.action.dXBkYXRlLWN1c3RvbWVy.option.ZW1haWw.display_name": {
+          "source": "Email",
+          "message": "E-mail"
+        },
+        "app.Q2hhcmdlYmVl.action.dXBkYXRlLWN1c3RvbWVy.option.ZW1haWw.short_desc": {
+          "source": "Customer email address",
+          "message": "Adres e-mail klienta"
+        },
+        "app.Q2hhcmdlYmVl.action.dXBkYXRlLWN1c3RvbWVy.option.Zmlyc3RfbmFtZQ.display_name": {
+          "source": "First Name",
+          "message": "Imię"
+        },
+        "app.Q2hhcmdlYmVl.action.dXBkYXRlLWN1c3RvbWVy.option.Zmlyc3RfbmFtZQ.short_desc": {
+          "source": "Customer first name",
+          "message": "Imię klienta"
+        },
+        "app.Q2hhcmdlYmVl.action.dXBkYXRlLWN1c3RvbWVy.option.aWQ.display_name": {
+          "source": "Customer ID",
+          "message": "Identyfikator klienta"
+        },
+        "app.Q2hhcmdlYmVl.action.dXBkYXRlLWN1c3RvbWVy.option.aWQ.short_desc": {
+          "source": "The customer to update",
+          "message": "Klient do zaktualizowania"
+        },
+        "app.Q2hhcmdlYmVl.action.dXBkYXRlLWN1c3RvbWVy.short_desc": {
+          "source": "Update an existing customer",
+          "message": "Zaktualizuj istniejącego klienta"
+        },
+        "app.Q2hhcmdlYmVl.action.dXBkYXRlLWNvdXBvbg.desc": {
+          "source": "Update an existing coupon in Chargebee.",
+          "message": "Zaktualizuj istniejący kupon w Chargebee."
+        },
+        "app.Q2hhcmdlYmVl.action.dXBkYXRlLWNvdXBvbg.display_name": {
+          "source": "Update Coupon",
+          "message": "Zaktualizuj kupon"
+        },
+        "app.Q2hhcmdlYmVl.action.dXBkYXRlLWNvdXBvbg.option.aWQ.display_name": {
+          "source": "Coupon ID",
+          "message": "Identyfikator kuponu"
+        },
+        "app.Q2hhcmdlYmVl.action.dXBkYXRlLWNvdXBvbg.option.aWQ.short_desc": {
+          "source": "The coupon to update",
+          "message": "Kupon do zaktualizowania"
+        },
+        "app.Q2hhcmdlYmVl.action.dXBkYXRlLWNvdXBvbg.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "Nazwa"
+        },
+        "app.Q2hhcmdlYmVl.action.dXBkYXRlLWNvdXBvbg.option.bmFtZQ.short_desc": {
+          "source": "Coupon display name",
+          "message": "Nazwa wyświetlana kuponu"
+        },
+        "app.Q2hhcmdlYmVl.action.dXBkYXRlLWNvdXBvbg.short_desc": {
+          "source": "Update an existing coupon",
+          "message": "Zaktualizuj istniejący kupon"
+        },
+        "app.Q2hhcmdlYmVl.action.dXBkYXRlLWludm9pY2U.desc": {
+          "source": "Update an existing invoice in Chargebee.",
+          "message": "Zaktualizuj istniejącą fakturę w Chargebee."
+        },
+        "app.Q2hhcmdlYmVl.action.dXBkYXRlLWludm9pY2U.display_name": {
+          "source": "Update Invoice",
+          "message": "Zaktualizuj fakturę"
+        },
+        "app.Q2hhcmdlYmVl.action.dXBkYXRlLWludm9pY2U.option.aWQ.display_name": {
+          "source": "Invoice ID",
+          "message": "Identyfikator faktury"
+        },
+        "app.Q2hhcmdlYmVl.action.dXBkYXRlLWludm9pY2U.option.aWQ.short_desc": {
+          "source": "The invoice to update",
+          "message": "Faktura do zaktualizowania"
+        },
+        "app.Q2hhcmdlYmVl.action.dXBkYXRlLWludm9pY2U.short_desc": {
+          "source": "Update an existing invoice",
+          "message": "Zaktualizuj istniejącą fakturę"
+        },
+        "app.Q2hhcmdlYmVl.action.dXBkYXRlLXN1YnNjcmlwdGlvbg.desc": {
+          "source": "Update an existing subscription in Chargebee. You can modify the plan, billing cycle, add-ons, and other subscription details.",
+          "message": "Zaktualizuj istniejącą subskrypcję w Chargebee. Możesz modyfikować plan, cykl rozliczeniowy, dodatki oraz inne szczegóły subskrypcji."
+        },
+        "app.Q2hhcmdlYmVl.action.dXBkYXRlLXN1YnNjcmlwdGlvbg.display_name": {
+          "source": "Update Subscription",
+          "message": "Zaktualizuj subskrypcję"
+        },
+        "app.Q2hhcmdlYmVl.action.dXBkYXRlLXN1YnNjcmlwdGlvbg.option.aWQ.display_name": {
+          "source": "Subscription ID",
+          "message": "ID subskrypcji"
+        },
+        "app.Q2hhcmdlYmVl.action.dXBkYXRlLXN1YnNjcmlwdGlvbg.option.aWQ.short_desc": {
+          "source": "The subscription to update",
+          "message": "Subskrypcja do zaktualizowania"
+        },
+        "app.Q2hhcmdlYmVl.action.dXBkYXRlLXN1YnNjcmlwdGlvbg.short_desc": {
+          "source": "Update an existing subscription",
+          "message": "Zaktualizuj istniejącą subskrypcję"
+        },
+        "app.Q2hhcmdlYmVl.desc": {
+          "source": "Chargebee is a subscription billing and revenue management platform that helps businesses automate recurring billing, manage subscriptions, and handle invoicing. This integration enables managing customers, subscriptions, invoices, coupons, promotional credits, and receiving real-time event notifications via webhooks.\n\n**Features:**\n- Customer management (create, update, delete)\n- Subscription lifecycle management (create, update, cancel)\n- Invoice management (create, update, collect payments, refunds)\n- Coupon management (create, update, delete)\n- Promotional credit management (add, deduct, set)\n- Transaction retrieval\n- Real-time webhooks for customers, subscriptions, invoices, and events",
+          "message": "Chargebee to platforma rozliczeń subskrypcyjnych i zarządzania przychodami, która pomaga firmom automatyzować cykliczne rozliczenia, zarządzać subskrypcjami i obsługiwać fakturowanie. Ta integracja umożliwia zarządzanie klientami, subskrypcjami, fakturami, kuponami, kredytami promocyjnymi oraz odbieranie powiadomień o zdarzeniach w czasie rzeczywistym za pośrednictwem webhooków.\n\n**Funkcje:**\n- Zarządzanie klientami (tworzenie, aktualizowanie, usuwanie)\n- Zarządzanie cyklem życia subskrypcji (tworzenie, aktualizowanie, anulowanie)\n- Zarządzanie fakturami (tworzenie, aktualizowanie, pobieranie płatności, zwroty)\n- Zarządzanie kuponami (tworzenie, aktualizowanie, usuwanie)\n- Zarządzanie kredytami promocyjnymi (dodawanie, potrącanie, ustawianie)\n- Pobieranie transakcji\n- Webhooki w czasie rzeczywistym dla klientów, subskrypcji, faktur i zdarzeń"
+        },
+        "app.Q2hhcmdlYmVl.display_name": {
+          "source": "Chargebee",
+          "message": "Chargebee"
+        },
+        "app.Q2hhcmdlYmVl.short_desc": {
+          "source": "Chargebee subscription billing and revenue management platform",
+          "message": "Platforma rozliczeń subskrypcyjnych i zarządzania przychodami Chargebee"
+        }
+      }
+    }
+  }
+}

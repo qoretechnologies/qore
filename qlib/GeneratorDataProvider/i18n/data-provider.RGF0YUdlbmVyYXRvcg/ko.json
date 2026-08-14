@@ -1,0 +1,205 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "ko": {
+      "messages": {
+        "app.RGF0YUdlbmVyYXRvcg.action.Z2VuZXJhdGUtZnJvbS10ZW1wbGF0ZQ.desc": {
+          "source": "Generate a stream of records by repeating and varying a template record with optional randomization for testing data pipelines",
+          "message": "데이터 파이프라인 테스트를 위해 선택적 무작위화와 함께 템플릿 레코드를 반복 및 변형하여 레코드 스트림을 생성합니다"
+        },
+        "app.RGF0YUdlbmVyYXRvcg.action.Z2VuZXJhdGUtZnJvbS10ZW1wbGF0ZQ.display_name": {
+          "source": "Generate From Template",
+          "message": "Generate From Template"
+        },
+        "app.RGF0YUdlbmVyYXRvcg.action.Z2VuZXJhdGUtZnJvbS10ZW1wbGF0ZQ.option.Y291bnQ.desc": {
+          "source": "The total number of records to generate from the template; must be a non-negative integer; defaults to 10",
+          "message": "템플릿에서 생성할 총 레코드 수입니다. 음수가 아닌 정수여야 하며 기본값은 10입니다"
+        },
+        "app.RGF0YUdlbmVyYXRvcg.action.Z2VuZXJhdGUtZnJvbS10ZW1wbGF0ZQ.option.Y291bnQ.display_name": {
+          "source": "Record Count",
+          "message": "Record Count"
+        },
+        "app.RGF0YUdlbmVyYXRvcg.action.Z2VuZXJhdGUtZnJvbS10ZW1wbGF0ZQ.option.Y291bnQ.short_desc": {
+          "source": "Number of records to generate",
+          "message": "생성할 레코드 수"
+        },
+        "app.RGF0YUdlbmVyYXRvcg.action.Z2VuZXJhdGUtZnJvbS10ZW1wbGF0ZQ.option.YmFzZV9kYXRl.desc": {
+          "source": "A fixed date/time value used as the reference point for generating date fields; when provided with a seed, this ensures full cross-run reproducibility of date fields; if not provided, the current date/time at the start of generation is used",
+          "message": "날짜 필드 생성을 위한 기준점으로 사용되는 고정 날짜/시간 값입니다. 시드와 함께 제공되면 여러 실행 간 날짜 필드의 완전한 재현성이 보장됩니다. 제공되지 않으면 생성 시작 시점의 현재 날짜/시간이 사용됩니다"
+        },
+        "app.RGF0YUdlbmVyYXRvcg.action.Z2VuZXJhdGUtZnJvbS10ZW1wbGF0ZQ.option.YmFzZV9kYXRl.display_name": {
+          "source": "Base Date",
+          "message": "Base Date"
+        },
+        "app.RGF0YUdlbmVyYXRvcg.action.Z2VuZXJhdGUtZnJvbS10ZW1wbGF0ZQ.option.YmFzZV9kYXRl.short_desc": {
+          "source": "Fixed base date for date field generation",
+          "message": "날짜 필드 생성을 위한 고정 기준 날짜"
+        },
+        "app.RGF0YUdlbmVyYXRvcg.action.Z2VuZXJhdGUtZnJvbS10ZW1wbGF0ZQ.option.aW5jbHVkZV9udWxscw.desc": {
+          "source": "When `True` and strategy is `random`, approximately 10%% of field values will be set to `NOTHING` (null); useful for testing null handling in data pipelines; defaults to `False`",
+          "message": "`True`이고 전략이 `random`인 경우 필드 값의 약 10%%가 `NOTHING`(null)로 설정됩니다. 데이터 파이프라인에서 null 처리를 테스트하는 데 유용하며 기본값은 `False`입니다"
+        },
+        "app.RGF0YUdlbmVyYXRvcg.action.Z2VuZXJhdGUtZnJvbS10ZW1wbGF0ZQ.option.aW5jbHVkZV9udWxscw.display_name": {
+          "source": "Include Nulls",
+          "message": "Null 포함"
+        },
+        "app.RGF0YUdlbmVyYXRvcg.action.Z2VuZXJhdGUtZnJvbS10ZW1wbGF0ZQ.option.aW5jbHVkZV9udWxscw.short_desc": {
+          "source": "Whether to randomly include null values",
+          "message": "null 값을 무작위로 포함할지 여부"
+        },
+        "app.RGF0YUdlbmVyYXRvcg.action.Z2VuZXJhdGUtZnJvbS10ZW1wbGF0ZQ.option.c2VlZA.desc": {
+          "source": "An integer seed for the random number generator for reproducible output; only effective with `random` strategy",
+          "message": "재현 가능한 출력을 위한 난수 생성기용 정수 시드입니다. `random` 전략에서만 유효합니다."
+        },
+        "app.RGF0YUdlbmVyYXRvcg.action.Z2VuZXJhdGUtZnJvbS10ZW1wbGF0ZQ.option.c2VlZA.display_name": {
+          "source": "Random Seed",
+          "message": "랜덤 시드"
+        },
+        "app.RGF0YUdlbmVyYXRvcg.action.Z2VuZXJhdGUtZnJvbS10ZW1wbGF0ZQ.option.c2VlZA.short_desc": {
+          "source": "Seed for reproducible random generation",
+          "message": "재현 가능한 무작위 생성을 위한 시드"
+        },
+        "app.RGF0YUdlbmVyYXRvcg.action.Z2VuZXJhdGUtZnJvbS10ZW1wbGF0ZQ.option.c3RyYXRlZ3k.allowed-value.c3RyaW5nOnJhbmRvbQ.desc": {
+          "source": "Apply random variations to template values",
+          "message": "템플릿 값에 무작위 변형 적용"
+        },
+        "app.RGF0YUdlbmVyYXRvcg.action.Z2VuZXJhdGUtZnJvbS10ZW1wbGF0ZQ.option.c3RyYXRlZ3k.allowed-value.c3RyaW5nOnNlcXVlbnRpYWw.desc": {
+          "source": "Vary template values deterministically by record index",
+          "message": "레코드 인덱스에 따라 템플릿 값을 결정론적으로 변경"
+        },
+        "app.RGF0YUdlbmVyYXRvcg.action.Z2VuZXJhdGUtZnJvbS10ZW1wbGF0ZQ.option.c3RyYXRlZ3k.desc": {
+          "source": "The strategy for varying template values across generated records; `sequential` adds the record index to numeric values and appends it as a suffix to strings; `random` applies random variations; defaults to `sequential`",
+          "message": "생성된 레코드 전체에서 템플릿 값을 변경하는 전략입니다. `sequential`은(는) 숫자 값에 레코드 인덱스를 더하고 문자열에 접미사로 추가합니다. `random`은(는) 무작위 변형을 적용합니다. 기본값은 `sequential`입니다."
+        },
+        "app.RGF0YUdlbmVyYXRvcg.action.Z2VuZXJhdGUtZnJvbS10ZW1wbGF0ZQ.option.c3RyYXRlZ3k.display_name": {
+          "source": "Generation Strategy",
+          "message": "생성 전략"
+        },
+        "app.RGF0YUdlbmVyYXRvcg.action.Z2VuZXJhdGUtZnJvbS10ZW1wbGF0ZQ.option.c3RyYXRlZ3k.short_desc": {
+          "source": "How template values are varied",
+          "message": "템플릿 값이 변경되는 방식"
+        },
+        "app.RGF0YUdlbmVyYXRvcg.action.Z2VuZXJhdGUtZnJvbS10ZW1wbGF0ZQ.option.dGVtcGxhdGU.desc": {
+          "source": "A hash representing a single record whose structure and values will be used as the basis for all generated records; field types are inferred from the template values; each generated record varies the template values based on the record index or randomly",
+          "message": "생성된 모든 레코드의 기초로 사용될 구조와 값을 나타내는 단일 레코드 해시입니다. 필드 유형은 템플릿 값에서 추론됩니다. 생성된 각 레코드는 레코드 인덱스에 따르거나 무작위로 템플릿 값을 변경합니다."
+        },
+        "app.RGF0YUdlbmVyYXRvcg.action.Z2VuZXJhdGUtZnJvbS10ZW1wbGF0ZQ.option.dGVtcGxhdGU.display_name": {
+          "source": "Template Record",
+          "message": "템플릿 레코드"
+        },
+        "app.RGF0YUdlbmVyYXRvcg.action.Z2VuZXJhdGUtZnJvbS10ZW1wbGF0ZQ.option.dGVtcGxhdGU.short_desc": {
+          "source": "A sample record to use as a template",
+          "message": "템플릿으로 사용할 샘플 레코드"
+        },
+        "app.RGF0YUdlbmVyYXRvcg.action.Z2VuZXJhdGUtZnJvbS10ZW1wbGF0ZQ.short_desc": {
+          "source": "Generate records based on a template record",
+          "message": "템플릿 레코드를 기반으로 레코드 생성"
+        },
+        "app.RGF0YUdlbmVyYXRvcg.action.Z2VuZXJhdGUtcmVjb3Jkcw.desc": {
+          "source": "Generate a stream of records with configurable count, field types, and data generation strategy for testing data pipelines",
+          "message": "데이터 파이프라인 테스트를 위해 구성 가능한 개수, 필드 유형 및 데이터 생성 전략을 사용하여 레코드 스트림을 생성합니다."
+        },
+        "app.RGF0YUdlbmVyYXRvcg.action.Z2VuZXJhdGUtcmVjb3Jkcw.display_name": {
+          "source": "Generate Records",
+          "message": "레코드 생성"
+        },
+        "app.RGF0YUdlbmVyYXRvcg.action.Z2VuZXJhdGUtcmVjb3Jkcw.option.Y291bnQ.desc": {
+          "source": "The total number of records to generate in the output stream; must be a non-negative integer; defaults to 10",
+          "message": "출력 스트림에서 생성할 총 레코드 수입니다. 음수가 아닌 정수여야 합니다. 기본값은 10입니다."
+        },
+        "app.RGF0YUdlbmVyYXRvcg.action.Z2VuZXJhdGUtcmVjb3Jkcw.option.Y291bnQ.display_name": {
+          "source": "Record Count",
+          "message": "Record Count"
+        },
+        "app.RGF0YUdlbmVyYXRvcg.action.Z2VuZXJhdGUtcmVjb3Jkcw.option.Y291bnQ.short_desc": {
+          "source": "Number of records to generate",
+          "message": "생성할 레코드 수"
+        },
+        "app.RGF0YUdlbmVyYXRvcg.action.Z2VuZXJhdGUtcmVjb3Jkcw.option.YmFzZV9kYXRl.desc": {
+          "source": "A fixed date/time value used as the reference point for generating date fields; when provided with a seed, this ensures full cross-run reproducibility of date fields; if not provided, the current date/time at the start of generation is used",
+          "message": "날짜 필드 생성을 위한 기준점으로 사용되는 고정 날짜/시간 값입니다. 시드와 함께 제공되면 여러 실행 간 날짜 필드의 완전한 재현성이 보장됩니다. 제공되지 않으면 생성 시작 시점의 현재 날짜/시간이 사용됩니다"
+        },
+        "app.RGF0YUdlbmVyYXRvcg.action.Z2VuZXJhdGUtcmVjb3Jkcw.option.YmFzZV9kYXRl.display_name": {
+          "source": "Base Date",
+          "message": "Base Date"
+        },
+        "app.RGF0YUdlbmVyYXRvcg.action.Z2VuZXJhdGUtcmVjb3Jkcw.option.YmFzZV9kYXRl.short_desc": {
+          "source": "Fixed base date for date field generation",
+          "message": "날짜 필드 생성을 위한 고정 기준 날짜"
+        },
+        "app.RGF0YUdlbmVyYXRvcg.action.Z2VuZXJhdGUtcmVjb3Jkcw.option.ZmllbGRz.desc": {
+          "source": "A list of field definition hashes, each with keys: `name` (string, the field name), `type` (string, one of: `string`, `int`, `float`, `bool`, `date`), and optionally `desc` (string, field description).\n\nIf not provided, a default schema is used with fields: `id` (int), `name` (string), `value` (float), `active` (bool), `created` (date)",
+          "message": "필드 정의 해시 목록으로, 각각 `name`(문자열, 필드 이름), `type`(문자열, 다음 중 하나: `string`, `int`, `float`, `bool`, `date`) 및 선택적으로 `desc`(문자열, 필드 설명) 키를 가집니다.\n\n제공되지 않으면 `id`(int), `name`(string), `value`(float), `active`(bool), `created`(date) 필드가 포함된 기본 스키마가 사용됩니다."
+        },
+        "app.RGF0YUdlbmVyYXRvcg.action.Z2VuZXJhdGUtcmVjb3Jkcw.option.ZmllbGRz.display_name": {
+          "source": "Field Definitions",
+          "message": "필드 정의"
+        },
+        "app.RGF0YUdlbmVyYXRvcg.action.Z2VuZXJhdGUtcmVjb3Jkcw.option.ZmllbGRz.short_desc": {
+          "source": "Schema definition for generated records",
+          "message": "생성된 레코드의 스키마 정의"
+        },
+        "app.RGF0YUdlbmVyYXRvcg.action.Z2VuZXJhdGUtcmVjb3Jkcw.option.aW5jbHVkZV9udWxscw.desc": {
+          "source": "When `True` and strategy is `random`, approximately 10%% of field values will be set to `NOTHING` (null); useful for testing null handling in data pipelines; defaults to `False`",
+          "message": "`True`이고 전략이 `random`인 경우 필드 값의 약 10%%가 `NOTHING`(null)로 설정됩니다. 데이터 파이프라인에서 null 처리를 테스트하는 데 유용하며 기본값은 `False`입니다"
+        },
+        "app.RGF0YUdlbmVyYXRvcg.action.Z2VuZXJhdGUtcmVjb3Jkcw.option.aW5jbHVkZV9udWxscw.display_name": {
+          "source": "Include Nulls",
+          "message": "Null 포함"
+        },
+        "app.RGF0YUdlbmVyYXRvcg.action.Z2VuZXJhdGUtcmVjb3Jkcw.option.aW5jbHVkZV9udWxscw.short_desc": {
+          "source": "Whether to randomly include null values",
+          "message": "null 값을 무작위로 포함할지 여부"
+        },
+        "app.RGF0YUdlbmVyYXRvcg.action.Z2VuZXJhdGUtcmVjb3Jkcw.option.c2VlZA.desc": {
+          "source": "An integer seed for the random number generator; when provided, the same seed will always produce the same sequence of records, enabling reproducible test data; only effective with `random` strategy",
+          "message": "난수 생성기용 정수 시드입니다. 제공된 경우 동일한 시드는 항상 동일한 레코드 시퀀스를 생성하여 재현 가능한 테스트 데이터를 가능하게 합니다. `random` 전략에서만 유효합니다."
+        },
+        "app.RGF0YUdlbmVyYXRvcg.action.Z2VuZXJhdGUtcmVjb3Jkcw.option.c2VlZA.display_name": {
+          "source": "Random Seed",
+          "message": "랜덤 시드"
+        },
+        "app.RGF0YUdlbmVyYXRvcg.action.Z2VuZXJhdGUtcmVjb3Jkcw.option.c2VlZA.short_desc": {
+          "source": "Seed for reproducible random generation",
+          "message": "재현 가능한 무작위 생성을 위한 시드"
+        },
+        "app.RGF0YUdlbmVyYXRvcg.action.Z2VuZXJhdGUtcmVjb3Jkcw.option.c3RyYXRlZ3k.allowed-value.c3RyaW5nOnJhbmRvbQ.desc": {
+          "source": "Generate pseudo-random values for each field",
+          "message": "각 필드에 대해 의사 난수 값 생성"
+        },
+        "app.RGF0YUdlbmVyYXRvcg.action.Z2VuZXJhdGUtcmVjb3Jkcw.option.c3RyYXRlZ3k.allowed-value.c3RyaW5nOnNlcXVlbnRpYWw.desc": {
+          "source": "Generate deterministic values incrementing with each record index",
+          "message": "각 레코드 인덱스에 따라 증가하는 결정론적 값 생성"
+        },
+        "app.RGF0YUdlbmVyYXRvcg.action.Z2VuZXJhdGUtcmVjb3Jkcw.option.c3RyYXRlZ3k.desc": {
+          "source": "The strategy used to generate field values; `sequential` produces deterministic values based on the record index; `random` produces pseudo-random values; defaults to `sequential`",
+          "message": "필드 값을 생성하는 데 사용되는 전략입니다. `sequential`은(는) 레코드 인덱스를 기반으로 결정론적 값을 생성합니다. `random`은(는) 의사 난수 값을 생성합니다. 기본값은 `sequential`입니다."
+        },
+        "app.RGF0YUdlbmVyYXRvcg.action.Z2VuZXJhdGUtcmVjb3Jkcw.option.c3RyYXRlZ3k.display_name": {
+          "source": "Generation Strategy",
+          "message": "생성 전략"
+        },
+        "app.RGF0YUdlbmVyYXRvcg.action.Z2VuZXJhdGUtcmVjb3Jkcw.option.c3RyYXRlZ3k.short_desc": {
+          "source": "How field values are generated",
+          "message": "필드 값이 생성되는 방식"
+        },
+        "app.RGF0YUdlbmVyYXRvcg.action.Z2VuZXJhdGUtcmVjb3Jkcw.short_desc": {
+          "source": "Generate a stream of records with a configurable schema",
+          "message": "구성 가능한 스키마를 사용하여 레코드 스트림 생성"
+        },
+        "app.RGF0YUdlbmVyYXRvcg.desc": {
+          "source": "Generate configurable record streams for testing data pipelines without any external service connections",
+          "message": "외부 서비스 연결 없이 데이터 파이프라인을 테스트할 수 있도록 구성 가능한 레코드 스트림을 생성합니다."
+        },
+        "app.RGF0YUdlbmVyYXRvcg.display_name": {
+          "source": "Data Generator",
+          "message": "Data Generator"
+        },
+        "app.RGF0YUdlbmVyYXRvcg.short_desc": {
+          "source": "Generate test record streams",
+          "message": "테스트 레코드 스트림 생성"
+        }
+      }
+    }
+  }
+}

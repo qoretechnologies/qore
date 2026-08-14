@@ -1,0 +1,21 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "ko": {
+      "messages": {
+        "app.T3JhY2xl.desc": {
+          "source": "Create and manage connections to a Oracle database server",
+          "message": "Oracle 데이터베이스 서버에 대한 연결 생성 및 관리"
+        },
+        "app.T3JhY2xl.display_name": {
+          "source": "Oracle",
+          "message": "Oracle"
+        },
+        "app.T3JhY2xl.short_desc": {
+          "source": "Oracle database server",
+          "message": "Oracle 데이터베이스 서버"
+        }
+      }
+    }
+  }
+}

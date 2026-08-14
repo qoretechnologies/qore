@@ -1,0 +1,1389 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "it": {
+      "messages": {
+        "app.Qml0bHk.action.Y3JlYXRlLWJpdGxpbms.desc": {
+          "source": "Create a new bitlink with title, tags, and deep links",
+          "message": "Crea un nuovo bitlink con titolo, tag e deep link"
+        },
+        "app.Qml0bHk.action.Y3JlYXRlLWJpdGxpbms.display_name": {
+          "source": "Create a Bitlink",
+          "message": "Crea un Bitlink"
+        },
+        "app.Qml0bHk.action.Y3JlYXRlLWJpdGxpbms.option.Z3JvdXBfZ3VpZA.desc": {
+          "source": "The GUID of the group to create the bitlink in",
+          "message": "Il GUID del gruppo in cui creare il bitlink"
+        },
+        "app.Qml0bHk.action.Y3JlYXRlLWJpdGxpbms.option.Z3JvdXBfZ3VpZA.display_name": {
+          "source": "Group GUID",
+          "message": "GUID gruppo"
+        },
+        "app.Qml0bHk.action.Y3JlYXRlLWJpdGxpbms.option.Z3JvdXBfZ3VpZA.short_desc": {
+          "source": "Group to create the link in",
+          "message": "Gruppo in cui creare il link"
+        },
+        "app.Qml0bHk.action.Y3JlYXRlLWJpdGxpbms.option.ZG9tYWlu.desc": {
+          "source": "The short domain to use for the link. Defaults to `bit.ly` if not specified. Can also use a branded short domain (BSD) configured on the account",
+          "message": "Il dominio breve da utilizzare per il link. Il valore predefinito è `bit.ly` se non specificato. Può anche utilizzare un dominio breve personalizzato (BSD) configurato sull'account"
+        },
+        "app.Qml0bHk.action.Y3JlYXRlLWJpdGxpbms.option.ZG9tYWlu.display_name": {
+          "source": "Domain",
+          "message": "Dominio"
+        },
+        "app.Qml0bHk.action.Y3JlYXRlLWJpdGxpbms.option.ZG9tYWlu.short_desc": {
+          "source": "Custom short domain",
+          "message": "Dominio breve personalizzato"
+        },
+        "app.Qml0bHk.action.Y3JlYXRlLWJpdGxpbms.option.ZGVlcGxpbmtz.desc": {
+          "source": "A list of deep link configurations for mobile apps",
+          "message": "Un elenco di configurazioni di deep link per app mobili"
+        },
+        "app.Qml0bHk.action.Y3JlYXRlLWJpdGxpbms.option.ZGVlcGxpbmtz.display_name": {
+          "source": "Deeplinks",
+          "message": "Deeplink"
+        },
+        "app.Qml0bHk.action.Y3JlYXRlLWJpdGxpbms.option.ZGVlcGxpbmtz.short_desc": {
+          "source": "Mobile deep links",
+          "message": "Deep link per dispositivi mobili"
+        },
+        "app.Qml0bHk.action.Y3JlYXRlLWJpdGxpbms.option.bG9uZ191cmw.desc": {
+          "source": "The URL to be shortened",
+          "message": "L'URL da accorciare"
+        },
+        "app.Qml0bHk.action.Y3JlYXRlLWJpdGxpbms.option.bG9uZ191cmw.display_name": {
+          "source": "Long URL",
+          "message": "URL lungo"
+        },
+        "app.Qml0bHk.action.Y3JlYXRlLWJpdGxpbms.option.bG9uZ191cmw.short_desc": {
+          "source": "The URL to shorten",
+          "message": "L'URL da accorciare"
+        },
+        "app.Qml0bHk.action.Y3JlYXRlLWJpdGxpbms.option.dGFncw.desc": {
+          "source": "A list of tags to associate with the bitlink for organization",
+          "message": "Un elenco di tag da associare al bitlink per l'organizzazione"
+        },
+        "app.Qml0bHk.action.Y3JlYXRlLWJpdGxpbms.option.dGFncw.display_name": {
+          "source": "Tags",
+          "message": "Tag"
+        },
+        "app.Qml0bHk.action.Y3JlYXRlLWJpdGxpbms.option.dGFncw.short_desc": {
+          "source": "Tags for the link",
+          "message": "Tag per il link"
+        },
+        "app.Qml0bHk.action.Y3JlYXRlLWJpdGxpbms.option.dGl0bGU.desc": {
+          "source": "A title or description for the bitlink",
+          "message": "Un titolo o una descrizione per il bitlink"
+        },
+        "app.Qml0bHk.action.Y3JlYXRlLWJpdGxpbms.option.dGl0bGU.display_name": {
+          "source": "Title",
+          "message": "Titolo"
+        },
+        "app.Qml0bHk.action.Y3JlYXRlLWJpdGxpbms.option.dGl0bGU.short_desc": {
+          "source": "Link title",
+          "message": "Titolo del link"
+        },
+        "app.Qml0bHk.action.Y3JlYXRlLWJpdGxpbms.short_desc": {
+          "source": "Create a bitlink with advanced options",
+          "message": "Crea un bitlink con opzioni avanzate"
+        },
+        "app.Qml0bHk.action.Y3JlYXRlLWN1c3RvbS1iaXRsaW5r.desc": {
+          "source": "Add a custom back-half (slug) to an existing bitlink for branded URLs",
+          "message": "Aggiunge una seconda metà personalizzata (slug) a un bitlink esistente per gli URL personalizzati del brand"
+        },
+        "app.Qml0bHk.action.Y3JlYXRlLWN1c3RvbS1iaXRsaW5r.display_name": {
+          "source": "Create Custom Bitlink",
+          "message": "Crea bitlink personalizzato"
+        },
+        "app.Qml0bHk.action.Y3JlYXRlLWN1c3RvbS1iaXRsaW5r.option.Y3VzdG9tX2JpdGxpbms.desc": {
+          "source": "The custom bitlink to create (e.g., `mydom.ain/custom-slug`)",
+          "message": "Il bitlink personalizzato da creare (ad es. `mydom.ain/custom-slug`)"
+        },
+        "app.Qml0bHk.action.Y3JlYXRlLWN1c3RvbS1iaXRsaW5r.option.Y3VzdG9tX2JpdGxpbms.display_name": {
+          "source": "Custom Bitlink",
+          "message": "Bitlink personalizzato"
+        },
+        "app.Qml0bHk.action.Y3JlYXRlLWN1c3RvbS1iaXRsaW5r.option.Y3VzdG9tX2JpdGxpbms.short_desc": {
+          "source": "The custom back-half URL",
+          "message": "L'URL personalizzato della seconda metà"
+        },
+        "app.Qml0bHk.action.Y3JlYXRlLWN1c3RvbS1iaXRsaW5r.option.Yml0bGlua19pZA.desc": {
+          "source": "The ID of the existing bitlink to add a custom back-half to",
+          "message": "L'ID del bitlink esistente a cui aggiungere una seconda metà personalizzata"
+        },
+        "app.Qml0bHk.action.Y3JlYXRlLWN1c3RvbS1iaXRsaW5r.option.Yml0bGlua19pZA.display_name": {
+          "source": "Bitlink ID",
+          "message": "ID bitlink"
+        },
+        "app.Qml0bHk.action.Y3JlYXRlLWN1c3RvbS1iaXRsaW5r.option.Yml0bGlua19pZA.short_desc": {
+          "source": "Existing bitlink to customize",
+          "message": "Bitlink esistente da personalizzare"
+        },
+        "app.Qml0bHk.action.Y3JlYXRlLWN1c3RvbS1iaXRsaW5r.short_desc": {
+          "source": "Add a custom back-half to a bitlink",
+          "message": "Aggiungi una seconda metà personalizzata a un bitlink"
+        },
+        "app.Qml0bHk.action.Y3JlYXRlLWNhbXBhaWdu.desc": {
+          "source": "Create a new campaign for organizing and tracking bitlinks",
+          "message": "Crea una nuova campagna per organizzare e monitorare i bitlink"
+        },
+        "app.Qml0bHk.action.Y3JlYXRlLWNhbXBhaWdu.display_name": {
+          "source": "Create a Campaign",
+          "message": "Crea una campagna"
+        },
+        "app.Qml0bHk.action.Y3JlYXRlLWNhbXBhaWdu.option.Y2hhbm5lbF9ndWlkcw.desc": {
+          "source": "A list of channel GUIDs to associate with the campaign",
+          "message": "Un elenco di GUID di canali da associare alla campagna"
+        },
+        "app.Qml0bHk.action.Y3JlYXRlLWNhbXBhaWdu.option.Y2hhbm5lbF9ndWlkcw.display_name": {
+          "source": "Channel GUIDs",
+          "message": "GUID dei canali"
+        },
+        "app.Qml0bHk.action.Y3JlYXRlLWNhbXBhaWdu.option.Y2hhbm5lbF9ndWlkcw.short_desc": {
+          "source": "Channels to associate with the campaign",
+          "message": "Canali da associare alla campagna"
+        },
+        "app.Qml0bHk.action.Y3JlYXRlLWNhbXBhaWdu.option.Z3JvdXBfZ3VpZA.desc": {
+          "source": "The GUID of the group to create the campaign in",
+          "message": "Il GUID del gruppo in cui creare la campagna"
+        },
+        "app.Qml0bHk.action.Y3JlYXRlLWNhbXBhaWdu.option.Z3JvdXBfZ3VpZA.display_name": {
+          "source": "Group GUID",
+          "message": "GUID gruppo"
+        },
+        "app.Qml0bHk.action.Y3JlYXRlLWNhbXBhaWdu.option.Z3JvdXBfZ3VpZA.short_desc": {
+          "source": "Group to create the campaign in",
+          "message": "Gruppo in cui creare la campagna"
+        },
+        "app.Qml0bHk.action.Y3JlYXRlLWNhbXBhaWdu.option.ZGVzY3JpcHRpb24.desc": {
+          "source": "A description of the campaign",
+          "message": "Una descrizione della campagna"
+        },
+        "app.Qml0bHk.action.Y3JlYXRlLWNhbXBhaWdu.option.ZGVzY3JpcHRpb24.display_name": {
+          "source": "Description",
+          "message": "Descrizione"
+        },
+        "app.Qml0bHk.action.Y3JlYXRlLWNhbXBhaWdu.option.ZGVzY3JpcHRpb24.short_desc": {
+          "source": "Campaign description",
+          "message": "Descrizione della campagna"
+        },
+        "app.Qml0bHk.action.Y3JlYXRlLWNhbXBhaWdu.option.bmFtZQ.desc": {
+          "source": "The name of the campaign to create",
+          "message": "Il nome della campagna da creare"
+        },
+        "app.Qml0bHk.action.Y3JlYXRlLWNhbXBhaWdu.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "Nome"
+        },
+        "app.Qml0bHk.action.Y3JlYXRlLWNhbXBhaWdu.option.bmFtZQ.short_desc": {
+          "source": "Campaign name",
+          "message": "Nome della campagna"
+        },
+        "app.Qml0bHk.action.Y3JlYXRlLWNhbXBhaWdu.short_desc": {
+          "source": "Create a new campaign",
+          "message": "Crea una nuova campagna"
+        },
+        "app.Qml0bHk.action.Y3JlYXRlLXFyLWNvZGU.desc": {
+          "source": "Create a new QR code linked to a URL or existing bitlink with optional appearance customization",
+          "message": "Crea un nuovo codice QR collegato a un URL o a un bitlink esistente con personalizzazione facoltativa dell'aspetto"
+        },
+        "app.Qml0bHk.action.Y3JlYXRlLXFyLWNvZGU.display_name": {
+          "source": "Create a QR Code",
+          "message": "Crea un codice QR"
+        },
+        "app.Qml0bHk.action.Y3JlYXRlLXFyLWNvZGU.option.Z3JvdXBfZ3VpZA.desc": {
+          "source": "The GUID of the group to create the QR code in",
+          "message": "Il GUID del gruppo in cui creare il codice QR"
+        },
+        "app.Qml0bHk.action.Y3JlYXRlLXFyLWNvZGU.option.Z3JvdXBfZ3VpZA.display_name": {
+          "source": "Group GUID",
+          "message": "GUID gruppo"
+        },
+        "app.Qml0bHk.action.Y3JlYXRlLXFyLWNvZGU.option.Z3JvdXBfZ3VpZA.short_desc": {
+          "source": "Group to create the QR code in",
+          "message": "Gruppo in cui creare il codice QR"
+        },
+        "app.Qml0bHk.action.Y3JlYXRlLXFyLWNvZGU.option.ZGVzdGluYXRpb24.desc": {
+          "source": "The destination for the QR code. Provide either `long_url` or `bitlink_id`",
+          "message": "La destinazione per il codice QR. Fornisci `long_url` o `bitlink_id`"
+        },
+        "app.Qml0bHk.action.Y3JlYXRlLXFyLWNvZGU.option.ZGVzdGluYXRpb24.display_name": {
+          "source": "Destination",
+          "message": "Destinazione"
+        },
+        "app.Qml0bHk.action.Y3JlYXRlLXFyLWNvZGU.option.ZGVzdGluYXRpb24.short_desc": {
+          "source": "Target URL or bitlink",
+          "message": "URL di destinazione o bitlink"
+        },
+        "app.Qml0bHk.action.Y3JlYXRlLXFyLWNvZGU.option.ZXhwaXJhdGlvbl9hdA.desc": {
+          "source": "ISO 8601 timestamp when the QR code should expire",
+          "message": "Timestamp ISO 8601 che indica la scadenza del codice QR"
+        },
+        "app.Qml0bHk.action.Y3JlYXRlLXFyLWNvZGU.option.ZXhwaXJhdGlvbl9hdA.display_name": {
+          "source": "Expiration",
+          "message": "Scadenza"
+        },
+        "app.Qml0bHk.action.Y3JlYXRlLXFyLWNvZGU.option.ZXhwaXJhdGlvbl9hdA.short_desc": {
+          "source": "When the QR code expires",
+          "message": "Quando scade il codice QR"
+        },
+        "app.Qml0bHk.action.Y3JlYXRlLXFyLWNvZGU.option.cmVuZGVyX2N1c3RvbWl6YXRpb25z.desc": {
+          "source": "Appearance customization settings for the QR code including colors and dot pattern",
+          "message": "Impostazioni di personalizzazione dell'aspetto per il codice QR, inclusi colori e motivo a punti"
+        },
+        "app.Qml0bHk.action.Y3JlYXRlLXFyLWNvZGU.option.cmVuZGVyX2N1c3RvbWl6YXRpb25z.display_name": {
+          "source": "Render Customizations",
+          "message": "Personalizzazioni del rendering"
+        },
+        "app.Qml0bHk.action.Y3JlYXRlLXFyLWNvZGU.option.cmVuZGVyX2N1c3RvbWl6YXRpb25z.short_desc": {
+          "source": "QR code appearance settings",
+          "message": "Impostazioni di aspetto del codice QR"
+        },
+        "app.Qml0bHk.action.Y3JlYXRlLXFyLWNvZGU.option.dGFncw.desc": {
+          "source": "A list of tags to associate with the QR code for organization",
+          "message": "Un elenco di tag da associare al codice QR per l'organizzazione"
+        },
+        "app.Qml0bHk.action.Y3JlYXRlLXFyLWNvZGU.option.dGFncw.display_name": {
+          "source": "Tags",
+          "message": "Tag"
+        },
+        "app.Qml0bHk.action.Y3JlYXRlLXFyLWNvZGU.option.dGFncw.short_desc": {
+          "source": "Tags for the QR code",
+          "message": "Tag per il codice QR"
+        },
+        "app.Qml0bHk.action.Y3JlYXRlLXFyLWNvZGU.option.dGl0bGU.desc": {
+          "source": "The title of the QR code",
+          "message": "Il titolo del codice QR"
+        },
+        "app.Qml0bHk.action.Y3JlYXRlLXFyLWNvZGU.option.dGl0bGU.display_name": {
+          "source": "Title",
+          "message": "Titolo"
+        },
+        "app.Qml0bHk.action.Y3JlYXRlLXFyLWNvZGU.option.dGl0bGU.short_desc": {
+          "source": "QR code title",
+          "message": "Titolo del codice QR"
+        },
+        "app.Qml0bHk.action.Y3JlYXRlLXFyLWNvZGU.short_desc": {
+          "source": "Create a new QR code",
+          "message": "Crea un nuovo codice QR"
+        },
+        "app.Qml0bHk.action.Yml0bGluay1jbGljaw.desc": {
+          "source": "Fires when a bitlink receives new click activity in a group",
+          "message": "Si attiva quando un bitlink riceve una nuova attività di clic in un gruppo"
+        },
+        "app.Qml0bHk.action.Yml0bGluay1jbGljaw.display_name": {
+          "source": "Bitlink Clicked",
+          "message": "Bitlink cliccato"
+        },
+        "app.Qml0bHk.action.Yml0bGluay1jbGljaw.short_desc": {
+          "source": "Trigger when a bitlink receives clicks",
+          "message": "Attiva quando un bitlink riceve clic"
+        },
+        "app.Qml0bHk.action.Z2V0LW9yZ2FuaXphdGlvbg.desc": {
+          "source": "Retrieve a single organization by its GUID",
+          "message": "Recupera una singola organizzazione tramite il relativo GUID"
+        },
+        "app.Qml0bHk.action.Z2V0LW9yZ2FuaXphdGlvbg.display_name": {
+          "source": "Get an Organization",
+          "message": "Ottieni un'organizzazione"
+        },
+        "app.Qml0bHk.action.Z2V0LW9yZ2FuaXphdGlvbg.option.b3JnYW5pemF0aW9uX2d1aWQ.display_name": {
+          "source": "Organization GUID",
+          "message": "GUID dell'organizzazione"
+        },
+        "app.Qml0bHk.action.Z2V0LW9yZ2FuaXphdGlvbg.option.b3JnYW5pemF0aW9uX2d1aWQ.short_desc": {
+          "source": "The organization GUID",
+          "message": "Il GUID dell'organizzazione"
+        },
+        "app.Qml0bHk.action.Z2V0LW9yZ2FuaXphdGlvbg.short_desc": {
+          "source": "Get a single organization by GUID",
+          "message": "Ottieni una singola organizzazione tramite GUID"
+        },
+        "app.Qml0bHk.action.Z2V0LWJpdGxpbms.desc": {
+          "source": "Retrieve a single bitlink by its ID",
+          "message": "Recupera un singolo bitlink tramite il relativo ID"
+        },
+        "app.Qml0bHk.action.Z2V0LWJpdGxpbms.display_name": {
+          "source": "Get a Bitlink",
+          "message": "Ottieni un bitlink"
+        },
+        "app.Qml0bHk.action.Z2V0LWJpdGxpbms.option.Yml0bGluaw.display_name": {
+          "source": "Bitlink",
+          "message": "Bitlink"
+        },
+        "app.Qml0bHk.action.Z2V0LWJpdGxpbms.option.Yml0bGluaw.short_desc": {
+          "source": "The bitlink ID",
+          "message": "L'ID del bitlink"
+        },
+        "app.Qml0bHk.action.Z2V0LWJpdGxpbms.short_desc": {
+          "source": "Get a single bitlink by ID",
+          "message": "Ottieni un singolo bitlink tramite ID"
+        },
+        "app.Qml0bHk.action.Z2V0LWJpdGxpbmstY2xpY2tz.desc": {
+          "source": "Retrieve aggregate click statistics for a bitlink over a specified time period",
+          "message": "Recupera le statistiche aggregate sui clic per un bitlink in un intervallo di tempo specificato"
+        },
+        "app.Qml0bHk.action.Z2V0LWJpdGxpbmstY2xpY2tz.display_name": {
+          "source": "Get Bitlink Clicks",
+          "message": "Ottieni clic del bitlink"
+        },
+        "app.Qml0bHk.action.Z2V0LWJpdGxpbmstY2xpY2tz.option.Yml0bGluaw.desc": {
+          "source": "The bitlink ID to retrieve click summary for (e.g., `bit.ly/abc123`)",
+          "message": "L'ID del bitlink di cui recuperare il riepilogo dei clic (ad es. `bit.ly/abc123`)"
+        },
+        "app.Qml0bHk.action.Z2V0LWJpdGxpbmstY2xpY2tz.option.Yml0bGluaw.display_name": {
+          "source": "Bitlink",
+          "message": "Bitlink"
+        },
+        "app.Qml0bHk.action.Z2V0LWJpdGxpbmstY2xpY2tz.option.Yml0bGluaw.short_desc": {
+          "source": "The bitlink to get clicks for",
+          "message": "Il bitlink per cui ottenere i clic"
+        },
+        "app.Qml0bHk.action.Z2V0LWJpdGxpbmstY2xpY2tz.option.dW5pdA.allowed-value.c3RyaW5nOm1pbnV0ZQ.display_name": {
+          "source": "Minute",
+          "message": "Minuto"
+        },
+        "app.Qml0bHk.action.Z2V0LWJpdGxpbmstY2xpY2tz.option.dW5pdA.allowed-value.c3RyaW5nOm1vbnRo.display_name": {
+          "source": "Month",
+          "message": "Mese"
+        },
+        "app.Qml0bHk.action.Z2V0LWJpdGxpbmstY2xpY2tz.option.dW5pdA.allowed-value.c3RyaW5nOmRheQ.display_name": {
+          "source": "Day (default)",
+          "message": "Giorno (predefinito)"
+        },
+        "app.Qml0bHk.action.Z2V0LWJpdGxpbmstY2xpY2tz.option.dW5pdA.allowed-value.c3RyaW5nOmhvdXI.display_name": {
+          "source": "Hour",
+          "message": "Ora"
+        },
+        "app.Qml0bHk.action.Z2V0LWJpdGxpbmstY2xpY2tz.option.dW5pdA.allowed-value.c3RyaW5nOndlZWs.display_name": {
+          "source": "Week",
+          "message": "Settimana"
+        },
+        "app.Qml0bHk.action.Z2V0LWJpdGxpbmstY2xpY2tz.option.dW5pdA.desc": {
+          "source": "The time unit to use for aggregating click data",
+          "message": "L'unità temporale da usare per aggregare i dati sui clic"
+        },
+        "app.Qml0bHk.action.Z2V0LWJpdGxpbmstY2xpY2tz.option.dW5pdA.display_name": {
+          "source": "Time Unit",
+          "message": "Unità temporale"
+        },
+        "app.Qml0bHk.action.Z2V0LWJpdGxpbmstY2xpY2tz.option.dW5pdA.short_desc": {
+          "source": "The time unit for aggregation",
+          "message": "L'unità temporale per l'aggregazione"
+        },
+        "app.Qml0bHk.action.Z2V0LWJpdGxpbmstY2xpY2tz.option.dW5pdHM.desc": {
+          "source": "The number of time units to query. Use `-1` for all available data",
+          "message": "Il numero di unità di tempo da interrogare. Usa `-1` per tutti i dati disponibili"
+        },
+        "app.Qml0bHk.action.Z2V0LWJpdGxpbmstY2xpY2tz.option.dW5pdHM.display_name": {
+          "source": "Number of Units",
+          "message": "Numero di unità"
+        },
+        "app.Qml0bHk.action.Z2V0LWJpdGxpbmstY2xpY2tz.option.dW5pdHM.short_desc": {
+          "source": "How many time units to query",
+          "message": "Quante unità di tempo interrogare"
+        },
+        "app.Qml0bHk.action.Z2V0LWJpdGxpbmstY2xpY2tz.short_desc": {
+          "source": "Get click summary for a bitlink",
+          "message": "Ottieni il riepilogo dei clic per un bitlink"
+        },
+        "app.Qml0bHk.action.Z2V0LWNhbXBhaWdu.desc": {
+          "source": "Retrieve a single campaign by its GUID",
+          "message": "Recupera una singola campagna tramite il suo GUID"
+        },
+        "app.Qml0bHk.action.Z2V0LWNhbXBhaWdu.display_name": {
+          "source": "Get a Campaign",
+          "message": "Ottieni una campagna"
+        },
+        "app.Qml0bHk.action.Z2V0LWNhbXBhaWdu.option.Y2FtcGFpZ25fZ3VpZA.display_name": {
+          "source": "Campaign GUID",
+          "message": "GUID campagna"
+        },
+        "app.Qml0bHk.action.Z2V0LWNhbXBhaWdu.option.Y2FtcGFpZ25fZ3VpZA.short_desc": {
+          "source": "The campaign GUID",
+          "message": "Il GUID della campagna"
+        },
+        "app.Qml0bHk.action.Z2V0LWNhbXBhaWdu.short_desc": {
+          "source": "Get a single campaign by GUID",
+          "message": "Ottieni una singola campagna tramite GUID"
+        },
+        "app.Qml0bHk.action.Z2V0LWdyb3Vw.desc": {
+          "source": "Retrieve a single group by its GUID",
+          "message": "Recupera un singolo gruppo tramite il suo GUID"
+        },
+        "app.Qml0bHk.action.Z2V0LWdyb3Vw.display_name": {
+          "source": "Get a Group",
+          "message": "Ottieni un gruppo"
+        },
+        "app.Qml0bHk.action.Z2V0LWdyb3Vw.option.Z3JvdXBfZ3VpZA.display_name": {
+          "source": "Group GUID",
+          "message": "GUID gruppo"
+        },
+        "app.Qml0bHk.action.Z2V0LWdyb3Vw.option.Z3JvdXBfZ3VpZA.short_desc": {
+          "source": "The group GUID",
+          "message": "Il GUID del gruppo"
+        },
+        "app.Qml0bHk.action.Z2V0LWdyb3Vw.short_desc": {
+          "source": "Get a single group by GUID",
+          "message": "Ottieni un singolo gruppo tramite GUID"
+        },
+        "app.Qml0bHk.action.Z2V0LXFyLWNvZGU.desc": {
+          "source": "Retrieve a single QR code by its ID",
+          "message": "Recupera un singolo codice QR tramite il suo ID"
+        },
+        "app.Qml0bHk.action.Z2V0LXFyLWNvZGU.display_name": {
+          "source": "Get a QR Code",
+          "message": "Ottieni un codice QR"
+        },
+        "app.Qml0bHk.action.Z2V0LXFyLWNvZGU.option.cXJjb2RlX2lk.display_name": {
+          "source": "QR Code ID",
+          "message": "ID codice QR"
+        },
+        "app.Qml0bHk.action.Z2V0LXFyLWNvZGU.option.cXJjb2RlX2lk.short_desc": {
+          "source": "The QR code ID",
+          "message": "L'ID del codice QR"
+        },
+        "app.Qml0bHk.action.Z2V0LXFyLWNvZGU.short_desc": {
+          "source": "Get a single QR code by ID",
+          "message": "Ottieni un singolo codice QR tramite ID"
+        },
+        "app.Qml0bHk.action.ZGVsZXRlLWJpdGxpbms.desc": {
+          "source": "Permanently delete a bitlink",
+          "message": "Elimina definitivamente un bitlink"
+        },
+        "app.Qml0bHk.action.ZGVsZXRlLWJpdGxpbms.display_name": {
+          "source": "Delete a Bitlink",
+          "message": "Elimina un bitlink"
+        },
+        "app.Qml0bHk.action.ZGVsZXRlLWJpdGxpbms.option.Yml0bGluaw.desc": {
+          "source": "The bitlink ID to delete (e.g., `bit.ly/abc123`)",
+          "message": "L'ID del bitlink da eliminare (ad es. `bit.ly/abc123`)"
+        },
+        "app.Qml0bHk.action.ZGVsZXRlLWJpdGxpbms.option.Yml0bGluaw.display_name": {
+          "source": "Bitlink",
+          "message": "Bitlink"
+        },
+        "app.Qml0bHk.action.ZGVsZXRlLWJpdGxpbms.option.Yml0bGluaw.short_desc": {
+          "source": "The bitlink to delete",
+          "message": "Il bitlink da eliminare"
+        },
+        "app.Qml0bHk.action.ZGVsZXRlLWJpdGxpbms.short_desc": {
+          "source": "Delete an existing bitlink",
+          "message": "Elimina un bitlink esistente"
+        },
+        "app.Qml0bHk.action.bGlzdC1iaXRsaW5rcw.desc": {
+          "source": "List bitlinks in a group with optional filtering by keyword, date, tags, and more",
+          "message": "Elenca i bitlink in un gruppo con filtri facoltativi per parola chiave, data, tag e altro"
+        },
+        "app.Qml0bHk.action.bGlzdC1iaXRsaW5rcw.display_name": {
+          "source": "List Bitlinks",
+          "message": "Elenca bitlink"
+        },
+        "app.Qml0bHk.action.bGlzdC1iaXRsaW5rcw.option.Y2FtcGFpZ25fZ3VpZA.display_name": {
+          "source": "Campaign GUID",
+          "message": "GUID campagna"
+        },
+        "app.Qml0bHk.action.bGlzdC1iaXRsaW5rcw.option.Y2FtcGFpZ25fZ3VpZA.short_desc": {
+          "source": "Filter by campaign",
+          "message": "Filtra per campagna"
+        },
+        "app.Qml0bHk.action.bGlzdC1iaXRsaW5rcw.option.Y3JlYXRlZF9hZnRlcg.display_name": {
+          "source": "Created After",
+          "message": "Creato dopo il"
+        },
+        "app.Qml0bHk.action.bGlzdC1iaXRsaW5rcw.option.Y3JlYXRlZF9hZnRlcg.short_desc": {
+          "source": "Filter by creation date",
+          "message": "Filtra per data di creazione"
+        },
+        "app.Qml0bHk.action.bGlzdC1iaXRsaW5rcw.option.Y3JlYXRlZF9iZWZvcmU.display_name": {
+          "source": "Created Before",
+          "message": "Creato prima del"
+        },
+        "app.Qml0bHk.action.bGlzdC1iaXRsaW5rcw.option.Y3JlYXRlZF9iZWZvcmU.short_desc": {
+          "source": "Filter by creation date",
+          "message": "Filtra per data di creazione"
+        },
+        "app.Qml0bHk.action.bGlzdC1iaXRsaW5rcw.option.Y3VzdG9tX2JpdGxpbms.allowed-value.c3RyaW5nOm9mZg.display_name": {
+          "source": "No Custom",
+          "message": "Nessun elemento personalizzato"
+        },
+        "app.Qml0bHk.action.bGlzdC1iaXRsaW5rcw.option.Y3VzdG9tX2JpdGxpbms.allowed-value.c3RyaW5nOm9u.display_name": {
+          "source": "Has Custom",
+          "message": "Con personalizzazione"
+        },
+        "app.Qml0bHk.action.bGlzdC1iaXRsaW5rcw.option.Y3VzdG9tX2JpdGxpbms.allowed-value.c3RyaW5nOmJvdGg.display_name": {
+          "source": "Both",
+          "message": "Entrambi"
+        },
+        "app.Qml0bHk.action.bGlzdC1iaXRsaW5rcw.option.Y3VzdG9tX2JpdGxpbms.display_name": {
+          "source": "Custom Bitlink",
+          "message": "Bitlink personalizzato"
+        },
+        "app.Qml0bHk.action.bGlzdC1iaXRsaW5rcw.option.Y3VzdG9tX2JpdGxpbms.short_desc": {
+          "source": "Filter custom back-halves",
+          "message": "Filtra back-half personalizzati"
+        },
+        "app.Qml0bHk.action.bGlzdC1iaXRsaW5rcw.option.YXJjaGl2ZWQ.allowed-value.c3RyaW5nOm9mZg.display_name": {
+          "source": "Not Archived",
+          "message": "Non archiviato"
+        },
+        "app.Qml0bHk.action.bGlzdC1iaXRsaW5rcw.option.YXJjaGl2ZWQ.allowed-value.c3RyaW5nOm9u.display_name": {
+          "source": "Archived",
+          "message": "Archiviato"
+        },
+        "app.Qml0bHk.action.bGlzdC1iaXRsaW5rcw.option.YXJjaGl2ZWQ.allowed-value.c3RyaW5nOmJvdGg.display_name": {
+          "source": "Both",
+          "message": "Entrambi"
+        },
+        "app.Qml0bHk.action.bGlzdC1iaXRsaW5rcw.option.YXJjaGl2ZWQ.display_name": {
+          "source": "Archived",
+          "message": "Archiviato"
+        },
+        "app.Qml0bHk.action.bGlzdC1iaXRsaW5rcw.option.YXJjaGl2ZWQ.short_desc": {
+          "source": "Filter by archive status",
+          "message": "Filtra per stato di archiviazione"
+        },
+        "app.Qml0bHk.action.bGlzdC1iaXRsaW5rcw.option.Yml0bGluaw.display_name": {
+          "source": "Bitlink",
+          "message": "Bitlink"
+        },
+        "app.Qml0bHk.action.bGlzdC1iaXRsaW5rcw.option.Yml0bGluaw.short_desc": {
+          "source": "Get a specific bitlink",
+          "message": "Ottieni un bitlink specifico"
+        },
+        "app.Qml0bHk.action.bGlzdC1iaXRsaW5rcw.option.Z3JvdXBfZ3VpZA.display_name": {
+          "source": "Group GUID",
+          "message": "GUID gruppo"
+        },
+        "app.Qml0bHk.action.bGlzdC1iaXRsaW5rcw.option.Z3JvdXBfZ3VpZA.short_desc": {
+          "source": "Group to list bitlinks for",
+          "message": "Gruppo per cui elencare i bitlink"
+        },
+        "app.Qml0bHk.action.bGlzdC1iaXRsaW5rcw.option.a2V5d29yZA.display_name": {
+          "source": "Keyword",
+          "message": "Parola chiave"
+        },
+        "app.Qml0bHk.action.bGlzdC1iaXRsaW5rcw.option.a2V5d29yZA.short_desc": {
+          "source": "Search by keyword",
+          "message": "Cerca per parola chiave"
+        },
+        "app.Qml0bHk.action.bGlzdC1iaXRsaW5rcw.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "Limite"
+        },
+        "app.Qml0bHk.action.bGlzdC1iaXRsaW5rcw.option.bGltaXQ.short_desc": {
+          "source": "Maximum results",
+          "message": "Risultati massimi"
+        },
+        "app.Qml0bHk.action.bGlzdC1iaXRsaW5rcw.option.bW9kaWZpZWRfYWZ0ZXI.display_name": {
+          "source": "Modified After",
+          "message": "Modificato dopo il"
+        },
+        "app.Qml0bHk.action.bGlzdC1iaXRsaW5rcw.option.bW9kaWZpZWRfYWZ0ZXI.short_desc": {
+          "source": "Filter by modification date",
+          "message": "Filtra per data di modifica"
+        },
+        "app.Qml0bHk.action.bGlzdC1iaXRsaW5rcw.option.dGFncw.display_name": {
+          "source": "Tags",
+          "message": "Tag"
+        },
+        "app.Qml0bHk.action.bGlzdC1iaXRsaW5rcw.option.dGFncw.short_desc": {
+          "source": "Filter by tags",
+          "message": "Filtra per tag"
+        },
+        "app.Qml0bHk.action.bGlzdC1iaXRsaW5rcw.short_desc": {
+          "source": "List bitlinks in a group",
+          "message": "Elenca i bitlink in un gruppo"
+        },
+        "app.Qml0bHk.action.bGlzdC1ic2Rz.desc": {
+          "source": "List all branded short domains (BSDs) available in the account",
+          "message": "Elenca tutti i domini brevi personalizzati (BSD) disponibili nell'account"
+        },
+        "app.Qml0bHk.action.bGlzdC1ic2Rz.display_name": {
+          "source": "List Branded Short Domains",
+          "message": "Elenca domini brevi personalizzati"
+        },
+        "app.Qml0bHk.action.bGlzdC1ic2Rz.short_desc": {
+          "source": "List all branded short domains",
+          "message": "Elenca tutti i domini brevi personalizzati"
+        },
+        "app.Qml0bHk.action.bGlzdC1jYW1wYWlnbnM.desc": {
+          "source": "List campaigns with optional filtering by group",
+          "message": "Elenca le campagne con filtro facoltativo per gruppo"
+        },
+        "app.Qml0bHk.action.bGlzdC1jYW1wYWlnbnM.display_name": {
+          "source": "List Campaigns",
+          "message": "Elenca campagne"
+        },
+        "app.Qml0bHk.action.bGlzdC1jYW1wYWlnbnM.option.Y2FtcGFpZ25fZ3VpZA.display_name": {
+          "source": "Campaign GUID",
+          "message": "GUID campagna"
+        },
+        "app.Qml0bHk.action.bGlzdC1jYW1wYWlnbnM.option.Y2FtcGFpZ25fZ3VpZA.short_desc": {
+          "source": "Get a specific campaign",
+          "message": "Ottieni una campagna specifica"
+        },
+        "app.Qml0bHk.action.bGlzdC1jYW1wYWlnbnM.option.Z3JvdXBfZ3VpZA.display_name": {
+          "source": "Group GUID",
+          "message": "GUID gruppo"
+        },
+        "app.Qml0bHk.action.bGlzdC1jYW1wYWlnbnM.option.Z3JvdXBfZ3VpZA.short_desc": {
+          "source": "Filter by group",
+          "message": "Filtra per gruppo"
+        },
+        "app.Qml0bHk.action.bGlzdC1jYW1wYWlnbnM.short_desc": {
+          "source": "List campaigns",
+          "message": "Elenca campagne"
+        },
+        "app.Qml0bHk.action.bGlzdC1ncm91cHM.desc": {
+          "source": "List all groups in the account",
+          "message": "Elenca tutti i gruppi nell'account"
+        },
+        "app.Qml0bHk.action.bGlzdC1ncm91cHM.display_name": {
+          "source": "List Groups",
+          "message": "Elenca gruppi"
+        },
+        "app.Qml0bHk.action.bGlzdC1ncm91cHM.option.Z3JvdXBfZ3VpZA.display_name": {
+          "source": "Group GUID",
+          "message": "GUID gruppo"
+        },
+        "app.Qml0bHk.action.bGlzdC1ncm91cHM.option.Z3JvdXBfZ3VpZA.short_desc": {
+          "source": "Get a specific group",
+          "message": "Ottieni un gruppo specifico"
+        },
+        "app.Qml0bHk.action.bGlzdC1ncm91cHM.option.b3JnYW5pemF0aW9uX2d1aWQ.display_name": {
+          "source": "Organization GUID",
+          "message": "GUID dell'organizzazione"
+        },
+        "app.Qml0bHk.action.bGlzdC1ncm91cHM.option.b3JnYW5pemF0aW9uX2d1aWQ.short_desc": {
+          "source": "Filter by organization",
+          "message": "Filtra per organizzazione"
+        },
+        "app.Qml0bHk.action.bGlzdC1ncm91cHM.short_desc": {
+          "source": "List all groups",
+          "message": "Elenca tutti i gruppi"
+        },
+        "app.Qml0bHk.action.bGlzdC1vcmdhbml6YXRpb25z.desc": {
+          "source": "List all organizations in the account",
+          "message": "Elenca tutte le organizzazioni nell'account"
+        },
+        "app.Qml0bHk.action.bGlzdC1vcmdhbml6YXRpb25z.display_name": {
+          "source": "List Organizations",
+          "message": "Elenca organizzazioni"
+        },
+        "app.Qml0bHk.action.bGlzdC1vcmdhbml6YXRpb25z.option.b3JnYW5pemF0aW9uX2d1aWQ.display_name": {
+          "source": "Organization GUID",
+          "message": "GUID dell'organizzazione"
+        },
+        "app.Qml0bHk.action.bGlzdC1vcmdhbml6YXRpb25z.option.b3JnYW5pemF0aW9uX2d1aWQ.short_desc": {
+          "source": "Get a specific organization",
+          "message": "Ottieni un'organizzazione specifica"
+        },
+        "app.Qml0bHk.action.bGlzdC1vcmdhbml6YXRpb25z.short_desc": {
+          "source": "List all organizations",
+          "message": "Elenca tutte le organizzazioni"
+        },
+        "app.Qml0bHk.action.bGlzdC1xci1jb2Rlcw.desc": {
+          "source": "List QR codes in a group with optional filtering",
+          "message": "Elenca i codici QR in un gruppo con filtri facoltativi"
+        },
+        "app.Qml0bHk.action.bGlzdC1xci1jb2Rlcw.display_name": {
+          "source": "List QR Codes",
+          "message": "Elenca codici QR"
+        },
+        "app.Qml0bHk.action.bGlzdC1xci1jb2Rlcw.option.Z3JvdXBfZ3VpZA.display_name": {
+          "source": "Group GUID",
+          "message": "GUID gruppo"
+        },
+        "app.Qml0bHk.action.bGlzdC1xci1jb2Rlcw.option.Z3JvdXBfZ3VpZA.short_desc": {
+          "source": "Group to list QR codes for",
+          "message": "Gruppo per cui elencare i codici QR"
+        },
+        "app.Qml0bHk.action.bGlzdC1xci1jb2Rlcw.option.cXJjb2RlX2lk.display_name": {
+          "source": "QR Code ID",
+          "message": "ID codice QR"
+        },
+        "app.Qml0bHk.action.bGlzdC1xci1jb2Rlcw.option.cXJjb2RlX2lk.short_desc": {
+          "source": "Get a specific QR code",
+          "message": "Ottieni un codice QR specifico"
+        },
+        "app.Qml0bHk.action.bGlzdC1xci1jb2Rlcw.short_desc": {
+          "source": "List QR codes in a group",
+          "message": "Elenca i codici QR in un gruppo"
+        },
+        "app.Qml0bHk.action.bWFrZS1hcGktY2FsbA.desc": {
+          "source": "Make a custom HTTP / REST API call to **Bitly** using the configured connection's authentication.\n\nSpecify the HTTP method, the URI path (relative to the connection's API base URL), optional query parameters, headers, and request body. The response is returned as a hash containing the status code, response headers, and response body.\n\nUse this action for endpoints that are not yet exposed as first-class actions on this app.",
+          "message": "Esegui una chiamata API HTTP / REST personalizzata a **Bitly** utilizzando l'autenticazione della connessione configurata.\n\nSpecifica il metodo HTTP, il percorso URI (relativo all'URL di base dell'API della connessione), parametri di query facoltativi, intestazioni e corpo della richiesta. La risposta viene restituita sotto forma di hash contenente il codice di stato, le intestazioni di risposta e il corpo della risposta.\n\nUsa questa azione per gli endpoint che non sono ancora esposti come azioni di prim'ordine su questa app."
+        },
+        "app.Qml0bHk.action.bWFrZS1hcGktY2FsbA.display_name": {
+          "source": "Make an API call",
+          "message": "Esegui una chiamata API"
+        },
+        "app.Qml0bHk.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.desc": {
+          "source": "The request body. The effective type depends on `body_type`: JSON/form/YAML expect a hash, XML/text expect a string, multipart expects a file structure, binary expects raw bytes.",
+          "message": "Il corpo della richiesta. Il tipo effettivo dipende da `body_type`: JSON/form/YAML richiedono un hash, XML/testo richiedono una stringa, multipart richiede una struttura di file, binario richiede byte grezzi."
+        },
+        "app.Qml0bHk.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.display_name": {
+          "source": "Body",
+          "message": "Corpo"
+        },
+        "app.Qml0bHk.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.short_desc": {
+          "source": "The request body",
+          "message": "Il corpo della richiesta"
+        },
+        "app.Qml0bHk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.desc": {
+          "source": "Upload a file using `multipart/form-data`. The body must be a @ref DataProvider::FileDataType \"FileDataType\" structure (filename + content + mime_type). The framework builds the multipart envelope and sets the boundary header.",
+          "message": "Carica un file utilizzando `multipart/form-data`. Il corpo deve essere una struttura @ref DataProvider::FileDataType \"FileDataType\" (nome file + contenuto + mime_type). Il framework costruisce l'inviluppo multipart e imposta l'intestazione del boundary."
+        },
+        "app.Qml0bHk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.display_name": {
+          "source": "Multipart Form",
+          "message": "Modulo Multipart"
+        },
+        "app.Qml0bHk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.short_desc": {
+          "source": "Upload a file using multipart/form-data",
+          "message": "Carica un file utilizzando multipart/form-data"
+        },
+        "app.Qml0bHk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.desc": {
+          "source": "Pass the body to the REST client unchanged; the client decides serialization based on its configured `data` option and the value type",
+          "message": "Passa il corpo al client REST inalterato; il client decide la serializzazione in base alla sua opzione `data` configurata e al tipo di valore"
+        },
+        "app.Qml0bHk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.display_name": {
+          "source": "Auto",
+          "message": "Auto"
+        },
+        "app.Qml0bHk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.short_desc": {
+          "source": "Pass-through; use connection serialization and let the REST client decide",
+          "message": "Pass-through; usa la serializzazione della connessione e lascia decidere al client REST"
+        },
+        "app.Qml0bHk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.desc": {
+          "source": "Send the body as raw bytes. The body must be a binary value. Sets `Content-Type: application/octet-stream` unless overridden by `hdr`.",
+          "message": "Invia il corpo come byte grezzi. Il corpo deve essere un valore binario. Imposta `Content-Type: application/octet-stream` a meno che non sia sovrascritto da `hdr`."
+        },
+        "app.Qml0bHk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.display_name": {
+          "source": "Raw Binary",
+          "message": "Binario grezzo"
+        },
+        "app.Qml0bHk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.short_desc": {
+          "source": "Send body as raw bytes",
+          "message": "Invia il corpo come byte grezzi"
+        },
+        "app.Qml0bHk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.desc": {
+          "source": "Serialize a hash of form fields as `application/x-www-form-urlencoded`. The body must be a hash whose values are scalars (strings/numbers/booleans).",
+          "message": "Serializza un hash di campi modulo come `application/x-www-form-urlencoded`. Il corpo deve essere un hash i cui valori sono scalari (stringhe/numeri/booleani)."
+        },
+        "app.Qml0bHk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.display_name": {
+          "source": "Form (URL-encoded)",
+          "message": "Form (URL-encoded)"
+        },
+        "app.Qml0bHk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.short_desc": {
+          "source": "Serialize body as application/x-www-form-urlencoded form fields",
+          "message": "Serializza il corpo come campi del modulo application/x-www-form-urlencoded"
+        },
+        "app.Qml0bHk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.desc": {
+          "source": "Serialize the body as JSON; sets `Content-Type: application/json`. The body should be a hash, list, or scalar value.",
+          "message": "Serializza il corpo come JSON; imposta `Content-Type: application/json`. Il corpo deve essere un hash, un elenco o un valore scalare."
+        },
+        "app.Qml0bHk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.display_name": {
+          "source": "JSON",
+          "message": "JSON"
+        },
+        "app.Qml0bHk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.short_desc": {
+          "source": "Serialize body as JSON",
+          "message": "Serializza il corpo come JSON"
+        },
+        "app.Qml0bHk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.desc": {
+          "source": "Send the body as plain text. The body must be a string. Sets `Content-Type: text/plain`.",
+          "message": "Invia il corpo come testo semplice. Il corpo deve essere una stringa. Imposta `Content-Type: text/plain`."
+        },
+        "app.Qml0bHk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.display_name": {
+          "source": "Plain Text",
+          "message": "Testo normale"
+        },
+        "app.Qml0bHk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.short_desc": {
+          "source": "Send body as text/plain",
+          "message": "Invia il corpo come text/plain"
+        },
+        "app.Qml0bHk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.desc": {
+          "source": "Send the body as XML. If the body is a hash it is serialized to XML; if it is a string it is sent verbatim. Sets `Content-Type: application/xml`.",
+          "message": "Invia il corpo come XML. Se il corpo è un hash viene serializzato in XML; se è una stringa viene inviato testualmente. Imposta `Content-Type: application/xml`."
+        },
+        "app.Qml0bHk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.display_name": {
+          "source": "XML",
+          "message": "XML"
+        },
+        "app.Qml0bHk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.short_desc": {
+          "source": "Send body as XML",
+          "message": "Invia il corpo come XML"
+        },
+        "app.Qml0bHk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.desc": {
+          "source": "Send the body as YAML. If the body is a hash it is serialized to YAML; if it is a string it is sent verbatim. Sets `Content-Type: application/x-yaml`.",
+          "message": "Invia il corpo come YAML. Se il corpo è un hash viene serializzato in YAML; se è una stringa viene inviato testualmente. Imposta `Content-Type: application/x-yaml`."
+        },
+        "app.Qml0bHk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.display_name": {
+          "source": "YAML",
+          "message": "YAML"
+        },
+        "app.Qml0bHk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.short_desc": {
+          "source": "Send body as YAML",
+          "message": "Invia il corpo come YAML"
+        },
+        "app.Qml0bHk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.desc": {
+          "source": "Selects the body serialization mode and the corresponding `Content-Type` header. Changing this field reshapes the `body` editor - selecting JSON exposes a JSON editor, selecting Multipart Form exposes a file picker, and so on.",
+          "message": "Seleziona la modalità di serializzazione del corpo e la corrispondente intestazione `Content-Type`. La modifica di questo campo riorganizza l'editor `body`: selezionando JSON viene mostrato un editor JSON, selezionando Modulo Multipart viene mostrato un selettore di file e così via."
+        },
+        "app.Qml0bHk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.display_name": {
+          "source": "Body Type",
+          "message": "Tipo di corpo"
+        },
+        "app.Qml0bHk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.short_desc": {
+          "source": "How the body is serialized and what Content-Type is sent",
+          "message": "Come viene serializzato il corpo e quale Content-Type viene inviato"
+        },
+        "app.Qml0bHk.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.desc": {
+          "source": "If `True`, non-2xx HTTP responses return as the normal response hash (with the actual status code) instead of raising `REST-RESPONSE-ERROR`. Useful for handling 4xx/5xx as data - e.g. checking whether a resource exists. Overrides the connection's `error_passthru` setting for this call only.",
+          "message": "Se `True`, le risposte HTTP diverse da 2xx ritornano come normale hash di risposta (con il codice di stato effettivo) invece di sollevare `REST-RESPONSE-ERROR`. Utile per gestire 4xx/5xx come dati, ad es. per verificare se una risorsa esiste. Sovrascrive l'impostazione `error_passthru` della connessione solo per questa chiamata."
+        },
+        "app.Qml0bHk.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.display_name": {
+          "source": "Return Errors as Data",
+          "message": "Restituisci errori come dati"
+        },
+        "app.Qml0bHk.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.short_desc": {
+          "source": "Return non-2xx responses normally instead of throwing",
+          "message": "Restituisci normalmente le risposte non 2xx invece di generare un'eccezione"
+        },
+        "app.Qml0bHk.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.desc": {
+          "source": "Optional list of HTTP status codes treated as success. If set and the response status is not in this list, the action throws `REST-STATUS-ERROR`. When unset, the REST client's default behavior applies (typically: 2xx is success, non-2xx throws).",
+          "message": "Elenco opzionale di codici di stato HTTP trattati come successo. Se impostato e lo stato della risposta non è in questo elenco, l'azione genera `REST-STATUS-ERROR`. Quando non è impostato, si applica il comportamento predefinito del client REST (in genere: 2xx è successo, non-2xx genera un'eccezione)."
+        },
+        "app.Qml0bHk.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.display_name": {
+          "source": "Expected Status Codes",
+          "message": "Codici di stato previsti"
+        },
+        "app.Qml0bHk.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.short_desc": {
+          "source": "Response status codes treated as success",
+          "message": "Codici di stato della risposta trattati come successo"
+        },
+        "app.Qml0bHk.action.bWFrZS1hcGktY2FsbA.option.aGRy.desc": {
+          "source": "Hash of custom headers added to the request. These override any default headers set by `body_type` (e.g. supplying `Content-Type` here wins over the body-type default).",
+          "message": "Hash di intestazioni personalizzate aggiunte alla richiesta. Queste sovrascrivono qualsiasi intestazione predefinita impostata da `body_type` (ad es. fornire `Content-Type` qui ha la precedenza sul valore predefinito del tipo di corpo)."
+        },
+        "app.Qml0bHk.action.bWFrZS1hcGktY2FsbA.option.aGRy.display_name": {
+          "source": "Custom Headers",
+          "message": "Intestazioni personalizzate"
+        },
+        "app.Qml0bHk.action.bWFrZS1hcGktY2FsbA.option.aGRy.short_desc": {
+          "source": "Extra request headers",
+          "message": "Intestazioni della richiesta aggiuntive"
+        },
+        "app.Qml0bHk.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.desc": {
+          "source": "If `True`, the response hash includes a `debug` sub-hash containing the request method/URL/headers (with sensitive values redacted), request and response sizes, and round-trip duration. Useful when investigating slow or failing calls. Off by default to keep responses lean.",
+          "message": "Se `True`, l'hash della risposta include un sotto-hash `debug` contenente il metodo/URL/intestazioni della richiesta (con i valori sensibili oscurati), le dimensioni della richiesta e della risposta e la durata di andata e ritorno. Utile quando si indagano chiamate lente o con errori. Disattivato per impostazione predefinita per mantenere le risposte snelle."
+        },
+        "app.Qml0bHk.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.display_name": {
+          "source": "Include Debug Info",
+          "message": "Includi informazioni di debug"
+        },
+        "app.Qml0bHk.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.short_desc": {
+          "source": "Include request/timing/size debug info in the response",
+          "message": "Includi le informazioni di debug relative a richiesta/tempi/dimensioni nella risposta"
+        },
+        "app.Qml0bHk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.desc": {
+          "source": "HTTP `OPTIONS`",
+          "message": "HTTP `OPTIONS`"
+        },
+        "app.Qml0bHk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.display_name": {
+          "source": "OPTIONS",
+          "message": "OPTIONS"
+        },
+        "app.Qml0bHk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.short_desc": {
+          "source": "HTTP OPTIONS",
+          "message": "HTTP OPTIONS"
+        },
+        "app.Qml0bHk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.desc": {
+          "source": "HTTP `DELETE`",
+          "message": "HTTP `DELETE`"
+        },
+        "app.Qml0bHk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.display_name": {
+          "source": "DELETE",
+          "message": "DELETE"
+        },
+        "app.Qml0bHk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.short_desc": {
+          "source": "HTTP DELETE",
+          "message": "HTTP DELETE"
+        },
+        "app.Qml0bHk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.desc": {
+          "source": "HTTP `GET`",
+          "message": "HTTP `GET`"
+        },
+        "app.Qml0bHk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.display_name": {
+          "source": "GET",
+          "message": "GET"
+        },
+        "app.Qml0bHk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.short_desc": {
+          "source": "HTTP GET",
+          "message": "HTTP GET"
+        },
+        "app.Qml0bHk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.desc": {
+          "source": "HTTP `HEAD`",
+          "message": "HTTP `HEAD`"
+        },
+        "app.Qml0bHk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.display_name": {
+          "source": "HEAD",
+          "message": "HEAD"
+        },
+        "app.Qml0bHk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.short_desc": {
+          "source": "HTTP HEAD",
+          "message": "HTTP HEAD"
+        },
+        "app.Qml0bHk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.desc": {
+          "source": "HTTP `PATCH`",
+          "message": "HTTP `PATCH`"
+        },
+        "app.Qml0bHk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.display_name": {
+          "source": "PATCH",
+          "message": "PATCH"
+        },
+        "app.Qml0bHk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.short_desc": {
+          "source": "HTTP PATCH",
+          "message": "HTTP PATCH"
+        },
+        "app.Qml0bHk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.desc": {
+          "source": "HTTP `POST`",
+          "message": "HTTP `POST`"
+        },
+        "app.Qml0bHk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.display_name": {
+          "source": "POST",
+          "message": "POST"
+        },
+        "app.Qml0bHk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.short_desc": {
+          "source": "HTTP POST",
+          "message": "HTTP POST"
+        },
+        "app.Qml0bHk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.desc": {
+          "source": "HTTP `PUT`",
+          "message": "HTTP `PUT`"
+        },
+        "app.Qml0bHk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.display_name": {
+          "source": "PUT",
+          "message": "PUT"
+        },
+        "app.Qml0bHk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.short_desc": {
+          "source": "HTTP PUT",
+          "message": "HTTP PUT"
+        },
+        "app.Qml0bHk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.desc": {
+          "source": "HTTP `TRACE`",
+          "message": "HTTP `TRACE`"
+        },
+        "app.Qml0bHk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.display_name": {
+          "source": "TRACE",
+          "message": "TRACE"
+        },
+        "app.Qml0bHk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.short_desc": {
+          "source": "HTTP TRACE",
+          "message": "HTTP TRACE"
+        },
+        "app.Qml0bHk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "Il metodo HTTP da utilizzare per la richiesta"
+        },
+        "app.Qml0bHk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.display_name": {
+          "source": "HTTP Method",
+          "message": "Metodo HTTP"
+        },
+        "app.Qml0bHk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.short_desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "Il metodo HTTP da utilizzare per la richiesta"
+        },
+        "app.Qml0bHk.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain `{name}` placeholders that are replaced from `path_vars`. Example: `/users/{id}/comments`.",
+          "message": "Il percorso URI relativo all'URL di base dell'API della connessione. Può contenere segnaposto `{name}` che vengono sostituiti da `path_vars`. Esempio: `/users/{id}/comments`."
+        },
+        "app.Qml0bHk.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.display_name": {
+          "source": "URI Path",
+          "message": "Percorso URI"
+        },
+        "app.Qml0bHk.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.short_desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain '{name}' placeholders that are replaced from 'path_vars'. Example: '/users/{id}/comments'",
+          "message": "Il percorso URI relativo all'URL di base dell'API della connessione. Può contenere segnaposto '{name}' che vengono sostituiti da 'path_vars'. Esempio: '/users/{id}/comments'"
+        },
+        "app.Qml0bHk.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.desc": {
+          "source": "Hash of values substituted into `{name}` placeholders in the URI path. Example: with `path = /users/{id}` and `path_vars = {id: 123}` the framework sends `/users/123`. Values are URL-encoded.",
+          "message": "Hash dei valori sostituiti nei segnaposto `{name}` nel percorso URI. Esempio: con `path = /users/{id}` e `path_vars = {id: 123}` il framework invia `/users/123`. I valori sono codificati in URL."
+        },
+        "app.Qml0bHk.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.display_name": {
+          "source": "Path Variables",
+          "message": "Variabili del percorso"
+        },
+        "app.Qml0bHk.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.short_desc": {
+          "source": "Values for {name} placeholders in path",
+          "message": "Valori per i segnaposto {name} nel percorso"
+        },
+        "app.Qml0bHk.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.desc": {
+          "source": "Hash of query string parameters to append to the URI path. Values are URL-encoded; list values are joined with `,`.",
+          "message": "Hash dei parametri della stringa di query da aggiungere al percorso URI. I valori sono codificati in URL; i valori dell'elenco sono uniti con `,`."
+        },
+        "app.Qml0bHk.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.display_name": {
+          "source": "Query Arguments",
+          "message": "Argomenti della query"
+        },
+        "app.Qml0bHk.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.short_desc": {
+          "source": "Query string parameters",
+          "message": "Parametri della stringa di query"
+        },
+        "app.Qml0bHk.action.bWFrZS1hcGktY2FsbA.short_desc": {
+          "source": "Make a custom API call to Bitly",
+          "message": "Esegui una chiamata API personalizzata a Bitly"
+        },
+        "app.Qml0bHk.action.c2hvcnRlbi1iaXRsaW5r.desc": {
+          "source": "Shorten a URL to create a new bitlink with optional custom domain",
+          "message": "Accorcia un URL per creare un nuovo bitlink con dominio personalizzato facoltativo"
+        },
+        "app.Qml0bHk.action.c2hvcnRlbi1iaXRsaW5r.display_name": {
+          "source": "Shorten a URL",
+          "message": "Accorcia un URL"
+        },
+        "app.Qml0bHk.action.c2hvcnRlbi1iaXRsaW5r.option.Z3JvdXBfZ3VpZA.desc": {
+          "source": "The GUID of the group to create the bitlink in. Uses the default group if not specified",
+          "message": "Il GUID del gruppo in cui creare il bitlink. Usa il gruppo predefinito se non specificato"
+        },
+        "app.Qml0bHk.action.c2hvcnRlbi1iaXRsaW5r.option.Z3JvdXBfZ3VpZA.display_name": {
+          "source": "Group GUID",
+          "message": "GUID gruppo"
+        },
+        "app.Qml0bHk.action.c2hvcnRlbi1iaXRsaW5r.option.Z3JvdXBfZ3VpZA.short_desc": {
+          "source": "Group to create the link in",
+          "message": "Gruppo in cui creare il link"
+        },
+        "app.Qml0bHk.action.c2hvcnRlbi1iaXRsaW5r.option.ZG9tYWlu.desc": {
+          "source": "The short domain to use for the link. Defaults to `bit.ly` if not specified. Can also use a branded short domain (BSD) configured on the account",
+          "message": "Il dominio breve da utilizzare per il link. Il valore predefinito è `bit.ly` se non specificato. Può anche utilizzare un dominio breve personalizzato (BSD) configurato sull'account"
+        },
+        "app.Qml0bHk.action.c2hvcnRlbi1iaXRsaW5r.option.ZG9tYWlu.display_name": {
+          "source": "Domain",
+          "message": "Dominio"
+        },
+        "app.Qml0bHk.action.c2hvcnRlbi1iaXRsaW5r.option.ZG9tYWlu.short_desc": {
+          "source": "Custom short domain",
+          "message": "Dominio breve personalizzato"
+        },
+        "app.Qml0bHk.action.c2hvcnRlbi1iaXRsaW5r.option.bG9uZ191cmw.desc": {
+          "source": "The URL to be shortened",
+          "message": "L'URL da accorciare"
+        },
+        "app.Qml0bHk.action.c2hvcnRlbi1iaXRsaW5r.option.bG9uZ191cmw.display_name": {
+          "source": "Long URL",
+          "message": "URL lungo"
+        },
+        "app.Qml0bHk.action.c2hvcnRlbi1iaXRsaW5r.option.bG9uZ191cmw.short_desc": {
+          "source": "The URL to shorten",
+          "message": "L'URL da accorciare"
+        },
+        "app.Qml0bHk.action.c2hvcnRlbi1iaXRsaW5r.short_desc": {
+          "source": "Create a shortened bitlink",
+          "message": "Crea un bitlink abbreviato"
+        },
+        "app.Qml0bHk.action.dXBkYXRlLWJpdGxpbms.desc": {
+          "source": "Update the destination URL, title, tags, or archive status of a bitlink",
+          "message": "Aggiorna l'URL di destinazione, il titolo, i tag o lo stato di archiviazione di un bitlink"
+        },
+        "app.Qml0bHk.action.dXBkYXRlLWJpdGxpbms.display_name": {
+          "source": "Update a Bitlink",
+          "message": "Aggiorna un bitlink"
+        },
+        "app.Qml0bHk.action.dXBkYXRlLWJpdGxpbms.option.YXJjaGl2ZWQ.desc": {
+          "source": "Set to `True` to archive the bitlink or `False` to unarchive it",
+          "message": "Imposta su `True` per archiviare il bitlink o `False` per annullarne l'archiviazione"
+        },
+        "app.Qml0bHk.action.dXBkYXRlLWJpdGxpbms.option.YXJjaGl2ZWQ.display_name": {
+          "source": "Archived",
+          "message": "Archiviato"
+        },
+        "app.Qml0bHk.action.dXBkYXRlLWJpdGxpbms.option.YXJjaGl2ZWQ.short_desc": {
+          "source": "Archive status",
+          "message": "Stato di archiviazione"
+        },
+        "app.Qml0bHk.action.dXBkYXRlLWJpdGxpbms.option.Yml0bGluaw.desc": {
+          "source": "The bitlink ID to update (e.g., `bit.ly/abc123`)",
+          "message": "L'ID del bitlink da aggiornare (ad es. `bit.ly/abc123`)"
+        },
+        "app.Qml0bHk.action.dXBkYXRlLWJpdGxpbms.option.Yml0bGluaw.display_name": {
+          "source": "Bitlink",
+          "message": "Bitlink"
+        },
+        "app.Qml0bHk.action.dXBkYXRlLWJpdGxpbms.option.Yml0bGluaw.short_desc": {
+          "source": "The bitlink to update",
+          "message": "Il bitlink da aggiornare"
+        },
+        "app.Qml0bHk.action.dXBkYXRlLWJpdGxpbms.option.bG9uZ191cmw.desc": {
+          "source": "The new destination URL for the bitlink",
+          "message": "Il nuovo URL di destinazione per il bitlink"
+        },
+        "app.Qml0bHk.action.dXBkYXRlLWJpdGxpbms.option.bG9uZ191cmw.display_name": {
+          "source": "Long URL",
+          "message": "URL lungo"
+        },
+        "app.Qml0bHk.action.dXBkYXRlLWJpdGxpbms.option.bG9uZ191cmw.short_desc": {
+          "source": "New destination URL",
+          "message": "Nuovo URL di destinazione"
+        },
+        "app.Qml0bHk.action.dXBkYXRlLWJpdGxpbms.option.dGFncw.desc": {
+          "source": "A new list of tags for the bitlink (replaces existing tags)",
+          "message": "Un nuovo elenco di tag per il bitlink (sostituisce i tag esistenti)"
+        },
+        "app.Qml0bHk.action.dXBkYXRlLWJpdGxpbms.option.dGFncw.display_name": {
+          "source": "Tags",
+          "message": "Tag"
+        },
+        "app.Qml0bHk.action.dXBkYXRlLWJpdGxpbms.option.dGFncw.short_desc": {
+          "source": "New tags",
+          "message": "Nuovi tag"
+        },
+        "app.Qml0bHk.action.dXBkYXRlLWJpdGxpbms.option.dGl0bGU.desc": {
+          "source": "The new title for the bitlink",
+          "message": "Il nuovo titolo per il bitlink"
+        },
+        "app.Qml0bHk.action.dXBkYXRlLWJpdGxpbms.option.dGl0bGU.display_name": {
+          "source": "Title",
+          "message": "Titolo"
+        },
+        "app.Qml0bHk.action.dXBkYXRlLWJpdGxpbms.option.dGl0bGU.short_desc": {
+          "source": "New title",
+          "message": "Nuovo titolo"
+        },
+        "app.Qml0bHk.action.dXBkYXRlLWJpdGxpbms.short_desc": {
+          "source": "Update an existing bitlink",
+          "message": "Aggiorna un bitlink esistente"
+        },
+        "app.Qml0bHk.action.dXBkYXRlLWNhbXBhaWdu.desc": {
+          "source": "Update the name or description of an existing campaign",
+          "message": "Aggiorna il nome o la descrizione di una campagna esistente"
+        },
+        "app.Qml0bHk.action.dXBkYXRlLWNhbXBhaWdu.display_name": {
+          "source": "Update a Campaign",
+          "message": "Aggiorna una campagna"
+        },
+        "app.Qml0bHk.action.dXBkYXRlLWNhbXBhaWdu.option.Y2FtcGFpZ25fZ3VpZA.desc": {
+          "source": "The GUID of the campaign to update",
+          "message": "Il GUID della campagna da aggiornare"
+        },
+        "app.Qml0bHk.action.dXBkYXRlLWNhbXBhaWdu.option.Y2FtcGFpZ25fZ3VpZA.display_name": {
+          "source": "Campaign GUID",
+          "message": "GUID campagna"
+        },
+        "app.Qml0bHk.action.dXBkYXRlLWNhbXBhaWdu.option.Y2FtcGFpZ25fZ3VpZA.short_desc": {
+          "source": "The campaign to update",
+          "message": "La campagna da aggiornare"
+        },
+        "app.Qml0bHk.action.dXBkYXRlLWNhbXBhaWdu.option.Y2hhbm5lbF9ndWlkcw.desc": {
+          "source": "A new list of channel GUIDs to associate with the campaign",
+          "message": "Un nuovo elenco di GUID di canale da associare alla campagna"
+        },
+        "app.Qml0bHk.action.dXBkYXRlLWNhbXBhaWdu.option.Y2hhbm5lbF9ndWlkcw.display_name": {
+          "source": "Channel GUIDs",
+          "message": "GUID dei canali"
+        },
+        "app.Qml0bHk.action.dXBkYXRlLWNhbXBhaWdu.option.Y2hhbm5lbF9ndWlkcw.short_desc": {
+          "source": "Channels to associate with the campaign",
+          "message": "Canali da associare alla campagna"
+        },
+        "app.Qml0bHk.action.dXBkYXRlLWNhbXBhaWdu.option.ZGVzY3JpcHRpb24.desc": {
+          "source": "The new description for the campaign",
+          "message": "La nuova descrizione per la campagna"
+        },
+        "app.Qml0bHk.action.dXBkYXRlLWNhbXBhaWdu.option.ZGVzY3JpcHRpb24.display_name": {
+          "source": "Description",
+          "message": "Descrizione"
+        },
+        "app.Qml0bHk.action.dXBkYXRlLWNhbXBhaWdu.option.ZGVzY3JpcHRpb24.short_desc": {
+          "source": "New campaign description",
+          "message": "Nuova descrizione della campagna"
+        },
+        "app.Qml0bHk.action.dXBkYXRlLWNhbXBhaWdu.option.bmFtZQ.desc": {
+          "source": "The new name for the campaign",
+          "message": "Il nuovo nome per la campagna"
+        },
+        "app.Qml0bHk.action.dXBkYXRlLWNhbXBhaWdu.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "Nome"
+        },
+        "app.Qml0bHk.action.dXBkYXRlLWNhbXBhaWdu.option.bmFtZQ.short_desc": {
+          "source": "New campaign name",
+          "message": "Nuovo nome della campagna"
+        },
+        "app.Qml0bHk.action.dXBkYXRlLWNhbXBhaWdu.short_desc": {
+          "source": "Update an existing campaign",
+          "message": "Aggiorna una campagna esistente"
+        },
+        "app.Qml0bHk.action.dXBkYXRlLWdyb3Vw.desc": {
+          "source": "Update the name, organization, or branded short domains of a group",
+          "message": "Aggiorna il nome, l'organizzazione o i domini brevi personalizzati di un gruppo"
+        },
+        "app.Qml0bHk.action.dXBkYXRlLWdyb3Vw.display_name": {
+          "source": "Update a Group",
+          "message": "Aggiorna un gruppo"
+        },
+        "app.Qml0bHk.action.dXBkYXRlLWdyb3Vw.option.YnNkcw.desc": {
+          "source": "A list of branded short domains to associate with the group",
+          "message": "Un elenco di domini brevi personalizzati da associare al gruppo"
+        },
+        "app.Qml0bHk.action.dXBkYXRlLWdyb3Vw.option.YnNkcw.display_name": {
+          "source": "Branded Short Domains",
+          "message": "Domini brevi personalizzati"
+        },
+        "app.Qml0bHk.action.dXBkYXRlLWdyb3Vw.option.YnNkcw.short_desc": {
+          "source": "BSDs to associate",
+          "message": "BSD da associare"
+        },
+        "app.Qml0bHk.action.dXBkYXRlLWdyb3Vw.option.Z3JvdXBfZ3VpZA.desc": {
+          "source": "The GUID of the group to update",
+          "message": "Il GUID del gruppo da aggiornare"
+        },
+        "app.Qml0bHk.action.dXBkYXRlLWdyb3Vw.option.Z3JvdXBfZ3VpZA.display_name": {
+          "source": "Group GUID",
+          "message": "GUID gruppo"
+        },
+        "app.Qml0bHk.action.dXBkYXRlLWdyb3Vw.option.Z3JvdXBfZ3VpZA.short_desc": {
+          "source": "The group to update",
+          "message": "Il gruppo da aggiornare"
+        },
+        "app.Qml0bHk.action.dXBkYXRlLWdyb3Vw.option.b3JnYW5pemF0aW9uX2d1aWQ.desc": {
+          "source": "The GUID of the organization to move the group to",
+          "message": "Il GUID dell'organizzazione a cui spostare il gruppo"
+        },
+        "app.Qml0bHk.action.dXBkYXRlLWdyb3Vw.option.b3JnYW5pemF0aW9uX2d1aWQ.display_name": {
+          "source": "Organization GUID",
+          "message": "GUID dell'organizzazione"
+        },
+        "app.Qml0bHk.action.dXBkYXRlLWdyb3Vw.option.b3JnYW5pemF0aW9uX2d1aWQ.short_desc": {
+          "source": "New organization",
+          "message": "Nuova organizzazione"
+        },
+        "app.Qml0bHk.action.dXBkYXRlLWdyb3Vw.option.bmFtZQ.desc": {
+          "source": "The new name for the group",
+          "message": "Il nuovo nome per il gruppo"
+        },
+        "app.Qml0bHk.action.dXBkYXRlLWdyb3Vw.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "Nome"
+        },
+        "app.Qml0bHk.action.dXBkYXRlLWdyb3Vw.option.bmFtZQ.short_desc": {
+          "source": "New group name",
+          "message": "Nuovo nome del gruppo"
+        },
+        "app.Qml0bHk.action.dXBkYXRlLWdyb3Vw.short_desc": {
+          "source": "Update an existing group",
+          "message": "Aggiorna un gruppo esistente"
+        },
+        "app.Qml0bHk.action.dXBkYXRlLXFyLWNvZGU.desc": {
+          "source": "Update the title, destination, appearance, or archive status of a QR code",
+          "message": "Aggiorna il titolo, la destinazione, l'aspetto o lo stato di archiviazione di un codice QR"
+        },
+        "app.Qml0bHk.action.dXBkYXRlLXFyLWNvZGU.display_name": {
+          "source": "Update a QR Code",
+          "message": "Aggiorna un codice QR"
+        },
+        "app.Qml0bHk.action.dXBkYXRlLXFyLWNvZGU.option.YXJjaGl2ZWQ.desc": {
+          "source": "Set to `True` to archive the QR code or `False` to unarchive it",
+          "message": "Imposta su `True` per archiviare il codice QR o su `False` per ripristinarlo dall'archivio"
+        },
+        "app.Qml0bHk.action.dXBkYXRlLXFyLWNvZGU.option.YXJjaGl2ZWQ.display_name": {
+          "source": "Archived",
+          "message": "Archiviato"
+        },
+        "app.Qml0bHk.action.dXBkYXRlLXFyLWNvZGU.option.YXJjaGl2ZWQ.short_desc": {
+          "source": "Archive status",
+          "message": "Stato di archiviazione"
+        },
+        "app.Qml0bHk.action.dXBkYXRlLXFyLWNvZGU.option.ZGVzdGluYXRpb24.desc": {
+          "source": "The new destination for the QR code. Provide either `long_url` or `bitlink_id`",
+          "message": "La nuova destinazione per il codice QR. Fornisci `long_url` o `bitlink_id`"
+        },
+        "app.Qml0bHk.action.dXBkYXRlLXFyLWNvZGU.option.ZGVzdGluYXRpb24.display_name": {
+          "source": "Destination",
+          "message": "Destinazione"
+        },
+        "app.Qml0bHk.action.dXBkYXRlLXFyLWNvZGU.option.ZGVzdGluYXRpb24.short_desc": {
+          "source": "New target URL or bitlink",
+          "message": "Nuovo URL o bitlink di destinazione"
+        },
+        "app.Qml0bHk.action.dXBkYXRlLXFyLWNvZGU.option.ZXhwaXJhdGlvbl9hdA.desc": {
+          "source": "ISO 8601 timestamp when the QR code should expire",
+          "message": "Timestamp ISO 8601 che indica la scadenza del codice QR"
+        },
+        "app.Qml0bHk.action.dXBkYXRlLXFyLWNvZGU.option.ZXhwaXJhdGlvbl9hdA.display_name": {
+          "source": "Expiration",
+          "message": "Scadenza"
+        },
+        "app.Qml0bHk.action.dXBkYXRlLXFyLWNvZGU.option.ZXhwaXJhdGlvbl9hdA.short_desc": {
+          "source": "When the QR code expires",
+          "message": "Quando scade il codice QR"
+        },
+        "app.Qml0bHk.action.dXBkYXRlLXFyLWNvZGU.option.cXJjb2RlX2lk.desc": {
+          "source": "The ID of the QR code to update",
+          "message": "L'ID del codice QR da aggiornare"
+        },
+        "app.Qml0bHk.action.dXBkYXRlLXFyLWNvZGU.option.cXJjb2RlX2lk.display_name": {
+          "source": "QR Code ID",
+          "message": "ID codice QR"
+        },
+        "app.Qml0bHk.action.dXBkYXRlLXFyLWNvZGU.option.cXJjb2RlX2lk.short_desc": {
+          "source": "The QR code to update",
+          "message": "Il codice QR da aggiornare"
+        },
+        "app.Qml0bHk.action.dXBkYXRlLXFyLWNvZGU.option.cmVuZGVyX2N1c3RvbWl6YXRpb25z.desc": {
+          "source": "Updated appearance customization settings for the QR code",
+          "message": "Impostazioni di personalizzazione dell'aspetto aggiornate per il codice QR"
+        },
+        "app.Qml0bHk.action.dXBkYXRlLXFyLWNvZGU.option.cmVuZGVyX2N1c3RvbWl6YXRpb25z.display_name": {
+          "source": "Render Customizations",
+          "message": "Personalizzazioni del rendering"
+        },
+        "app.Qml0bHk.action.dXBkYXRlLXFyLWNvZGU.option.cmVuZGVyX2N1c3RvbWl6YXRpb25z.short_desc": {
+          "source": "QR code appearance settings",
+          "message": "Impostazioni di aspetto del codice QR"
+        },
+        "app.Qml0bHk.action.dXBkYXRlLXFyLWNvZGU.option.dGFncw.desc": {
+          "source": "A new list of tags for the QR code (replaces existing tags)",
+          "message": "Un nuovo elenco di tag per il codice QR (sostituisce i tag esistenti)"
+        },
+        "app.Qml0bHk.action.dXBkYXRlLXFyLWNvZGU.option.dGFncw.display_name": {
+          "source": "Tags",
+          "message": "Tag"
+        },
+        "app.Qml0bHk.action.dXBkYXRlLXFyLWNvZGU.option.dGFncw.short_desc": {
+          "source": "New tags",
+          "message": "Nuovi tag"
+        },
+        "app.Qml0bHk.action.dXBkYXRlLXFyLWNvZGU.option.dGl0bGU.desc": {
+          "source": "The new title for the QR code",
+          "message": "Il nuovo titolo per il codice QR"
+        },
+        "app.Qml0bHk.action.dXBkYXRlLXFyLWNvZGU.option.dGl0bGU.display_name": {
+          "source": "Title",
+          "message": "Titolo"
+        },
+        "app.Qml0bHk.action.dXBkYXRlLXFyLWNvZGU.option.dGl0bGU.short_desc": {
+          "source": "New title",
+          "message": "Nuovo titolo"
+        },
+        "app.Qml0bHk.action.dXBkYXRlLXFyLWNvZGU.short_desc": {
+          "source": "Update an existing QR code",
+          "message": "Aggiorna un codice QR esistente"
+        },
+        "app.Qml0bHk.desc": {
+          "source": "Bitly is a URL shortening and link management platform for creating branded links, QR codes, and tracking click analytics.\n\nThis integration supports creating, managing, and tracking bitlinks, campaigns, QR codes, and engagement events.",
+          "message": "Bitly è una piattaforma di accorciamento URL e gestione dei link per creare link personalizzati, codici QR e monitorare le analisi dei clic.\n\nQuesta integrazione supporta la creazione, la gestione e il monitoraggio di bitlink, campagne, codici QR ed eventi di engagement."
+        },
+        "app.Qml0bHk.display_name": {
+          "source": "Bitly",
+          "message": "Bitly"
+        },
+        "app.Qml0bHk.short_desc": {
+          "source": "Bitly URL shortening and link management",
+          "message": "Accorciamento URL e gestione dei link con Bitly"
+        }
+      }
+    }
+  }
+}

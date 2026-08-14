@@ -1,0 +1,1341 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "zh-Hant": {
+      "messages": {
+        "app.TGlua2VkSW4.action.Y3JlYXRlLW11bHRpLWltYWdlLXBvc3Q.desc": {
+          "source": "Uploads several images and publishes them as one post that readers swipe through.\n\nLinkedIn requires between 2 and 20 images; the images appear in the order given. Alt texts are matched to the images **by position**.",
+          "message": "上傳多張圖片並發布為可供讀者滑動瀏覽的單篇貼文。\n\nLinkedIn 要求 2 至 20 張圖片；圖片會依指定順序顯示。替代文字會**依位置**與圖片配對。"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLW11bHRpLWltYWdlLXBvc3Q.display_name": {
+          "source": "Create Multi-Image Post",
+          "message": "建立多圖貼文"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLW11bHRpLWltYWdlLXBvc3Q.option.Y29tbWVudGFyeQ.desc": {
+          "source": "The post's text.\n\nMentions and hashtags are written **inline**: `@[Qore Technologies](urn:li:organization:2414183)` mentions an organization — the display text must match the entity's name exactly, case included, or it stays plain text — and `#coding` is a hashtag.",
+          "message": "貼文文字。\n\n提及 (mentions) 和主題標籤 (hashtags) 為**內嵌**寫法：`@[Qore Technologies](urn:li:organization:2414183)` 提及組織——顯示文字必須與實體名稱完全一致（包含大小寫），否則會維持純文字——而 `#coding` 為主題標籤。"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLW11bHRpLWltYWdlLXBvc3Q.option.Y29tbWVudGFyeQ.display_name": {
+          "source": "Text",
+          "message": "文字"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLW11bHRpLWltYWdlLXBvc3Q.option.Y29tbWVudGFyeQ.short_desc": {
+          "source": "The post's text",
+          "message": "貼文的文字"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLW11bHRpLWltYWdlLXBvc3Q.option.YWx0X3RleHRz.desc": {
+          "source": "Alternative text describing each image, used by screen readers and matched to `images` **by position**; a shorter list leaves the remaining images without alt text",
+          "message": "描述各圖片的替代文字，供螢幕閱讀器使用，並**依位置**與 `images` 配對；若清單較短，剩餘圖片將沒有替代文字"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLW11bHRpLWltYWdlLXBvc3Q.option.YWx0X3RleHRz.display_name": {
+          "source": "Alt Texts",
+          "message": "替代文字"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLW11bHRpLWltYWdlLXBvc3Q.option.YWx0X3RleHRz.short_desc": {
+          "source": "Alternative text for each image, matched by position",
+          "message": "各圖片的替代文字，依位置配對"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLW11bHRpLWltYWdlLXBvc3Q.option.ZGlzYWJsZV9yZXNoYXJpbmc.desc": {
+          "source": "Prevent others from resharing the post",
+          "message": "防止其他人轉分享此貼文"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLW11bHRpLWltYWdlLXBvc3Q.option.ZGlzYWJsZV9yZXNoYXJpbmc.display_name": {
+          "source": "Disable Resharing",
+          "message": "停用轉分享"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLW11bHRpLWltYWdlLXBvc3Q.option.ZGlzYWJsZV9yZXNoYXJpbmc.short_desc": {
+          "source": "Prevent others from resharing the post",
+          "message": "防止其他人轉分享此貼文"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLW11bHRpLWltYWdlLXBvc3Q.option.ZmVlZF9kaXN0cmlidXRpb24.allowed-value.c3RyaW5nOk1BSU5fRkVFRA.desc": {
+          "source": "The post is distributed to the main LinkedIn feed",
+          "message": "貼文會發布至 LinkedIn 主動態時報"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLW11bHRpLWltYWdlLXBvc3Q.option.ZmVlZF9kaXN0cmlidXRpb24.allowed-value.c3RyaW5nOk1BSU5fRkVFRA.display_name": {
+          "source": "Main Feed",
+          "message": "主動態時報"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLW11bHRpLWltYWdlLXBvc3Q.option.ZmVlZF9kaXN0cmlidXRpb24.allowed-value.c3RyaW5nOk1BSU5fRkVFRA.short_desc": {
+          "source": "Distributed to the main LinkedIn feed",
+          "message": "發布至 LinkedIn 主動態時報"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLW11bHRpLWltYWdlLXBvc3Q.option.ZmVlZF9kaXN0cmlidXRpb24.allowed-value.c3RyaW5nOk5PTkU.desc": {
+          "source": "The post is not distributed to any feed; it is reachable only by its URN",
+          "message": "貼文不會發布至任何動態時報；僅能透過其 URN 存取"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLW11bHRpLWltYWdlLXBvc3Q.option.ZmVlZF9kaXN0cmlidXRpb24.allowed-value.c3RyaW5nOk5PTkU.display_name": {
+          "source": "None",
+          "message": "無"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLW11bHRpLWltYWdlLXBvc3Q.option.ZmVlZF9kaXN0cmlidXRpb24.allowed-value.c3RyaW5nOk5PTkU.short_desc": {
+          "source": "Not distributed to any feed",
+          "message": "不發布至任何動態時報"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLW11bHRpLWltYWdlLXBvc3Q.option.ZmVlZF9kaXN0cmlidXRpb24.desc": {
+          "source": "Where the post is distributed.  `NONE` creates a post that is reachable only by its URN and does not appear in any feed",
+          "message": "貼文的發布位置。`NONE` 會建立僅能透過其 URN 存取且不會出現在任何動態時報中的貼文"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLW11bHRpLWltYWdlLXBvc3Q.option.ZmVlZF9kaXN0cmlidXRpb24.display_name": {
+          "source": "Feed Distribution",
+          "message": "動態發布設定"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLW11bHRpLWltYWdlLXBvc3Q.option.ZmVlZF9kaXN0cmlidXRpb24.short_desc": {
+          "source": "Where the post is distributed",
+          "message": "貼文的發布位置"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLW11bHRpLWltYWdlLXBvc3Q.option.aW1hZ2Vz.desc": {
+          "source": "The images to post, in the order they should appear; LinkedIn requires between 2 and 20 of them",
+          "message": "要發布的圖片，依顯示順序排列；LinkedIn 要求 2 至 20 張圖片"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLW11bHRpLWltYWdlLXBvc3Q.option.aW1hZ2Vz.display_name": {
+          "source": "Images",
+          "message": "圖片"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLW11bHRpLWltYWdlLXBvc3Q.option.aW1hZ2Vz.short_desc": {
+          "source": "The images to post, in the order they should appear",
+          "message": "要發布的圖片，依顯示順序排列"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLW11bHRpLWltYWdlLXBvc3Q.option.dmlzaWJpbGl0eQ.allowed-value.c3RyaW5nOkNPTk5FQ1RJT05T.desc": {
+          "source": "Visible only to the authenticated member's connections",
+          "message": "僅對已驗證會員的聯絡人可見"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLW11bHRpLWltYWdlLXBvc3Q.option.dmlzaWJpbGl0eQ.allowed-value.c3RyaW5nOkNPTk5FQ1RJT05T.display_name": {
+          "source": "Connections Only",
+          "message": "僅限聯絡人"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLW11bHRpLWltYWdlLXBvc3Q.option.dmlzaWJpbGl0eQ.allowed-value.c3RyaW5nOkNPTk5FQ1RJT05T.short_desc": {
+          "source": "Visible only to the member's connections",
+          "message": "僅對會員的聯絡人可見"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLW11bHRpLWltYWdlLXBvc3Q.option.dmlzaWJpbGl0eQ.allowed-value.c3RyaW5nOlBVQkxJQw.desc": {
+          "source": "Visible to anyone on or off LinkedIn",
+          "message": "對 LinkedIn 站內及站外的所有人可見"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLW11bHRpLWltYWdlLXBvc3Q.option.dmlzaWJpbGl0eQ.allowed-value.c3RyaW5nOlBVQkxJQw.display_name": {
+          "source": "Public",
+          "message": "公開"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLW11bHRpLWltYWdlLXBvc3Q.option.dmlzaWJpbGl0eQ.allowed-value.c3RyaW5nOlBVQkxJQw.short_desc": {
+          "source": "Visible to anyone on or off LinkedIn",
+          "message": "對 LinkedIn 站內及站外的所有人可見"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLW11bHRpLWltYWdlLXBvc3Q.option.dmlzaWJpbGl0eQ.desc": {
+          "source": "Who can see the post",
+          "message": "誰可以看到此貼文"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLW11bHRpLWltYWdlLXBvc3Q.option.dmlzaWJpbGl0eQ.display_name": {
+          "source": "Visibility",
+          "message": "可見性"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLW11bHRpLWltYWdlLXBvc3Q.option.dmlzaWJpbGl0eQ.short_desc": {
+          "source": "Who can see the post",
+          "message": "誰可以看到此貼文"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLW11bHRpLWltYWdlLXBvc3Q.short_desc": {
+          "source": "Publish a post with several images",
+          "message": "發布包含多張圖片的貼文"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLWFydGljbGUtcG9zdA.desc": {
+          "source": "Publishes a post that links to an article, shown as a card under the post's text.\n\nLinkedIn does **not** scrape the URL, so the title, description and thumbnail have to be supplied here or the card appears bare. Upload a thumbnail with the **Upload Image** action first and pass the image URN it returns.",
+          "message": "發布連結至文章的貼文，在貼文文字下方顯示為卡片。\n\nLinkedIn **不會**自動抓取 URL 的內容，因此必須在此提供標題、說明與縮圖，否則卡片將呈現空白。請先使用「**Upload Image**」動作上傳縮圖，並傳入其傳回的圖片 URN。"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLWFydGljbGUtcG9zdA.display_name": {
+          "source": "Create Article Post",
+          "message": "建立文章貼文"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLWFydGljbGUtcG9zdA.option.Y29tbWVudGFyeQ.desc": {
+          "source": "The post's text.\n\nMentions and hashtags are written **inline**: `@[Qore Technologies](urn:li:organization:2414183)` mentions an organization — the display text must match the entity's name exactly, case included, or it stays plain text — and `#coding` is a hashtag.",
+          "message": "貼文文字。\n\n提及 (mentions) 和主題標籤 (hashtags) 為**內嵌**寫法：`@[Qore Technologies](urn:li:organization:2414183)` 提及組織——顯示文字必須與實體名稱完全一致（包含大小寫），否則會維持純文字——而 `#coding` 為主題標籤。"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLWFydGljbGUtcG9zdA.option.Y29tbWVudGFyeQ.display_name": {
+          "source": "Text",
+          "message": "文字"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLWFydGljbGUtcG9zdA.option.Y29tbWVudGFyeQ.short_desc": {
+          "source": "The post's text",
+          "message": "貼文的文字"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLWFydGljbGUtcG9zdA.option.YXJ0aWNsZV90aHVtYm5haWw.desc": {
+          "source": "An uploaded image URN (`urn:li:image:...`) to show as the article's thumbnail; upload one with the **Upload Image** action first.  LinkedIn does not scrape the URL for an image",
+          "message": "顯示為文章縮圖的已上傳圖片 URN (`urn:li:image:...`)；請先使用「**Upload Image**」動作上傳圖片。LinkedIn 不會從 URL 抓取圖片"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLWFydGljbGUtcG9zdA.option.YXJ0aWNsZV90aHVtYm5haWw.display_name": {
+          "source": "Thumbnail Image URN",
+          "message": "縮圖圖片 URN"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLWFydGljbGUtcG9zdA.option.YXJ0aWNsZV90aHVtYm5haWw.short_desc": {
+          "source": "An uploaded image URN to show as the article's thumbnail",
+          "message": "顯示為文章縮圖的已上傳圖片 URN"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLWFydGljbGUtcG9zdA.option.YXJ0aWNsZV90aXRsZQ.desc": {
+          "source": "The title shown on the article card.\n\nLinkedIn does **not** scrape the URL for a title, so an article posted without one shows a card with no heading.",
+          "message": "文章卡片上顯示的標題。\n\nLinkedIn **不會**從 URL 抓取標題，因此發布沒有標題的文章會顯示沒有標頭的卡片。"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLWFydGljbGUtcG9zdA.option.YXJ0aWNsZV90aXRsZQ.display_name": {
+          "source": "Article Title",
+          "message": "文章標題"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLWFydGljbGUtcG9zdA.option.YXJ0aWNsZV90aXRsZQ.short_desc": {
+          "source": "The title shown on the article card",
+          "message": "文章卡片上顯示的標題"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLWFydGljbGUtcG9zdA.option.YXJ0aWNsZV91cmw.desc": {
+          "source": "The URL the article links to",
+          "message": "文章連結的 URL"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLWFydGljbGUtcG9zdA.option.YXJ0aWNsZV91cmw.display_name": {
+          "source": "Article URL",
+          "message": "文章 URL"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLWFydGljbGUtcG9zdA.option.YXJ0aWNsZV91cmw.short_desc": {
+          "source": "The URL the article links to",
+          "message": "文章連結的 URL"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLWFydGljbGUtcG9zdA.option.YXJ0aWNsZV9kZXNjcmlwdGlvbg.desc": {
+          "source": "The description shown on the article card; LinkedIn does not scrape the URL for one",
+          "message": "文章卡片上顯示的說明；LinkedIn 不會從 URL 抓取說明"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLWFydGljbGUtcG9zdA.option.YXJ0aWNsZV9kZXNjcmlwdGlvbg.display_name": {
+          "source": "Article Description",
+          "message": "文章說明"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLWFydGljbGUtcG9zdA.option.YXJ0aWNsZV9kZXNjcmlwdGlvbg.short_desc": {
+          "source": "The description shown on the article card",
+          "message": "文章卡片上顯示的說明"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLWFydGljbGUtcG9zdA.option.ZGlzYWJsZV9yZXNoYXJpbmc.desc": {
+          "source": "Prevent others from resharing the post",
+          "message": "防止其他人轉分享此貼文"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLWFydGljbGUtcG9zdA.option.ZGlzYWJsZV9yZXNoYXJpbmc.display_name": {
+          "source": "Disable Resharing",
+          "message": "停用轉分享"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLWFydGljbGUtcG9zdA.option.ZGlzYWJsZV9yZXNoYXJpbmc.short_desc": {
+          "source": "Prevent others from resharing the post",
+          "message": "防止其他人轉分享此貼文"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLWFydGljbGUtcG9zdA.option.ZmVlZF9kaXN0cmlidXRpb24.allowed-value.c3RyaW5nOk1BSU5fRkVFRA.desc": {
+          "source": "The post is distributed to the main LinkedIn feed",
+          "message": "貼文會發布至 LinkedIn 主動態時報"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLWFydGljbGUtcG9zdA.option.ZmVlZF9kaXN0cmlidXRpb24.allowed-value.c3RyaW5nOk1BSU5fRkVFRA.display_name": {
+          "source": "Main Feed",
+          "message": "主動態時報"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLWFydGljbGUtcG9zdA.option.ZmVlZF9kaXN0cmlidXRpb24.allowed-value.c3RyaW5nOk1BSU5fRkVFRA.short_desc": {
+          "source": "Distributed to the main LinkedIn feed",
+          "message": "發布至 LinkedIn 主動態時報"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLWFydGljbGUtcG9zdA.option.ZmVlZF9kaXN0cmlidXRpb24.allowed-value.c3RyaW5nOk5PTkU.desc": {
+          "source": "The post is not distributed to any feed; it is reachable only by its URN",
+          "message": "貼文不會發布至任何動態時報；僅能透過其 URN 存取"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLWFydGljbGUtcG9zdA.option.ZmVlZF9kaXN0cmlidXRpb24.allowed-value.c3RyaW5nOk5PTkU.display_name": {
+          "source": "None",
+          "message": "無"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLWFydGljbGUtcG9zdA.option.ZmVlZF9kaXN0cmlidXRpb24.allowed-value.c3RyaW5nOk5PTkU.short_desc": {
+          "source": "Not distributed to any feed",
+          "message": "不發布至任何動態時報"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLWFydGljbGUtcG9zdA.option.ZmVlZF9kaXN0cmlidXRpb24.desc": {
+          "source": "Where the post is distributed.  `NONE` creates a post that is reachable only by its URN and does not appear in any feed",
+          "message": "貼文的發布位置。`NONE` 會建立僅能透過其 URN 存取且不會出現在任何動態時報中的貼文"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLWFydGljbGUtcG9zdA.option.ZmVlZF9kaXN0cmlidXRpb24.display_name": {
+          "source": "Feed Distribution",
+          "message": "動態發布設定"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLWFydGljbGUtcG9zdA.option.ZmVlZF9kaXN0cmlidXRpb24.short_desc": {
+          "source": "Where the post is distributed",
+          "message": "貼文的發布位置"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLWFydGljbGUtcG9zdA.option.dmlzaWJpbGl0eQ.allowed-value.c3RyaW5nOkNPTk5FQ1RJT05T.desc": {
+          "source": "Visible only to the authenticated member's connections",
+          "message": "僅對已驗證會員的聯絡人可見"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLWFydGljbGUtcG9zdA.option.dmlzaWJpbGl0eQ.allowed-value.c3RyaW5nOkNPTk5FQ1RJT05T.display_name": {
+          "source": "Connections Only",
+          "message": "僅限聯絡人"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLWFydGljbGUtcG9zdA.option.dmlzaWJpbGl0eQ.allowed-value.c3RyaW5nOkNPTk5FQ1RJT05T.short_desc": {
+          "source": "Visible only to the member's connections",
+          "message": "僅對會員的聯絡人可見"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLWFydGljbGUtcG9zdA.option.dmlzaWJpbGl0eQ.allowed-value.c3RyaW5nOlBVQkxJQw.desc": {
+          "source": "Visible to anyone on or off LinkedIn",
+          "message": "對 LinkedIn 站內及站外的所有人可見"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLWFydGljbGUtcG9zdA.option.dmlzaWJpbGl0eQ.allowed-value.c3RyaW5nOlBVQkxJQw.display_name": {
+          "source": "Public",
+          "message": "公開"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLWFydGljbGUtcG9zdA.option.dmlzaWJpbGl0eQ.allowed-value.c3RyaW5nOlBVQkxJQw.short_desc": {
+          "source": "Visible to anyone on or off LinkedIn",
+          "message": "對 LinkedIn 站內及站外的所有人可見"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLWFydGljbGUtcG9zdA.option.dmlzaWJpbGl0eQ.desc": {
+          "source": "Who can see the post",
+          "message": "誰可以看到此貼文"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLWFydGljbGUtcG9zdA.option.dmlzaWJpbGl0eQ.display_name": {
+          "source": "Visibility",
+          "message": "可見性"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLWFydGljbGUtcG9zdA.option.dmlzaWJpbGl0eQ.short_desc": {
+          "source": "Who can see the post",
+          "message": "誰可以看到此貼文"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLWFydGljbGUtcG9zdA.short_desc": {
+          "source": "Publish a post linking to an article",
+          "message": "發布連結至文章的貼文"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLWltYWdlLXBvc3Q.desc": {
+          "source": "Uploads an image and publishes it as a post by the signed-in member.\n\nLinkedIn accepts JPG, PNG and GIF. Supplying alt text is worth the effort: it is what screen readers announce, and LinkedIn shows it when the image cannot be loaded.",
+          "message": "上傳圖片並以已登入會員的身分發布為貼文。\n\nLinkedIn 接受 JPG、PNG 和 GIF。提供替代文字很有價值：螢幕閱讀器會朗讀它，且當圖片無法載入時 LinkedIn 會顯示它。"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLWltYWdlLXBvc3Q.display_name": {
+          "source": "Create Image Post",
+          "message": "建立圖片貼文"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLWltYWdlLXBvc3Q.option.Y29tbWVudGFyeQ.desc": {
+          "source": "The post's text.\n\nMentions and hashtags are written **inline**: `@[Qore Technologies](urn:li:organization:2414183)` mentions an organization — the display text must match the entity's name exactly, case included, or it stays plain text — and `#coding` is a hashtag.",
+          "message": "貼文文字。\n\n提及 (mentions) 和主題標籤 (hashtags) 為**內嵌**寫法：`@[Qore Technologies](urn:li:organization:2414183)` 提及組織——顯示文字必須與實體名稱完全一致（包含大小寫），否則會維持純文字——而 `#coding` 為主題標籤。"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLWltYWdlLXBvc3Q.option.Y29tbWVudGFyeQ.display_name": {
+          "source": "Text",
+          "message": "文字"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLWltYWdlLXBvc3Q.option.Y29tbWVudGFyeQ.short_desc": {
+          "source": "The post's text",
+          "message": "貼文的文字"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLWltYWdlLXBvc3Q.option.YWx0X3RleHQ.desc": {
+          "source": "The alternative text describing the image, used by screen readers; up to 4,086 characters, and best kept under 120",
+          "message": "描述圖片的替代文字，供螢幕閱讀器使用；最多 4,086 個字元，建議保持在 120 個字元以下"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLWltYWdlLXBvc3Q.option.YWx0X3RleHQ.display_name": {
+          "source": "Alt Text",
+          "message": "替代文字"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLWltYWdlLXBvc3Q.option.YWx0X3RleHQ.short_desc": {
+          "source": "The alternative text describing the image",
+          "message": "描述圖片的替代文字"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLWltYWdlLXBvc3Q.option.ZGlzYWJsZV9yZXNoYXJpbmc.desc": {
+          "source": "Prevent others from resharing the post",
+          "message": "防止其他人轉分享此貼文"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLWltYWdlLXBvc3Q.option.ZGlzYWJsZV9yZXNoYXJpbmc.display_name": {
+          "source": "Disable Resharing",
+          "message": "停用轉分享"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLWltYWdlLXBvc3Q.option.ZGlzYWJsZV9yZXNoYXJpbmc.short_desc": {
+          "source": "Prevent others from resharing the post",
+          "message": "防止其他人轉分享此貼文"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLWltYWdlLXBvc3Q.option.ZmVlZF9kaXN0cmlidXRpb24.allowed-value.c3RyaW5nOk1BSU5fRkVFRA.desc": {
+          "source": "The post is distributed to the main LinkedIn feed",
+          "message": "貼文會發布至 LinkedIn 主動態時報"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLWltYWdlLXBvc3Q.option.ZmVlZF9kaXN0cmlidXRpb24.allowed-value.c3RyaW5nOk1BSU5fRkVFRA.display_name": {
+          "source": "Main Feed",
+          "message": "主動態時報"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLWltYWdlLXBvc3Q.option.ZmVlZF9kaXN0cmlidXRpb24.allowed-value.c3RyaW5nOk1BSU5fRkVFRA.short_desc": {
+          "source": "Distributed to the main LinkedIn feed",
+          "message": "發布至 LinkedIn 主動態時報"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLWltYWdlLXBvc3Q.option.ZmVlZF9kaXN0cmlidXRpb24.allowed-value.c3RyaW5nOk5PTkU.desc": {
+          "source": "The post is not distributed to any feed; it is reachable only by its URN",
+          "message": "貼文不會發布至任何動態時報；僅能透過其 URN 存取"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLWltYWdlLXBvc3Q.option.ZmVlZF9kaXN0cmlidXRpb24.allowed-value.c3RyaW5nOk5PTkU.display_name": {
+          "source": "None",
+          "message": "無"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLWltYWdlLXBvc3Q.option.ZmVlZF9kaXN0cmlidXRpb24.allowed-value.c3RyaW5nOk5PTkU.short_desc": {
+          "source": "Not distributed to any feed",
+          "message": "不發布至任何動態時報"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLWltYWdlLXBvc3Q.option.ZmVlZF9kaXN0cmlidXRpb24.desc": {
+          "source": "Where the post is distributed.  `NONE` creates a post that is reachable only by its URN and does not appear in any feed",
+          "message": "貼文的發布位置。`NONE` 會建立僅能透過其 URN 存取且不會出現在任何動態時報中的貼文"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLWltYWdlLXBvc3Q.option.ZmVlZF9kaXN0cmlidXRpb24.display_name": {
+          "source": "Feed Distribution",
+          "message": "動態發布設定"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLWltYWdlLXBvc3Q.option.ZmVlZF9kaXN0cmlidXRpb24.short_desc": {
+          "source": "Where the post is distributed",
+          "message": "貼文的發布位置"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLWltYWdlLXBvc3Q.option.aW1hZ2U.desc": {
+          "source": "The image to post; LinkedIn accepts JPG, PNG and GIF with fewer than 36,152,320 pixels",
+          "message": "要發布的圖片；LinkedIn 接受像素少於 36,152,320 的 JPG、PNG 和 GIF"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLWltYWdlLXBvc3Q.option.aW1hZ2U.display_name": {
+          "source": "Image",
+          "message": "圖片"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLWltYWdlLXBvc3Q.option.aW1hZ2U.short_desc": {
+          "source": "The image to post",
+          "message": "要發布的圖片"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLWltYWdlLXBvc3Q.option.dGl0bGU.desc": {
+          "source": "The title shown with the image",
+          "message": "與圖片一同顯示的標題"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLWltYWdlLXBvc3Q.option.dGl0bGU.display_name": {
+          "source": "Image Title",
+          "message": "圖片標題"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLWltYWdlLXBvc3Q.option.dGl0bGU.short_desc": {
+          "source": "The title shown with the image",
+          "message": "與圖片一同顯示的標題"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLWltYWdlLXBvc3Q.option.dmlzaWJpbGl0eQ.allowed-value.c3RyaW5nOkNPTk5FQ1RJT05T.desc": {
+          "source": "Visible only to the authenticated member's connections",
+          "message": "僅對已驗證會員的聯絡人可見"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLWltYWdlLXBvc3Q.option.dmlzaWJpbGl0eQ.allowed-value.c3RyaW5nOkNPTk5FQ1RJT05T.display_name": {
+          "source": "Connections Only",
+          "message": "僅限聯絡人"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLWltYWdlLXBvc3Q.option.dmlzaWJpbGl0eQ.allowed-value.c3RyaW5nOkNPTk5FQ1RJT05T.short_desc": {
+          "source": "Visible only to the member's connections",
+          "message": "僅對會員的聯絡人可見"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLWltYWdlLXBvc3Q.option.dmlzaWJpbGl0eQ.allowed-value.c3RyaW5nOlBVQkxJQw.desc": {
+          "source": "Visible to anyone on or off LinkedIn",
+          "message": "對 LinkedIn 站內及站外的所有人可見"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLWltYWdlLXBvc3Q.option.dmlzaWJpbGl0eQ.allowed-value.c3RyaW5nOlBVQkxJQw.display_name": {
+          "source": "Public",
+          "message": "公開"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLWltYWdlLXBvc3Q.option.dmlzaWJpbGl0eQ.allowed-value.c3RyaW5nOlBVQkxJQw.short_desc": {
+          "source": "Visible to anyone on or off LinkedIn",
+          "message": "對 LinkedIn 站內及站外的所有人可見"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLWltYWdlLXBvc3Q.option.dmlzaWJpbGl0eQ.desc": {
+          "source": "Who can see the post",
+          "message": "誰可以看到此貼文"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLWltYWdlLXBvc3Q.option.dmlzaWJpbGl0eQ.display_name": {
+          "source": "Visibility",
+          "message": "可見性"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLWltYWdlLXBvc3Q.option.dmlzaWJpbGl0eQ.short_desc": {
+          "source": "Who can see the post",
+          "message": "誰可以看到此貼文"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLWltYWdlLXBvc3Q.short_desc": {
+          "source": "Publish a post with an image",
+          "message": "發布包含圖片的貼文"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLXRleHQtcG9zdA.desc": {
+          "source": "Publishes a text-only post as the signed-in member.\n\nReturns the post's URN and the URL a browser can open it at.",
+          "message": "以已登入會員的身分發布純文字貼文。\n\n傳回貼文的 URN 以及瀏覽器可用以開啟它的 URL。"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLXRleHQtcG9zdA.display_name": {
+          "source": "Create Text Post",
+          "message": "建立純文字貼文"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLXRleHQtcG9zdA.option.Y29tbWVudGFyeQ.desc": {
+          "source": "The post's text.\n\nMentions and hashtags are written **inline**: `@[Qore Technologies](urn:li:organization:2414183)` mentions an organization — the display text must match the entity's name exactly, case included, or it stays plain text — and `#coding` is a hashtag.",
+          "message": "貼文文字。\n\n提及 (mentions) 和主題標籤 (hashtags) 為**內嵌**寫法：`@[Qore Technologies](urn:li:organization:2414183)` 提及組織——顯示文字必須與實體名稱完全一致（包含大小寫），否則會維持純文字——而 `#coding` 為主題標籤。"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLXRleHQtcG9zdA.option.Y29tbWVudGFyeQ.display_name": {
+          "source": "Text",
+          "message": "文字"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLXRleHQtcG9zdA.option.Y29tbWVudGFyeQ.short_desc": {
+          "source": "The post's text",
+          "message": "貼文的文字"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLXRleHQtcG9zdA.option.ZGlzYWJsZV9yZXNoYXJpbmc.desc": {
+          "source": "Prevent others from resharing the post",
+          "message": "防止其他人轉分享此貼文"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLXRleHQtcG9zdA.option.ZGlzYWJsZV9yZXNoYXJpbmc.display_name": {
+          "source": "Disable Resharing",
+          "message": "停用轉分享"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLXRleHQtcG9zdA.option.ZGlzYWJsZV9yZXNoYXJpbmc.short_desc": {
+          "source": "Prevent others from resharing the post",
+          "message": "防止其他人轉分享此貼文"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLXRleHQtcG9zdA.option.ZmVlZF9kaXN0cmlidXRpb24.allowed-value.c3RyaW5nOk1BSU5fRkVFRA.desc": {
+          "source": "The post is distributed to the main LinkedIn feed",
+          "message": "貼文會發布至 LinkedIn 主動態時報"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLXRleHQtcG9zdA.option.ZmVlZF9kaXN0cmlidXRpb24.allowed-value.c3RyaW5nOk1BSU5fRkVFRA.display_name": {
+          "source": "Main Feed",
+          "message": "主動態時報"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLXRleHQtcG9zdA.option.ZmVlZF9kaXN0cmlidXRpb24.allowed-value.c3RyaW5nOk1BSU5fRkVFRA.short_desc": {
+          "source": "Distributed to the main LinkedIn feed",
+          "message": "發布至 LinkedIn 主動態時報"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLXRleHQtcG9zdA.option.ZmVlZF9kaXN0cmlidXRpb24.allowed-value.c3RyaW5nOk5PTkU.desc": {
+          "source": "The post is not distributed to any feed; it is reachable only by its URN",
+          "message": "貼文不會發布至任何動態時報；僅能透過其 URN 存取"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLXRleHQtcG9zdA.option.ZmVlZF9kaXN0cmlidXRpb24.allowed-value.c3RyaW5nOk5PTkU.display_name": {
+          "source": "None",
+          "message": "無"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLXRleHQtcG9zdA.option.ZmVlZF9kaXN0cmlidXRpb24.allowed-value.c3RyaW5nOk5PTkU.short_desc": {
+          "source": "Not distributed to any feed",
+          "message": "不發布至任何動態時報"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLXRleHQtcG9zdA.option.ZmVlZF9kaXN0cmlidXRpb24.desc": {
+          "source": "Where the post is distributed.  `NONE` creates a post that is reachable only by its URN and does not appear in any feed",
+          "message": "貼文的發布位置。`NONE` 會建立僅能透過其 URN 存取且不會出現在任何動態時報中的貼文"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLXRleHQtcG9zdA.option.ZmVlZF9kaXN0cmlidXRpb24.display_name": {
+          "source": "Feed Distribution",
+          "message": "動態發布設定"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLXRleHQtcG9zdA.option.ZmVlZF9kaXN0cmlidXRpb24.short_desc": {
+          "source": "Where the post is distributed",
+          "message": "貼文的發布位置"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLXRleHQtcG9zdA.option.dmlzaWJpbGl0eQ.allowed-value.c3RyaW5nOkNPTk5FQ1RJT05T.desc": {
+          "source": "Visible only to the authenticated member's connections",
+          "message": "僅對已驗證會員的聯絡人可見"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLXRleHQtcG9zdA.option.dmlzaWJpbGl0eQ.allowed-value.c3RyaW5nOkNPTk5FQ1RJT05T.display_name": {
+          "source": "Connections Only",
+          "message": "僅限聯絡人"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLXRleHQtcG9zdA.option.dmlzaWJpbGl0eQ.allowed-value.c3RyaW5nOkNPTk5FQ1RJT05T.short_desc": {
+          "source": "Visible only to the member's connections",
+          "message": "僅對會員的聯絡人可見"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLXRleHQtcG9zdA.option.dmlzaWJpbGl0eQ.allowed-value.c3RyaW5nOlBVQkxJQw.desc": {
+          "source": "Visible to anyone on or off LinkedIn",
+          "message": "對 LinkedIn 站內及站外的所有人可見"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLXRleHQtcG9zdA.option.dmlzaWJpbGl0eQ.allowed-value.c3RyaW5nOlBVQkxJQw.display_name": {
+          "source": "Public",
+          "message": "公開"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLXRleHQtcG9zdA.option.dmlzaWJpbGl0eQ.allowed-value.c3RyaW5nOlBVQkxJQw.short_desc": {
+          "source": "Visible to anyone on or off LinkedIn",
+          "message": "對 LinkedIn 站內及站外的所有人可見"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLXRleHQtcG9zdA.option.dmlzaWJpbGl0eQ.desc": {
+          "source": "Who can see the post",
+          "message": "誰可以看到此貼文"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLXRleHQtcG9zdA.option.dmlzaWJpbGl0eQ.display_name": {
+          "source": "Visibility",
+          "message": "可見性"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLXRleHQtcG9zdA.option.dmlzaWJpbGl0eQ.short_desc": {
+          "source": "Who can see the post",
+          "message": "誰可以看到此貼文"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLXRleHQtcG9zdA.short_desc": {
+          "source": "Publish a text post",
+          "message": "發布純文字貼文"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLXZpZGVvLXBvc3Q.desc": {
+          "source": "Uploads a video and publishes it as a post by the signed-in member.\n\nLinkedIn accepts MP4 between 75 KB and 500 MB, and between 3 seconds and 30 minutes long. The upload is sent in parts, so a large video does not have to start again from the beginning if one part fails.\n\nLinkedIn processes a video after it is uploaded, so the post may take a short while to become visible even though this action has already returned its URN.",
+          "message": "上傳影片並以已登入會員的身分發布為貼文。\n\nLinkedIn 接受 75 KB 至 500 MB 之間且長度在 3 秒至 30 分鐘之間的 MP4。上傳會分段發送，因此若某個區段失敗，大容量影片無需從頭重新開始。\n\nLinkedIn 會在影片上傳後進行處理，因此即使此動作已傳回其 URN，貼文可能仍需稍候才會顯示。"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLXZpZGVvLXBvc3Q.display_name": {
+          "source": "Create Video Post",
+          "message": "建立影片貼文"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLXZpZGVvLXBvc3Q.option.Y29tbWVudGFyeQ.desc": {
+          "source": "The post's text.\n\nMentions and hashtags are written **inline**: `@[Qore Technologies](urn:li:organization:2414183)` mentions an organization — the display text must match the entity's name exactly, case included, or it stays plain text — and `#coding` is a hashtag.",
+          "message": "貼文文字。\n\n提及 (mentions) 和主題標籤 (hashtags) 為**內嵌**寫法：`@[Qore Technologies](urn:li:organization:2414183)` 提及組織——顯示文字必須與實體名稱完全一致（包含大小寫），否則會維持純文字——而 `#coding` 為主題標籤。"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLXZpZGVvLXBvc3Q.option.Y29tbWVudGFyeQ.display_name": {
+          "source": "Text",
+          "message": "文字"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLXZpZGVvLXBvc3Q.option.Y29tbWVudGFyeQ.short_desc": {
+          "source": "The post's text",
+          "message": "貼文的文字"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLXZpZGVvLXBvc3Q.option.ZGlzYWJsZV9yZXNoYXJpbmc.desc": {
+          "source": "Prevent others from resharing the post",
+          "message": "防止其他人轉分享此貼文"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLXZpZGVvLXBvc3Q.option.ZGlzYWJsZV9yZXNoYXJpbmc.display_name": {
+          "source": "Disable Resharing",
+          "message": "停用轉分享"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLXZpZGVvLXBvc3Q.option.ZGlzYWJsZV9yZXNoYXJpbmc.short_desc": {
+          "source": "Prevent others from resharing the post",
+          "message": "防止其他人轉分享此貼文"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLXZpZGVvLXBvc3Q.option.ZmVlZF9kaXN0cmlidXRpb24.allowed-value.c3RyaW5nOk1BSU5fRkVFRA.desc": {
+          "source": "The post is distributed to the main LinkedIn feed",
+          "message": "貼文會發布至 LinkedIn 主動態時報"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLXZpZGVvLXBvc3Q.option.ZmVlZF9kaXN0cmlidXRpb24.allowed-value.c3RyaW5nOk1BSU5fRkVFRA.display_name": {
+          "source": "Main Feed",
+          "message": "主動態時報"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLXZpZGVvLXBvc3Q.option.ZmVlZF9kaXN0cmlidXRpb24.allowed-value.c3RyaW5nOk1BSU5fRkVFRA.short_desc": {
+          "source": "Distributed to the main LinkedIn feed",
+          "message": "發布至 LinkedIn 主動態時報"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLXZpZGVvLXBvc3Q.option.ZmVlZF9kaXN0cmlidXRpb24.allowed-value.c3RyaW5nOk5PTkU.desc": {
+          "source": "The post is not distributed to any feed; it is reachable only by its URN",
+          "message": "貼文不會發布至任何動態時報；僅能透過其 URN 存取"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLXZpZGVvLXBvc3Q.option.ZmVlZF9kaXN0cmlidXRpb24.allowed-value.c3RyaW5nOk5PTkU.display_name": {
+          "source": "None",
+          "message": "無"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLXZpZGVvLXBvc3Q.option.ZmVlZF9kaXN0cmlidXRpb24.allowed-value.c3RyaW5nOk5PTkU.short_desc": {
+          "source": "Not distributed to any feed",
+          "message": "不發布至任何動態時報"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLXZpZGVvLXBvc3Q.option.ZmVlZF9kaXN0cmlidXRpb24.desc": {
+          "source": "Where the post is distributed.  `NONE` creates a post that is reachable only by its URN and does not appear in any feed",
+          "message": "貼文的發布位置。`NONE` 會建立僅能透過其 URN 存取且不會出現在任何動態時報中的貼文"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLXZpZGVvLXBvc3Q.option.ZmVlZF9kaXN0cmlidXRpb24.display_name": {
+          "source": "Feed Distribution",
+          "message": "動態發布設定"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLXZpZGVvLXBvc3Q.option.ZmVlZF9kaXN0cmlidXRpb24.short_desc": {
+          "source": "Where the post is distributed",
+          "message": "貼文的發布位置"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLXZpZGVvLXBvc3Q.option.dGl0bGU.desc": {
+          "source": "The title shown with the video",
+          "message": "與影片一同顯示的標題"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLXZpZGVvLXBvc3Q.option.dGl0bGU.display_name": {
+          "source": "Video Title",
+          "message": "影片標題"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLXZpZGVvLXBvc3Q.option.dGl0bGU.short_desc": {
+          "source": "The title shown with the video",
+          "message": "與影片一同顯示的標題"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLXZpZGVvLXBvc3Q.option.dmlkZW8.desc": {
+          "source": "The video to post; LinkedIn accepts MP4 between 75 KB and 500 MB and between 3 seconds and 30 minutes long",
+          "message": "要發布的影片；LinkedIn 接受介於 75 KB 至 500 MB 之間，且長度介於 3 秒至 30 分鐘之間的 MP4 格式"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLXZpZGVvLXBvc3Q.option.dmlkZW8.display_name": {
+          "source": "Video",
+          "message": "影片"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLXZpZGVvLXBvc3Q.option.dmlkZW8.short_desc": {
+          "source": "The video to post",
+          "message": "要發布的影片"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLXZpZGVvLXBvc3Q.option.dmlzaWJpbGl0eQ.allowed-value.c3RyaW5nOkNPTk5FQ1RJT05T.desc": {
+          "source": "Visible only to the authenticated member's connections",
+          "message": "僅對已驗證會員的聯絡人可見"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLXZpZGVvLXBvc3Q.option.dmlzaWJpbGl0eQ.allowed-value.c3RyaW5nOkNPTk5FQ1RJT05T.display_name": {
+          "source": "Connections Only",
+          "message": "僅限聯絡人"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLXZpZGVvLXBvc3Q.option.dmlzaWJpbGl0eQ.allowed-value.c3RyaW5nOkNPTk5FQ1RJT05T.short_desc": {
+          "source": "Visible only to the member's connections",
+          "message": "僅對會員的聯絡人可見"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLXZpZGVvLXBvc3Q.option.dmlzaWJpbGl0eQ.allowed-value.c3RyaW5nOlBVQkxJQw.desc": {
+          "source": "Visible to anyone on or off LinkedIn",
+          "message": "對 LinkedIn 站內及站外的所有人可見"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLXZpZGVvLXBvc3Q.option.dmlzaWJpbGl0eQ.allowed-value.c3RyaW5nOlBVQkxJQw.display_name": {
+          "source": "Public",
+          "message": "公開"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLXZpZGVvLXBvc3Q.option.dmlzaWJpbGl0eQ.allowed-value.c3RyaW5nOlBVQkxJQw.short_desc": {
+          "source": "Visible to anyone on or off LinkedIn",
+          "message": "對 LinkedIn 站內及站外的所有人可見"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLXZpZGVvLXBvc3Q.option.dmlzaWJpbGl0eQ.desc": {
+          "source": "Who can see the post",
+          "message": "誰可以看到此貼文"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLXZpZGVvLXBvc3Q.option.dmlzaWJpbGl0eQ.display_name": {
+          "source": "Visibility",
+          "message": "可見性"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLXZpZGVvLXBvc3Q.option.dmlzaWJpbGl0eQ.short_desc": {
+          "source": "Who can see the post",
+          "message": "誰可以看到此貼文"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLXZpZGVvLXBvc3Q.short_desc": {
+          "source": "Publish a post with a video",
+          "message": "發布含有影片的貼文"
+        },
+        "app.TGlua2VkSW4.action.Z2V0LWN1cnJlbnQtdXNlcg.desc": {
+          "source": "Retrieves the signed-in member's profile: name, email address, profile picture and locale.\n\nThe `urn` field is the member's `urn:li:person:{id}` URN, which is what LinkedIn APIs take wherever a member has to be named.",
+          "message": "擷取已登入會員的個人檔案：姓名、電子郵件地址、個人頭像及地區設定。\n\n`urn` 欄位為該會員的 `urn:li:person:{id}` URN，這是 LinkedIn API 在需要指定會員時所使用的識別碼。"
+        },
+        "app.TGlua2VkSW4.action.Z2V0LWN1cnJlbnQtdXNlcg.display_name": {
+          "source": "Get Current User",
+          "message": "取得目前使用者"
+        },
+        "app.TGlua2VkSW4.action.Z2V0LWN1cnJlbnQtdXNlcg.short_desc": {
+          "source": "Get the signed-in member's profile",
+          "message": "取得已登入會員的個人檔案"
+        },
+        "app.TGlua2VkSW4.action.Z2V0LXBvc3Q.desc": {
+          "source": "Retrieves a post by its URN, with its text, visibility, attached content and timestamps.\n\n**Requires the `r_member_social` permission**, which LinkedIn grants only to approved applications; add it to the connection's scopes once the application has been approved for it, otherwise this action fails with HTTP 403.\n\nTimestamps are returned as dates: LinkedIn reports them as milliseconds since the epoch and they are converted here.",
+          "message": "根據 URN 擷取貼文，包含其文字內容、可見度、附件內容及時間戳記。\n\n**需要 `r_member_social` 權限**，LinkedIn 僅將此權限授予經核准的應用程式；在應用程式獲得核准後，請將其新增至連線的範圍（scopes），否則此動作將失敗並回傳 HTTP 403。\n\n時間戳記會以日期格式回傳：LinkedIn 以自 epoch 起的毫秒數回報，此處已將其轉換。"
+        },
+        "app.TGlua2VkSW4.action.Z2V0LXBvc3Q.display_name": {
+          "source": "Get Post",
+          "message": "取得貼文"
+        },
+        "app.TGlua2VkSW4.action.Z2V0LXBvc3Q.option.cG9zdA.desc": {
+          "source": "The URN of the post to retrieve",
+          "message": "要擷取的貼文 URN"
+        },
+        "app.TGlua2VkSW4.action.Z2V0LXBvc3Q.option.cG9zdA.display_name": {
+          "source": "Post URN",
+          "message": "貼文 URN"
+        },
+        "app.TGlua2VkSW4.action.Z2V0LXBvc3Q.option.cG9zdA.short_desc": {
+          "source": "The URN of the post to retrieve",
+          "message": "要擷取的貼文 URN"
+        },
+        "app.TGlua2VkSW4.action.Z2V0LXBvc3Q.option.dmlld19jb250ZXh0.allowed-value.c3RyaW5nOkFVVEhPUg.desc": {
+          "source": "The latest version, which may be `DRAFT` or `PROCESSING` rather than published",
+          "message": "最新版本，可能為 `DRAFT` 或 `PROCESSING`，而非已發布狀態"
+        },
+        "app.TGlua2VkSW4.action.Z2V0LXBvc3Q.option.dmlld19jb250ZXh0.allowed-value.c3RyaW5nOkFVVEhPUg.display_name": {
+          "source": "Author",
+          "message": "作者"
+        },
+        "app.TGlua2VkSW4.action.Z2V0LXBvc3Q.option.dmlld19jb250ZXh0.allowed-value.c3RyaW5nOkFVVEhPUg.short_desc": {
+          "source": "The latest version, including drafts and processing posts",
+          "message": "最新版本，包含草稿及處理中的貼文"
+        },
+        "app.TGlua2VkSW4.action.Z2V0LXBvc3Q.option.dmlld19jb250ZXh0.allowed-value.c3RyaW5nOlJFQURFUg.desc": {
+          "source": "The published version visible to a general audience",
+          "message": "一般受眾可見的已發布版本"
+        },
+        "app.TGlua2VkSW4.action.Z2V0LXBvc3Q.option.dmlld19jb250ZXh0.allowed-value.c3RyaW5nOlJFQURFUg.display_name": {
+          "source": "Reader",
+          "message": "檢視者"
+        },
+        "app.TGlua2VkSW4.action.Z2V0LXBvc3Q.option.dmlld19jb250ZXh0.allowed-value.c3RyaW5nOlJFQURFUg.short_desc": {
+          "source": "The published version visible to a general audience",
+          "message": "一般受眾可見的已發布版本"
+        },
+        "app.TGlua2VkSW4.action.Z2V0LXBvc3Q.option.dmlld19jb250ZXh0.desc": {
+          "source": "Whether to read the post as its author or as a reader.  `AUTHOR` returns the latest version, which may still be a draft or processing; `READER` returns the published version visible to a general audience",
+          "message": "以作者或讀者身分讀取貼文。`AUTHOR` 會傳回最新版本（可能仍為草稿或處理中）；`READER` 會傳回一般受眾可見的已發布版本"
+        },
+        "app.TGlua2VkSW4.action.Z2V0LXBvc3Q.option.dmlld19jb250ZXh0.display_name": {
+          "source": "View Context",
+          "message": "檢視情境"
+        },
+        "app.TGlua2VkSW4.action.Z2V0LXBvc3Q.option.dmlld19jb250ZXh0.short_desc": {
+          "source": "Whether to read the post as its author or as a reader",
+          "message": "以作者或讀者身分讀取貼文"
+        },
+        "app.TGlua2VkSW4.action.Z2V0LXBvc3Q.short_desc": {
+          "source": "Retrieve a post by its URN",
+          "message": "根據 URN 擷取貼文"
+        },
+        "app.TGlua2VkSW4.action.ZGVsZXRlLXBvc3Q.desc": {
+          "source": "Deletes a post.\n\nDeletion is idempotent: deleting a post that is already gone succeeds rather than failing.",
+          "message": "刪除貼文。\n\n刪除操作具有等冪性：刪除已不存在的貼文將回傳成功而非失敗。"
+        },
+        "app.TGlua2VkSW4.action.ZGVsZXRlLXBvc3Q.display_name": {
+          "source": "Delete Post",
+          "message": "刪除貼文"
+        },
+        "app.TGlua2VkSW4.action.ZGVsZXRlLXBvc3Q.option.cG9zdA.desc": {
+          "source": "The URN of the post to delete",
+          "message": "要刪除的貼文 URN"
+        },
+        "app.TGlua2VkSW4.action.ZGVsZXRlLXBvc3Q.option.cG9zdA.display_name": {
+          "source": "Post URN",
+          "message": "貼文 URN"
+        },
+        "app.TGlua2VkSW4.action.ZGVsZXRlLXBvc3Q.option.cG9zdA.short_desc": {
+          "source": "The URN of the post to delete",
+          "message": "要刪除的貼文 URN"
+        },
+        "app.TGlua2VkSW4.action.ZGVsZXRlLXBvc3Q.short_desc": {
+          "source": "Delete a post",
+          "message": "刪除貼文"
+        },
+        "app.TGlua2VkSW4.action.bWFrZS1hcGktY2FsbA.desc": {
+          "source": "Make a custom HTTP / REST API call to **LinkedIn** using the configured connection's authentication.\n\nSpecify the HTTP method, the URI path (relative to the connection's API base URL), optional query parameters, headers, and request body. The response is returned as a hash containing the status code, response headers, and response body.\n\nUse this action for endpoints that are not yet exposed as first-class actions on this app.",
+          "message": "使用已設定連線的驗證資訊對 **LinkedIn** 進行自訂 HTTP / REST API 呼叫。\n\n指定 HTTP 方法、URI 路徑（相對於連線的 API 基本 URL）、選填的查詢參數、標頭及請求主體。回應將以包含狀態碼、回應標頭及回應主體的雜湊形式回傳。\n\n針對此應用程式尚未以專屬動作提供的端點，請使用此動作。"
+        },
+        "app.TGlua2VkSW4.action.bWFrZS1hcGktY2FsbA.display_name": {
+          "source": "Make an API call",
+          "message": "發出 API 呼叫"
+        },
+        "app.TGlua2VkSW4.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.desc": {
+          "source": "The request body. The effective type depends on `body_type`: JSON/form/YAML expect a hash, XML/text expect a string, multipart expects a file structure, binary expects raw bytes.",
+          "message": "請求主體。有效類型取決於 `body_type`：JSON/form/YAML 期望雜湊，XML/text 期望字串，multipart 期望檔案結構，binary 期望原始位元組。"
+        },
+        "app.TGlua2VkSW4.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.display_name": {
+          "source": "Body",
+          "message": "內文"
+        },
+        "app.TGlua2VkSW4.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.short_desc": {
+          "source": "The request body",
+          "message": "請求主體"
+        },
+        "app.TGlua2VkSW4.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.desc": {
+          "source": "Upload a file using `multipart/form-data`. The body must be a @ref DataProvider::FileDataType \"FileDataType\" structure (filename + content + mime_type). The framework builds the multipart envelope and sets the boundary header.",
+          "message": "使用 `multipart/form-data` 上傳檔案。主體必須是 @ref DataProvider::FileDataType \"FileDataType\" 結構（filename + content + mime_type）。架構會建立 multipart 封套並設定 boundary 標頭。"
+        },
+        "app.TGlua2VkSW4.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.display_name": {
+          "source": "Multipart Form",
+          "message": "Multipart 表單"
+        },
+        "app.TGlua2VkSW4.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.short_desc": {
+          "source": "Upload a file using multipart/form-data",
+          "message": "使用 multipart/form-data 上傳檔案"
+        },
+        "app.TGlua2VkSW4.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.desc": {
+          "source": "Pass the body to the REST client unchanged; the client decides serialization based on its configured `data` option and the value type",
+          "message": "原封不動地將主體傳遞給 REST 用戶端；用戶端會根據其設定的 `data` 選項和值類型來決定序列化方式"
+        },
+        "app.TGlua2VkSW4.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.display_name": {
+          "source": "Auto",
+          "message": "自動"
+        },
+        "app.TGlua2VkSW4.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.short_desc": {
+          "source": "Pass-through; use connection serialization and let the REST client decide",
+          "message": "透傳；使用連線序列化並由 REST 用戶端決定"
+        },
+        "app.TGlua2VkSW4.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.desc": {
+          "source": "Send the body as raw bytes. The body must be a binary value. Sets `Content-Type: application/octet-stream` unless overridden by `hdr`.",
+          "message": "將主體作為原始位元組傳送。主體必須是二進位值。除非被 `hdr` 覆蓋，否則會設定 `Content-Type: application/octet-stream`。"
+        },
+        "app.TGlua2VkSW4.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.display_name": {
+          "source": "Raw Binary",
+          "message": "原始二進位"
+        },
+        "app.TGlua2VkSW4.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.short_desc": {
+          "source": "Send body as raw bytes",
+          "message": "將主體作為原始位元組傳送"
+        },
+        "app.TGlua2VkSW4.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.desc": {
+          "source": "Serialize a hash of form fields as `application/x-www-form-urlencoded`. The body must be a hash whose values are scalars (strings/numbers/booleans).",
+          "message": "將表單欄位的雜湊序列化為 `application/x-www-form-urlencoded`。主體必須是值為純量（字串/數字/布林值）的雜湊。"
+        },
+        "app.TGlua2VkSW4.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.display_name": {
+          "source": "Form (URL-encoded)",
+          "message": "表單 (URL 編碼)"
+        },
+        "app.TGlua2VkSW4.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.short_desc": {
+          "source": "Serialize body as application/x-www-form-urlencoded form fields",
+          "message": "將主體序列化為 application/x-www-form-urlencoded 表單欄位"
+        },
+        "app.TGlua2VkSW4.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.desc": {
+          "source": "Serialize the body as JSON; sets `Content-Type: application/json`. The body should be a hash, list, or scalar value.",
+          "message": "將主體序列化為 JSON；設定 `Content-Type: application/json`。主體應為雜湊、清單或純量值。"
+        },
+        "app.TGlua2VkSW4.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.display_name": {
+          "source": "JSON",
+          "message": "JSON"
+        },
+        "app.TGlua2VkSW4.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.short_desc": {
+          "source": "Serialize body as JSON",
+          "message": "將主體序列化為 JSON"
+        },
+        "app.TGlua2VkSW4.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.desc": {
+          "source": "Send the body as plain text. The body must be a string. Sets `Content-Type: text/plain`.",
+          "message": "將主體作為純文字傳送。主體必須是字串。設定 `Content-Type: text/plain`。"
+        },
+        "app.TGlua2VkSW4.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.display_name": {
+          "source": "Plain Text",
+          "message": "純文字"
+        },
+        "app.TGlua2VkSW4.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.short_desc": {
+          "source": "Send body as text/plain",
+          "message": "將主體作為 text/plain 傳送"
+        },
+        "app.TGlua2VkSW4.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.desc": {
+          "source": "Send the body as XML. If the body is a hash it is serialized to XML; if it is a string it is sent verbatim. Sets `Content-Type: application/xml`.",
+          "message": "將主體作為 XML 傳送。若主體為雜湊，則會序列化為 XML；若為字串，則原樣傳送。設定 `Content-Type: application/xml`。"
+        },
+        "app.TGlua2VkSW4.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.display_name": {
+          "source": "XML",
+          "message": "XML"
+        },
+        "app.TGlua2VkSW4.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.short_desc": {
+          "source": "Send body as XML",
+          "message": "將主體作為 XML 傳送"
+        },
+        "app.TGlua2VkSW4.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.desc": {
+          "source": "Send the body as YAML. If the body is a hash it is serialized to YAML; if it is a string it is sent verbatim. Sets `Content-Type: application/x-yaml`.",
+          "message": "將主體作為 YAML 傳送。若主體為雜湊，則會序列化為 YAML；若為字串，則原樣傳送。設定 `Content-Type: application/x-yaml`。"
+        },
+        "app.TGlua2VkSW4.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.display_name": {
+          "source": "YAML",
+          "message": "YAML"
+        },
+        "app.TGlua2VkSW4.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.short_desc": {
+          "source": "Send body as YAML",
+          "message": "將主體作為 YAML 傳送"
+        },
+        "app.TGlua2VkSW4.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.desc": {
+          "source": "Selects the body serialization mode and the corresponding `Content-Type` header. Changing this field reshapes the `body` editor - selecting JSON exposes a JSON editor, selecting Multipart Form exposes a file picker, and so on.",
+          "message": "選擇主體序列化模式及對應的 `Content-Type` 標頭。變更此欄位會重新配置 `body` 編輯器 — 選擇 JSON 會顯示 JSON 編輯器，選擇 Multipart 表單會顯示檔案選擇器，依此類推。"
+        },
+        "app.TGlua2VkSW4.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.display_name": {
+          "source": "Body Type",
+          "message": "主體類型"
+        },
+        "app.TGlua2VkSW4.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.short_desc": {
+          "source": "How the body is serialized and what Content-Type is sent",
+          "message": "主體如何序列化以及傳送何種 Content-Type"
+        },
+        "app.TGlua2VkSW4.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.desc": {
+          "source": "If `True`, non-2xx HTTP responses return as the normal response hash (with the actual status code) instead of raising `REST-RESPONSE-ERROR`. Useful for handling 4xx/5xx as data - e.g. checking whether a resource exists. Overrides the connection's `error_passthru` setting for this call only.",
+          "message": "若為 `True`，非 2xx HTTP 回應會作為正常的相應雜湊傳回（帶有實際狀態碼），而非引發 `REST-RESPONSE-ERROR`。有助於將 4xx/5xx 作為資料處理 — 例如檢查資源是否存在。僅針對本次呼叫覆蓋連線的 `error_passthru` 設定。"
+        },
+        "app.TGlua2VkSW4.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.display_name": {
+          "source": "Return Errors as Data",
+          "message": "將錯誤作為資料傳回"
+        },
+        "app.TGlua2VkSW4.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.short_desc": {
+          "source": "Return non-2xx responses normally instead of throwing",
+          "message": "正常傳回非 2xx 回應而非拋出例外"
+        },
+        "app.TGlua2VkSW4.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.desc": {
+          "source": "Optional list of HTTP status codes treated as success. If set and the response status is not in this list, the action throws `REST-STATUS-ERROR`. When unset, the REST client's default behavior applies (typically: 2xx is success, non-2xx throws).",
+          "message": "視為成功的 HTTP 狀態碼選擇性清單。若有設定且回應狀態不在此清單中，該動作會拋出 `REST-STATUS-ERROR`。若未設定，則套用 REST 用戶端的預設行為（通常：2xx 為成功，非 2xx 則拋出例外）。"
+        },
+        "app.TGlua2VkSW4.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.display_name": {
+          "source": "Expected Status Codes",
+          "message": "預期的狀態碼"
+        },
+        "app.TGlua2VkSW4.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.short_desc": {
+          "source": "Response status codes treated as success",
+          "message": "視為成功的回應狀態碼"
+        },
+        "app.TGlua2VkSW4.action.bWFrZS1hcGktY2FsbA.option.aGRy.desc": {
+          "source": "Hash of custom headers added to the request. These override any default headers set by `body_type` (e.g. supplying `Content-Type` here wins over the body-type default).",
+          "message": "新增至請求的自訂標頭雜湊。這些標頭會覆蓋由 `body_type` 設定的任何預設標頭（例如，在此處提供 `Content-Type` 會優先於主體類型的預設值）。"
+        },
+        "app.TGlua2VkSW4.action.bWFrZS1hcGktY2FsbA.option.aGRy.display_name": {
+          "source": "Custom Headers",
+          "message": "自訂標頭"
+        },
+        "app.TGlua2VkSW4.action.bWFrZS1hcGktY2FsbA.option.aGRy.short_desc": {
+          "source": "Extra request headers",
+          "message": "額外的請求標頭"
+        },
+        "app.TGlua2VkSW4.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.desc": {
+          "source": "If `True`, the response hash includes a `debug` sub-hash containing the request method/URL/headers (with sensitive values redacted), request and response sizes, and round-trip duration. Useful when investigating slow or failing calls. Off by default to keep responses lean.",
+          "message": "若為 `True`，回應雜湊包含 `debug` 子雜湊，其中含有請求方法/URL/標頭（敏感值已被隱藏）、請求與回應大小以及來回時間。在調查過慢或失敗的呼叫時很有用。預設為關閉以保持回應精簡。"
+        },
+        "app.TGlua2VkSW4.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.display_name": {
+          "source": "Include Debug Info",
+          "message": "包含除錯資訊"
+        },
+        "app.TGlua2VkSW4.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.short_desc": {
+          "source": "Include request/timing/size debug info in the response",
+          "message": "在回應中包含請求/計時/大小等除錯資訊"
+        },
+        "app.TGlua2VkSW4.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.desc": {
+          "source": "HTTP `OPTIONS`",
+          "message": "HTTP `OPTIONS`"
+        },
+        "app.TGlua2VkSW4.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.display_name": {
+          "source": "OPTIONS",
+          "message": "OPTIONS"
+        },
+        "app.TGlua2VkSW4.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.short_desc": {
+          "source": "HTTP OPTIONS",
+          "message": "HTTP OPTIONS"
+        },
+        "app.TGlua2VkSW4.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.desc": {
+          "source": "HTTP `DELETE`",
+          "message": "HTTP `DELETE`"
+        },
+        "app.TGlua2VkSW4.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.display_name": {
+          "source": "DELETE",
+          "message": "DELETE"
+        },
+        "app.TGlua2VkSW4.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.short_desc": {
+          "source": "HTTP DELETE",
+          "message": "HTTP DELETE"
+        },
+        "app.TGlua2VkSW4.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.desc": {
+          "source": "HTTP `GET`",
+          "message": "HTTP `GET`"
+        },
+        "app.TGlua2VkSW4.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.display_name": {
+          "source": "GET",
+          "message": "GET"
+        },
+        "app.TGlua2VkSW4.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.short_desc": {
+          "source": "HTTP GET",
+          "message": "HTTP GET"
+        },
+        "app.TGlua2VkSW4.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.desc": {
+          "source": "HTTP `HEAD`",
+          "message": "HTTP `HEAD`"
+        },
+        "app.TGlua2VkSW4.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.display_name": {
+          "source": "HEAD",
+          "message": "HEAD"
+        },
+        "app.TGlua2VkSW4.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.short_desc": {
+          "source": "HTTP HEAD",
+          "message": "HTTP HEAD"
+        },
+        "app.TGlua2VkSW4.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.desc": {
+          "source": "HTTP `PATCH`",
+          "message": "HTTP `PATCH`"
+        },
+        "app.TGlua2VkSW4.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.display_name": {
+          "source": "PATCH",
+          "message": "PATCH"
+        },
+        "app.TGlua2VkSW4.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.short_desc": {
+          "source": "HTTP PATCH",
+          "message": "HTTP PATCH"
+        },
+        "app.TGlua2VkSW4.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.desc": {
+          "source": "HTTP `POST`",
+          "message": "HTTP `POST`"
+        },
+        "app.TGlua2VkSW4.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.display_name": {
+          "source": "POST",
+          "message": "POST"
+        },
+        "app.TGlua2VkSW4.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.short_desc": {
+          "source": "HTTP POST",
+          "message": "HTTP POST"
+        },
+        "app.TGlua2VkSW4.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.desc": {
+          "source": "HTTP `PUT`",
+          "message": "HTTP `PUT`"
+        },
+        "app.TGlua2VkSW4.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.display_name": {
+          "source": "PUT",
+          "message": "PUT"
+        },
+        "app.TGlua2VkSW4.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.short_desc": {
+          "source": "HTTP PUT",
+          "message": "HTTP PUT"
+        },
+        "app.TGlua2VkSW4.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.desc": {
+          "source": "HTTP `TRACE`",
+          "message": "HTTP `TRACE`"
+        },
+        "app.TGlua2VkSW4.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.display_name": {
+          "source": "TRACE",
+          "message": "TRACE"
+        },
+        "app.TGlua2VkSW4.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.short_desc": {
+          "source": "HTTP TRACE",
+          "message": "HTTP TRACE"
+        },
+        "app.TGlua2VkSW4.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "用於請求的 HTTP 方法"
+        },
+        "app.TGlua2VkSW4.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.display_name": {
+          "source": "HTTP Method",
+          "message": "HTTP 方法"
+        },
+        "app.TGlua2VkSW4.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.short_desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "用於請求的 HTTP 方法"
+        },
+        "app.TGlua2VkSW4.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain `{name}` placeholders that are replaced from `path_vars`. Example: `/users/{id}/comments`.",
+          "message": "相於連線 API 基底 URL 的 URI 路徑。可能包含從 `path_vars` 替換的 `{name}` 預留位置。範例：`/users/{id}/comments`。"
+        },
+        "app.TGlua2VkSW4.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.display_name": {
+          "source": "URI Path",
+          "message": "URI 路徑"
+        },
+        "app.TGlua2VkSW4.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.short_desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain '{name}' placeholders that are replaced from 'path_vars'. Example: '/users/{id}/comments'",
+          "message": "相對於連線 API 根 URL 的 URI 路徑。可能包含從 'path_vars' 替換的 '{name}' 預留位置。範例：'/users/{id}/comments'"
+        },
+        "app.TGlua2VkSW4.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.desc": {
+          "source": "Hash of values substituted into `{name}` placeholders in the URI path. Example: with `path = /users/{id}` and `path_vars = {id: 123}` the framework sends `/users/123`. Values are URL-encoded.",
+          "message": "代入 URI 路徑中 `{name}` 預留位置的值 Hash。範例：使用 `path = /users/{id}` 與 `path_vars = {id: 123}`，框架會傳送 `/users/123`。值均經過 URL 編碼。"
+        },
+        "app.TGlua2VkSW4.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.display_name": {
+          "source": "Path Variables",
+          "message": "路徑變數"
+        },
+        "app.TGlua2VkSW4.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.short_desc": {
+          "source": "Values for {name} placeholders in path",
+          "message": "路徑中 {name} 預留位置的值"
+        },
+        "app.TGlua2VkSW4.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.desc": {
+          "source": "Hash of query string parameters to append to the URI path. Values are URL-encoded; list values are joined with `,`.",
+          "message": "要附加至 URI 路徑的查詢字串參數 Hash。值均經過 URL 編碼；清單值會以 `,` 連接。"
+        },
+        "app.TGlua2VkSW4.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.display_name": {
+          "source": "Query Arguments",
+          "message": "查詢引數"
+        },
+        "app.TGlua2VkSW4.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.short_desc": {
+          "source": "Query string parameters",
+          "message": "查詢字串參數"
+        },
+        "app.TGlua2VkSW4.action.bWFrZS1hcGktY2FsbA.short_desc": {
+          "source": "Make a custom API call to LinkedIn",
+          "message": "對 LinkedIn 進行自訂 API 呼叫"
+        },
+        "app.TGlua2VkSW4.action.cmVzaGFyZS1wb3N0.desc": {
+          "source": "Reshares an existing post as the signed-in member, optionally with commentary of your own above it.\n\nAny post the member can see may be reshared, including an organization's.",
+          "message": "以已登入會員身分轉發既有貼文，可選擇在上方附上自己的評論。\n\n會員可檢視的任何貼文皆可轉發，包含機構的貼文。"
+        },
+        "app.TGlua2VkSW4.action.cmVzaGFyZS1wb3N0.display_name": {
+          "source": "Reshare Post",
+          "message": "轉發貼文"
+        },
+        "app.TGlua2VkSW4.action.cmVzaGFyZS1wb3N0.option.Y29tbWVudGFyeQ.desc": {
+          "source": "The text to add above the reshared post; a reshare may carry no text of its own.\n\nMentions and hashtags are written **inline**: `@[Qore Technologies](urn:li:organization:2414183)` mentions an organization and `#coding` is a hashtag.",
+          "message": "要加在轉發貼文上方的文字；轉發貼文也可以不附帶自訂文字。\n\n提及與主題標籤以**行內**方式撰寫：`@[Qore Technologies](urn:li:organization:2414183)` 提及機構，`#coding` 為主題標籤。"
+        },
+        "app.TGlua2VkSW4.action.cmVzaGFyZS1wb3N0.option.Y29tbWVudGFyeQ.display_name": {
+          "source": "Text",
+          "message": "文字"
+        },
+        "app.TGlua2VkSW4.action.cmVzaGFyZS1wb3N0.option.Y29tbWVudGFyeQ.short_desc": {
+          "source": "The post's text",
+          "message": "貼文的文字"
+        },
+        "app.TGlua2VkSW4.action.cmVzaGFyZS1wb3N0.option.ZGlzYWJsZV9yZXNoYXJpbmc.desc": {
+          "source": "Prevent others from resharing the post",
+          "message": "防止其他人轉分享此貼文"
+        },
+        "app.TGlua2VkSW4.action.cmVzaGFyZS1wb3N0.option.ZGlzYWJsZV9yZXNoYXJpbmc.display_name": {
+          "source": "Disable Resharing",
+          "message": "停用轉分享"
+        },
+        "app.TGlua2VkSW4.action.cmVzaGFyZS1wb3N0.option.ZGlzYWJsZV9yZXNoYXJpbmc.short_desc": {
+          "source": "Prevent others from resharing the post",
+          "message": "防止其他人轉分享此貼文"
+        },
+        "app.TGlua2VkSW4.action.cmVzaGFyZS1wb3N0.option.ZmVlZF9kaXN0cmlidXRpb24.allowed-value.c3RyaW5nOk1BSU5fRkVFRA.desc": {
+          "source": "The post is distributed to the main LinkedIn feed",
+          "message": "貼文會發布至 LinkedIn 主動態時報"
+        },
+        "app.TGlua2VkSW4.action.cmVzaGFyZS1wb3N0.option.ZmVlZF9kaXN0cmlidXRpb24.allowed-value.c3RyaW5nOk1BSU5fRkVFRA.display_name": {
+          "source": "Main Feed",
+          "message": "主動態時報"
+        },
+        "app.TGlua2VkSW4.action.cmVzaGFyZS1wb3N0.option.ZmVlZF9kaXN0cmlidXRpb24.allowed-value.c3RyaW5nOk1BSU5fRkVFRA.short_desc": {
+          "source": "Distributed to the main LinkedIn feed",
+          "message": "發布至 LinkedIn 主動態時報"
+        },
+        "app.TGlua2VkSW4.action.cmVzaGFyZS1wb3N0.option.ZmVlZF9kaXN0cmlidXRpb24.allowed-value.c3RyaW5nOk5PTkU.desc": {
+          "source": "The post is not distributed to any feed; it is reachable only by its URN",
+          "message": "貼文不會發布至任何動態時報；僅能透過其 URN 存取"
+        },
+        "app.TGlua2VkSW4.action.cmVzaGFyZS1wb3N0.option.ZmVlZF9kaXN0cmlidXRpb24.allowed-value.c3RyaW5nOk5PTkU.display_name": {
+          "source": "None",
+          "message": "無"
+        },
+        "app.TGlua2VkSW4.action.cmVzaGFyZS1wb3N0.option.ZmVlZF9kaXN0cmlidXRpb24.allowed-value.c3RyaW5nOk5PTkU.short_desc": {
+          "source": "Not distributed to any feed",
+          "message": "不發布至任何動態時報"
+        },
+        "app.TGlua2VkSW4.action.cmVzaGFyZS1wb3N0.option.ZmVlZF9kaXN0cmlidXRpb24.desc": {
+          "source": "Where the post is distributed.  `NONE` creates a post that is reachable only by its URN and does not appear in any feed",
+          "message": "貼文的發布位置。`NONE` 會建立僅能透過其 URN 存取且不會出現在任何動態時報中的貼文"
+        },
+        "app.TGlua2VkSW4.action.cmVzaGFyZS1wb3N0.option.ZmVlZF9kaXN0cmlidXRpb24.display_name": {
+          "source": "Feed Distribution",
+          "message": "動態發布設定"
+        },
+        "app.TGlua2VkSW4.action.cmVzaGFyZS1wb3N0.option.ZmVlZF9kaXN0cmlidXRpb24.short_desc": {
+          "source": "Where the post is distributed",
+          "message": "貼文的發布位置"
+        },
+        "app.TGlua2VkSW4.action.cmVzaGFyZS1wb3N0.option.cG9zdA.desc": {
+          "source": "The URN of the post to reshare, e.g. `urn:li:share:6957408550713184256`",
+          "message": "要轉發的貼文 URN，例如 `urn:li:share:6957408550713184256`"
+        },
+        "app.TGlua2VkSW4.action.cmVzaGFyZS1wb3N0.option.cG9zdA.display_name": {
+          "source": "Post URN",
+          "message": "貼文 URN"
+        },
+        "app.TGlua2VkSW4.action.cmVzaGFyZS1wb3N0.option.cG9zdA.short_desc": {
+          "source": "The URN of the post to reshare",
+          "message": "要轉發的貼文 URN"
+        },
+        "app.TGlua2VkSW4.action.cmVzaGFyZS1wb3N0.option.dmlzaWJpbGl0eQ.allowed-value.c3RyaW5nOkNPTk5FQ1RJT05T.desc": {
+          "source": "Visible only to the authenticated member's connections",
+          "message": "僅對已驗證會員的聯絡人可見"
+        },
+        "app.TGlua2VkSW4.action.cmVzaGFyZS1wb3N0.option.dmlzaWJpbGl0eQ.allowed-value.c3RyaW5nOkNPTk5FQ1RJT05T.display_name": {
+          "source": "Connections Only",
+          "message": "僅限聯絡人"
+        },
+        "app.TGlua2VkSW4.action.cmVzaGFyZS1wb3N0.option.dmlzaWJpbGl0eQ.allowed-value.c3RyaW5nOkNPTk5FQ1RJT05T.short_desc": {
+          "source": "Visible only to the member's connections",
+          "message": "僅對會員的聯絡人可見"
+        },
+        "app.TGlua2VkSW4.action.cmVzaGFyZS1wb3N0.option.dmlzaWJpbGl0eQ.allowed-value.c3RyaW5nOlBVQkxJQw.desc": {
+          "source": "Visible to anyone on or off LinkedIn",
+          "message": "對 LinkedIn 站內及站外的所有人可見"
+        },
+        "app.TGlua2VkSW4.action.cmVzaGFyZS1wb3N0.option.dmlzaWJpbGl0eQ.allowed-value.c3RyaW5nOlBVQkxJQw.display_name": {
+          "source": "Public",
+          "message": "公開"
+        },
+        "app.TGlua2VkSW4.action.cmVzaGFyZS1wb3N0.option.dmlzaWJpbGl0eQ.allowed-value.c3RyaW5nOlBVQkxJQw.short_desc": {
+          "source": "Visible to anyone on or off LinkedIn",
+          "message": "對 LinkedIn 站內及站外的所有人可見"
+        },
+        "app.TGlua2VkSW4.action.cmVzaGFyZS1wb3N0.option.dmlzaWJpbGl0eQ.desc": {
+          "source": "Who can see the post",
+          "message": "誰可以看到此貼文"
+        },
+        "app.TGlua2VkSW4.action.cmVzaGFyZS1wb3N0.option.dmlzaWJpbGl0eQ.display_name": {
+          "source": "Visibility",
+          "message": "可見性"
+        },
+        "app.TGlua2VkSW4.action.cmVzaGFyZS1wb3N0.option.dmlzaWJpbGl0eQ.short_desc": {
+          "source": "Who can see the post",
+          "message": "誰可以看到此貼文"
+        },
+        "app.TGlua2VkSW4.action.cmVzaGFyZS1wb3N0.short_desc": {
+          "source": "Reshare an existing post",
+          "message": "轉發既有貼文"
+        },
+        "app.TGlua2VkSW4.action.dXBkYXRlLXBvc3Q.desc": {
+          "source": "Replaces the text of a post that has already been published.\n\nLinkedIn marks an edited post as edited; the attached content of a post cannot be changed after publication, only its text.",
+          "message": "取代已發布貼文的文字內容。\n\nLinkedIn 會將編輯過的貼文標記為已編輯；貼文發布後無法變更其附加內容，僅能變更文字。"
+        },
+        "app.TGlua2VkSW4.action.dXBkYXRlLXBvc3Q.display_name": {
+          "source": "Update Post",
+          "message": "更新貼文"
+        },
+        "app.TGlua2VkSW4.action.dXBkYXRlLXBvc3Q.option.Y29tbWVudGFyeQ.desc": {
+          "source": "The post's new text, replacing the existing text.\n\nMentions and hashtags are written **inline**: `@[Qore Technologies](urn:li:organization:2414183)` mentions an organization and `#coding` is a hashtag.",
+          "message": "貼文的新文字內容，將取代現有文字。\n\n提及與主題標籤以**行內**方式撰寫：`@[Qore Technologies](urn:li:organization:2414183)` 提及機構，`#coding` 為主題標籤。"
+        },
+        "app.TGlua2VkSW4.action.dXBkYXRlLXBvc3Q.option.Y29tbWVudGFyeQ.display_name": {
+          "source": "Text",
+          "message": "文字"
+        },
+        "app.TGlua2VkSW4.action.dXBkYXRlLXBvc3Q.option.Y29tbWVudGFyeQ.short_desc": {
+          "source": "The post's new text",
+          "message": "貼文的新文字"
+        },
+        "app.TGlua2VkSW4.action.dXBkYXRlLXBvc3Q.option.cG9zdA.desc": {
+          "source": "The URN of the post to update",
+          "message": "要更新的貼文 URN"
+        },
+        "app.TGlua2VkSW4.action.dXBkYXRlLXBvc3Q.option.cG9zdA.display_name": {
+          "source": "Post URN",
+          "message": "貼文 URN"
+        },
+        "app.TGlua2VkSW4.action.dXBkYXRlLXBvc3Q.option.cG9zdA.short_desc": {
+          "source": "The URN of the post to update",
+          "message": "要更新的貼文 URN"
+        },
+        "app.TGlua2VkSW4.action.dXBkYXRlLXBvc3Q.short_desc": {
+          "source": "Change the text of a published post",
+          "message": "變更已發布貼文的文字"
+        },
+        "app.TGlua2VkSW4.action.dXBsb2FkLWltYWdl.desc": {
+          "source": "Uploads an image to LinkedIn and returns its URN, without posting it.\n\nUse this when the same image is needed in more than one post, or as an article post's thumbnail. An uploaded image can be reused across posts and ad formats without uploading it again.",
+          "message": "將圖片上傳至 LinkedIn 並傳回其 URN，而不直接發布貼文。\n\n當多篇貼文需要使用相同圖片，或用作文章貼文的縮圖時，請使用此動作。已上傳的圖片可在不同貼文與廣告格式中重複使用，無需再次上傳。"
+        },
+        "app.TGlua2VkSW4.action.dXBsb2FkLWltYWdl.display_name": {
+          "source": "Upload Image",
+          "message": "上傳圖片"
+        },
+        "app.TGlua2VkSW4.action.dXBsb2FkLWltYWdl.option.aW1hZ2U.desc": {
+          "source": "The image to upload; LinkedIn accepts JPG, PNG and GIF with fewer than 36,152,320 pixels",
+          "message": "要上傳的圖片；LinkedIn 接受像素少於 36,152,320 的 JPG、PNG 及 GIF 格式"
+        },
+        "app.TGlua2VkSW4.action.dXBsb2FkLWltYWdl.option.aW1hZ2U.display_name": {
+          "source": "Image",
+          "message": "圖片"
+        },
+        "app.TGlua2VkSW4.action.dXBsb2FkLWltYWdl.option.aW1hZ2U.short_desc": {
+          "source": "The image to upload",
+          "message": "要上傳的圖片"
+        },
+        "app.TGlua2VkSW4.action.dXBsb2FkLWltYWdl.option.b3duZXI.desc": {
+          "source": "The URN of the entity that will own the asset.  Defaults to the authenticated member (`urn:li:person:...`); an organization URN (`urn:li:organization:...`) requires an administrator or content-admin role on that page and the `w_organization_social` scope",
+          "message": "將擁有該資產的實體 URN。預設為已驗證會員（`urn:li:person:...`）；機構 URN（`urn:li:organization:...`）需要該專頁的管理員或內容管理員角色以及 `w_organization_social` 範圍"
+        },
+        "app.TGlua2VkSW4.action.dXBsb2FkLWltYWdl.option.b3duZXI.display_name": {
+          "source": "Owner URN",
+          "message": "擁有者 URN"
+        },
+        "app.TGlua2VkSW4.action.dXBsb2FkLWltYWdl.option.b3duZXI.short_desc": {
+          "source": "The URN of the entity that will own the asset",
+          "message": "將擁有該資產的實體 URN"
+        },
+        "app.TGlua2VkSW4.action.dXBsb2FkLWltYWdl.short_desc": {
+          "source": "Upload an image and get its URN",
+          "message": "上傳圖片並取得其 URN"
+        },
+        "app.TGlua2VkSW4.action.dXBsb2FkLXZpZGVv.desc": {
+          "source": "Uploads a video to LinkedIn and returns its URN, without posting it.\n\nThe upload is sent in parts, so a large video does not have to start again from the beginning if one part fails. LinkedIn processes the video afterwards; it can be attached to a post before processing finishes.",
+          "message": "將影片上傳至 LinkedIn 並傳回其 URN，而不直接發布貼文。\n\n上傳過程採用分段傳送，因此若其中一部分失敗，大型影片無需從頭重新開始。LinkedIn 會在稍後處理影片；在處理完成前即可將其附加至貼文中。"
+        },
+        "app.TGlua2VkSW4.action.dXBsb2FkLXZpZGVv.display_name": {
+          "source": "Upload Video",
+          "message": "上傳影片"
+        },
+        "app.TGlua2VkSW4.action.dXBsb2FkLXZpZGVv.option.b3duZXI.desc": {
+          "source": "The URN of the entity that will own the asset.  Defaults to the authenticated member (`urn:li:person:...`); an organization URN (`urn:li:organization:...`) requires an administrator or content-admin role on that page and the `w_organization_social` scope",
+          "message": "將擁有該資產的實體 URN。預設為已驗證會員（`urn:li:person:...`）；機構 URN（`urn:li:organization:...`）需要該專頁的管理員或內容管理員角色以及 `w_organization_social` 範圍"
+        },
+        "app.TGlua2VkSW4.action.dXBsb2FkLXZpZGVv.option.b3duZXI.display_name": {
+          "source": "Owner URN",
+          "message": "擁有者 URN"
+        },
+        "app.TGlua2VkSW4.action.dXBsb2FkLXZpZGVv.option.b3duZXI.short_desc": {
+          "source": "The URN of the entity that will own the asset",
+          "message": "將擁有該資產的實體 URN"
+        },
+        "app.TGlua2VkSW4.action.dXBsb2FkLXZpZGVv.option.dmlkZW8.desc": {
+          "source": "The video to upload; LinkedIn accepts MP4 between 75 KB and 500 MB and between 3 seconds and 30 minutes long",
+          "message": "要上傳的影片；LinkedIn 接受介於 75 KB 至 500 MB 之間，且長度介於 3 秒至 30 分鐘之間的 MP4 格式"
+        },
+        "app.TGlua2VkSW4.action.dXBsb2FkLXZpZGVv.option.dmlkZW8.display_name": {
+          "source": "Video",
+          "message": "影片"
+        },
+        "app.TGlua2VkSW4.action.dXBsb2FkLXZpZGVv.option.dmlkZW8.short_desc": {
+          "source": "The video to upload",
+          "message": "要上傳的影片"
+        },
+        "app.TGlua2VkSW4.action.dXBsb2FkLXZpZGVv.short_desc": {
+          "source": "Upload a video and get its URN",
+          "message": "上傳影片並取得其 URN"
+        },
+        "app.TGlua2VkSW4.desc": {
+          "source": "Provides access to [LinkedIn](https://www.linkedin.com) for publishing and managing content as the signed-in member, through the [Posts](https://learn.microsoft.com/en-us/linkedin/marketing/community-management/shares/posts-api), [Images](https://learn.microsoft.com/en-us/linkedin/marketing/community-management/shares/images-api) and [Videos](https://learn.microsoft.com/en-us/linkedin/marketing/community-management/shares/videos-api) APIs.\n\n**Common use cases**:\n- **Publishing**: post text, an article link, an image, a video, or a set of images, and reshare someone else's post with your own commentary\n- **Content management**: edit the text of a post you published, or delete it\n- **Media**: upload an image or a video once and reuse its URN across several posts\n\nMentions and hashtags are written **inline** in the post text: `@[Qore Technologies](urn:li:organization:2414183)` mentions an organization and `#coding` is a hashtag.\n\nAuthentication is OAuth2 with a LinkedIn developer application carrying the **Sign In with LinkedIn using OpenID Connect** and **Share on LinkedIn** products. Reading posts back (the **Get Post** action) additionally needs the `r_member_social` permission, which LinkedIn grants only to approved applications; add it to the connection's scopes once it has been approved.\n\nTo work with an organization's page content — its posts, comments, reactions, followers and analytics — use the **LinkedIn Organizations** application instead.\n\nLinkedIn is a trademark of LinkedIn Corporation",
+          "message": "透過 [Posts](https://learn.microsoft.com/en-us/linkedin/marketing/community-management/shares/posts-api)、[Images](https://learn.microsoft.com/en-us/linkedin/marketing/community-management/shares/images-api) 與 [Videos](https://learn.microsoft.com/en-us/linkedin/marketing/community-management/shares/videos-api) API，以已登入會員身分存取 [LinkedIn](https://www.linkedin.com) 以發布及管理內容。\n\n**常見使用案例**：\n- **發布**：發布文字、文章連結、圖片、影片或一組圖片，並附上您自己的評論轉發他人的貼文\n- **內容管理**：編輯您已發布貼文的文字，或將其刪除\n- **媒體**：上傳一次圖片或影片，並在多篇貼文中重複使用其 URN\n\n提及與主題標籤以**行內**方式寫入貼文文字中：`@[Qore Technologies](urn:li:organization:2414183)` 提及機構，`#coding` 為主題標籤。\n\n驗證採用 OAuth2，搭配包含 **Sign In with LinkedIn using OpenID Connect** 及 **Share on LinkedIn** 產品的 LinkedIn 開發人員應用程式。讀取貼文（**取得貼文**動作）還需要 `r_member_social` 權限，LinkedIn 僅將此權限授予經核准的應用程式；在獲得核准後請將其新增至連線範圍中。\n\n若要處理機構專頁內容（其貼文、留言、心情回應、追蹤者及分析數據），請改用 **LinkedIn Organizations** 應用程式。\n\nLinkedIn 是 LinkedIn Corporation 的商標"
+        },
+        "app.TGlua2VkSW4.display_name": {
+          "source": "LinkedIn",
+          "message": "LinkedIn"
+        },
+        "app.TGlua2VkSW4.short_desc": {
+          "source": "Publish and manage content on LinkedIn as the signed-in member",
+          "message": "以已登入會員身分在 LinkedIn 上發布與管理內容"
+        }
+      }
+    }
+  }
+}

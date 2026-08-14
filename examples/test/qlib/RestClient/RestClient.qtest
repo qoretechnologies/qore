@@ -212,6 +212,7 @@ public class Main inherits QUnit::Test {
         addTestCase("issue 3472", \issue3472());
         addTestCase("connection tests", \connectionTests());
         addTestCase("negotiate auth options", \negotiateAuthOptionsTest());
+        addTestCase("reauthorization control option", \reauthorizationControlOptionTest());
         addTestCase("ping_body view hint", \pingBodyViewHintTest());
         addTestCase("absolute ping URL", \absolutePingUrlTest());
         addTestCase("an absolute ping path and the connection's URL path", \pingConnectionPathTest());
@@ -698,6 +699,12 @@ public class Main inherits QUnit::Test {
             assertTrue(cinfo.features{AbstractConnection::CF_UPDATE_OPTIONS});
             assertTrue(cinfo.features{RestConnection::RCF_OAUTH2_AUTH_CODE});
         }
+    }
+
+    reauthorizationControlOptionTest() {
+        assertEq("$qore-reauthorization-required",
+            RestConnection::ReauthorizationRequiredOption,
+            "specialized OAuth2 clients and consumers share the same control option");
     }
 
     pingBodyViewHintTest() {

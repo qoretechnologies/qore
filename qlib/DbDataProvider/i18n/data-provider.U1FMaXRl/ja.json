@@ -1,0 +1,21 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "ja": {
+      "messages": {
+        "app.U1FMaXRl.desc": {
+          "source": "Create and manage connections to a SQLite embedded database",
+          "message": "SQLite 組込みデータベースへの接続を作成および管理します"
+        },
+        "app.U1FMaXRl.display_name": {
+          "source": "SQLite",
+          "message": "SQLite"
+        },
+        "app.U1FMaXRl.short_desc": {
+          "source": "SQLite embedded database",
+          "message": "SQLite 組込みデータベース"
+        }
+      }
+    }
+  }
+}

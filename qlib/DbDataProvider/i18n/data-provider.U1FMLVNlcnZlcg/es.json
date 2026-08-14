@@ -1,0 +1,21 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "es": {
+      "messages": {
+        "app.U1FMLVNlcnZlcg.desc": {
+          "source": "Create and manage connections to a Microsoft SQL Server database",
+          "message": "Cree y gestione conexiones a una base de datos de Microsoft SQL Server"
+        },
+        "app.U1FMLVNlcnZlcg.display_name": {
+          "source": "SQL-Server",
+          "message": "SQL-Server"
+        },
+        "app.U1FMLVNlcnZlcg.short_desc": {
+          "source": "Microsoft SQL Server database",
+          "message": "Base de datos de Microsoft SQL Server"
+        }
+      }
+    }
+  }
+}

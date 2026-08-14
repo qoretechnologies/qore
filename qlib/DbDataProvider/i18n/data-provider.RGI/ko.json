@@ -1,0 +1,189 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "ko": {
+      "messages": {
+        "app.RGI.action.Y3JlYXRl.desc": {
+          "source": "Create a record in the table",
+          "message": "테이블에 레코드 생성"
+        },
+        "app.RGI.action.Y3JlYXRl.display_name": {
+          "source": "Create Record",
+          "message": "레코드 생성"
+        },
+        "app.RGI.action.Y3JlYXRl.option.dGFibGU.desc": {
+          "source": "The name of the table",
+          "message": "테이블 이름"
+        },
+        "app.RGI.action.Y3JlYXRl.option.dGFibGU.display_name": {
+          "source": "Table",
+          "message": "테이블"
+        },
+        "app.RGI.action.Y3JlYXRl.option.dGFibGU.short_desc": {
+          "source": "The name of the table",
+          "message": "테이블 이름"
+        },
+        "app.RGI.action.Y3JlYXRl.short_desc": {
+          "source": "Create a record in the table",
+          "message": "테이블에 레코드 생성"
+        },
+        "app.RGI.action.ZGVsZXRl.desc": {
+          "source": "Delete records in the table",
+          "message": "테이블의 레코드 삭제"
+        },
+        "app.RGI.action.ZGVsZXRl.display_name": {
+          "source": "Delete Records",
+          "message": "레코드 삭제"
+        },
+        "app.RGI.action.ZGVsZXRl.option.dGFibGU.desc": {
+          "source": "The name of the table",
+          "message": "테이블 이름"
+        },
+        "app.RGI.action.ZGVsZXRl.option.dGFibGU.display_name": {
+          "source": "Table",
+          "message": "테이블"
+        },
+        "app.RGI.action.ZGVsZXRl.option.dGFibGU.short_desc": {
+          "source": "The name of the table",
+          "message": "테이블 이름"
+        },
+        "app.RGI.action.ZGVsZXRl.short_desc": {
+          "source": "Delete records in the table",
+          "message": "테이블의 레코드 삭제"
+        },
+        "app.RGI.action.ZXhlYy1zcWw.desc": {
+          "source": "Execute an SQL statement",
+          "message": "SQL 문 실행"
+        },
+        "app.RGI.action.ZXhlYy1zcWw.display_name": {
+          "source": "Execute an SQL Statement",
+          "message": "SQL 문 실행"
+        },
+        "app.RGI.action.ZXhlYy1zcWw.short_desc": {
+          "source": "Execute an SQL statement",
+          "message": "SQL 문 실행"
+        },
+        "app.RGI.action.ZmluZA.desc": {
+          "source": "Find records in the table",
+          "message": "테이블에서 레코드 찾기"
+        },
+        "app.RGI.action.ZmluZA.display_name": {
+          "source": "Find Matching Records",
+          "message": "일치하는 레코드 찾기"
+        },
+        "app.RGI.action.ZmluZA.option.dGFibGU.desc": {
+          "source": "The name of the table",
+          "message": "테이블 이름"
+        },
+        "app.RGI.action.ZmluZA.option.dGFibGU.display_name": {
+          "source": "Table",
+          "message": "테이블"
+        },
+        "app.RGI.action.ZmluZA.option.dGFibGU.short_desc": {
+          "source": "The name of the table",
+          "message": "테이블 이름"
+        },
+        "app.RGI.action.ZmluZA.short_desc": {
+          "source": "Find records in the table",
+          "message": "테이블에서 레코드 찾기"
+        },
+        "app.RGI.action.ZmluZF9zaW5nbGU.desc": {
+          "source": "Find a single record in the table",
+          "message": "테이블에서 단일 레코드 찾기"
+        },
+        "app.RGI.action.ZmluZF9zaW5nbGU.display_name": {
+          "source": "Find Single Record",
+          "message": "단일 레코드 찾기"
+        },
+        "app.RGI.action.ZmluZF9zaW5nbGU.option.dGFibGU.desc": {
+          "source": "The name of the table",
+          "message": "테이블 이름"
+        },
+        "app.RGI.action.ZmluZF9zaW5nbGU.option.dGFibGU.display_name": {
+          "source": "Table",
+          "message": "테이블"
+        },
+        "app.RGI.action.ZmluZF9zaW5nbGU.option.dGFibGU.short_desc": {
+          "source": "The name of the table",
+          "message": "테이블 이름"
+        },
+        "app.RGI.action.ZmluZF9zaW5nbGU.short_desc": {
+          "source": "Find a single record in the table",
+          "message": "테이블에서 단일 레코드 찾기"
+        },
+        "app.RGI.action.c2VsZWN0LXNxbA.desc": {
+          "source": "Execute an SQL select statement",
+          "message": "SQL select 문 실행"
+        },
+        "app.RGI.action.c2VsZWN0LXNxbA.display_name": {
+          "source": "Execute an SQL Select Statement",
+          "message": "SQL Select 문 실행"
+        },
+        "app.RGI.action.c2VsZWN0LXNxbA.short_desc": {
+          "source": "Execute an SQL select statement",
+          "message": "SQL select 문 실행"
+        },
+        "app.RGI.action.dXBkYXRl.desc": {
+          "source": "Update records in the table",
+          "message": "테이블의 레코드 업데이트"
+        },
+        "app.RGI.action.dXBkYXRl.display_name": {
+          "source": "Update Records",
+          "message": "레코드 업데이트"
+        },
+        "app.RGI.action.dXBkYXRl.option.dGFibGU.desc": {
+          "source": "The name of the table",
+          "message": "테이블 이름"
+        },
+        "app.RGI.action.dXBkYXRl.option.dGFibGU.display_name": {
+          "source": "Table",
+          "message": "테이블"
+        },
+        "app.RGI.action.dXBkYXRl.option.dGFibGU.short_desc": {
+          "source": "The name of the table",
+          "message": "테이블 이름"
+        },
+        "app.RGI.action.dXBkYXRl.short_desc": {
+          "source": "Update records in the table",
+          "message": "테이블의 레코드 업데이트"
+        },
+        "app.RGI.action.dXBzZXJ0.desc": {
+          "source": "Upsert records in the table",
+          "message": "테이블의 레코드 업서트"
+        },
+        "app.RGI.action.dXBzZXJ0.display_name": {
+          "source": "Upsert Records",
+          "message": "레코드 업서트"
+        },
+        "app.RGI.action.dXBzZXJ0.option.dGFibGU.desc": {
+          "source": "The name of the table",
+          "message": "테이블 이름"
+        },
+        "app.RGI.action.dXBzZXJ0.option.dGFibGU.display_name": {
+          "source": "Table",
+          "message": "테이블"
+        },
+        "app.RGI.action.dXBzZXJ0.option.dGFibGU.short_desc": {
+          "source": "The name of the table",
+          "message": "테이블 이름"
+        },
+        "app.RGI.action.dXBzZXJ0.short_desc": {
+          "source": "Upsert records in the table",
+          "message": "테이블의 레코드 업서트"
+        },
+        "app.RGI.desc": {
+          "source": "DB operations on connected datasources.",
+          "message": "연결된 데이터 소스에서의 DB 작업입니다."
+        },
+        "app.RGI.display_name": {
+          "source": "DB",
+          "message": "DB"
+        },
+        "app.RGI.short_desc": {
+          "source": "DB operations on connected datasources",
+          "message": "연결된 데이터 소스에서의 DB 작업"
+        }
+      }
+    }
+  }
+}

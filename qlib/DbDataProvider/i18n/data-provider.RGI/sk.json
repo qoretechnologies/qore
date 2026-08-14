@@ -1,0 +1,189 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "sk": {
+      "messages": {
+        "app.RGI.action.Y3JlYXRl.desc": {
+          "source": "Create a record in the table",
+          "message": "Vytvoriť záznam v tabuľke"
+        },
+        "app.RGI.action.Y3JlYXRl.display_name": {
+          "source": "Create Record",
+          "message": "Vytvoriť záznam"
+        },
+        "app.RGI.action.Y3JlYXRl.option.dGFibGU.desc": {
+          "source": "The name of the table",
+          "message": "Názov tabuľky"
+        },
+        "app.RGI.action.Y3JlYXRl.option.dGFibGU.display_name": {
+          "source": "Table",
+          "message": "Tabuľka"
+        },
+        "app.RGI.action.Y3JlYXRl.option.dGFibGU.short_desc": {
+          "source": "The name of the table",
+          "message": "Názov tabuľky"
+        },
+        "app.RGI.action.Y3JlYXRl.short_desc": {
+          "source": "Create a record in the table",
+          "message": "Vytvoriť záznam v tabuľke"
+        },
+        "app.RGI.action.ZGVsZXRl.desc": {
+          "source": "Delete records in the table",
+          "message": "Odstrániť záznamy v tabuľke"
+        },
+        "app.RGI.action.ZGVsZXRl.display_name": {
+          "source": "Delete Records",
+          "message": "Odstrániť záznamy"
+        },
+        "app.RGI.action.ZGVsZXRl.option.dGFibGU.desc": {
+          "source": "The name of the table",
+          "message": "Názov tabuľky"
+        },
+        "app.RGI.action.ZGVsZXRl.option.dGFibGU.display_name": {
+          "source": "Table",
+          "message": "Tabuľka"
+        },
+        "app.RGI.action.ZGVsZXRl.option.dGFibGU.short_desc": {
+          "source": "The name of the table",
+          "message": "Názov tabuľky"
+        },
+        "app.RGI.action.ZGVsZXRl.short_desc": {
+          "source": "Delete records in the table",
+          "message": "Odstrániť záznamy v tabuľke"
+        },
+        "app.RGI.action.ZXhlYy1zcWw.desc": {
+          "source": "Execute an SQL statement",
+          "message": "Vykonať príkaz SQL"
+        },
+        "app.RGI.action.ZXhlYy1zcWw.display_name": {
+          "source": "Execute an SQL Statement",
+          "message": "Vykonať príkaz SQL"
+        },
+        "app.RGI.action.ZXhlYy1zcWw.short_desc": {
+          "source": "Execute an SQL statement",
+          "message": "Vykonať príkaz SQL"
+        },
+        "app.RGI.action.ZmluZA.desc": {
+          "source": "Find records in the table",
+          "message": "Nájsť záznamy v tabuľke"
+        },
+        "app.RGI.action.ZmluZA.display_name": {
+          "source": "Find Matching Records",
+          "message": "Nájsť zodpovedajúce záznamy"
+        },
+        "app.RGI.action.ZmluZA.option.dGFibGU.desc": {
+          "source": "The name of the table",
+          "message": "Názov tabuľky"
+        },
+        "app.RGI.action.ZmluZA.option.dGFibGU.display_name": {
+          "source": "Table",
+          "message": "Tabuľka"
+        },
+        "app.RGI.action.ZmluZA.option.dGFibGU.short_desc": {
+          "source": "The name of the table",
+          "message": "Názov tabuľky"
+        },
+        "app.RGI.action.ZmluZA.short_desc": {
+          "source": "Find records in the table",
+          "message": "Nájsť záznamy v tabuľke"
+        },
+        "app.RGI.action.ZmluZF9zaW5nbGU.desc": {
+          "source": "Find a single record in the table",
+          "message": "Nájsť jeden záznam v tabuľke"
+        },
+        "app.RGI.action.ZmluZF9zaW5nbGU.display_name": {
+          "source": "Find Single Record",
+          "message": "Nájsť jeden záznam"
+        },
+        "app.RGI.action.ZmluZF9zaW5nbGU.option.dGFibGU.desc": {
+          "source": "The name of the table",
+          "message": "Názov tabuľky"
+        },
+        "app.RGI.action.ZmluZF9zaW5nbGU.option.dGFibGU.display_name": {
+          "source": "Table",
+          "message": "Tabuľka"
+        },
+        "app.RGI.action.ZmluZF9zaW5nbGU.option.dGFibGU.short_desc": {
+          "source": "The name of the table",
+          "message": "Názov tabuľky"
+        },
+        "app.RGI.action.ZmluZF9zaW5nbGU.short_desc": {
+          "source": "Find a single record in the table",
+          "message": "Nájsť jeden záznam v tabuľke"
+        },
+        "app.RGI.action.c2VsZWN0LXNxbA.desc": {
+          "source": "Execute an SQL select statement",
+          "message": "Vykonať príkaz SQL select"
+        },
+        "app.RGI.action.c2VsZWN0LXNxbA.display_name": {
+          "source": "Execute an SQL Select Statement",
+          "message": "Vykonať príkaz SQL Select"
+        },
+        "app.RGI.action.c2VsZWN0LXNxbA.short_desc": {
+          "source": "Execute an SQL select statement",
+          "message": "Vykonať príkaz SQL select"
+        },
+        "app.RGI.action.dXBkYXRl.desc": {
+          "source": "Update records in the table",
+          "message": "Aktualizovať záznamy v tabuľke"
+        },
+        "app.RGI.action.dXBkYXRl.display_name": {
+          "source": "Update Records",
+          "message": "Aktualizovať záznamy"
+        },
+        "app.RGI.action.dXBkYXRl.option.dGFibGU.desc": {
+          "source": "The name of the table",
+          "message": "Názov tabuľky"
+        },
+        "app.RGI.action.dXBkYXRl.option.dGFibGU.display_name": {
+          "source": "Table",
+          "message": "Tabuľka"
+        },
+        "app.RGI.action.dXBkYXRl.option.dGFibGU.short_desc": {
+          "source": "The name of the table",
+          "message": "Názov tabuľky"
+        },
+        "app.RGI.action.dXBkYXRl.short_desc": {
+          "source": "Update records in the table",
+          "message": "Aktualizovať záznamy v tabuľke"
+        },
+        "app.RGI.action.dXBzZXJ0.desc": {
+          "source": "Upsert records in the table",
+          "message": "Upsertovať záznamy v tabuľke"
+        },
+        "app.RGI.action.dXBzZXJ0.display_name": {
+          "source": "Upsert Records",
+          "message": "Upsertovať záznamy"
+        },
+        "app.RGI.action.dXBzZXJ0.option.dGFibGU.desc": {
+          "source": "The name of the table",
+          "message": "Názov tabuľky"
+        },
+        "app.RGI.action.dXBzZXJ0.option.dGFibGU.display_name": {
+          "source": "Table",
+          "message": "Tabuľka"
+        },
+        "app.RGI.action.dXBzZXJ0.option.dGFibGU.short_desc": {
+          "source": "The name of the table",
+          "message": "Názov tabuľky"
+        },
+        "app.RGI.action.dXBzZXJ0.short_desc": {
+          "source": "Upsert records in the table",
+          "message": "Upsertovať záznamy v tabuľke"
+        },
+        "app.RGI.desc": {
+          "source": "DB operations on connected datasources.",
+          "message": "Databázové operácie na pripojených zdrojoch údajov."
+        },
+        "app.RGI.display_name": {
+          "source": "DB",
+          "message": "DB"
+        },
+        "app.RGI.short_desc": {
+          "source": "DB operations on connected datasources",
+          "message": "Databázové operácie na pripojených zdrojoch údajov"
+        }
+      }
+    }
+  }
+}

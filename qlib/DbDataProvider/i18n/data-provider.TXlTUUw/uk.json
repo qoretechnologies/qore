@@ -1,0 +1,21 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "uk": {
+      "messages": {
+        "app.TXlTUUw.desc": {
+          "source": "Create and manage connections to a MySQL database server",
+          "message": "Створення та керування підключеннями до сервера бази даних MySQL"
+        },
+        "app.TXlTUUw.display_name": {
+          "source": "MySQL",
+          "message": "MySQL"
+        },
+        "app.TXlTUUw.short_desc": {
+          "source": "MySQL database server",
+          "message": "Сервер бази даних MySQL"
+        }
+      }
+    }
+  }
+}

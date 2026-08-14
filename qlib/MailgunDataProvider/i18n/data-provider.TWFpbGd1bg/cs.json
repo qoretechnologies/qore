@@ -1,0 +1,1053 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "cs": {
+      "messages": {
+        "app.TWFpbGd1bg.action.Y29tcGxhaW5lZA.desc": {
+          "source": "Fires when a recipient marks an email as spam. Consider removing the recipient from future mailings to maintain sender reputation.",
+          "message": "Spustí se, když příjemce označí e-mail jako spam. Pro udržení reputace odesílatele zvažte odebrání příjemce z budoucích rozesílek."
+        },
+        "app.TWFpbGd1bg.action.Y29tcGxhaW5lZA.display_name": {
+          "source": "Spam Complaint",
+          "message": "Hlášení spamu"
+        },
+        "app.TWFpbGd1bg.action.Y29tcGxhaW5lZA.option.YXBpX2RvbWFpbg.desc": {
+          "source": "Select the domain to monitor for spam complaint events",
+          "message": "Vyberte doménu, kterou chcete sledovat pro události hlášení spamu"
+        },
+        "app.TWFpbGd1bg.action.Y29tcGxhaW5lZA.option.YXBpX2RvbWFpbg.display_name": {
+          "source": "Domain",
+          "message": "Doména"
+        },
+        "app.TWFpbGd1bg.action.Y29tcGxhaW5lZA.option.YXBpX2RvbWFpbg.short_desc": {
+          "source": "The domain to watch for events",
+          "message": "Doména pro sledování událostí"
+        },
+        "app.TWFpbGd1bg.action.Y29tcGxhaW5lZA.short_desc": {
+          "source": "Trigger when an email is marked as spam",
+          "message": "Spustit, když je e-mail označen jako spam"
+        },
+        "app.TWFpbGd1bg.action.Y2xpY2tlZA.desc": {
+          "source": "Fires when a recipient clicks a link in an email. Provides information about the clicked URL, recipient, and client information.",
+          "message": "Spustí se, když příjemce klikne na odkaz v e-mailu. Poskytuje informace o kliknuté URL adrese, příjemci a klientské informace."
+        },
+        "app.TWFpbGd1bg.action.Y2xpY2tlZA.display_name": {
+          "source": "Email Link Clicked",
+          "message": "Kliknuto na odkaz v e-mailu"
+        },
+        "app.TWFpbGd1bg.action.Y2xpY2tlZA.option.YXBpX2RvbWFpbg.desc": {
+          "source": "Select the domain to monitor for click events",
+          "message": "Vyberte doménu, kterou chcete sledovat pro události kliknutí"
+        },
+        "app.TWFpbGd1bg.action.Y2xpY2tlZA.option.YXBpX2RvbWFpbg.display_name": {
+          "source": "Domain",
+          "message": "Doména"
+        },
+        "app.TWFpbGd1bg.action.Y2xpY2tlZA.option.YXBpX2RvbWFpbg.short_desc": {
+          "source": "The domain to watch for events",
+          "message": "Doména pro sledování událostí"
+        },
+        "app.TWFpbGd1bg.action.Y2xpY2tlZA.short_desc": {
+          "source": "Trigger when a link in an email is clicked",
+          "message": "Spustit při kliknutí na odkaz v e-mailu"
+        },
+        "app.TWFpbGd1bg.action.Y3JlYXRlLXJvdXRl.desc": {
+          "source": "Create a new inbound email route for processing incoming emails. Routes use expressions to match incoming messages and execute actions like forwarding or storing.",
+          "message": "Vytvoří novou příchozí e-mailovou trasu pro zpracování příchozích e-mailů. Trasy používají výrazy pro porovnání příchozích zpráv a provádějí akce, jako je přeposlání nebo uložení."
+        },
+        "app.TWFpbGd1bg.action.Y3JlYXRlLXJvdXRl.display_name": {
+          "source": "Create Route",
+          "message": "Vytvořit trasu"
+        },
+        "app.TWFpbGd1bg.action.Y3JlYXRlLXJvdXRl.option.YWN0aW9u.desc": {
+          "source": "Actions to execute when the expression matches. Examples:\n- forward('http://example.com/webhook')\n- forward('user@example.com')\n- store(notify='http://example.com/callback')\n- stop()",
+          "message": "Akce, které se mají provést, když výraz odpovídá. Příklady:\n- forward('http://example.com/webhook')\n- forward('user@example.com')\n- store(notify='http://example.com/callback')\n- stop()"
+        },
+        "app.TWFpbGd1bg.action.Y3JlYXRlLXJvdXRl.option.YWN0aW9u.display_name": {
+          "source": "Actions",
+          "message": "Akce"
+        },
+        "app.TWFpbGd1bg.action.Y3JlYXRlLXJvdXRl.option.YWN0aW9u.short_desc": {
+          "source": "Route actions",
+          "message": "Akce trasy"
+        },
+        "app.TWFpbGd1bg.action.Y3JlYXRlLXJvdXRl.option.ZGVzY3JpcHRpb24.desc": {
+          "source": "A description of what this route does",
+          "message": "Popis toho, co tato trasa dělá"
+        },
+        "app.TWFpbGd1bg.action.Y3JlYXRlLXJvdXRl.option.ZGVzY3JpcHRpb24.display_name": {
+          "source": "Description",
+          "message": "Popis"
+        },
+        "app.TWFpbGd1bg.action.Y3JlYXRlLXJvdXRl.option.ZGVzY3JpcHRpb24.short_desc": {
+          "source": "Route description",
+          "message": "Popis trasy"
+        },
+        "app.TWFpbGd1bg.action.Y3JlYXRlLXJvdXRl.option.ZXhwcmVzc2lvbg.desc": {
+          "source": "The expression used to match incoming messages. Examples:\n- match_recipient('.*@example.com')\n- match_header('subject', '.*support.*')\n- catch_all()",
+          "message": "Výraz použitý k porovnání příchozích zpráv. Příklady:\n- match_recipient('.*@example.com')\n- match_header('subject', '.*support.*')\n- catch_all()"
+        },
+        "app.TWFpbGd1bg.action.Y3JlYXRlLXJvdXRl.option.ZXhwcmVzc2lvbg.display_name": {
+          "source": "Expression",
+          "message": "Výraz"
+        },
+        "app.TWFpbGd1bg.action.Y3JlYXRlLXJvdXRl.option.ZXhwcmVzc2lvbg.short_desc": {
+          "source": "Matching expression",
+          "message": "Porovnávací výraz"
+        },
+        "app.TWFpbGd1bg.action.Y3JlYXRlLXJvdXRl.option.cHJpb3JpdHk.desc": {
+          "source": "Priority of the route (lower number = higher priority, default: 0)",
+          "message": "Priorita trasy (nižší číslo = vyšší priorita, výchozí: 0)"
+        },
+        "app.TWFpbGd1bg.action.Y3JlYXRlLXJvdXRl.option.cHJpb3JpdHk.display_name": {
+          "source": "Priority",
+          "message": "Priorita"
+        },
+        "app.TWFpbGd1bg.action.Y3JlYXRlLXJvdXRl.option.cHJpb3JpdHk.short_desc": {
+          "source": "Route priority",
+          "message": "Priorita trasy"
+        },
+        "app.TWFpbGd1bg.action.Y3JlYXRlLXJvdXRl.short_desc": {
+          "source": "Create an inbound email route",
+          "message": "Vytvořit příchozí e-mailovou trasu"
+        },
+        "app.TWFpbGd1bg.action.YWRkLW1haWxpbmctbGlzdC1tZW1iZXI.desc": {
+          "source": "Add a new member to a Mailgun mailing list. Supports custom variables and upsert mode.",
+          "message": "Přidá nového člena do e-mailové konference Mailgun. Podporuje vlastní proměnné a režim upsert."
+        },
+        "app.TWFpbGd1bg.action.YWRkLW1haWxpbmctbGlzdC1tZW1iZXI.display_name": {
+          "source": "Add Mailing List Member",
+          "message": "Přidat člena distribučního seznamu"
+        },
+        "app.TWFpbGd1bg.action.YWRkLW1haWxpbmctbGlzdC1tZW1iZXI.option.YWRkcmVzcw.desc": {
+          "source": "The email address of the member to add",
+          "message": "E-mailová adresa člena k přidání"
+        },
+        "app.TWFpbGd1bg.action.YWRkLW1haWxpbmctbGlzdC1tZW1iZXI.option.YWRkcmVzcw.display_name": {
+          "source": "Member Email",
+          "message": "E-mail člena"
+        },
+        "app.TWFpbGd1bg.action.YWRkLW1haWxpbmctbGlzdC1tZW1iZXI.option.YWRkcmVzcw.short_desc": {
+          "source": "Email address to add",
+          "message": "E-mailová adresa k přidání"
+        },
+        "app.TWFpbGd1bg.action.YWRkLW1haWxpbmctbGlzdC1tZW1iZXI.option.bGlzdF9hZGRyZXNz.desc": {
+          "source": "Select the mailing list to add the member to",
+          "message": "Vyberte distribuční seznam, do kterého chcete člena přidat"
+        },
+        "app.TWFpbGd1bg.action.YWRkLW1haWxpbmctbGlzdC1tZW1iZXI.option.bGlzdF9hZGRyZXNz.display_name": {
+          "source": "Mailing List",
+          "message": "Distribuční seznam"
+        },
+        "app.TWFpbGd1bg.action.YWRkLW1haWxpbmctbGlzdC1tZW1iZXI.option.bGlzdF9hZGRyZXNz.short_desc": {
+          "source": "The mailing list to add the member to",
+          "message": "Distribuční seznam, do kterého se má člen přidat"
+        },
+        "app.TWFpbGd1bg.action.YWRkLW1haWxpbmctbGlzdC1tZW1iZXI.option.bmFtZQ.desc": {
+          "source": "The name of the member",
+          "message": "Jméno člena"
+        },
+        "app.TWFpbGd1bg.action.YWRkLW1haWxpbmctbGlzdC1tZW1iZXI.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "Název"
+        },
+        "app.TWFpbGd1bg.action.YWRkLW1haWxpbmctbGlzdC1tZW1iZXI.option.bmFtZQ.short_desc": {
+          "source": "Member's name",
+          "message": "Jméno člena"
+        },
+        "app.TWFpbGd1bg.action.YWRkLW1haWxpbmctbGlzdC1tZW1iZXI.option.c3Vic2NyaWJlZA.desc": {
+          "source": "Whether the member is subscribed (default: `True`)",
+          "message": "Zda je člen přihlášen k odběru (výchozí: `True`)"
+        },
+        "app.TWFpbGd1bg.action.YWRkLW1haWxpbmctbGlzdC1tZW1iZXI.option.c3Vic2NyaWJlZA.display_name": {
+          "source": "Subscribed",
+          "message": "Přihlášen k odběru"
+        },
+        "app.TWFpbGd1bg.action.YWRkLW1haWxpbmctbGlzdC1tZW1iZXI.option.c3Vic2NyaWJlZA.short_desc": {
+          "source": "Subscription status",
+          "message": "Stav odběru"
+        },
+        "app.TWFpbGd1bg.action.YWRkLW1haWxpbmctbGlzdC1tZW1iZXI.option.dXBzZXJ0.desc": {
+          "source": "If `True`, update the member if they already exist (default: `False`)",
+          "message": "Pokud je `True`, aktualizovat člena, pokud již existuje (výchozí: `False`)"
+        },
+        "app.TWFpbGd1bg.action.YWRkLW1haWxpbmctbGlzdC1tZW1iZXI.option.dXBzZXJ0.display_name": {
+          "source": "Upsert",
+          "message": "Upsert"
+        },
+        "app.TWFpbGd1bg.action.YWRkLW1haWxpbmctbGlzdC1tZW1iZXI.option.dXBzZXJ0.short_desc": {
+          "source": "Update if exists",
+          "message": "Aktualizovat, pokud existuje"
+        },
+        "app.TWFpbGd1bg.action.YWRkLW1haWxpbmctbGlzdC1tZW1iZXI.option.dmFycw.desc": {
+          "source": "Custom JSON variables to associate with the member",
+          "message": "Vlastní proměnné JSON, které se mají přidružit ke členovi"
+        },
+        "app.TWFpbGd1bg.action.YWRkLW1haWxpbmctbGlzdC1tZW1iZXI.option.dmFycw.display_name": {
+          "source": "Variables",
+          "message": "Proměnné"
+        },
+        "app.TWFpbGd1bg.action.YWRkLW1haWxpbmctbGlzdC1tZW1iZXI.option.dmFycw.short_desc": {
+          "source": "Custom variables",
+          "message": "Vlastní proměnné"
+        },
+        "app.TWFpbGd1bg.action.YWRkLW1haWxpbmctbGlzdC1tZW1iZXI.short_desc": {
+          "source": "Add a member to a mailing list",
+          "message": "Přidat člena do distribučního seznamu"
+        },
+        "app.TWFpbGd1bg.action.Z2V0LW1haWxpbmctbGlzdC1tZW1iZXI.desc": {
+          "source": "Retrieve a specific member from a Mailgun mailing list by their email address.",
+          "message": "Načíst konkrétního člena z distribučního seznamu Mailgun podle jeho e-mailové adresy."
+        },
+        "app.TWFpbGd1bg.action.Z2V0LW1haWxpbmctbGlzdC1tZW1iZXI.display_name": {
+          "source": "Get Mailing List Member",
+          "message": "Získat člena distribučního seznamu"
+        },
+        "app.TWFpbGd1bg.action.Z2V0LW1haWxpbmctbGlzdC1tZW1iZXI.option.bGlzdF9hZGRyZXNz.desc": {
+          "source": "Select the mailing list to get the member from",
+          "message": "Vyberte distribuční seznam, ze kterého chcete člena načíst"
+        },
+        "app.TWFpbGd1bg.action.Z2V0LW1haWxpbmctbGlzdC1tZW1iZXI.option.bGlzdF9hZGRyZXNz.display_name": {
+          "source": "Mailing List",
+          "message": "Distribuční seznam"
+        },
+        "app.TWFpbGd1bg.action.Z2V0LW1haWxpbmctbGlzdC1tZW1iZXI.option.bGlzdF9hZGRyZXNz.short_desc": {
+          "source": "The mailing list to get the member from",
+          "message": "Distribuční seznam, ze kterého se má člen načíst"
+        },
+        "app.TWFpbGd1bg.action.Z2V0LW1haWxpbmctbGlzdC1tZW1iZXI.option.bWVtYmVyX2FkZHJlc3M.desc": {
+          "source": "The email address of the member to retrieve",
+          "message": "E-mailová adresa člena, který se má načíst"
+        },
+        "app.TWFpbGd1bg.action.Z2V0LW1haWxpbmctbGlzdC1tZW1iZXI.option.bWVtYmVyX2FkZHJlc3M.display_name": {
+          "source": "Member Email",
+          "message": "E-mail člena"
+        },
+        "app.TWFpbGd1bg.action.Z2V0LW1haWxpbmctbGlzdC1tZW1iZXI.option.bWVtYmVyX2FkZHJlc3M.short_desc": {
+          "source": "Email address to retrieve",
+          "message": "E-mailová adresa k načtení"
+        },
+        "app.TWFpbGd1bg.action.Z2V0LW1haWxpbmctbGlzdC1tZW1iZXI.short_desc": {
+          "source": "Get a member from a mailing list",
+          "message": "Získat člena z distribučního seznamu"
+        },
+        "app.TWFpbGd1bg.action.ZGVsZXRlLW1haWxpbmctbGlzdC1tZW1iZXI.desc": {
+          "source": "Remove a member from a Mailgun mailing list by their email address.",
+          "message": "Odebrat člena z distribučního seznamu Mailgun podle jeho e-mailové adresy."
+        },
+        "app.TWFpbGd1bg.action.ZGVsZXRlLW1haWxpbmctbGlzdC1tZW1iZXI.display_name": {
+          "source": "Delete Mailing List Member",
+          "message": "Smazat člena distribučního seznamu"
+        },
+        "app.TWFpbGd1bg.action.ZGVsZXRlLW1haWxpbmctbGlzdC1tZW1iZXI.option.bGlzdF9hZGRyZXNz.desc": {
+          "source": "Select the mailing list to remove the member from",
+          "message": "Vyberte distribuční seznam, ze kterého chcete člena odebrat"
+        },
+        "app.TWFpbGd1bg.action.ZGVsZXRlLW1haWxpbmctbGlzdC1tZW1iZXI.option.bGlzdF9hZGRyZXNz.display_name": {
+          "source": "Mailing List",
+          "message": "Distribuční seznam"
+        },
+        "app.TWFpbGd1bg.action.ZGVsZXRlLW1haWxpbmctbGlzdC1tZW1iZXI.option.bGlzdF9hZGRyZXNz.short_desc": {
+          "source": "The mailing list to remove the member from",
+          "message": "Distribuční seznam, ze kterého se má člen odebrat"
+        },
+        "app.TWFpbGd1bg.action.ZGVsZXRlLW1haWxpbmctbGlzdC1tZW1iZXI.option.bWVtYmVyX2FkZHJlc3M.desc": {
+          "source": "The email address of the member to remove",
+          "message": "E-mailová adresa člena k odebrání"
+        },
+        "app.TWFpbGd1bg.action.ZGVsZXRlLW1haWxpbmctbGlzdC1tZW1iZXI.option.bWVtYmVyX2FkZHJlc3M.display_name": {
+          "source": "Member Email",
+          "message": "E-mail člena"
+        },
+        "app.TWFpbGd1bg.action.ZGVsZXRlLW1haWxpbmctbGlzdC1tZW1iZXI.option.bWVtYmVyX2FkZHJlc3M.short_desc": {
+          "source": "Email address to remove",
+          "message": "E-mailová adresa k odebrání"
+        },
+        "app.TWFpbGd1bg.action.ZGVsZXRlLW1haWxpbmctbGlzdC1tZW1iZXI.short_desc": {
+          "source": "Remove a member from a mailing list",
+          "message": "Odebrat člena z distribučního seznamu"
+        },
+        "app.TWFpbGd1bg.action.ZGVsaXZlcmVk.desc": {
+          "source": "Fires when an email is successfully delivered to the recipient's mail server.",
+          "message": "Spustí se při úspěšném doručení e-mailu na poštovní server příjemce."
+        },
+        "app.TWFpbGd1bg.action.ZGVsaXZlcmVk.display_name": {
+          "source": "Email Delivered",
+          "message": "E-mail doručen"
+        },
+        "app.TWFpbGd1bg.action.ZGVsaXZlcmVk.option.YXBpX2RvbWFpbg.desc": {
+          "source": "Select the domain to monitor for delivery events",
+          "message": "Vyberte doménu, kterou chcete sledovat pro události doručení"
+        },
+        "app.TWFpbGd1bg.action.ZGVsaXZlcmVk.option.YXBpX2RvbWFpbg.display_name": {
+          "source": "Domain",
+          "message": "Doména"
+        },
+        "app.TWFpbGd1bg.action.ZGVsaXZlcmVk.option.YXBpX2RvbWFpbg.short_desc": {
+          "source": "The domain to watch for events",
+          "message": "Doména pro sledování událostí"
+        },
+        "app.TWFpbGd1bg.action.ZGVsaXZlcmVk.short_desc": {
+          "source": "Trigger when an email is delivered",
+          "message": "Spustit při doručení e-mailu"
+        },
+        "app.TWFpbGd1bg.action.b3BlbmVk.desc": {
+          "source": "Fires when a recipient opens an email. Provides information about the recipient and client information.",
+          "message": "Spustí se, když příjemce otevře e-mail. Poskytuje informace o příjemci a klientovi."
+        },
+        "app.TWFpbGd1bg.action.b3BlbmVk.display_name": {
+          "source": "Email Opened",
+          "message": "E-mail otevřen"
+        },
+        "app.TWFpbGd1bg.action.b3BlbmVk.option.YXBpX2RvbWFpbg.desc": {
+          "source": "Select the domain to monitor for open events",
+          "message": "Vyberte doménu, kterou chcete sledovat pro události otevření"
+        },
+        "app.TWFpbGd1bg.action.b3BlbmVk.option.YXBpX2RvbWFpbg.display_name": {
+          "source": "Domain",
+          "message": "Doména"
+        },
+        "app.TWFpbGd1bg.action.b3BlbmVk.option.YXBpX2RvbWFpbg.short_desc": {
+          "source": "The domain to watch for events",
+          "message": "Doména pro sledování událostí"
+        },
+        "app.TWFpbGd1bg.action.b3BlbmVk.short_desc": {
+          "source": "Trigger when an email is opened",
+          "message": "Spustit při otevření e-mailu"
+        },
+        "app.TWFpbGd1bg.action.bGlzdC1kb21haW5z.desc": {
+          "source": "List all domains configured in your Mailgun account with optional filtering by state.",
+          "message": "Zobrazit všechny domény nakonfigurované ve vašem účtu Mailgun s volitelným filtrováním podle stavu."
+        },
+        "app.TWFpbGd1bg.action.bGlzdC1kb21haW5z.display_name": {
+          "source": "List Domains",
+          "message": "Zobrazit domény"
+        },
+        "app.TWFpbGd1bg.action.bGlzdC1kb21haW5z.option.bGltaXQ.desc": {
+          "source": "Maximum number of domains to return",
+          "message": "Maximální počet domén k vrácení"
+        },
+        "app.TWFpbGd1bg.action.bGlzdC1kb21haW5z.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "Limit"
+        },
+        "app.TWFpbGd1bg.action.bGlzdC1kb21haW5z.option.bGltaXQ.short_desc": {
+          "source": "Maximum results",
+          "message": "Maximální počet výsledků"
+        },
+        "app.TWFpbGd1bg.action.bGlzdC1kb21haW5z.option.c3RhdGU.allowed-value.c3RyaW5nOmFjdGl2ZQ.desc": {
+          "source": "Active domains",
+          "message": "Aktivní domény"
+        },
+        "app.TWFpbGd1bg.action.bGlzdC1kb21haW5z.option.c3RhdGU.allowed-value.c3RyaW5nOmRpc2FibGVk.desc": {
+          "source": "Disabled domains",
+          "message": "Deaktivované domény"
+        },
+        "app.TWFpbGd1bg.action.bGlzdC1kb21haW5z.option.c3RhdGU.allowed-value.c3RyaW5nOnVudmVyaWZpZWQ.desc": {
+          "source": "Unverified domains",
+          "message": "Neověřené domény"
+        },
+        "app.TWFpbGd1bg.action.bGlzdC1kb21haW5z.option.c3RhdGU.desc": {
+          "source": "Filter domains by state (`active`, `unverified`, `disabled`)",
+          "message": "Filtrovat domény podle stavu (`active`, `unverified`, `disabled`)"
+        },
+        "app.TWFpbGd1bg.action.bGlzdC1kb21haW5z.option.c3RhdGU.display_name": {
+          "source": "State",
+          "message": "Stát"
+        },
+        "app.TWFpbGd1bg.action.bGlzdC1kb21haW5z.option.c3RhdGU.short_desc": {
+          "source": "Filter by domain state",
+          "message": "Filtrovat podle stavu domény"
+        },
+        "app.TWFpbGd1bg.action.bGlzdC1kb21haW5z.short_desc": {
+          "source": "List all sending domains",
+          "message": "Zobrazit všechny odesílací domény"
+        },
+        "app.TWFpbGd1bg.action.bGlzdC1tYWlsaW5nLWxpc3QtbWVtYmVycw.desc": {
+          "source": "List all members of a Mailgun mailing list with optional filtering by subscription status.",
+          "message": "Zobrazit všechny členy distribučního seznamu Mailgun s volitelným filtrováním podle stavu odběru."
+        },
+        "app.TWFpbGd1bg.action.bGlzdC1tYWlsaW5nLWxpc3QtbWVtYmVycw.display_name": {
+          "source": "List Mailing List Members",
+          "message": "Zobrazit členy distribučního seznamu"
+        },
+        "app.TWFpbGd1bg.action.bGlzdC1tYWlsaW5nLWxpc3QtbWVtYmVycw.option.bGltaXQ.desc": {
+          "source": "Maximum number of members to return",
+          "message": "Maximální počet členů k vrácení"
+        },
+        "app.TWFpbGd1bg.action.bGlzdC1tYWlsaW5nLWxpc3QtbWVtYmVycw.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "Limit"
+        },
+        "app.TWFpbGd1bg.action.bGlzdC1tYWlsaW5nLWxpc3QtbWVtYmVycw.option.bGltaXQ.short_desc": {
+          "source": "Maximum results",
+          "message": "Maximální počet výsledků"
+        },
+        "app.TWFpbGd1bg.action.bGlzdC1tYWlsaW5nLWxpc3QtbWVtYmVycw.option.bGlzdF9hZGRyZXNz.desc": {
+          "source": "Select the mailing list to list members from",
+          "message": "Vyberte distribuční seznam, ze kterého chcete vypsat členy"
+        },
+        "app.TWFpbGd1bg.action.bGlzdC1tYWlsaW5nLWxpc3QtbWVtYmVycw.option.bGlzdF9hZGRyZXNz.display_name": {
+          "source": "Mailing List",
+          "message": "Distribuční seznam"
+        },
+        "app.TWFpbGd1bg.action.bGlzdC1tYWlsaW5nLWxpc3QtbWVtYmVycw.option.bGlzdF9hZGRyZXNz.short_desc": {
+          "source": "The mailing list to list members from",
+          "message": "Distribuční seznam, ze kterého se mají vypsat členové"
+        },
+        "app.TWFpbGd1bg.action.bGlzdC1tYWlsaW5nLWxpc3QtbWVtYmVycw.option.c3Vic2NyaWJlZA.desc": {
+          "source": "Filter members by subscription status",
+          "message": "Filtrovat členy podle stavu odběru"
+        },
+        "app.TWFpbGd1bg.action.bGlzdC1tYWlsaW5nLWxpc3QtbWVtYmVycw.option.c3Vic2NyaWJlZA.display_name": {
+          "source": "Subscribed",
+          "message": "Přihlášen k odběru"
+        },
+        "app.TWFpbGd1bg.action.bGlzdC1tYWlsaW5nLWxpc3QtbWVtYmVycw.option.c3Vic2NyaWJlZA.short_desc": {
+          "source": "Filter by subscription status",
+          "message": "Filtrovat podle stavu předplatného"
+        },
+        "app.TWFpbGd1bg.action.bGlzdC1tYWlsaW5nLWxpc3QtbWVtYmVycw.short_desc": {
+          "source": "List members of a mailing list",
+          "message": "Zobrazit členy distribučního seznamu"
+        },
+        "app.TWFpbGd1bg.action.bGlzdC1tYWlsaW5nLWxpc3Rz.desc": {
+          "source": "List all mailing lists configured in your Mailgun account.",
+          "message": "Zobrazit všechny distribuční seznamy nakonfigurované ve vašem účtu Mailgun."
+        },
+        "app.TWFpbGd1bg.action.bGlzdC1tYWlsaW5nLWxpc3Rz.display_name": {
+          "source": "List Mailing Lists",
+          "message": "Zobrazit distribuční seznamy"
+        },
+        "app.TWFpbGd1bg.action.bGlzdC1tYWlsaW5nLWxpc3Rz.option.bGltaXQ.desc": {
+          "source": "Maximum number of mailing lists to return",
+          "message": "Maximální počet distribučních seznamů k vrácení"
+        },
+        "app.TWFpbGd1bg.action.bGlzdC1tYWlsaW5nLWxpc3Rz.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "Limit"
+        },
+        "app.TWFpbGd1bg.action.bGlzdC1tYWlsaW5nLWxpc3Rz.option.bGltaXQ.short_desc": {
+          "source": "Maximum results",
+          "message": "Maximální počet výsledků"
+        },
+        "app.TWFpbGd1bg.action.bGlzdC1tYWlsaW5nLWxpc3Rz.short_desc": {
+          "source": "List all mailing lists",
+          "message": "Zobrazit všechny distribuční seznamy"
+        },
+        "app.TWFpbGd1bg.action.bGlzdC1yb3V0ZXM.desc": {
+          "source": "List all configured inbound email routes for processing incoming emails.",
+          "message": "Zobrazit všechny nakonfigurované příchozí e-mailové trasy pro zpracování příchozích e-mailů."
+        },
+        "app.TWFpbGd1bg.action.bGlzdC1yb3V0ZXM.display_name": {
+          "source": "List Routes",
+          "message": "Zobrazit trasy"
+        },
+        "app.TWFpbGd1bg.action.bGlzdC1yb3V0ZXM.option.bGltaXQ.desc": {
+          "source": "Maximum number of routes to return",
+          "message": "Maximální počet tras k vrácení"
+        },
+        "app.TWFpbGd1bg.action.bGlzdC1yb3V0ZXM.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "Limit"
+        },
+        "app.TWFpbGd1bg.action.bGlzdC1yb3V0ZXM.option.bGltaXQ.short_desc": {
+          "source": "Maximum results",
+          "message": "Maximální počet výsledků"
+        },
+        "app.TWFpbGd1bg.action.bGlzdC1yb3V0ZXM.short_desc": {
+          "source": "List all inbound email routes",
+          "message": "Zobrazit všechny příchozí e-mailové trasy"
+        },
+        "app.TWFpbGd1bg.action.bWFrZS1hcGktY2FsbA.desc": {
+          "source": "Make a custom HTTP / REST API call to **Mailgun** using the configured connection's authentication.\n\nSpecify the HTTP method, the URI path (relative to the connection's API base URL), optional query parameters, headers, and request body. The response is returned as a hash containing the status code, response headers, and response body.\n\nUse this action for endpoints that are not yet exposed as first-class actions on this app.",
+          "message": "Provést vlastní volání HTTP / REST API do **Mailgun** pomocí autentizace nakonfigurovaného připojení.\n\nZadejte metodu HTTP, cestu URI (relativní k základní adrese URL API připojení), volitelné parametry dotazu, hlavičky a tělo požadavku. Odpověď je vrácena jako hash obsahující stavový kód, hlavičky odpovědi a tělo odpovědi.\n\nTuto akci použijte pro koncové body, které v této aplikaci zatím nejsou k dispozici jako plnohodnotné akce."
+        },
+        "app.TWFpbGd1bg.action.bWFrZS1hcGktY2FsbA.display_name": {
+          "source": "Make an API call",
+          "message": "Provést volání API"
+        },
+        "app.TWFpbGd1bg.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.desc": {
+          "source": "The request body. The effective type depends on `body_type`: JSON/form/YAML expect a hash, XML/text expect a string, multipart expects a file structure, binary expects raw bytes.",
+          "message": "Tělo požadavku. Efektivní typ závisí na `body_type`: JSON/form/YAML očekávají hash, XML/text očekávají řetězec, multipart očekává strukturu souboru, binary očekává surové bajty."
+        },
+        "app.TWFpbGd1bg.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.display_name": {
+          "source": "Body",
+          "message": "Tělo"
+        },
+        "app.TWFpbGd1bg.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.short_desc": {
+          "source": "The request body",
+          "message": "Tělo požadavku"
+        },
+        "app.TWFpbGd1bg.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.desc": {
+          "source": "Upload a file using `multipart/form-data`. The body must be a @ref DataProvider::FileDataType \"FileDataType\" structure (filename + content + mime_type). The framework builds the multipart envelope and sets the boundary header.",
+          "message": "Nahrát soubor pomocí `multipart/form-data`. Tělo musí být struktura @ref DataProvider::FileDataType \"FileDataType\" (filename + content + mime_type). Framework vytvoří obálku multipart a nastaví záhlaví boundary."
+        },
+        "app.TWFpbGd1bg.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.display_name": {
+          "source": "Multipart Form",
+          "message": "Multipart Form"
+        },
+        "app.TWFpbGd1bg.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.short_desc": {
+          "source": "Upload a file using multipart/form-data",
+          "message": "Nahrát soubor pomocí multipart/form-data"
+        },
+        "app.TWFpbGd1bg.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.desc": {
+          "source": "Pass the body to the REST client unchanged; the client decides serialization based on its configured `data` option and the value type",
+          "message": "Předat tělo klientovi REST beze změny; klient rozhodne o serializaci na základě své nakonfigurované možnosti `data` a typu hodnoty"
+        },
+        "app.TWFpbGd1bg.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.display_name": {
+          "source": "Auto",
+          "message": "Automaticky"
+        },
+        "app.TWFpbGd1bg.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.short_desc": {
+          "source": "Pass-through; use connection serialization and let the REST client decide",
+          "message": "Předání bez změn; použít serializaci připojení a nechat rozhodnutí na klientovi REST"
+        },
+        "app.TWFpbGd1bg.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.desc": {
+          "source": "Send the body as raw bytes. The body must be a binary value. Sets `Content-Type: application/octet-stream` unless overridden by `hdr`.",
+          "message": "Odeslat tělo jako surové bajty. Tělo musí být binární hodnota. Nastavuje `Content-Type: application/octet-stream`, pokud není přepsáno `hdr`."
+        },
+        "app.TWFpbGd1bg.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.display_name": {
+          "source": "Raw Binary",
+          "message": "Surová binární data"
+        },
+        "app.TWFpbGd1bg.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.short_desc": {
+          "source": "Send body as raw bytes",
+          "message": "Odeslat tělo jako surové bajty"
+        },
+        "app.TWFpbGd1bg.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.desc": {
+          "source": "Serialize a hash of form fields as `application/x-www-form-urlencoded`. The body must be a hash whose values are scalars (strings/numbers/booleans).",
+          "message": "Serializovat hash formulářových polí jako `application/x-www-form-urlencoded`. Tělo musí být hash, jehož hodnotami jsou skaláry (řetězce/čísla/booleovské hodnoty)."
+        },
+        "app.TWFpbGd1bg.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.display_name": {
+          "source": "Form (URL-encoded)",
+          "message": "Formulář (URL-encoded)"
+        },
+        "app.TWFpbGd1bg.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.short_desc": {
+          "source": "Serialize body as application/x-www-form-urlencoded form fields",
+          "message": "Serializovat tělo jako formulářová pole application/x-www-form-urlencoded"
+        },
+        "app.TWFpbGd1bg.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.desc": {
+          "source": "Serialize the body as JSON; sets `Content-Type: application/json`. The body should be a hash, list, or scalar value.",
+          "message": "Serializovat tělo jako JSON; nastavuje `Content-Type: application/json`. Tělo by mělo být hash, seznam nebo skalární hodnota."
+        },
+        "app.TWFpbGd1bg.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.display_name": {
+          "source": "JSON",
+          "message": "JSON"
+        },
+        "app.TWFpbGd1bg.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.short_desc": {
+          "source": "Serialize body as JSON",
+          "message": "Serializovat tělo jako JSON"
+        },
+        "app.TWFpbGd1bg.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.desc": {
+          "source": "Send the body as plain text. The body must be a string. Sets `Content-Type: text/plain`.",
+          "message": "Odeslat tělo jako prostý text. Tělo musí být řetězec. Nastavuje `Content-Type: text/plain`."
+        },
+        "app.TWFpbGd1bg.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.display_name": {
+          "source": "Plain Text",
+          "message": "Čistý text"
+        },
+        "app.TWFpbGd1bg.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.short_desc": {
+          "source": "Send body as text/plain",
+          "message": "Odeslat tělo jako text/plain"
+        },
+        "app.TWFpbGd1bg.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.desc": {
+          "source": "Send the body as XML. If the body is a hash it is serialized to XML; if it is a string it is sent verbatim. Sets `Content-Type: application/xml`.",
+          "message": "Odeslat tělo jako XML. Pokud je tělo hash, serializuje se do XML; pokud je to řetězec, odešle se doslovně. Nastavuje `Content-Type: application/xml`."
+        },
+        "app.TWFpbGd1bg.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.display_name": {
+          "source": "XML",
+          "message": "XML"
+        },
+        "app.TWFpbGd1bg.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.short_desc": {
+          "source": "Send body as XML",
+          "message": "Odeslat tělo jako XML"
+        },
+        "app.TWFpbGd1bg.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.desc": {
+          "source": "Send the body as YAML. If the body is a hash it is serialized to YAML; if it is a string it is sent verbatim. Sets `Content-Type: application/x-yaml`.",
+          "message": "Odeslat tělo jako YAML. Pokud je tělo hash, serializuje se do YAML; pokud je to řetězec, odešle se doslovně. Nastavuje `Content-Type: application/x-yaml`."
+        },
+        "app.TWFpbGd1bg.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.display_name": {
+          "source": "YAML",
+          "message": "YAML"
+        },
+        "app.TWFpbGd1bg.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.short_desc": {
+          "source": "Send body as YAML",
+          "message": "Odeslat tělo jako YAML"
+        },
+        "app.TWFpbGd1bg.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.desc": {
+          "source": "Selects the body serialization mode and the corresponding `Content-Type` header. Changing this field reshapes the `body` editor - selecting JSON exposes a JSON editor, selecting Multipart Form exposes a file picker, and so on.",
+          "message": "Vybírá režim serializace těla a odpovídající záhlaví `Content-Type`. Změna tohoto pole upraví editor `body` – výběrem JSON se zobrazí editor JSON, výběrem Multipart Form se zobrazí výběr souboru a podobně."
+        },
+        "app.TWFpbGd1bg.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.display_name": {
+          "source": "Body Type",
+          "message": "Typ těla"
+        },
+        "app.TWFpbGd1bg.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.short_desc": {
+          "source": "How the body is serialized and what Content-Type is sent",
+          "message": "Jak je tělo serializováno a jaký Content-Type je odeslán"
+        },
+        "app.TWFpbGd1bg.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.desc": {
+          "source": "If `True`, non-2xx HTTP responses return as the normal response hash (with the actual status code) instead of raising `REST-RESPONSE-ERROR`. Useful for handling 4xx/5xx as data - e.g. checking whether a resource exists. Overrides the connection's `error_passthru` setting for this call only.",
+          "message": "Pokud je `True`, odpovědi HTTP jiné než 2xx se vrátí jako běžný hash odpovědi (s reálným stavovým kódem) namísto vyvolání `REST-RESPONSE-ERROR`. Užitečné pro zpracování 4xx/5xx jako dat – např. kontrola, zda prostředek existuje. Přepisuje nastavení `error_passthru` připojení pouze pro toto volání."
+        },
+        "app.TWFpbGd1bg.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.display_name": {
+          "source": "Return Errors as Data",
+          "message": "Vracet chyby jako data"
+        },
+        "app.TWFpbGd1bg.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.short_desc": {
+          "source": "Return non-2xx responses normally instead of throwing",
+          "message": "Vracet odpovědi jiné než 2xx normálně namísto vyvolání výjimky"
+        },
+        "app.TWFpbGd1bg.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.desc": {
+          "source": "Optional list of HTTP status codes treated as success. If set and the response status is not in this list, the action throws `REST-STATUS-ERROR`. When unset, the REST client's default behavior applies (typically: 2xx is success, non-2xx throws).",
+          "message": "Volitelný seznam stavových kódů HTTP považovaných za úspěch. Je-li nastaven a stav odpovědi není v tomto seznamu, akce vyvolá `REST-STATUS-ERROR`. Pokud není nastaven, uplatní se výchozí chování klienta REST (obvykle: 2xx je úspěch, jiné než 2xx vyvolá výjimku)."
+        },
+        "app.TWFpbGd1bg.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.display_name": {
+          "source": "Expected Status Codes",
+          "message": "Očekávané stavové kódy"
+        },
+        "app.TWFpbGd1bg.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.short_desc": {
+          "source": "Response status codes treated as success",
+          "message": "Stavové kódy odpovědi považované za úspěch"
+        },
+        "app.TWFpbGd1bg.action.bWFrZS1hcGktY2FsbA.option.aGRy.desc": {
+          "source": "Hash of custom headers added to the request. These override any default headers set by `body_type` (e.g. supplying `Content-Type` here wins over the body-type default).",
+          "message": "Hash vlastních záhlaví přidaných k požadavku. Tyto přepisují jakákoli výchozí záhlaví nastavená `body_type` (např. zadání `Content-Type` zde má přednost před výchozím nastavením typu těla)."
+        },
+        "app.TWFpbGd1bg.action.bWFrZS1hcGktY2FsbA.option.aGRy.display_name": {
+          "source": "Custom Headers",
+          "message": "Vlastní záhlaví"
+        },
+        "app.TWFpbGd1bg.action.bWFrZS1hcGktY2FsbA.option.aGRy.short_desc": {
+          "source": "Extra request headers",
+          "message": "Dodatečná záhlaví požadavku"
+        },
+        "app.TWFpbGd1bg.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.desc": {
+          "source": "If `True`, the response hash includes a `debug` sub-hash containing the request method/URL/headers (with sensitive values redacted), request and response sizes, and round-trip duration. Useful when investigating slow or failing calls. Off by default to keep responses lean.",
+          "message": "Pokud je `True`, hash odpovědi obsahuje pod-hash `debug` obsahující metodu/URL/záhlaví požadavku (s cenzurovanými citlivými hodnotami), velikosti požadavku a odpovědi a dobu trvání. Užitečné při zkoumání pomalých nebo selhávajících volání. Ve výchozím nastavení vypnuto pro zachování kompaktních odpovědí."
+        },
+        "app.TWFpbGd1bg.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.display_name": {
+          "source": "Include Debug Info",
+          "message": "Zahrnout ladicí informace"
+        },
+        "app.TWFpbGd1bg.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.short_desc": {
+          "source": "Include request/timing/size debug info in the response",
+          "message": "Zahrnout do odpovědi ladicí informace o požadavku/časování/velikosti"
+        },
+        "app.TWFpbGd1bg.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.desc": {
+          "source": "HTTP `OPTIONS`",
+          "message": "HTTP `OPTIONS`"
+        },
+        "app.TWFpbGd1bg.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.display_name": {
+          "source": "OPTIONS",
+          "message": "OPTIONS"
+        },
+        "app.TWFpbGd1bg.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.short_desc": {
+          "source": "HTTP OPTIONS",
+          "message": "HTTP OPTIONS"
+        },
+        "app.TWFpbGd1bg.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.desc": {
+          "source": "HTTP `DELETE`",
+          "message": "HTTP `DELETE`"
+        },
+        "app.TWFpbGd1bg.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.display_name": {
+          "source": "DELETE",
+          "message": "DELETE"
+        },
+        "app.TWFpbGd1bg.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.short_desc": {
+          "source": "HTTP DELETE",
+          "message": "HTTP DELETE"
+        },
+        "app.TWFpbGd1bg.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.desc": {
+          "source": "HTTP `GET`",
+          "message": "HTTP `GET`"
+        },
+        "app.TWFpbGd1bg.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.display_name": {
+          "source": "GET",
+          "message": "GET"
+        },
+        "app.TWFpbGd1bg.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.short_desc": {
+          "source": "HTTP GET",
+          "message": "HTTP GET"
+        },
+        "app.TWFpbGd1bg.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.desc": {
+          "source": "HTTP `HEAD`",
+          "message": "HTTP `HEAD`"
+        },
+        "app.TWFpbGd1bg.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.display_name": {
+          "source": "HEAD",
+          "message": "HEAD"
+        },
+        "app.TWFpbGd1bg.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.short_desc": {
+          "source": "HTTP HEAD",
+          "message": "HTTP HEAD"
+        },
+        "app.TWFpbGd1bg.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.desc": {
+          "source": "HTTP `PATCH`",
+          "message": "HTTP `PATCH`"
+        },
+        "app.TWFpbGd1bg.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.display_name": {
+          "source": "PATCH",
+          "message": "PATCH"
+        },
+        "app.TWFpbGd1bg.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.short_desc": {
+          "source": "HTTP PATCH",
+          "message": "HTTP PATCH"
+        },
+        "app.TWFpbGd1bg.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.desc": {
+          "source": "HTTP `POST`",
+          "message": "HTTP `POST`"
+        },
+        "app.TWFpbGd1bg.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.display_name": {
+          "source": "POST",
+          "message": "POST"
+        },
+        "app.TWFpbGd1bg.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.short_desc": {
+          "source": "HTTP POST",
+          "message": "HTTP POST"
+        },
+        "app.TWFpbGd1bg.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.desc": {
+          "source": "HTTP `PUT`",
+          "message": "HTTP `PUT`"
+        },
+        "app.TWFpbGd1bg.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.display_name": {
+          "source": "PUT",
+          "message": "PUT"
+        },
+        "app.TWFpbGd1bg.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.short_desc": {
+          "source": "HTTP PUT",
+          "message": "HTTP PUT"
+        },
+        "app.TWFpbGd1bg.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.desc": {
+          "source": "HTTP `TRACE`",
+          "message": "HTTP `TRACE`"
+        },
+        "app.TWFpbGd1bg.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.display_name": {
+          "source": "TRACE",
+          "message": "TRACE"
+        },
+        "app.TWFpbGd1bg.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.short_desc": {
+          "source": "HTTP TRACE",
+          "message": "HTTP TRACE"
+        },
+        "app.TWFpbGd1bg.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "Metoda HTTP, která se má použít pro požadavek"
+        },
+        "app.TWFpbGd1bg.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.display_name": {
+          "source": "HTTP Method",
+          "message": "Metoda HTTP"
+        },
+        "app.TWFpbGd1bg.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.short_desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "Metoda HTTP, která se má použít pro požadavek"
+        },
+        "app.TWFpbGd1bg.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain `{name}` placeholders that are replaced from `path_vars`. Example: `/users/{id}/comments`.",
+          "message": "Cesta URI relativní k základní adrese URL API připojení. Může obsahovat zástupné symboly `{name}`, které jsou nahrazeny z `path_vars`. Příklad: `/users/{id}/comments`."
+        },
+        "app.TWFpbGd1bg.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.display_name": {
+          "source": "URI Path",
+          "message": "Cesta URI"
+        },
+        "app.TWFpbGd1bg.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.short_desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain '{name}' placeholders that are replaced from 'path_vars'. Example: '/users/{id}/comments'",
+          "message": "Cesta URI relativní vůči základní URL API připojení. Může obsahovat zástupné symboly '{name}', které jsou nahrazeny z 'path_vars'. Příklad: '/users/{id}/comments'"
+        },
+        "app.TWFpbGd1bg.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.desc": {
+          "source": "Hash of values substituted into `{name}` placeholders in the URI path. Example: with `path = /users/{id}` and `path_vars = {id: 123}` the framework sends `/users/123`. Values are URL-encoded.",
+          "message": "Haš hodnot nahrazených za zástupné symboly `{name}` v cestě URI. Příklad: s `path = /users/{id}` a `path_vars = {id: 123}` rozhraní odesílá `/users/123`. Hodnoty jsou kódovány v URL."
+        },
+        "app.TWFpbGd1bg.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.display_name": {
+          "source": "Path Variables",
+          "message": "Proměnné cesty"
+        },
+        "app.TWFpbGd1bg.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.short_desc": {
+          "source": "Values for {name} placeholders in path",
+          "message": "Hodnoty pro zástupné symboly {name} v cestě"
+        },
+        "app.TWFpbGd1bg.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.desc": {
+          "source": "Hash of query string parameters to append to the URI path. Values are URL-encoded; list values are joined with `,`.",
+          "message": "Haš parametrů dotazovacího řetězce, které se připojí k cestě URI. Hodnoty jsou kódovány v URL; hodnoty seznamu jsou spojeny pomocí `,`."
+        },
+        "app.TWFpbGd1bg.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.display_name": {
+          "source": "Query Arguments",
+          "message": "Argumenty dotazu"
+        },
+        "app.TWFpbGd1bg.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.short_desc": {
+          "source": "Query string parameters",
+          "message": "Parametry dotazovacího řetězce"
+        },
+        "app.TWFpbGd1bg.action.bWFrZS1hcGktY2FsbA.short_desc": {
+          "source": "Make a custom API call to Mailgun",
+          "message": "Provést vlastní volání API služby Mailgun"
+        },
+        "app.TWFpbGd1bg.action.c2VuZC1lbWFpbA.desc": {
+          "source": "Send a transactional email through Mailgun. Supports HTML content, text content, tracking options, and custom headers.",
+          "message": "Odeslat transakční e-mail přes Mailgun. Podporuje obsah HTML, textový obsah, možnosti sledování a vlastní záhlaví."
+        },
+        "app.TWFpbGd1bg.action.c2VuZC1lbWFpbA.display_name": {
+          "source": "Send Email",
+          "message": "Odeslat e-mail"
+        },
+        "app.TWFpbGd1bg.action.c2VuZC1lbWFpbA.option.Y2M.desc": {
+          "source": "Carbon copy recipients",
+          "message": "Příjemci v kopii"
+        },
+        "app.TWFpbGd1bg.action.c2VuZC1lbWFpbA.option.Y2M.display_name": {
+          "source": "CC",
+          "message": "Kopie (CC)"
+        },
+        "app.TWFpbGd1bg.action.c2VuZC1lbWFpbA.option.Y2M.short_desc": {
+          "source": "CC recipients",
+          "message": "Příjemci kopie (CC)"
+        },
+        "app.TWFpbGd1bg.action.c2VuZC1lbWFpbA.option.YmNj.desc": {
+          "source": "Blind carbon copy recipients",
+          "message": "Příjemci ve skryté kopii"
+        },
+        "app.TWFpbGd1bg.action.c2VuZC1lbWFpbA.option.YmNj.display_name": {
+          "source": "BCC",
+          "message": "Skrytá kopie (BCC)"
+        },
+        "app.TWFpbGd1bg.action.c2VuZC1lbWFpbA.option.YmNj.short_desc": {
+          "source": "BCC recipients",
+          "message": "Příjemci skryté kopie (BCC)"
+        },
+        "app.TWFpbGd1bg.action.c2VuZC1lbWFpbA.option.ZnJvbQ.desc": {
+          "source": "The sender email address. Can include a name: 'Name <email@domain.com>'",
+          "message": "E-mailová adresa odesílatele. Může obsahovat jméno: 'Jméno <email@domain.com>'"
+        },
+        "app.TWFpbGd1bg.action.c2VuZC1lbWFpbA.option.ZnJvbQ.display_name": {
+          "source": "From",
+          "message": "Od"
+        },
+        "app.TWFpbGd1bg.action.c2VuZC1lbWFpbA.option.ZnJvbQ.short_desc": {
+          "source": "Sender email address",
+          "message": "E-mailová adresa odesílatele"
+        },
+        "app.TWFpbGd1bg.action.c2VuZC1lbWFpbA.option.aDpSZXBseS1Ubw.desc": {
+          "source": "Email address for replies",
+          "message": "E-mailová adresa pro odpovědi"
+        },
+        "app.TWFpbGd1bg.action.c2VuZC1lbWFpbA.option.aDpSZXBseS1Ubw.display_name": {
+          "source": "Reply-To",
+          "message": "Reply-To"
+        },
+        "app.TWFpbGd1bg.action.c2VuZC1lbWFpbA.option.aDpSZXBseS1Ubw.short_desc": {
+          "source": "Reply-to address",
+          "message": "Adresa pro odpověď"
+        },
+        "app.TWFpbGd1bg.action.c2VuZC1lbWFpbA.option.aHRtbA.desc": {
+          "source": "HTML version of the email body",
+          "message": "HTML verze těla e-mailu"
+        },
+        "app.TWFpbGd1bg.action.c2VuZC1lbWFpbA.option.aHRtbA.display_name": {
+          "source": "HTML Body",
+          "message": "Tělo v HTML"
+        },
+        "app.TWFpbGd1bg.action.c2VuZC1lbWFpbA.option.aHRtbA.short_desc": {
+          "source": "HTML body",
+          "message": "HTML tělo"
+        },
+        "app.TWFpbGd1bg.action.c2VuZC1lbWFpbA.option.bzp0YWc.desc": {
+          "source": "Tags for message categorization and tracking",
+          "message": "Štítky pro kategorizaci a sledování zpráv"
+        },
+        "app.TWFpbGd1bg.action.c2VuZC1lbWFpbA.option.bzp0YWc.display_name": {
+          "source": "Tags",
+          "message": "Štítky"
+        },
+        "app.TWFpbGd1bg.action.c2VuZC1lbWFpbA.option.bzp0YWc.short_desc": {
+          "source": "Message tags",
+          "message": "Štítky zprávy"
+        },
+        "app.TWFpbGd1bg.action.c2VuZC1lbWFpbA.option.bzp0cmFja2luZw.desc": {
+          "source": "Enable tracking for this message",
+          "message": "Povolit sledování této zprávy"
+        },
+        "app.TWFpbGd1bg.action.c2VuZC1lbWFpbA.option.bzp0cmFja2luZw.display_name": {
+          "source": "Enable Tracking",
+          "message": "Povolit sledování"
+        },
+        "app.TWFpbGd1bg.action.c2VuZC1lbWFpbA.option.bzp0cmFja2luZw.short_desc": {
+          "source": "Enable click/open tracking",
+          "message": "Povolit sledování kliknutí/otevření"
+        },
+        "app.TWFpbGd1bg.action.c2VuZC1lbWFpbA.option.bzp0cmFja2luZy1jbGlja3M.desc": {
+          "source": "Enable click tracking for this message",
+          "message": "Povolit sledování kliknutí pro tuto zprávu"
+        },
+        "app.TWFpbGd1bg.action.c2VuZC1lbWFpbA.option.bzp0cmFja2luZy1jbGlja3M.display_name": {
+          "source": "Track Clicks",
+          "message": "Sledovat kliknutí"
+        },
+        "app.TWFpbGd1bg.action.c2VuZC1lbWFpbA.option.bzp0cmFja2luZy1jbGlja3M.short_desc": {
+          "source": "Track link clicks",
+          "message": "Sledovat kliknutí na odkazy"
+        },
+        "app.TWFpbGd1bg.action.c2VuZC1lbWFpbA.option.bzp0cmFja2luZy1vcGVucw.desc": {
+          "source": "Enable open tracking for this message",
+          "message": "Povolit sledování otevření pro tuto zprávu"
+        },
+        "app.TWFpbGd1bg.action.c2VuZC1lbWFpbA.option.bzp0cmFja2luZy1vcGVucw.display_name": {
+          "source": "Track Opens",
+          "message": "Sledovat otevření"
+        },
+        "app.TWFpbGd1bg.action.c2VuZC1lbWFpbA.option.bzp0cmFja2luZy1vcGVucw.short_desc": {
+          "source": "Track email opens",
+          "message": "Sledovat otevření e-mailu"
+        },
+        "app.TWFpbGd1bg.action.c2VuZC1lbWFpbA.option.c3ViamVjdA.desc": {
+          "source": "The email subject line",
+          "message": "Předmět e-mailu"
+        },
+        "app.TWFpbGd1bg.action.c2VuZC1lbWFpbA.option.c3ViamVjdA.display_name": {
+          "source": "Subject",
+          "message": "Předmět"
+        },
+        "app.TWFpbGd1bg.action.c2VuZC1lbWFpbA.option.c3ViamVjdA.short_desc": {
+          "source": "Email subject",
+          "message": "Předmět e-mailu"
+        },
+        "app.TWFpbGd1bg.action.c2VuZC1lbWFpbA.option.dG8.desc": {
+          "source": "One or more recipient email addresses. Can include names.",
+          "message": "Jedna nebo více e-mailových adres příjemců. Může obsahovat jména."
+        },
+        "app.TWFpbGd1bg.action.c2VuZC1lbWFpbA.option.dG8.display_name": {
+          "source": "To",
+          "message": "Komu"
+        },
+        "app.TWFpbGd1bg.action.c2VuZC1lbWFpbA.option.dG8.short_desc": {
+          "source": "Recipient email address(es)",
+          "message": "E-mailová adresa (adresy) příjemce"
+        },
+        "app.TWFpbGd1bg.action.c2VuZC1lbWFpbA.option.dGV4dA.desc": {
+          "source": "Plain text version of the email body",
+          "message": "Čistě textová verze těla e-mailu"
+        },
+        "app.TWFpbGd1bg.action.c2VuZC1lbWFpbA.option.dGV4dA.display_name": {
+          "source": "Text Body",
+          "message": "Textové tělo"
+        },
+        "app.TWFpbGd1bg.action.c2VuZC1lbWFpbA.option.dGV4dA.short_desc": {
+          "source": "Plain text body",
+          "message": "Tělo v prostém textu"
+        },
+        "app.TWFpbGd1bg.action.c2VuZC1lbWFpbA.short_desc": {
+          "source": "Send an email via Mailgun",
+          "message": "Odeslat e-mail přes Mailgun"
+        },
+        "app.TWFpbGd1bg.action.cGVybWFuZW50X2ZhaWw.desc": {
+          "source": "Fires when an email permanently fails to deliver (hard bounce). This typically indicates an invalid email address or blocked domain.",
+          "message": "Spustí se, když se e-mail trvale nepodaří doručit (hard bounce). To obvykle značí neplatnou e-mailovou adresu nebo blokovanou doménu."
+        },
+        "app.TWFpbGd1bg.action.cGVybWFuZW50X2ZhaWw.display_name": {
+          "source": "Permanent Failure",
+          "message": "Trvalé selhání"
+        },
+        "app.TWFpbGd1bg.action.cGVybWFuZW50X2ZhaWw.option.YXBpX2RvbWFpbg.desc": {
+          "source": "Select the domain to monitor for permanent failure events",
+          "message": "Vyberte doménu, kterou chcete monitorovat pro události trvalého selhání"
+        },
+        "app.TWFpbGd1bg.action.cGVybWFuZW50X2ZhaWw.option.YXBpX2RvbWFpbg.display_name": {
+          "source": "Domain",
+          "message": "Doména"
+        },
+        "app.TWFpbGd1bg.action.cGVybWFuZW50X2ZhaWw.option.YXBpX2RvbWFpbg.short_desc": {
+          "source": "The domain to watch for events",
+          "message": "Doména pro sledování událostí"
+        },
+        "app.TWFpbGd1bg.action.cGVybWFuZW50X2ZhaWw.short_desc": {
+          "source": "Trigger on permanent delivery failure (hard bounce)",
+          "message": "Aktivovat při trvalém selhání doručení (hard bounce)"
+        },
+        "app.TWFpbGd1bg.action.dGVtcG9yYXJ5X2ZhaWw.desc": {
+          "source": "Fires when an email temporarily fails to deliver (soft bounce). Mailgun will retry delivery automatically.",
+          "message": "Spustí se, když se e-mail dočasně nepodaří doručit (soft bounce). Mailgun se automaticky pokusí o opakované doručení."
+        },
+        "app.TWFpbGd1bg.action.dGVtcG9yYXJ5X2ZhaWw.display_name": {
+          "source": "Temporary Failure",
+          "message": "Dočasné selhání"
+        },
+        "app.TWFpbGd1bg.action.dGVtcG9yYXJ5X2ZhaWw.option.YXBpX2RvbWFpbg.desc": {
+          "source": "Select the domain to monitor for temporary failure events",
+          "message": "Vyberte doménu, kterou chcete monitorovat pro události dočasného selhání"
+        },
+        "app.TWFpbGd1bg.action.dGVtcG9yYXJ5X2ZhaWw.option.YXBpX2RvbWFpbg.display_name": {
+          "source": "Domain",
+          "message": "Doména"
+        },
+        "app.TWFpbGd1bg.action.dGVtcG9yYXJ5X2ZhaWw.option.YXBpX2RvbWFpbg.short_desc": {
+          "source": "The domain to watch for events",
+          "message": "Doména pro sledování událostí"
+        },
+        "app.TWFpbGd1bg.action.dGVtcG9yYXJ5X2ZhaWw.short_desc": {
+          "source": "Trigger on temporary delivery failure (soft bounce)",
+          "message": "Aktivovat při dočasném selhání doručení (soft bounce)"
+        },
+        "app.TWFpbGd1bg.action.dW5zdWJzY3JpYmVk.desc": {
+          "source": "Fires when a recipient clicks an unsubscribe link in an email. Remove the recipient from your mailing list to comply with their preference.",
+          "message": "Spustí se, když příjemce klikne na odhlašovací odkaz v e-mailu. Odeberte příjemce ze svého e-mailového seznamu, abyste vyhověli jeho preferenci."
+        },
+        "app.TWFpbGd1bg.action.dW5zdWJzY3JpYmVk.display_name": {
+          "source": "Unsubscribed",
+          "message": "Odhlášeno"
+        },
+        "app.TWFpbGd1bg.action.dW5zdWJzY3JpYmVk.option.YXBpX2RvbWFpbg.desc": {
+          "source": "Select the domain to monitor for unsubscribe events",
+          "message": "Vyberte doménu, kterou chcete monitorovat pro události odhlášení odběru"
+        },
+        "app.TWFpbGd1bg.action.dW5zdWJzY3JpYmVk.option.YXBpX2RvbWFpbg.display_name": {
+          "source": "Domain",
+          "message": "Doména"
+        },
+        "app.TWFpbGd1bg.action.dW5zdWJzY3JpYmVk.option.YXBpX2RvbWFpbg.short_desc": {
+          "source": "The domain to watch for events",
+          "message": "Doména pro sledování událostí"
+        },
+        "app.TWFpbGd1bg.action.dW5zdWJzY3JpYmVk.short_desc": {
+          "source": "Trigger when a recipient unsubscribes",
+          "message": "Aktivovat, když se příjemce odhlásí"
+        },
+        "app.TWFpbGd1bg.action.dmFsaWRhdGUtZW1haWw.desc": {
+          "source": "Validate an email address using Mailgun's email validation API. Returns information about deliverability, risk assessment, and suggested corrections.",
+          "message": "Ověřit e-mailovou adresu pomocí rozhraní Mailgun pro validaci e-mailů. Vrací informace o doručitelnosti, vyhodnocení rizik a navrhované opravy."
+        },
+        "app.TWFpbGd1bg.action.dmFsaWRhdGUtZW1haWw.display_name": {
+          "source": "Validate Email",
+          "message": "Ověřit e-mail"
+        },
+        "app.TWFpbGd1bg.action.dmFsaWRhdGUtZW1haWw.option.YWRkcmVzcw.desc": {
+          "source": "The email address to validate",
+          "message": "E-mailová adresa k ověření"
+        },
+        "app.TWFpbGd1bg.action.dmFsaWRhdGUtZW1haWw.option.YWRkcmVzcw.display_name": {
+          "source": "Email Address",
+          "message": "E-mailová adresa"
+        },
+        "app.TWFpbGd1bg.action.dmFsaWRhdGUtZW1haWw.option.YWRkcmVzcw.short_desc": {
+          "source": "Email address to validate",
+          "message": "E-mailová adresa k ověření"
+        },
+        "app.TWFpbGd1bg.action.dmFsaWRhdGUtZW1haWw.short_desc": {
+          "source": "Validate an email address",
+          "message": "Ověřit e-mailovou adresu"
+        },
+        "app.TWFpbGd1bg.desc": {
+          "source": "Mailgun is a powerful email API service for sending, receiving, and tracking emails. This integration enables sending transactional emails, managing mailing lists, validating email addresses, and receiving webhooks for email events.\n\n**Features:**\n- Send transactional and marketing emails\n- Email validation to verify addresses\n- Mailing list management\n- Inbound email routing\n- Event tracking via webhooks",
+          "message": "Mailgun je výkonná služba e-mailového API pro odesílání, přijímání a sledování e-mailů. Tato integrace umožňuje odesílání transakčních e-mailů, správu e-mailových seznamů, validaci e-mailových adres a příjem webhooků pro e-mailové události.\n\n**Vlastnosti:**\n- Odesílání transakčních a marketingových e-mailů\n- Validace e-mailů pro ověření adres\n- Správa e-mailových seznamů\n- Směrování příchozích e-mailů\n- Sledování událostí prostřednictvím webhooků"
+        },
+        "app.TWFpbGd1bg.display_name": {
+          "source": "Mailgun",
+          "message": "Mailgun"
+        },
+        "app.TWFpbGd1bg.short_desc": {
+          "source": "Mailgun email delivery and management service",
+          "message": "Služba Mailgun pro doručování a správu e-mailů"
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,657 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "sk": {
+      "messages": {
+        "app.Sm90Rm9ybQ.action.Y3JlYXRlLXN1Ym1pc3Npb24.desc": {
+          "source": "Submit data to a form programmatically. Select a form first to see available fields.",
+          "message": "Odoslať údaje do formulára programovo. Najprv vyberte formulár, aby sa zobrazili dostupné polia."
+        },
+        "app.Sm90Rm9ybQ.action.Y3JlYXRlLXN1Ym1pc3Npb24.display_name": {
+          "source": "Create Submission",
+          "message": "Vytvoriť odoslanie"
+        },
+        "app.Sm90Rm9ybQ.action.Y3JlYXRlLXN1Ym1pc3Npb24.option.Zm9ybUlE.desc": {
+          "source": "Select the form to create a submission for. The submission fields will update based on your selection.",
+          "message": "Vyberte formulár, pre创新 chcete vytvoriť odoslanie. Polia odoslania sa aktualizujú na základe vášho výberu."
+        },
+        "app.Sm90Rm9ybQ.action.Y3JlYXRlLXN1Ym1pc3Npb24.option.Zm9ybUlE.display_name": {
+          "source": "Form",
+          "message": "Formulár"
+        },
+        "app.Sm90Rm9ybQ.action.Y3JlYXRlLXN1Ym1pc3Npb24.option.Zm9ybUlE.short_desc": {
+          "source": "The form to submit to",
+          "message": "Formulár, do ktorého sa má odoslať"
+        },
+        "app.Sm90Rm9ybQ.action.Y3JlYXRlLXN1Ym1pc3Npb24.short_desc": {
+          "source": "Create a new form submission",
+          "message": "Vytvoriť nové odoslanie formulára"
+        },
+        "app.Sm90Rm9ybQ.action.Z2V0LWZvcm0.desc": {
+          "source": "Retrieve details of a specific form including title, status, and submission count",
+          "message": "Získať podrobnosti o konkrétnom formulári vrátane názvu, stavu a počtu odoslaní"
+        },
+        "app.Sm90Rm9ybQ.action.Z2V0LWZvcm0.display_name": {
+          "source": "Get Form",
+          "message": "Získať formulár"
+        },
+        "app.Sm90Rm9ybQ.action.Z2V0LWZvcm0.option.Zm9ybUlE.desc": {
+          "source": "The form to retrieve",
+          "message": "Formulár na načítanie"
+        },
+        "app.Sm90Rm9ybQ.action.Z2V0LWZvcm0.option.Zm9ybUlE.display_name": {
+          "source": "Form",
+          "message": "Formulár"
+        },
+        "app.Sm90Rm9ybQ.action.Z2V0LWZvcm0.option.Zm9ybUlE.short_desc": {
+          "source": "The form to retrieve",
+          "message": "Formulár na načítanie"
+        },
+        "app.Sm90Rm9ybQ.action.Z2V0LWZvcm0.short_desc": {
+          "source": "Get form details",
+          "message": "Získať podrobnosti formulára"
+        },
+        "app.Sm90Rm9ybQ.action.Z2V0LWZvcm0tc3VibWlzc2lvbnM.desc": {
+          "source": "Retrieve all submissions for a specific form with optional filtering and pagination",
+          "message": "Získať všetky odoslania pre konkrétny formulár s voliteľným filtrovaním a stránkovaním"
+        },
+        "app.Sm90Rm9ybQ.action.Z2V0LWZvcm0tc3VibWlzc2lvbnM.display_name": {
+          "source": "Get Form Submissions",
+          "message": "Získať odoslané záznamy formulára"
+        },
+        "app.Sm90Rm9ybQ.action.Z2V0LWZvcm0tc3VibWlzc2lvbnM.option.Zm9ybUlE.desc": {
+          "source": "Select the form to retrieve submissions for",
+          "message": "Vyberte formulár, pre ktorý chcete získať odoslania"
+        },
+        "app.Sm90Rm9ybQ.action.Z2V0LWZvcm0tc3VibWlzc2lvbnM.option.Zm9ybUlE.display_name": {
+          "source": "Form",
+          "message": "Formulár"
+        },
+        "app.Sm90Rm9ybQ.action.Z2V0LWZvcm0tc3VibWlzc2lvbnM.option.Zm9ybUlE.short_desc": {
+          "source": "The form to get submissions from",
+          "message": "Formulár, z ktorého sa majú získať odoslania"
+        },
+        "app.Sm90Rm9ybQ.action.Z2V0LWZvcm0tc3VibWlzc2lvbnM.option.ZmlsdGVy.desc": {
+          "source": "Filter submissions using JotForm filter syntax (e.g., {\"status\": \"ACTIVE\"})",
+          "message": "Filtrovať odoslania pomocou syntaxe filtrov JotForm (napr. {\"status\": \"ACTIVE\"})"
+        },
+        "app.Sm90Rm9ybQ.action.Z2V0LWZvcm0tc3VibWlzc2lvbnM.option.ZmlsdGVy.display_name": {
+          "source": "Filter",
+          "message": "Filter"
+        },
+        "app.Sm90Rm9ybQ.action.Z2V0LWZvcm0tc3VibWlzc2lvbnM.option.ZmlsdGVy.short_desc": {
+          "source": "Filter conditions",
+          "message": "Podmienky filtra"
+        },
+        "app.Sm90Rm9ybQ.action.Z2V0LWZvcm0tc3VibWlzc2lvbnM.option.b3JkZXJieQ.desc": {
+          "source": "Field to sort by (e.g., `created_at`, `updated_at`)",
+          "message": "Pole, podľa ktorého sa má triediť (napr. `created_at`, `updated_at`)"
+        },
+        "app.Sm90Rm9ybQ.action.Z2V0LWZvcm0tc3VibWlzc2lvbnM.option.b3JkZXJieQ.display_name": {
+          "source": "Order By",
+          "message": "Zoradiť podľa"
+        },
+        "app.Sm90Rm9ybQ.action.Z2V0LWZvcm0tc3VibWlzc2lvbnM.option.b3JkZXJieQ.short_desc": {
+          "source": "Sort order",
+          "message": "Poradie zoradenia"
+        },
+        "app.Sm90Rm9ybQ.action.Z2V0LWZvcm0tc3VibWlzc2lvbnM.option.bGltaXQ.desc": {
+          "source": "Maximum number of submissions to return",
+          "message": "Maximálny počet odoslaní, ktoré sa majú vrátiť"
+        },
+        "app.Sm90Rm9ybQ.action.Z2V0LWZvcm0tc3VibWlzc2lvbnM.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "Limit"
+        },
+        "app.Sm90Rm9ybQ.action.Z2V0LWZvcm0tc3VibWlzc2lvbnM.option.bGltaXQ.short_desc": {
+          "source": "Maximum results",
+          "message": "Maximálny počet výsledkov"
+        },
+        "app.Sm90Rm9ybQ.action.Z2V0LWZvcm0tc3VibWlzc2lvbnM.short_desc": {
+          "source": "List submissions for a form",
+          "message": "Zoznam odoslaní formulára"
+        },
+        "app.Sm90Rm9ybQ.action.Z2V0LWZvcm0tcmVwb3J0cw.desc": {
+          "source": "Retrieve reports and analytics for a specific form",
+          "message": "Získať reporty a analýzy pre konkrétny formulár"
+        },
+        "app.Sm90Rm9ybQ.action.Z2V0LWZvcm0tcmVwb3J0cw.display_name": {
+          "source": "Get Form Reports",
+          "message": "Získať reporty formulára"
+        },
+        "app.Sm90Rm9ybQ.action.Z2V0LWZvcm0tcmVwb3J0cw.option.Zm9ybUlE.desc": {
+          "source": "The form to retrieve reports for",
+          "message": "Formulár, pre ktorý sa majú získať reporty"
+        },
+        "app.Sm90Rm9ybQ.action.Z2V0LWZvcm0tcmVwb3J0cw.option.Zm9ybUlE.display_name": {
+          "source": "Form",
+          "message": "Formulár"
+        },
+        "app.Sm90Rm9ybQ.action.Z2V0LWZvcm0tcmVwb3J0cw.option.Zm9ybUlE.short_desc": {
+          "source": "The form to get reports for",
+          "message": "Formulár, z ktorého sa majú získať reporty"
+        },
+        "app.Sm90Rm9ybQ.action.Z2V0LWZvcm0tcmVwb3J0cw.short_desc": {
+          "source": "Get form analytics and reports",
+          "message": "Získať analýzy a reporty formulára"
+        },
+        "app.Sm90Rm9ybQ.action.Z2V0LWZvcm1z.desc": {
+          "source": "Retrieve all forms in the JotForm account with optional filtering",
+          "message": "Získať všetky formuláre v účte JotForm s voliteľným filtrovaním"
+        },
+        "app.Sm90Rm9ybQ.action.Z2V0LWZvcm1z.display_name": {
+          "source": "Get Forms",
+          "message": "Získať formuláre"
+        },
+        "app.Sm90Rm9ybQ.action.Z2V0LWZvcm1z.option.ZmlsdGVy.desc": {
+          "source": "Filter forms using JotForm filter syntax (e.g., {\"status\": \"ENABLED\"})",
+          "message": "Filtrovať formuláre pomocou syntaxe filtrov JotForm (napr. {\"status\": \"ENABLED\"})"
+        },
+        "app.Sm90Rm9ybQ.action.Z2V0LWZvcm1z.option.ZmlsdGVy.display_name": {
+          "source": "Filter",
+          "message": "Filter"
+        },
+        "app.Sm90Rm9ybQ.action.Z2V0LWZvcm1z.option.ZmlsdGVy.short_desc": {
+          "source": "Filter conditions",
+          "message": "Podmienky filtra"
+        },
+        "app.Sm90Rm9ybQ.action.Z2V0LWZvcm1z.option.b3JkZXJieQ.desc": {
+          "source": "Field to sort by (e.g., `created_at`, `updated_at`, `title`)",
+          "message": "Pole, podľa ktorého sa má triediť (napr. `created_at`, `updated_at`, `title`)"
+        },
+        "app.Sm90Rm9ybQ.action.Z2V0LWZvcm1z.option.b3JkZXJieQ.display_name": {
+          "source": "Order By",
+          "message": "Zoradiť podľa"
+        },
+        "app.Sm90Rm9ybQ.action.Z2V0LWZvcm1z.option.b3JkZXJieQ.short_desc": {
+          "source": "Sort order",
+          "message": "Poradie zoradenia"
+        },
+        "app.Sm90Rm9ybQ.action.Z2V0LWZvcm1z.option.bGltaXQ.desc": {
+          "source": "Maximum number of forms to return",
+          "message": "Maximálny počet formulárov na vrátenie"
+        },
+        "app.Sm90Rm9ybQ.action.Z2V0LWZvcm1z.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "Limit"
+        },
+        "app.Sm90Rm9ybQ.action.Z2V0LWZvcm1z.option.bGltaXQ.short_desc": {
+          "source": "Maximum results",
+          "message": "Maximálny počet výsledkov"
+        },
+        "app.Sm90Rm9ybQ.action.Z2V0LWZvcm1z.short_desc": {
+          "source": "List all forms",
+          "message": "Zoznam všetkých formulárov"
+        },
+        "app.Sm90Rm9ybQ.action.Z2V0LXN1Ym1pc3Npb24.desc": {
+          "source": "Retrieve a specific submission by its ID",
+          "message": "Získať konkrétne odoslanie podľa jeho ID"
+        },
+        "app.Sm90Rm9ybQ.action.Z2V0LXN1Ym1pc3Npb24.display_name": {
+          "source": "Get Submission",
+          "message": "Získať odoslanie"
+        },
+        "app.Sm90Rm9ybQ.action.Z2V0LXN1Ym1pc3Npb24.option.c3VibWlzc2lvbklE.desc": {
+          "source": "The unique ID of the submission to retrieve",
+          "message": "Jedinečné ID odoslania, ktoré sa má získať"
+        },
+        "app.Sm90Rm9ybQ.action.Z2V0LXN1Ym1pc3Npb24.option.c3VibWlzc2lvbklE.display_name": {
+          "source": "Submission ID",
+          "message": "ID odoslania"
+        },
+        "app.Sm90Rm9ybQ.action.Z2V0LXN1Ym1pc3Npb24.option.c3VibWlzc2lvbklE.short_desc": {
+          "source": "The submission to retrieve",
+          "message": "Odoslanie, ktoré sa má získať"
+        },
+        "app.Sm90Rm9ybQ.action.Z2V0LXN1Ym1pc3Npb24.short_desc": {
+          "source": "Get a specific form submission",
+          "message": "Získať konkrétne odoslanie formulára"
+        },
+        "app.Sm90Rm9ybQ.action.ZGVsZXRlLXN1Ym1pc3Npb24.desc": {
+          "source": "Permanently delete a submission from a form",
+          "message": "Natrvalo vymazať odoslanie z formulára"
+        },
+        "app.Sm90Rm9ybQ.action.ZGVsZXRlLXN1Ym1pc3Npb24.display_name": {
+          "source": "Delete Submission",
+          "message": "Vymazať odoslanie"
+        },
+        "app.Sm90Rm9ybQ.action.ZGVsZXRlLXN1Ym1pc3Npb24.option.c3VibWlzc2lvbklE.desc": {
+          "source": "The ID of the submission to delete",
+          "message": "ID odoslania, ktoré sa má vymazať"
+        },
+        "app.Sm90Rm9ybQ.action.ZGVsZXRlLXN1Ym1pc3Npb24.option.c3VibWlzc2lvbklE.display_name": {
+          "source": "Submission ID",
+          "message": "ID odoslania"
+        },
+        "app.Sm90Rm9ybQ.action.ZGVsZXRlLXN1Ym1pc3Npb24.option.c3VibWlzc2lvbklE.short_desc": {
+          "source": "The submission to delete",
+          "message": "Odoslanie, ktoré sa má vymazať"
+        },
+        "app.Sm90Rm9ybQ.action.ZGVsZXRlLXN1Ym1pc3Npb24.short_desc": {
+          "source": "Delete a form submission",
+          "message": "Vymazať odoslanie formulára"
+        },
+        "app.Sm90Rm9ybQ.action.bWFrZS1hcGktY2FsbA.desc": {
+          "source": "Make a custom HTTP / REST API call to **JotForm** using the configured connection's authentication.\n\nSpecify the HTTP method, the URI path (relative to the connection's API base URL), optional query parameters, headers, and request body. The response is returned as a hash containing the status code, response headers, and response body.\n\nUse this action for endpoints that are not yet exposed as first-class actions on this app.",
+          "message": "Vykonať vlastné volanie HTTP / REST API do **JotForm** s použitím autentifikácie nakonfigurovaného pripojenia.\n\nZadajte metódu HTTP, cestu URI (relatívnu k základnej adrese URL API pripojenia), voliteľné parametre dotazu, hlavičky a telo požiadavky. Odpoveď sa vráti ako hash obsahujúci stavový kód, hlavičky odpovede a telo odpovede.\n\nTúto akciu použite pre koncové body, ktoré ešte nie sú v tejto aplikácii sprístupnené ako predvolené akcie."
+        },
+        "app.Sm90Rm9ybQ.action.bWFrZS1hcGktY2FsbA.display_name": {
+          "source": "Make an API call",
+          "message": "Urobiť volanie API"
+        },
+        "app.Sm90Rm9ybQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.desc": {
+          "source": "The request body. The effective type depends on `body_type`: JSON/form/YAML expect a hash, XML/text expect a string, multipart expects a file structure, binary expects raw bytes.",
+          "message": "Telo požiadavky. Efektívny typ závisí od `body_type`: JSON/formulár/YAML očakávajú hash, XML/text očakávajú reťazec, multipart očakáva štruktúru súboru, binárny typ očakáva neopracované bajty."
+        },
+        "app.Sm90Rm9ybQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.display_name": {
+          "source": "Body",
+          "message": "Telo"
+        },
+        "app.Sm90Rm9ybQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.short_desc": {
+          "source": "The request body",
+          "message": "Telo požiadavky"
+        },
+        "app.Sm90Rm9ybQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.desc": {
+          "source": "Upload a file using `multipart/form-data`. The body must be a @ref DataProvider::FileDataType \"FileDataType\" structure (filename + content + mime_type). The framework builds the multipart envelope and sets the boundary header.",
+          "message": "Odoslať súbor pomocou `multipart/form-data`. Telo musí byť štruktúra @ref DataProvider::FileDataType \"FileDataType\" (filename + content + mime_type). Rámec vytvorí obálku multipart a nastaví hlavičku boundary."
+        },
+        "app.Sm90Rm9ybQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.display_name": {
+          "source": "Multipart Form",
+          "message": "Multipart formulár"
+        },
+        "app.Sm90Rm9ybQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.short_desc": {
+          "source": "Upload a file using multipart/form-data",
+          "message": "Odoslať súbor pomocou multipart/form-data"
+        },
+        "app.Sm90Rm9ybQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.desc": {
+          "source": "Pass the body to the REST client unchanged; the client decides serialization based on its configured `data` option and the value type",
+          "message": "Odovzdať telo klientovi REST bez zmeny; klient rozhodne o serializácii na základe svojej konfigurovanej možnosti `data` a typu hodnoty"
+        },
+        "app.Sm90Rm9ybQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.display_name": {
+          "source": "Auto",
+          "message": "Auto"
+        },
+        "app.Sm90Rm9ybQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.short_desc": {
+          "source": "Pass-through; use connection serialization and let the REST client decide",
+          "message": "Priamy prechod; použiť serializáciu spojenia a nechať rozhodnúť klienta REST"
+        },
+        "app.Sm90Rm9ybQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.desc": {
+          "source": "Send the body as raw bytes. The body must be a binary value. Sets `Content-Type: application/octet-stream` unless overridden by `hdr`.",
+          "message": "Odoslať telo ako neopracované bajty. Telo musí byť binárna hodnota. Nastavuje `Content-Type: application/octet-stream`, pokiaľ nie je prepísané pomocou `hdr`."
+        },
+        "app.Sm90Rm9ybQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.display_name": {
+          "source": "Raw Binary",
+          "message": "Surové binárne dáta"
+        },
+        "app.Sm90Rm9ybQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.short_desc": {
+          "source": "Send body as raw bytes",
+          "message": "Odoslať telo ako neopracované bajty"
+        },
+        "app.Sm90Rm9ybQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.desc": {
+          "source": "Serialize a hash of form fields as `application/x-www-form-urlencoded`. The body must be a hash whose values are scalars (strings/numbers/booleans).",
+          "message": "Serializovať hash polí formulára ako `application/x-www-form-urlencoded`. Telo musí byť hash, ktorého hodnoty sú skaláre (reťazce/čísla/booleovské hodnoty)."
+        },
+        "app.Sm90Rm9ybQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.display_name": {
+          "source": "Form (URL-encoded)",
+          "message": "Formulár (kódovaný v URL)"
+        },
+        "app.Sm90Rm9ybQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.short_desc": {
+          "source": "Serialize body as application/x-www-form-urlencoded form fields",
+          "message": "Serializovať telo ako polia formulára application/x-www-form-urlencoded"
+        },
+        "app.Sm90Rm9ybQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.desc": {
+          "source": "Serialize the body as JSON; sets `Content-Type: application/json`. The body should be a hash, list, or scalar value.",
+          "message": "Serializovať telo ako JSON; nastavuje `Content-Type: application/json`. Telo by malo byť hash, zoznam alebo skalárna hodnota."
+        },
+        "app.Sm90Rm9ybQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.display_name": {
+          "source": "JSON",
+          "message": "JSON"
+        },
+        "app.Sm90Rm9ybQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.short_desc": {
+          "source": "Serialize body as JSON",
+          "message": "Serializovať telo ako JSON"
+        },
+        "app.Sm90Rm9ybQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.desc": {
+          "source": "Send the body as plain text. The body must be a string. Sets `Content-Type: text/plain`.",
+          "message": "Odoslať telo ako čistý text. Telo musí byť reťazec. Nastavuje `Content-Type: text/plain`."
+        },
+        "app.Sm90Rm9ybQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.display_name": {
+          "source": "Plain Text",
+          "message": "Čistý text"
+        },
+        "app.Sm90Rm9ybQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.short_desc": {
+          "source": "Send body as text/plain",
+          "message": "Odoslať telo ako text/plain"
+        },
+        "app.Sm90Rm9ybQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.desc": {
+          "source": "Send the body as XML. If the body is a hash it is serialized to XML; if it is a string it is sent verbatim. Sets `Content-Type: application/xml`.",
+          "message": "Odoslať telo ako XML. Ak je telo hash, serializuje sa do XML; ak je to reťazec, odosiela sa doslovne. Nastavuje `Content-Type: application/xml`."
+        },
+        "app.Sm90Rm9ybQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.display_name": {
+          "source": "XML",
+          "message": "XML"
+        },
+        "app.Sm90Rm9ybQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.short_desc": {
+          "source": "Send body as XML",
+          "message": "Odoslať telo ako XML"
+        },
+        "app.Sm90Rm9ybQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.desc": {
+          "source": "Send the body as YAML. If the body is a hash it is serialized to YAML; if it is a string it is sent verbatim. Sets `Content-Type: application/x-yaml`.",
+          "message": "Odoslať telo ako YAML. Ak je telo hash, serializuje sa do YAML; ak je to reťazec, odosiela sa doslovne. Nastavuje `Content-Type: application/x-yaml`."
+        },
+        "app.Sm90Rm9ybQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.display_name": {
+          "source": "YAML",
+          "message": "YAML"
+        },
+        "app.Sm90Rm9ybQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.short_desc": {
+          "source": "Send body as YAML",
+          "message": "Odoslať telo ako YAML"
+        },
+        "app.Sm90Rm9ybQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.desc": {
+          "source": "Selects the body serialization mode and the corresponding `Content-Type` header. Changing this field reshapes the `body` editor - selecting JSON exposes a JSON editor, selecting Multipart Form exposes a file picker, and so on.",
+          "message": "Vyberie režim serializácie tela a zodpovedajúcu hlavičku `Content-Type`. Zmena tohto poľa zmení editor `body` - výber JSON zobrazí editor JSON, výber Multipart Form zobrazí výber súborov a podobne."
+        },
+        "app.Sm90Rm9ybQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.display_name": {
+          "source": "Body Type",
+          "message": "Typ tela"
+        },
+        "app.Sm90Rm9ybQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.short_desc": {
+          "source": "How the body is serialized and what Content-Type is sent",
+          "message": "Ako sa telo serializuje a aký Content-Type sa odosiela"
+        },
+        "app.Sm90Rm9ybQ.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.desc": {
+          "source": "If `True`, non-2xx HTTP responses return as the normal response hash (with the actual status code) instead of raising `REST-RESPONSE-ERROR`. Useful for handling 4xx/5xx as data - e.g. checking whether a resource exists. Overrides the connection's `error_passthru` setting for this call only.",
+          "message": "Ak je `True`, odpovede HTTP iné ako 2xx sa vrátia ako normálny hash odpovede (s reálnym stavovým kódom) namiesto vyvolania `REST-RESPONSE-ERROR`. Užitočné na spracovanie 4xx/5xx ako dát – napr. kontrola, či zdroj existuje. Prepíše nastavenie `error_passthru` spojenia len pre toto volanie."
+        },
+        "app.Sm90Rm9ybQ.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.display_name": {
+          "source": "Return Errors as Data",
+          "message": "Vrátiť chyby ako dáta"
+        },
+        "app.Sm90Rm9ybQ.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.short_desc": {
+          "source": "Return non-2xx responses normally instead of throwing",
+          "message": "Vrátiť odpovede iné ako 2xx normálne namiesto vyvolania výnimky"
+        },
+        "app.Sm90Rm9ybQ.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.desc": {
+          "source": "Optional list of HTTP status codes treated as success. If set and the response status is not in this list, the action throws `REST-STATUS-ERROR`. When unset, the REST client's default behavior applies (typically: 2xx is success, non-2xx throws).",
+          "message": "Voliteľný zoznam stavových kódov HTTP považovaných za úspech. Ak je nastavený a stav odpovede nie je v tomto zozname, akcia vyvolá `REST-STATUS-ERROR`. Ak nie je nastavený, uplatní sa predvolené správanie klienta REST (zvyčajne: 2xx je úspech, iné ako 2xx vyvolá výnimku)."
+        },
+        "app.Sm90Rm9ybQ.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.display_name": {
+          "source": "Expected Status Codes",
+          "message": "Očakávané stavové kódy"
+        },
+        "app.Sm90Rm9ybQ.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.short_desc": {
+          "source": "Response status codes treated as success",
+          "message": "Stavové kódy odpovede považované za úspech"
+        },
+        "app.Sm90Rm9ybQ.action.bWFrZS1hcGktY2FsbA.option.aGRy.desc": {
+          "source": "Hash of custom headers added to the request. These override any default headers set by `body_type` (e.g. supplying `Content-Type` here wins over the body-type default).",
+          "message": "Hash vlastných hlavičiek pridaných k požiadavke. Tie prepíšu akékoľvek predvolené hlavičky nastavené pomocou `body_type` (napr. zadanie `Content-Type` na tomto mieste má prednosť pred predvolenou hodnotou typu tela)."
+        },
+        "app.Sm90Rm9ybQ.action.bWFrZS1hcGktY2FsbA.option.aGRy.display_name": {
+          "source": "Custom Headers",
+          "message": "Vlastné hlavičky"
+        },
+        "app.Sm90Rm9ybQ.action.bWFrZS1hcGktY2FsbA.option.aGRy.short_desc": {
+          "source": "Extra request headers",
+          "message": "Dodatočné hlavičky požiadavky"
+        },
+        "app.Sm90Rm9ybQ.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.desc": {
+          "source": "If `True`, the response hash includes a `debug` sub-hash containing the request method/URL/headers (with sensitive values redacted), request and response sizes, and round-trip duration. Useful when investigating slow or failing calls. Off by default to keep responses lean.",
+          "message": "Ak je `True`, hash odpovede obsahuje pod-hash `debug` obsahujúci metódu/URL/hlavičky požiadavky (so skrytými citlivými hodnotami), veľkosti požiadavky a odpovede a trvanie celého cyklu. Užitočné pri vyšetrovaní pomalých alebo zlyhávajúcich volaní. Predvolene vypnuté, aby odpovede zostali stručné."
+        },
+        "app.Sm90Rm9ybQ.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.display_name": {
+          "source": "Include Debug Info",
+          "message": "Zahrnúť ladiace informácie"
+        },
+        "app.Sm90Rm9ybQ.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.short_desc": {
+          "source": "Include request/timing/size debug info in the response",
+          "message": "Zahrnúť ladiace informácie o požiadavke/časovaní/veľkosti do odpovede"
+        },
+        "app.Sm90Rm9ybQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.desc": {
+          "source": "HTTP `OPTIONS`",
+          "message": "HTTP `OPTIONS`"
+        },
+        "app.Sm90Rm9ybQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.display_name": {
+          "source": "OPTIONS",
+          "message": "OPTIONS"
+        },
+        "app.Sm90Rm9ybQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.short_desc": {
+          "source": "HTTP OPTIONS",
+          "message": "HTTP OPTIONS"
+        },
+        "app.Sm90Rm9ybQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.desc": {
+          "source": "HTTP `DELETE`",
+          "message": "HTTP `DELETE`"
+        },
+        "app.Sm90Rm9ybQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.display_name": {
+          "source": "DELETE",
+          "message": "DELETE"
+        },
+        "app.Sm90Rm9ybQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.short_desc": {
+          "source": "HTTP DELETE",
+          "message": "HTTP DELETE"
+        },
+        "app.Sm90Rm9ybQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.desc": {
+          "source": "HTTP `GET`",
+          "message": "HTTP `GET`"
+        },
+        "app.Sm90Rm9ybQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.display_name": {
+          "source": "GET",
+          "message": "GET"
+        },
+        "app.Sm90Rm9ybQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.short_desc": {
+          "source": "HTTP GET",
+          "message": "HTTP GET"
+        },
+        "app.Sm90Rm9ybQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.desc": {
+          "source": "HTTP `HEAD`",
+          "message": "HTTP `HEAD`"
+        },
+        "app.Sm90Rm9ybQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.display_name": {
+          "source": "HEAD",
+          "message": "HEAD"
+        },
+        "app.Sm90Rm9ybQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.short_desc": {
+          "source": "HTTP HEAD",
+          "message": "HTTP HEAD"
+        },
+        "app.Sm90Rm9ybQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.desc": {
+          "source": "HTTP `PATCH`",
+          "message": "HTTP `PATCH`"
+        },
+        "app.Sm90Rm9ybQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.display_name": {
+          "source": "PATCH",
+          "message": "PATCH"
+        },
+        "app.Sm90Rm9ybQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.short_desc": {
+          "source": "HTTP PATCH",
+          "message": "HTTP PATCH"
+        },
+        "app.Sm90Rm9ybQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.desc": {
+          "source": "HTTP `POST`",
+          "message": "HTTP `POST`"
+        },
+        "app.Sm90Rm9ybQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.display_name": {
+          "source": "POST",
+          "message": "POST"
+        },
+        "app.Sm90Rm9ybQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.short_desc": {
+          "source": "HTTP POST",
+          "message": "HTTP POST"
+        },
+        "app.Sm90Rm9ybQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.desc": {
+          "source": "HTTP `PUT`",
+          "message": "HTTP `PUT`"
+        },
+        "app.Sm90Rm9ybQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.display_name": {
+          "source": "PUT",
+          "message": "PUT"
+        },
+        "app.Sm90Rm9ybQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.short_desc": {
+          "source": "HTTP PUT",
+          "message": "HTTP PUT"
+        },
+        "app.Sm90Rm9ybQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.desc": {
+          "source": "HTTP `TRACE`",
+          "message": "HTTP `TRACE`"
+        },
+        "app.Sm90Rm9ybQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.display_name": {
+          "source": "TRACE",
+          "message": "TRACE"
+        },
+        "app.Sm90Rm9ybQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.short_desc": {
+          "source": "HTTP TRACE",
+          "message": "HTTP TRACE"
+        },
+        "app.Sm90Rm9ybQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "Metóda HTTP, ktorá sa má použiť pre požiadavku"
+        },
+        "app.Sm90Rm9ybQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.display_name": {
+          "source": "HTTP Method",
+          "message": "Metóda HTTP"
+        },
+        "app.Sm90Rm9ybQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.short_desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "Metóda HTTP, ktorá sa má použiť pre požiadavku"
+        },
+        "app.Sm90Rm9ybQ.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain `{name}` placeholders that are replaced from `path_vars`. Example: `/users/{id}/comments`.",
+          "message": "Cesta URI relatívna k základnej adrese URL API spojenia. Môže obsahovať žolíky `{name}`, ktoré sú nahradené z `path_vars`. Príklad: `/users/{id}/comments`."
+        },
+        "app.Sm90Rm9ybQ.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.display_name": {
+          "source": "URI Path",
+          "message": "Cesta URI"
+        },
+        "app.Sm90Rm9ybQ.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.short_desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain '{name}' placeholders that are replaced from 'path_vars'. Example: '/users/{id}/comments'",
+          "message": "Cesta URI relatívna k základnej URL adrese API pripojenia. Môže obsahovať zastupiteľné objekty '{name}', ktoré sa nahradia z 'path_vars'. Príklad: '/users/{id}/comments'"
+        },
+        "app.Sm90Rm9ybQ.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.desc": {
+          "source": "Hash of values substituted into `{name}` placeholders in the URI path. Example: with `path = /users/{id}` and `path_vars = {id: 123}` the framework sends `/users/123`. Values are URL-encoded.",
+          "message": "Hash hodnôt nahradených do zastupiteľných objektov `{name}` v ceste URI. Príklad: s `path = /users/{id}` a `path_vars = {id: 123}` rozhranie odosiela `/users/123`. Hodnoty sú zakódované v URL."
+        },
+        "app.Sm90Rm9ybQ.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.display_name": {
+          "source": "Path Variables",
+          "message": "Premenné cesty"
+        },
+        "app.Sm90Rm9ybQ.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.short_desc": {
+          "source": "Values for {name} placeholders in path",
+          "message": "Hodnoty pre zastupiteľné objekty {name} v ceste"
+        },
+        "app.Sm90Rm9ybQ.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.desc": {
+          "source": "Hash of query string parameters to append to the URI path. Values are URL-encoded; list values are joined with `,`.",
+          "message": "Hash parametrov reťazca dopytu na pripojenie k ceste URI. Hodnoty sú zakódované v URL; hodnoty zoznamu sú spojené pomocou `,`."
+        },
+        "app.Sm90Rm9ybQ.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.display_name": {
+          "source": "Query Arguments",
+          "message": "Argumenty dopytu"
+        },
+        "app.Sm90Rm9ybQ.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.short_desc": {
+          "source": "Query string parameters",
+          "message": "Parametre reťazca dopytu"
+        },
+        "app.Sm90Rm9ybQ.action.bWFrZS1hcGktY2FsbA.short_desc": {
+          "source": "Make a custom API call to JotForm",
+          "message": "Vykonať vlastné volanie API do JotForm"
+        },
+        "app.Sm90Rm9ybQ.action.bmV3LXBheW1lbnQ.desc": {
+          "source": "Fires when a payment is completed on a form with payment integration.\n\n**Note:** This trigger only works for payments made through the form UI.",
+          "message": "Spustí sa pri dokončení platby na formulári s integráciou platieb.\n\n**Poznámka:** Tento spúšťač funguje iba pre platby vykonané cez používateľské rozhranie formulára."
+        },
+        "app.Sm90Rm9ybQ.action.bmV3LXBheW1lbnQ.display_name": {
+          "source": "New Payment",
+          "message": "Nová platba"
+        },
+        "app.Sm90Rm9ybQ.action.bmV3LXBheW1lbnQ.option.Zm9ybUlE.desc": {
+          "source": "Select the form (with payment integration) to monitor for payments",
+          "message": "Vyberte formulár (s integráciou platieb), na ktorom sa majú sledovať platby"
+        },
+        "app.Sm90Rm9ybQ.action.bmV3LXBheW1lbnQ.option.Zm9ybUlE.display_name": {
+          "source": "Form",
+          "message": "Formulár"
+        },
+        "app.Sm90Rm9ybQ.action.bmV3LXBheW1lbnQ.option.Zm9ybUlE.short_desc": {
+          "source": "The form to watch for payments",
+          "message": "Formulár na sledovanie platieb"
+        },
+        "app.Sm90Rm9ybQ.action.bmV3LXBheW1lbnQ.short_desc": {
+          "source": "Trigger when a payment is received",
+          "message": "Spustiť pri prijatí platby"
+        },
+        "app.Sm90Rm9ybQ.action.bmV3LXN1Ym1pc3Npb24.desc": {
+          "source": "Fires when a new submission is received on a form via the JotForm UI.\n\n**Note:** This trigger only works for submissions made through the form UI, not for API-created submissions. This is a JotForm platform limitation.",
+          "message": "Spustí sa pri prijatí nového odoslania formulára cez používateľské rozhranie JotForm.\n\n**Poznámka:** Tento spúšťač funguje iba pre odoslania vykonané cez používateľské rozhranie formulára, nie pre odoslania vytvorené cez API. Ide o obmedzenie platformy JotForm."
+        },
+        "app.Sm90Rm9ybQ.action.bmV3LXN1Ym1pc3Npb24.display_name": {
+          "source": "New Submission",
+          "message": "Nové odoslanie"
+        },
+        "app.Sm90Rm9ybQ.action.bmV3LXN1Ym1pc3Npb24.option.Zm9ybUlE.desc": {
+          "source": "Select the form to monitor for new submissions",
+          "message": "Vyberte formulár, na ktorom sa majú sledovať nové odoslania"
+        },
+        "app.Sm90Rm9ybQ.action.bmV3LXN1Ym1pc3Npb24.option.Zm9ybUlE.display_name": {
+          "source": "Form",
+          "message": "Formulár"
+        },
+        "app.Sm90Rm9ybQ.action.bmV3LXN1Ym1pc3Npb24.option.Zm9ybUlE.short_desc": {
+          "source": "The form to watch for submissions",
+          "message": "Formulár na sledovanie odoslaní"
+        },
+        "app.Sm90Rm9ybQ.action.bmV3LXN1Ym1pc3Npb24.short_desc": {
+          "source": "Trigger when a form receives a new submission",
+          "message": "Spustiť, keď formulár prijme nové odoslanie"
+        },
+        "app.Sm90Rm9ybQ.action.dXBkYXRlLXN1Ym1pc3Npb24.desc": {
+          "source": "Modify the answers in an existing form submission. Select a form first to see available fields.",
+          "message": "Upraviť odpovede v existujúcom odoslaní formulára. Najprv vyberte formulár, aby sa zobrazili dostupné polia."
+        },
+        "app.Sm90Rm9ybQ.action.dXBkYXRlLXN1Ym1pc3Npb24.display_name": {
+          "source": "Update Submission",
+          "message": "Aktualizovať odoslanie"
+        },
+        "app.Sm90Rm9ybQ.action.dXBkYXRlLXN1Ym1pc3Npb24.option.Zm9ybUlE.desc": {
+          "source": "Select the form to get field definitions for the submission update. The submission fields will update based on your selection.",
+          "message": "Vyberte formulár, aby ste získali definície polí na aktualizáciu odoslania. Polia odoslania sa aktualizujú na základe vášho výberu."
+        },
+        "app.Sm90Rm9ybQ.action.dXBkYXRlLXN1Ym1pc3Npb24.option.Zm9ybUlE.display_name": {
+          "source": "Form",
+          "message": "Formulár"
+        },
+        "app.Sm90Rm9ybQ.action.dXBkYXRlLXN1Ym1pc3Npb24.option.Zm9ybUlE.short_desc": {
+          "source": "The form containing the submission",
+          "message": "Formulár obsahujúci odoslanie"
+        },
+        "app.Sm90Rm9ybQ.action.dXBkYXRlLXN1Ym1pc3Npb24.option.c3VibWlzc2lvbklE.desc": {
+          "source": "The ID of the submission to update",
+          "message": "ID odoslania na aktualizáciu"
+        },
+        "app.Sm90Rm9ybQ.action.dXBkYXRlLXN1Ym1pc3Npb24.option.c3VibWlzc2lvbklE.display_name": {
+          "source": "Submission ID",
+          "message": "ID odoslania"
+        },
+        "app.Sm90Rm9ybQ.action.dXBkYXRlLXN1Ym1pc3Npb24.option.c3VibWlzc2lvbklE.short_desc": {
+          "source": "The submission to update",
+          "message": "Odoslanie na aktualizáciu"
+        },
+        "app.Sm90Rm9ybQ.action.dXBkYXRlLXN1Ym1pc3Npb24.short_desc": {
+          "source": "Update an existing submission",
+          "message": "Aktualizovať existujúce odoslanie"
+        },
+        "app.Sm90Rm9ybQ.desc": {
+          "source": "JotForm is an online form builder that enables creating forms, collecting submissions, and processing payments. This integration enables managing form submissions through the JotForm REST API.\n\n**Note:** Webhook-based triggers only fire for submissions made through the JotForm UI, not for API-created submissions.",
+          "message": "JotForm je online nástroj na tvorbu formulárov, ktorý umožňuje vytvárať formuláre, zbierať odoslané dáta a spracovávať platby. Táto integrácia umožňuje spravovať odoslané formuláre prostredníctvom rozhrania JotForm REST API.\n\n**Poznámka:** Triggery založené na webhookoch sa spúšťajú iba pri odoslaniach vytvorených cez používateľské rozhranie JotForm, nie pri odoslaniach vytvorených cez API."
+        },
+        "app.Sm90Rm9ybQ.display_name": {
+          "source": "JotForm",
+          "message": "JotForm"
+        },
+        "app.Sm90Rm9ybQ.short_desc": {
+          "source": "JotForm online form builder and data collection",
+          "message": "Online nástroj na tvorbu formulárov a zber údajov JotForm"
+        }
+      }
+    }
+  }
+}

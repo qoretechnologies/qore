@@ -1,0 +1,21 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "es": {
+      "messages": {
+        "app.SDI.desc": {
+          "source": "Create and manage connections to a H2 embedded Java SQL database",
+          "message": "Cree y gestione conexiones a una base de datos SQL Java integrada de H2"
+        },
+        "app.SDI.display_name": {
+          "source": "H2",
+          "message": "H2"
+        },
+        "app.SDI.short_desc": {
+          "source": "H2 embedded Java SQL database",
+          "message": "Base de datos SQL Java integrada de H2"
+        }
+      }
+    }
+  }
+}

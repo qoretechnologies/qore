@@ -1,0 +1,205 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "zh-Hant": {
+      "messages": {
+        "app.RGF0YUdlbmVyYXRvcg.action.Z2VuZXJhdGUtZnJvbS10ZW1wbGF0ZQ.desc": {
+          "source": "Generate a stream of records by repeating and varying a template record with optional randomization for testing data pipelines",
+          "message": "透過重複和變更範本記錄並套用選用的隨機化來產生記錄串流，以用於測試資料管線"
+        },
+        "app.RGF0YUdlbmVyYXRvcg.action.Z2VuZXJhdGUtZnJvbS10ZW1wbGF0ZQ.display_name": {
+          "source": "Generate From Template",
+          "message": "從範本產生"
+        },
+        "app.RGF0YUdlbmVyYXRvcg.action.Z2VuZXJhdGUtZnJvbS10ZW1wbGF0ZQ.option.Y291bnQ.desc": {
+          "source": "The total number of records to generate from the template; must be a non-negative integer; defaults to 10",
+          "message": "從範本產生的記錄總數；必須為非負整數；預設為 10"
+        },
+        "app.RGF0YUdlbmVyYXRvcg.action.Z2VuZXJhdGUtZnJvbS10ZW1wbGF0ZQ.option.Y291bnQ.display_name": {
+          "source": "Record Count",
+          "message": "記錄計數"
+        },
+        "app.RGF0YUdlbmVyYXRvcg.action.Z2VuZXJhdGUtZnJvbS10ZW1wbGF0ZQ.option.Y291bnQ.short_desc": {
+          "source": "Number of records to generate",
+          "message": "要產生的記錄數量"
+        },
+        "app.RGF0YUdlbmVyYXRvcg.action.Z2VuZXJhdGUtZnJvbS10ZW1wbGF0ZQ.option.YmFzZV9kYXRl.desc": {
+          "source": "A fixed date/time value used as the reference point for generating date fields; when provided with a seed, this ensures full cross-run reproducibility of date fields; if not provided, the current date/time at the start of generation is used",
+          "message": "用作產生日期欄位之參考點的固定日期/時間值；當與種子 (seed) 一起提供時，可確保日期欄位在多次執行間具備完整的可重現性；若未提供，則使用生成開始時的當前日期/時間"
+        },
+        "app.RGF0YUdlbmVyYXRvcg.action.Z2VuZXJhdGUtZnJvbS10ZW1wbGF0ZQ.option.YmFzZV9kYXRl.display_name": {
+          "source": "Base Date",
+          "message": "基準日期"
+        },
+        "app.RGF0YUdlbmVyYXRvcg.action.Z2VuZXJhdGUtZnJvbS10ZW1wbGF0ZQ.option.YmFzZV9kYXRl.short_desc": {
+          "source": "Fixed base date for date field generation",
+          "message": "用於生成日期欄位的固定基準日期"
+        },
+        "app.RGF0YUdlbmVyYXRvcg.action.Z2VuZXJhdGUtZnJvbS10ZW1wbGF0ZQ.option.aW5jbHVkZV9udWxscw.desc": {
+          "source": "When `True` and strategy is `random`, approximately 10%% of field values will be set to `NOTHING` (null); useful for testing null handling in data pipelines; defaults to `False`",
+          "message": "當為 `True` 且策略為 `random` 時，約有 10%% 的欄位值會設為 `NOTHING` (null)；這對測試資料管線中的 null 處理非常有用；預設為 `False`"
+        },
+        "app.RGF0YUdlbmVyYXRvcg.action.Z2VuZXJhdGUtZnJvbS10ZW1wbGF0ZQ.option.aW5jbHVkZV9udWxscw.display_name": {
+          "source": "Include Nulls",
+          "message": "包含 Null 值"
+        },
+        "app.RGF0YUdlbmVyYXRvcg.action.Z2VuZXJhdGUtZnJvbS10ZW1wbGF0ZQ.option.aW5jbHVkZV9udWxscw.short_desc": {
+          "source": "Whether to randomly include null values",
+          "message": "是否隨機包含 null 值"
+        },
+        "app.RGF0YUdlbmVyYXRvcg.action.Z2VuZXJhdGUtZnJvbS10ZW1wbGF0ZQ.option.c2VlZA.desc": {
+          "source": "An integer seed for the random number generator for reproducible output; only effective with `random` strategy",
+          "message": "用於隨機數生成器以實現可重現輸出的整數種子；僅在 `random` 策略下有效"
+        },
+        "app.RGF0YUdlbmVyYXRvcg.action.Z2VuZXJhdGUtZnJvbS10ZW1wbGF0ZQ.option.c2VlZA.display_name": {
+          "source": "Random Seed",
+          "message": "隨機種子"
+        },
+        "app.RGF0YUdlbmVyYXRvcg.action.Z2VuZXJhdGUtZnJvbS10ZW1wbGF0ZQ.option.c2VlZA.short_desc": {
+          "source": "Seed for reproducible random generation",
+          "message": "用於可重現隨機生成的種子"
+        },
+        "app.RGF0YUdlbmVyYXRvcg.action.Z2VuZXJhdGUtZnJvbS10ZW1wbGF0ZQ.option.c3RyYXRlZ3k.allowed-value.c3RyaW5nOnJhbmRvbQ.desc": {
+          "source": "Apply random variations to template values",
+          "message": "對範本值套用隨機變化"
+        },
+        "app.RGF0YUdlbmVyYXRvcg.action.Z2VuZXJhdGUtZnJvbS10ZW1wbGF0ZQ.option.c3RyYXRlZ3k.allowed-value.c3RyaW5nOnNlcXVlbnRpYWw.desc": {
+          "source": "Vary template values deterministically by record index",
+          "message": "根據記錄索引確定性地改變範本值"
+        },
+        "app.RGF0YUdlbmVyYXRvcg.action.Z2VuZXJhdGUtZnJvbS10ZW1wbGF0ZQ.option.c3RyYXRlZ3k.desc": {
+          "source": "The strategy for varying template values across generated records; `sequential` adds the record index to numeric values and appends it as a suffix to strings; `random` applies random variations; defaults to `sequential`",
+          "message": "在生成的記錄中改變範本值的策略；`sequential` 會將記錄索引加到數值中並作為後綴附加到字串中；`random` 套用隨機變化；預設為 `sequential`"
+        },
+        "app.RGF0YUdlbmVyYXRvcg.action.Z2VuZXJhdGUtZnJvbS10ZW1wbGF0ZQ.option.c3RyYXRlZ3k.display_name": {
+          "source": "Generation Strategy",
+          "message": "生成策略"
+        },
+        "app.RGF0YUdlbmVyYXRvcg.action.Z2VuZXJhdGUtZnJvbS10ZW1wbGF0ZQ.option.c3RyYXRlZ3k.short_desc": {
+          "source": "How template values are varied",
+          "message": "如何改變範本值"
+        },
+        "app.RGF0YUdlbmVyYXRvcg.action.Z2VuZXJhdGUtZnJvbS10ZW1wbGF0ZQ.option.dGVtcGxhdGU.desc": {
+          "source": "A hash representing a single record whose structure and values will be used as the basis for all generated records; field types are inferred from the template values; each generated record varies the template values based on the record index or randomly",
+          "message": "代表單一記錄的雜湊，其結構和值將用作所有生成記錄的基礎；欄位類型由範本值推斷；每條生成的記錄會根據記錄索引或隨機改變範本值"
+        },
+        "app.RGF0YUdlbmVyYXRvcg.action.Z2VuZXJhdGUtZnJvbS10ZW1wbGF0ZQ.option.dGVtcGxhdGU.display_name": {
+          "source": "Template Record",
+          "message": "範本記錄"
+        },
+        "app.RGF0YUdlbmVyYXRvcg.action.Z2VuZXJhdGUtZnJvbS10ZW1wbGF0ZQ.option.dGVtcGxhdGU.short_desc": {
+          "source": "A sample record to use as a template",
+          "message": "用作範本的範例記錄"
+        },
+        "app.RGF0YUdlbmVyYXRvcg.action.Z2VuZXJhdGUtZnJvbS10ZW1wbGF0ZQ.short_desc": {
+          "source": "Generate records based on a template record",
+          "message": "根據範本記錄生成記錄"
+        },
+        "app.RGF0YUdlbmVyYXRvcg.action.Z2VuZXJhdGUtcmVjb3Jkcw.desc": {
+          "source": "Generate a stream of records with configurable count, field types, and data generation strategy for testing data pipelines",
+          "message": "生成包含可設定數量、欄位類型和資料生成策略的記錄串流，用於測試資料管線"
+        },
+        "app.RGF0YUdlbmVyYXRvcg.action.Z2VuZXJhdGUtcmVjb3Jkcw.display_name": {
+          "source": "Generate Records",
+          "message": "生成記錄"
+        },
+        "app.RGF0YUdlbmVyYXRvcg.action.Z2VuZXJhdGUtcmVjb3Jkcw.option.Y291bnQ.desc": {
+          "source": "The total number of records to generate in the output stream; must be a non-negative integer; defaults to 10",
+          "message": "要在輸出串流中生成的記錄總數；必須為非負整數；預設為 10"
+        },
+        "app.RGF0YUdlbmVyYXRvcg.action.Z2VuZXJhdGUtcmVjb3Jkcw.option.Y291bnQ.display_name": {
+          "source": "Record Count",
+          "message": "記錄計數"
+        },
+        "app.RGF0YUdlbmVyYXRvcg.action.Z2VuZXJhdGUtcmVjb3Jkcw.option.Y291bnQ.short_desc": {
+          "source": "Number of records to generate",
+          "message": "要產生的記錄數量"
+        },
+        "app.RGF0YUdlbmVyYXRvcg.action.Z2VuZXJhdGUtcmVjb3Jkcw.option.YmFzZV9kYXRl.desc": {
+          "source": "A fixed date/time value used as the reference point for generating date fields; when provided with a seed, this ensures full cross-run reproducibility of date fields; if not provided, the current date/time at the start of generation is used",
+          "message": "用作產生日期欄位之參考點的固定日期/時間值；當與種子 (seed) 一起提供時，可確保日期欄位在多次執行間具備完整的可重現性；若未提供，則使用生成開始時的當前日期/時間"
+        },
+        "app.RGF0YUdlbmVyYXRvcg.action.Z2VuZXJhdGUtcmVjb3Jkcw.option.YmFzZV9kYXRl.display_name": {
+          "source": "Base Date",
+          "message": "基準日期"
+        },
+        "app.RGF0YUdlbmVyYXRvcg.action.Z2VuZXJhdGUtcmVjb3Jkcw.option.YmFzZV9kYXRl.short_desc": {
+          "source": "Fixed base date for date field generation",
+          "message": "用於生成日期欄位的固定基準日期"
+        },
+        "app.RGF0YUdlbmVyYXRvcg.action.Z2VuZXJhdGUtcmVjb3Jkcw.option.ZmllbGRz.desc": {
+          "source": "A list of field definition hashes, each with keys: `name` (string, the field name), `type` (string, one of: `string`, `int`, `float`, `bool`, `date`), and optionally `desc` (string, field description).\n\nIf not provided, a default schema is used with fields: `id` (int), `name` (string), `value` (float), `active` (bool), `created` (date)",
+          "message": "欄位定義雜湊的列表，每個定義包含鍵：`name`（字串，欄位名稱）、`type`（字串，下列之一：`string`、`int`、`float`、`bool`、`date`），以及可選的 `desc`（字串，欄位描述）。\n\n若未提供，則使用預設結構定義，包含以下欄位：`id` (int)、`name` (string)、`value` (float)、`active` (bool)、`created` (date)"
+        },
+        "app.RGF0YUdlbmVyYXRvcg.action.Z2VuZXJhdGUtcmVjb3Jkcw.option.ZmllbGRz.display_name": {
+          "source": "Field Definitions",
+          "message": "欄位定義"
+        },
+        "app.RGF0YUdlbmVyYXRvcg.action.Z2VuZXJhdGUtcmVjb3Jkcw.option.ZmllbGRz.short_desc": {
+          "source": "Schema definition for generated records",
+          "message": "生成記錄的結構定義"
+        },
+        "app.RGF0YUdlbmVyYXRvcg.action.Z2VuZXJhdGUtcmVjb3Jkcw.option.aW5jbHVkZV9udWxscw.desc": {
+          "source": "When `True` and strategy is `random`, approximately 10%% of field values will be set to `NOTHING` (null); useful for testing null handling in data pipelines; defaults to `False`",
+          "message": "當為 `True` 且策略為 `random` 時，約有 10%% 的欄位值會設為 `NOTHING` (null)；這對測試資料管線中的 null 處理非常有用；預設為 `False`"
+        },
+        "app.RGF0YUdlbmVyYXRvcg.action.Z2VuZXJhdGUtcmVjb3Jkcw.option.aW5jbHVkZV9udWxscw.display_name": {
+          "source": "Include Nulls",
+          "message": "包含 Null 值"
+        },
+        "app.RGF0YUdlbmVyYXRvcg.action.Z2VuZXJhdGUtcmVjb3Jkcw.option.aW5jbHVkZV9udWxscw.short_desc": {
+          "source": "Whether to randomly include null values",
+          "message": "是否隨機包含 null 值"
+        },
+        "app.RGF0YUdlbmVyYXRvcg.action.Z2VuZXJhdGUtcmVjb3Jkcw.option.c2VlZA.desc": {
+          "source": "An integer seed for the random number generator; when provided, the same seed will always produce the same sequence of records, enabling reproducible test data; only effective with `random` strategy",
+          "message": "用於隨機數生成器的整數種子；提供時，相同的種子將一律產生相同的記錄序列，從而實現可重現的測試資料；僅在 `random` 策略下有效"
+        },
+        "app.RGF0YUdlbmVyYXRvcg.action.Z2VuZXJhdGUtcmVjb3Jkcw.option.c2VlZA.display_name": {
+          "source": "Random Seed",
+          "message": "隨機種子"
+        },
+        "app.RGF0YUdlbmVyYXRvcg.action.Z2VuZXJhdGUtcmVjb3Jkcw.option.c2VlZA.short_desc": {
+          "source": "Seed for reproducible random generation",
+          "message": "用於可重現隨機生成的種子"
+        },
+        "app.RGF0YUdlbmVyYXRvcg.action.Z2VuZXJhdGUtcmVjb3Jkcw.option.c3RyYXRlZ3k.allowed-value.c3RyaW5nOnJhbmRvbQ.desc": {
+          "source": "Generate pseudo-random values for each field",
+          "message": "為每個欄位生成偽隨機值"
+        },
+        "app.RGF0YUdlbmVyYXRvcg.action.Z2VuZXJhdGUtcmVjb3Jkcw.option.c3RyYXRlZ3k.allowed-value.c3RyaW5nOnNlcXVlbnRpYWw.desc": {
+          "source": "Generate deterministic values incrementing with each record index",
+          "message": "生成隨每個記錄索引遞增的確定性值"
+        },
+        "app.RGF0YUdlbmVyYXRvcg.action.Z2VuZXJhdGUtcmVjb3Jkcw.option.c3RyYXRlZ3k.desc": {
+          "source": "The strategy used to generate field values; `sequential` produces deterministic values based on the record index; `random` produces pseudo-random values; defaults to `sequential`",
+          "message": "用於生成欄位值的策略；`sequential` 根據記錄索引產生確定性值；`random` 產生偽隨機值；預設為 `sequential`"
+        },
+        "app.RGF0YUdlbmVyYXRvcg.action.Z2VuZXJhdGUtcmVjb3Jkcw.option.c3RyYXRlZ3k.display_name": {
+          "source": "Generation Strategy",
+          "message": "生成策略"
+        },
+        "app.RGF0YUdlbmVyYXRvcg.action.Z2VuZXJhdGUtcmVjb3Jkcw.option.c3RyYXRlZ3k.short_desc": {
+          "source": "How field values are generated",
+          "message": "如何生成欄位值"
+        },
+        "app.RGF0YUdlbmVyYXRvcg.action.Z2VuZXJhdGUtcmVjb3Jkcw.short_desc": {
+          "source": "Generate a stream of records with a configurable schema",
+          "message": "生成具有可設定結構定義的記錄串流"
+        },
+        "app.RGF0YUdlbmVyYXRvcg.desc": {
+          "source": "Generate configurable record streams for testing data pipelines without any external service connections",
+          "message": "生成可設定的記錄串流，用於在無需任何外部服務連線的情況下測試資料管線"
+        },
+        "app.RGF0YUdlbmVyYXRvcg.display_name": {
+          "source": "Data Generator",
+          "message": "Data Generator"
+        },
+        "app.RGF0YUdlbmVyYXRvcg.short_desc": {
+          "source": "Generate test record streams",
+          "message": "生成測試記錄串流"
+        }
+      }
+    }
+  }
+}

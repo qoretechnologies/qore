@@ -1,0 +1,21 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "zh-TW": {
+      "messages": {
+        "app.Q29ja3JvYWNoREI.desc": {
+          "source": "Create and manage connections to a CockroachDB distributed SQL database",
+          "message": "建立並管理至 CockroachDB 分散式 SQL 資料庫的連線"
+        },
+        "app.Q29ja3JvYWNoREI.display_name": {
+          "source": "CockroachDB",
+          "message": "CockroachDB"
+        },
+        "app.Q29ja3JvYWNoREI.short_desc": {
+          "source": "CockroachDB distributed SQL database",
+          "message": "CockroachDB 分散式 SQL 資料庫"
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,633 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "it": {
+      "messages": {
+        "app.TWlzdHJhbEFp.action.Y2hhdC1jb21wbGV0aW9u.desc": {
+          "source": "Sends a list of chat messages to a Mistral AI model via the OpenAI-compatible `/v1/chat/completions` endpoint.",
+          "message": "Invia un elenco di messaggi di chat a un modello Mistral AI tramite l'endpoint compatibile con OpenAI `/v1/chat/completions`."
+        },
+        "app.TWlzdHJhbEFp.action.Y2hhdC1jb21wbGV0aW9u.display_name": {
+          "source": "Chat Completion",
+          "message": "Completamento chat"
+        },
+        "app.TWlzdHJhbEFp.action.Y2hhdC1jb21wbGV0aW9u.option.bW9kZWw.desc": {
+          "source": "Mistral model identifier, e.g. `mistral-large-latest`, `mistral-small-latest`, `codestral-latest`, `mistral-nemo`.",
+          "message": "Identificatore del modello Mistral, ad es. `mistral-large-latest`, `mistral-small-latest`, `codestral-latest`, `mistral-nemo`."
+        },
+        "app.TWlzdHJhbEFp.action.Y2hhdC1jb21wbGV0aW9u.option.bW9kZWw.display_name": {
+          "source": "Model",
+          "message": "Modello"
+        },
+        "app.TWlzdHJhbEFp.action.Y2hhdC1jb21wbGV0aW9u.option.bW9kZWw.short_desc": {
+          "source": "Mistral model name",
+          "message": "Nome del modello Mistral"
+        },
+        "app.TWlzdHJhbEFp.action.Y2hhdC1jb21wbGV0aW9u.option.bWF4X3Rva2Vucw.desc": {
+          "source": "Maximum number of tokens to generate.",
+          "message": "Numero massimo di token da generare."
+        },
+        "app.TWlzdHJhbEFp.action.Y2hhdC1jb21wbGV0aW9u.option.bWF4X3Rva2Vucw.display_name": {
+          "source": "Max Tokens",
+          "message": "Token massimi"
+        },
+        "app.TWlzdHJhbEFp.action.Y2hhdC1jb21wbGV0aW9u.option.bWF4X3Rva2Vucw.short_desc": {
+          "source": "Maximum tokens to emit",
+          "message": "Token massimi da emettere"
+        },
+        "app.TWlzdHJhbEFp.action.Y2hhdC1jb21wbGV0aW9u.option.bWVzc2FnZXM.desc": {
+          "source": "The conversation history.",
+          "message": "La cronologia della conversazione."
+        },
+        "app.TWlzdHJhbEFp.action.Y2hhdC1jb21wbGV0aW9u.option.bWVzc2FnZXM.display_name": {
+          "source": "Messages",
+          "message": "Messaggi"
+        },
+        "app.TWlzdHJhbEFp.action.Y2hhdC1jb21wbGV0aW9u.option.bWVzc2FnZXM.short_desc": {
+          "source": "List of chat messages forming the conversation",
+          "message": "Elenco di messaggi di chat che compongono la conversazione"
+        },
+        "app.TWlzdHJhbEFp.action.Y2hhdC1jb21wbGV0aW9u.option.c2FmZV9wcm9tcHQ.desc": {
+          "source": "When `True`, Mistral injects its safety preamble.",
+          "message": "Quando è `True`, Mistral inserisce il proprio preambolo di sicurezza."
+        },
+        "app.TWlzdHJhbEFp.action.Y2hhdC1jb21wbGV0aW9u.option.c2FmZV9wcm9tcHQ.display_name": {
+          "source": "Safe Prompt",
+          "message": "Safe Prompt"
+        },
+        "app.TWlzdHJhbEFp.action.Y2hhdC1jb21wbGV0aW9u.option.c2FmZV9wcm9tcHQ.short_desc": {
+          "source": "Inject Mistral's safety preamble",
+          "message": "Inserisci il preambolo di sicurezza di Mistral"
+        },
+        "app.TWlzdHJhbEFp.action.Y2hhdC1jb21wbGV0aW9u.option.c3RyZWFt.desc": {
+          "source": "When `True`, the server streams partial completions as SSE.",
+          "message": "Quando è `True`, il server invia i completamenti parziali in streaming come SSE."
+        },
+        "app.TWlzdHJhbEFp.action.Y2hhdC1jb21wbGV0aW9u.option.c3RyZWFt.display_name": {
+          "source": "Stream",
+          "message": "Stream"
+        },
+        "app.TWlzdHJhbEFp.action.Y2hhdC1jb21wbGV0aW9u.option.c3RyZWFt.short_desc": {
+          "source": "Stream partial completions as SSE",
+          "message": "Invia completamenti parziali in streaming come SSE"
+        },
+        "app.TWlzdHJhbEFp.action.Y2hhdC1jb21wbGV0aW9u.option.cmFuZG9tX3NlZWQ.desc": {
+          "source": "Integer seed for deterministic sampling.",
+          "message": "Seed intero per il campionamento deterministico."
+        },
+        "app.TWlzdHJhbEFp.action.Y2hhdC1jb21wbGV0aW9u.option.cmFuZG9tX3NlZWQ.display_name": {
+          "source": "Random Seed",
+          "message": "Seed casuale"
+        },
+        "app.TWlzdHJhbEFp.action.Y2hhdC1jb21wbGV0aW9u.option.cmFuZG9tX3NlZWQ.short_desc": {
+          "source": "Deterministic sampling seed",
+          "message": "Seed di campionamento deterministico"
+        },
+        "app.TWlzdHJhbEFp.action.Y2hhdC1jb21wbGV0aW9u.option.cmVzcG9uc2VfZm9ybWF0.desc": {
+          "source": "Hash that forces a structured response shape, e.g. `{type: \"json_object\"}`.",
+          "message": "Hash che forza una struttura di risposta strutturata, ad es. `{type: \"json_object\"}`."
+        },
+        "app.TWlzdHJhbEFp.action.Y2hhdC1jb21wbGV0aW9u.option.cmVzcG9uc2VfZm9ybWF0.display_name": {
+          "source": "Response Format",
+          "message": "Formato di risposta"
+        },
+        "app.TWlzdHJhbEFp.action.Y2hhdC1jb21wbGV0aW9u.option.cmVzcG9uc2VfZm9ybWF0.short_desc": {
+          "source": "Force structured output (e.g. JSON)",
+          "message": "Forza output strutturato (ad es. JSON)"
+        },
+        "app.TWlzdHJhbEFp.action.Y2hhdC1jb21wbGV0aW9u.option.dG9vbF9jaG9pY2U.allowed-value.c3RyaW5nOm5vbmU.display_name": {
+          "source": "None - never call a tool",
+          "message": "Nessuno - non chiamare mai uno strumento"
+        },
+        "app.TWlzdHJhbEFp.action.Y2hhdC1jb21wbGV0aW9u.option.dG9vbF9jaG9pY2U.allowed-value.c3RyaW5nOmF1dG8.display_name": {
+          "source": "Auto - model decides",
+          "message": "Auto - decide il modello"
+        },
+        "app.TWlzdHJhbEFp.action.Y2hhdC1jb21wbGV0aW9u.option.dG9vbF9jaG9pY2U.allowed-value.c3RyaW5nOmFueQ.display_name": {
+          "source": "Any - must call a tool",
+          "message": "Qualsiasi - deve chiamare un tool"
+        },
+        "app.TWlzdHJhbEFp.action.Y2hhdC1jb21wbGV0aW9u.option.dG9vbF9jaG9pY2U.desc": {
+          "source": "Tool invocation mode: `none`, `auto`, or `any` (Mistral's equivalent of `required`).",
+          "message": "Modalità di invocazione del tool: `none`, `auto` o `any` (l'equivalente in Mistral di `required`)."
+        },
+        "app.TWlzdHJhbEFp.action.Y2hhdC1jb21wbGV0aW9u.option.dG9vbF9jaG9pY2U.display_name": {
+          "source": "Tool Choice",
+          "message": "Scelta dello strumento"
+        },
+        "app.TWlzdHJhbEFp.action.Y2hhdC1jb21wbGV0aW9u.option.dG9vbF9jaG9pY2U.short_desc": {
+          "source": "Tool invocation mode",
+          "message": "Modalità di chiamata dello strumento"
+        },
+        "app.TWlzdHJhbEFp.action.Y2hhdC1jb21wbGV0aW9u.option.dG9vbHM.desc": {
+          "source": "List of tool definitions.",
+          "message": "Elenco delle definizioni dei tool."
+        },
+        "app.TWlzdHJhbEFp.action.Y2hhdC1jb21wbGV0aW9u.option.dG9vbHM.display_name": {
+          "source": "Tools",
+          "message": "Strumenti"
+        },
+        "app.TWlzdHJhbEFp.action.Y2hhdC1jb21wbGV0aW9u.option.dG9vbHM.short_desc": {
+          "source": "OpenAI-style tool definitions the model may call",
+          "message": "Definizioni di strumenti in stile OpenAI che il modello può chiamare"
+        },
+        "app.TWlzdHJhbEFp.action.Y2hhdC1jb21wbGV0aW9u.option.dG9wX3A.desc": {
+          "source": "Nucleus sampling cutoff (0-1).",
+          "message": "Soglia di nucleus sampling (0-1)."
+        },
+        "app.TWlzdHJhbEFp.action.Y2hhdC1jb21wbGV0aW9u.option.dG9wX3A.display_name": {
+          "source": "Top-P",
+          "message": "Top-P"
+        },
+        "app.TWlzdHJhbEFp.action.Y2hhdC1jb21wbGV0aW9u.option.dG9wX3A.short_desc": {
+          "source": "Nucleus sampling cutoff",
+          "message": "Soglia di nucleus sampling"
+        },
+        "app.TWlzdHJhbEFp.action.Y2hhdC1jb21wbGV0aW9u.option.dGVtcGVyYXR1cmU.desc": {
+          "source": "Controls randomness.  Mistral recommends `0.3` as a default.",
+          "message": "Controlla la casualità. Mistral consiglia `0.3` come valore predefinito."
+        },
+        "app.TWlzdHJhbEFp.action.Y2hhdC1jb21wbGV0aW9u.option.dGVtcGVyYXR1cmU.display_name": {
+          "source": "Temperature",
+          "message": "Temperatura"
+        },
+        "app.TWlzdHJhbEFp.action.Y2hhdC1jb21wbGV0aW9u.option.dGVtcGVyYXR1cmU.short_desc": {
+          "source": "Sampling temperature (0-1.5)",
+          "message": "Temperatura di campionamento (0-1.5)"
+        },
+        "app.TWlzdHJhbEFp.action.Y2hhdC1jb21wbGV0aW9u.short_desc": {
+          "source": "Generate a chat completion from a Mistral AI model",
+          "message": "Genera un completamento di chat da un modello Mistral AI"
+        },
+        "app.TWlzdHJhbEFp.action.Y3JlYXRlLWVtYmVkZGluZ3M.desc": {
+          "source": "Converts text inputs into embedding vectors via the OpenAI-compatible `/v1/embeddings` endpoint using `mistral-embed`.",
+          "message": "Converte input di testo in vettori di embedding tramite l'endpoint compatibile con OpenAI `/v1/embeddings` utilizzando `mistral-embed`."
+        },
+        "app.TWlzdHJhbEFp.action.Y3JlYXRlLWVtYmVkZGluZ3M.display_name": {
+          "source": "Create Embeddings",
+          "message": "Crea embedding"
+        },
+        "app.TWlzdHJhbEFp.action.Y3JlYXRlLWVtYmVkZGluZ3M.option.ZW5jb2RpbmdfZm9ybWF0.desc": {
+          "source": "`float` (default) or `base64`.",
+          "message": "`float` (predefinito) o `base64`."
+        },
+        "app.TWlzdHJhbEFp.action.Y3JlYXRlLWVtYmVkZGluZ3M.option.ZW5jb2RpbmdfZm9ybWF0.display_name": {
+          "source": "Encoding Format",
+          "message": "Formato di codifica"
+        },
+        "app.TWlzdHJhbEFp.action.Y3JlYXRlLWVtYmVkZGluZ3M.option.ZW5jb2RpbmdfZm9ybWF0.short_desc": {
+          "source": "Wire format for vectors",
+          "message": "Formato di trasmissione per i vettori"
+        },
+        "app.TWlzdHJhbEFp.action.Y3JlYXRlLWVtYmVkZGluZ3M.option.aW5wdXQ.desc": {
+          "source": "Text input(s) to convert to embedding vectors.",
+          "message": "Input di testo da convertire in vettori di embedding."
+        },
+        "app.TWlzdHJhbEFp.action.Y3JlYXRlLWVtYmVkZGluZ3M.option.aW5wdXQ.display_name": {
+          "source": "Input",
+          "message": "Input"
+        },
+        "app.TWlzdHJhbEFp.action.Y3JlYXRlLWVtYmVkZGluZ3M.option.aW5wdXQ.short_desc": {
+          "source": "Text(s) to embed",
+          "message": "Testo/i da incorporare"
+        },
+        "app.TWlzdHJhbEFp.action.Y3JlYXRlLWVtYmVkZGluZ3M.option.bW9kZWw.desc": {
+          "source": "Mistral embedding model identifier, currently `mistral-embed`.",
+          "message": "Identificatore del modello di embedding Mistral, attualmente `mistral-embed`."
+        },
+        "app.TWlzdHJhbEFp.action.Y3JlYXRlLWVtYmVkZGluZ3M.option.bW9kZWw.display_name": {
+          "source": "Model",
+          "message": "Modello"
+        },
+        "app.TWlzdHJhbEFp.action.Y3JlYXRlLWVtYmVkZGluZ3M.option.bW9kZWw.short_desc": {
+          "source": "Mistral embedding model",
+          "message": "Modello di embedding Mistral"
+        },
+        "app.TWlzdHJhbEFp.action.Y3JlYXRlLWVtYmVkZGluZ3M.short_desc": {
+          "source": "Generate embedding vectors from a Mistral AI embedding model",
+          "message": "Genera vettori di embedding da un modello di embedding Mistral AI"
+        },
+        "app.TWlzdHJhbEFp.action.b2Ny.desc": {
+          "source": "Converts a PDF or image document into structured markdown using Mistral's `mistral-ocr-latest` model via `/v1/ocr`.  Returns per-page markdown, layout-preserved tables, and inline image references.\n\nSupply a document URL via `document.document_url` (preferred for large PDFs) or inline base64-encoded bytes via `document.image_url` (data: URI) for small inputs.\n\n**Note**: integration with the @ref qoreocrutilsintro \"QoreOcrUtils\" engine abstraction is planned for a follow-up release; this action is the direct REST surface in the meantime.",
+          "message": "Converte un documento PDF o immagine in markdown strutturato utilizzando il modello `mistral-ocr-latest` di Mistral tramite `/v1/ocr`. Restituisce markdown per pagina, tabelle con layout preservato e riferimenti a immagini inline.\n\nFornisci l'URL di un documento tramite `document.document_url` (preferito per PDF di grandi dimensioni) o byte con codifica base64 inline tramite `document.image_url` (URI data:) per input di piccole dimensioni.\n\n**Nota**: l'integrazione con l'astrazione del motore @ref qoreocrutilsintro \"QoreOcrUtils\" è prevista per una versione successiva; nel frattempo questa azione rappresenta l'interfaccia REST diretta."
+        },
+        "app.TWlzdHJhbEFp.action.b2Ny.display_name": {
+          "source": "Document OCR",
+          "message": "OCR documento"
+        },
+        "app.TWlzdHJhbEFp.action.b2Ny.option.ZG9jdW1lbnQ.desc": {
+          "source": "Hash describing the document.  One of:\n\n- `{type: \"document_url\", document_url: \"https://...\"}` — remote PDF URL (preferred for large documents)\n- `{type: \"image_url\", image_url: \"data:image/png;base64,...\"}` — inline base64-encoded image (small inputs only)",
+          "message": "Hash che descrive il documento. Uno tra:\n\n- `{type: \"document_url\", document_url: \"https://...\"}` — URL PDF remoto (preferito per documenti di grandi dimensioni)\n- `{type: \"image_url\", image_url: \"data:image/png;base64,...\"}` — immagine con codifica base64 inline (solo input di piccole dimensioni)"
+        },
+        "app.TWlzdHJhbEFp.action.b2Ny.option.ZG9jdW1lbnQ.display_name": {
+          "source": "Document",
+          "message": "Documento"
+        },
+        "app.TWlzdHJhbEFp.action.b2Ny.option.ZG9jdW1lbnQ.short_desc": {
+          "source": "Document to OCR (URL or base64 data URI)",
+          "message": "Documento per OCR (URL o URI dati base64)"
+        },
+        "app.TWlzdHJhbEFp.action.b2Ny.option.aW1hZ2VfbGltaXQ.desc": {
+          "source": "Cap on the number of images extracted from the document.",
+          "message": "Limite al numero di immagini estratte dal documento."
+        },
+        "app.TWlzdHJhbEFp.action.b2Ny.option.aW1hZ2VfbGltaXQ.display_name": {
+          "source": "Image Limit",
+          "message": "Limite immagini"
+        },
+        "app.TWlzdHJhbEFp.action.b2Ny.option.aW1hZ2VfbGltaXQ.short_desc": {
+          "source": "Maximum number of images to extract",
+          "message": "Numero massimo di immagini da estrarre"
+        },
+        "app.TWlzdHJhbEFp.action.b2Ny.option.aW1hZ2VfbWluX3NpemU.desc": {
+          "source": "Skip images smaller than this size in pixels.",
+          "message": "Ignora le immagini più piccole di questa dimensione in pixel."
+        },
+        "app.TWlzdHJhbEFp.action.b2Ny.option.aW1hZ2VfbWluX3NpemU.display_name": {
+          "source": "Image Min Size",
+          "message": "Dimensione minima immagine"
+        },
+        "app.TWlzdHJhbEFp.action.b2Ny.option.aW1hZ2VfbWluX3NpemU.short_desc": {
+          "source": "Minimum image size (pixels) to extract",
+          "message": "Dimensione minima dell'immagine (pixel) da estrarre"
+        },
+        "app.TWlzdHJhbEFp.action.b2Ny.option.aW5jbHVkZV9pbWFnZV9iYXNlNjQ.desc": {
+          "source": "When `True`, embedded images are returned as base64 in the response.  When `False` (default), images are referenced by URL.",
+          "message": "Quando è `True`, le immagini incorporate vengono restituite come base64 nella risposta. Quando è `False` (predefinito), le immagini vengono referenziate tramite URL."
+        },
+        "app.TWlzdHJhbEFp.action.b2Ny.option.aW5jbHVkZV9pbWFnZV9iYXNlNjQ.display_name": {
+          "source": "Include Image Base64",
+          "message": "Includi immagine Base64"
+        },
+        "app.TWlzdHJhbEFp.action.b2Ny.option.aW5jbHVkZV9pbWFnZV9iYXNlNjQ.short_desc": {
+          "source": "Embed images inline as base64 in the response",
+          "message": "Incorpora immagini inline come base64 nella risposta"
+        },
+        "app.TWlzdHJhbEFp.action.b2Ny.option.bW9kZWw.desc": {
+          "source": "Mistral OCR model identifier, e.g. `mistral-ocr-latest`.",
+          "message": "Identificatore del modello Mistral OCR, ad es. `mistral-ocr-latest`."
+        },
+        "app.TWlzdHJhbEFp.action.b2Ny.option.bW9kZWw.display_name": {
+          "source": "Model",
+          "message": "Modello"
+        },
+        "app.TWlzdHJhbEFp.action.b2Ny.option.bW9kZWw.short_desc": {
+          "source": "Mistral OCR model",
+          "message": "Modello Mistral OCR"
+        },
+        "app.TWlzdHJhbEFp.action.b2Ny.option.cGFnZXM.desc": {
+          "source": "Optional list of 0-indexed page numbers to OCR.  Defaults to all pages.",
+          "message": "Elenco facoltativo di numeri di pagina con indice in base 0 per l'OCR. Il valore predefinito riguarda tutte le pagine."
+        },
+        "app.TWlzdHJhbEFp.action.b2Ny.option.cGFnZXM.display_name": {
+          "source": "Pages",
+          "message": "Pagine"
+        },
+        "app.TWlzdHJhbEFp.action.b2Ny.option.cGFnZXM.short_desc": {
+          "source": "Specific pages to OCR (0-indexed list)",
+          "message": "Pagine specifiche per OCR (elenco con indice in base 0)"
+        },
+        "app.TWlzdHJhbEFp.action.b2Ny.short_desc": {
+          "source": "Extract structured markdown from PDF or image documents",
+          "message": "Estrai markdown strutturato da documenti PDF o immagini"
+        },
+        "app.TWlzdHJhbEFp.action.bWFrZS1hcGktY2FsbA.desc": {
+          "source": "Make a custom HTTP / REST API call to **Mistral AI** using the configured connection's authentication.\n\nSpecify the HTTP method, the URI path (relative to the connection's API base URL), optional query parameters, headers, and request body. The response is returned as a hash containing the status code, response headers, and response body.\n\nUse this action for endpoints that are not yet exposed as first-class actions on this app.",
+          "message": "Effettua una chiamata API HTTP / REST personalizzata a **Mistral AI** utilizzando l'autenticazione della connessione configurata.\n\nSpecifica il metodo HTTP, il percorso URI (relativo all'URL di base dell'API della connessione), parametri di query opzionali, intestazioni e corpo della richiesta. La risposta viene restituita come un hash contenente il codice di stato, le intestazioni di risposta e il corpo della risposta.\n\nUsa questa azione per gli endpoint non ancora esposti come azioni di prim'ordine su questa app."
+        },
+        "app.TWlzdHJhbEFp.action.bWFrZS1hcGktY2FsbA.display_name": {
+          "source": "Make an API call",
+          "message": "Esegui una chiamata API"
+        },
+        "app.TWlzdHJhbEFp.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.desc": {
+          "source": "The request body. The effective type depends on `body_type`: JSON/form/YAML expect a hash, XML/text expect a string, multipart expects a file structure, binary expects raw bytes.",
+          "message": "Il corpo della richiesta. Il tipo effettivo dipende da `body_type`: JSON/form/YAML richiedono un hash, XML/testo richiedono una stringa, multipart richiede una struttura di file, binario richiede byte grezzi."
+        },
+        "app.TWlzdHJhbEFp.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.display_name": {
+          "source": "Body",
+          "message": "Corpo"
+        },
+        "app.TWlzdHJhbEFp.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.short_desc": {
+          "source": "The request body",
+          "message": "Il corpo della richiesta"
+        },
+        "app.TWlzdHJhbEFp.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.desc": {
+          "source": "Upload a file using `multipart/form-data`. The body must be a @ref DataProvider::FileDataType \"FileDataType\" structure (filename + content + mime_type). The framework builds the multipart envelope and sets the boundary header.",
+          "message": "Carica un file utilizzando `multipart/form-data`. Il corpo deve essere una struttura @ref DataProvider::FileDataType \"FileDataType\" (nome file + contenuto + mime_type). Il framework costruisce l'inviluppo multipart e imposta l'intestazione del boundary."
+        },
+        "app.TWlzdHJhbEFp.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.display_name": {
+          "source": "Multipart Form",
+          "message": "Modulo Multipart"
+        },
+        "app.TWlzdHJhbEFp.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.short_desc": {
+          "source": "Upload a file using multipart/form-data",
+          "message": "Carica un file utilizzando multipart/form-data"
+        },
+        "app.TWlzdHJhbEFp.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.desc": {
+          "source": "Pass the body to the REST client unchanged; the client decides serialization based on its configured `data` option and the value type",
+          "message": "Passa il corpo al client REST inalterato; il client decide la serializzazione in base alla sua opzione `data` configurata e al tipo di valore"
+        },
+        "app.TWlzdHJhbEFp.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.display_name": {
+          "source": "Auto",
+          "message": "Auto"
+        },
+        "app.TWlzdHJhbEFp.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.short_desc": {
+          "source": "Pass-through; use connection serialization and let the REST client decide",
+          "message": "Pass-through; usa la serializzazione della connessione e lascia decidere al client REST"
+        },
+        "app.TWlzdHJhbEFp.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.desc": {
+          "source": "Send the body as raw bytes. The body must be a binary value. Sets `Content-Type: application/octet-stream` unless overridden by `hdr`.",
+          "message": "Invia il corpo come byte grezzi. Il corpo deve essere un valore binario. Imposta `Content-Type: application/octet-stream` a meno che non sia sovrascritto da `hdr`."
+        },
+        "app.TWlzdHJhbEFp.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.display_name": {
+          "source": "Raw Binary",
+          "message": "Binario grezzo"
+        },
+        "app.TWlzdHJhbEFp.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.short_desc": {
+          "source": "Send body as raw bytes",
+          "message": "Invia il corpo come byte grezzi"
+        },
+        "app.TWlzdHJhbEFp.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.desc": {
+          "source": "Serialize a hash of form fields as `application/x-www-form-urlencoded`. The body must be a hash whose values are scalars (strings/numbers/booleans).",
+          "message": "Serializza un hash di campi modulo come `application/x-www-form-urlencoded`. Il corpo deve essere un hash i cui valori sono scalari (stringhe/numeri/booleani)."
+        },
+        "app.TWlzdHJhbEFp.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.display_name": {
+          "source": "Form (URL-encoded)",
+          "message": "Form (URL-encoded)"
+        },
+        "app.TWlzdHJhbEFp.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.short_desc": {
+          "source": "Serialize body as application/x-www-form-urlencoded form fields",
+          "message": "Serializza il corpo come campi del modulo application/x-www-form-urlencoded"
+        },
+        "app.TWlzdHJhbEFp.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.desc": {
+          "source": "Serialize the body as JSON; sets `Content-Type: application/json`. The body should be a hash, list, or scalar value.",
+          "message": "Serializza il corpo come JSON; imposta `Content-Type: application/json`. Il corpo deve essere un hash, un elenco o un valore scalare."
+        },
+        "app.TWlzdHJhbEFp.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.display_name": {
+          "source": "JSON",
+          "message": "JSON"
+        },
+        "app.TWlzdHJhbEFp.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.short_desc": {
+          "source": "Serialize body as JSON",
+          "message": "Serializza il corpo come JSON"
+        },
+        "app.TWlzdHJhbEFp.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.desc": {
+          "source": "Send the body as plain text. The body must be a string. Sets `Content-Type: text/plain`.",
+          "message": "Invia il corpo come testo semplice. Il corpo deve essere una stringa. Imposta `Content-Type: text/plain`."
+        },
+        "app.TWlzdHJhbEFp.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.display_name": {
+          "source": "Plain Text",
+          "message": "Testo normale"
+        },
+        "app.TWlzdHJhbEFp.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.short_desc": {
+          "source": "Send body as text/plain",
+          "message": "Invia il corpo come text/plain"
+        },
+        "app.TWlzdHJhbEFp.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.desc": {
+          "source": "Send the body as XML. If the body is a hash it is serialized to XML; if it is a string it is sent verbatim. Sets `Content-Type: application/xml`.",
+          "message": "Invia il corpo come XML. Se il corpo è un hash viene serializzato in XML; se è una stringa viene inviato testualmente. Imposta `Content-Type: application/xml`."
+        },
+        "app.TWlzdHJhbEFp.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.display_name": {
+          "source": "XML",
+          "message": "XML"
+        },
+        "app.TWlzdHJhbEFp.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.short_desc": {
+          "source": "Send body as XML",
+          "message": "Invia il corpo come XML"
+        },
+        "app.TWlzdHJhbEFp.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.desc": {
+          "source": "Send the body as YAML. If the body is a hash it is serialized to YAML; if it is a string it is sent verbatim. Sets `Content-Type: application/x-yaml`.",
+          "message": "Invia il corpo come YAML. Se il corpo è un hash viene serializzato in YAML; se è una stringa viene inviato testualmente. Imposta `Content-Type: application/x-yaml`."
+        },
+        "app.TWlzdHJhbEFp.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.display_name": {
+          "source": "YAML",
+          "message": "YAML"
+        },
+        "app.TWlzdHJhbEFp.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.short_desc": {
+          "source": "Send body as YAML",
+          "message": "Invia il corpo come YAML"
+        },
+        "app.TWlzdHJhbEFp.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.desc": {
+          "source": "Selects the body serialization mode and the corresponding `Content-Type` header. Changing this field reshapes the `body` editor - selecting JSON exposes a JSON editor, selecting Multipart Form exposes a file picker, and so on.",
+          "message": "Seleziona la modalità di serializzazione del corpo e la corrispondente intestazione `Content-Type`. La modifica di questo campo riorganizza l'editor `body`: selezionando JSON viene mostrato un editor JSON, selezionando Modulo Multipart viene mostrato un selettore di file e così via."
+        },
+        "app.TWlzdHJhbEFp.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.display_name": {
+          "source": "Body Type",
+          "message": "Tipo di corpo"
+        },
+        "app.TWlzdHJhbEFp.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.short_desc": {
+          "source": "How the body is serialized and what Content-Type is sent",
+          "message": "Come viene serializzato il corpo e quale Content-Type viene inviato"
+        },
+        "app.TWlzdHJhbEFp.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.desc": {
+          "source": "If `True`, non-2xx HTTP responses return as the normal response hash (with the actual status code) instead of raising `REST-RESPONSE-ERROR`. Useful for handling 4xx/5xx as data - e.g. checking whether a resource exists. Overrides the connection's `error_passthru` setting for this call only.",
+          "message": "Se `True`, le risposte HTTP diverse da 2xx ritornano come normale hash di risposta (con il codice di stato effettivo) invece di sollevare `REST-RESPONSE-ERROR`. Utile per gestire 4xx/5xx come dati, ad es. per verificare se una risorsa esiste. Sovrascrive l'impostazione `error_passthru` della connessione solo per questa chiamata."
+        },
+        "app.TWlzdHJhbEFp.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.display_name": {
+          "source": "Return Errors as Data",
+          "message": "Restituisci errori come dati"
+        },
+        "app.TWlzdHJhbEFp.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.short_desc": {
+          "source": "Return non-2xx responses normally instead of throwing",
+          "message": "Restituisci normalmente le risposte non 2xx invece di generare un'eccezione"
+        },
+        "app.TWlzdHJhbEFp.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.desc": {
+          "source": "Optional list of HTTP status codes treated as success. If set and the response status is not in this list, the action throws `REST-STATUS-ERROR`. When unset, the REST client's default behavior applies (typically: 2xx is success, non-2xx throws).",
+          "message": "Elenco opzionale di codici di stato HTTP trattati come successo. Se impostato e lo stato della risposta non è in questo elenco, l'azione genera `REST-STATUS-ERROR`. Quando non è impostato, si applica il comportamento predefinito del client REST (in genere: 2xx è successo, non-2xx genera un'eccezione)."
+        },
+        "app.TWlzdHJhbEFp.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.display_name": {
+          "source": "Expected Status Codes",
+          "message": "Codici di stato previsti"
+        },
+        "app.TWlzdHJhbEFp.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.short_desc": {
+          "source": "Response status codes treated as success",
+          "message": "Codici di stato della risposta trattati come successo"
+        },
+        "app.TWlzdHJhbEFp.action.bWFrZS1hcGktY2FsbA.option.aGRy.desc": {
+          "source": "Hash of custom headers added to the request. These override any default headers set by `body_type` (e.g. supplying `Content-Type` here wins over the body-type default).",
+          "message": "Hash di intestazioni personalizzate aggiunte alla richiesta. Queste sovrascrivono qualsiasi intestazione predefinita impostata da `body_type` (ad es. fornire `Content-Type` qui ha la precedenza sul valore predefinito del tipo di corpo)."
+        },
+        "app.TWlzdHJhbEFp.action.bWFrZS1hcGktY2FsbA.option.aGRy.display_name": {
+          "source": "Custom Headers",
+          "message": "Intestazioni personalizzate"
+        },
+        "app.TWlzdHJhbEFp.action.bWFrZS1hcGktY2FsbA.option.aGRy.short_desc": {
+          "source": "Extra request headers",
+          "message": "Intestazioni della richiesta aggiuntive"
+        },
+        "app.TWlzdHJhbEFp.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.desc": {
+          "source": "If `True`, the response hash includes a `debug` sub-hash containing the request method/URL/headers (with sensitive values redacted), request and response sizes, and round-trip duration. Useful when investigating slow or failing calls. Off by default to keep responses lean.",
+          "message": "Se `True`, l'hash della risposta include un sotto-hash `debug` contenente il metodo/URL/intestazioni della richiesta (con i valori sensibili oscurati), le dimensioni della richiesta e della risposta e la durata di andata e ritorno. Utile quando si indagano chiamate lente o con errori. Disattivato per impostazione predefinita per mantenere le risposte snelle."
+        },
+        "app.TWlzdHJhbEFp.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.display_name": {
+          "source": "Include Debug Info",
+          "message": "Includi informazioni di debug"
+        },
+        "app.TWlzdHJhbEFp.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.short_desc": {
+          "source": "Include request/timing/size debug info in the response",
+          "message": "Includi le informazioni di debug relative a richiesta/tempi/dimensioni nella risposta"
+        },
+        "app.TWlzdHJhbEFp.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.desc": {
+          "source": "HTTP `OPTIONS`",
+          "message": "HTTP `OPTIONS`"
+        },
+        "app.TWlzdHJhbEFp.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.display_name": {
+          "source": "OPTIONS",
+          "message": "OPTIONS"
+        },
+        "app.TWlzdHJhbEFp.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.short_desc": {
+          "source": "HTTP OPTIONS",
+          "message": "HTTP OPTIONS"
+        },
+        "app.TWlzdHJhbEFp.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.desc": {
+          "source": "HTTP `DELETE`",
+          "message": "HTTP `DELETE`"
+        },
+        "app.TWlzdHJhbEFp.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.display_name": {
+          "source": "DELETE",
+          "message": "DELETE"
+        },
+        "app.TWlzdHJhbEFp.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.short_desc": {
+          "source": "HTTP DELETE",
+          "message": "HTTP DELETE"
+        },
+        "app.TWlzdHJhbEFp.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.desc": {
+          "source": "HTTP `GET`",
+          "message": "HTTP `GET`"
+        },
+        "app.TWlzdHJhbEFp.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.display_name": {
+          "source": "GET",
+          "message": "GET"
+        },
+        "app.TWlzdHJhbEFp.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.short_desc": {
+          "source": "HTTP GET",
+          "message": "HTTP GET"
+        },
+        "app.TWlzdHJhbEFp.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.desc": {
+          "source": "HTTP `HEAD`",
+          "message": "HTTP `HEAD`"
+        },
+        "app.TWlzdHJhbEFp.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.display_name": {
+          "source": "HEAD",
+          "message": "HEAD"
+        },
+        "app.TWlzdHJhbEFp.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.short_desc": {
+          "source": "HTTP HEAD",
+          "message": "HTTP HEAD"
+        },
+        "app.TWlzdHJhbEFp.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.desc": {
+          "source": "HTTP `PATCH`",
+          "message": "HTTP `PATCH`"
+        },
+        "app.TWlzdHJhbEFp.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.display_name": {
+          "source": "PATCH",
+          "message": "PATCH"
+        },
+        "app.TWlzdHJhbEFp.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.short_desc": {
+          "source": "HTTP PATCH",
+          "message": "HTTP PATCH"
+        },
+        "app.TWlzdHJhbEFp.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.desc": {
+          "source": "HTTP `POST`",
+          "message": "HTTP `POST`"
+        },
+        "app.TWlzdHJhbEFp.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.display_name": {
+          "source": "POST",
+          "message": "POST"
+        },
+        "app.TWlzdHJhbEFp.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.short_desc": {
+          "source": "HTTP POST",
+          "message": "HTTP POST"
+        },
+        "app.TWlzdHJhbEFp.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.desc": {
+          "source": "HTTP `PUT`",
+          "message": "HTTP `PUT`"
+        },
+        "app.TWlzdHJhbEFp.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.display_name": {
+          "source": "PUT",
+          "message": "PUT"
+        },
+        "app.TWlzdHJhbEFp.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.short_desc": {
+          "source": "HTTP PUT",
+          "message": "HTTP PUT"
+        },
+        "app.TWlzdHJhbEFp.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.desc": {
+          "source": "HTTP `TRACE`",
+          "message": "HTTP `TRACE`"
+        },
+        "app.TWlzdHJhbEFp.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.display_name": {
+          "source": "TRACE",
+          "message": "TRACE"
+        },
+        "app.TWlzdHJhbEFp.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.short_desc": {
+          "source": "HTTP TRACE",
+          "message": "HTTP TRACE"
+        },
+        "app.TWlzdHJhbEFp.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "Il metodo HTTP da utilizzare per la richiesta"
+        },
+        "app.TWlzdHJhbEFp.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.display_name": {
+          "source": "HTTP Method",
+          "message": "Metodo HTTP"
+        },
+        "app.TWlzdHJhbEFp.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.short_desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "Il metodo HTTP da utilizzare per la richiesta"
+        },
+        "app.TWlzdHJhbEFp.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain `{name}` placeholders that are replaced from `path_vars`. Example: `/users/{id}/comments`.",
+          "message": "Il percorso URI relativo all'URL di base dell'API della connessione. Può contenere segnaposto `{name}` che vengono sostituiti da `path_vars`. Esempio: `/users/{id}/comments`."
+        },
+        "app.TWlzdHJhbEFp.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.display_name": {
+          "source": "URI Path",
+          "message": "Percorso URI"
+        },
+        "app.TWlzdHJhbEFp.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.short_desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain '{name}' placeholders that are replaced from 'path_vars'. Example: '/users/{id}/comments'",
+          "message": "Il percorso URI relativo all'URL di base dell'API della connessione. Può contenere segnaposto '{name}' che vengono sostituiti da 'path_vars'. Esempio: '/users/{id}/comments'"
+        },
+        "app.TWlzdHJhbEFp.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.desc": {
+          "source": "Hash of values substituted into `{name}` placeholders in the URI path. Example: with `path = /users/{id}` and `path_vars = {id: 123}` the framework sends `/users/123`. Values are URL-encoded.",
+          "message": "Hash dei valori sostituiti nei segnaposto `{name}` nel percorso URI. Esempio: con `path = /users/{id}` e `path_vars = {id: 123}` il framework invia `/users/123`. I valori sono codificati in URL."
+        },
+        "app.TWlzdHJhbEFp.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.display_name": {
+          "source": "Path Variables",
+          "message": "Variabili del percorso"
+        },
+        "app.TWlzdHJhbEFp.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.short_desc": {
+          "source": "Values for {name} placeholders in path",
+          "message": "Valori per i segnaposto {name} nel percorso"
+        },
+        "app.TWlzdHJhbEFp.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.desc": {
+          "source": "Hash of query string parameters to append to the URI path. Values are URL-encoded; list values are joined with `,`.",
+          "message": "Hash dei parametri della stringa di query da aggiungere al percorso URI. I valori sono codificati in URL; i valori dell'elenco sono uniti con `,`."
+        },
+        "app.TWlzdHJhbEFp.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.display_name": {
+          "source": "Query Arguments",
+          "message": "Argomenti della query"
+        },
+        "app.TWlzdHJhbEFp.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.short_desc": {
+          "source": "Query string parameters",
+          "message": "Parametri della stringa di query"
+        },
+        "app.TWlzdHJhbEFp.action.bWFrZS1hcGktY2FsbA.short_desc": {
+          "source": "Make a custom API call to Mistral AI",
+          "message": "Effettua una chiamata API personalizzata a Mistral AI"
+        },
+        "app.TWlzdHJhbEFp.desc": {
+          "source": "Provides access to [Mistral AI](https://mistral.ai) — frontier and open-weight chat models, embeddings, and best-in-class document OCR.\n\n**Common use cases**:\n- **Frontier chat** with mistral-large-latest, mistral-small-latest\n- **Code-tuned chat** with codestral-latest\n- **RAG embeddings** with mistral-embed\n- **Document OCR** — extract structured markdown from PDFs and images using `mistral-ocr-latest`",
+          "message": "Fornisce l'accesso a [Mistral AI](https://mistral.ai) — modelli di chat all'avanguardia e open-weight, embeddings e OCR di documenti di prim'ordine.\n\n**Casi d'uso comuni**:\n- **Chat all'avanguardia** con mistral-large-latest, mistral-small-latest\n- **Chat ottimizzata per il codice** con codestral-latest\n- **Embedding RAG** con mistral-embed\n- **OCR di documenti** — estrai markdown strutturato da PDF e immagini utilizzando `mistral-ocr-latest`"
+        },
+        "app.TWlzdHJhbEFp.display_name": {
+          "source": "Mistral AI",
+          "message": "Mistral AI"
+        },
+        "app.TWlzdHJhbEFp.short_desc": {
+          "source": "Mistral AI chat, embeddings, and document OCR",
+          "message": "Chat, embedding e OCR di documenti Mistral AI"
+        }
+      }
+    }
+  }
+}

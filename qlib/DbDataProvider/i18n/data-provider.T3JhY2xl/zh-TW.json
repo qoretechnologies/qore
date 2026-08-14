@@ -1,0 +1,21 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "zh-TW": {
+      "messages": {
+        "app.T3JhY2xl.desc": {
+          "source": "Create and manage connections to a Oracle database server",
+          "message": "建立並管理至 Oracle 資料庫伺服器的連線"
+        },
+        "app.T3JhY2xl.display_name": {
+          "source": "Oracle",
+          "message": "Oracle"
+        },
+        "app.T3JhY2xl.short_desc": {
+          "source": "Oracle database server",
+          "message": "Oracle 資料庫伺服器"
+        }
+      }
+    }
+  }
+}

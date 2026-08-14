@@ -1,0 +1,1341 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "ja": {
+      "messages": {
+        "app.TGlua2VkSW4.action.Y3JlYXRlLW11bHRpLWltYWdlLXBvc3Q.desc": {
+          "source": "Uploads several images and publishes them as one post that readers swipe through.\n\nLinkedIn requires between 2 and 20 images; the images appear in the order given. Alt texts are matched to the images **by position**.",
+          "message": "複数の画像をアップロードし、読者がスワイプして閲覧できる1つの投稿として公開します。\n\nLinkedIn では2〜20枚の画像が必要です。画像は指定された順序で表示されます。代替テキストは**位置順**に画像と一致させられます。"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLW11bHRpLWltYWdlLXBvc3Q.display_name": {
+          "source": "Create Multi-Image Post",
+          "message": "複数画像投稿を作成"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLW11bHRpLWltYWdlLXBvc3Q.option.Y29tbWVudGFyeQ.desc": {
+          "source": "The post's text.\n\nMentions and hashtags are written **inline**: `@[Qore Technologies](urn:li:organization:2414183)` mentions an organization — the display text must match the entity's name exactly, case included, or it stays plain text — and `#coding` is a hashtag.",
+          "message": "投稿のテキスト。\n\nメンションとハッシュタグは**インライン**で記述します。`@[Qore Technologies](urn:li:organization:2414183)` は組織をメンションし（表示テキストは大文字と小文字を含めてエンティティの名前と完全に一致する必要があり、そうでない場合はプレーンテキストのままになります）、`#coding` はハッシュタグです。"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLW11bHRpLWltYWdlLXBvc3Q.option.Y29tbWVudGFyeQ.display_name": {
+          "source": "Text",
+          "message": "テキスト"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLW11bHRpLWltYWdlLXBvc3Q.option.Y29tbWVudGFyeQ.short_desc": {
+          "source": "The post's text",
+          "message": "投稿のテキスト"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLW11bHRpLWltYWdlLXBvc3Q.option.YWx0X3RleHRz.desc": {
+          "source": "Alternative text describing each image, used by screen readers and matched to `images` **by position**; a shorter list leaves the remaining images without alt text",
+          "message": "各画像を説明する代替テキスト。スクリーンリーダーで使用され、**位置順**に `images` と照合されます。リストが画像数より短い場合、残りの画像には代替テキストが設定されません。"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLW11bHRpLWltYWdlLXBvc3Q.option.YWx0X3RleHRz.display_name": {
+          "source": "Alt Texts",
+          "message": "代替テキスト"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLW11bHRpLWltYWdlLXBvc3Q.option.YWx0X3RleHRz.short_desc": {
+          "source": "Alternative text for each image, matched by position",
+          "message": "各画像の代替テキスト（位置順に照合）"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLW11bHRpLWltYWdlLXBvc3Q.option.ZGlzYWJsZV9yZXNoYXJpbmc.desc": {
+          "source": "Prevent others from resharing the post",
+          "message": "他のユーザーによる投稿の再共有を無効化"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLW11bHRpLWltYWdlLXBvc3Q.option.ZGlzYWJsZV9yZXNoYXJpbmc.display_name": {
+          "source": "Disable Resharing",
+          "message": "再共有を無効化"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLW11bHRpLWltYWdlLXBvc3Q.option.ZGlzYWJsZV9yZXNoYXJpbmc.short_desc": {
+          "source": "Prevent others from resharing the post",
+          "message": "他のユーザーによる投稿の再共有を無効化"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLW11bHRpLWltYWdlLXBvc3Q.option.ZmVlZF9kaXN0cmlidXRpb24.allowed-value.c3RyaW5nOk1BSU5fRkVFRA.desc": {
+          "source": "The post is distributed to the main LinkedIn feed",
+          "message": "投稿はメインのLinkedInフィードに配信されます"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLW11bHRpLWltYWdlLXBvc3Q.option.ZmVlZF9kaXN0cmlidXRpb24.allowed-value.c3RyaW5nOk1BSU5fRkVFRA.display_name": {
+          "source": "Main Feed",
+          "message": "メインフィード"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLW11bHRpLWltYWdlLXBvc3Q.option.ZmVlZF9kaXN0cmlidXRpb24.allowed-value.c3RyaW5nOk1BSU5fRkVFRA.short_desc": {
+          "source": "Distributed to the main LinkedIn feed",
+          "message": "メインのLinkedInフィードに配信"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLW11bHRpLWltYWdlLXBvc3Q.option.ZmVlZF9kaXN0cmlidXRpb24.allowed-value.c3RyaW5nOk5PTkU.desc": {
+          "source": "The post is not distributed to any feed; it is reachable only by its URN",
+          "message": "投稿はどのフィードにも配信されず、そのURNからのみアクセス可能です"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLW11bHRpLWltYWdlLXBvc3Q.option.ZmVlZF9kaXN0cmlidXRpb24.allowed-value.c3RyaW5nOk5PTkU.display_name": {
+          "source": "None",
+          "message": "なし"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLW11bHRpLWltYWdlLXBvc3Q.option.ZmVlZF9kaXN0cmlidXRpb24.allowed-value.c3RyaW5nOk5PTkU.short_desc": {
+          "source": "Not distributed to any feed",
+          "message": "どのフィードにも配信しない"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLW11bHRpLWltYWdlLXBvc3Q.option.ZmVlZF9kaXN0cmlidXRpb24.desc": {
+          "source": "Where the post is distributed.  `NONE` creates a post that is reachable only by its URN and does not appear in any feed",
+          "message": "投稿の配信先。`NONE` を指定すると、どのフィードにも表示されず、URNからのみアクセス可能な投稿が作成されます"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLW11bHRpLWltYWdlLXBvc3Q.option.ZmVlZF9kaXN0cmlidXRpb24.display_name": {
+          "source": "Feed Distribution",
+          "message": "フィード配信"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLW11bHRpLWltYWdlLXBvc3Q.option.ZmVlZF9kaXN0cmlidXRpb24.short_desc": {
+          "source": "Where the post is distributed",
+          "message": "投稿の配信先"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLW11bHRpLWltYWdlLXBvc3Q.option.aW1hZ2Vz.desc": {
+          "source": "The images to post, in the order they should appear; LinkedIn requires between 2 and 20 of them",
+          "message": "投稿する画像（表示順）。LinkedInでは2〜20枚の画像が必要です"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLW11bHRpLWltYWdlLXBvc3Q.option.aW1hZ2Vz.display_name": {
+          "source": "Images",
+          "message": "画像"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLW11bHRpLWltYWdlLXBvc3Q.option.aW1hZ2Vz.short_desc": {
+          "source": "The images to post, in the order they should appear",
+          "message": "投稿する画像（表示順）"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLW11bHRpLWltYWdlLXBvc3Q.option.dmlzaWJpbGl0eQ.allowed-value.c3RyaW5nOkNPTk5FQ1RJT05T.desc": {
+          "source": "Visible only to the authenticated member's connections",
+          "message": "認証済みメンバーのつながりのみに公開"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLW11bHRpLWltYWdlLXBvc3Q.option.dmlzaWJpbGl0eQ.allowed-value.c3RyaW5nOkNPTk5FQ1RJT05T.display_name": {
+          "source": "Connections Only",
+          "message": "つながりのみ"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLW11bHRpLWltYWdlLXBvc3Q.option.dmlzaWJpbGl0eQ.allowed-value.c3RyaW5nOkNPTk5FQ1RJT05T.short_desc": {
+          "source": "Visible only to the member's connections",
+          "message": "メンバーのつながりのみに公開"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLW11bHRpLWltYWdlLXBvc3Q.option.dmlzaWJpbGl0eQ.allowed-value.c3RyaW5nOlBVQkxJQw.desc": {
+          "source": "Visible to anyone on or off LinkedIn",
+          "message": "LinkedIn内外のすべてのユーザーに公開"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLW11bHRpLWltYWdlLXBvc3Q.option.dmlzaWJpbGl0eQ.allowed-value.c3RyaW5nOlBVQkxJQw.display_name": {
+          "source": "Public",
+          "message": "パブリック"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLW11bHRpLWltYWdlLXBvc3Q.option.dmlzaWJpbGl0eQ.allowed-value.c3RyaW5nOlBVQkxJQw.short_desc": {
+          "source": "Visible to anyone on or off LinkedIn",
+          "message": "LinkedIn内外のすべてのユーザーに公開"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLW11bHRpLWltYWdlLXBvc3Q.option.dmlzaWJpbGl0eQ.desc": {
+          "source": "Who can see the post",
+          "message": "投稿の公開範囲"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLW11bHRpLWltYWdlLXBvc3Q.option.dmlzaWJpbGl0eQ.display_name": {
+          "source": "Visibility",
+          "message": "公開設定"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLW11bHRpLWltYWdlLXBvc3Q.option.dmlzaWJpbGl0eQ.short_desc": {
+          "source": "Who can see the post",
+          "message": "投稿の公開範囲"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLW11bHRpLWltYWdlLXBvc3Q.short_desc": {
+          "source": "Publish a post with several images",
+          "message": "複数画像付きの投稿を公開"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLWFydGljbGUtcG9zdA.desc": {
+          "source": "Publishes a post that links to an article, shown as a card under the post's text.\n\nLinkedIn does **not** scrape the URL, so the title, description and thumbnail have to be supplied here or the card appears bare. Upload a thumbnail with the **Upload Image** action first and pass the image URN it returns.",
+          "message": "記事へのリンクを含む投稿を公開します。投稿テキストの下にカードとして表示されます。\n\nLinkedInはURLを**スクレイピングしない**ため、タイトル、説明、サムネイルをここで指定しないとカードが空の状態で表示されます。まず**画像をアップロード**アクションでサムネイルをアップロードし、返された画像URNを渡してください。"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLWFydGljbGUtcG9zdA.display_name": {
+          "source": "Create Article Post",
+          "message": "記事投稿を作成"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLWFydGljbGUtcG9zdA.option.Y29tbWVudGFyeQ.desc": {
+          "source": "The post's text.\n\nMentions and hashtags are written **inline**: `@[Qore Technologies](urn:li:organization:2414183)` mentions an organization — the display text must match the entity's name exactly, case included, or it stays plain text — and `#coding` is a hashtag.",
+          "message": "投稿のテキスト。\n\nメンションとハッシュタグは**インライン**で記述します。`@[Qore Technologies](urn:li:organization:2414183)` は組織をメンションし（表示テキストは大文字と小文字を含めてエンティティの名前と完全に一致する必要があり、そうでない場合はプレーンテキストのままになります）、`#coding` はハッシュタグです。"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLWFydGljbGUtcG9zdA.option.Y29tbWVudGFyeQ.display_name": {
+          "source": "Text",
+          "message": "テキスト"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLWFydGljbGUtcG9zdA.option.Y29tbWVudGFyeQ.short_desc": {
+          "source": "The post's text",
+          "message": "投稿のテキスト"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLWFydGljbGUtcG9zdA.option.YXJ0aWNsZV90aHVtYm5haWw.desc": {
+          "source": "An uploaded image URN (`urn:li:image:...`) to show as the article's thumbnail; upload one with the **Upload Image** action first.  LinkedIn does not scrape the URL for an image",
+          "message": "記事のサムネイルとして表示するアップロード済み画像のURN（`urn:li:image:...`）。まず**画像をアップロード**アクションでアップロードしてください。LinkedInはURLから画像をスクレイピングしません"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLWFydGljbGUtcG9zdA.option.YXJ0aWNsZV90aHVtYm5haWw.display_name": {
+          "source": "Thumbnail Image URN",
+          "message": "サムネイル画像URN"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLWFydGljbGUtcG9zdA.option.YXJ0aWNsZV90aHVtYm5haWw.short_desc": {
+          "source": "An uploaded image URN to show as the article's thumbnail",
+          "message": "記事のサムネイルとして表示するアップロード済み画像のURN"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLWFydGljbGUtcG9zdA.option.YXJ0aWNsZV90aXRsZQ.desc": {
+          "source": "The title shown on the article card.\n\nLinkedIn does **not** scrape the URL for a title, so an article posted without one shows a card with no heading.",
+          "message": "記事カードに表示されるタイトル。\n\nLinkedInはURLからタイトルを**スクレイピングしない**ため、タイトルなしで投稿された記事カードには見出しが表示されません。"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLWFydGljbGUtcG9zdA.option.YXJ0aWNsZV90aXRsZQ.display_name": {
+          "source": "Article Title",
+          "message": "記事のタイトル"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLWFydGljbGUtcG9zdA.option.YXJ0aWNsZV90aXRsZQ.short_desc": {
+          "source": "The title shown on the article card",
+          "message": "記事カードに表示されるタイトル"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLWFydGljbGUtcG9zdA.option.YXJ0aWNsZV91cmw.desc": {
+          "source": "The URL the article links to",
+          "message": "記事がリンクするURL"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLWFydGljbGUtcG9zdA.option.YXJ0aWNsZV91cmw.display_name": {
+          "source": "Article URL",
+          "message": "記事URL"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLWFydGljbGUtcG9zdA.option.YXJ0aWNsZV91cmw.short_desc": {
+          "source": "The URL the article links to",
+          "message": "記事がリンクするURL"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLWFydGljbGUtcG9zdA.option.YXJ0aWNsZV9kZXNjcmlwdGlvbg.desc": {
+          "source": "The description shown on the article card; LinkedIn does not scrape the URL for one",
+          "message": "記事カードに表示される説明。LinkedInはURLから説明をスクレイピングしません"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLWFydGljbGUtcG9zdA.option.YXJ0aWNsZV9kZXNjcmlwdGlvbg.display_name": {
+          "source": "Article Description",
+          "message": "記事の説明"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLWFydGljbGUtcG9zdA.option.YXJ0aWNsZV9kZXNjcmlwdGlvbg.short_desc": {
+          "source": "The description shown on the article card",
+          "message": "記事カードに表示される説明"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLWFydGljbGUtcG9zdA.option.ZGlzYWJsZV9yZXNoYXJpbmc.desc": {
+          "source": "Prevent others from resharing the post",
+          "message": "他のユーザーによる投稿の再共有を無効化"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLWFydGljbGUtcG9zdA.option.ZGlzYWJsZV9yZXNoYXJpbmc.display_name": {
+          "source": "Disable Resharing",
+          "message": "再共有を無効化"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLWFydGljbGUtcG9zdA.option.ZGlzYWJsZV9yZXNoYXJpbmc.short_desc": {
+          "source": "Prevent others from resharing the post",
+          "message": "他のユーザーによる投稿の再共有を無効化"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLWFydGljbGUtcG9zdA.option.ZmVlZF9kaXN0cmlidXRpb24.allowed-value.c3RyaW5nOk1BSU5fRkVFRA.desc": {
+          "source": "The post is distributed to the main LinkedIn feed",
+          "message": "投稿はメインのLinkedInフィードに配信されます"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLWFydGljbGUtcG9zdA.option.ZmVlZF9kaXN0cmlidXRpb24.allowed-value.c3RyaW5nOk1BSU5fRkVFRA.display_name": {
+          "source": "Main Feed",
+          "message": "メインフィード"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLWFydGljbGUtcG9zdA.option.ZmVlZF9kaXN0cmlidXRpb24.allowed-value.c3RyaW5nOk1BSU5fRkVFRA.short_desc": {
+          "source": "Distributed to the main LinkedIn feed",
+          "message": "メインのLinkedInフィードに配信"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLWFydGljbGUtcG9zdA.option.ZmVlZF9kaXN0cmlidXRpb24.allowed-value.c3RyaW5nOk5PTkU.desc": {
+          "source": "The post is not distributed to any feed; it is reachable only by its URN",
+          "message": "投稿はどのフィードにも配信されず、そのURNからのみアクセス可能です"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLWFydGljbGUtcG9zdA.option.ZmVlZF9kaXN0cmlidXRpb24.allowed-value.c3RyaW5nOk5PTkU.display_name": {
+          "source": "None",
+          "message": "なし"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLWFydGljbGUtcG9zdA.option.ZmVlZF9kaXN0cmlidXRpb24.allowed-value.c3RyaW5nOk5PTkU.short_desc": {
+          "source": "Not distributed to any feed",
+          "message": "どのフィードにも配信しない"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLWFydGljbGUtcG9zdA.option.ZmVlZF9kaXN0cmlidXRpb24.desc": {
+          "source": "Where the post is distributed.  `NONE` creates a post that is reachable only by its URN and does not appear in any feed",
+          "message": "投稿の配信先。`NONE` を指定すると、どのフィードにも表示されず、URNからのみアクセス可能な投稿が作成されます"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLWFydGljbGUtcG9zdA.option.ZmVlZF9kaXN0cmlidXRpb24.display_name": {
+          "source": "Feed Distribution",
+          "message": "フィード配信"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLWFydGljbGUtcG9zdA.option.ZmVlZF9kaXN0cmlidXRpb24.short_desc": {
+          "source": "Where the post is distributed",
+          "message": "投稿の配信先"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLWFydGljbGUtcG9zdA.option.dmlzaWJpbGl0eQ.allowed-value.c3RyaW5nOkNPTk5FQ1RJT05T.desc": {
+          "source": "Visible only to the authenticated member's connections",
+          "message": "認証済みメンバーのつながりのみに公開"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLWFydGljbGUtcG9zdA.option.dmlzaWJpbGl0eQ.allowed-value.c3RyaW5nOkNPTk5FQ1RJT05T.display_name": {
+          "source": "Connections Only",
+          "message": "つながりのみ"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLWFydGljbGUtcG9zdA.option.dmlzaWJpbGl0eQ.allowed-value.c3RyaW5nOkNPTk5FQ1RJT05T.short_desc": {
+          "source": "Visible only to the member's connections",
+          "message": "メンバーのつながりのみに公開"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLWFydGljbGUtcG9zdA.option.dmlzaWJpbGl0eQ.allowed-value.c3RyaW5nOlBVQkxJQw.desc": {
+          "source": "Visible to anyone on or off LinkedIn",
+          "message": "LinkedIn内外のすべてのユーザーに公開"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLWFydGljbGUtcG9zdA.option.dmlzaWJpbGl0eQ.allowed-value.c3RyaW5nOlBVQkxJQw.display_name": {
+          "source": "Public",
+          "message": "パブリック"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLWFydGljbGUtcG9zdA.option.dmlzaWJpbGl0eQ.allowed-value.c3RyaW5nOlBVQkxJQw.short_desc": {
+          "source": "Visible to anyone on or off LinkedIn",
+          "message": "LinkedIn内外のすべてのユーザーに公開"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLWFydGljbGUtcG9zdA.option.dmlzaWJpbGl0eQ.desc": {
+          "source": "Who can see the post",
+          "message": "投稿の公開範囲"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLWFydGljbGUtcG9zdA.option.dmlzaWJpbGl0eQ.display_name": {
+          "source": "Visibility",
+          "message": "公開設定"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLWFydGljbGUtcG9zdA.option.dmlzaWJpbGl0eQ.short_desc": {
+          "source": "Who can see the post",
+          "message": "投稿の公開範囲"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLWFydGljbGUtcG9zdA.short_desc": {
+          "source": "Publish a post linking to an article",
+          "message": "記事へのリンクを含む投稿を公開"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLWltYWdlLXBvc3Q.desc": {
+          "source": "Uploads an image and publishes it as a post by the signed-in member.\n\nLinkedIn accepts JPG, PNG and GIF. Supplying alt text is worth the effort: it is what screen readers announce, and LinkedIn shows it when the image cannot be loaded.",
+          "message": "画像をアップロードし、サインインしているメンバーの投稿として公開します。\n\nLinkedInではJPG、PNG、GIFがサポートされています。代替テキストはスクリーンリーダーで読み上げられ、画像が読み込めない場合にLinkedInに表示されるため、設定することを推奨します。"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLWltYWdlLXBvc3Q.display_name": {
+          "source": "Create Image Post",
+          "message": "画像投稿を作成"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLWltYWdlLXBvc3Q.option.Y29tbWVudGFyeQ.desc": {
+          "source": "The post's text.\n\nMentions and hashtags are written **inline**: `@[Qore Technologies](urn:li:organization:2414183)` mentions an organization — the display text must match the entity's name exactly, case included, or it stays plain text — and `#coding` is a hashtag.",
+          "message": "投稿のテキスト。\n\nメンションとハッシュタグは**インライン**で記述します。`@[Qore Technologies](urn:li:organization:2414183)` は組織をメンションし（表示テキストは大文字と小文字を含めてエンティティの名前と完全に一致する必要があり、そうでない場合はプレーンテキストのままになります）、`#coding` はハッシュタグです。"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLWltYWdlLXBvc3Q.option.Y29tbWVudGFyeQ.display_name": {
+          "source": "Text",
+          "message": "テキスト"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLWltYWdlLXBvc3Q.option.Y29tbWVudGFyeQ.short_desc": {
+          "source": "The post's text",
+          "message": "投稿のテキスト"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLWltYWdlLXBvc3Q.option.YWx0X3RleHQ.desc": {
+          "source": "The alternative text describing the image, used by screen readers; up to 4,086 characters, and best kept under 120",
+          "message": "画像を説明する代替テキスト（スクリーンリーダーで使用）。最大4,086文字（120文字未満を推奨）"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLWltYWdlLXBvc3Q.option.YWx0X3RleHQ.display_name": {
+          "source": "Alt Text",
+          "message": "代替テキスト"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLWltYWdlLXBvc3Q.option.YWx0X3RleHQ.short_desc": {
+          "source": "The alternative text describing the image",
+          "message": "画像を説明する代替テキスト"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLWltYWdlLXBvc3Q.option.ZGlzYWJsZV9yZXNoYXJpbmc.desc": {
+          "source": "Prevent others from resharing the post",
+          "message": "他のユーザーによる投稿の再共有を無効化"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLWltYWdlLXBvc3Q.option.ZGlzYWJsZV9yZXNoYXJpbmc.display_name": {
+          "source": "Disable Resharing",
+          "message": "再共有を無効化"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLWltYWdlLXBvc3Q.option.ZGlzYWJsZV9yZXNoYXJpbmc.short_desc": {
+          "source": "Prevent others from resharing the post",
+          "message": "他のユーザーによる投稿の再共有を無効化"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLWltYWdlLXBvc3Q.option.ZmVlZF9kaXN0cmlidXRpb24.allowed-value.c3RyaW5nOk1BSU5fRkVFRA.desc": {
+          "source": "The post is distributed to the main LinkedIn feed",
+          "message": "投稿はメインのLinkedInフィードに配信されます"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLWltYWdlLXBvc3Q.option.ZmVlZF9kaXN0cmlidXRpb24.allowed-value.c3RyaW5nOk1BSU5fRkVFRA.display_name": {
+          "source": "Main Feed",
+          "message": "メインフィード"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLWltYWdlLXBvc3Q.option.ZmVlZF9kaXN0cmlidXRpb24.allowed-value.c3RyaW5nOk1BSU5fRkVFRA.short_desc": {
+          "source": "Distributed to the main LinkedIn feed",
+          "message": "メインのLinkedInフィードに配信"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLWltYWdlLXBvc3Q.option.ZmVlZF9kaXN0cmlidXRpb24.allowed-value.c3RyaW5nOk5PTkU.desc": {
+          "source": "The post is not distributed to any feed; it is reachable only by its URN",
+          "message": "投稿はどのフィードにも配信されず、そのURNからのみアクセス可能です"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLWltYWdlLXBvc3Q.option.ZmVlZF9kaXN0cmlidXRpb24.allowed-value.c3RyaW5nOk5PTkU.display_name": {
+          "source": "None",
+          "message": "なし"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLWltYWdlLXBvc3Q.option.ZmVlZF9kaXN0cmlidXRpb24.allowed-value.c3RyaW5nOk5PTkU.short_desc": {
+          "source": "Not distributed to any feed",
+          "message": "どのフィードにも配信しない"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLWltYWdlLXBvc3Q.option.ZmVlZF9kaXN0cmlidXRpb24.desc": {
+          "source": "Where the post is distributed.  `NONE` creates a post that is reachable only by its URN and does not appear in any feed",
+          "message": "投稿の配信先。`NONE` を指定すると、どのフィードにも表示されず、URNからのみアクセス可能な投稿が作成されます"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLWltYWdlLXBvc3Q.option.ZmVlZF9kaXN0cmlidXRpb24.display_name": {
+          "source": "Feed Distribution",
+          "message": "フィード配信"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLWltYWdlLXBvc3Q.option.ZmVlZF9kaXN0cmlidXRpb24.short_desc": {
+          "source": "Where the post is distributed",
+          "message": "投稿の配信先"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLWltYWdlLXBvc3Q.option.aW1hZ2U.desc": {
+          "source": "The image to post; LinkedIn accepts JPG, PNG and GIF with fewer than 36,152,320 pixels",
+          "message": "投稿する画像。LinkedInは36,152,320ピクセル未満のJPG、PNG、GIFを受け付けます"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLWltYWdlLXBvc3Q.option.aW1hZ2U.display_name": {
+          "source": "Image",
+          "message": "画像"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLWltYWdlLXBvc3Q.option.aW1hZ2U.short_desc": {
+          "source": "The image to post",
+          "message": "投稿する画像"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLWltYWdlLXBvc3Q.option.dGl0bGU.desc": {
+          "source": "The title shown with the image",
+          "message": "画像とともに表示されるタイトル"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLWltYWdlLXBvc3Q.option.dGl0bGU.display_name": {
+          "source": "Image Title",
+          "message": "画像タイトル"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLWltYWdlLXBvc3Q.option.dGl0bGU.short_desc": {
+          "source": "The title shown with the image",
+          "message": "画像とともに表示されるタイトル"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLWltYWdlLXBvc3Q.option.dmlzaWJpbGl0eQ.allowed-value.c3RyaW5nOkNPTk5FQ1RJT05T.desc": {
+          "source": "Visible only to the authenticated member's connections",
+          "message": "認証済みメンバーのつながりのみに公開"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLWltYWdlLXBvc3Q.option.dmlzaWJpbGl0eQ.allowed-value.c3RyaW5nOkNPTk5FQ1RJT05T.display_name": {
+          "source": "Connections Only",
+          "message": "つながりのみ"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLWltYWdlLXBvc3Q.option.dmlzaWJpbGl0eQ.allowed-value.c3RyaW5nOkNPTk5FQ1RJT05T.short_desc": {
+          "source": "Visible only to the member's connections",
+          "message": "メンバーのつながりのみに公開"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLWltYWdlLXBvc3Q.option.dmlzaWJpbGl0eQ.allowed-value.c3RyaW5nOlBVQkxJQw.desc": {
+          "source": "Visible to anyone on or off LinkedIn",
+          "message": "LinkedIn内外のすべてのユーザーに公開"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLWltYWdlLXBvc3Q.option.dmlzaWJpbGl0eQ.allowed-value.c3RyaW5nOlBVQkxJQw.display_name": {
+          "source": "Public",
+          "message": "パブリック"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLWltYWdlLXBvc3Q.option.dmlzaWJpbGl0eQ.allowed-value.c3RyaW5nOlBVQkxJQw.short_desc": {
+          "source": "Visible to anyone on or off LinkedIn",
+          "message": "LinkedIn内外のすべてのユーザーに公開"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLWltYWdlLXBvc3Q.option.dmlzaWJpbGl0eQ.desc": {
+          "source": "Who can see the post",
+          "message": "投稿の公開範囲"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLWltYWdlLXBvc3Q.option.dmlzaWJpbGl0eQ.display_name": {
+          "source": "Visibility",
+          "message": "公開設定"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLWltYWdlLXBvc3Q.option.dmlzaWJpbGl0eQ.short_desc": {
+          "source": "Who can see the post",
+          "message": "投稿の公開範囲"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLWltYWdlLXBvc3Q.short_desc": {
+          "source": "Publish a post with an image",
+          "message": "画像付きの投稿を公開"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLXRleHQtcG9zdA.desc": {
+          "source": "Publishes a text-only post as the signed-in member.\n\nReturns the post's URN and the URL a browser can open it at.",
+          "message": "サインインしているメンバーとしてテキストのみの投稿を公開します。\n\n投稿のURNとブラウザで開くためのURLを返します。"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLXRleHQtcG9zdA.display_name": {
+          "source": "Create Text Post",
+          "message": "テキスト投稿を作成"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLXRleHQtcG9zdA.option.Y29tbWVudGFyeQ.desc": {
+          "source": "The post's text.\n\nMentions and hashtags are written **inline**: `@[Qore Technologies](urn:li:organization:2414183)` mentions an organization — the display text must match the entity's name exactly, case included, or it stays plain text — and `#coding` is a hashtag.",
+          "message": "投稿のテキスト。\n\nメンションとハッシュタグは**インライン**で記述します。`@[Qore Technologies](urn:li:organization:2414183)` は組織をメンションし（表示テキストは大文字と小文字を含めてエンティティの名前と完全に一致する必要があり、そうでない場合はプレーンテキストのままになります）、`#coding` はハッシュタグです。"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLXRleHQtcG9zdA.option.Y29tbWVudGFyeQ.display_name": {
+          "source": "Text",
+          "message": "テキスト"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLXRleHQtcG9zdA.option.Y29tbWVudGFyeQ.short_desc": {
+          "source": "The post's text",
+          "message": "投稿のテキスト"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLXRleHQtcG9zdA.option.ZGlzYWJsZV9yZXNoYXJpbmc.desc": {
+          "source": "Prevent others from resharing the post",
+          "message": "他のユーザーによる投稿の再共有を無効化"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLXRleHQtcG9zdA.option.ZGlzYWJsZV9yZXNoYXJpbmc.display_name": {
+          "source": "Disable Resharing",
+          "message": "再共有を無効化"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLXRleHQtcG9zdA.option.ZGlzYWJsZV9yZXNoYXJpbmc.short_desc": {
+          "source": "Prevent others from resharing the post",
+          "message": "他のユーザーによる投稿の再共有を無効化"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLXRleHQtcG9zdA.option.ZmVlZF9kaXN0cmlidXRpb24.allowed-value.c3RyaW5nOk1BSU5fRkVFRA.desc": {
+          "source": "The post is distributed to the main LinkedIn feed",
+          "message": "投稿はメインのLinkedInフィードに配信されます"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLXRleHQtcG9zdA.option.ZmVlZF9kaXN0cmlidXRpb24.allowed-value.c3RyaW5nOk1BSU5fRkVFRA.display_name": {
+          "source": "Main Feed",
+          "message": "メインフィード"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLXRleHQtcG9zdA.option.ZmVlZF9kaXN0cmlidXRpb24.allowed-value.c3RyaW5nOk1BSU5fRkVFRA.short_desc": {
+          "source": "Distributed to the main LinkedIn feed",
+          "message": "メインのLinkedInフィードに配信"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLXRleHQtcG9zdA.option.ZmVlZF9kaXN0cmlidXRpb24.allowed-value.c3RyaW5nOk5PTkU.desc": {
+          "source": "The post is not distributed to any feed; it is reachable only by its URN",
+          "message": "投稿はどのフィードにも配信されず、そのURNからのみアクセス可能です"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLXRleHQtcG9zdA.option.ZmVlZF9kaXN0cmlidXRpb24.allowed-value.c3RyaW5nOk5PTkU.display_name": {
+          "source": "None",
+          "message": "なし"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLXRleHQtcG9zdA.option.ZmVlZF9kaXN0cmlidXRpb24.allowed-value.c3RyaW5nOk5PTkU.short_desc": {
+          "source": "Not distributed to any feed",
+          "message": "どのフィードにも配信しない"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLXRleHQtcG9zdA.option.ZmVlZF9kaXN0cmlidXRpb24.desc": {
+          "source": "Where the post is distributed.  `NONE` creates a post that is reachable only by its URN and does not appear in any feed",
+          "message": "投稿の配信先。`NONE` を指定すると、どのフィードにも表示されず、URNからのみアクセス可能な投稿が作成されます"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLXRleHQtcG9zdA.option.ZmVlZF9kaXN0cmlidXRpb24.display_name": {
+          "source": "Feed Distribution",
+          "message": "フィード配信"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLXRleHQtcG9zdA.option.ZmVlZF9kaXN0cmlidXRpb24.short_desc": {
+          "source": "Where the post is distributed",
+          "message": "投稿の配信先"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLXRleHQtcG9zdA.option.dmlzaWJpbGl0eQ.allowed-value.c3RyaW5nOkNPTk5FQ1RJT05T.desc": {
+          "source": "Visible only to the authenticated member's connections",
+          "message": "認証済みメンバーのつながりのみに公開"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLXRleHQtcG9zdA.option.dmlzaWJpbGl0eQ.allowed-value.c3RyaW5nOkNPTk5FQ1RJT05T.display_name": {
+          "source": "Connections Only",
+          "message": "つながりのみ"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLXRleHQtcG9zdA.option.dmlzaWJpbGl0eQ.allowed-value.c3RyaW5nOkNPTk5FQ1RJT05T.short_desc": {
+          "source": "Visible only to the member's connections",
+          "message": "メンバーのつながりのみに公開"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLXRleHQtcG9zdA.option.dmlzaWJpbGl0eQ.allowed-value.c3RyaW5nOlBVQkxJQw.desc": {
+          "source": "Visible to anyone on or off LinkedIn",
+          "message": "LinkedIn内外のすべてのユーザーに公開"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLXRleHQtcG9zdA.option.dmlzaWJpbGl0eQ.allowed-value.c3RyaW5nOlBVQkxJQw.display_name": {
+          "source": "Public",
+          "message": "パブリック"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLXRleHQtcG9zdA.option.dmlzaWJpbGl0eQ.allowed-value.c3RyaW5nOlBVQkxJQw.short_desc": {
+          "source": "Visible to anyone on or off LinkedIn",
+          "message": "LinkedIn内外のすべてのユーザーに公開"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLXRleHQtcG9zdA.option.dmlzaWJpbGl0eQ.desc": {
+          "source": "Who can see the post",
+          "message": "投稿の公開範囲"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLXRleHQtcG9zdA.option.dmlzaWJpbGl0eQ.display_name": {
+          "source": "Visibility",
+          "message": "公開設定"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLXRleHQtcG9zdA.option.dmlzaWJpbGl0eQ.short_desc": {
+          "source": "Who can see the post",
+          "message": "投稿の公開範囲"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLXRleHQtcG9zdA.short_desc": {
+          "source": "Publish a text post",
+          "message": "テキスト投稿を公開"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLXZpZGVvLXBvc3Q.desc": {
+          "source": "Uploads a video and publishes it as a post by the signed-in member.\n\nLinkedIn accepts MP4 between 75 KB and 500 MB, and between 3 seconds and 30 minutes long. The upload is sent in parts, so a large video does not have to start again from the beginning if one part fails.\n\nLinkedIn processes a video after it is uploaded, so the post may take a short while to become visible even though this action has already returned its URN.",
+          "message": "動画をアップロードし、サインインしているメンバーの投稿として公開します。\n\nLinkedInでは75 KB〜500 MB、長さ3秒〜30分のMP4を受け付けます。アップロードは分割して送信されるため、一部のパートが失敗しても大きな動画を最初からやり直す必要はありません。\n\nLinkedInはアップロード後に動画を処理するため、このアクションがURNを返した後でも投稿が表示されるまでに少し時間がかかる場合があります。"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLXZpZGVvLXBvc3Q.display_name": {
+          "source": "Create Video Post",
+          "message": "動画投稿を作成"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLXZpZGVvLXBvc3Q.option.Y29tbWVudGFyeQ.desc": {
+          "source": "The post's text.\n\nMentions and hashtags are written **inline**: `@[Qore Technologies](urn:li:organization:2414183)` mentions an organization — the display text must match the entity's name exactly, case included, or it stays plain text — and `#coding` is a hashtag.",
+          "message": "投稿のテキスト。\n\nメンションとハッシュタグは**インライン**で記述します。`@[Qore Technologies](urn:li:organization:2414183)` は組織をメンションし（表示テキストは大文字と小文字を含めてエンティティの名前と完全に一致する必要があり、そうでない場合はプレーンテキストのままになります）、`#coding` はハッシュタグです。"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLXZpZGVvLXBvc3Q.option.Y29tbWVudGFyeQ.display_name": {
+          "source": "Text",
+          "message": "テキスト"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLXZpZGVvLXBvc3Q.option.Y29tbWVudGFyeQ.short_desc": {
+          "source": "The post's text",
+          "message": "投稿のテキスト"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLXZpZGVvLXBvc3Q.option.ZGlzYWJsZV9yZXNoYXJpbmc.desc": {
+          "source": "Prevent others from resharing the post",
+          "message": "他のユーザーによる投稿の再共有を無効化"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLXZpZGVvLXBvc3Q.option.ZGlzYWJsZV9yZXNoYXJpbmc.display_name": {
+          "source": "Disable Resharing",
+          "message": "再共有を無効化"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLXZpZGVvLXBvc3Q.option.ZGlzYWJsZV9yZXNoYXJpbmc.short_desc": {
+          "source": "Prevent others from resharing the post",
+          "message": "他のユーザーによる投稿の再共有を無効化"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLXZpZGVvLXBvc3Q.option.ZmVlZF9kaXN0cmlidXRpb24.allowed-value.c3RyaW5nOk1BSU5fRkVFRA.desc": {
+          "source": "The post is distributed to the main LinkedIn feed",
+          "message": "投稿はメインのLinkedInフィードに配信されます"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLXZpZGVvLXBvc3Q.option.ZmVlZF9kaXN0cmlidXRpb24.allowed-value.c3RyaW5nOk1BSU5fRkVFRA.display_name": {
+          "source": "Main Feed",
+          "message": "メインフィード"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLXZpZGVvLXBvc3Q.option.ZmVlZF9kaXN0cmlidXRpb24.allowed-value.c3RyaW5nOk1BSU5fRkVFRA.short_desc": {
+          "source": "Distributed to the main LinkedIn feed",
+          "message": "メインのLinkedInフィードに配信"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLXZpZGVvLXBvc3Q.option.ZmVlZF9kaXN0cmlidXRpb24.allowed-value.c3RyaW5nOk5PTkU.desc": {
+          "source": "The post is not distributed to any feed; it is reachable only by its URN",
+          "message": "投稿はどのフィードにも配信されず、そのURNからのみアクセス可能です"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLXZpZGVvLXBvc3Q.option.ZmVlZF9kaXN0cmlidXRpb24.allowed-value.c3RyaW5nOk5PTkU.display_name": {
+          "source": "None",
+          "message": "なし"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLXZpZGVvLXBvc3Q.option.ZmVlZF9kaXN0cmlidXRpb24.allowed-value.c3RyaW5nOk5PTkU.short_desc": {
+          "source": "Not distributed to any feed",
+          "message": "どのフィードにも配信しない"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLXZpZGVvLXBvc3Q.option.ZmVlZF9kaXN0cmlidXRpb24.desc": {
+          "source": "Where the post is distributed.  `NONE` creates a post that is reachable only by its URN and does not appear in any feed",
+          "message": "投稿の配信先。`NONE` を指定すると、どのフィードにも表示されず、URNからのみアクセス可能な投稿が作成されます"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLXZpZGVvLXBvc3Q.option.ZmVlZF9kaXN0cmlidXRpb24.display_name": {
+          "source": "Feed Distribution",
+          "message": "フィード配信"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLXZpZGVvLXBvc3Q.option.ZmVlZF9kaXN0cmlidXRpb24.short_desc": {
+          "source": "Where the post is distributed",
+          "message": "投稿の配信先"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLXZpZGVvLXBvc3Q.option.dGl0bGU.desc": {
+          "source": "The title shown with the video",
+          "message": "動画とともに表示されるタイトル"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLXZpZGVvLXBvc3Q.option.dGl0bGU.display_name": {
+          "source": "Video Title",
+          "message": "動画タイトル"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLXZpZGVvLXBvc3Q.option.dGl0bGU.short_desc": {
+          "source": "The title shown with the video",
+          "message": "動画とともに表示されるタイトル"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLXZpZGVvLXBvc3Q.option.dmlkZW8.desc": {
+          "source": "The video to post; LinkedIn accepts MP4 between 75 KB and 500 MB and between 3 seconds and 30 minutes long",
+          "message": "投稿する動画。LinkedInは75 KB〜500 MB、長さ3秒〜30分のMP4を受け付けます"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLXZpZGVvLXBvc3Q.option.dmlkZW8.display_name": {
+          "source": "Video",
+          "message": "動画"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLXZpZGVvLXBvc3Q.option.dmlkZW8.short_desc": {
+          "source": "The video to post",
+          "message": "投稿する動画"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLXZpZGVvLXBvc3Q.option.dmlzaWJpbGl0eQ.allowed-value.c3RyaW5nOkNPTk5FQ1RJT05T.desc": {
+          "source": "Visible only to the authenticated member's connections",
+          "message": "認証済みメンバーのつながりのみに公開"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLXZpZGVvLXBvc3Q.option.dmlzaWJpbGl0eQ.allowed-value.c3RyaW5nOkNPTk5FQ1RJT05T.display_name": {
+          "source": "Connections Only",
+          "message": "つながりのみ"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLXZpZGVvLXBvc3Q.option.dmlzaWJpbGl0eQ.allowed-value.c3RyaW5nOkNPTk5FQ1RJT05T.short_desc": {
+          "source": "Visible only to the member's connections",
+          "message": "メンバーのつながりのみに公開"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLXZpZGVvLXBvc3Q.option.dmlzaWJpbGl0eQ.allowed-value.c3RyaW5nOlBVQkxJQw.desc": {
+          "source": "Visible to anyone on or off LinkedIn",
+          "message": "LinkedIn内外のすべてのユーザーに公開"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLXZpZGVvLXBvc3Q.option.dmlzaWJpbGl0eQ.allowed-value.c3RyaW5nOlBVQkxJQw.display_name": {
+          "source": "Public",
+          "message": "パブリック"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLXZpZGVvLXBvc3Q.option.dmlzaWJpbGl0eQ.allowed-value.c3RyaW5nOlBVQkxJQw.short_desc": {
+          "source": "Visible to anyone on or off LinkedIn",
+          "message": "LinkedIn内外のすべてのユーザーに公開"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLXZpZGVvLXBvc3Q.option.dmlzaWJpbGl0eQ.desc": {
+          "source": "Who can see the post",
+          "message": "投稿の公開範囲"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLXZpZGVvLXBvc3Q.option.dmlzaWJpbGl0eQ.display_name": {
+          "source": "Visibility",
+          "message": "公開設定"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLXZpZGVvLXBvc3Q.option.dmlzaWJpbGl0eQ.short_desc": {
+          "source": "Who can see the post",
+          "message": "投稿の公開範囲"
+        },
+        "app.TGlua2VkSW4.action.Y3JlYXRlLXZpZGVvLXBvc3Q.short_desc": {
+          "source": "Publish a post with a video",
+          "message": "動画付きの投稿を公開"
+        },
+        "app.TGlua2VkSW4.action.Z2V0LWN1cnJlbnQtdXNlcg.desc": {
+          "source": "Retrieves the signed-in member's profile: name, email address, profile picture and locale.\n\nThe `urn` field is the member's `urn:li:person:{id}` URN, which is what LinkedIn APIs take wherever a member has to be named.",
+          "message": "サインインしているメンバーのプロファイル（名前、メールアドレス、プロファイル画像、ロケール）を取得します。\n\n`urn` フィールドはメンバーの `urn:li:person:{id}` URNであり、メンバーを指定する必要があるLinkedIn APIの各所で使用されます。"
+        },
+        "app.TGlua2VkSW4.action.Z2V0LWN1cnJlbnQtdXNlcg.display_name": {
+          "source": "Get Current User",
+          "message": "現在のユーザーを取得"
+        },
+        "app.TGlua2VkSW4.action.Z2V0LWN1cnJlbnQtdXNlcg.short_desc": {
+          "source": "Get the signed-in member's profile",
+          "message": "サインインしているメンバーのプロファイルを取得"
+        },
+        "app.TGlua2VkSW4.action.Z2V0LXBvc3Q.desc": {
+          "source": "Retrieves a post by its URN, with its text, visibility, attached content and timestamps.\n\n**Requires the `r_member_social` permission**, which LinkedIn grants only to approved applications; add it to the connection's scopes once the application has been approved for it, otherwise this action fails with HTTP 403.\n\nTimestamps are returned as dates: LinkedIn reports them as milliseconds since the epoch and they are converted here.",
+          "message": "URNで投稿を取得し、テキスト、公開範囲、添付コンテンツ、タイムスタンプを含めて返します。\n\n**`r_member_social` 権限が必要です**（LinkedInが承認済みアプリケーションにのみ付与）。アプリケーションが承認されたら接続のスコープに追加してください。そうしないと、このアクションはHTTP 403で失敗します。\n\nタイムスタンプは日付として返されます（LinkedInはエポックからのミリ秒数として報告し、ここで変換されます）。"
+        },
+        "app.TGlua2VkSW4.action.Z2V0LXBvc3Q.display_name": {
+          "source": "Get Post",
+          "message": "投稿を取得"
+        },
+        "app.TGlua2VkSW4.action.Z2V0LXBvc3Q.option.cG9zdA.desc": {
+          "source": "The URN of the post to retrieve",
+          "message": "取得する投稿のURN"
+        },
+        "app.TGlua2VkSW4.action.Z2V0LXBvc3Q.option.cG9zdA.display_name": {
+          "source": "Post URN",
+          "message": "投稿URN"
+        },
+        "app.TGlua2VkSW4.action.Z2V0LXBvc3Q.option.cG9zdA.short_desc": {
+          "source": "The URN of the post to retrieve",
+          "message": "取得する投稿のURN"
+        },
+        "app.TGlua2VkSW4.action.Z2V0LXBvc3Q.option.dmlld19jb250ZXh0.allowed-value.c3RyaW5nOkFVVEhPUg.desc": {
+          "source": "The latest version, which may be `DRAFT` or `PROCESSING` rather than published",
+          "message": "最新バージョン（公開済みではなく `DRAFT` または `PROCESSING` の可能性があります）"
+        },
+        "app.TGlua2VkSW4.action.Z2V0LXBvc3Q.option.dmlld19jb250ZXh0.allowed-value.c3RyaW5nOkFVVEhPUg.display_name": {
+          "source": "Author",
+          "message": "作成者"
+        },
+        "app.TGlua2VkSW4.action.Z2V0LXBvc3Q.option.dmlld19jb250ZXh0.allowed-value.c3RyaW5nOkFVVEhPUg.short_desc": {
+          "source": "The latest version, including drafts and processing posts",
+          "message": "下書きや処理中の投稿を含む最新バージョン"
+        },
+        "app.TGlua2VkSW4.action.Z2V0LXBvc3Q.option.dmlld19jb250ZXh0.allowed-value.c3RyaW5nOlJFQURFUg.desc": {
+          "source": "The published version visible to a general audience",
+          "message": "一般ユーザーに表示される公開バージョン"
+        },
+        "app.TGlua2VkSW4.action.Z2V0LXBvc3Q.option.dmlld19jb250ZXh0.allowed-value.c3RyaW5nOlJFQURFUg.display_name": {
+          "source": "Reader",
+          "message": "閲覧者"
+        },
+        "app.TGlua2VkSW4.action.Z2V0LXBvc3Q.option.dmlld19jb250ZXh0.allowed-value.c3RyaW5nOlJFQURFUg.short_desc": {
+          "source": "The published version visible to a general audience",
+          "message": "一般ユーザーに表示される公開バージョン"
+        },
+        "app.TGlua2VkSW4.action.Z2V0LXBvc3Q.option.dmlld19jb250ZXh0.desc": {
+          "source": "Whether to read the post as its author or as a reader.  `AUTHOR` returns the latest version, which may still be a draft or processing; `READER` returns the published version visible to a general audience",
+          "message": "投稿を作成者として読み取るか、閲覧者として読み取るか。`AUTHOR` は最新バージョンを返します（下書きまたは処理中である可能性があります）。`READER` は一般公開されている公開済みバージョンを返します。"
+        },
+        "app.TGlua2VkSW4.action.Z2V0LXBvc3Q.option.dmlld19jb250ZXh0.display_name": {
+          "source": "View Context",
+          "message": "表示コンテキスト"
+        },
+        "app.TGlua2VkSW4.action.Z2V0LXBvc3Q.option.dmlld19jb250ZXh0.short_desc": {
+          "source": "Whether to read the post as its author or as a reader",
+          "message": "投稿を作成者として読み取るか、閲覧者として読み取るか"
+        },
+        "app.TGlua2VkSW4.action.Z2V0LXBvc3Q.short_desc": {
+          "source": "Retrieve a post by its URN",
+          "message": "URNで投稿を取得"
+        },
+        "app.TGlua2VkSW4.action.ZGVsZXRlLXBvc3Q.desc": {
+          "source": "Deletes a post.\n\nDeletion is idempotent: deleting a post that is already gone succeeds rather than failing.",
+          "message": "投稿を削除します。\n\n削除はべき等です。すでに存在しない投稿を削除した場合でも、失敗せずに成功します。"
+        },
+        "app.TGlua2VkSW4.action.ZGVsZXRlLXBvc3Q.display_name": {
+          "source": "Delete Post",
+          "message": "投稿を削除"
+        },
+        "app.TGlua2VkSW4.action.ZGVsZXRlLXBvc3Q.option.cG9zdA.desc": {
+          "source": "The URN of the post to delete",
+          "message": "削除する投稿のURN"
+        },
+        "app.TGlua2VkSW4.action.ZGVsZXRlLXBvc3Q.option.cG9zdA.display_name": {
+          "source": "Post URN",
+          "message": "投稿URN"
+        },
+        "app.TGlua2VkSW4.action.ZGVsZXRlLXBvc3Q.option.cG9zdA.short_desc": {
+          "source": "The URN of the post to delete",
+          "message": "削除する投稿のURN"
+        },
+        "app.TGlua2VkSW4.action.ZGVsZXRlLXBvc3Q.short_desc": {
+          "source": "Delete a post",
+          "message": "投稿を削除"
+        },
+        "app.TGlua2VkSW4.action.bWFrZS1hcGktY2FsbA.desc": {
+          "source": "Make a custom HTTP / REST API call to **LinkedIn** using the configured connection's authentication.\n\nSpecify the HTTP method, the URI path (relative to the connection's API base URL), optional query parameters, headers, and request body. The response is returned as a hash containing the status code, response headers, and response body.\n\nUse this action for endpoints that are not yet exposed as first-class actions on this app.",
+          "message": "設定された接続の認証を使用して、**LinkedIn** へのカスタムHTTP / REST API呼び出しを実行します。\n\nHTTPメソッド、URIパス（接続のAPIベースURLに対する相対パス）、任意のクエリパラメータ、ヘッダー、リクエスト本文を指定します。レスポンスはステータスコード、レスポンスヘッダー、レスポンス本文を含むハッシュとして返されます。\n\nこのアクションは、このアプリでファーストクラスのアクションとしてまだ公開されていないエンドポイントに使用します。"
+        },
+        "app.TGlua2VkSW4.action.bWFrZS1hcGktY2FsbA.display_name": {
+          "source": "Make an API call",
+          "message": "API コールを実行"
+        },
+        "app.TGlua2VkSW4.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.desc": {
+          "source": "The request body. The effective type depends on `body_type`: JSON/form/YAML expect a hash, XML/text expect a string, multipart expects a file structure, binary expects raw bytes.",
+          "message": "リクエストボディ。有効な型は`body_type`に依存します。JSON/form/YAMLはハッシュを期待し、XML/textは文字列を期待し、multipartはファイル構造を期待し、binaryは生バイトを期待します。"
+        },
+        "app.TGlua2VkSW4.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.display_name": {
+          "source": "Body",
+          "message": "ボディ"
+        },
+        "app.TGlua2VkSW4.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.short_desc": {
+          "source": "The request body",
+          "message": "リクエストボディ"
+        },
+        "app.TGlua2VkSW4.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.desc": {
+          "source": "Upload a file using `multipart/form-data`. The body must be a @ref DataProvider::FileDataType \"FileDataType\" structure (filename + content + mime_type). The framework builds the multipart envelope and sets the boundary header.",
+          "message": "`multipart/form-data`を使用してファイルをアップロードします。ボディは@ref DataProvider::FileDataType \"FileDataType\"構造（filename + content + mime_type）である必要があります。フレームワークがmultipartエンベロープを構築し、boundaryヘッダーを設定します。"
+        },
+        "app.TGlua2VkSW4.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.display_name": {
+          "source": "Multipart Form",
+          "message": "マルチパートフォーム"
+        },
+        "app.TGlua2VkSW4.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.short_desc": {
+          "source": "Upload a file using multipart/form-data",
+          "message": "multipart/form-dataを使用してファイルをアップロード"
+        },
+        "app.TGlua2VkSW4.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.desc": {
+          "source": "Pass the body to the REST client unchanged; the client decides serialization based on its configured `data` option and the value type",
+          "message": "ボディを変更せずにRESTクライアントに渡します。クライアントは設定された`data`オプションと値の型に基づいてシリアライズを決定します"
+        },
+        "app.TGlua2VkSW4.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.display_name": {
+          "source": "Auto",
+          "message": "自動"
+        },
+        "app.TGlua2VkSW4.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.short_desc": {
+          "source": "Pass-through; use connection serialization and let the REST client decide",
+          "message": "パススルー。接続のシリアライズを使用し、RESTクライアントに決定させます"
+        },
+        "app.TGlua2VkSW4.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.desc": {
+          "source": "Send the body as raw bytes. The body must be a binary value. Sets `Content-Type: application/octet-stream` unless overridden by `hdr`.",
+          "message": "ボディを生バイトとして送信します。ボディはバイナリ値である必要があります。`hdr`によってオーバーライドされない限り、`Content-Type: application/octet-stream`を設定します。"
+        },
+        "app.TGlua2VkSW4.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.display_name": {
+          "source": "Raw Binary",
+          "message": "生バイナリ"
+        },
+        "app.TGlua2VkSW4.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.short_desc": {
+          "source": "Send body as raw bytes",
+          "message": "ボディを生バイトとして送信"
+        },
+        "app.TGlua2VkSW4.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.desc": {
+          "source": "Serialize a hash of form fields as `application/x-www-form-urlencoded`. The body must be a hash whose values are scalars (strings/numbers/booleans).",
+          "message": "フォームフィールドのハッシュを`application/x-www-form-urlencoded`としてシリアライズします。ボディは値がスカラー（文字列/数値/ブール値）のハッシュである必要があります。"
+        },
+        "app.TGlua2VkSW4.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.display_name": {
+          "source": "Form (URL-encoded)",
+          "message": "フォーム (URLエンコード)"
+        },
+        "app.TGlua2VkSW4.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.short_desc": {
+          "source": "Serialize body as application/x-www-form-urlencoded form fields",
+          "message": "ボディをapplication/x-www-form-urlencodedフォームフィールドとしてシリアライズ"
+        },
+        "app.TGlua2VkSW4.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.desc": {
+          "source": "Serialize the body as JSON; sets `Content-Type: application/json`. The body should be a hash, list, or scalar value.",
+          "message": "ボディをJSONとしてシリアライズします。`Content-Type: application/json`を設定します。ボディはハッシュ、リスト、またはスカラー値である必要があります。"
+        },
+        "app.TGlua2VkSW4.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.display_name": {
+          "source": "JSON",
+          "message": "JSON"
+        },
+        "app.TGlua2VkSW4.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.short_desc": {
+          "source": "Serialize body as JSON",
+          "message": "ボディをJSONとしてシリアライズ"
+        },
+        "app.TGlua2VkSW4.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.desc": {
+          "source": "Send the body as plain text. The body must be a string. Sets `Content-Type: text/plain`.",
+          "message": "ボディをプレーンテキストとして送信します。ボディは文字列である必要があります。`Content-Type: text/plain`を設定します。"
+        },
+        "app.TGlua2VkSW4.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.display_name": {
+          "source": "Plain Text",
+          "message": "プレーンテキスト"
+        },
+        "app.TGlua2VkSW4.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.short_desc": {
+          "source": "Send body as text/plain",
+          "message": "ボディをtext/plainとして送信"
+        },
+        "app.TGlua2VkSW4.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.desc": {
+          "source": "Send the body as XML. If the body is a hash it is serialized to XML; if it is a string it is sent verbatim. Sets `Content-Type: application/xml`.",
+          "message": "ボディをXMLとして送信します。ボディがハッシュの場合はXMLにシリアライズされ、文字列の場合はそのまま送信されます。`Content-Type: application/xml`を設定します。"
+        },
+        "app.TGlua2VkSW4.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.display_name": {
+          "source": "XML",
+          "message": "XML"
+        },
+        "app.TGlua2VkSW4.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.short_desc": {
+          "source": "Send body as XML",
+          "message": "ボディをXMLとして送信"
+        },
+        "app.TGlua2VkSW4.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.desc": {
+          "source": "Send the body as YAML. If the body is a hash it is serialized to YAML; if it is a string it is sent verbatim. Sets `Content-Type: application/x-yaml`.",
+          "message": "ボディをYAMLとして送信します。ボディがハッシュの場合はYAMLにシリアライズされ、文字列の場合はそのまま送信されます。`Content-Type: application/x-yaml`を設定します。"
+        },
+        "app.TGlua2VkSW4.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.display_name": {
+          "source": "YAML",
+          "message": "YAML"
+        },
+        "app.TGlua2VkSW4.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.short_desc": {
+          "source": "Send body as YAML",
+          "message": "ボディをYAMLとして送信"
+        },
+        "app.TGlua2VkSW4.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.desc": {
+          "source": "Selects the body serialization mode and the corresponding `Content-Type` header. Changing this field reshapes the `body` editor - selecting JSON exposes a JSON editor, selecting Multipart Form exposes a file picker, and so on.",
+          "message": "ボディのシリアライズモードと対応する`Content-Type`ヘッダーを選択します。このフィールドを変更すると`body`エディターの形状が変わります。JSONを選択するとJSONエディターが表示され、マルチパートフォームを選択するとファイルピッカーが表示される、などです。"
+        },
+        "app.TGlua2VkSW4.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.display_name": {
+          "source": "Body Type",
+          "message": "ボディタイプ"
+        },
+        "app.TGlua2VkSW4.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.short_desc": {
+          "source": "How the body is serialized and what Content-Type is sent",
+          "message": "ボディのシリアライズ方法および送信されるContent-Type"
+        },
+        "app.TGlua2VkSW4.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.desc": {
+          "source": "If `True`, non-2xx HTTP responses return as the normal response hash (with the actual status code) instead of raising `REST-RESPONSE-ERROR`. Useful for handling 4xx/5xx as data - e.g. checking whether a resource exists. Overrides the connection's `error_passthru` setting for this call only.",
+          "message": "`True`の場合、2xx以外のHTTPレスポンスは`REST-RESPONSE-ERROR`を発生させる代わりに（実際のステータスコードを含む）通常のレスポンスハッシュとして返されます。リソースが存在するかどうかの確認など、4xx/5xxをデータとして処理する場合に便利です。この呼び出しに限り、接続の`error_passthru`設定をオーバーライドします。"
+        },
+        "app.TGlua2VkSW4.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.display_name": {
+          "source": "Return Errors as Data",
+          "message": "エラーをデータとして返す"
+        },
+        "app.TGlua2VkSW4.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.short_desc": {
+          "source": "Return non-2xx responses normally instead of throwing",
+          "message": "例外をスローする代わりに2xx以外のレスポンスを通常通り返す"
+        },
+        "app.TGlua2VkSW4.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.desc": {
+          "source": "Optional list of HTTP status codes treated as success. If set and the response status is not in this list, the action throws `REST-STATUS-ERROR`. When unset, the REST client's default behavior applies (typically: 2xx is success, non-2xx throws).",
+          "message": "成功として扱われるHTTPステータスコードのオプションリスト。設定されていてレスポンスステータスがこのリストに含まれない場合、アクションは`REST-STATUS-ERROR`をスローします。未設定の場合、RESTクライアントのデフォルト動作が適用されます（通常：2xxは成功、2xx以外はスロー）。"
+        },
+        "app.TGlua2VkSW4.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.display_name": {
+          "source": "Expected Status Codes",
+          "message": "期待されるステータスコード"
+        },
+        "app.TGlua2VkSW4.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.short_desc": {
+          "source": "Response status codes treated as success",
+          "message": "成功として扱われるレスポンスステータスコード"
+        },
+        "app.TGlua2VkSW4.action.bWFrZS1hcGktY2FsbA.option.aGRy.desc": {
+          "source": "Hash of custom headers added to the request. These override any default headers set by `body_type` (e.g. supplying `Content-Type` here wins over the body-type default).",
+          "message": "リクエストに追加されるカスタムヘッダーのハッシュ。これらは`body_type`によって設定されたデフォルトヘッダーをオーバーライドします（例：ここで`Content-Type`を指定すると、ボディタイプのデフォルトより優先されます）。"
+        },
+        "app.TGlua2VkSW4.action.bWFrZS1hcGktY2FsbA.option.aGRy.display_name": {
+          "source": "Custom Headers",
+          "message": "カスタムヘッダー"
+        },
+        "app.TGlua2VkSW4.action.bWFrZS1hcGktY2FsbA.option.aGRy.short_desc": {
+          "source": "Extra request headers",
+          "message": "追加のリクエストヘッダー"
+        },
+        "app.TGlua2VkSW4.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.desc": {
+          "source": "If `True`, the response hash includes a `debug` sub-hash containing the request method/URL/headers (with sensitive values redacted), request and response sizes, and round-trip duration. Useful when investigating slow or failing calls. Off by default to keep responses lean.",
+          "message": "`True`の場合、レスポンスハッシュにはリクエストメソッド/URL/ヘッダー（機密値は伏字処理済み）、リクエストとレスポンスのサイズ、およびラウンドトリップ時間を含む`debug`サブハッシュが含まれます。遅い呼び出しや失敗した呼び出しを調査する際に便利です。レスポンスを軽量に保つため、デフォルトではオフになっています。"
+        },
+        "app.TGlua2VkSW4.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.display_name": {
+          "source": "Include Debug Info",
+          "message": "デバッグ情報を含める"
+        },
+        "app.TGlua2VkSW4.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.short_desc": {
+          "source": "Include request/timing/size debug info in the response",
+          "message": "レスポンスにリクエスト/タイミング/サイズのデバッグ情報を含める"
+        },
+        "app.TGlua2VkSW4.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.desc": {
+          "source": "HTTP `OPTIONS`",
+          "message": "HTTP `OPTIONS`"
+        },
+        "app.TGlua2VkSW4.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.display_name": {
+          "source": "OPTIONS",
+          "message": "OPTIONS"
+        },
+        "app.TGlua2VkSW4.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.short_desc": {
+          "source": "HTTP OPTIONS",
+          "message": "HTTP OPTIONS"
+        },
+        "app.TGlua2VkSW4.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.desc": {
+          "source": "HTTP `DELETE`",
+          "message": "HTTP `DELETE`"
+        },
+        "app.TGlua2VkSW4.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.display_name": {
+          "source": "DELETE",
+          "message": "DELETE"
+        },
+        "app.TGlua2VkSW4.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.short_desc": {
+          "source": "HTTP DELETE",
+          "message": "HTTP DELETE"
+        },
+        "app.TGlua2VkSW4.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.desc": {
+          "source": "HTTP `GET`",
+          "message": "HTTP `GET`"
+        },
+        "app.TGlua2VkSW4.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.display_name": {
+          "source": "GET",
+          "message": "GET"
+        },
+        "app.TGlua2VkSW4.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.short_desc": {
+          "source": "HTTP GET",
+          "message": "HTTP GET"
+        },
+        "app.TGlua2VkSW4.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.desc": {
+          "source": "HTTP `HEAD`",
+          "message": "HTTP `HEAD`"
+        },
+        "app.TGlua2VkSW4.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.display_name": {
+          "source": "HEAD",
+          "message": "HEAD"
+        },
+        "app.TGlua2VkSW4.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.short_desc": {
+          "source": "HTTP HEAD",
+          "message": "HTTP HEAD"
+        },
+        "app.TGlua2VkSW4.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.desc": {
+          "source": "HTTP `PATCH`",
+          "message": "HTTP `PATCH`"
+        },
+        "app.TGlua2VkSW4.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.display_name": {
+          "source": "PATCH",
+          "message": "PATCH"
+        },
+        "app.TGlua2VkSW4.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.short_desc": {
+          "source": "HTTP PATCH",
+          "message": "HTTP PATCH"
+        },
+        "app.TGlua2VkSW4.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.desc": {
+          "source": "HTTP `POST`",
+          "message": "HTTP `POST`"
+        },
+        "app.TGlua2VkSW4.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.display_name": {
+          "source": "POST",
+          "message": "POST"
+        },
+        "app.TGlua2VkSW4.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.short_desc": {
+          "source": "HTTP POST",
+          "message": "HTTP POST"
+        },
+        "app.TGlua2VkSW4.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.desc": {
+          "source": "HTTP `PUT`",
+          "message": "HTTP `PUT`"
+        },
+        "app.TGlua2VkSW4.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.display_name": {
+          "source": "PUT",
+          "message": "PUT"
+        },
+        "app.TGlua2VkSW4.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.short_desc": {
+          "source": "HTTP PUT",
+          "message": "HTTP PUT"
+        },
+        "app.TGlua2VkSW4.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.desc": {
+          "source": "HTTP `TRACE`",
+          "message": "HTTP `TRACE`"
+        },
+        "app.TGlua2VkSW4.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.display_name": {
+          "source": "TRACE",
+          "message": "TRACE"
+        },
+        "app.TGlua2VkSW4.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.short_desc": {
+          "source": "HTTP TRACE",
+          "message": "HTTP TRACE"
+        },
+        "app.TGlua2VkSW4.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "リクエストに使用するHTTPメソッド"
+        },
+        "app.TGlua2VkSW4.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.display_name": {
+          "source": "HTTP Method",
+          "message": "HTTPメソッド"
+        },
+        "app.TGlua2VkSW4.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.short_desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "リクエストに使用するHTTPメソッド"
+        },
+        "app.TGlua2VkSW4.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain `{name}` placeholders that are replaced from `path_vars`. Example: `/users/{id}/comments`.",
+          "message": "接続のAPIベースURLに対する相対URIパス。`path_vars`から置換される`{name}`プレースホルダーを含めることができます。例: `/users/{id}/comments`。"
+        },
+        "app.TGlua2VkSW4.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.display_name": {
+          "source": "URI Path",
+          "message": "URIパス"
+        },
+        "app.TGlua2VkSW4.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.short_desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain '{name}' placeholders that are replaced from 'path_vars'. Example: '/users/{id}/comments'",
+          "message": "接続のAPIベースURLに対する相対URIパス。'path_vars' から置換される '{name}' プレースホルダーを含めることができます。例: '/users/{id}/comments'"
+        },
+        "app.TGlua2VkSW4.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.desc": {
+          "source": "Hash of values substituted into `{name}` placeholders in the URI path. Example: with `path = /users/{id}` and `path_vars = {id: 123}` the framework sends `/users/123`. Values are URL-encoded.",
+          "message": "URIパス内の `{name}` プレースホルダーに置換される値のハッシュ。例: `path = /users/{id}` と `path_vars = {id: 123}` を指定すると、フレームワークは `/users/123` を送信します。値はURLエンコードされます。"
+        },
+        "app.TGlua2VkSW4.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.display_name": {
+          "source": "Path Variables",
+          "message": "パス変数"
+        },
+        "app.TGlua2VkSW4.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.short_desc": {
+          "source": "Values for {name} placeholders in path",
+          "message": "パス内の {name} プレースホルダーの値"
+        },
+        "app.TGlua2VkSW4.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.desc": {
+          "source": "Hash of query string parameters to append to the URI path. Values are URL-encoded; list values are joined with `,`.",
+          "message": "URIパスに追加するクエリ文字列パラメータのハッシュ。値はURLエンコードされます。リスト値は `,` で結合されます。"
+        },
+        "app.TGlua2VkSW4.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.display_name": {
+          "source": "Query Arguments",
+          "message": "クエリ引数"
+        },
+        "app.TGlua2VkSW4.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.short_desc": {
+          "source": "Query string parameters",
+          "message": "クエリ文字列パラメータ"
+        },
+        "app.TGlua2VkSW4.action.bWFrZS1hcGktY2FsbA.short_desc": {
+          "source": "Make a custom API call to LinkedIn",
+          "message": "LinkedInへのカスタムAPI呼び出しを実行"
+        },
+        "app.TGlua2VkSW4.action.cmVzaGFyZS1wb3N0.desc": {
+          "source": "Reshares an existing post as the signed-in member, optionally with commentary of your own above it.\n\nAny post the member can see may be reshared, including an organization's.",
+          "message": "サインインしているメンバーとして既存の投稿を再共有します。必要に応じて投稿の上に独自のコメントを追加できます。\n\n組織の投稿を含め、メンバーが表示できる任意の投稿を再共有できます。"
+        },
+        "app.TGlua2VkSW4.action.cmVzaGFyZS1wb3N0.display_name": {
+          "source": "Reshare Post",
+          "message": "投稿を再共有"
+        },
+        "app.TGlua2VkSW4.action.cmVzaGFyZS1wb3N0.option.Y29tbWVudGFyeQ.desc": {
+          "source": "The text to add above the reshared post; a reshare may carry no text of its own.\n\nMentions and hashtags are written **inline**: `@[Qore Technologies](urn:li:organization:2414183)` mentions an organization and `#coding` is a hashtag.",
+          "message": "再共有する投稿の上に追加するテキスト。再共有にはテキストを含めないこともできます。\n\nメンションとハッシュタグは**インライン**で記述します。`@[Qore Technologies](urn:li:organization:2414183)` は組織をメンションし、`#coding` はハッシュタグです。"
+        },
+        "app.TGlua2VkSW4.action.cmVzaGFyZS1wb3N0.option.Y29tbWVudGFyeQ.display_name": {
+          "source": "Text",
+          "message": "テキスト"
+        },
+        "app.TGlua2VkSW4.action.cmVzaGFyZS1wb3N0.option.Y29tbWVudGFyeQ.short_desc": {
+          "source": "The post's text",
+          "message": "投稿のテキスト"
+        },
+        "app.TGlua2VkSW4.action.cmVzaGFyZS1wb3N0.option.ZGlzYWJsZV9yZXNoYXJpbmc.desc": {
+          "source": "Prevent others from resharing the post",
+          "message": "他のユーザーによる投稿の再共有を無効化"
+        },
+        "app.TGlua2VkSW4.action.cmVzaGFyZS1wb3N0.option.ZGlzYWJsZV9yZXNoYXJpbmc.display_name": {
+          "source": "Disable Resharing",
+          "message": "再共有を無効化"
+        },
+        "app.TGlua2VkSW4.action.cmVzaGFyZS1wb3N0.option.ZGlzYWJsZV9yZXNoYXJpbmc.short_desc": {
+          "source": "Prevent others from resharing the post",
+          "message": "他のユーザーによる投稿の再共有を無効化"
+        },
+        "app.TGlua2VkSW4.action.cmVzaGFyZS1wb3N0.option.ZmVlZF9kaXN0cmlidXRpb24.allowed-value.c3RyaW5nOk1BSU5fRkVFRA.desc": {
+          "source": "The post is distributed to the main LinkedIn feed",
+          "message": "投稿はメインのLinkedInフィードに配信されます"
+        },
+        "app.TGlua2VkSW4.action.cmVzaGFyZS1wb3N0.option.ZmVlZF9kaXN0cmlidXRpb24.allowed-value.c3RyaW5nOk1BSU5fRkVFRA.display_name": {
+          "source": "Main Feed",
+          "message": "メインフィード"
+        },
+        "app.TGlua2VkSW4.action.cmVzaGFyZS1wb3N0.option.ZmVlZF9kaXN0cmlidXRpb24.allowed-value.c3RyaW5nOk1BSU5fRkVFRA.short_desc": {
+          "source": "Distributed to the main LinkedIn feed",
+          "message": "メインのLinkedInフィードに配信"
+        },
+        "app.TGlua2VkSW4.action.cmVzaGFyZS1wb3N0.option.ZmVlZF9kaXN0cmlidXRpb24.allowed-value.c3RyaW5nOk5PTkU.desc": {
+          "source": "The post is not distributed to any feed; it is reachable only by its URN",
+          "message": "投稿はどのフィードにも配信されず、そのURNからのみアクセス可能です"
+        },
+        "app.TGlua2VkSW4.action.cmVzaGFyZS1wb3N0.option.ZmVlZF9kaXN0cmlidXRpb24.allowed-value.c3RyaW5nOk5PTkU.display_name": {
+          "source": "None",
+          "message": "なし"
+        },
+        "app.TGlua2VkSW4.action.cmVzaGFyZS1wb3N0.option.ZmVlZF9kaXN0cmlidXRpb24.allowed-value.c3RyaW5nOk5PTkU.short_desc": {
+          "source": "Not distributed to any feed",
+          "message": "どのフィードにも配信しない"
+        },
+        "app.TGlua2VkSW4.action.cmVzaGFyZS1wb3N0.option.ZmVlZF9kaXN0cmlidXRpb24.desc": {
+          "source": "Where the post is distributed.  `NONE` creates a post that is reachable only by its URN and does not appear in any feed",
+          "message": "投稿の配信先。`NONE` を指定すると、どのフィードにも表示されず、URNからのみアクセス可能な投稿が作成されます"
+        },
+        "app.TGlua2VkSW4.action.cmVzaGFyZS1wb3N0.option.ZmVlZF9kaXN0cmlidXRpb24.display_name": {
+          "source": "Feed Distribution",
+          "message": "フィード配信"
+        },
+        "app.TGlua2VkSW4.action.cmVzaGFyZS1wb3N0.option.ZmVlZF9kaXN0cmlidXRpb24.short_desc": {
+          "source": "Where the post is distributed",
+          "message": "投稿の配信先"
+        },
+        "app.TGlua2VkSW4.action.cmVzaGFyZS1wb3N0.option.cG9zdA.desc": {
+          "source": "The URN of the post to reshare, e.g. `urn:li:share:6957408550713184256`",
+          "message": "再共有する投稿のURN（例: `urn:li:share:6957408550713184256`）"
+        },
+        "app.TGlua2VkSW4.action.cmVzaGFyZS1wb3N0.option.cG9zdA.display_name": {
+          "source": "Post URN",
+          "message": "投稿URN"
+        },
+        "app.TGlua2VkSW4.action.cmVzaGFyZS1wb3N0.option.cG9zdA.short_desc": {
+          "source": "The URN of the post to reshare",
+          "message": "再共有する投稿のURN"
+        },
+        "app.TGlua2VkSW4.action.cmVzaGFyZS1wb3N0.option.dmlzaWJpbGl0eQ.allowed-value.c3RyaW5nOkNPTk5FQ1RJT05T.desc": {
+          "source": "Visible only to the authenticated member's connections",
+          "message": "認証済みメンバーのつながりのみに公開"
+        },
+        "app.TGlua2VkSW4.action.cmVzaGFyZS1wb3N0.option.dmlzaWJpbGl0eQ.allowed-value.c3RyaW5nOkNPTk5FQ1RJT05T.display_name": {
+          "source": "Connections Only",
+          "message": "つながりのみ"
+        },
+        "app.TGlua2VkSW4.action.cmVzaGFyZS1wb3N0.option.dmlzaWJpbGl0eQ.allowed-value.c3RyaW5nOkNPTk5FQ1RJT05T.short_desc": {
+          "source": "Visible only to the member's connections",
+          "message": "メンバーのつながりのみに公開"
+        },
+        "app.TGlua2VkSW4.action.cmVzaGFyZS1wb3N0.option.dmlzaWJpbGl0eQ.allowed-value.c3RyaW5nOlBVQkxJQw.desc": {
+          "source": "Visible to anyone on or off LinkedIn",
+          "message": "LinkedIn内外のすべてのユーザーに公開"
+        },
+        "app.TGlua2VkSW4.action.cmVzaGFyZS1wb3N0.option.dmlzaWJpbGl0eQ.allowed-value.c3RyaW5nOlBVQkxJQw.display_name": {
+          "source": "Public",
+          "message": "パブリック"
+        },
+        "app.TGlua2VkSW4.action.cmVzaGFyZS1wb3N0.option.dmlzaWJpbGl0eQ.allowed-value.c3RyaW5nOlBVQkxJQw.short_desc": {
+          "source": "Visible to anyone on or off LinkedIn",
+          "message": "LinkedIn内外のすべてのユーザーに公開"
+        },
+        "app.TGlua2VkSW4.action.cmVzaGFyZS1wb3N0.option.dmlzaWJpbGl0eQ.desc": {
+          "source": "Who can see the post",
+          "message": "投稿の公開範囲"
+        },
+        "app.TGlua2VkSW4.action.cmVzaGFyZS1wb3N0.option.dmlzaWJpbGl0eQ.display_name": {
+          "source": "Visibility",
+          "message": "公開設定"
+        },
+        "app.TGlua2VkSW4.action.cmVzaGFyZS1wb3N0.option.dmlzaWJpbGl0eQ.short_desc": {
+          "source": "Who can see the post",
+          "message": "投稿の公開範囲"
+        },
+        "app.TGlua2VkSW4.action.cmVzaGFyZS1wb3N0.short_desc": {
+          "source": "Reshare an existing post",
+          "message": "既存の投稿を再共有"
+        },
+        "app.TGlua2VkSW4.action.dXBkYXRlLXBvc3Q.desc": {
+          "source": "Replaces the text of a post that has already been published.\n\nLinkedIn marks an edited post as edited; the attached content of a post cannot be changed after publication, only its text.",
+          "message": "公開済みの投稿のテキストを置換します。\n\nLinkedInでは編集された投稿に編集済みと表示されます。公開後に変更できるのはテキストのみで、添付コンテンツは変更できません。"
+        },
+        "app.TGlua2VkSW4.action.dXBkYXRlLXBvc3Q.display_name": {
+          "source": "Update Post",
+          "message": "投稿を更新"
+        },
+        "app.TGlua2VkSW4.action.dXBkYXRlLXBvc3Q.option.Y29tbWVudGFyeQ.desc": {
+          "source": "The post's new text, replacing the existing text.\n\nMentions and hashtags are written **inline**: `@[Qore Technologies](urn:li:organization:2414183)` mentions an organization and `#coding` is a hashtag.",
+          "message": "既存のテキストを置き換える、投稿の新しいテキスト。\n\nメンションとハッシュタグは**インライン**で記述します。`@[Qore Technologies](urn:li:organization:2414183)` は組織をメンションし、`#coding` はハッシュタグです。"
+        },
+        "app.TGlua2VkSW4.action.dXBkYXRlLXBvc3Q.option.Y29tbWVudGFyeQ.display_name": {
+          "source": "Text",
+          "message": "テキスト"
+        },
+        "app.TGlua2VkSW4.action.dXBkYXRlLXBvc3Q.option.Y29tbWVudGFyeQ.short_desc": {
+          "source": "The post's new text",
+          "message": "投稿の新しいテキスト"
+        },
+        "app.TGlua2VkSW4.action.dXBkYXRlLXBvc3Q.option.cG9zdA.desc": {
+          "source": "The URN of the post to update",
+          "message": "更新する投稿のURN"
+        },
+        "app.TGlua2VkSW4.action.dXBkYXRlLXBvc3Q.option.cG9zdA.display_name": {
+          "source": "Post URN",
+          "message": "投稿URN"
+        },
+        "app.TGlua2VkSW4.action.dXBkYXRlLXBvc3Q.option.cG9zdA.short_desc": {
+          "source": "The URN of the post to update",
+          "message": "更新する投稿のURN"
+        },
+        "app.TGlua2VkSW4.action.dXBkYXRlLXBvc3Q.short_desc": {
+          "source": "Change the text of a published post",
+          "message": "公開済み投稿のテキストを変更"
+        },
+        "app.TGlua2VkSW4.action.dXBsb2FkLWltYWdl.desc": {
+          "source": "Uploads an image to LinkedIn and returns its URN, without posting it.\n\nUse this when the same image is needed in more than one post, or as an article post's thumbnail. An uploaded image can be reused across posts and ad formats without uploading it again.",
+          "message": "画像を投稿せずにLinkedInにアップロードし、そのURNを返します。\n\n複数の投稿で同じ画像が必要な場合や、記事投稿のサムネイルとして使用する場合にこれを使用します。アップロードした画像は、再度アップロードすることなく、投稿や広告フォーマット間で再利用できます。"
+        },
+        "app.TGlua2VkSW4.action.dXBsb2FkLWltYWdl.display_name": {
+          "source": "Upload Image",
+          "message": "画像をアップロード"
+        },
+        "app.TGlua2VkSW4.action.dXBsb2FkLWltYWdl.option.aW1hZ2U.desc": {
+          "source": "The image to upload; LinkedIn accepts JPG, PNG and GIF with fewer than 36,152,320 pixels",
+          "message": "アップロードする画像。LinkedInは36,152,320ピクセル未満のJPG、PNG、GIFを受け入れます"
+        },
+        "app.TGlua2VkSW4.action.dXBsb2FkLWltYWdl.option.aW1hZ2U.display_name": {
+          "source": "Image",
+          "message": "画像"
+        },
+        "app.TGlua2VkSW4.action.dXBsb2FkLWltYWdl.option.aW1hZ2U.short_desc": {
+          "source": "The image to upload",
+          "message": "アップロードする画像"
+        },
+        "app.TGlua2VkSW4.action.dXBsb2FkLWltYWdl.option.b3duZXI.desc": {
+          "source": "The URN of the entity that will own the asset.  Defaults to the authenticated member (`urn:li:person:...`); an organization URN (`urn:li:organization:...`) requires an administrator or content-admin role on that page and the `w_organization_social` scope",
+          "message": "アセットを所有するエンティティのURN。デフォルトは認証されたメンバー（`urn:li:person:...`）です。組織のURN（`urn:li:organization:...`）を指定する場合は、そのページでの管理者またはコンテンツ管理者ロールおよび `w_organization_social` スコープが必要です"
+        },
+        "app.TGlua2VkSW4.action.dXBsb2FkLWltYWdl.option.b3duZXI.display_name": {
+          "source": "Owner URN",
+          "message": "所有者URN"
+        },
+        "app.TGlua2VkSW4.action.dXBsb2FkLWltYWdl.option.b3duZXI.short_desc": {
+          "source": "The URN of the entity that will own the asset",
+          "message": "アセットを所有するエンティティのURN"
+        },
+        "app.TGlua2VkSW4.action.dXBsb2FkLWltYWdl.short_desc": {
+          "source": "Upload an image and get its URN",
+          "message": "画像をアップロードしてそのURNを取得"
+        },
+        "app.TGlua2VkSW4.action.dXBsb2FkLXZpZGVv.desc": {
+          "source": "Uploads a video to LinkedIn and returns its URN, without posting it.\n\nThe upload is sent in parts, so a large video does not have to start again from the beginning if one part fails. LinkedIn processes the video afterwards; it can be attached to a post before processing finishes.",
+          "message": "動画を投稿せずにLinkedInにアップロードし、そのURNを返します。\n\nアップロードは分割して送信されるため、一部が失敗しても大きな動画を最初からやり直す必要はありません。LinkedInはその後動画を処理しますが、処理が完了する前でも投稿に添付できます。"
+        },
+        "app.TGlua2VkSW4.action.dXBsb2FkLXZpZGVv.display_name": {
+          "source": "Upload Video",
+          "message": "動画のアップロード"
+        },
+        "app.TGlua2VkSW4.action.dXBsb2FkLXZpZGVv.option.b3duZXI.desc": {
+          "source": "The URN of the entity that will own the asset.  Defaults to the authenticated member (`urn:li:person:...`); an organization URN (`urn:li:organization:...`) requires an administrator or content-admin role on that page and the `w_organization_social` scope",
+          "message": "アセットを所有するエンティティのURN。デフォルトは認証されたメンバー（`urn:li:person:...`）です。組織のURN（`urn:li:organization:...`）を指定する場合は、そのページでの管理者またはコンテンツ管理者ロールおよび `w_organization_social` スコープが必要です"
+        },
+        "app.TGlua2VkSW4.action.dXBsb2FkLXZpZGVv.option.b3duZXI.display_name": {
+          "source": "Owner URN",
+          "message": "所有者URN"
+        },
+        "app.TGlua2VkSW4.action.dXBsb2FkLXZpZGVv.option.b3duZXI.short_desc": {
+          "source": "The URN of the entity that will own the asset",
+          "message": "アセットを所有するエンティティのURN"
+        },
+        "app.TGlua2VkSW4.action.dXBsb2FkLXZpZGVv.option.dmlkZW8.desc": {
+          "source": "The video to upload; LinkedIn accepts MP4 between 75 KB and 500 MB and between 3 seconds and 30 minutes long",
+          "message": "アップロードする動画。LinkedInは75 KB〜500 MB、長さ3秒〜30分のMP4を受け入れます"
+        },
+        "app.TGlua2VkSW4.action.dXBsb2FkLXZpZGVv.option.dmlkZW8.display_name": {
+          "source": "Video",
+          "message": "動画"
+        },
+        "app.TGlua2VkSW4.action.dXBsb2FkLXZpZGVv.option.dmlkZW8.short_desc": {
+          "source": "The video to upload",
+          "message": "アップロードする動画"
+        },
+        "app.TGlua2VkSW4.action.dXBsb2FkLXZpZGVv.short_desc": {
+          "source": "Upload a video and get its URN",
+          "message": "動画をアップロードしてそのURNを取得"
+        },
+        "app.TGlua2VkSW4.desc": {
+          "source": "Provides access to [LinkedIn](https://www.linkedin.com) for publishing and managing content as the signed-in member, through the [Posts](https://learn.microsoft.com/en-us/linkedin/marketing/community-management/shares/posts-api), [Images](https://learn.microsoft.com/en-us/linkedin/marketing/community-management/shares/images-api) and [Videos](https://learn.microsoft.com/en-us/linkedin/marketing/community-management/shares/videos-api) APIs.\n\n**Common use cases**:\n- **Publishing**: post text, an article link, an image, a video, or a set of images, and reshare someone else's post with your own commentary\n- **Content management**: edit the text of a post you published, or delete it\n- **Media**: upload an image or a video once and reuse its URN across several posts\n\nMentions and hashtags are written **inline** in the post text: `@[Qore Technologies](urn:li:organization:2414183)` mentions an organization and `#coding` is a hashtag.\n\nAuthentication is OAuth2 with a LinkedIn developer application carrying the **Sign In with LinkedIn using OpenID Connect** and **Share on LinkedIn** products. Reading posts back (the **Get Post** action) additionally needs the `r_member_social` permission, which LinkedIn grants only to approved applications; add it to the connection's scopes once it has been approved.\n\nTo work with an organization's page content — its posts, comments, reactions, followers and analytics — use the **LinkedIn Organizations** application instead.\n\nLinkedIn is a trademark of LinkedIn Corporation",
+          "message": "[Posts](https://learn.microsoft.com/en-us/linkedin/marketing/community-management/shares/posts-api)、[Images](https://learn.microsoft.com/en-us/linkedin/marketing/community-management/shares/images-api)、[Videos](https://learn.microsoft.com/en-us/linkedin/marketing/community-management/shares/videos-api) APIを通じて、サインインしているメンバーとして [LinkedIn](https://www.linkedin.com) 上でコンテンツを公開および管理するためのアクセスを提供します。\n\n**一般的なユースケース**:\n- **公開**: テキスト、記事リンク、画像、動画、または一連の画像を投稿し、独自のコメントを添えて他のユーザーの投稿を再共有する\n- **コンテンツ管理**: 公開した投稿のテキストを編集するか、削除する\n- **メディア**: 画像や動画を一度アップロードし、そのURNを複数の投稿で再利用する\n\nメンションとハッシュタグは投稿テキスト内に**インライン**で記述します。`@[Qore Technologies](urn:li:organization:2414183)` は組織をメンションし、`#coding` はハッシュタグです。\n\n認証は、**Sign In with LinkedIn using OpenID Connect** および **Share on LinkedIn** プロダクトを持つLinkedIn開発者アプリケーションによるOAuth2です。投稿の読み戻し（**Get Post** アクション）には追加で `r_member_social` 権限が必要であり、これは承認されたアプリケーションにのみLinkedInから付与されます。承認されたら接続のスコープに追加してください。\n\n組織のページコンテンツ（投稿、コメント、リアクション、フォロワー、アナリティクスなど）を操作するには、代わりに **LinkedIn Organizations** アプリケーションを使用してください。\n\nLinkedIn is a trademark of LinkedIn Corporation"
+        },
+        "app.TGlua2VkSW4.display_name": {
+          "source": "LinkedIn",
+          "message": "LinkedIn"
+        },
+        "app.TGlua2VkSW4.short_desc": {
+          "source": "Publish and manage content on LinkedIn as the signed-in member",
+          "message": "サインインしているメンバーとしてLinkedIn上でコンテンツを公開および管理"
+        }
+      }
+    }
+  }
+}

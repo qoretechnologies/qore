@@ -1,0 +1,2181 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "ko": {
+      "messages": {
+        "app.U2VuZENsb3Vk.action.Y2FuY2VsLXBhcmNlbA.desc": {
+          "source": "Cancel an announced parcel in SendCloud. This removes the parcel from the outgoing queue and voids the shipping label if one was created.",
+          "message": "SendCloud에서 접수된 소포를 취소합니다. 이렇게 하면 발송 대기열에서 소포가 제거되고 배송 라벨이 생성된 경우 무효화됩니다."
+        },
+        "app.U2VuZENsb3Vk.action.Y2FuY2VsLXBhcmNlbA.display_name": {
+          "source": "Cancel Parcel",
+          "message": "소포 취소"
+        },
+        "app.U2VuZENsb3Vk.action.Y2FuY2VsLXBhcmNlbA.option.aWQ.desc": {
+          "source": "Numeric ID of the parcel to cancel",
+          "message": "취소할 소포의 숫자 ID"
+        },
+        "app.U2VuZENsb3Vk.action.Y2FuY2VsLXBhcmNlbA.option.aWQ.display_name": {
+          "source": "Parcel ID",
+          "message": "소포 ID"
+        },
+        "app.U2VuZENsb3Vk.action.Y2FuY2VsLXBhcmNlbA.option.aWQ.short_desc": {
+          "source": "Parcel to cancel",
+          "message": "취소할 소포"
+        },
+        "app.U2VuZENsb3Vk.action.Y2FuY2VsLXBhcmNlbA.short_desc": {
+          "source": "Cancel an announced parcel",
+          "message": "접수된 소포 취소"
+        },
+        "app.U2VuZENsb3Vk.action.Y2FuY2VsLXJldHVybg.desc": {
+          "source": "Cancel a previously created return so that it will not be processed further.",
+          "message": "이전에 생성된 반품을 취소하여 더 이상 처리되지 않도록 합니다."
+        },
+        "app.U2VuZENsb3Vk.action.Y2FuY2VsLXJldHVybg.display_name": {
+          "source": "Cancel Return",
+          "message": "반품 취소"
+        },
+        "app.U2VuZENsb3Vk.action.Y2FuY2VsLXJldHVybg.option.aWQ.desc": {
+          "source": "Numeric ID of the return to cancel",
+          "message": "취소할 반품의 숫자 ID"
+        },
+        "app.U2VuZENsb3Vk.action.Y2FuY2VsLXJldHVybg.option.aWQ.display_name": {
+          "source": "Return ID",
+          "message": "반품 ID"
+        },
+        "app.U2VuZENsb3Vk.action.Y2FuY2VsLXJldHVybg.option.aWQ.short_desc": {
+          "source": "Return to cancel",
+          "message": "취소할 반품"
+        },
+        "app.U2VuZENsb3Vk.action.Y2FuY2VsLXJldHVybg.short_desc": {
+          "source": "Cancel a return",
+          "message": "반품 취소"
+        },
+        "app.U2VuZENsb3Vk.action.Y3JlYXRlLXBhcmNlbA.desc": {
+          "source": "Create a new parcel in SendCloud, optionally requesting a shipping label and announcing the parcel to the selected carrier.",
+          "message": "SendCloud에서 새 소포를 생성하고, 선택적으로 배송 라벨을 요청하며 선택한 운송업체에 소포를 접수합니다."
+        },
+        "app.U2VuZENsb3Vk.action.Y3JlYXRlLXBhcmNlbA.display_name": {
+          "source": "Create Parcel",
+          "message": "소포 생성"
+        },
+        "app.U2VuZENsb3Vk.action.Y3JlYXRlLXBhcmNlbA.option.Y291bnRyeQ.desc": {
+          "source": "Two-letter ISO country code of the recipient",
+          "message": "수취인의 2자리 ISO 국가 코드"
+        },
+        "app.U2VuZENsb3Vk.action.Y3JlYXRlLXBhcmNlbA.option.Y291bnRyeQ.display_name": {
+          "source": "Country",
+          "message": "국가"
+        },
+        "app.U2VuZENsb3Vk.action.Y3JlYXRlLXBhcmNlbA.option.Y291bnRyeQ.short_desc": {
+          "source": "ISO 3166-1 alpha-2 country code",
+          "message": "ISO 3166-1 alpha-2 국가 코드"
+        },
+        "app.U2VuZENsb3Vk.action.Y3JlYXRlLXBhcmNlbA.option.Y291bnRyeV9zdGF0ZQ.desc": {
+          "source": "State or region code (required for some destinations such as US and CA)",
+          "message": "주 또는 지역 코드(미국 및 캐나다 등 일부 목적지에 필수)"
+        },
+        "app.U2VuZENsb3Vk.action.Y3JlYXRlLXBhcmNlbA.option.Y291bnRyeV9zdGF0ZQ.display_name": {
+          "source": "State / Region",
+          "message": "주 / 지역"
+        },
+        "app.U2VuZENsb3Vk.action.Y3JlYXRlLXBhcmNlbA.option.Y291bnRyeV9zdGF0ZQ.short_desc": {
+          "source": "Country state or region code",
+          "message": "국가 주 또는 지역 코드"
+        },
+        "app.U2VuZENsb3Vk.action.Y3JlYXRlLXBhcmNlbA.option.Y29tcGFueV9uYW1l.desc": {
+          "source": "Optional company name of the recipient",
+          "message": "수취인의 회사명(선택 사항)"
+        },
+        "app.U2VuZENsb3Vk.action.Y3JlYXRlLXBhcmNlbA.option.Y29tcGFueV9uYW1l.display_name": {
+          "source": "Company Name",
+          "message": "회사 이름"
+        },
+        "app.U2VuZENsb3Vk.action.Y3JlYXRlLXBhcmNlbA.option.Y29tcGFueV9uYW1l.short_desc": {
+          "source": "Recipient company name",
+          "message": "수령인 회사명"
+        },
+        "app.U2VuZENsb3Vk.action.Y3JlYXRlLXBhcmNlbA.option.Y2l0eQ.desc": {
+          "source": "City of the recipient",
+          "message": "수취인의 도시"
+        },
+        "app.U2VuZENsb3Vk.action.Y3JlYXRlLXBhcmNlbA.option.Y2l0eQ.display_name": {
+          "source": "City",
+          "message": "도시"
+        },
+        "app.U2VuZENsb3Vk.action.Y3JlYXRlLXBhcmNlbA.option.Y2l0eQ.short_desc": {
+          "source": "Recipient city",
+          "message": "수취인 도시"
+        },
+        "app.U2VuZENsb3Vk.action.Y3JlYXRlLXBhcmNlbA.option.Y3VzdG9tc19pbnZvaWNlX25y.desc": {
+          "source": "Invoice number to include on customs declarations (international shipments)",
+          "message": "세관 신고서에 포함할 송장 번호(국제 배송)"
+        },
+        "app.U2VuZENsb3Vk.action.Y3JlYXRlLXBhcmNlbA.option.Y3VzdG9tc19pbnZvaWNlX25y.display_name": {
+          "source": "Customs Invoice Number",
+          "message": "세관 송장 번호"
+        },
+        "app.U2VuZENsb3Vk.action.Y3JlYXRlLXBhcmNlbA.option.Y3VzdG9tc19pbnZvaWNlX25y.short_desc": {
+          "source": "Customs invoice number",
+          "message": "세관 송장 번호"
+        },
+        "app.U2VuZENsb3Vk.action.Y3JlYXRlLXBhcmNlbA.option.Y3VzdG9tc19zaGlwbWVudF90eXBl.allowed-value.aW50OjA.desc": {
+          "source": "Gift",
+          "message": "선물"
+        },
+        "app.U2VuZENsb3Vk.action.Y3JlYXRlLXBhcmNlbA.option.Y3VzdG9tc19zaGlwbWVudF90eXBl.allowed-value.aW50OjA.display_name": {
+          "source": "Gift",
+          "message": "선물"
+        },
+        "app.U2VuZENsb3Vk.action.Y3JlYXRlLXBhcmNlbA.option.Y3VzdG9tc19zaGlwbWVudF90eXBl.allowed-value.aW50OjE.desc": {
+          "source": "Documents",
+          "message": "문서"
+        },
+        "app.U2VuZENsb3Vk.action.Y3JlYXRlLXBhcmNlbA.option.Y3VzdG9tc19zaGlwbWVudF90eXBl.allowed-value.aW50OjE.display_name": {
+          "source": "Documents",
+          "message": "문서"
+        },
+        "app.U2VuZENsb3Vk.action.Y3JlYXRlLXBhcmNlbA.option.Y3VzdG9tc19zaGlwbWVudF90eXBl.allowed-value.aW50OjI.desc": {
+          "source": "Commercial goods",
+          "message": "상업용 상품"
+        },
+        "app.U2VuZENsb3Vk.action.Y3JlYXRlLXBhcmNlbA.option.Y3VzdG9tc19zaGlwbWVudF90eXBl.allowed-value.aW50OjI.display_name": {
+          "source": "Commercial Goods",
+          "message": "상업용 상품"
+        },
+        "app.U2VuZENsb3Vk.action.Y3JlYXRlLXBhcmNlbA.option.Y3VzdG9tc19zaGlwbWVudF90eXBl.allowed-value.aW50OjM.desc": {
+          "source": "Commercial sample",
+          "message": "상업용 샘플"
+        },
+        "app.U2VuZENsb3Vk.action.Y3JlYXRlLXBhcmNlbA.option.Y3VzdG9tc19zaGlwbWVudF90eXBl.allowed-value.aW50OjM.display_name": {
+          "source": "Commercial Sample",
+          "message": "상업용 샘플"
+        },
+        "app.U2VuZENsb3Vk.action.Y3JlYXRlLXBhcmNlbA.option.Y3VzdG9tc19zaGlwbWVudF90eXBl.allowed-value.aW50OjQ.desc": {
+          "source": "Returned goods",
+          "message": "반품 상품"
+        },
+        "app.U2VuZENsb3Vk.action.Y3JlYXRlLXBhcmNlbA.option.Y3VzdG9tc19zaGlwbWVudF90eXBl.allowed-value.aW50OjQ.display_name": {
+          "source": "Returned Goods",
+          "message": "반품 상품"
+        },
+        "app.U2VuZENsb3Vk.action.Y3JlYXRlLXBhcmNlbA.option.Y3VzdG9tc19zaGlwbWVudF90eXBl.desc": {
+          "source": "Customs shipment type; determines the CN22/CN23 declaration category",
+          "message": "세관 배송 유형; CN22/CN23 신고 카테고리를 결정합니다"
+        },
+        "app.U2VuZENsb3Vk.action.Y3JlYXRlLXBhcmNlbA.option.Y3VzdG9tc19zaGlwbWVudF90eXBl.display_name": {
+          "source": "Customs Shipment Type",
+          "message": "세관 배송 유형"
+        },
+        "app.U2VuZENsb3Vk.action.Y3JlYXRlLXBhcmNlbA.option.Y3VzdG9tc19zaGlwbWVudF90eXBl.short_desc": {
+          "source": "Customs shipment type code",
+          "message": "세관 배송 유형 코드"
+        },
+        "app.U2VuZENsb3Vk.action.Y3JlYXRlLXBhcmNlbA.option.YWRkcmVzc18y.desc": {
+          "source": "Apartment/suite or additional recipient address information",
+          "message": "아파트/호수 또는 추가 수취인 주소 정보"
+        },
+        "app.U2VuZENsb3Vk.action.Y3JlYXRlLXBhcmNlbA.option.YWRkcmVzc18y.display_name": {
+          "source": "Address Line 2",
+          "message": "주소 2"
+        },
+        "app.U2VuZENsb3Vk.action.Y3JlYXRlLXBhcmNlbA.option.YWRkcmVzc18y.short_desc": {
+          "source": "Secondary address line",
+          "message": "보조 주소 라인"
+        },
+        "app.U2VuZENsb3Vk.action.Y3JlYXRlLXBhcmNlbA.option.YWRkcmVzcw.desc": {
+          "source": "Street address of the recipient",
+          "message": "수취인의 도로명 주소"
+        },
+        "app.U2VuZENsb3Vk.action.Y3JlYXRlLXBhcmNlbA.option.YWRkcmVzcw.display_name": {
+          "source": "Street Address",
+          "message": "도로명 주소"
+        },
+        "app.U2VuZENsb3Vk.action.Y3JlYXRlLXBhcmNlbA.option.YWRkcmVzcw.short_desc": {
+          "source": "Primary recipient street",
+          "message": "기본 수취인 도로명 주소"
+        },
+        "app.U2VuZENsb3Vk.action.Y3JlYXRlLXBhcmNlbA.option.YXBwbHlfc2hpcHBpbmdfcnVsZXM.desc": {
+          "source": "If `True`, SendCloud applies configured shipping rules to choose a shipping method",
+          "message": "`True`인 경우 SendCloud가 구성된 배송 규칙을 적용하여 배송 방법을 선택합니다"
+        },
+        "app.U2VuZENsb3Vk.action.Y3JlYXRlLXBhcmNlbA.option.YXBwbHlfc2hpcHBpbmdfcnVsZXM.display_name": {
+          "source": "Apply Shipping Rules",
+          "message": "배송 규칙 적용"
+        },
+        "app.U2VuZENsb3Vk.action.Y3JlYXRlLXBhcmNlbA.option.YXBwbHlfc2hpcHBpbmdfcnVsZXM.short_desc": {
+          "source": "Apply SendCloud shipping rules",
+          "message": "SendCloud 배송 규칙 적용"
+        },
+        "app.U2VuZENsb3Vk.action.Y3JlYXRlLXBhcmNlbA.option.YnJhbmQ.desc": {
+          "source": "ID of the brand associated with this parcel (must be linked to the chosen sender address)",
+          "message": "이 소포와 연결된 브랜드의 ID(선택한 발신자 주소에 연결되어 있어야 함)"
+        },
+        "app.U2VuZENsb3Vk.action.Y3JlYXRlLXBhcmNlbA.option.YnJhbmQ.display_name": {
+          "source": "Brand",
+          "message": "브랜드"
+        },
+        "app.U2VuZENsb3Vk.action.Y3JlYXRlLXBhcmNlbA.option.YnJhbmQ.short_desc": {
+          "source": "Brand ID",
+          "message": "브랜드 ID"
+        },
+        "app.U2VuZENsb3Vk.action.Y3JlYXRlLXBhcmNlbA.option.ZGF0YQ.desc": {
+          "source": "Extra arbitrary merchant data attached to the parcel",
+          "message": "소포에 첨부된 추가 임의 판매자 데이터"
+        },
+        "app.U2VuZENsb3Vk.action.Y3JlYXRlLXBhcmNlbA.option.ZGF0YQ.display_name": {
+          "source": "Data",
+          "message": "데이터"
+        },
+        "app.U2VuZENsb3Vk.action.Y3JlYXRlLXBhcmNlbA.option.ZGF0YQ.short_desc": {
+          "source": "Arbitrary extra parcel data",
+          "message": "임의의 추가 소포 데이터"
+        },
+        "app.U2VuZENsb3Vk.action.Y3JlYXRlLXBhcmNlbA.option.ZW1haWw.desc": {
+          "source": "Email address of the recipient",
+          "message": "수취인의 이메일 주소"
+        },
+        "app.U2VuZENsb3Vk.action.Y3JlYXRlLXBhcmNlbA.option.ZW1haWw.display_name": {
+          "source": "Email",
+          "message": "이메일"
+        },
+        "app.U2VuZENsb3Vk.action.Y3JlYXRlLXBhcmNlbA.option.ZW1haWw.short_desc": {
+          "source": "Recipient email",
+          "message": "수취인 이메일"
+        },
+        "app.U2VuZENsb3Vk.action.Y3JlYXRlLXBhcmNlbA.option.ZXh0ZXJuYWxfb3JkZXJfaWQ.desc": {
+          "source": "Order ID in the originating e-commerce system",
+          "message": "발신 전자상거래 시스템의 주문 ID"
+        },
+        "app.U2VuZENsb3Vk.action.Y3JlYXRlLXBhcmNlbA.option.ZXh0ZXJuYWxfb3JkZXJfaWQ.display_name": {
+          "source": "External Order ID",
+          "message": "외부 주문 ID"
+        },
+        "app.U2VuZENsb3Vk.action.Y3JlYXRlLXBhcmNlbA.option.ZXh0ZXJuYWxfb3JkZXJfaWQ.short_desc": {
+          "source": "External system order ID",
+          "message": "외부 시스템 주문 ID"
+        },
+        "app.U2VuZENsb3Vk.action.Y3JlYXRlLXBhcmNlbA.option.ZXh0ZXJuYWxfcmVmZXJlbmNl.desc": {
+          "source": "Additional reference attached to the parcel",
+          "message": "소포에 첨부된 추가 참조"
+        },
+        "app.U2VuZENsb3Vk.action.Y3JlYXRlLXBhcmNlbA.option.ZXh0ZXJuYWxfcmVmZXJlbmNl.display_name": {
+          "source": "External Reference",
+          "message": "외부 참조"
+        },
+        "app.U2VuZENsb3Vk.action.Y3JlYXRlLXBhcmNlbA.option.ZXh0ZXJuYWxfcmVmZXJlbmNl.short_desc": {
+          "source": "Free-form reference",
+          "message": "자유 형식 참조"
+        },
+        "app.U2VuZENsb3Vk.action.Y3JlYXRlLXBhcmNlbA.option.ZnJvbV90ZWxlcGhvbmU.desc": {
+          "source": "If provided, overrides the sender phone number for this parcel",
+          "message": "제공된 경우 이 소포의 발신자 전화번호를 재정의합니다"
+        },
+        "app.U2VuZENsb3Vk.action.Y3JlYXRlLXBhcmNlbA.option.ZnJvbV90ZWxlcGhvbmU.display_name": {
+          "source": "Sender Phone (Override)",
+          "message": "발신자 전화번호(재정의)"
+        },
+        "app.U2VuZENsb3Vk.action.Y3JlYXRlLXBhcmNlbA.option.ZnJvbV90ZWxlcGhvbmU.short_desc": {
+          "source": "Per-parcel sender phone override",
+          "message": "소포별 발신자 전화번호 재정의"
+        },
+        "app.U2VuZENsb3Vk.action.Y3JlYXRlLXBhcmNlbA.option.ZnJvbV9hZGRyZXNzXzE.desc": {
+          "source": "If provided, overrides the sender street line for this parcel",
+          "message": "제공된 경우 이 소포의 발신자 도로명 주소를 재정의합니다"
+        },
+        "app.U2VuZENsb3Vk.action.Y3JlYXRlLXBhcmNlbA.option.ZnJvbV9hZGRyZXNzXzE.display_name": {
+          "source": "Sender Street (Override)",
+          "message": "발신자 도로명 주소(재정의)"
+        },
+        "app.U2VuZENsb3Vk.action.Y3JlYXRlLXBhcmNlbA.option.ZnJvbV9hZGRyZXNzXzE.short_desc": {
+          "source": "Per-parcel sender street override",
+          "message": "소포별 발신자 도로명 주소 재정의"
+        },
+        "app.U2VuZENsb3Vk.action.Y3JlYXRlLXBhcmNlbA.option.ZnJvbV9hZGRyZXNzXzI.desc": {
+          "source": "If provided, overrides the sender address-line-2 for this parcel",
+          "message": "제공된 경우 이 소포의 발신자 주소 라인 2를 재정의합니다"
+        },
+        "app.U2VuZENsb3Vk.action.Y3JlYXRlLXBhcmNlbA.option.ZnJvbV9hZGRyZXNzXzI.display_name": {
+          "source": "Sender Address 2 (Override)",
+          "message": "발신자 주소 2(재정의)"
+        },
+        "app.U2VuZENsb3Vk.action.Y3JlYXRlLXBhcmNlbA.option.ZnJvbV9hZGRyZXNzXzI.short_desc": {
+          "source": "Per-parcel sender address line 2 override",
+          "message": "소포별 발신자 주소 라인 2 재정의"
+        },
+        "app.U2VuZENsb3Vk.action.Y3JlYXRlLXBhcmNlbA.option.ZnJvbV9jaXR5.desc": {
+          "source": "If provided, overrides the sender city for this parcel",
+          "message": "제공된 경우 이 소포의 발신자 도시를 재정의합니다"
+        },
+        "app.U2VuZENsb3Vk.action.Y3JlYXRlLXBhcmNlbA.option.ZnJvbV9jaXR5.display_name": {
+          "source": "Sender City (Override)",
+          "message": "발신자 도시(재정의)"
+        },
+        "app.U2VuZENsb3Vk.action.Y3JlYXRlLXBhcmNlbA.option.ZnJvbV9jaXR5.short_desc": {
+          "source": "Per-parcel sender city override",
+          "message": "소포별 발신자 도시 재정의"
+        },
+        "app.U2VuZENsb3Vk.action.Y3JlYXRlLXBhcmNlbA.option.ZnJvbV9jb21wYW55X25hbWU.desc": {
+          "source": "If provided, overrides the sender company for this parcel",
+          "message": "제공된 경우 이 소포의 발신자 회사를 재정의합니다"
+        },
+        "app.U2VuZENsb3Vk.action.Y3JlYXRlLXBhcmNlbA.option.ZnJvbV9jb21wYW55X25hbWU.display_name": {
+          "source": "Sender Company (Override)",
+          "message": "발신자 회사(재정의)"
+        },
+        "app.U2VuZENsb3Vk.action.Y3JlYXRlLXBhcmNlbA.option.ZnJvbV9jb21wYW55X25hbWU.short_desc": {
+          "source": "Per-parcel sender company override",
+          "message": "소포별 발신자 회사 재정의"
+        },
+        "app.U2VuZENsb3Vk.action.Y3JlYXRlLXBhcmNlbA.option.ZnJvbV9jb3VudHJ5.desc": {
+          "source": "If provided, overrides the sender country (ISO 3166-1 alpha-2) for this parcel",
+          "message": "제공된 경우 이 소포의 발신자 국가(ISO 3166-1 alpha-2)를 재정의합니다"
+        },
+        "app.U2VuZENsb3Vk.action.Y3JlYXRlLXBhcmNlbA.option.ZnJvbV9jb3VudHJ5.display_name": {
+          "source": "Sender Country (Override)",
+          "message": "발신자 국가(재정의)"
+        },
+        "app.U2VuZENsb3Vk.action.Y3JlYXRlLXBhcmNlbA.option.ZnJvbV9jb3VudHJ5.short_desc": {
+          "source": "Per-parcel sender country override",
+          "message": "소포별 발신자 국가 재정의"
+        },
+        "app.U2VuZENsb3Vk.action.Y3JlYXRlLXBhcmNlbA.option.ZnJvbV9jb3VudHJ5X3N0YXRl.desc": {
+          "source": "If provided, overrides the sender state/region for this parcel",
+          "message": "제공된 경우 이 소포의 발신자 주/지역을 재정의합니다"
+        },
+        "app.U2VuZENsb3Vk.action.Y3JlYXRlLXBhcmNlbA.option.ZnJvbV9jb3VudHJ5X3N0YXRl.display_name": {
+          "source": "Sender State (Override)",
+          "message": "발신자 주(재정의)"
+        },
+        "app.U2VuZENsb3Vk.action.Y3JlYXRlLXBhcmNlbA.option.ZnJvbV9jb3VudHJ5X3N0YXRl.short_desc": {
+          "source": "Per-parcel sender state override",
+          "message": "소포별 발신자 주 재정의"
+        },
+        "app.U2VuZENsb3Vk.action.Y3JlYXRlLXBhcmNlbA.option.ZnJvbV9lbWFpbA.desc": {
+          "source": "If provided, overrides the sender email for this parcel",
+          "message": "제공된 경우 이 소포의 발신자 이메일을 재정의합니다"
+        },
+        "app.U2VuZENsb3Vk.action.Y3JlYXRlLXBhcmNlbA.option.ZnJvbV9lbWFpbA.display_name": {
+          "source": "Sender Email (Override)",
+          "message": "발신자 이메일(재정의)"
+        },
+        "app.U2VuZENsb3Vk.action.Y3JlYXRlLXBhcmNlbA.option.ZnJvbV9lbWFpbA.short_desc": {
+          "source": "Per-parcel sender email override",
+          "message": "소포별 발신자 이메일 재정의"
+        },
+        "app.U2VuZENsb3Vk.action.Y3JlYXRlLXBhcmNlbA.option.ZnJvbV9ob3VzZV9udW1iZXI.desc": {
+          "source": "If provided, overrides the sender house number for this parcel",
+          "message": "제공된 경우 이 소포의 발신자 건물 번호를 재정의합니다"
+        },
+        "app.U2VuZENsb3Vk.action.Y3JlYXRlLXBhcmNlbA.option.ZnJvbV9ob3VzZV9udW1iZXI.display_name": {
+          "source": "Sender House Number (Override)",
+          "message": "발신자 건물 번호(재정의)"
+        },
+        "app.U2VuZENsb3Vk.action.Y3JlYXRlLXBhcmNlbA.option.ZnJvbV9ob3VzZV9udW1iZXI.short_desc": {
+          "source": "Per-parcel sender house number override",
+          "message": "소포별 발신자 건물 번호 재정의"
+        },
+        "app.U2VuZENsb3Vk.action.Y3JlYXRlLXBhcmNlbA.option.ZnJvbV9uYW1l.desc": {
+          "source": "If provided, overrides the sender name for this parcel",
+          "message": "제공된 경우 이 소포의 발신자 이름을 재정의합니다"
+        },
+        "app.U2VuZENsb3Vk.action.Y3JlYXRlLXBhcmNlbA.option.ZnJvbV9uYW1l.display_name": {
+          "source": "Sender Name (Override)",
+          "message": "발신자 이름(재정의)"
+        },
+        "app.U2VuZENsb3Vk.action.Y3JlYXRlLXBhcmNlbA.option.ZnJvbV9uYW1l.short_desc": {
+          "source": "Per-parcel sender name override",
+          "message": "소포별 발송인 이름 재정의"
+        },
+        "app.U2VuZENsb3Vk.action.Y3JlYXRlLXBhcmNlbA.option.ZnJvbV9wb3N0YWxfY29kZQ.desc": {
+          "source": "If provided, overrides the sender postal code for this parcel",
+          "message": "제공된 경우 이 소포의 발송인 우편번호를 재정의합니다"
+        },
+        "app.U2VuZENsb3Vk.action.Y3JlYXRlLXBhcmNlbA.option.ZnJvbV9wb3N0YWxfY29kZQ.display_name": {
+          "source": "Sender Postal Code (Override)",
+          "message": "발송인 우편번호(재정의)"
+        },
+        "app.U2VuZENsb3Vk.action.Y3JlYXRlLXBhcmNlbA.option.ZnJvbV9wb3N0YWxfY29kZQ.short_desc": {
+          "source": "Per-parcel sender postal-code override",
+          "message": "소포별 발송인 우편번호 재정의"
+        },
+        "app.U2VuZENsb3Vk.action.Y3JlYXRlLXBhcmNlbA.option.aG91c2VfbnVtYmVy.desc": {
+          "source": "House/street number of the recipient",
+          "message": "수령인의 번지/거리 번호"
+        },
+        "app.U2VuZENsb3Vk.action.Y3JlYXRlLXBhcmNlbA.option.aG91c2VfbnVtYmVy.display_name": {
+          "source": "House Number",
+          "message": "번지 번호"
+        },
+        "app.U2VuZENsb3Vk.action.Y3JlYXRlLXBhcmNlbA.option.aG91c2VfbnVtYmVy.short_desc": {
+          "source": "Recipient house number",
+          "message": "수령인 번지 번호"
+        },
+        "app.U2VuZENsb3Vk.action.Y3JlYXRlLXBhcmNlbA.option.aGVpZ2h0.desc": {
+          "source": "Height of the parcel (string-encoded decimal, unit via `length_unit`, e.g., `\"10.0\"`)",
+          "message": "소포의 높이(문자열 인코딩된 10진수, 단위는 `length_unit`을 통해 지정, 예: `\"10.0\"`)"
+        },
+        "app.U2VuZENsb3Vk.action.Y3JlYXRlLXBhcmNlbA.option.aGVpZ2h0.display_name": {
+          "source": "Height",
+          "message": "높이"
+        },
+        "app.U2VuZENsb3Vk.action.Y3JlYXRlLXBhcmNlbA.option.aGVpZ2h0.short_desc": {
+          "source": "Parcel height",
+          "message": "소포 높이"
+        },
+        "app.U2VuZENsb3Vk.action.Y3JlYXRlLXBhcmNlbA.option.aXNfcmV0dXJu.desc": {
+          "source": "If `True`, mark this parcel as a return shipment",
+          "message": "`True`인 경우 이 소포를 반송 배송으로 표시합니다"
+        },
+        "app.U2VuZENsb3Vk.action.Y3JlYXRlLXBhcmNlbA.option.aXNfcmV0dXJu.display_name": {
+          "source": "Is Return",
+          "message": "반품 여부"
+        },
+        "app.U2VuZENsb3Vk.action.Y3JlYXRlLXBhcmNlbA.option.aXNfcmV0dXJu.short_desc": {
+          "source": "Whether this parcel is a return",
+          "message": "이 소포가 반송품인지 여부"
+        },
+        "app.U2VuZENsb3Vk.action.Y3JlYXRlLXBhcmNlbA.option.b3JkZXJfbnVtYmVy.desc": {
+          "source": "Order number to display on the label",
+          "message": "라벨에 표시할 주문 번호"
+        },
+        "app.U2VuZENsb3Vk.action.Y3JlYXRlLXBhcmNlbA.option.b3JkZXJfbnVtYmVy.display_name": {
+          "source": "Order Number",
+          "message": "주문 번호"
+        },
+        "app.U2VuZENsb3Vk.action.Y3JlYXRlLXBhcmNlbA.option.b3JkZXJfbnVtYmVy.short_desc": {
+          "source": "Merchant order number",
+          "message": "가맹점 주문 번호"
+        },
+        "app.U2VuZENsb3Vk.action.Y3JlYXRlLXBhcmNlbA.option.bGVuZ3Ro.desc": {
+          "source": "Length of the parcel (string-encoded decimal, unit via `length_unit`, e.g., `\"30.0\"`)",
+          "message": "소포의 길이(문자열 인코딩된 10진수, 단위는 `length_unit`을 통해 지정, 예: `\"30.0\"`)"
+        },
+        "app.U2VuZENsb3Vk.action.Y3JlYXRlLXBhcmNlbA.option.bGVuZ3Ro.display_name": {
+          "source": "Length",
+          "message": "길이"
+        },
+        "app.U2VuZENsb3Vk.action.Y3JlYXRlLXBhcmNlbA.option.bGVuZ3Ro.short_desc": {
+          "source": "Parcel length",
+          "message": "소포 길이"
+        },
+        "app.U2VuZENsb3Vk.action.Y3JlYXRlLXBhcmNlbA.option.bGVuZ3RoX3VuaXQ.allowed-value.c3RyaW5nOm0.desc": {
+          "source": "Meters",
+          "message": "미터"
+        },
+        "app.U2VuZENsb3Vk.action.Y3JlYXRlLXBhcmNlbA.option.bGVuZ3RoX3VuaXQ.allowed-value.c3RyaW5nOm0.display_name": {
+          "source": "Meters",
+          "message": "미터"
+        },
+        "app.U2VuZENsb3Vk.action.Y3JlYXRlLXBhcmNlbA.option.bGVuZ3RoX3VuaXQ.allowed-value.c3RyaW5nOm1t.desc": {
+          "source": "Millimeters",
+          "message": "밀리미터"
+        },
+        "app.U2VuZENsb3Vk.action.Y3JlYXRlLXBhcmNlbA.option.bGVuZ3RoX3VuaXQ.allowed-value.c3RyaW5nOm1t.display_name": {
+          "source": "Millimeters",
+          "message": "밀리미터"
+        },
+        "app.U2VuZENsb3Vk.action.Y3JlYXRlLXBhcmNlbA.option.bGVuZ3RoX3VuaXQ.allowed-value.c3RyaW5nOmNt.desc": {
+          "source": "Centimeters",
+          "message": "센티미터"
+        },
+        "app.U2VuZENsb3Vk.action.Y3JlYXRlLXBhcmNlbA.option.bGVuZ3RoX3VuaXQ.allowed-value.c3RyaW5nOmNt.display_name": {
+          "source": "Centimeters",
+          "message": "센티미터"
+        },
+        "app.U2VuZENsb3Vk.action.Y3JlYXRlLXBhcmNlbA.option.bGVuZ3RoX3VuaXQ.allowed-value.c3RyaW5nOmlu.desc": {
+          "source": "Inches",
+          "message": "인치"
+        },
+        "app.U2VuZENsb3Vk.action.Y3JlYXRlLXBhcmNlbA.option.bGVuZ3RoX3VuaXQ.allowed-value.c3RyaW5nOmlu.display_name": {
+          "source": "Inches",
+          "message": "인치"
+        },
+        "app.U2VuZENsb3Vk.action.Y3JlYXRlLXBhcmNlbA.option.bGVuZ3RoX3VuaXQ.desc": {
+          "source": "Unit used for `length`, `width`, and `height`",
+          "message": "`length`, `width` 및 `height`에 사용되는 단위"
+        },
+        "app.U2VuZENsb3Vk.action.Y3JlYXRlLXBhcmNlbA.option.bGVuZ3RoX3VuaXQ.display_name": {
+          "source": "Length Unit",
+          "message": "길이 단위"
+        },
+        "app.U2VuZENsb3Vk.action.Y3JlYXRlLXBhcmNlbA.option.bGVuZ3RoX3VuaXQ.short_desc": {
+          "source": "Length/width/height unit",
+          "message": "길이/너비/높이 단위"
+        },
+        "app.U2VuZENsb3Vk.action.Y3JlYXRlLXBhcmNlbA.option.bmFtZQ.desc": {
+          "source": "Name of the parcel's recipient",
+          "message": "소포 수령인 이름"
+        },
+        "app.U2VuZENsb3Vk.action.Y3JlYXRlLXBhcmNlbA.option.bmFtZQ.display_name": {
+          "source": "Recipient Name",
+          "message": "수령인 이름"
+        },
+        "app.U2VuZENsb3Vk.action.Y3JlYXRlLXBhcmNlbA.option.bmFtZQ.short_desc": {
+          "source": "Full name of the recipient",
+          "message": "수령인 전체 이름"
+        },
+        "app.U2VuZENsb3Vk.action.Y3JlYXRlLXBhcmNlbA.option.c2VuZGVyX2FkZHJlc3M.desc": {
+          "source": "ID of the sender address. Omit to use the default sender address",
+          "message": "발송인 주소 ID입니다. 기본 발송인 주소를 사용하려면 생략하십시오"
+        },
+        "app.U2VuZENsb3Vk.action.Y3JlYXRlLXBhcmNlbA.option.c2VuZGVyX2FkZHJlc3M.display_name": {
+          "source": "Sender Address",
+          "message": "발송인 주소"
+        },
+        "app.U2VuZENsb3Vk.action.Y3JlYXRlLXBhcmNlbA.option.c2VuZGVyX2FkZHJlc3M.short_desc": {
+          "source": "Sender address ID",
+          "message": "발송인 주소 ID"
+        },
+        "app.U2VuZENsb3Vk.action.Y3JlYXRlLXBhcmNlbA.option.c2hpcHBpbmdfbWV0aG9k.desc": {
+          "source": "Numeric ID of the SendCloud shipping method to use for this parcel.  Required by the v3 announce endpoint (translated to a `shipping_option_code` via the SendCloud compatibility endpoint).  Use `list-shipping-methods` to discover available IDs for your account; `8` (*Unstamped letter*) is the no-billing test method",
+          "message": "이 소포에 사용할 SendCloud 배송 방법의 숫자 ID입니다. v3 announce 엔드포인트에 필수입니다(SendCloud 호환성 엔드포인트를 통해 `shipping_option_code`(으)로 변환됨). 계정에 사용 가능한 ID를 찾으려면 `list-shipping-methods`을(를) 사용하십시오. `8`(*Unstamped letter*)는 청구되지 않는 테스트 방법입니다"
+        },
+        "app.U2VuZENsb3Vk.action.Y3JlYXRlLXBhcmNlbA.option.c2hpcHBpbmdfbWV0aG9k.display_name": {
+          "source": "Shipping Method",
+          "message": "배송 방법"
+        },
+        "app.U2VuZENsb3Vk.action.Y3JlYXRlLXBhcmNlbA.option.c2hpcHBpbmdfbWV0aG9k.short_desc": {
+          "source": "Shipping method ID",
+          "message": "배송 방법 ID"
+        },
+        "app.U2VuZENsb3Vk.action.Y3JlYXRlLXBhcmNlbA.option.cG9zdGFsX2NvZGU.desc": {
+          "source": "Postal or ZIP code of the recipient",
+          "message": "수령인의 우편번호 또는 ZIP 코드"
+        },
+        "app.U2VuZENsb3Vk.action.Y3JlYXRlLXBhcmNlbA.option.cG9zdGFsX2NvZGU.display_name": {
+          "source": "Postal Code",
+          "message": "우편번호"
+        },
+        "app.U2VuZENsb3Vk.action.Y3JlYXRlLXBhcmNlbA.option.cG9zdGFsX2NvZGU.short_desc": {
+          "source": "Recipient postal code",
+          "message": "수령인 우편번호"
+        },
+        "app.U2VuZENsb3Vk.action.Y3JlYXRlLXBhcmNlbA.option.cGFyY2VsX2l0ZW1z.desc": {
+          "source": "List of parcel items; required for international shipments that need a customs declaration",
+          "message": "소포 품목 목록입니다. 세관 신고가 필요한 국제 배송에 필수입니다"
+        },
+        "app.U2VuZENsb3Vk.action.Y3JlYXRlLXBhcmNlbA.option.cGFyY2VsX2l0ZW1z.display_name": {
+          "source": "Parcel Items",
+          "message": "소포 품목"
+        },
+        "app.U2VuZENsb3Vk.action.Y3JlYXRlLXBhcmNlbA.option.cGFyY2VsX2l0ZW1z.short_desc": {
+          "source": "Customs line items",
+          "message": "세관 품목 목록"
+        },
+        "app.U2VuZENsb3Vk.action.Y3JlYXRlLXBhcmNlbA.option.cXVhbnRpdHk.desc": {
+          "source": "Number of labels to generate for this parcel (multi-collo shipments)",
+          "message": "이 소포에 대해 생성할 라벨 수(다중 콜로 배송)"
+        },
+        "app.U2VuZENsb3Vk.action.Y3JlYXRlLXBhcmNlbA.option.cXVhbnRpdHk.display_name": {
+          "source": "Label Quantity",
+          "message": "라벨 수량"
+        },
+        "app.U2VuZENsb3Vk.action.Y3JlYXRlLXBhcmNlbA.option.cXVhbnRpdHk.short_desc": {
+          "source": "Number of labels to generate",
+          "message": "생성할 라벨 수"
+        },
+        "app.U2VuZENsb3Vk.action.Y3JlYXRlLXBhcmNlbA.option.cmVxdWVzdF9sYWJlbA.desc": {
+          "source": "If `True`, the parcel is announced to the carrier and a label is generated immediately",
+          "message": "`True`인 경우 소포가 운송업체에 공지되고 라벨이 즉시 생성됩니다"
+        },
+        "app.U2VuZENsb3Vk.action.Y3JlYXRlLXBhcmNlbA.option.cmVxdWVzdF9sYWJlbA.display_name": {
+          "source": "Request Label",
+          "message": "라벨 요청"
+        },
+        "app.U2VuZENsb3Vk.action.Y3JlYXRlLXBhcmNlbA.option.cmVxdWVzdF9sYWJlbA.short_desc": {
+          "source": "Immediately announce & request a label",
+          "message": "즉시 공지 및 라벨 요청"
+        },
+        "app.U2VuZENsb3Vk.action.Y3JlYXRlLXBhcmNlbA.option.d2VpZ2h0.desc": {
+          "source": "Total weight of the parcel as a string-encoded decimal (e.g., `\"1.500\"`).  The unit defaults to kilograms; override via `weight_unit` (`kg`, `g`, `lb`, `oz`).  Required by the SendCloud v3 announce endpoint",
+          "message": "문자열 인코딩된 10진수 형식의 소포 총 중량(예: `\"1.500\"`). 단위는 기본적으로 킬로그램이며, `weight_unit`(`kg`, `g`, `lb`, `oz`)을 통해 재정의할 수 있습니다. SendCloud v3 announce 엔드포인트에 필수입니다"
+        },
+        "app.U2VuZENsb3Vk.action.Y3JlYXRlLXBhcmNlbA.option.d2VpZ2h0.display_name": {
+          "source": "Weight (kg)",
+          "message": "무게 (kg)"
+        },
+        "app.U2VuZENsb3Vk.action.Y3JlYXRlLXBhcmNlbA.option.d2VpZ2h0.short_desc": {
+          "source": "Parcel weight in kilograms",
+          "message": "소포 중량(kg)"
+        },
+        "app.U2VuZENsb3Vk.action.Y3JlYXRlLXBhcmNlbA.option.d2VpZ2h0X3VuaXQ.allowed-value.c3RyaW5nOm96.desc": {
+          "source": "Ounces",
+          "message": "온스"
+        },
+        "app.U2VuZENsb3Vk.action.Y3JlYXRlLXBhcmNlbA.option.d2VpZ2h0X3VuaXQ.allowed-value.c3RyaW5nOm96.display_name": {
+          "source": "Ounces",
+          "message": "온스"
+        },
+        "app.U2VuZENsb3Vk.action.Y3JlYXRlLXBhcmNlbA.option.d2VpZ2h0X3VuaXQ.allowed-value.c3RyaW5nOmc.desc": {
+          "source": "Grams",
+          "message": "그램"
+        },
+        "app.U2VuZENsb3Vk.action.Y3JlYXRlLXBhcmNlbA.option.d2VpZ2h0X3VuaXQ.allowed-value.c3RyaW5nOmc.display_name": {
+          "source": "Grams",
+          "message": "그램"
+        },
+        "app.U2VuZENsb3Vk.action.Y3JlYXRlLXBhcmNlbA.option.d2VpZ2h0X3VuaXQ.allowed-value.c3RyaW5nOmtn.desc": {
+          "source": "Kilograms",
+          "message": "킬로그램"
+        },
+        "app.U2VuZENsb3Vk.action.Y3JlYXRlLXBhcmNlbA.option.d2VpZ2h0X3VuaXQ.allowed-value.c3RyaW5nOmtn.display_name": {
+          "source": "Kilograms",
+          "message": "킬로그램"
+        },
+        "app.U2VuZENsb3Vk.action.Y3JlYXRlLXBhcmNlbA.option.d2VpZ2h0X3VuaXQ.allowed-value.c3RyaW5nOmxi.desc": {
+          "source": "Pounds",
+          "message": "파운드"
+        },
+        "app.U2VuZENsb3Vk.action.Y3JlYXRlLXBhcmNlbA.option.d2VpZ2h0X3VuaXQ.allowed-value.c3RyaW5nOmxi.display_name": {
+          "source": "Pounds",
+          "message": "파운드"
+        },
+        "app.U2VuZENsb3Vk.action.Y3JlYXRlLXBhcmNlbA.option.d2VpZ2h0X3VuaXQ.desc": {
+          "source": "Unit used for the `weight` field",
+          "message": "`weight` 필드에 사용되는 단위"
+        },
+        "app.U2VuZENsb3Vk.action.Y3JlYXRlLXBhcmNlbA.option.d2VpZ2h0X3VuaXQ.display_name": {
+          "source": "Weight Unit",
+          "message": "중량 단위"
+        },
+        "app.U2VuZENsb3Vk.action.Y3JlYXRlLXBhcmNlbA.option.d2VpZ2h0X3VuaXQ.short_desc": {
+          "source": "Weight unit",
+          "message": "중량 단위"
+        },
+        "app.U2VuZENsb3Vk.action.Y3JlYXRlLXBhcmNlbA.option.d2lkdGg.desc": {
+          "source": "Width of the parcel (string-encoded decimal, unit via `length_unit`, e.g., `\"20.0\"`)",
+          "message": "소포의 너비(문자열 인코딩된 10진수, 단위는 `length_unit`을 통해 지정, 예: `\"20.0\"`)"
+        },
+        "app.U2VuZENsb3Vk.action.Y3JlYXRlLXBhcmNlbA.option.d2lkdGg.display_name": {
+          "source": "Width",
+          "message": "너비"
+        },
+        "app.U2VuZENsb3Vk.action.Y3JlYXRlLXBhcmNlbA.option.d2lkdGg.short_desc": {
+          "source": "Parcel width",
+          "message": "소포 너비"
+        },
+        "app.U2VuZENsb3Vk.action.Y3JlYXRlLXBhcmNlbA.option.dG90YWxfaW5zdXJlZF92YWx1ZQ.desc": {
+          "source": "Insured value of the parcel contents in the order currency",
+          "message": "주문 통화 기준 소포 내용물의 보험 가액"
+        },
+        "app.U2VuZENsb3Vk.action.Y3JlYXRlLXBhcmNlbA.option.dG90YWxfaW5zdXJlZF92YWx1ZQ.display_name": {
+          "source": "Total Insured Value",
+          "message": "총 보험 가액"
+        },
+        "app.U2VuZENsb3Vk.action.Y3JlYXRlLXBhcmNlbA.option.dG90YWxfaW5zdXJlZF92YWx1ZQ.short_desc": {
+          "source": "Total insured value",
+          "message": "총 보험 가액"
+        },
+        "app.U2VuZENsb3Vk.action.Y3JlYXRlLXBhcmNlbA.option.dG90YWxfb3JkZXJfdmFsdWU.desc": {
+          "source": "Total order value as a string-encoded decimal; pair with `total_order_value_currency`",
+          "message": "문자열 인코딩된 10진수 형식의 총 주문 금액입니다. `total_order_value_currency`과(와) 함께 사용하십시오"
+        },
+        "app.U2VuZENsb3Vk.action.Y3JlYXRlLXBhcmNlbA.option.dG90YWxfb3JkZXJfdmFsdWU.display_name": {
+          "source": "Total Order Value",
+          "message": "총 주문 금액"
+        },
+        "app.U2VuZENsb3Vk.action.Y3JlYXRlLXBhcmNlbA.option.dG90YWxfb3JkZXJfdmFsdWU.short_desc": {
+          "source": "Order value (string-encoded decimal)",
+          "message": "주문 금액(문자열 인코딩된 10진수)"
+        },
+        "app.U2VuZENsb3Vk.action.Y3JlYXRlLXBhcmNlbA.option.dG90YWxfb3JkZXJfdmFsdWVfY3VycmVuY3k.desc": {
+          "source": "Currency of the order value (e.g., EUR, USD)",
+          "message": "주문 금액의 통화(예: EUR, USD)"
+        },
+        "app.U2VuZENsb3Vk.action.Y3JlYXRlLXBhcmNlbA.option.dG90YWxfb3JkZXJfdmFsdWVfY3VycmVuY3k.display_name": {
+          "source": "Order Value Currency",
+          "message": "주문 금액 통화"
+        },
+        "app.U2VuZENsb3Vk.action.Y3JlYXRlLXBhcmNlbA.option.dG90YWxfb3JkZXJfdmFsdWVfY3VycmVuY3k.short_desc": {
+          "source": "ISO 4217 currency code",
+          "message": "ISO 4217 통화 코드"
+        },
+        "app.U2VuZENsb3Vk.action.Y3JlYXRlLXBhcmNlbA.option.dG9fc2VydmljZV9wb2ludA.desc": {
+          "source": "ID of the service point the parcel will be delivered to (for service-point shipments)",
+          "message": "소포가 배송될 서비스 포인트의 ID(서비스 포인트 배송용)"
+        },
+        "app.U2VuZENsb3Vk.action.Y3JlYXRlLXBhcmNlbA.option.dG9fc2VydmljZV9wb2ludA.display_name": {
+          "source": "Destination Service Point",
+          "message": "도착지 서비스 포인트"
+        },
+        "app.U2VuZENsb3Vk.action.Y3JlYXRlLXBhcmNlbA.option.dG9fc2VydmljZV9wb2ludA.short_desc": {
+          "source": "Service point ID the parcel is sent to",
+          "message": "소포가 발송되는 서비스 포인트 ID"
+        },
+        "app.U2VuZENsb3Vk.action.Y3JlYXRlLXBhcmNlbA.option.dG9fcG9zdF9udW1iZXI.desc": {
+          "source": "Post number used for the destination service point (when required)",
+          "message": "도착지 서비스 포인트에 사용되는 우편 번호(필요한 경우)"
+        },
+        "app.U2VuZENsb3Vk.action.Y3JlYXRlLXBhcmNlbA.option.dG9fcG9zdF9udW1iZXI.display_name": {
+          "source": "Post Number",
+          "message": "우편 사서함 번호(Post Number)"
+        },
+        "app.U2VuZENsb3Vk.action.Y3JlYXRlLXBhcmNlbA.option.dG9fcG9zdF9udW1iZXI.short_desc": {
+          "source": "Destination post number",
+          "message": "도착지 우편 사서함 번호"
+        },
+        "app.U2VuZENsb3Vk.action.Y3JlYXRlLXBhcmNlbA.option.dGVsZXBob25l.desc": {
+          "source": "Phone number of the recipient",
+          "message": "수취인 전화번호"
+        },
+        "app.U2VuZENsb3Vk.action.Y3JlYXRlLXBhcmNlbA.option.dGVsZXBob25l.display_name": {
+          "source": "Telephone",
+          "message": "전화번호"
+        },
+        "app.U2VuZENsb3Vk.action.Y3JlYXRlLXBhcmNlbA.option.dGVsZXBob25l.short_desc": {
+          "source": "Recipient phone",
+          "message": "수취인 전화번호"
+        },
+        "app.U2VuZENsb3Vk.action.Y3JlYXRlLXBhcmNlbA.short_desc": {
+          "source": "Create a new parcel",
+          "message": "새 소포 생성"
+        },
+        "app.U2VuZENsb3Vk.action.Y3JlYXRlLXJldHVybg.desc": {
+          "source": "Create a new return in SendCloud for an outgoing parcel, optionally including refund details and the list of returned items.",
+          "message": "발송된 소포에 대해 SendCloud에서 새 반품을 생성하며, 선택적으로 환불 세부 정보 및 반품 품목 목록을 포함합니다."
+        },
+        "app.U2VuZENsb3Vk.action.Y3JlYXRlLXJldHVybg.display_name": {
+          "source": "Create Return",
+          "message": "반품 생성"
+        },
+        "app.U2VuZENsb3Vk.action.Y3JlYXRlLXJldHVybg.option.YWRkcmVzcw.desc": {
+          "source": "Pickup address for the return (if different from the original shipping address)",
+          "message": "반품 픽업 주소(원래 배송 주소와 다른 경우)"
+        },
+        "app.U2VuZENsb3Vk.action.Y3JlYXRlLXJldHVybg.option.YWRkcmVzcw.display_name": {
+          "source": "Pickup Address",
+          "message": "픽업 주소"
+        },
+        "app.U2VuZENsb3Vk.action.Y3JlYXRlLXJldHVybg.option.YWRkcmVzcw.short_desc": {
+          "source": "Pickup address for the return",
+          "message": "반품 픽업 주소"
+        },
+        "app.U2VuZENsb3Vk.action.Y3JlYXRlLXJldHVybg.option.b3V0Z29pbmdfcGFyY2Vs.desc": {
+          "source": "ID of the original outgoing parcel being returned.  Used to derive the customer pickup address (`from_address` on the v3 return) and the merchant return destination (`to_address`) automatically.",
+          "message": "반품할 원래 발송 소포의 ID입니다. 고객 픽업 주소(v3 반품의 `from_address`) 및 판매자 반품 목적지(`to_address`)를 자동으로 파생하는 데 사용됩니다."
+        },
+        "app.U2VuZENsb3Vk.action.Y3JlYXRlLXJldHVybg.option.b3V0Z29pbmdfcGFyY2Vs.display_name": {
+          "source": "Outgoing Parcel",
+          "message": "발송 소포"
+        },
+        "app.U2VuZENsb3Vk.action.Y3JlYXRlLXJldHVybg.option.b3V0Z29pbmdfcGFyY2Vs.short_desc": {
+          "source": "The parcel being returned",
+          "message": "반품 대상 소포"
+        },
+        "app.U2VuZENsb3Vk.action.Y3JlYXRlLXJldHVybg.option.bWVzc2FnZQ.desc": {
+          "source": "Customer-provided message describing the return",
+          "message": "고객이 제공한 반품 설명 메시지"
+        },
+        "app.U2VuZENsb3Vk.action.Y3JlYXRlLXJldHVybg.option.bWVzc2FnZQ.display_name": {
+          "source": "Message",
+          "message": "메시지"
+        },
+        "app.U2VuZENsb3Vk.action.Y3JlYXRlLXJldHVybg.option.bWVzc2FnZQ.short_desc": {
+          "source": "Customer-provided message",
+          "message": "고객 제공 메시지"
+        },
+        "app.U2VuZENsb3Vk.action.Y3JlYXRlLXJldHVybg.option.c2hpcHBpbmdfb3B0aW9uX2NvZGU.desc": {
+          "source": "v3 shipping option code to use for the return (e.g. `dpd:return/return`).  Required for v3-cohort accounts; if omitted, the data provider attempts to translate the outgoing parcel's shipping method via the SendCloud compatibility endpoint, but this is not guaranteed to produce a return-capable option.  Use a return-specific code when in doubt.",
+          "message": "반품에 사용할 v3 배송 옵션 코드(예: `dpd:return/return`)입니다. v3 코호트 계정에 필요합니다. 생략하면 데이터 공급자가 SendCloud 호환성 엔드포인트를 통해 발송 소포의 배송 방법을 변환하려고 시도하지만 반품 가능한 옵션이 생성된다는 보장은 없습니다. 확실하지 않은 경우 반품 전용 코드를 사용하세요."
+        },
+        "app.U2VuZENsb3Vk.action.Y3JlYXRlLXJldHVybg.option.c2hpcHBpbmdfb3B0aW9uX2NvZGU.display_name": {
+          "source": "Return Shipping Option Code",
+          "message": "반품 배송 옵션 코드"
+        },
+        "app.U2VuZENsb3Vk.action.Y3JlYXRlLXJldHVybg.option.c2hpcHBpbmdfb3B0aW9uX2NvZGU.short_desc": {
+          "source": "v3 shipping_option_code for the return shipment",
+          "message": "반품 배송용 v3 shipping_option_code"
+        },
+        "app.U2VuZENsb3Vk.action.Y3JlYXRlLXJldHVybg.option.cHJvZHVjdHM.desc": {
+          "source": "List of product lines being returned (at least one entry required)",
+          "message": "반품할 제품 라인 목록(최소 1개 이상의 항목 필요)"
+        },
+        "app.U2VuZENsb3Vk.action.Y3JlYXRlLXJldHVybg.option.cHJvZHVjdHM.display_name": {
+          "source": "Products",
+          "message": "제품"
+        },
+        "app.U2VuZENsb3Vk.action.Y3JlYXRlLXJldHVybg.option.cHJvZHVjdHM.short_desc": {
+          "source": "Products being returned",
+          "message": "반품 대상 제품"
+        },
+        "app.U2VuZENsb3Vk.action.Y3JlYXRlLXJldHVybg.option.cmVhc29u.allowed-value.c3RyaW5nOm5vX2xvbmdlcl9uZWVkZWQ.desc": {
+          "source": "Product no longer needed",
+          "message": "제품이 더 이상 필요하지 않음"
+        },
+        "app.U2VuZENsb3Vk.action.Y3JlYXRlLXJldHVybg.option.cmVhc29u.allowed-value.c3RyaW5nOm5vX2xvbmdlcl9uZWVkZWQ.display_name": {
+          "source": "No Longer Needed",
+          "message": "더 이상 필요 없음"
+        },
+        "app.U2VuZENsb3Vk.action.Y3JlYXRlLXJldHVybg.option.cmVhc29u.allowed-value.c3RyaW5nOm5vdF9hc19kZXNjcmliZWQ.desc": {
+          "source": "Product not as described",
+          "message": "제품이 설명과 다름"
+        },
+        "app.U2VuZENsb3Vk.action.Y3JlYXRlLXJldHVybg.option.cmVhc29u.allowed-value.c3RyaW5nOm5vdF9hc19kZXNjcmliZWQ.display_name": {
+          "source": "Not as Described",
+          "message": "설명과 다름"
+        },
+        "app.U2VuZENsb3Vk.action.Y3JlYXRlLXJldHVybg.option.cmVhc29u.allowed-value.c3RyaW5nOm90aGVy.desc": {
+          "source": "Other reason",
+          "message": "기타 사유"
+        },
+        "app.U2VuZENsb3Vk.action.Y3JlYXRlLXJldHVybg.option.cmVhc29u.allowed-value.c3RyaW5nOm90aGVy.display_name": {
+          "source": "Other",
+          "message": "기타"
+        },
+        "app.U2VuZENsb3Vk.action.Y3JlYXRlLXJldHVybg.option.cmVhc29u.allowed-value.c3RyaW5nOmRhbWFnZWQ.desc": {
+          "source": "Product damaged",
+          "message": "제품 파손"
+        },
+        "app.U2VuZENsb3Vk.action.Y3JlYXRlLXJldHVybg.option.cmVhc29u.allowed-value.c3RyaW5nOmRhbWFnZWQ.display_name": {
+          "source": "Damaged",
+          "message": "파손됨"
+        },
+        "app.U2VuZENsb3Vk.action.Y3JlYXRlLXJldHVybg.option.cmVhc29u.allowed-value.c3RyaW5nOmRlZmVjdGl2ZQ.desc": {
+          "source": "Product defective",
+          "message": "제품 결함"
+        },
+        "app.U2VuZENsb3Vk.action.Y3JlYXRlLXJldHVybg.option.cmVhc29u.allowed-value.c3RyaW5nOmRlZmVjdGl2ZQ.display_name": {
+          "source": "Defective",
+          "message": "결함 있음"
+        },
+        "app.U2VuZENsb3Vk.action.Y3JlYXRlLXJldHVybg.option.cmVhc29u.allowed-value.c3RyaW5nOndyb25nX3Byb2R1Y3Q.desc": {
+          "source": "Wrong product delivered",
+          "message": "잘못된 제품 배송"
+        },
+        "app.U2VuZENsb3Vk.action.Y3JlYXRlLXJldHVybg.option.cmVhc29u.allowed-value.c3RyaW5nOndyb25nX3Byb2R1Y3Q.display_name": {
+          "source": "Wrong Product",
+          "message": "오배송된 제품"
+        },
+        "app.U2VuZENsb3Vk.action.Y3JlYXRlLXJldHVybg.option.cmVhc29u.desc": {
+          "source": "Return reason category",
+          "message": "반품 사유 카테고리"
+        },
+        "app.U2VuZENsb3Vk.action.Y3JlYXRlLXJldHVybg.option.cmVhc29u.display_name": {
+          "source": "Reason",
+          "message": "사유"
+        },
+        "app.U2VuZENsb3Vk.action.Y3JlYXRlLXJldHVybg.option.cmVhc29u.short_desc": {
+          "source": "Overall return reason",
+          "message": "전체 반품 사유"
+        },
+        "app.U2VuZENsb3Vk.action.Y3JlYXRlLXJldHVybg.option.cmVmdW5k.desc": {
+          "source": "Optional refund hash describing the refund type and amount",
+          "message": "환불 유형 및 금액을 설명하는 선택적 환불 해시"
+        },
+        "app.U2VuZENsb3Vk.action.Y3JlYXRlLXJldHVybg.option.cmVmdW5k.display_name": {
+          "source": "Refund",
+          "message": "환불"
+        },
+        "app.U2VuZENsb3Vk.action.Y3JlYXRlLXJldHVybg.option.cmVmdW5k.short_desc": {
+          "source": "Refund details",
+          "message": "환불 세부 정보"
+        },
+        "app.U2VuZENsb3Vk.action.Y3JlYXRlLXJldHVybg.option.d2VpZ2h0.desc": {
+          "source": "Total weight of the return parcel (string-encoded decimal in kg).  Defaults to the outgoing parcel's weight when not provided; falls back to `1.000` when the outgoing parcel has no weight set.",
+          "message": "반품 소포의 총 중량(kg 단위의 문자열 인코딩된 소수점 값)입니다. 제공되지 않은 경우 발송 소포의 중량이 기본값으로 적용되며, 발송 소포에 설정된 중량이 없는 경우 `1.000`(으)로 대체됩니다."
+        },
+        "app.U2VuZENsb3Vk.action.Y3JlYXRlLXJldHVybg.option.d2VpZ2h0.display_name": {
+          "source": "Weight",
+          "message": "무게"
+        },
+        "app.U2VuZENsb3Vk.action.Y3JlYXRlLXJldHVybg.option.d2VpZ2h0.short_desc": {
+          "source": "Total weight of the return parcel",
+          "message": "반품 소포 총 중량"
+        },
+        "app.U2VuZENsb3Vk.action.Y3JlYXRlLXJldHVybg.short_desc": {
+          "source": "Create a new return",
+          "message": "새 반품 생성"
+        },
+        "app.U2VuZENsb3Vk.action.Z2V0LXBhcmNlbA.desc": {
+          "source": "Retrieve detailed information about a specific SendCloud parcel by its numeric ID.",
+          "message": "숫자 ID로 특정 SendCloud 소포에 대한 자세한 정보를 조회합니다."
+        },
+        "app.U2VuZENsb3Vk.action.Z2V0LXBhcmNlbA.display_name": {
+          "source": "Get Parcel",
+          "message": "소포 조회"
+        },
+        "app.U2VuZENsb3Vk.action.Z2V0LXBhcmNlbA.option.aWQ.desc": {
+          "source": "Numeric ID of the parcel to retrieve",
+          "message": "조회할 소포의 숫자 ID"
+        },
+        "app.U2VuZENsb3Vk.action.Z2V0LXBhcmNlbA.option.aWQ.display_name": {
+          "source": "Parcel ID",
+          "message": "소포 ID"
+        },
+        "app.U2VuZENsb3Vk.action.Z2V0LXBhcmNlbA.option.aWQ.short_desc": {
+          "source": "Parcel ID to retrieve",
+          "message": "조회할 소포 ID"
+        },
+        "app.U2VuZENsb3Vk.action.Z2V0LXBhcmNlbA.short_desc": {
+          "source": "Get a single parcel by ID",
+          "message": "ID로 단일 소포 조회"
+        },
+        "app.U2VuZENsb3Vk.action.Z2V0LXBhcmNlbC1kb2N1bWVudHM.desc": {
+          "source": "Download a specific parcel document (such as the shipping label, CN22/CN23 customs declaration, or commercial invoice) as binary PDF data.",
+          "message": "특정 소포 문서(예: 배송 라벨, CN22/CN23 세관 신고서 또는 상업 송장)를 바이너리 PDF 데이터로 다운로드합니다."
+        },
+        "app.U2VuZENsb3Vk.action.Z2V0LXBhcmNlbC1kb2N1bWVudHM.display_name": {
+          "source": "Get Parcel Document",
+          "message": "소포 문서 조회"
+        },
+        "app.U2VuZENsb3Vk.action.Z2V0LXBhcmNlbC1kb2N1bWVudHM.option.Zm9ybWF0.allowed-value.c3RyaW5nOnBkZg.desc": {
+          "source": "PDF format",
+          "message": "PDF 형식"
+        },
+        "app.U2VuZENsb3Vk.action.Z2V0LXBhcmNlbC1kb2N1bWVudHM.option.Zm9ybWF0.allowed-value.c3RyaW5nOnBkZg.display_name": {
+          "source": "PDF",
+          "message": "PDF"
+        },
+        "app.U2VuZENsb3Vk.action.Z2V0LXBhcmNlbC1kb2N1bWVudHM.option.Zm9ybWF0.allowed-value.c3RyaW5nOnBuZw.desc": {
+          "source": "PNG image (only available for certain document types like QR codes)",
+          "message": "PNG 이미지(QR 코드와 같은 특정 문서 유형에서만 사용 가능)"
+        },
+        "app.U2VuZENsb3Vk.action.Z2V0LXBhcmNlbC1kb2N1bWVudHM.option.Zm9ybWF0.allowed-value.c3RyaW5nOnBuZw.display_name": {
+          "source": "PNG",
+          "message": "PNG"
+        },
+        "app.U2VuZENsb3Vk.action.Z2V0LXBhcmNlbC1kb2N1bWVudHM.option.Zm9ybWF0.allowed-value.c3RyaW5nOnpwbA.desc": {
+          "source": "ZPL (Zebra printer) format",
+          "message": "ZPL(Zebra 프린터) 형식"
+        },
+        "app.U2VuZENsb3Vk.action.Z2V0LXBhcmNlbC1kb2N1bWVudHM.option.Zm9ybWF0.allowed-value.c3RyaW5nOnpwbA.display_name": {
+          "source": "ZPL",
+          "message": "ZPL"
+        },
+        "app.U2VuZENsb3Vk.action.Z2V0LXBhcmNlbC1kb2N1bWVudHM.option.Zm9ybWF0.desc": {
+          "source": "Output format of the document",
+          "message": "문서 출력 형식"
+        },
+        "app.U2VuZENsb3Vk.action.Z2V0LXBhcmNlbC1kb2N1bWVudHM.option.Zm9ybWF0.display_name": {
+          "source": "Format",
+          "message": "형식"
+        },
+        "app.U2VuZENsb3Vk.action.Z2V0LXBhcmNlbC1kb2N1bWVudHM.option.Zm9ybWF0.short_desc": {
+          "source": "Output format",
+          "message": "출력 형식"
+        },
+        "app.U2VuZENsb3Vk.action.Z2V0LXBhcmNlbC1kb2N1bWVudHM.option.aWQ.desc": {
+          "source": "Numeric ID of the parcel",
+          "message": "소포의 숫자 ID"
+        },
+        "app.U2VuZENsb3Vk.action.Z2V0LXBhcmNlbC1kb2N1bWVudHM.option.aWQ.display_name": {
+          "source": "Parcel ID",
+          "message": "소포 ID"
+        },
+        "app.U2VuZENsb3Vk.action.Z2V0LXBhcmNlbC1kb2N1bWVudHM.option.aWQ.short_desc": {
+          "source": "Parcel whose document to retrieve",
+          "message": "문서를 조회할 소포"
+        },
+        "app.U2VuZENsb3Vk.action.Z2V0LXBhcmNlbC1kb2N1bWVudHM.option.dHlwZQ.allowed-value.c3RyaW5nOmFpci13YXliaWxs.desc": {
+          "source": "Air waybill document",
+          "message": "항공화물운송장(Air waybill) 문서"
+        },
+        "app.U2VuZENsb3Vk.action.Z2V0LXBhcmNlbC1kb2N1bWVudHM.option.dHlwZQ.allowed-value.c3RyaW5nOmFpci13YXliaWxs.display_name": {
+          "source": "Air Waybill",
+          "message": "항공화물운송장"
+        },
+        "app.U2VuZENsb3Vk.action.Z2V0LXBhcmNlbC1kb2N1bWVudHM.option.dHlwZQ.allowed-value.c3RyaW5nOmNuMjI.desc": {
+          "source": "CN22 customs declaration form",
+          "message": "CN22 세관 신고서 서식"
+        },
+        "app.U2VuZENsb3Vk.action.Z2V0LXBhcmNlbC1kb2N1bWVudHM.option.dHlwZQ.allowed-value.c3RyaW5nOmNuMjI.display_name": {
+          "source": "CN22",
+          "message": "CN22"
+        },
+        "app.U2VuZENsb3Vk.action.Z2V0LXBhcmNlbC1kb2N1bWVudHM.option.dHlwZQ.allowed-value.c3RyaW5nOmNuMjM.desc": {
+          "source": "CN23 customs declaration form",
+          "message": "CN23 세관 신고서 서식"
+        },
+        "app.U2VuZENsb3Vk.action.Z2V0LXBhcmNlbC1kb2N1bWVudHM.option.dHlwZQ.allowed-value.c3RyaW5nOmNuMjM.display_name": {
+          "source": "CN23",
+          "message": "CN23"
+        },
+        "app.U2VuZENsb3Vk.action.Z2V0LXBhcmNlbC1kb2N1bWVudHM.option.dHlwZQ.allowed-value.c3RyaW5nOmNuMjMtZGVmYXVsdA.desc": {
+          "source": "CN23 customs declaration form (default layout)",
+          "message": "CN23 세관 신고서 서식(기본 레이아웃)"
+        },
+        "app.U2VuZENsb3Vk.action.Z2V0LXBhcmNlbC1kb2N1bWVudHM.option.dHlwZQ.allowed-value.c3RyaW5nOmNuMjMtZGVmYXVsdA.display_name": {
+          "source": "CN23 (Default)",
+          "message": "CN23(기본값)"
+        },
+        "app.U2VuZENsb3Vk.action.Z2V0LXBhcmNlbC1kb2N1bWVudHM.option.dHlwZQ.allowed-value.c3RyaW5nOmNvbW1lcmNpYWwtaW52b2ljZQ.desc": {
+          "source": "Commercial invoice PDF",
+          "message": "상업 송장 PDF"
+        },
+        "app.U2VuZENsb3Vk.action.Z2V0LXBhcmNlbC1kb2N1bWVudHM.option.dHlwZQ.allowed-value.c3RyaW5nOmNvbW1lcmNpYWwtaW52b2ljZQ.display_name": {
+          "source": "Commercial Invoice",
+          "message": "상업 송장"
+        },
+        "app.U2VuZENsb3Vk.action.Z2V0LXBhcmNlbC1kb2N1bWVudHM.option.dHlwZQ.allowed-value.c3RyaW5nOmNwNzE.desc": {
+          "source": "CP71 international parcel form",
+          "message": "CP71 국제 소포 서식"
+        },
+        "app.U2VuZENsb3Vk.action.Z2V0LXBhcmNlbC1kb2N1bWVudHM.option.dHlwZQ.allowed-value.c3RyaW5nOmNwNzE.display_name": {
+          "source": "CP71",
+          "message": "CP71"
+        },
+        "app.U2VuZENsb3Vk.action.Z2V0LXBhcmNlbC1kb2N1bWVudHM.option.dHlwZQ.allowed-value.c3RyaW5nOmxhYmVs.desc": {
+          "source": "Shipping label PDF",
+          "message": "배송 라벨 PDF"
+        },
+        "app.U2VuZENsb3Vk.action.Z2V0LXBhcmNlbC1kb2N1bWVudHM.option.dHlwZQ.allowed-value.c3RyaW5nOmxhYmVs.display_name": {
+          "source": "Label",
+          "message": "라벨"
+        },
+        "app.U2VuZENsb3Vk.action.Z2V0LXBhcmNlbC1kb2N1bWVudHM.option.dHlwZQ.allowed-value.c3RyaW5nOnFy.desc": {
+          "source": "QR code label (for paperless return drop-offs)",
+          "message": "QR 코드 라벨(무인쇄 반품 접수용)"
+        },
+        "app.U2VuZENsb3Vk.action.Z2V0LXBhcmNlbC1kb2N1bWVudHM.option.dHlwZQ.allowed-value.c3RyaW5nOnFy.display_name": {
+          "source": "QR Code",
+          "message": "QR 코드"
+        },
+        "app.U2VuZENsb3Vk.action.Z2V0LXBhcmNlbC1kb2N1bWVudHM.option.dHlwZQ.desc": {
+          "source": "Type of document to download for the parcel",
+          "message": "소포에 대해 다운로드할 문서 유형"
+        },
+        "app.U2VuZENsb3Vk.action.Z2V0LXBhcmNlbC1kb2N1bWVudHM.option.dHlwZQ.display_name": {
+          "source": "Document Type",
+          "message": "문서 유형"
+        },
+        "app.U2VuZENsb3Vk.action.Z2V0LXBhcmNlbC1kb2N1bWVudHM.option.dHlwZQ.short_desc": {
+          "source": "Type of document to download",
+          "message": "다운로드할 문서 유형"
+        },
+        "app.U2VuZENsb3Vk.action.Z2V0LXBhcmNlbC1kb2N1bWVudHM.short_desc": {
+          "source": "Download a parcel document (label, customs, invoice)",
+          "message": "소포 문서(라벨, 세관 문서, 인보이스) 다운로드"
+        },
+        "app.U2VuZENsb3Vk.action.Z2V0LXBhcmNlbC1sYWJlbA.desc": {
+          "source": "Retrieve the shipping label URL(s) for an announced parcel. The label is available as a normal-printer PDF and a label-printer PDF.",
+          "message": "등록된 소포의 배송 라벨 URL을 조회합니다. 라벨은 일반 프린터용 PDF 및 라벨 프린터용 PDF로 제공됩니다."
+        },
+        "app.U2VuZENsb3Vk.action.Z2V0LXBhcmNlbC1sYWJlbA.display_name": {
+          "source": "Get Parcel Label",
+          "message": "소포 라벨 가져오기"
+        },
+        "app.U2VuZENsb3Vk.action.Z2V0LXBhcmNlbC1sYWJlbA.option.cGFyY2VsX2lk.desc": {
+          "source": "Numeric ID of the parcel whose label URLs are being retrieved",
+          "message": "라벨 URL을 조회할 소포의 숫자 ID"
+        },
+        "app.U2VuZENsb3Vk.action.Z2V0LXBhcmNlbC1sYWJlbA.option.cGFyY2VsX2lk.display_name": {
+          "source": "Parcel ID",
+          "message": "소포 ID"
+        },
+        "app.U2VuZENsb3Vk.action.Z2V0LXBhcmNlbC1sYWJlbA.option.cGFyY2VsX2lk.short_desc": {
+          "source": "Parcel whose label URLs to retrieve",
+          "message": "라벨 URL을 조회할 소포"
+        },
+        "app.U2VuZENsb3Vk.action.Z2V0LXBhcmNlbC1sYWJlbA.short_desc": {
+          "source": "Get shipping label URLs for a parcel",
+          "message": "소포의 배송 라벨 URL 가져오기"
+        },
+        "app.U2VuZENsb3Vk.action.Z2V0LXJldHVybg.desc": {
+          "source": "Retrieve detailed information about a specific return by its numeric ID.",
+          "message": "숫자 ID로 특정 반품에 대한 상세 정보를 조회합니다."
+        },
+        "app.U2VuZENsb3Vk.action.Z2V0LXJldHVybg.display_name": {
+          "source": "Get Return",
+          "message": "반품 가져오기"
+        },
+        "app.U2VuZENsb3Vk.action.Z2V0LXJldHVybg.option.aWQ.desc": {
+          "source": "Numeric ID of the return to retrieve",
+          "message": "조회할 반품의 숫자 ID"
+        },
+        "app.U2VuZENsb3Vk.action.Z2V0LXJldHVybg.option.aWQ.display_name": {
+          "source": "Return ID",
+          "message": "반품 ID"
+        },
+        "app.U2VuZENsb3Vk.action.Z2V0LXJldHVybg.option.aWQ.short_desc": {
+          "source": "Return ID to retrieve",
+          "message": "조회할 반품 ID"
+        },
+        "app.U2VuZENsb3Vk.action.Z2V0LXJldHVybg.short_desc": {
+          "source": "Get a single return by ID",
+          "message": "ID로 단일 반품 가져오기"
+        },
+        "app.U2VuZENsb3Vk.action.Z2V0LXVzZXI.desc": {
+          "source": "Retrieve information about the currently authenticated SendCloud user (account owner).",
+          "message": "현재 인증된 SendCloud 사용자(계정 소유자)에 대한 정보를 조회합니다."
+        },
+        "app.U2VuZENsb3Vk.action.Z2V0LXVzZXI.display_name": {
+          "source": "Get User",
+          "message": "사용자 가져오기"
+        },
+        "app.U2VuZENsb3Vk.action.Z2V0LXVzZXI.short_desc": {
+          "source": "Get the authenticated user",
+          "message": "인증된 사용자 가져오기"
+        },
+        "app.U2VuZENsb3Vk.action.bGlzdC11c2Vycw.desc": {
+          "source": "Retrieve the SendCloud user/account owning the current API credentials. The list contains at most one entry because the API returns the authenticated user only.",
+          "message": "현재 API 자격 증명을 소유한 SendCloud 사용자/계정을 조회합니다. API가 인증된 사용자만 반환하므로 목록에는 최대 하나의 항목이 포함됩니다."
+        },
+        "app.U2VuZENsb3Vk.action.bGlzdC11c2Vycw.display_name": {
+          "source": "List Users",
+          "message": "사용자 목록"
+        },
+        "app.U2VuZENsb3Vk.action.bGlzdC11c2Vycw.short_desc": {
+          "source": "List the authenticated user",
+          "message": "인증된 사용자 목록 조회"
+        },
+        "app.U2VuZENsb3Vk.action.bGlzdC1icmFuZHM.desc": {
+          "source": "Retrieve a list of brands configured on your SendCloud account. Brands are used to customize tracking pages and shipping documentation.",
+          "message": "SendCloud 계정에 구성된 브랜드 목록을 조회합니다. 브랜드는 배송 조회 페이지 및 배송 문서를 맞춤설정하는 데 사용됩니다."
+        },
+        "app.U2VuZENsb3Vk.action.bGlzdC1icmFuZHM.display_name": {
+          "source": "List Brands",
+          "message": "브랜드 목록 조회"
+        },
+        "app.U2VuZENsb3Vk.action.bGlzdC1icmFuZHM.short_desc": {
+          "source": "List configured brands",
+          "message": "구성된 브랜드 목록 조회"
+        },
+        "app.U2VuZENsb3Vk.action.bGlzdC1wYXJjZWxz.desc": {
+          "source": "Retrieve a list of parcels from SendCloud with optional filtering by order number, tracking number, and creation/update date ranges.",
+          "message": "주문 번호, 운송장 번호 및 생성/업데이트 날짜 범위별 선택적 필터링을 사용하여 SendCloud에서 소포 목록을 조회합니다."
+        },
+        "app.U2VuZENsb3Vk.action.bGlzdC1wYXJjZWxz.display_name": {
+          "source": "List Parcels",
+          "message": "소포 목록 조회"
+        },
+        "app.U2VuZENsb3Vk.action.bGlzdC1wYXJjZWxz.option.YW5ub3VuY2VkX2FmdGVy.desc": {
+          "source": "Only return parcels announced to the carrier on or after this timestamp",
+          "message": "이 타임스탬프 이후에 운송업체에 등록된 소포만 반환"
+        },
+        "app.U2VuZENsb3Vk.action.bGlzdC1wYXJjZWxz.option.YW5ub3VuY2VkX2FmdGVy.display_name": {
+          "source": "Announced After",
+          "message": "등록 시작 일시"
+        },
+        "app.U2VuZENsb3Vk.action.bGlzdC1wYXJjZWxz.option.YW5ub3VuY2VkX2FmdGVy.short_desc": {
+          "source": "Earliest announcement date",
+          "message": "가장 빠른 등록 날짜"
+        },
+        "app.U2VuZENsb3Vk.action.bGlzdC1wYXJjZWxz.option.ZXh0ZXJuYWxfcmVmZXJlbmNl.desc": {
+          "source": "Filter parcels by the merchant-supplied `external_reference` field",
+          "message": "판매자가 제공한 `external_reference` 필드로 소포 필터링"
+        },
+        "app.U2VuZENsb3Vk.action.bGlzdC1wYXJjZWxz.option.ZXh0ZXJuYWxfcmVmZXJlbmNl.display_name": {
+          "source": "External Reference",
+          "message": "외부 참조"
+        },
+        "app.U2VuZENsb3Vk.action.bGlzdC1wYXJjZWxz.option.ZXh0ZXJuYWxfcmVmZXJlbmNl.short_desc": {
+          "source": "Filter by external reference",
+          "message": "외부 참조로 필터링"
+        },
+        "app.U2VuZENsb3Vk.action.bGlzdC1wYXJjZWxz.option.b3JkZXJfbnVtYmVy.desc": {
+          "source": "Filter parcels by the merchant-provided order number",
+          "message": "판매자가 제공한 주문 번호로 소포 필터링"
+        },
+        "app.U2VuZENsb3Vk.action.bGlzdC1wYXJjZWxz.option.b3JkZXJfbnVtYmVy.display_name": {
+          "source": "Order Number",
+          "message": "주문 번호"
+        },
+        "app.U2VuZENsb3Vk.action.bGlzdC1wYXJjZWxz.option.b3JkZXJfbnVtYmVy.short_desc": {
+          "source": "Filter by merchant order number",
+          "message": "판매자 주문 번호로 필터링"
+        },
+        "app.U2VuZENsb3Vk.action.bGlzdC1wYXJjZWxz.option.bGltaXQ.desc": {
+          "source": "Maximum number of aggregated records to return across pages",
+          "message": "페이지 전체에서 반환할 최대 집계 레코드 수"
+        },
+        "app.U2VuZENsb3Vk.action.bGlzdC1wYXJjZWxz.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "제한"
+        },
+        "app.U2VuZENsb3Vk.action.bGlzdC1wYXJjZWxz.option.bGltaXQ.short_desc": {
+          "source": "Maximum total records",
+          "message": "최대 총 레코드 수"
+        },
+        "app.U2VuZENsb3Vk.action.bGlzdC1wYXJjZWxz.option.cGFyY2VsX3N0YXR1cw.desc": {
+          "source": "Numeric SendCloud parcel-status ID to filter on",
+          "message": "필터링할 숫자 형식의 SendCloud 소포 상태 ID"
+        },
+        "app.U2VuZENsb3Vk.action.bGlzdC1wYXJjZWxz.option.cGFyY2VsX3N0YXR1cw.display_name": {
+          "source": "Parcel Status",
+          "message": "소포 상태"
+        },
+        "app.U2VuZENsb3Vk.action.bGlzdC1wYXJjZWxz.option.cGFyY2VsX3N0YXR1cw.short_desc": {
+          "source": "Filter by parcel status ID",
+          "message": "소포 상태 ID로 필터링"
+        },
+        "app.U2VuZENsb3Vk.action.bGlzdC1wYXJjZWxz.option.dHJhY2tpbmdfbnVtYmVy.desc": {
+          "source": "Filter parcels by the carrier tracking number",
+          "message": "운송업체 운송장 번호로 소포 필터링"
+        },
+        "app.U2VuZENsb3Vk.action.bGlzdC1wYXJjZWxz.option.dHJhY2tpbmdfbnVtYmVy.display_name": {
+          "source": "Tracking Number",
+          "message": "운송장 번호"
+        },
+        "app.U2VuZENsb3Vk.action.bGlzdC1wYXJjZWxz.option.dHJhY2tpbmdfbnVtYmVy.short_desc": {
+          "source": "Filter by carrier tracking number",
+          "message": "운송업체 운송장 번호로 필터링"
+        },
+        "app.U2VuZENsb3Vk.action.bGlzdC1wYXJjZWxz.option.dXBkYXRlZF9hZnRlcg.desc": {
+          "source": "Only return parcels updated on or after this timestamp",
+          "message": "이 타임스탬프 이후에 업데이트된 소포만 반환"
+        },
+        "app.U2VuZENsb3Vk.action.bGlzdC1wYXJjZWxz.option.dXBkYXRlZF9hZnRlcg.display_name": {
+          "source": "Updated After",
+          "message": "이후 업데이트됨"
+        },
+        "app.U2VuZENsb3Vk.action.bGlzdC1wYXJjZWxz.option.dXBkYXRlZF9hZnRlcg.short_desc": {
+          "source": "Earliest update date",
+          "message": "가장 빠른 업데이트 날짜"
+        },
+        "app.U2VuZENsb3Vk.action.bGlzdC1wYXJjZWxz.short_desc": {
+          "source": "List and search parcels",
+          "message": "소포 목록 조회 및 검색"
+        },
+        "app.U2VuZENsb3Vk.action.bGlzdC1yZXR1cm5z.desc": {
+          "source": "Retrieve a list of returns from SendCloud, optionally filtered by status, parcel, and creation date range.",
+          "message": "상태, 소포 및 생성 날짜 범위별로 선택적으로 필터링하여 SendCloud에서 반품 목록을 조회합니다."
+        },
+        "app.U2VuZENsb3Vk.action.bGlzdC1yZXR1cm5z.display_name": {
+          "source": "List Returns",
+          "message": "반품 목록 조회"
+        },
+        "app.U2VuZENsb3Vk.action.bGlzdC1yZXR1cm5z.option.Y3JlYXRlZF9hdF90bw.desc": {
+          "source": "Only return records created on or before this timestamp",
+          "message": "이 타임스탬프 이전에 생성된 레코드만 반환"
+        },
+        "app.U2VuZENsb3Vk.action.bGlzdC1yZXR1cm5z.option.Y3JlYXRlZF9hdF90bw.display_name": {
+          "source": "Created To",
+          "message": "생성 종료 일시"
+        },
+        "app.U2VuZENsb3Vk.action.bGlzdC1yZXR1cm5z.option.Y3JlYXRlZF9hdF90bw.short_desc": {
+          "source": "Latest creation date",
+          "message": "최신 생성일"
+        },
+        "app.U2VuZENsb3Vk.action.bGlzdC1yZXR1cm5z.option.Y3JlYXRlZF9hdF9mcm9t.desc": {
+          "source": "Only return records created on or after this timestamp",
+          "message": "이 타임스탬프 이후에 생성된 레코드만 반환"
+        },
+        "app.U2VuZENsb3Vk.action.bGlzdC1yZXR1cm5z.option.Y3JlYXRlZF9hdF9mcm9t.display_name": {
+          "source": "Created From",
+          "message": "생성 출처"
+        },
+        "app.U2VuZENsb3Vk.action.bGlzdC1yZXR1cm5z.option.Y3JlYXRlZF9hdF9mcm9t.short_desc": {
+          "source": "Earliest creation date",
+          "message": "최초 생성일"
+        },
+        "app.U2VuZENsb3Vk.action.bGlzdC1yZXR1cm5z.option.bGltaXQ.desc": {
+          "source": "Maximum number of aggregated records to return across pages",
+          "message": "페이지 전체에서 반환할 최대 집계 레코드 수"
+        },
+        "app.U2VuZENsb3Vk.action.bGlzdC1yZXR1cm5z.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "제한"
+        },
+        "app.U2VuZENsb3Vk.action.bGlzdC1yZXR1cm5z.option.bGltaXQ.short_desc": {
+          "source": "Maximum total records",
+          "message": "최대 총 레코드 수"
+        },
+        "app.U2VuZENsb3Vk.action.bGlzdC1yZXR1cm5z.option.c3RhdHVz.allowed-value.c3RyaW5nOmFubm91bmNlZA.display_name": {
+          "source": "Announced",
+          "message": "등록됨"
+        },
+        "app.U2VuZENsb3Vk.action.bGlzdC1yZXR1cm5z.option.c3RhdHVz.allowed-value.c3RyaW5nOmNhbmNlbGxlZA.display_name": {
+          "source": "Cancelled",
+          "message": "취소됨"
+        },
+        "app.U2VuZENsb3Vk.action.bGlzdC1yZXR1cm5z.option.c3RhdHVz.allowed-value.c3RyaW5nOmNvbXBsZXRlZA.display_name": {
+          "source": "Completed",
+          "message": "완료됨"
+        },
+        "app.U2VuZENsb3Vk.action.bGlzdC1yZXR1cm5z.option.c3RhdHVz.allowed-value.c3RyaW5nOmNyZWF0ZWQ.display_name": {
+          "source": "Created",
+          "message": "생성일"
+        },
+        "app.U2VuZENsb3Vk.action.bGlzdC1yZXR1cm5z.option.c3RhdHVz.allowed-value.c3RyaW5nOmRlbGl2ZXJlZA.display_name": {
+          "source": "Delivered",
+          "message": "배송 완료"
+        },
+        "app.U2VuZENsb3Vk.action.bGlzdC1yZXR1cm5z.option.c3RhdHVz.desc": {
+          "source": "Filter returns by status",
+          "message": "상태별 반품 필터링"
+        },
+        "app.U2VuZENsb3Vk.action.bGlzdC1yZXR1cm5z.option.c3RhdHVz.display_name": {
+          "source": "Status",
+          "message": "상태"
+        },
+        "app.U2VuZENsb3Vk.action.bGlzdC1yZXR1cm5z.option.c3RhdHVz.short_desc": {
+          "source": "Filter by return status",
+          "message": "반품 상태로 필터링"
+        },
+        "app.U2VuZENsb3Vk.action.bGlzdC1yZXR1cm5z.option.cGFyY2VsX2lk.desc": {
+          "source": "Filter returns whose outgoing parcel matches the given ID",
+          "message": "발송 소포가 지정된 ID와 일치하는 반품 필터링"
+        },
+        "app.U2VuZENsb3Vk.action.bGlzdC1yZXR1cm5z.option.cGFyY2VsX2lk.display_name": {
+          "source": "Parcel",
+          "message": "소포"
+        },
+        "app.U2VuZENsb3Vk.action.bGlzdC1yZXR1cm5z.option.cGFyY2VsX2lk.short_desc": {
+          "source": "Filter by outgoing parcel",
+          "message": "발송 소포로 필터링"
+        },
+        "app.U2VuZENsb3Vk.action.bGlzdC1yZXR1cm5z.short_desc": {
+          "source": "List and search returns",
+          "message": "반품 목록 조회 및 검색"
+        },
+        "app.U2VuZENsb3Vk.action.bGlzdC1zZW5kZXItYWRkcmVzc2Vz.desc": {
+          "source": "Retrieve a list of sender addresses configured on your SendCloud account; the default sender address is used when no other is specified on a parcel.",
+          "message": "SendCloud 계정에 구성된 발신자 주소 목록을 조회합니다. 소포에 다른 주소가 지정되지 않은 경우 기본 발신자 주소가 사용됩니다."
+        },
+        "app.U2VuZENsb3Vk.action.bGlzdC1zZW5kZXItYWRkcmVzc2Vz.display_name": {
+          "source": "List Sender Addresses",
+          "message": "발신자 주소 목록 조회"
+        },
+        "app.U2VuZENsb3Vk.action.bGlzdC1zZW5kZXItYWRkcmVzc2Vz.short_desc": {
+          "source": "List sender addresses",
+          "message": "발신자 주소 목록 조회"
+        },
+        "app.U2VuZENsb3Vk.action.bGlzdC1zZXJ2aWNlLXBvaW50cw.desc": {
+          "source": "Retrieve a list of carrier service points (pickup/drop-off locations) within a country; supports filtering by city, postal code, carrier, and radius.",
+          "message": "국가 내의 운송업체 서비스 포인트(수령/보관 장소) 목록을 조회합니다. 도시, 우편번호, 운송업체 및 반경별 필터링을 지원합니다."
+        },
+        "app.U2VuZENsb3Vk.action.bGlzdC1zZXJ2aWNlLXBvaW50cw.display_name": {
+          "source": "List Service Points",
+          "message": "서비스 포인트 목록 조회"
+        },
+        "app.U2VuZENsb3Vk.action.bGlzdC1zZXJ2aWNlLXBvaW50cw.option.Y291bnRyeQ.desc": {
+          "source": "Two-letter ISO country code to search service points within",
+          "message": "서비스 포인트를 검색할 두 자리 ISO 국가 코드"
+        },
+        "app.U2VuZENsb3Vk.action.bGlzdC1zZXJ2aWNlLXBvaW50cw.option.Y291bnRyeQ.display_name": {
+          "source": "Country",
+          "message": "국가"
+        },
+        "app.U2VuZENsb3Vk.action.bGlzdC1zZXJ2aWNlLXBvaW50cw.option.Y291bnRyeQ.short_desc": {
+          "source": "ISO 3166-1 alpha-2 country code (required)",
+          "message": "ISO 3166-1 alpha-2 국가 코드(필수)"
+        },
+        "app.U2VuZENsb3Vk.action.bGlzdC1zZXJ2aWNlLXBvaW50cw.option.Y2Fycmllcg.desc": {
+          "source": "Filter service points by carrier code (e.g., `postnl`, `dhl`, `ups`)",
+          "message": "운송업체 코드로 서비스 포인트 필터링(예: `postnl`, `dhl`, `ups`)"
+        },
+        "app.U2VuZENsb3Vk.action.bGlzdC1zZXJ2aWNlLXBvaW50cw.option.Y2Fycmllcg.display_name": {
+          "source": "Carrier",
+          "message": "배송업체"
+        },
+        "app.U2VuZENsb3Vk.action.bGlzdC1zZXJ2aWNlLXBvaW50cw.option.Y2Fycmllcg.short_desc": {
+          "source": "Carrier code filter",
+          "message": "운송업체 코드 필터"
+        },
+        "app.U2VuZENsb3Vk.action.bGlzdC1zZXJ2aWNlLXBvaW50cw.option.Y2l0eQ.desc": {
+          "source": "Filter service points by city name",
+          "message": "도시 이름으로 서비스 포인트 필터링"
+        },
+        "app.U2VuZENsb3Vk.action.bGlzdC1zZXJ2aWNlLXBvaW50cw.option.Y2l0eQ.display_name": {
+          "source": "City",
+          "message": "도시"
+        },
+        "app.U2VuZENsb3Vk.action.bGlzdC1zZXJ2aWNlLXBvaW50cw.option.Y2l0eQ.short_desc": {
+          "source": "City name filter",
+          "message": "도시 이름 필터"
+        },
+        "app.U2VuZENsb3Vk.action.bGlzdC1zZXJ2aWNlLXBvaW50cw.option.bmVhcl9wb3N0YWxfY29kZQ.desc": {
+          "source": "Postal code to search service points near (with distance returned)",
+          "message": "인근 서비스 포인트를 검색할 우편번호(거리 정보 반환 포함)"
+        },
+        "app.U2VuZENsb3Vk.action.bGlzdC1zZXJ2aWNlLXBvaW50cw.option.bmVhcl9wb3N0YWxfY29kZQ.display_name": {
+          "source": "Near Postal Code",
+          "message": "주변 우편번호"
+        },
+        "app.U2VuZENsb3Vk.action.bGlzdC1zZXJ2aWNlLXBvaW50cw.option.bmVhcl9wb3N0YWxfY29kZQ.short_desc": {
+          "source": "Postal code near-search origin",
+          "message": "근접 검색 기준 우편번호"
+        },
+        "app.U2VuZENsb3Vk.action.bGlzdC1zZXJ2aWNlLXBvaW50cw.option.cG9zdGFsX2NvZGU.desc": {
+          "source": "Postal code used as a search origin",
+          "message": "검색 기준으로 사용되는 우편번호"
+        },
+        "app.U2VuZENsb3Vk.action.bGlzdC1zZXJ2aWNlLXBvaW50cw.option.cG9zdGFsX2NvZGU.display_name": {
+          "source": "Postal Code",
+          "message": "우편번호"
+        },
+        "app.U2VuZENsb3Vk.action.bGlzdC1zZXJ2aWNlLXBvaW50cw.option.cG9zdGFsX2NvZGU.short_desc": {
+          "source": "Postal code to search near",
+          "message": "주변을 검색할 우편번호"
+        },
+        "app.U2VuZENsb3Vk.action.bGlzdC1zZXJ2aWNlLXBvaW50cw.option.cmFkaXVz.desc": {
+          "source": "Radius in meters around the search origin (max 50000)",
+          "message": "검색 원점 주변의 반경(미터 단위, 최대 50000)"
+        },
+        "app.U2VuZENsb3Vk.action.bGlzdC1zZXJ2aWNlLXBvaW50cw.option.cmFkaXVz.display_name": {
+          "source": "Radius (m)",
+          "message": "반경(m)"
+        },
+        "app.U2VuZENsb3Vk.action.bGlzdC1zZXJ2aWNlLXBvaW50cw.option.cmFkaXVz.short_desc": {
+          "source": "Search radius in meters",
+          "message": "검색 반경(미터)"
+        },
+        "app.U2VuZENsb3Vk.action.bGlzdC1zZXJ2aWNlLXBvaW50cw.short_desc": {
+          "source": "List service points for a country",
+          "message": "국가별 서비스 포인트 목록 조회"
+        },
+        "app.U2VuZENsb3Vk.action.bGlzdC1zaGlwcGluZy1tZXRob2Rz.desc": {
+          "source": "Retrieve a list of shipping methods available on your SendCloud account, including carrier details, service levels and destination countries.",
+          "message": "SendCloud 계정에서 사용 가능한 배송 방법 목록을 운송업체 세부 정보, 서비스 수준 및 목적지 국가와 함께 가져옵니다."
+        },
+        "app.U2VuZENsb3Vk.action.bGlzdC1zaGlwcGluZy1tZXRob2Rz.display_name": {
+          "source": "List Shipping Methods",
+          "message": "배송 방법 목록 조회"
+        },
+        "app.U2VuZENsb3Vk.action.bGlzdC1zaGlwcGluZy1tZXRob2Rz.option.aXNfcmV0dXJu.desc": {
+          "source": "If `True`, only return-capable shipping methods are returned",
+          "message": "`True`인 경우 반품 가능한 배송 방법만 반환됩니다"
+        },
+        "app.U2VuZENsb3Vk.action.bGlzdC1zaGlwcGluZy1tZXRob2Rz.option.aXNfcmV0dXJu.display_name": {
+          "source": "Is Return",
+          "message": "반품 여부"
+        },
+        "app.U2VuZENsb3Vk.action.bGlzdC1zaGlwcGluZy1tZXRob2Rz.option.aXNfcmV0dXJu.short_desc": {
+          "source": "Filter return methods",
+          "message": "반품 방법 필터링"
+        },
+        "app.U2VuZENsb3Vk.action.bGlzdC1zaGlwcGluZy1tZXRob2Rz.option.c2VuZGVyX2FkZHJlc3M.desc": {
+          "source": "Only return shipping methods available for the given sender address ID",
+          "message": "지정된 발송인 주소 ID에 사용할 수 있는 배송 방법만 반환합니다"
+        },
+        "app.U2VuZENsb3Vk.action.bGlzdC1zaGlwcGluZy1tZXRob2Rz.option.c2VuZGVyX2FkZHJlc3M.display_name": {
+          "source": "Sender Address",
+          "message": "발송인 주소"
+        },
+        "app.U2VuZENsb3Vk.action.bGlzdC1zaGlwcGluZy1tZXRob2Rz.option.c2VuZGVyX2FkZHJlc3M.short_desc": {
+          "source": "Filter methods by sender address",
+          "message": "발송인 주소별 방법 필터링"
+        },
+        "app.U2VuZENsb3Vk.action.bGlzdC1zaGlwcGluZy1tZXRob2Rz.option.c2VydmljZV9wb2ludF9pbnB1dA.allowed-value.c3RyaW5nOm5vbmU.desc": {
+          "source": "Methods that don't accept a service point",
+          "message": "서비스 포인트를 허용하지 않는 방법"
+        },
+        "app.U2VuZENsb3Vk.action.bGlzdC1zaGlwcGluZy1tZXRob2Rz.option.c2VydmljZV9wb2ludF9pbnB1dA.allowed-value.c3RyaW5nOm5vbmU.display_name": {
+          "source": "None",
+          "message": "없음"
+        },
+        "app.U2VuZENsb3Vk.action.bGlzdC1zaGlwcGluZy1tZXRob2Rz.option.c2VydmljZV9wb2ludF9pbnB1dA.allowed-value.c3RyaW5nOm9wdGlvbmFs.desc": {
+          "source": "Methods where a service point is optional",
+          "message": "서비스 포인트가 선택 사항인 방법"
+        },
+        "app.U2VuZENsb3Vk.action.bGlzdC1zaGlwcGluZy1tZXRob2Rz.option.c2VydmljZV9wb2ludF9pbnB1dA.allowed-value.c3RyaW5nOm9wdGlvbmFs.display_name": {
+          "source": "Optional",
+          "message": "선택 사항"
+        },
+        "app.U2VuZENsb3Vk.action.bGlzdC1zaGlwcGluZy1tZXRob2Rz.option.c2VydmljZV9wb2ludF9pbnB1dA.allowed-value.c3RyaW5nOnJlcXVpcmVk.desc": {
+          "source": "Methods that require a service point",
+          "message": "서비스 포인트가 필요한 방법"
+        },
+        "app.U2VuZENsb3Vk.action.bGlzdC1zaGlwcGluZy1tZXRob2Rz.option.c2VydmljZV9wb2ludF9pbnB1dA.allowed-value.c3RyaW5nOnJlcXVpcmVk.display_name": {
+          "source": "Required",
+          "message": "필수"
+        },
+        "app.U2VuZENsb3Vk.action.bGlzdC1zaGlwcGluZy1tZXRob2Rz.option.c2VydmljZV9wb2ludF9pbnB1dA.desc": {
+          "source": "Filter methods by whether a service point is required, optional, or not used",
+          "message": "서비스 포인트가 필수인지, 선택 사항인지 또는 사용되지 않는지 여부로 방법을 필터링합니다"
+        },
+        "app.U2VuZENsb3Vk.action.bGlzdC1zaGlwcGluZy1tZXRob2Rz.option.c2VydmljZV9wb2ludF9pbnB1dA.display_name": {
+          "source": "Service Point Input",
+          "message": "서비스 포인트 입력"
+        },
+        "app.U2VuZENsb3Vk.action.bGlzdC1zaGlwcGluZy1tZXRob2Rz.option.c2VydmljZV9wb2ludF9pbnB1dA.short_desc": {
+          "source": "Service-point input filter",
+          "message": "서비스 포인트 입력 필터"
+        },
+        "app.U2VuZENsb3Vk.action.bGlzdC1zaGlwcGluZy1tZXRob2Rz.option.cHJpY2VfYnJlYWtkb3du.desc": {
+          "source": "If `True`, include a detailed pricing breakdown on each method",
+          "message": "`True`인 경우 각 방법에 대한 상세 가격 분석을 포함합니다"
+        },
+        "app.U2VuZENsb3Vk.action.bGlzdC1zaGlwcGluZy1tZXRob2Rz.option.cHJpY2VfYnJlYWtkb3du.display_name": {
+          "source": "Price Breakdown",
+          "message": "가격 분석"
+        },
+        "app.U2VuZENsb3Vk.action.bGlzdC1zaGlwcGluZy1tZXRob2Rz.option.cHJpY2VfYnJlYWtkb3du.short_desc": {
+          "source": "Include detailed price breakdown",
+          "message": "상세 가격 분석 포함"
+        },
+        "app.U2VuZENsb3Vk.action.bGlzdC1zaGlwcGluZy1tZXRob2Rz.option.dG9fY291bnRyeQ.desc": {
+          "source": "ISO 3166-1 alpha-2 destination country code; only methods shipping to this country are returned",
+          "message": "ISO 3166-1 alpha-2 목적지 국가 코드; 이 국가로 배송되는 방법만 반환됩니다"
+        },
+        "app.U2VuZENsb3Vk.action.bGlzdC1zaGlwcGluZy1tZXRob2Rz.option.dG9fY291bnRyeQ.display_name": {
+          "source": "To Country",
+          "message": "목적지 국가"
+        },
+        "app.U2VuZENsb3Vk.action.bGlzdC1zaGlwcGluZy1tZXRob2Rz.option.dG9fY291bnRyeQ.short_desc": {
+          "source": "Destination country filter",
+          "message": "목적지 국가 필터"
+        },
+        "app.U2VuZENsb3Vk.action.bGlzdC1zaGlwcGluZy1tZXRob2Rz.short_desc": {
+          "source": "List available shipping methods",
+          "message": "사용 가능한 배송 방법 목록 조회"
+        },
+        "app.U2VuZENsb3Vk.action.bWFrZS1hcGktY2FsbA.desc": {
+          "source": "Make a custom HTTP / REST API call to **SendCloud** using the configured connection's authentication.\n\nSpecify the HTTP method, the URI path (relative to the connection's API base URL), optional query parameters, headers, and request body. The response is returned as a hash containing the status code, response headers, and response body.\n\nUse this action for endpoints that are not yet exposed as first-class actions on this app.",
+          "message": "구성된 연결의 인증을 사용하여 **SendCloud**에 사용자 지정 HTTP / REST API 호출을 수행합니다.\n\nHTTP 메서드, URI 경로(연결의 API 기본 URL 기준 상대 경로), 선택적 쿼리 매개변수, 헤더 및 요청 본문을 지정합니다. 응답은 상태 코드, 응답 헤더 및 응답 본문이 포함된 해시로 반환됩니다.\n\n이 앱에서 아직 일급 액션으로 노출되지 않은 엔드포인트에 이 액션을 사용하세요."
+        },
+        "app.U2VuZENsb3Vk.action.bWFrZS1hcGktY2FsbA.display_name": {
+          "source": "Make an API call",
+          "message": "API 호출 실행"
+        },
+        "app.U2VuZENsb3Vk.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.desc": {
+          "source": "The request body. The effective type depends on `body_type`: JSON/form/YAML expect a hash, XML/text expect a string, multipart expects a file structure, binary expects raw bytes.",
+          "message": "요청 본문입니다. 유효한 유형은 `body_type`에 따라 달라집니다. JSON/form/YAML은 해시를, XML/text는 문자열을, multipart는 파일 구조를, binary는 원시 바이트를 요구합니다."
+        },
+        "app.U2VuZENsb3Vk.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.display_name": {
+          "source": "Body",
+          "message": "본문"
+        },
+        "app.U2VuZENsb3Vk.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.short_desc": {
+          "source": "The request body",
+          "message": "요청 본문"
+        },
+        "app.U2VuZENsb3Vk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.desc": {
+          "source": "Upload a file using `multipart/form-data`. The body must be a @ref DataProvider::FileDataType \"FileDataType\" structure (filename + content + mime_type). The framework builds the multipart envelope and sets the boundary header.",
+          "message": "`multipart/form-data`을(를) 사용하여 파일을 업로드합니다. 본문은 @ref DataProvider::FileDataType \"FileDataType\" 구조(filename + content + mime_type)여야 합니다. 프레임워크가 multipart 봉투를 작성하고 boundary 헤더를 설정합니다."
+        },
+        "app.U2VuZENsb3Vk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.display_name": {
+          "source": "Multipart Form",
+          "message": "멀티파트 폼"
+        },
+        "app.U2VuZENsb3Vk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.short_desc": {
+          "source": "Upload a file using multipart/form-data",
+          "message": "multipart/form-data를 사용하여 파일 업로드"
+        },
+        "app.U2VuZENsb3Vk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.desc": {
+          "source": "Pass the body to the REST client unchanged; the client decides serialization based on its configured `data` option and the value type",
+          "message": "본문을 변경하지 않고 REST 클라이언트에 전달합니다. 클라이언트는 구성된 `data` 옵션과 값 유형을 기반으로 직렬화를 결정합니다."
+        },
+        "app.U2VuZENsb3Vk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.display_name": {
+          "source": "Auto",
+          "message": "자동"
+        },
+        "app.U2VuZENsb3Vk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.short_desc": {
+          "source": "Pass-through; use connection serialization and let the REST client decide",
+          "message": "패스스루: 연결 직렬화를 사용하고 REST 클라이언트가 결정하도록 합니다."
+        },
+        "app.U2VuZENsb3Vk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.desc": {
+          "source": "Send the body as raw bytes. The body must be a binary value. Sets `Content-Type: application/octet-stream` unless overridden by `hdr`.",
+          "message": "본문을 원시 바이트로 전송합니다. 본문은 바이너리 값이어야 합니다. `hdr`에 의해 재정의되지 않는 한 `Content-Type: application/octet-stream`을(를) 설정합니다."
+        },
+        "app.U2VuZENsb3Vk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.display_name": {
+          "source": "Raw Binary",
+          "message": "원시 바이너리"
+        },
+        "app.U2VuZENsb3Vk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.short_desc": {
+          "source": "Send body as raw bytes",
+          "message": "본문을 원시 바이트로 전송"
+        },
+        "app.U2VuZENsb3Vk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.desc": {
+          "source": "Serialize a hash of form fields as `application/x-www-form-urlencoded`. The body must be a hash whose values are scalars (strings/numbers/booleans).",
+          "message": "폼 필드의 해시를 `application/x-www-form-urlencoded`(으)로 직렬화합니다. 본문은 값이 스칼라(문자열/숫자/불리언)인 해시여야 합니다."
+        },
+        "app.U2VuZENsb3Vk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.display_name": {
+          "source": "Form (URL-encoded)",
+          "message": "폼 (URL 인코딩)"
+        },
+        "app.U2VuZENsb3Vk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.short_desc": {
+          "source": "Serialize body as application/x-www-form-urlencoded form fields",
+          "message": "본문을 application/x-www-form-urlencoded 폼 필드로 직렬화"
+        },
+        "app.U2VuZENsb3Vk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.desc": {
+          "source": "Serialize the body as JSON; sets `Content-Type: application/json`. The body should be a hash, list, or scalar value.",
+          "message": "본문을 JSON으로 직렬화하며, `Content-Type: application/json`을(를) 설정합니다. 본문은 해시, 리스트 또는 스칼라 값이어야 합니다."
+        },
+        "app.U2VuZENsb3Vk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.display_name": {
+          "source": "JSON",
+          "message": "JSON"
+        },
+        "app.U2VuZENsb3Vk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.short_desc": {
+          "source": "Serialize body as JSON",
+          "message": "본문을 JSON으로 직렬화"
+        },
+        "app.U2VuZENsb3Vk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.desc": {
+          "source": "Send the body as plain text. The body must be a string. Sets `Content-Type: text/plain`.",
+          "message": "본문을 일반 텍스트로 전송합니다. 본문은 문자열이어야 합니다. `Content-Type: text/plain`을(를) 설정합니다."
+        },
+        "app.U2VuZENsb3Vk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.display_name": {
+          "source": "Plain Text",
+          "message": "일반 텍스트"
+        },
+        "app.U2VuZENsb3Vk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.short_desc": {
+          "source": "Send body as text/plain",
+          "message": "본문을 text/plain으로 전송"
+        },
+        "app.U2VuZENsb3Vk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.desc": {
+          "source": "Send the body as XML. If the body is a hash it is serialized to XML; if it is a string it is sent verbatim. Sets `Content-Type: application/xml`.",
+          "message": "본문을 XML로 전송합니다. 본문이 해시인 경우 XML로 직렬화되고, 문자열인 경우 그대로 전송됩니다. `Content-Type: application/xml`을(를) 설정합니다."
+        },
+        "app.U2VuZENsb3Vk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.display_name": {
+          "source": "XML",
+          "message": "XML"
+        },
+        "app.U2VuZENsb3Vk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.short_desc": {
+          "source": "Send body as XML",
+          "message": "본문을 XML로 전송"
+        },
+        "app.U2VuZENsb3Vk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.desc": {
+          "source": "Send the body as YAML. If the body is a hash it is serialized to YAML; if it is a string it is sent verbatim. Sets `Content-Type: application/x-yaml`.",
+          "message": "본문을 YAML로 전송합니다. 본문이 해시인 경우 YAML로 직렬화되고, 문자열인 경우 그대로 전송됩니다. `Content-Type: application/x-yaml`을(를) 설정합니다."
+        },
+        "app.U2VuZENsb3Vk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.display_name": {
+          "source": "YAML",
+          "message": "YAML"
+        },
+        "app.U2VuZENsb3Vk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.short_desc": {
+          "source": "Send body as YAML",
+          "message": "본문을 YAML로 전송"
+        },
+        "app.U2VuZENsb3Vk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.desc": {
+          "source": "Selects the body serialization mode and the corresponding `Content-Type` header. Changing this field reshapes the `body` editor - selecting JSON exposes a JSON editor, selecting Multipart Form exposes a file picker, and so on.",
+          "message": "본문 직렬화 모드 및 해당되는 `Content-Type` 헤더를 선택합니다. 이 필드를 변경하면 `body` 에디터의 형태가 변경됩니다. JSON을 선택하면 JSON 에디터가 표시되고, 멀티파트 폼을 선택하면 파일 선택기가 표시되는 방식입니다."
+        },
+        "app.U2VuZENsb3Vk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.display_name": {
+          "source": "Body Type",
+          "message": "본문 유형"
+        },
+        "app.U2VuZENsb3Vk.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.short_desc": {
+          "source": "How the body is serialized and what Content-Type is sent",
+          "message": "본문이 직렬화되는 방식 및 전송되는 Content-Type"
+        },
+        "app.U2VuZENsb3Vk.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.desc": {
+          "source": "If `True`, non-2xx HTTP responses return as the normal response hash (with the actual status code) instead of raising `REST-RESPONSE-ERROR`. Useful for handling 4xx/5xx as data - e.g. checking whether a resource exists. Overrides the connection's `error_passthru` setting for this call only.",
+          "message": "`True`인 경우, 2xx가 아닌 HTTP 응답은 `REST-RESPONSE-ERROR`을(를) 발생시키는 대신 (실제 상태 코드와 함께) 일반 응답 해시로 반환됩니다. 리소스 존재 여부 확인 등 4xx/5xx를 데이터로 처리할 때 유용합니다. 이 호출에 대해서만 연결의 `error_passthru` 설정을 재정의합니다."
+        },
+        "app.U2VuZENsb3Vk.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.display_name": {
+          "source": "Return Errors as Data",
+          "message": "오류를 데이터로 반환"
+        },
+        "app.U2VuZENsb3Vk.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.short_desc": {
+          "source": "Return non-2xx responses normally instead of throwing",
+          "message": "예외를 발생시키는 대신 2xx가 아닌 응답을 정상적으로 반환"
+        },
+        "app.U2VuZENsb3Vk.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.desc": {
+          "source": "Optional list of HTTP status codes treated as success. If set and the response status is not in this list, the action throws `REST-STATUS-ERROR`. When unset, the REST client's default behavior applies (typically: 2xx is success, non-2xx throws).",
+          "message": "성공으로 처리되는 HTTP 상태 코드의 선택적 목록입니다. 설정되어 있고 응답 상태가 이 목록에 없는 경우 작업이 `REST-STATUS-ERROR` 예외를 발생시킵니다. 설정되지 않은 경우 REST 클라이언트의 기본 동작이 적용됩니다(일반적으로 2xx는 성공, 2xx 이외는 예외 발생)."
+        },
+        "app.U2VuZENsb3Vk.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.display_name": {
+          "source": "Expected Status Codes",
+          "message": "예상되는 상태 코드"
+        },
+        "app.U2VuZENsb3Vk.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.short_desc": {
+          "source": "Response status codes treated as success",
+          "message": "성공으로 처리되는 응답 상태 코드"
+        },
+        "app.U2VuZENsb3Vk.action.bWFrZS1hcGktY2FsbA.option.aGRy.desc": {
+          "source": "Hash of custom headers added to the request. These override any default headers set by `body_type` (e.g. supplying `Content-Type` here wins over the body-type default).",
+          "message": "요청에 추가되는 사용자 지정 헤더의 해시입니다. 이는 `body_type`에 의해 설정된 기본 헤더보다 우선합니다(예: 여기에 `Content-Type`을(를) 제공하면 본문 유형 기본값보다 우선 적용됨)."
+        },
+        "app.U2VuZENsb3Vk.action.bWFrZS1hcGktY2FsbA.option.aGRy.display_name": {
+          "source": "Custom Headers",
+          "message": "사용자 지정 헤더"
+        },
+        "app.U2VuZENsb3Vk.action.bWFrZS1hcGktY2FsbA.option.aGRy.short_desc": {
+          "source": "Extra request headers",
+          "message": "추가 요청 헤더"
+        },
+        "app.U2VuZENsb3Vk.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.desc": {
+          "source": "If `True`, the response hash includes a `debug` sub-hash containing the request method/URL/headers (with sensitive values redacted), request and response sizes, and round-trip duration. Useful when investigating slow or failing calls. Off by default to keep responses lean.",
+          "message": "`True`인 경우 응답 해시에 요청 메서드/URL/헤더(민감한 값은 가려짐), 요청 및 응답 크기, 왕복 시간이 포함된 `debug` 하위 해시가 포함됩니다. 느리거나 실패한 호출을 조사할 때 유용합니다. 응답을 가볍게 유지하기 위해 기본적으로 비활성화되어 있습니다."
+        },
+        "app.U2VuZENsb3Vk.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.display_name": {
+          "source": "Include Debug Info",
+          "message": "디버그 정보 포함"
+        },
+        "app.U2VuZENsb3Vk.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.short_desc": {
+          "source": "Include request/timing/size debug info in the response",
+          "message": "응답에 요청/타이밍/크기 디버그 정보 포함"
+        },
+        "app.U2VuZENsb3Vk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.desc": {
+          "source": "HTTP `OPTIONS`",
+          "message": "HTTP `OPTIONS`"
+        },
+        "app.U2VuZENsb3Vk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.display_name": {
+          "source": "OPTIONS",
+          "message": "OPTIONS"
+        },
+        "app.U2VuZENsb3Vk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.short_desc": {
+          "source": "HTTP OPTIONS",
+          "message": "HTTP OPTIONS"
+        },
+        "app.U2VuZENsb3Vk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.desc": {
+          "source": "HTTP `DELETE`",
+          "message": "HTTP `DELETE`"
+        },
+        "app.U2VuZENsb3Vk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.display_name": {
+          "source": "DELETE",
+          "message": "DELETE"
+        },
+        "app.U2VuZENsb3Vk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.short_desc": {
+          "source": "HTTP DELETE",
+          "message": "HTTP DELETE"
+        },
+        "app.U2VuZENsb3Vk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.desc": {
+          "source": "HTTP `GET`",
+          "message": "HTTP `GET`"
+        },
+        "app.U2VuZENsb3Vk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.display_name": {
+          "source": "GET",
+          "message": "GET"
+        },
+        "app.U2VuZENsb3Vk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.short_desc": {
+          "source": "HTTP GET",
+          "message": "HTTP GET"
+        },
+        "app.U2VuZENsb3Vk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.desc": {
+          "source": "HTTP `HEAD`",
+          "message": "HTTP `HEAD`"
+        },
+        "app.U2VuZENsb3Vk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.display_name": {
+          "source": "HEAD",
+          "message": "HEAD"
+        },
+        "app.U2VuZENsb3Vk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.short_desc": {
+          "source": "HTTP HEAD",
+          "message": "HTTP HEAD"
+        },
+        "app.U2VuZENsb3Vk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.desc": {
+          "source": "HTTP `PATCH`",
+          "message": "HTTP `PATCH`"
+        },
+        "app.U2VuZENsb3Vk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.display_name": {
+          "source": "PATCH",
+          "message": "PATCH"
+        },
+        "app.U2VuZENsb3Vk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.short_desc": {
+          "source": "HTTP PATCH",
+          "message": "HTTP PATCH"
+        },
+        "app.U2VuZENsb3Vk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.desc": {
+          "source": "HTTP `POST`",
+          "message": "HTTP `POST`"
+        },
+        "app.U2VuZENsb3Vk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.display_name": {
+          "source": "POST",
+          "message": "POST"
+        },
+        "app.U2VuZENsb3Vk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.short_desc": {
+          "source": "HTTP POST",
+          "message": "HTTP POST"
+        },
+        "app.U2VuZENsb3Vk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.desc": {
+          "source": "HTTP `PUT`",
+          "message": "HTTP `PUT`"
+        },
+        "app.U2VuZENsb3Vk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.display_name": {
+          "source": "PUT",
+          "message": "PUT"
+        },
+        "app.U2VuZENsb3Vk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.short_desc": {
+          "source": "HTTP PUT",
+          "message": "HTTP PUT"
+        },
+        "app.U2VuZENsb3Vk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.desc": {
+          "source": "HTTP `TRACE`",
+          "message": "HTTP `TRACE`"
+        },
+        "app.U2VuZENsb3Vk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.display_name": {
+          "source": "TRACE",
+          "message": "TRACE"
+        },
+        "app.U2VuZENsb3Vk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.short_desc": {
+          "source": "HTTP TRACE",
+          "message": "HTTP TRACE"
+        },
+        "app.U2VuZENsb3Vk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "요청에 사용할 HTTP 메서드"
+        },
+        "app.U2VuZENsb3Vk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.display_name": {
+          "source": "HTTP Method",
+          "message": "HTTP 메서드"
+        },
+        "app.U2VuZENsb3Vk.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.short_desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "요청에 사용할 HTTP 메서드"
+        },
+        "app.U2VuZENsb3Vk.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain `{name}` placeholders that are replaced from `path_vars`. Example: `/users/{id}/comments`.",
+          "message": "연결의 API 기본 URL에 대한 상대 URI 경로입니다. `path_vars`에서 대체되는 `{name}` 자리 표시자가 포함될 수 있습니다. 예: `/users/{id}/comments`."
+        },
+        "app.U2VuZENsb3Vk.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.display_name": {
+          "source": "URI Path",
+          "message": "URI 경로"
+        },
+        "app.U2VuZENsb3Vk.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.short_desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain '{name}' placeholders that are replaced from 'path_vars'. Example: '/users/{id}/comments'",
+          "message": "연결의 API 기본 URL에 대한 상대 URI 경로입니다. 'path_vars'에서 대체되는 '{name}' 자리 표시자를 포함할 수 있습니다. 예: '/users/{id}/comments'"
+        },
+        "app.U2VuZENsb3Vk.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.desc": {
+          "source": "Hash of values substituted into `{name}` placeholders in the URI path. Example: with `path = /users/{id}` and `path_vars = {id: 123}` the framework sends `/users/123`. Values are URL-encoded.",
+          "message": "URI 경로의 `{name}` 자리 표시자에 대체되는 값의 해시입니다. 예: `path = /users/{id}` 및 `path_vars = {id: 123}`이 있으면 프레임워크가 `/users/123`을(를) 전송합니다. 값은 URL 인코딩됩니다."
+        },
+        "app.U2VuZENsb3Vk.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.display_name": {
+          "source": "Path Variables",
+          "message": "경로 변수"
+        },
+        "app.U2VuZENsb3Vk.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.short_desc": {
+          "source": "Values for {name} placeholders in path",
+          "message": "경로 내 {name} 자리 표시자의 값"
+        },
+        "app.U2VuZENsb3Vk.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.desc": {
+          "source": "Hash of query string parameters to append to the URI path. Values are URL-encoded; list values are joined with `,`.",
+          "message": "URI 경로에 추가할 쿼리 문자열 매개변수 해시입니다. 값은 URL 인코딩되며, 목록 값은 `,`(으)로 연결됩니다."
+        },
+        "app.U2VuZENsb3Vk.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.display_name": {
+          "source": "Query Arguments",
+          "message": "쿼리 인수"
+        },
+        "app.U2VuZENsb3Vk.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.short_desc": {
+          "source": "Query string parameters",
+          "message": "쿼리 문자열 매개변수"
+        },
+        "app.U2VuZENsb3Vk.action.bWFrZS1hcGktY2FsbA.short_desc": {
+          "source": "Make a custom API call to SendCloud",
+          "message": "SendCloud에 사용자 지정 API 호출 수행"
+        },
+        "app.U2VuZENsb3Vk.action.c2VhcmNoLXNlcnZpY2UtcG9pbnRz.desc": {
+          "source": "Search for carrier service points (pickup/drop-off locations) near a location; supports postal-code or lat/long search origins and radius/weight filters.",
+          "message": "위치 근처의 운송업체 서비스 포인트(수령/위탁 장소)를 검색합니다. 우편번호 또는 위도/경도 검색 원점 및 반경/무게 필터를 지원합니다."
+        },
+        "app.U2VuZENsb3Vk.action.c2VhcmNoLXNlcnZpY2UtcG9pbnRz.display_name": {
+          "source": "Search Service Points",
+          "message": "서비스 포인트 검색"
+        },
+        "app.U2VuZENsb3Vk.action.c2VhcmNoLXNlcnZpY2UtcG9pbnRz.option.Y291bnRyeQ.desc": {
+          "source": "Two-letter ISO country code to search service points within",
+          "message": "서비스 포인트를 검색할 두 자리 ISO 국가 코드"
+        },
+        "app.U2VuZENsb3Vk.action.c2VhcmNoLXNlcnZpY2UtcG9pbnRz.option.Y291bnRyeQ.display_name": {
+          "source": "Country",
+          "message": "국가"
+        },
+        "app.U2VuZENsb3Vk.action.c2VhcmNoLXNlcnZpY2UtcG9pbnRz.option.Y291bnRyeQ.short_desc": {
+          "source": "ISO 3166-1 alpha-2 country code (required)",
+          "message": "ISO 3166-1 alpha-2 국가 코드(필수)"
+        },
+        "app.U2VuZENsb3Vk.action.c2VhcmNoLXNlcnZpY2UtcG9pbnRz.option.Y2Fycmllcg.desc": {
+          "source": "Filter service points by carrier code (e.g., postnl, dhl, ups)",
+          "message": "운송업체 코드별 서비스 포인트 필터링(예: postnl, dhl, ups)"
+        },
+        "app.U2VuZENsb3Vk.action.c2VhcmNoLXNlcnZpY2UtcG9pbnRz.option.Y2Fycmllcg.display_name": {
+          "source": "Carrier",
+          "message": "배송업체"
+        },
+        "app.U2VuZENsb3Vk.action.c2VhcmNoLXNlcnZpY2UtcG9pbnRz.option.Y2Fycmllcg.short_desc": {
+          "source": "Carrier code filter",
+          "message": "운송업체 코드 필터"
+        },
+        "app.U2VuZENsb3Vk.action.c2VhcmNoLXNlcnZpY2UtcG9pbnRz.option.Y2l0eQ.desc": {
+          "source": "Filter service points by city name",
+          "message": "도시 이름으로 서비스 포인트 필터링"
+        },
+        "app.U2VuZENsb3Vk.action.c2VhcmNoLXNlcnZpY2UtcG9pbnRz.option.Y2l0eQ.display_name": {
+          "source": "City",
+          "message": "도시"
+        },
+        "app.U2VuZENsb3Vk.action.c2VhcmNoLXNlcnZpY2UtcG9pbnRz.option.Y2l0eQ.short_desc": {
+          "source": "City name filter",
+          "message": "도시 이름 필터"
+        },
+        "app.U2VuZENsb3Vk.action.c2VhcmNoLXNlcnZpY2UtcG9pbnRz.option.aG91c2VfbnVtYmVy.desc": {
+          "source": "House number used together with the search origin",
+          "message": "검색 원점과 함께 사용되는 건물 번호"
+        },
+        "app.U2VuZENsb3Vk.action.c2VhcmNoLXNlcnZpY2UtcG9pbnRz.option.aG91c2VfbnVtYmVy.display_name": {
+          "source": "House Number",
+          "message": "번지 번호"
+        },
+        "app.U2VuZENsb3Vk.action.c2VhcmNoLXNlcnZpY2UtcG9pbnRz.option.aG91c2VfbnVtYmVy.short_desc": {
+          "source": "House number near the search origin",
+          "message": "검색 원점 근처의 건물 번호"
+        },
+        "app.U2VuZENsb3Vk.action.c2VhcmNoLXNlcnZpY2UtcG9pbnRz.option.bG9uZ2l0dWRl.desc": {
+          "source": "Longitude used as a search origin",
+          "message": "검색 원점으로 사용되는 경도"
+        },
+        "app.U2VuZENsb3Vk.action.c2VhcmNoLXNlcnZpY2UtcG9pbnRz.option.bG9uZ2l0dWRl.display_name": {
+          "source": "Longitude",
+          "message": "경도"
+        },
+        "app.U2VuZENsb3Vk.action.c2VhcmNoLXNlcnZpY2UtcG9pbnRz.option.bG9uZ2l0dWRl.short_desc": {
+          "source": "Longitude filter",
+          "message": "경도 필터"
+        },
+        "app.U2VuZENsb3Vk.action.c2VhcmNoLXNlcnZpY2UtcG9pbnRz.option.bGF0aXR1ZGU.desc": {
+          "source": "Latitude used as a search origin",
+          "message": "검색 원점으로 사용되는 위도"
+        },
+        "app.U2VuZENsb3Vk.action.c2VhcmNoLXNlcnZpY2UtcG9pbnRz.option.bGF0aXR1ZGU.display_name": {
+          "source": "Latitude",
+          "message": "위도"
+        },
+        "app.U2VuZENsb3Vk.action.c2VhcmNoLXNlcnZpY2UtcG9pbnRz.option.bGF0aXR1ZGU.short_desc": {
+          "source": "Latitude filter",
+          "message": "위도 필터"
+        },
+        "app.U2VuZENsb3Vk.action.c2VhcmNoLXNlcnZpY2UtcG9pbnRz.option.bmVhcl9sYXRpdHVkZQ.desc": {
+          "source": "Latitude to search service points near",
+          "message": "근처 서비스 포인트를 검색할 위도"
+        },
+        "app.U2VuZENsb3Vk.action.c2VhcmNoLXNlcnZpY2UtcG9pbnRz.option.bmVhcl9sYXRpdHVkZQ.display_name": {
+          "source": "Near Latitude",
+          "message": "근처 위도"
+        },
+        "app.U2VuZENsb3Vk.action.c2VhcmNoLXNlcnZpY2UtcG9pbnRz.option.bmVhcl9sYXRpdHVkZQ.short_desc": {
+          "source": "Latitude near-search origin",
+          "message": "위도 근처 검색 원점"
+        },
+        "app.U2VuZENsb3Vk.action.c2VhcmNoLXNlcnZpY2UtcG9pbnRz.option.bmVhcl9sb25naXR1ZGU.desc": {
+          "source": "Longitude to search service points near",
+          "message": "근처 서비스 포인트를 검색할 경도"
+        },
+        "app.U2VuZENsb3Vk.action.c2VhcmNoLXNlcnZpY2UtcG9pbnRz.option.bmVhcl9sb25naXR1ZGU.display_name": {
+          "source": "Near Longitude",
+          "message": "근처 경도"
+        },
+        "app.U2VuZENsb3Vk.action.c2VhcmNoLXNlcnZpY2UtcG9pbnRz.option.bmVhcl9sb25naXR1ZGU.short_desc": {
+          "source": "Longitude near-search origin",
+          "message": "경도 근처 검색 원점"
+        },
+        "app.U2VuZENsb3Vk.action.c2VhcmNoLXNlcnZpY2UtcG9pbnRz.option.bmVhcl9wb3N0YWxfY29kZQ.desc": {
+          "source": "Postal code to search service points near (with distance returned)",
+          "message": "인근 서비스 포인트를 검색할 우편번호(거리 정보 반환 포함)"
+        },
+        "app.U2VuZENsb3Vk.action.c2VhcmNoLXNlcnZpY2UtcG9pbnRz.option.bmVhcl9wb3N0YWxfY29kZQ.display_name": {
+          "source": "Near Postal Code",
+          "message": "주변 우편번호"
+        },
+        "app.U2VuZENsb3Vk.action.c2VhcmNoLXNlcnZpY2UtcG9pbnRz.option.bmVhcl9wb3N0YWxfY29kZQ.short_desc": {
+          "source": "Postal code near-search origin",
+          "message": "근접 검색 기준 우편번호"
+        },
+        "app.U2VuZENsb3Vk.action.c2VhcmNoLXNlcnZpY2UtcG9pbnRz.option.cG9zdGFsX2NvZGU.desc": {
+          "source": "Postal code used as a search origin",
+          "message": "검색 기준으로 사용되는 우편번호"
+        },
+        "app.U2VuZENsb3Vk.action.c2VhcmNoLXNlcnZpY2UtcG9pbnRz.option.cG9zdGFsX2NvZGU.display_name": {
+          "source": "Postal Code",
+          "message": "우편번호"
+        },
+        "app.U2VuZENsb3Vk.action.c2VhcmNoLXNlcnZpY2UtcG9pbnRz.option.cG9zdGFsX2NvZGU.short_desc": {
+          "source": "Postal code to search near",
+          "message": "주변을 검색할 우편번호"
+        },
+        "app.U2VuZENsb3Vk.action.c2VhcmNoLXNlcnZpY2UtcG9pbnRz.option.cmFkaXVz.desc": {
+          "source": "Radius in meters around the search origin (max 50000)",
+          "message": "검색 원점 주변의 반경(미터 단위, 최대 50000)"
+        },
+        "app.U2VuZENsb3Vk.action.c2VhcmNoLXNlcnZpY2UtcG9pbnRz.option.cmFkaXVz.display_name": {
+          "source": "Radius (m)",
+          "message": "반경(m)"
+        },
+        "app.U2VuZENsb3Vk.action.c2VhcmNoLXNlcnZpY2UtcG9pbnRz.option.cmFkaXVz.short_desc": {
+          "source": "Search radius in meters",
+          "message": "검색 반경(미터)"
+        },
+        "app.U2VuZENsb3Vk.action.c2VhcmNoLXNlcnZpY2UtcG9pbnRz.option.d2VpZ2h0.desc": {
+          "source": "Parcel weight in kilograms (string-encoded decimal)",
+          "message": "소포 무게(kg 단위, 문자열로 인코딩된 소수)"
+        },
+        "app.U2VuZENsb3Vk.action.c2VhcmNoLXNlcnZpY2UtcG9pbnRz.option.d2VpZ2h0.display_name": {
+          "source": "Weight (kg)",
+          "message": "무게 (kg)"
+        },
+        "app.U2VuZENsb3Vk.action.c2VhcmNoLXNlcnZpY2UtcG9pbnRz.option.d2VpZ2h0.short_desc": {
+          "source": "Parcel weight to filter by capability",
+          "message": "용량별로 필터링할 소포 무게"
+        },
+        "app.U2VuZENsb3Vk.action.c2VhcmNoLXNlcnZpY2UtcG9pbnRz.short_desc": {
+          "source": "Search service points across carriers",
+          "message": "운송업체 전체 서비스 포인트 검색"
+        },
+        "app.U2VuZENsb3Vk.action.cGFyY2VsLXN0YXR1cy1jaGFuZ2Vk.desc": {
+          "source": "Fires whenever the status of a SendCloud parcel changes. The poll interval is configurable; a minimum interval is enforced to respect SendCloud API limits.",
+          "message": "SendCloud 소포의 상태가 변경될 때마다 실행됩니다. 폴링 간격은 구성 가능하며, SendCloud API 제한을 준수하기 위해 최소 간격이 적용됩니다."
+        },
+        "app.U2VuZENsb3Vk.action.cGFyY2VsLXN0YXR1cy1jaGFuZ2Vk.display_name": {
+          "source": "Parcel Status Changed",
+          "message": "소포 상태 변경됨"
+        },
+        "app.U2VuZENsb3Vk.action.cGFyY2VsLXN0YXR1cy1jaGFuZ2Vk.short_desc": {
+          "source": "Trigger when a parcel's status changes",
+          "message": "소포 상태가 변경될 때 트리거"
+        },
+        "app.U2VuZENsb3Vk.action.cmV0dXJuLXVwZGF0ZWQ.desc": {
+          "source": "Fires whenever a return record is created or updated in SendCloud. The poll interval is configurable; a minimum interval is enforced to respect SendCloud API limits.",
+          "message": "SendCloud에서 반품 레코드가 생성되거나 업데이트될 때마다 실행됩니다. 폴링 간격은 구성 가능하며, SendCloud API 제한을 준수하기 위해 최소 간격이 적용됩니다."
+        },
+        "app.U2VuZENsb3Vk.action.cmV0dXJuLXVwZGF0ZWQ.display_name": {
+          "source": "Return Updated",
+          "message": "반품 업데이트됨"
+        },
+        "app.U2VuZENsb3Vk.action.cmV0dXJuLXVwZGF0ZWQ.short_desc": {
+          "source": "Trigger when a return is created or updated",
+          "message": "반품이 생성되거나 업데이트될 때 트리거"
+        },
+        "app.U2VuZENsb3Vk.action.dXBkYXRlLXBhcmNlbA.desc": {
+          "source": "Update an existing parcel in SendCloud; commonly used to announce a parcel and request a shipping label after initial creation.",
+          "message": "SendCloud에서 기존 소포를 업데이트합니다. 일반적으로 최초 생성 후 소포를 등록하고 배송 라벨을 요청하는 데 사용됩니다."
+        },
+        "app.U2VuZENsb3Vk.action.dXBkYXRlLXBhcmNlbA.display_name": {
+          "source": "Update Parcel",
+          "message": "소포 업데이트"
+        },
+        "app.U2VuZENsb3Vk.action.dXBkYXRlLXBhcmNlbA.option.aWQ.desc": {
+          "source": "Numeric ID of the existing parcel to update",
+          "message": "업데이트할 기존 소포의 숫자 ID"
+        },
+        "app.U2VuZENsb3Vk.action.dXBkYXRlLXBhcmNlbA.option.aWQ.display_name": {
+          "source": "Parcel ID",
+          "message": "소포 ID"
+        },
+        "app.U2VuZENsb3Vk.action.dXBkYXRlLXBhcmNlbA.option.aWQ.short_desc": {
+          "source": "ID of the parcel to update",
+          "message": "업데이트할 소포의 ID"
+        },
+        "app.U2VuZENsb3Vk.action.dXBkYXRlLXBhcmNlbA.option.c2hpcG1lbnQ.desc": {
+          "source": "Shipping method to assign to the parcel before announcing — a hash with `id` (required) and optional `name`. Required when `request_label` is `True`",
+          "message": "등록 전 소포에 할당할 배송 방법 — `id`(필수) 및 선택적 `name`이 포함된 해시입니다. `request_label`이(가) `True`인 경우 필수입니다"
+        },
+        "app.U2VuZENsb3Vk.action.dXBkYXRlLXBhcmNlbA.option.c2hpcG1lbnQ.display_name": {
+          "source": "Shipping Method",
+          "message": "배송 방법"
+        },
+        "app.U2VuZENsb3Vk.action.dXBkYXRlLXBhcmNlbA.option.c2hpcG1lbnQ.short_desc": {
+          "source": "Shipping method to assign (id + name)",
+          "message": "할당할 배송 방법(id + name)"
+        },
+        "app.U2VuZENsb3Vk.action.dXBkYXRlLXBhcmNlbA.option.cmVxdWVzdF9sYWJlbA.desc": {
+          "source": "If `True`, announces the parcel to the carrier and generates a shipping label",
+          "message": "`True`인 경우 운송업체에 소포를 등록하고 배송 라벨을 생성합니다"
+        },
+        "app.U2VuZENsb3Vk.action.dXBkYXRlLXBhcmNlbA.option.cmVxdWVzdF9sYWJlbA.display_name": {
+          "source": "Request Label",
+          "message": "라벨 요청"
+        },
+        "app.U2VuZENsb3Vk.action.dXBkYXRlLXBhcmNlbA.option.cmVxdWVzdF9sYWJlbA.short_desc": {
+          "source": "Announce the parcel and generate a label",
+          "message": "소포 등록 및 라벨 생성"
+        },
+        "app.U2VuZENsb3Vk.action.dXBkYXRlLXBhcmNlbA.short_desc": {
+          "source": "Update an existing parcel",
+          "message": "기존 소포 업데이트"
+        },
+        "app.U2VuZENsb3Vk.action.dXBkYXRlLXJldHVybg.desc": {
+          "source": "Update fields on an existing return (status, refund details, etc.).",
+          "message": "기존 반품의 필드(상태, 환불 세부 정보 등)를 업데이트합니다."
+        },
+        "app.U2VuZENsb3Vk.action.dXBkYXRlLXJldHVybg.display_name": {
+          "source": "Update Return",
+          "message": "반품 업데이트"
+        },
+        "app.U2VuZENsb3Vk.action.dXBkYXRlLXJldHVybg.option.aWQ.desc": {
+          "source": "ID of the return to update",
+          "message": "업데이트할 반품의 ID"
+        },
+        "app.U2VuZENsb3Vk.action.dXBkYXRlLXJldHVybg.option.aWQ.display_name": {
+          "source": "Return ID",
+          "message": "반품 ID"
+        },
+        "app.U2VuZENsb3Vk.action.dXBkYXRlLXJldHVybg.option.aWQ.short_desc": {
+          "source": "Numeric ID of the return to update",
+          "message": "업데이트할 반품의 숫자 ID"
+        },
+        "app.U2VuZENsb3Vk.action.dXBkYXRlLXJldHVybg.option.c3RhdHVz.allowed-value.c3RyaW5nOmFubm91bmNlZA.desc": {
+          "source": "Return announced",
+          "message": "반품 통지됨"
+        },
+        "app.U2VuZENsb3Vk.action.dXBkYXRlLXJldHVybg.option.c3RhdHVz.allowed-value.c3RyaW5nOmFubm91bmNlZA.display_name": {
+          "source": "Announced",
+          "message": "등록됨"
+        },
+        "app.U2VuZENsb3Vk.action.dXBkYXRlLXJldHVybg.option.c3RhdHVz.allowed-value.c3RyaW5nOmNhbmNlbGxlZA.desc": {
+          "source": "Return cancelled",
+          "message": "반품 취소됨"
+        },
+        "app.U2VuZENsb3Vk.action.dXBkYXRlLXJldHVybg.option.c3RhdHVz.allowed-value.c3RyaW5nOmNhbmNlbGxlZA.display_name": {
+          "source": "Cancelled",
+          "message": "취소됨"
+        },
+        "app.U2VuZENsb3Vk.action.dXBkYXRlLXJldHVybg.option.c3RhdHVz.allowed-value.c3RyaW5nOmNvbXBsZXRlZA.desc": {
+          "source": "Return completed",
+          "message": "반품 완료됨"
+        },
+        "app.U2VuZENsb3Vk.action.dXBkYXRlLXJldHVybg.option.c3RhdHVz.allowed-value.c3RyaW5nOmNvbXBsZXRlZA.display_name": {
+          "source": "Completed",
+          "message": "완료됨"
+        },
+        "app.U2VuZENsb3Vk.action.dXBkYXRlLXJldHVybg.option.c3RhdHVz.allowed-value.c3RyaW5nOmNyZWF0ZWQ.desc": {
+          "source": "Return created",
+          "message": "반품 생성됨"
+        },
+        "app.U2VuZENsb3Vk.action.dXBkYXRlLXJldHVybg.option.c3RhdHVz.allowed-value.c3RyaW5nOmNyZWF0ZWQ.display_name": {
+          "source": "Created",
+          "message": "생성일"
+        },
+        "app.U2VuZENsb3Vk.action.dXBkYXRlLXJldHVybg.option.c3RhdHVz.allowed-value.c3RyaW5nOmRlbGl2ZXJlZA.desc": {
+          "source": "Return delivered",
+          "message": "반품 배송 완료됨"
+        },
+        "app.U2VuZENsb3Vk.action.dXBkYXRlLXJldHVybg.option.c3RhdHVz.allowed-value.c3RyaW5nOmRlbGl2ZXJlZA.display_name": {
+          "source": "Delivered",
+          "message": "배송 완료"
+        },
+        "app.U2VuZENsb3Vk.action.dXBkYXRlLXJldHVybg.option.c3RhdHVz.desc": {
+          "source": "New status for the return",
+          "message": "반품의 새 상태"
+        },
+        "app.U2VuZENsb3Vk.action.dXBkYXRlLXJldHVybg.option.c3RhdHVz.display_name": {
+          "source": "Status",
+          "message": "상태"
+        },
+        "app.U2VuZENsb3Vk.action.dXBkYXRlLXJldHVybg.option.c3RhdHVz.short_desc": {
+          "source": "New status",
+          "message": "새 상태"
+        },
+        "app.U2VuZENsb3Vk.action.dXBkYXRlLXJldHVybg.option.cmVhc29u.desc": {
+          "source": "Updated return reason",
+          "message": "업데이트된 반품 사유"
+        },
+        "app.U2VuZENsb3Vk.action.dXBkYXRlLXJldHVybg.option.cmVhc29u.display_name": {
+          "source": "Reason",
+          "message": "사유"
+        },
+        "app.U2VuZENsb3Vk.action.dXBkYXRlLXJldHVybg.option.cmVhc29u.short_desc": {
+          "source": "Updated reason",
+          "message": "업데이트된 사유"
+        },
+        "app.U2VuZENsb3Vk.action.dXBkYXRlLXJldHVybg.option.dHJhY2tpbmdfbnVtYmVy.desc": {
+          "source": "Tracking number to associate with the return",
+          "message": "반품에 연결할 운송장 번호"
+        },
+        "app.U2VuZENsb3Vk.action.dXBkYXRlLXJldHVybg.option.dHJhY2tpbmdfbnVtYmVy.display_name": {
+          "source": "Tracking Number",
+          "message": "운송장 번호"
+        },
+        "app.U2VuZENsb3Vk.action.dXBkYXRlLXJldHVybg.option.dHJhY2tpbmdfbnVtYmVy.short_desc": {
+          "source": "Carrier tracking number",
+          "message": "운송업체 운송장 번호"
+        },
+        "app.U2VuZENsb3Vk.action.dXBkYXRlLXJldHVybg.short_desc": {
+          "source": "Update an existing return",
+          "message": "기존 반품 업데이트"
+        },
+        "app.U2VuZENsb3Vk.desc": {
+          "source": "SendCloud is a European shipping automation platform that helps eCommerce merchants manage parcels, carriers, labels, returns, and tracking from a single integration. This integration enables creating and managing parcels, requesting shipping labels, processing returns, and receiving real-time notifications via polling-based triggers.\n\n**Features:**\n- Parcel management (create, update, cancel, track)\n- Shipping label generation and PDF retrieval\n- Return management (create, update, cancel)\n- Service point lookup across carriers\n- Brand and sender-address management\n- Triggers for parcel status changes and return updates",
+          "message": "SendCloud는 전자상거래 판매자가 단일 연동을 통해 소포, 배송업체, 라벨, 반품 및 배송 조회를 관리할 수 있도록 지원하는 유럽의 배송 자동화 플랫폼입니다. 이 연동을 통해 소포를 생성 및 관리하고, 배송 라벨을 요청하고, 반품을 처리하며, 폴링 기반 트리거를 통해 실시간 알림을 받을 수 있습니다.\n\n**기능:**\n- 소포 관리(생성, 업데이트, 취소, 추적)\n- 배송 라벨 생성 및 PDF 검색\n- 반품 관리(생성, 업데이트, 취소)\n- 배송업체별 서비스 포인트 조회\n- 브랜드 및 발송인 주소 관리\n- 소포 상태 변경 및 반품 업데이트에 대한 트리거"
+        },
+        "app.U2VuZENsb3Vk.display_name": {
+          "source": "SendCloud",
+          "message": "SendCloud"
+        },
+        "app.U2VuZENsb3Vk.short_desc": {
+          "source": "SendCloud shipping automation platform",
+          "message": "SendCloud 배송 자동화 플랫폼"
+        }
+      }
+    }
+  }
+}

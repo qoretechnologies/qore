@@ -4440,6 +4440,16 @@ public class RestConnection inherits ConnectionProvider::HttpBasedConnection,
         */
         const string RCF_OAUTH2_AUTH = "oauth2-auth";
 
+        #! Internal option returned when an OAuth2 token response requires authorization for a newly discovered URL
+        /** A specialized REST connection can return this option from
+            @ref processOAuth2TokenResponseImpl() when processing an OAuth2 token response changes the resource URL
+            and the issued token cannot authorize the newly discovered resource.  Callers must remove this control
+            option before persisting the returned connection options and start a new authorization flow.
+
+            @since %RestClient 2.7
+        */
+        const string ReauthorizationRequiredOption = "$qore-reauthorization-required";
+
         #! Validator options
         const list<string> ValOpts = (
             "openapi3",

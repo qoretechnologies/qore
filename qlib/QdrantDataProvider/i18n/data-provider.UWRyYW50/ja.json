@@ -1,0 +1,597 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "ja": {
+      "messages": {
+        "app.UWRyYW50.action.Y291bnQtcG9pbnRz.desc": {
+          "source": "Count the number of points in a Qdrant collection, optionally with a filter",
+          "message": "Qdrantコレクション内のポイント数をカウントします（オプションでフィルタ付き）"
+        },
+        "app.UWRyYW50.action.Y291bnQtcG9pbnRz.display_name": {
+          "source": "Count Points",
+          "message": "ポイント数のカウント"
+        },
+        "app.UWRyYW50.action.Y291bnQtcG9pbnRz.short_desc": {
+          "source": "Count points in a collection",
+          "message": "コレクション内のポイント数をカウント"
+        },
+        "app.UWRyYW50.action.Y29sbGVjdGlvbi1leGlzdHM.desc": {
+          "source": "Check whether a specific collection exists in the Qdrant instance",
+          "message": "Qdrantインスタンスに特定のコレクションが存在するかどうかを確認します"
+        },
+        "app.UWRyYW50.action.Y29sbGVjdGlvbi1leGlzdHM.display_name": {
+          "source": "Collection Exists",
+          "message": "コレクションの存在確認"
+        },
+        "app.UWRyYW50.action.Y29sbGVjdGlvbi1leGlzdHM.short_desc": {
+          "source": "Check if a collection exists",
+          "message": "コレクションが存在するかどうかを確認"
+        },
+        "app.UWRyYW50.action.Y3JlYXRlLWNvbGxlY3Rpb24.desc": {
+          "source": "Create a new vector collection with configurable vector parameters and distance metrics",
+          "message": "設定可能なベクトルパラメータと距離メトリックを使用して新しいベクトルコレクションを作成します"
+        },
+        "app.UWRyYW50.action.Y3JlYXRlLWNvbGxlY3Rpb24.display_name": {
+          "source": "Create Collection",
+          "message": "コレクションの作成"
+        },
+        "app.UWRyYW50.action.Y3JlYXRlLWNvbGxlY3Rpb24.short_desc": {
+          "source": "Create a new Qdrant collection",
+          "message": "新しいQdrantコレクションを作成"
+        },
+        "app.UWRyYW50.action.Y3JlYXRlLXBvaW50.desc": {
+          "source": "Create or upsert a point with a vector and optional payload in a Qdrant collection",
+          "message": "Qdrantコレクション内にベクトルとオプションのペイロードを持つポイントを作成またはアップサートします"
+        },
+        "app.UWRyYW50.action.Y3JlYXRlLXBvaW50.display_name": {
+          "source": "Create/Upsert Point",
+          "message": "ポイントの作成/アップサート"
+        },
+        "app.UWRyYW50.action.Y3JlYXRlLXBvaW50.short_desc": {
+          "source": "Create or upsert a point in a collection",
+          "message": "コレクション内にポイントを作成またはアップサート"
+        },
+        "app.UWRyYW50.action.YmF0Y2gtdXBkYXRlLXBvaW50cw.desc": {
+          "source": "Execute a batch of heterogeneous point operations (upsert, delete, set/overwrite/delete/clear payload, update/delete vectors) in a single request for high-performance bulk updates",
+          "message": "高性能な一括更新のために、異種ポイント操作のバッチ（アップサート、削除、ペイロードの設定/上書き/削除/クリア、ベクトルの更新/削除）を単一のリクエストで実行します"
+        },
+        "app.UWRyYW50.action.YmF0Y2gtdXBkYXRlLXBvaW50cw.display_name": {
+          "source": "Batch Update Points",
+          "message": "ポイントの一括更新"
+        },
+        "app.UWRyYW50.action.YmF0Y2gtdXBkYXRlLXBvaW50cw.short_desc": {
+          "source": "Apply multiple point operations in a single batch",
+          "message": "単一バッチで複数のポイント操作を適用"
+        },
+        "app.UWRyYW50.action.Z2V0LWNvbGxlY3Rpb24.desc": {
+          "source": "Retrieve detailed information about a specific Qdrant collection, including its configuration and status",
+          "message": "設定やステータスを含む、特定のQdrantコレクションに関する詳細情報を取得します"
+        },
+        "app.UWRyYW50.action.Z2V0LWNvbGxlY3Rpb24.display_name": {
+          "source": "Get Collection",
+          "message": "コレクションを取得"
+        },
+        "app.UWRyYW50.action.Z2V0LWNvbGxlY3Rpb24.short_desc": {
+          "source": "Get collection info",
+          "message": "コレクション情報の取得"
+        },
+        "app.UWRyYW50.action.Z2V0LXBvaW50cw.desc": {
+          "source": "Retrieve specific points from a Qdrant collection by their IDs, including vectors and payloads",
+          "message": "IDによってQdrantコレクションから特定のポイント（ベクトルおよびペイロードを含む）を取得します"
+        },
+        "app.UWRyYW50.action.Z2V0LXBvaW50cw.display_name": {
+          "source": "Get Points",
+          "message": "ポイントの取得"
+        },
+        "app.UWRyYW50.action.Z2V0LXBvaW50cw.short_desc": {
+          "source": "Get specific points by ID",
+          "message": "IDによる特定のポイントの取得"
+        },
+        "app.UWRyYW50.action.ZGVsZXRlLWNvbGxlY3Rpb24.desc": {
+          "source": "Delete a collection and all its data from the Qdrant instance",
+          "message": "Qdrantインスタンスからコレクションとそのすべてのデータを削除します"
+        },
+        "app.UWRyYW50.action.ZGVsZXRlLWNvbGxlY3Rpb24.display_name": {
+          "source": "Delete Collection",
+          "message": "コレクションを削除"
+        },
+        "app.UWRyYW50.action.ZGVsZXRlLWNvbGxlY3Rpb24.short_desc": {
+          "source": "Delete a Qdrant collection",
+          "message": "Qdrantコレクションを削除"
+        },
+        "app.UWRyYW50.action.ZGVsZXRlLXBvaW50cw.desc": {
+          "source": "Delete points from a Qdrant collection by point IDs or by filter conditions",
+          "message": "ポイントIDまたはフィルター条件によってQdrantコレクションからポイントを削除します"
+        },
+        "app.UWRyYW50.action.ZGVsZXRlLXBvaW50cw.display_name": {
+          "source": "Delete Points",
+          "message": "ポイントの削除"
+        },
+        "app.UWRyYW50.action.ZGVsZXRlLXBvaW50cw.short_desc": {
+          "source": "Delete points from a collection",
+          "message": "コレクションからポイントを削除"
+        },
+        "app.UWRyYW50.action.aGVhbHRoLWNoZWNr.desc": {
+          "source": "Check the health status of the Qdrant server",
+          "message": "Qdrantサーバーのヘルスステータスを確認します"
+        },
+        "app.UWRyYW50.action.aGVhbHRoLWNoZWNr.display_name": {
+          "source": "Health Check",
+          "message": "ヘルスチェック"
+        },
+        "app.UWRyYW50.action.aGVhbHRoLWNoZWNr.short_desc": {
+          "source": "Check Qdrant server health",
+          "message": "Qdrantサーバーのヘルスを確認"
+        },
+        "app.UWRyYW50.action.bGl2ZW5lc3MtY2hlY2s.desc": {
+          "source": "Check if the Qdrant server is alive and responsive",
+          "message": "Qdrantサーバーが稼働中で応答可能か確認します"
+        },
+        "app.UWRyYW50.action.bGl2ZW5lc3MtY2hlY2s.display_name": {
+          "source": "Liveness Check",
+          "message": "ライブネスチェック"
+        },
+        "app.UWRyYW50.action.bGl2ZW5lc3MtY2hlY2s.short_desc": {
+          "source": "Check Qdrant server liveness",
+          "message": "Qdrantサーバーのライブネスを確認"
+        },
+        "app.UWRyYW50.action.bGlzdC1hbGwtYWxpYXNlcw.desc": {
+          "source": "Retrieve a list of all aliases and their associated collections in the Qdrant instance",
+          "message": "Qdrantインスタンス内のすべてのエイリアスおよび関連付けられたコレクションのリストを取得します"
+        },
+        "app.UWRyYW50.action.bGlzdC1hbGwtYWxpYXNlcw.display_name": {
+          "source": "List All Aliases",
+          "message": "すべてのエイリアスを一覧表示"
+        },
+        "app.UWRyYW50.action.bGlzdC1hbGwtYWxpYXNlcw.short_desc": {
+          "source": "List all collection aliases",
+          "message": "すべてのコレクションエイリアスを一覧表示"
+        },
+        "app.UWRyYW50.action.bGlzdC1jb2xsZWN0aW9ucw.desc": {
+          "source": "Retrieve a list of all collections in the Qdrant instance",
+          "message": "Qdrantインスタンス内のすべてのコレクションのリストを取得します"
+        },
+        "app.UWRyYW50.action.bGlzdC1jb2xsZWN0aW9ucw.display_name": {
+          "source": "List Collections",
+          "message": "コレクションの一覧表示"
+        },
+        "app.UWRyYW50.action.bGlzdC1jb2xsZWN0aW9ucw.short_desc": {
+          "source": "List all Qdrant collections",
+          "message": "すべてのQdrantコレクションを一覧表示"
+        },
+        "app.UWRyYW50.action.bWFrZS1hcGktY2FsbA.desc": {
+          "source": "Make a custom HTTP / REST API call to **Qdrant Vector Database** using the configured connection's authentication.\n\nSpecify the HTTP method, the URI path (relative to the connection's API base URL), optional query parameters, headers, and request body. The response is returned as a hash containing the status code, response headers, and response body.\n\nUse this action for endpoints that are not yet exposed as first-class actions on this app.",
+          "message": "設定された接続の認証を使用して、**Qdrant Vector Database** に対するカスタムHTTP / REST API呼び出しを実行します。\n\nHTTPメソッド、URIパス（接続のAPIベースURLに対する相対パス）、オプションのクエリパラメーター、ヘッダー、リクエスト本文を指定します。レスポンスはステータスコード、レスポンスヘッダー、レスポンス本文を含むハッシュとして返されます。\n\nこのアプリでファーストクラスのアクションとしてまだ公開されていないエンドポイントに対してこのアクションを使用します。"
+        },
+        "app.UWRyYW50.action.bWFrZS1hcGktY2FsbA.display_name": {
+          "source": "Make an API call",
+          "message": "API コールを実行"
+        },
+        "app.UWRyYW50.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.desc": {
+          "source": "The request body. The effective type depends on `body_type`: JSON/form/YAML expect a hash, XML/text expect a string, multipart expects a file structure, binary expects raw bytes.",
+          "message": "リクエストボディ。有効な型は`body_type`に依存します。JSON/form/YAMLはハッシュを期待し、XML/textは文字列を期待し、multipartはファイル構造を期待し、binaryは生バイトを期待します。"
+        },
+        "app.UWRyYW50.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.display_name": {
+          "source": "Body",
+          "message": "ボディ"
+        },
+        "app.UWRyYW50.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.short_desc": {
+          "source": "The request body",
+          "message": "リクエストボディ"
+        },
+        "app.UWRyYW50.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.desc": {
+          "source": "Upload a file using `multipart/form-data`. The body must be a @ref DataProvider::FileDataType \"FileDataType\" structure (filename + content + mime_type). The framework builds the multipart envelope and sets the boundary header.",
+          "message": "`multipart/form-data`を使用してファイルをアップロードします。ボディは@ref DataProvider::FileDataType \"FileDataType\"構造（filename + content + mime_type）である必要があります。フレームワークがmultipartエンベロープを構築し、boundaryヘッダーを設定します。"
+        },
+        "app.UWRyYW50.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.display_name": {
+          "source": "Multipart Form",
+          "message": "マルチパートフォーム"
+        },
+        "app.UWRyYW50.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.short_desc": {
+          "source": "Upload a file using multipart/form-data",
+          "message": "multipart/form-dataを使用してファイルをアップロード"
+        },
+        "app.UWRyYW50.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.desc": {
+          "source": "Pass the body to the REST client unchanged; the client decides serialization based on its configured `data` option and the value type",
+          "message": "ボディを変更せずにRESTクライアントに渡します。クライアントは設定された`data`オプションと値の型に基づいてシリアライズを決定します"
+        },
+        "app.UWRyYW50.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.display_name": {
+          "source": "Auto",
+          "message": "自動"
+        },
+        "app.UWRyYW50.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.short_desc": {
+          "source": "Pass-through; use connection serialization and let the REST client decide",
+          "message": "パススルー。接続のシリアライズを使用し、RESTクライアントに決定させます"
+        },
+        "app.UWRyYW50.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.desc": {
+          "source": "Send the body as raw bytes. The body must be a binary value. Sets `Content-Type: application/octet-stream` unless overridden by `hdr`.",
+          "message": "ボディを生バイトとして送信します。ボディはバイナリ値である必要があります。`hdr`によってオーバーライドされない限り、`Content-Type: application/octet-stream`を設定します。"
+        },
+        "app.UWRyYW50.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.display_name": {
+          "source": "Raw Binary",
+          "message": "生バイナリ"
+        },
+        "app.UWRyYW50.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.short_desc": {
+          "source": "Send body as raw bytes",
+          "message": "ボディを生バイトとして送信"
+        },
+        "app.UWRyYW50.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.desc": {
+          "source": "Serialize a hash of form fields as `application/x-www-form-urlencoded`. The body must be a hash whose values are scalars (strings/numbers/booleans).",
+          "message": "フォームフィールドのハッシュを`application/x-www-form-urlencoded`としてシリアライズします。ボディは値がスカラー（文字列/数値/ブール値）のハッシュである必要があります。"
+        },
+        "app.UWRyYW50.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.display_name": {
+          "source": "Form (URL-encoded)",
+          "message": "フォーム (URLエンコード)"
+        },
+        "app.UWRyYW50.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.short_desc": {
+          "source": "Serialize body as application/x-www-form-urlencoded form fields",
+          "message": "ボディをapplication/x-www-form-urlencodedフォームフィールドとしてシリアライズ"
+        },
+        "app.UWRyYW50.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.desc": {
+          "source": "Serialize the body as JSON; sets `Content-Type: application/json`. The body should be a hash, list, or scalar value.",
+          "message": "ボディをJSONとしてシリアライズします。`Content-Type: application/json`を設定します。ボディはハッシュ、リスト、またはスカラー値である必要があります。"
+        },
+        "app.UWRyYW50.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.display_name": {
+          "source": "JSON",
+          "message": "JSON"
+        },
+        "app.UWRyYW50.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.short_desc": {
+          "source": "Serialize body as JSON",
+          "message": "ボディをJSONとしてシリアライズ"
+        },
+        "app.UWRyYW50.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.desc": {
+          "source": "Send the body as plain text. The body must be a string. Sets `Content-Type: text/plain`.",
+          "message": "ボディをプレーンテキストとして送信します。ボディは文字列である必要があります。`Content-Type: text/plain`を設定します。"
+        },
+        "app.UWRyYW50.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.display_name": {
+          "source": "Plain Text",
+          "message": "プレーンテキスト"
+        },
+        "app.UWRyYW50.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.short_desc": {
+          "source": "Send body as text/plain",
+          "message": "ボディをtext/plainとして送信"
+        },
+        "app.UWRyYW50.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.desc": {
+          "source": "Send the body as XML. If the body is a hash it is serialized to XML; if it is a string it is sent verbatim. Sets `Content-Type: application/xml`.",
+          "message": "ボディをXMLとして送信します。ボディがハッシュの場合はXMLにシリアライズされ、文字列の場合はそのまま送信されます。`Content-Type: application/xml`を設定します。"
+        },
+        "app.UWRyYW50.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.display_name": {
+          "source": "XML",
+          "message": "XML"
+        },
+        "app.UWRyYW50.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.short_desc": {
+          "source": "Send body as XML",
+          "message": "ボディをXMLとして送信"
+        },
+        "app.UWRyYW50.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.desc": {
+          "source": "Send the body as YAML. If the body is a hash it is serialized to YAML; if it is a string it is sent verbatim. Sets `Content-Type: application/x-yaml`.",
+          "message": "ボディをYAMLとして送信します。ボディがハッシュの場合はYAMLにシリアライズされ、文字列の場合はそのまま送信されます。`Content-Type: application/x-yaml`を設定します。"
+        },
+        "app.UWRyYW50.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.display_name": {
+          "source": "YAML",
+          "message": "YAML"
+        },
+        "app.UWRyYW50.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.short_desc": {
+          "source": "Send body as YAML",
+          "message": "ボディをYAMLとして送信"
+        },
+        "app.UWRyYW50.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.desc": {
+          "source": "Selects the body serialization mode and the corresponding `Content-Type` header. Changing this field reshapes the `body` editor - selecting JSON exposes a JSON editor, selecting Multipart Form exposes a file picker, and so on.",
+          "message": "ボディのシリアライズモードと対応する`Content-Type`ヘッダーを選択します。このフィールドを変更すると`body`エディターの形状が変わります。JSONを選択するとJSONエディターが表示され、マルチパートフォームを選択するとファイルピッカーが表示される、などです。"
+        },
+        "app.UWRyYW50.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.display_name": {
+          "source": "Body Type",
+          "message": "ボディタイプ"
+        },
+        "app.UWRyYW50.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.short_desc": {
+          "source": "How the body is serialized and what Content-Type is sent",
+          "message": "ボディのシリアライズ方法および送信されるContent-Type"
+        },
+        "app.UWRyYW50.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.desc": {
+          "source": "If `True`, non-2xx HTTP responses return as the normal response hash (with the actual status code) instead of raising `REST-RESPONSE-ERROR`. Useful for handling 4xx/5xx as data - e.g. checking whether a resource exists. Overrides the connection's `error_passthru` setting for this call only.",
+          "message": "`True`の場合、2xx以外のHTTPレスポンスは`REST-RESPONSE-ERROR`を発生させる代わりに（実際のステータスコードを含む）通常のレスポンスハッシュとして返されます。リソースが存在するかどうかの確認など、4xx/5xxをデータとして処理する場合に便利です。この呼び出しに限り、接続の`error_passthru`設定をオーバーライドします。"
+        },
+        "app.UWRyYW50.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.display_name": {
+          "source": "Return Errors as Data",
+          "message": "エラーをデータとして返す"
+        },
+        "app.UWRyYW50.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.short_desc": {
+          "source": "Return non-2xx responses normally instead of throwing",
+          "message": "例外をスローする代わりに2xx以外のレスポンスを通常通り返す"
+        },
+        "app.UWRyYW50.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.desc": {
+          "source": "Optional list of HTTP status codes treated as success. If set and the response status is not in this list, the action throws `REST-STATUS-ERROR`. When unset, the REST client's default behavior applies (typically: 2xx is success, non-2xx throws).",
+          "message": "成功として扱われるHTTPステータスコードのオプションリスト。設定されていてレスポンスステータスがこのリストに含まれない場合、アクションは`REST-STATUS-ERROR`をスローします。未設定の場合、RESTクライアントのデフォルト動作が適用されます（通常：2xxは成功、2xx以外はスロー）。"
+        },
+        "app.UWRyYW50.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.display_name": {
+          "source": "Expected Status Codes",
+          "message": "期待されるステータスコード"
+        },
+        "app.UWRyYW50.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.short_desc": {
+          "source": "Response status codes treated as success",
+          "message": "成功として扱われるレスポンスステータスコード"
+        },
+        "app.UWRyYW50.action.bWFrZS1hcGktY2FsbA.option.aGRy.desc": {
+          "source": "Hash of custom headers added to the request. These override any default headers set by `body_type` (e.g. supplying `Content-Type` here wins over the body-type default).",
+          "message": "リクエストに追加されるカスタムヘッダーのハッシュ。これらは`body_type`によって設定されたデフォルトヘッダーをオーバーライドします（例：ここで`Content-Type`を指定すると、ボディタイプのデフォルトより優先されます）。"
+        },
+        "app.UWRyYW50.action.bWFrZS1hcGktY2FsbA.option.aGRy.display_name": {
+          "source": "Custom Headers",
+          "message": "カスタムヘッダー"
+        },
+        "app.UWRyYW50.action.bWFrZS1hcGktY2FsbA.option.aGRy.short_desc": {
+          "source": "Extra request headers",
+          "message": "追加のリクエストヘッダー"
+        },
+        "app.UWRyYW50.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.desc": {
+          "source": "If `True`, the response hash includes a `debug` sub-hash containing the request method/URL/headers (with sensitive values redacted), request and response sizes, and round-trip duration. Useful when investigating slow or failing calls. Off by default to keep responses lean.",
+          "message": "`True`の場合、レスポンスハッシュにはリクエストメソッド/URL/ヘッダー（機密値は伏字処理済み）、リクエストとレスポンスのサイズ、およびラウンドトリップ時間を含む`debug`サブハッシュが含まれます。遅い呼び出しや失敗した呼び出しを調査する際に便利です。レスポンスを軽量に保つため、デフォルトではオフになっています。"
+        },
+        "app.UWRyYW50.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.display_name": {
+          "source": "Include Debug Info",
+          "message": "デバッグ情報を含める"
+        },
+        "app.UWRyYW50.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.short_desc": {
+          "source": "Include request/timing/size debug info in the response",
+          "message": "レスポンスにリクエスト/タイミング/サイズのデバッグ情報を含める"
+        },
+        "app.UWRyYW50.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.desc": {
+          "source": "HTTP `OPTIONS`",
+          "message": "HTTP `OPTIONS`"
+        },
+        "app.UWRyYW50.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.display_name": {
+          "source": "OPTIONS",
+          "message": "OPTIONS"
+        },
+        "app.UWRyYW50.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.short_desc": {
+          "source": "HTTP OPTIONS",
+          "message": "HTTP OPTIONS"
+        },
+        "app.UWRyYW50.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.desc": {
+          "source": "HTTP `DELETE`",
+          "message": "HTTP `DELETE`"
+        },
+        "app.UWRyYW50.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.display_name": {
+          "source": "DELETE",
+          "message": "DELETE"
+        },
+        "app.UWRyYW50.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.short_desc": {
+          "source": "HTTP DELETE",
+          "message": "HTTP DELETE"
+        },
+        "app.UWRyYW50.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.desc": {
+          "source": "HTTP `GET`",
+          "message": "HTTP `GET`"
+        },
+        "app.UWRyYW50.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.display_name": {
+          "source": "GET",
+          "message": "GET"
+        },
+        "app.UWRyYW50.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.short_desc": {
+          "source": "HTTP GET",
+          "message": "HTTP GET"
+        },
+        "app.UWRyYW50.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.desc": {
+          "source": "HTTP `HEAD`",
+          "message": "HTTP `HEAD`"
+        },
+        "app.UWRyYW50.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.display_name": {
+          "source": "HEAD",
+          "message": "HEAD"
+        },
+        "app.UWRyYW50.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.short_desc": {
+          "source": "HTTP HEAD",
+          "message": "HTTP HEAD"
+        },
+        "app.UWRyYW50.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.desc": {
+          "source": "HTTP `PATCH`",
+          "message": "HTTP `PATCH`"
+        },
+        "app.UWRyYW50.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.display_name": {
+          "source": "PATCH",
+          "message": "PATCH"
+        },
+        "app.UWRyYW50.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.short_desc": {
+          "source": "HTTP PATCH",
+          "message": "HTTP PATCH"
+        },
+        "app.UWRyYW50.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.desc": {
+          "source": "HTTP `POST`",
+          "message": "HTTP `POST`"
+        },
+        "app.UWRyYW50.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.display_name": {
+          "source": "POST",
+          "message": "POST"
+        },
+        "app.UWRyYW50.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.short_desc": {
+          "source": "HTTP POST",
+          "message": "HTTP POST"
+        },
+        "app.UWRyYW50.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.desc": {
+          "source": "HTTP `PUT`",
+          "message": "HTTP `PUT`"
+        },
+        "app.UWRyYW50.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.display_name": {
+          "source": "PUT",
+          "message": "PUT"
+        },
+        "app.UWRyYW50.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.short_desc": {
+          "source": "HTTP PUT",
+          "message": "HTTP PUT"
+        },
+        "app.UWRyYW50.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.desc": {
+          "source": "HTTP `TRACE`",
+          "message": "HTTP `TRACE`"
+        },
+        "app.UWRyYW50.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.display_name": {
+          "source": "TRACE",
+          "message": "TRACE"
+        },
+        "app.UWRyYW50.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.short_desc": {
+          "source": "HTTP TRACE",
+          "message": "HTTP TRACE"
+        },
+        "app.UWRyYW50.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "リクエストに使用するHTTPメソッド"
+        },
+        "app.UWRyYW50.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.display_name": {
+          "source": "HTTP Method",
+          "message": "HTTPメソッド"
+        },
+        "app.UWRyYW50.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.short_desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "リクエストに使用するHTTPメソッド"
+        },
+        "app.UWRyYW50.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain `{name}` placeholders that are replaced from `path_vars`. Example: `/users/{id}/comments`.",
+          "message": "接続のAPIベースURLに対する相対URIパス。`path_vars`から置換される`{name}`プレースホルダーを含めることができます。例: `/users/{id}/comments`。"
+        },
+        "app.UWRyYW50.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.display_name": {
+          "source": "URI Path",
+          "message": "URIパス"
+        },
+        "app.UWRyYW50.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.short_desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain '{name}' placeholders that are replaced from 'path_vars'. Example: '/users/{id}/comments'",
+          "message": "接続のAPIベースURLに対する相対URIパス。'path_vars' から置換される '{name}' プレースホルダーを含めることができます。例: '/users/{id}/comments'"
+        },
+        "app.UWRyYW50.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.desc": {
+          "source": "Hash of values substituted into `{name}` placeholders in the URI path. Example: with `path = /users/{id}` and `path_vars = {id: 123}` the framework sends `/users/123`. Values are URL-encoded.",
+          "message": "URIパス内の `{name}` プレースホルダーに置換される値のハッシュ。例: `path = /users/{id}` と `path_vars = {id: 123}` を指定すると、フレームワークは `/users/123` を送信します。値はURLエンコードされます。"
+        },
+        "app.UWRyYW50.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.display_name": {
+          "source": "Path Variables",
+          "message": "パス変数"
+        },
+        "app.UWRyYW50.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.short_desc": {
+          "source": "Values for {name} placeholders in path",
+          "message": "パス内の {name} プレースホルダーの値"
+        },
+        "app.UWRyYW50.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.desc": {
+          "source": "Hash of query string parameters to append to the URI path. Values are URL-encoded; list values are joined with `,`.",
+          "message": "URIパスに追加するクエリ文字列パラメータのハッシュ。値はURLエンコードされます。リスト値は `,` で結合されます。"
+        },
+        "app.UWRyYW50.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.display_name": {
+          "source": "Query Arguments",
+          "message": "クエリ引数"
+        },
+        "app.UWRyYW50.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.short_desc": {
+          "source": "Query string parameters",
+          "message": "クエリ文字列パラメータ"
+        },
+        "app.UWRyYW50.action.bWFrZS1hcGktY2FsbA.short_desc": {
+          "source": "Make a custom API call to Qdrant Vector Database",
+          "message": "Qdrant Vector DatabaseへのカスタムAPI呼び出しを実行"
+        },
+        "app.UWRyYW50.action.c2Nyb2xsLXBvaW50cw.desc": {
+          "source": "Iterate through all points in a Qdrant collection using scroll-based pagination with optional filtering",
+          "message": "オプションのフィルタリングを伴うスクロールベースのページネーションを使用して、Qdrantコレクション内のすべてのポイントを反復処理します"
+        },
+        "app.UWRyYW50.action.c2Nyb2xsLXBvaW50cw.display_name": {
+          "source": "Scroll Points",
+          "message": "ポイントのスクロール"
+        },
+        "app.UWRyYW50.action.c2Nyb2xsLXBvaW50cw.short_desc": {
+          "source": "Scroll through points in a collection",
+          "message": "コレクション内のポイントをスクロール"
+        },
+        "app.UWRyYW50.action.c2V0LXBheWxvYWQ.desc": {
+          "source": "Set or update payload key-value pairs on points in a Qdrant collection by point IDs or filter conditions",
+          "message": "ポイントIDまたはフィルター条件によってQdrantコレクション内のポイントのペイロードキー/値ペアを設定または更新します"
+        },
+        "app.UWRyYW50.action.c2V0LXBheWxvYWQ.display_name": {
+          "source": "Set Payload",
+          "message": "ペイロードの設定"
+        },
+        "app.UWRyYW50.action.c2V0LXBheWxvYWQ.short_desc": {
+          "source": "Set payload on points",
+          "message": "ポイントにペイロードを設定"
+        },
+        "app.UWRyYW50.action.c2VhcmNoLXBvaW50cw.desc": {
+          "source": "Vector similarity search on a Qdrant collection returning results as a record stream for efficient pipeline processing",
+          "message": "効率的なパイプライン処理のために結果をレコードストリームとして返す、Qdrantコレクションでのベクトル類似度検索"
+        },
+        "app.UWRyYW50.action.c2VhcmNoLXBvaW50cw.display_name": {
+          "source": "Search Points",
+          "message": "ポイントの検索"
+        },
+        "app.UWRyYW50.action.c2VhcmNoLXBvaW50cw.short_desc": {
+          "source": "Search points with record streaming",
+          "message": "レコードストリーミングによるポイントの検索"
+        },
+        "app.UWRyYW50.action.cXVlcnktYmF0Y2gtcG9pbnRz.desc": {
+          "source": "Execute multiple vector similarity search queries in a single batch request against a Qdrant collection",
+          "message": "Qdrantコレクションに対して単一のバッチリクエストで複数のベクトル類似度検索クエリを実行します"
+        },
+        "app.UWRyYW50.action.cXVlcnktYmF0Y2gtcG9pbnRz.display_name": {
+          "source": "Query Batch Points",
+          "message": "ポイントの一括クエリ"
+        },
+        "app.UWRyYW50.action.cXVlcnktYmF0Y2gtcG9pbnRz.short_desc": {
+          "source": "Perform batch vector similarity searches",
+          "message": "バッチベクトル類似度検索を実行"
+        },
+        "app.UWRyYW50.action.cXVlcnktZ3JvdXBzLXBvaW50cw.desc": {
+          "source": "Execute a vector similarity search on a Qdrant collection with results grouped by a specified payload field",
+          "message": "指定したペイロードフィールドでグループ化された結果を含むベクトル類似度検索をQdrantコレクションで実行します"
+        },
+        "app.UWRyYW50.action.cXVlcnktZ3JvdXBzLXBvaW50cw.display_name": {
+          "source": "Query Grouped Points",
+          "message": "グループ化されたポイントのクエリ"
+        },
+        "app.UWRyYW50.action.cXVlcnktZ3JvdXBzLXBvaW50cw.short_desc": {
+          "source": "Perform grouped vector similarity search",
+          "message": "グループ化されたベクトル類似度検索を実行"
+        },
+        "app.UWRyYW50.action.cXVlcnktcG9pbnRz.desc": {
+          "source": "Perform vector similarity search, filtering, and hybrid search on a Qdrant collection",
+          "message": "Qdrantコレクションでベクトル類似度検索、フィルタリング、ハイブリッド検索を実行します"
+        },
+        "app.UWRyYW50.action.cXVlcnktcG9pbnRz.display_name": {
+          "source": "Query Points",
+          "message": "ポイントのクエリ"
+        },
+        "app.UWRyYW50.action.cXVlcnktcG9pbnRz.short_desc": {
+          "source": "Query points using vector similarity search",
+          "message": "ベクトル類似度検索を使用してポイントをクエリ"
+        },
+        "app.UWRyYW50.action.dXBkYXRlLWFsaWFzZXM.desc": {
+          "source": "Create, rename, or delete collection aliases in the Qdrant instance",
+          "message": "Qdrantインスタンスでコレクションエイリアスを作成、名前変更、または削除します"
+        },
+        "app.UWRyYW50.action.dXBkYXRlLWFsaWFzZXM.display_name": {
+          "source": "Update Aliases",
+          "message": "エイリアスの更新"
+        },
+        "app.UWRyYW50.action.dXBkYXRlLWFsaWFzZXM.short_desc": {
+          "source": "Update collection aliases",
+          "message": "コレクションエイリアスを更新"
+        },
+        "app.UWRyYW50.action.dXBzZXJ0LXBvaW50cw.desc": {
+          "source": "Insert or update points with vectors and optional payloads in a Qdrant collection",
+          "message": "Qdrantコレクションにベクトルおよびオプションのペイロードを含むポイントを挿入または更新します"
+        },
+        "app.UWRyYW50.action.dXBzZXJ0LXBvaW50cw.display_name": {
+          "source": "Upsert Points",
+          "message": "ポイントのアップサート"
+        },
+        "app.UWRyYW50.action.dXBzZXJ0LXBvaW50cw.short_desc": {
+          "source": "Insert or update points in a collection",
+          "message": "コレクション内のポイントを挿入または更新"
+        },
+        "app.UWRyYW50.desc": {
+          "source": "Qdrant vector database providing similarity search, hybrid search, and vector CRUD operations for AI/ML and RAG pipelines",
+          "message": "AI/MLおよびRAGパイプライン向けに類似度検索、ハイブリッド検索、ベクトルCRUD操作を提供するQdrantベクトルデータベース"
+        },
+        "app.UWRyYW50.display_name": {
+          "source": "Qdrant Vector Database",
+          "message": "Qdrant Vector Database"
+        },
+        "app.UWRyYW50.short_desc": {
+          "source": "Qdrant vector database for similarity search and RAG",
+          "message": "類似度検索およびRAG向けのQdrantベクトルデータベース"
+        }
+      }
+    }
+  }
+}

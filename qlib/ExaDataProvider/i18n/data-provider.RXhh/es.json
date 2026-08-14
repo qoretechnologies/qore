@@ -1,0 +1,649 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "es": {
+      "messages": {
+        "app.RXhh.action.Y29udGVudHM.desc": {
+          "source": "Fetches text content, highlight extracts, and AI-summarized snippets for one or more URLs via Exa's `/contents` endpoint.",
+          "message": "Obtiene contenido de texto, extractos destacados y fragmentos resumidos con IA para una o más URL mediante el endpoint `/contents` de Exa."
+        },
+        "app.RXhh.action.Y29udGVudHM.display_name": {
+          "source": "Fetch Page Contents",
+          "message": "Obtener contenido de la página"
+        },
+        "app.RXhh.action.Y29udGVudHM.option.aGlnaGxpZ2h0cw.desc": {
+          "source": "Highlight options: `{num_sentences, highlights_per_url, query}`.",
+          "message": "Opciones de elementos destacados: `{num_sentences, highlights_per_url, query}`."
+        },
+        "app.RXhh.action.Y29udGVudHM.option.aGlnaGxpZ2h0cw.display_name": {
+          "source": "Highlights",
+          "message": "Elementos destacados"
+        },
+        "app.RXhh.action.Y29udGVudHM.option.aGlnaGxpZ2h0cw.short_desc": {
+          "source": "Highlight configuration hash",
+          "message": "Hash de configuración de elementos destacados"
+        },
+        "app.RXhh.action.Y29udGVudHM.option.aWRz.desc": {
+          "source": "Result IDs from a prior search (or absolute URLs).",
+          "message": "ID de resultados de una búsqueda previa (o URL absolutas)."
+        },
+        "app.RXhh.action.Y29udGVudHM.option.aWRz.display_name": {
+          "source": "IDs",
+          "message": "ID"
+        },
+        "app.RXhh.action.Y29udGVudHM.option.aWRz.short_desc": {
+          "source": "List of Exa result IDs (or URLs)",
+          "message": "Lista de ID de resultados de Exa (o URL)"
+        },
+        "app.RXhh.action.Y29udGVudHM.option.c3VtbWFyeQ.desc": {
+          "source": "Summary options: `{query}` to drive a guided summary.",
+          "message": "Opciones de resumen: `{query}` para generar un resumen guiado."
+        },
+        "app.RXhh.action.Y29udGVudHM.option.c3VtbWFyeQ.display_name": {
+          "source": "Summary",
+          "message": "Resumen"
+        },
+        "app.RXhh.action.Y29udGVudHM.option.c3VtbWFyeQ.short_desc": {
+          "source": "Summary configuration hash",
+          "message": "Hash de configuración del resumen"
+        },
+        "app.RXhh.action.Y29udGVudHM.option.dGV4dA.desc": {
+          "source": "When `True`, results include the full text content of each page.",
+          "message": "Cuando es `True`, los resultados incluyen el contenido de texto completo de cada página."
+        },
+        "app.RXhh.action.Y29udGVudHM.option.dGV4dA.display_name": {
+          "source": "Text",
+          "message": "Texto"
+        },
+        "app.RXhh.action.Y29udGVudHM.option.dGV4dA.short_desc": {
+          "source": "Include full text content",
+          "message": "Incluir contenido de texto completo"
+        },
+        "app.RXhh.action.Y29udGVudHM.short_desc": {
+          "source": "Fetch text / highlights / summaries for URLs",
+          "message": "Obtener texto / elementos destacados / resúmenes para URL"
+        },
+        "app.RXhh.action.ZmluZC1zaW1pbGFy.desc": {
+          "source": "Finds pages similar to a seed URL via Exa's `/findSimilar` endpoint.",
+          "message": "Busca páginas similares a una URL semilla mediante el endpoint `/findSimilar` de Exa."
+        },
+        "app.RXhh.action.ZmluZC1zaW1pbGFy.display_name": {
+          "source": "Find Similar Pages",
+          "message": "Buscar páginas similares"
+        },
+        "app.RXhh.action.ZmluZC1zaW1pbGFy.option.Y29udGVudHM.desc": {
+          "source": "Same as on `/search`; saves a follow-up call to `/contents`.",
+          "message": "Igual que en `/search`; ahorra una llamada posterior a `/contents`."
+        },
+        "app.RXhh.action.ZmluZC1zaW1pbGFy.option.Y29udGVudHM.display_name": {
+          "source": "Contents Config",
+          "message": "Configuración de contenidos"
+        },
+        "app.RXhh.action.ZmluZC1zaW1pbGFy.option.Y29udGVudHM.short_desc": {
+          "source": "Include text/highlights/summary in results",
+          "message": "Incluir texto/destacados/resumen en los resultados"
+        },
+        "app.RXhh.action.ZmluZC1zaW1pbGFy.option.ZXhjbHVkZV9kb21haW5z.desc": {
+          "source": "List of domains to exclude.",
+          "message": "Lista de dominios a excluir."
+        },
+        "app.RXhh.action.ZmluZC1zaW1pbGFy.option.ZXhjbHVkZV9kb21haW5z.display_name": {
+          "source": "Exclude Domains",
+          "message": "Excluir dominios"
+        },
+        "app.RXhh.action.ZmluZC1zaW1pbGFy.option.ZXhjbHVkZV9kb21haW5z.short_desc": {
+          "source": "Exclude these domains",
+          "message": "Excluir estos dominios"
+        },
+        "app.RXhh.action.ZmluZC1zaW1pbGFy.option.ZXhjbHVkZV9zb3VyY2VfZG9tYWlu.desc": {
+          "source": "When `True`, results don't include the seed URL's own domain.",
+          "message": "Cuando es `True`, los resultados no incluyen el propio dominio de la URL semilla."
+        },
+        "app.RXhh.action.ZmluZC1zaW1pbGFy.option.ZXhjbHVkZV9zb3VyY2VfZG9tYWlu.display_name": {
+          "source": "Exclude Source Domain",
+          "message": "Excluir dominio de origen"
+        },
+        "app.RXhh.action.ZmluZC1zaW1pbGFy.option.ZXhjbHVkZV9zb3VyY2VfZG9tYWlu.short_desc": {
+          "source": "Skip pages from the seed URL's own domain",
+          "message": "Omitir páginas del propio dominio de la URL semilla"
+        },
+        "app.RXhh.action.ZmluZC1zaW1pbGFy.option.aW5jbHVkZV9kb21haW5z.desc": {
+          "source": "List of domains to restrict results to.",
+          "message": "Lista de dominios a los que restringir los resultados."
+        },
+        "app.RXhh.action.ZmluZC1zaW1pbGFy.option.aW5jbHVkZV9kb21haW5z.display_name": {
+          "source": "Include Domains",
+          "message": "Incluir dominios"
+        },
+        "app.RXhh.action.ZmluZC1zaW1pbGFy.option.aW5jbHVkZV9kb21haW5z.short_desc": {
+          "source": "Restrict results to these domains",
+          "message": "Restringir los resultados a estos dominios"
+        },
+        "app.RXhh.action.ZmluZC1zaW1pbGFy.option.bnVtX3Jlc3VsdHM.desc": {
+          "source": "Number of similar pages to return.  Default 10.",
+          "message": "Número de páginas similares a devolver. Predeterminado: 10."
+        },
+        "app.RXhh.action.ZmluZC1zaW1pbGFy.option.bnVtX3Jlc3VsdHM.display_name": {
+          "source": "Number of Results",
+          "message": "Número de resultados"
+        },
+        "app.RXhh.action.ZmluZC1zaW1pbGFy.option.bnVtX3Jlc3VsdHM.short_desc": {
+          "source": "Number of similar results",
+          "message": "Número de resultados similares"
+        },
+        "app.RXhh.action.ZmluZC1zaW1pbGFy.option.dXJs.desc": {
+          "source": "Seed URL.",
+          "message": "URL semilla."
+        },
+        "app.RXhh.action.ZmluZC1zaW1pbGFy.option.dXJs.display_name": {
+          "source": "Seed URL",
+          "message": "URL semilla"
+        },
+        "app.RXhh.action.ZmluZC1zaW1pbGFy.option.dXJs.short_desc": {
+          "source": "URL to find similar pages for",
+          "message": "URL para la que buscar páginas similares"
+        },
+        "app.RXhh.action.ZmluZC1zaW1pbGFy.short_desc": {
+          "source": "Find pages similar to a seed URL using Exa's neural search",
+          "message": "Buscar páginas similares a una URL semilla mediante la búsqueda neuronal de Exa"
+        },
+        "app.RXhh.action.bWFrZS1hcGktY2FsbA.desc": {
+          "source": "Make a custom HTTP / REST API call to **Exa** using the configured connection's authentication.\n\nSpecify the HTTP method, the URI path (relative to the connection's API base URL), optional query parameters, headers, and request body. The response is returned as a hash containing the status code, response headers, and response body.\n\nUse this action for endpoints that are not yet exposed as first-class actions on this app.",
+          "message": "Realice una llamada personalizada a la API HTTP / REST a **Exa** utilizando la autenticación de la conexión configurada.\n\nEspecifique el método HTTP, la ruta URI (relativa a la URL base de la API de la conexión), parámetros de consulta opcionales, encabezados y el cuerpo de la solicitud. La respuesta se devuelve como un hash que contiene el código de estado, los encabezados de respuesta y el cuerpo de la respuesta.\n\nUtilice esta acción para endpoints que aún no estén expuestos como acciones de primer nivel en esta aplicación."
+        },
+        "app.RXhh.action.bWFrZS1hcGktY2FsbA.display_name": {
+          "source": "Make an API call",
+          "message": "Realizar una llamada a la API"
+        },
+        "app.RXhh.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.desc": {
+          "source": "The request body. The effective type depends on `body_type`: JSON/form/YAML expect a hash, XML/text expect a string, multipart expects a file structure, binary expects raw bytes.",
+          "message": "El cuerpo de la solicitud. El tipo efectivo depende de `body_type`: JSON/formulario/YAML esperan un hash, XML/texto esperan una cadena, multipart espera una estructura de archivo y binario espera bytes sin procesar."
+        },
+        "app.RXhh.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.display_name": {
+          "source": "Body",
+          "message": "Cuerpo"
+        },
+        "app.RXhh.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.short_desc": {
+          "source": "The request body",
+          "message": "El cuerpo de la solicitud"
+        },
+        "app.RXhh.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.desc": {
+          "source": "Upload a file using `multipart/form-data`. The body must be a @ref DataProvider::FileDataType \"FileDataType\" structure (filename + content + mime_type). The framework builds the multipart envelope and sets the boundary header.",
+          "message": "Cargue un archivo usando `multipart/form-data`. El cuerpo debe ser una estructura @ref DataProvider::FileDataType \"FileDataType\" (filename + content + mime_type). El marco construye el sobre multipart y establece el encabezado boundary."
+        },
+        "app.RXhh.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.display_name": {
+          "source": "Multipart Form",
+          "message": "Formulario multipart"
+        },
+        "app.RXhh.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.short_desc": {
+          "source": "Upload a file using multipart/form-data",
+          "message": "Cargar un archivo usando multipart/form-data"
+        },
+        "app.RXhh.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.desc": {
+          "source": "Pass the body to the REST client unchanged; the client decides serialization based on its configured `data` option and the value type",
+          "message": "Pasa el cuerpo al cliente REST sin cambios; el cliente decide la serialización según su opción `data` configurada y el tipo de valor"
+        },
+        "app.RXhh.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.display_name": {
+          "source": "Auto",
+          "message": "Auto"
+        },
+        "app.RXhh.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.short_desc": {
+          "source": "Pass-through; use connection serialization and let the REST client decide",
+          "message": "Paso directo; utiliza la serialización de la conexión y deja que el cliente REST decida"
+        },
+        "app.RXhh.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.desc": {
+          "source": "Send the body as raw bytes. The body must be a binary value. Sets `Content-Type: application/octet-stream` unless overridden by `hdr`.",
+          "message": "Envía el cuerpo como bytes sin procesar. El cuerpo debe ser un valor binario. Establece `Content-Type: application/octet-stream` a menos que `hdr` lo anule."
+        },
+        "app.RXhh.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.display_name": {
+          "source": "Raw Binary",
+          "message": "Binario sin procesar"
+        },
+        "app.RXhh.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.short_desc": {
+          "source": "Send body as raw bytes",
+          "message": "Enviar el cuerpo como bytes sin procesar"
+        },
+        "app.RXhh.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.desc": {
+          "source": "Serialize a hash of form fields as `application/x-www-form-urlencoded`. The body must be a hash whose values are scalars (strings/numbers/booleans).",
+          "message": "Serializa un hash de campos de formulario como `application/x-www-form-urlencoded`. El cuerpo debe ser un hash cuyos valores sean escalares (cadenas/números/booleanos)."
+        },
+        "app.RXhh.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.display_name": {
+          "source": "Form (URL-encoded)",
+          "message": "Formulario (codificado en URL)"
+        },
+        "app.RXhh.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.short_desc": {
+          "source": "Serialize body as application/x-www-form-urlencoded form fields",
+          "message": "Serializar el cuerpo como campos de formulario application/x-www-form-urlencoded"
+        },
+        "app.RXhh.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.desc": {
+          "source": "Serialize the body as JSON; sets `Content-Type: application/json`. The body should be a hash, list, or scalar value.",
+          "message": "Serializa el cuerpo como JSON; establece `Content-Type: application/json`. El cuerpo debe ser un hash, lista o valor escalar."
+        },
+        "app.RXhh.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.display_name": {
+          "source": "JSON",
+          "message": "JSON"
+        },
+        "app.RXhh.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.short_desc": {
+          "source": "Serialize body as JSON",
+          "message": "Serializar el cuerpo como JSON"
+        },
+        "app.RXhh.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.desc": {
+          "source": "Send the body as plain text. The body must be a string. Sets `Content-Type: text/plain`.",
+          "message": "Envía el cuerpo como texto plano. El cuerpo debe ser una cadena. Establece `Content-Type: text/plain`."
+        },
+        "app.RXhh.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.display_name": {
+          "source": "Plain Text",
+          "message": "Texto plano"
+        },
+        "app.RXhh.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.short_desc": {
+          "source": "Send body as text/plain",
+          "message": "Enviar el cuerpo como text/plain"
+        },
+        "app.RXhh.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.desc": {
+          "source": "Send the body as XML. If the body is a hash it is serialized to XML; if it is a string it is sent verbatim. Sets `Content-Type: application/xml`.",
+          "message": "Envía el cuerpo como XML. Si el cuerpo es un hash, se serializa a XML; si es una cadena, se envía textualmente. Establece `Content-Type: application/xml`."
+        },
+        "app.RXhh.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.display_name": {
+          "source": "XML",
+          "message": "XML"
+        },
+        "app.RXhh.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.short_desc": {
+          "source": "Send body as XML",
+          "message": "Enviar el cuerpo como XML"
+        },
+        "app.RXhh.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.desc": {
+          "source": "Send the body as YAML. If the body is a hash it is serialized to YAML; if it is a string it is sent verbatim. Sets `Content-Type: application/x-yaml`.",
+          "message": "Envía el cuerpo como YAML. Si el cuerpo es un hash, se serializa a YAML; si es una cadena, se envía textualmente. Establece `Content-Type: application/x-yaml`."
+        },
+        "app.RXhh.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.display_name": {
+          "source": "YAML",
+          "message": "YAML"
+        },
+        "app.RXhh.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.short_desc": {
+          "source": "Send body as YAML",
+          "message": "Enviar el cuerpo como YAML"
+        },
+        "app.RXhh.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.desc": {
+          "source": "Selects the body serialization mode and the corresponding `Content-Type` header. Changing this field reshapes the `body` editor - selecting JSON exposes a JSON editor, selecting Multipart Form exposes a file picker, and so on.",
+          "message": "Selecciona el modo de serialización del cuerpo y el encabezado `Content-Type` correspondiente. Cambiar este campo modifica la forma del editor `body`: seleccionar JSON expone un editor JSON, seleccionar Formulario multipart expone un selector de archivos, y así sucesivamente."
+        },
+        "app.RXhh.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.display_name": {
+          "source": "Body Type",
+          "message": "Tipo de cuerpo"
+        },
+        "app.RXhh.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.short_desc": {
+          "source": "How the body is serialized and what Content-Type is sent",
+          "message": "Cómo se serializa el cuerpo y qué Content-Type se envía"
+        },
+        "app.RXhh.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.desc": {
+          "source": "If `True`, non-2xx HTTP responses return as the normal response hash (with the actual status code) instead of raising `REST-RESPONSE-ERROR`. Useful for handling 4xx/5xx as data - e.g. checking whether a resource exists. Overrides the connection's `error_passthru` setting for this call only.",
+          "message": "Si es `True`, las respuestas HTTP que no sean 2xx se devuelven como el hash de respuesta normal (con el código de estado real) en lugar de generar `REST-RESPONSE-ERROR`. Útil para manejar 4xx/5xx como datos, por ejemplo, para comprobar si un recurso existe. Anula la configuración `error_passthru` de la conexión solo para esta llamada."
+        },
+        "app.RXhh.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.display_name": {
+          "source": "Return Errors as Data",
+          "message": "Devolver errores como datos"
+        },
+        "app.RXhh.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.short_desc": {
+          "source": "Return non-2xx responses normally instead of throwing",
+          "message": "Devolver respuestas que no sean 2xx normalmente en lugar de lanzar una excepción"
+        },
+        "app.RXhh.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.desc": {
+          "source": "Optional list of HTTP status codes treated as success. If set and the response status is not in this list, the action throws `REST-STATUS-ERROR`. When unset, the REST client's default behavior applies (typically: 2xx is success, non-2xx throws).",
+          "message": "Lista opcional de códigos de estado HTTP tratados como éxito. Si se establece y el estado de la respuesta no está en esta lista, la acción lanza `REST-STATUS-ERROR`. Cuando no se establece, se aplica el comportamiento predeterminado del cliente REST (típicamente: 2xx es éxito, no 2xx lanza una excepción)."
+        },
+        "app.RXhh.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.display_name": {
+          "source": "Expected Status Codes",
+          "message": "Códigos de estado esperados"
+        },
+        "app.RXhh.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.short_desc": {
+          "source": "Response status codes treated as success",
+          "message": "Códigos de estado de respuesta tratados como éxito"
+        },
+        "app.RXhh.action.bWFrZS1hcGktY2FsbA.option.aGRy.desc": {
+          "source": "Hash of custom headers added to the request. These override any default headers set by `body_type` (e.g. supplying `Content-Type` here wins over the body-type default).",
+          "message": "Hash de encabezados personalizados agregados a la solicitud. Estos anulan cualquier encabezado predeterminado establecido por `body_type` (por ejemplo, proporcionar `Content-Type` aquí prevalece sobre el valor predeterminado según el tipo de cuerpo)."
+        },
+        "app.RXhh.action.bWFrZS1hcGktY2FsbA.option.aGRy.display_name": {
+          "source": "Custom Headers",
+          "message": "Encabezados personalizados"
+        },
+        "app.RXhh.action.bWFrZS1hcGktY2FsbA.option.aGRy.short_desc": {
+          "source": "Extra request headers",
+          "message": "Encabezados de solicitud adicionales"
+        },
+        "app.RXhh.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.desc": {
+          "source": "If `True`, the response hash includes a `debug` sub-hash containing the request method/URL/headers (with sensitive values redacted), request and response sizes, and round-trip duration. Useful when investigating slow or failing calls. Off by default to keep responses lean.",
+          "message": "Si es `True`, el hash de respuesta incluye un sub-hash `debug` que contiene el método/URL/encabezados de la solicitud (con valores confidenciales redactados), tamaños de solicitud y respuesta, y la duración del viaje de ida y vuelta. Útil para investigar llamadas lentas o con fallos. Desactivado de forma predeterminada para mantener las respuestas ligeras."
+        },
+        "app.RXhh.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.display_name": {
+          "source": "Include Debug Info",
+          "message": "Incluir información de depuración"
+        },
+        "app.RXhh.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.short_desc": {
+          "source": "Include request/timing/size debug info in the response",
+          "message": "Incluir información de depuración de solicitud/tiempo/tamaño en la respuesta"
+        },
+        "app.RXhh.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.desc": {
+          "source": "HTTP `OPTIONS`",
+          "message": "HTTP `OPTIONS`"
+        },
+        "app.RXhh.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.display_name": {
+          "source": "OPTIONS",
+          "message": "OPTIONS"
+        },
+        "app.RXhh.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.short_desc": {
+          "source": "HTTP OPTIONS",
+          "message": "HTTP OPTIONS"
+        },
+        "app.RXhh.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.desc": {
+          "source": "HTTP `DELETE`",
+          "message": "HTTP `DELETE`"
+        },
+        "app.RXhh.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.display_name": {
+          "source": "DELETE",
+          "message": "DELETE"
+        },
+        "app.RXhh.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.short_desc": {
+          "source": "HTTP DELETE",
+          "message": "HTTP DELETE"
+        },
+        "app.RXhh.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.desc": {
+          "source": "HTTP `GET`",
+          "message": "HTTP `GET`"
+        },
+        "app.RXhh.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.display_name": {
+          "source": "GET",
+          "message": "GET"
+        },
+        "app.RXhh.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.short_desc": {
+          "source": "HTTP GET",
+          "message": "HTTP GET"
+        },
+        "app.RXhh.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.desc": {
+          "source": "HTTP `HEAD`",
+          "message": "HTTP `HEAD`"
+        },
+        "app.RXhh.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.display_name": {
+          "source": "HEAD",
+          "message": "HEAD"
+        },
+        "app.RXhh.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.short_desc": {
+          "source": "HTTP HEAD",
+          "message": "HTTP HEAD"
+        },
+        "app.RXhh.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.desc": {
+          "source": "HTTP `PATCH`",
+          "message": "HTTP `PATCH`"
+        },
+        "app.RXhh.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.display_name": {
+          "source": "PATCH",
+          "message": "PATCH"
+        },
+        "app.RXhh.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.short_desc": {
+          "source": "HTTP PATCH",
+          "message": "HTTP PATCH"
+        },
+        "app.RXhh.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.desc": {
+          "source": "HTTP `POST`",
+          "message": "HTTP `POST`"
+        },
+        "app.RXhh.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.display_name": {
+          "source": "POST",
+          "message": "POST"
+        },
+        "app.RXhh.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.short_desc": {
+          "source": "HTTP POST",
+          "message": "HTTP POST"
+        },
+        "app.RXhh.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.desc": {
+          "source": "HTTP `PUT`",
+          "message": "HTTP `PUT`"
+        },
+        "app.RXhh.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.display_name": {
+          "source": "PUT",
+          "message": "PUT"
+        },
+        "app.RXhh.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.short_desc": {
+          "source": "HTTP PUT",
+          "message": "HTTP PUT"
+        },
+        "app.RXhh.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.desc": {
+          "source": "HTTP `TRACE`",
+          "message": "HTTP `TRACE`"
+        },
+        "app.RXhh.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.display_name": {
+          "source": "TRACE",
+          "message": "TRACE"
+        },
+        "app.RXhh.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.short_desc": {
+          "source": "HTTP TRACE",
+          "message": "HTTP TRACE"
+        },
+        "app.RXhh.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "El método HTTP que se utilizará para la solicitud"
+        },
+        "app.RXhh.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.display_name": {
+          "source": "HTTP Method",
+          "message": "Método HTTP"
+        },
+        "app.RXhh.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.short_desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "El método HTTP que se utilizará para la solicitud"
+        },
+        "app.RXhh.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain `{name}` placeholders that are replaced from `path_vars`. Example: `/users/{id}/comments`.",
+          "message": "La ruta URI relativa a la URL base de la API de la conexión. Puede contener marcadores de posición `{name}` que se reemplazan desde `path_vars`. Ejemplo: `/users/{id}/comments`."
+        },
+        "app.RXhh.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.display_name": {
+          "source": "URI Path",
+          "message": "Ruta URI"
+        },
+        "app.RXhh.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.short_desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain '{name}' placeholders that are replaced from 'path_vars'. Example: '/users/{id}/comments'",
+          "message": "La ruta URI relativa a la URL base de la API de la conexión. Puede contener marcadores de posición '{name}' que se reemplazan desde 'path_vars'. Ejemplo: '/users/{id}/comments'"
+        },
+        "app.RXhh.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.desc": {
+          "source": "Hash of values substituted into `{name}` placeholders in the URI path. Example: with `path = /users/{id}` and `path_vars = {id: 123}` the framework sends `/users/123`. Values are URL-encoded.",
+          "message": "Hash de valores sustituidos en los marcadores de posición `{name}` en la ruta URI. Ejemplo: con `path = /users/{id}` y `path_vars = {id: 123}`, el framework envía `/users/123`. Los valores están codificados en URL."
+        },
+        "app.RXhh.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.display_name": {
+          "source": "Path Variables",
+          "message": "Variables de ruta"
+        },
+        "app.RXhh.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.short_desc": {
+          "source": "Values for {name} placeholders in path",
+          "message": "Valores para los marcadores de posición {name} en la ruta"
+        },
+        "app.RXhh.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.desc": {
+          "source": "Hash of query string parameters to append to the URI path. Values are URL-encoded; list values are joined with `,`.",
+          "message": "Hash de parámetros de cadena de consulta para adjuntar a la ruta URI. Los valores están codificados en URL; los valores de lista se unen con `,`."
+        },
+        "app.RXhh.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.display_name": {
+          "source": "Query Arguments",
+          "message": "Argumentos de consulta"
+        },
+        "app.RXhh.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.short_desc": {
+          "source": "Query string parameters",
+          "message": "Parámetros de cadena de consulta"
+        },
+        "app.RXhh.action.bWFrZS1hcGktY2FsbA.short_desc": {
+          "source": "Make a custom API call to Exa",
+          "message": "Hacer una llamada personalizada a la API de Exa"
+        },
+        "app.RXhh.action.c2VhcmNo.desc": {
+          "source": "Performs a neural, keyword, or auto-routed web search via Exa's `/search` endpoint and returns ranked results with title, url, and optional text content / highlights.",
+          "message": "Realiza una búsqueda web neuronal, por palabras clave o con enrutamiento automático mediante el endpoint `/search` de Exa y devuelve resultados clasificados con título, URL y contenido de texto / destacados opcionales."
+        },
+        "app.RXhh.action.c2VhcmNo.display_name": {
+          "source": "Neural Search",
+          "message": "Búsqueda neuronal"
+        },
+        "app.RXhh.action.c2VhcmNo.option.Y29udGVudHM.desc": {
+          "source": "Hash configuring content fetching alongside the search: `{text: True, highlights: {...}, summary: {...}}`.  Saves a follow-up call to `/contents`.",
+          "message": "Hash que configura la obtención de contenido junto con la búsqueda: `{text: True, highlights: {...}, summary: {...}}`. Ahorra una llamada posterior a `/contents`."
+        },
+        "app.RXhh.action.c2VhcmNo.option.Y29udGVudHM.display_name": {
+          "source": "Contents Config",
+          "message": "Configuración de contenidos"
+        },
+        "app.RXhh.action.c2VhcmNo.option.Y29udGVudHM.short_desc": {
+          "source": "Include text/highlights/summary in results",
+          "message": "Incluir texto/destacados/resumen en los resultados"
+        },
+        "app.RXhh.action.c2VhcmNo.option.Y2F0ZWdvcnk.allowed-value.c3RyaW5nOm5ld3M.display_name": {
+          "source": "News",
+          "message": "Noticias"
+        },
+        "app.RXhh.action.c2VhcmNo.option.Y2F0ZWdvcnk.allowed-value.c3RyaW5nOmNvbXBhbnk.display_name": {
+          "source": "Company",
+          "message": "Empresa"
+        },
+        "app.RXhh.action.c2VhcmNo.option.Y2F0ZWdvcnk.allowed-value.c3RyaW5nOmdpdGh1Yg.display_name": {
+          "source": "GitHub",
+          "message": "GitHub"
+        },
+        "app.RXhh.action.c2VhcmNo.option.Y2F0ZWdvcnk.allowed-value.c3RyaW5nOnBkZg.display_name": {
+          "source": "PDF",
+          "message": "PDF"
+        },
+        "app.RXhh.action.c2VhcmNo.option.Y2F0ZWdvcnk.allowed-value.c3RyaW5nOnBlcnNvbmFsIHNpdGU.display_name": {
+          "source": "Personal Site",
+          "message": "Sitio personal"
+        },
+        "app.RXhh.action.c2VhcmNo.option.Y2F0ZWdvcnk.allowed-value.c3RyaW5nOnJlc2VhcmNoIHBhcGVy.display_name": {
+          "source": "Research Paper",
+          "message": "Artículo de investigación"
+        },
+        "app.RXhh.action.c2VhcmNo.option.Y2F0ZWdvcnk.allowed-value.c3RyaW5nOnR3ZWV0.display_name": {
+          "source": "Tweet",
+          "message": "Tweet"
+        },
+        "app.RXhh.action.c2VhcmNo.option.Y2F0ZWdvcnk.desc": {
+          "source": "Filter results by entity category.",
+          "message": "Filtrar resultados por categoría de entidad."
+        },
+        "app.RXhh.action.c2VhcmNo.option.Y2F0ZWdvcnk.display_name": {
+          "source": "Category",
+          "message": "Categoría"
+        },
+        "app.RXhh.action.c2VhcmNo.option.Y2F0ZWdvcnk.short_desc": {
+          "source": "Result category filter (company, paper, etc.)",
+          "message": "Filtro de categoría de resultado (empresa, artículo, etc.)"
+        },
+        "app.RXhh.action.c2VhcmNo.option.ZW5kX3B1Ymxpc2hlZF9kYXRl.desc": {
+          "source": "Restrict results to pages published on or before this ISO date.",
+          "message": "Restringir los resultados a páginas publicadas en o antes de esta fecha ISO."
+        },
+        "app.RXhh.action.c2VhcmNo.option.ZW5kX3B1Ymxpc2hlZF9kYXRl.display_name": {
+          "source": "End Published Date",
+          "message": "Fecha de publicación final"
+        },
+        "app.RXhh.action.c2VhcmNo.option.ZW5kX3B1Ymxpc2hlZF9kYXRl.short_desc": {
+          "source": "Only pages published on/before this ISO date",
+          "message": "Solo páginas publicadas en o antes de esta fecha ISO"
+        },
+        "app.RXhh.action.c2VhcmNo.option.ZXhjbHVkZV9kb21haW5z.desc": {
+          "source": "List of domains to exclude from results.",
+          "message": "Lista de dominios a excluir de los resultados."
+        },
+        "app.RXhh.action.c2VhcmNo.option.ZXhjbHVkZV9kb21haW5z.display_name": {
+          "source": "Exclude Domains",
+          "message": "Excluir dominios"
+        },
+        "app.RXhh.action.c2VhcmNo.option.ZXhjbHVkZV9kb21haW5z.short_desc": {
+          "source": "Exclude these domains",
+          "message": "Excluir estos dominios"
+        },
+        "app.RXhh.action.c2VhcmNo.option.aW5jbHVkZV9kb21haW5z.desc": {
+          "source": "List of domains to restrict results to.",
+          "message": "Lista de dominios a los que restringir los resultados."
+        },
+        "app.RXhh.action.c2VhcmNo.option.aW5jbHVkZV9kb21haW5z.display_name": {
+          "source": "Include Domains",
+          "message": "Incluir dominios"
+        },
+        "app.RXhh.action.c2VhcmNo.option.aW5jbHVkZV9kb21haW5z.short_desc": {
+          "source": "Restrict results to these domains",
+          "message": "Restringir los resultados a estos dominios"
+        },
+        "app.RXhh.action.c2VhcmNo.option.bnVtX3Jlc3VsdHM.desc": {
+          "source": "Number of results.  Default 10.",
+          "message": "Número de resultados. Predeterminado: 10."
+        },
+        "app.RXhh.action.c2VhcmNo.option.bnVtX3Jlc3VsdHM.display_name": {
+          "source": "Number of Results",
+          "message": "Número de resultados"
+        },
+        "app.RXhh.action.c2VhcmNo.option.bnVtX3Jlc3VsdHM.short_desc": {
+          "source": "Number of results to return",
+          "message": "Número de resultados a devolver"
+        },
+        "app.RXhh.action.c2VhcmNo.option.c3RhcnRfcHVibGlzaGVkX2RhdGU.desc": {
+          "source": "Restrict results to pages published on or after this ISO date.",
+          "message": "Restringir los resultados a páginas publicadas en o después de esta fecha ISO."
+        },
+        "app.RXhh.action.c2VhcmNo.option.c3RhcnRfcHVibGlzaGVkX2RhdGU.display_name": {
+          "source": "Start Published Date",
+          "message": "Fecha de publicación inicial"
+        },
+        "app.RXhh.action.c2VhcmNo.option.c3RhcnRfcHVibGlzaGVkX2RhdGU.short_desc": {
+          "source": "Only pages published on/after this ISO date",
+          "message": "Solo páginas publicadas en o después de esta fecha ISO"
+        },
+        "app.RXhh.action.c2VhcmNo.option.cXVlcnk.desc": {
+          "source": "The search query in natural language.",
+          "message": "La consulta de búsqueda en lenguaje natural."
+        },
+        "app.RXhh.action.c2VhcmNo.option.cXVlcnk.display_name": {
+          "source": "Query",
+          "message": "Consulta"
+        },
+        "app.RXhh.action.c2VhcmNo.option.cXVlcnk.short_desc": {
+          "source": "Search query (natural language)",
+          "message": "Consulta de búsqueda (lenguaje natural)"
+        },
+        "app.RXhh.action.c2VhcmNo.option.dHlwZQ.allowed-value.c3RyaW5nOm5ldXJhbA.display_name": {
+          "source": "Neural",
+          "message": "Neuronal"
+        },
+        "app.RXhh.action.c2VhcmNo.option.dHlwZQ.allowed-value.c3RyaW5nOmF1dG8.display_name": {
+          "source": "Auto",
+          "message": "Auto"
+        },
+        "app.RXhh.action.c2VhcmNo.option.dHlwZQ.allowed-value.c3RyaW5nOmtleXdvcmQ.display_name": {
+          "source": "Keyword",
+          "message": "Palabra clave"
+        },
+        "app.RXhh.action.c2VhcmNo.option.dHlwZQ.desc": {
+          "source": "Search type.  `neural` uses embeddings; `keyword` is traditional; `auto` routes between them.",
+          "message": "Tipo de búsqueda. `neural` utiliza incrustaciones (embeddings); `keyword` es tradicional; `auto` enruta entre ellos."
+        },
+        "app.RXhh.action.c2VhcmNo.option.dHlwZQ.display_name": {
+          "source": "Search Type",
+          "message": "Tipo de búsqueda"
+        },
+        "app.RXhh.action.c2VhcmNo.option.dHlwZQ.short_desc": {
+          "source": "neural / keyword / auto",
+          "message": "neuronal / palabra clave / auto"
+        },
+        "app.RXhh.action.c2VhcmNo.short_desc": {
+          "source": "Neural / keyword / auto web search via Exa",
+          "message": "Búsqueda web neuronal / por palabras clave / automática mediante Exa"
+        },
+        "app.RXhh.desc": {
+          "source": "Provides access to [Exa](https://exa.ai) (formerly Metaphor) — a neural web-search API that complements keyword search with embedding-based semantic retrieval.\n\n**Common use cases**:\n- **Semantic search** where keyword matching fails (e.g. \"companies similar to X\", \"papers about Y\")\n- **Discovery** via `find-similar` from a known seed URL\n- **Agent tools**: register `exa_search` / `exa_find_similar` / `exa_contents` as tools an LLM can invoke (see @ref exarestclientintro \"ExaRestClient\" docs)",
+          "message": "Proporciona acceso a [Exa](https://exa.ai) (anteriormente Metaphor), una API de búsqueda web neuronal que complementa la búsqueda por palabras clave con recuperación semántica basada en embeddings.\n\n**Casos de uso habituales**:\n- **Búsqueda semántica** donde la coincidencia de palabras clave falla (p. ej., \"empresas similares a X\", \"artículos sobre Y\")\n- **Descubrimiento** mediante `find-similar` a partir de una URL semilla conocida\n- **Herramientas de agentes**: registre `exa_search` / `exa_find_similar` / `exa_contents` como herramientas que un LLM puede invocar (consulte la documentación de @ref exarestclientintro \"ExaRestClient\")"
+        },
+        "app.RXhh.display_name": {
+          "source": "Exa",
+          "message": "Exa"
+        },
+        "app.RXhh.short_desc": {
+          "source": "Exa (Metaphor) neural web search for semantic retrieval",
+          "message": "Búsqueda web neuronal de Exa (Metaphor) para recuperación semántica"
+        }
+      }
+    }
+  }
+}

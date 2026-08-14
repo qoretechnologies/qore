@@ -1,0 +1,657 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "de": {
+      "messages": {
+        "app.Sm90Rm9ybQ.action.Y3JlYXRlLXN1Ym1pc3Npb24.desc": {
+          "source": "Submit data to a form programmatically. Select a form first to see available fields.",
+          "message": "Senden Sie Daten programmatisch an ein Formular. Wählen Sie zuerst ein Formular aus, um die verfügbaren Felder anzuzeigen."
+        },
+        "app.Sm90Rm9ybQ.action.Y3JlYXRlLXN1Ym1pc3Npb24.display_name": {
+          "source": "Create Submission",
+          "message": "Übermittlung erstellen"
+        },
+        "app.Sm90Rm9ybQ.action.Y3JlYXRlLXN1Ym1pc3Npb24.option.Zm9ybUlE.desc": {
+          "source": "Select the form to create a submission for. The submission fields will update based on your selection.",
+          "message": "Wählen Sie das Formular aus, für das eine Übermittlung erstellt werden soll. Die Übermittlungsfelder werden basierend auf Ihrer Auswahl aktualisiert."
+        },
+        "app.Sm90Rm9ybQ.action.Y3JlYXRlLXN1Ym1pc3Npb24.option.Zm9ybUlE.display_name": {
+          "source": "Form",
+          "message": "Formular"
+        },
+        "app.Sm90Rm9ybQ.action.Y3JlYXRlLXN1Ym1pc3Npb24.option.Zm9ybUlE.short_desc": {
+          "source": "The form to submit to",
+          "message": "Das Formular, an das übermittelt werden soll"
+        },
+        "app.Sm90Rm9ybQ.action.Y3JlYXRlLXN1Ym1pc3Npb24.short_desc": {
+          "source": "Create a new form submission",
+          "message": "Neue Formularübermittlung erstellen"
+        },
+        "app.Sm90Rm9ybQ.action.Z2V0LWZvcm0.desc": {
+          "source": "Retrieve details of a specific form including title, status, and submission count",
+          "message": "Details eines bestimmten Formulars einschließlich Titel, Status und Übermittlungsanzahl abrufen"
+        },
+        "app.Sm90Rm9ybQ.action.Z2V0LWZvcm0.display_name": {
+          "source": "Get Form",
+          "message": "Formular abrufen"
+        },
+        "app.Sm90Rm9ybQ.action.Z2V0LWZvcm0.option.Zm9ybUlE.desc": {
+          "source": "The form to retrieve",
+          "message": "Das abzurufende Formular"
+        },
+        "app.Sm90Rm9ybQ.action.Z2V0LWZvcm0.option.Zm9ybUlE.display_name": {
+          "source": "Form",
+          "message": "Formular"
+        },
+        "app.Sm90Rm9ybQ.action.Z2V0LWZvcm0.option.Zm9ybUlE.short_desc": {
+          "source": "The form to retrieve",
+          "message": "Das abzurufende Formular"
+        },
+        "app.Sm90Rm9ybQ.action.Z2V0LWZvcm0.short_desc": {
+          "source": "Get form details",
+          "message": "Formulardetails abrufen"
+        },
+        "app.Sm90Rm9ybQ.action.Z2V0LWZvcm0tc3VibWlzc2lvbnM.desc": {
+          "source": "Retrieve all submissions for a specific form with optional filtering and pagination",
+          "message": "Alle Übermittlungen für ein bestimmtes Formular mit optionaler Filterung und Paginierung abrufen"
+        },
+        "app.Sm90Rm9ybQ.action.Z2V0LWZvcm0tc3VibWlzc2lvbnM.display_name": {
+          "source": "Get Form Submissions",
+          "message": "Formulareinsendungen abrufen"
+        },
+        "app.Sm90Rm9ybQ.action.Z2V0LWZvcm0tc3VibWlzc2lvbnM.option.Zm9ybUlE.desc": {
+          "source": "Select the form to retrieve submissions for",
+          "message": "Wählen Sie das Formular aus, für das Übermittlungen abgerufen werden sollen"
+        },
+        "app.Sm90Rm9ybQ.action.Z2V0LWZvcm0tc3VibWlzc2lvbnM.option.Zm9ybUlE.display_name": {
+          "source": "Form",
+          "message": "Formular"
+        },
+        "app.Sm90Rm9ybQ.action.Z2V0LWZvcm0tc3VibWlzc2lvbnM.option.Zm9ybUlE.short_desc": {
+          "source": "The form to get submissions from",
+          "message": "Das Formular, aus dem Übermittlungen abgerufen werden sollen"
+        },
+        "app.Sm90Rm9ybQ.action.Z2V0LWZvcm0tc3VibWlzc2lvbnM.option.ZmlsdGVy.desc": {
+          "source": "Filter submissions using JotForm filter syntax (e.g., {\"status\": \"ACTIVE\"})",
+          "message": "Übermittlungen mit der JotForm-Filtersyntax filtern (z. B. {\"status\": \"ACTIVE\"})"
+        },
+        "app.Sm90Rm9ybQ.action.Z2V0LWZvcm0tc3VibWlzc2lvbnM.option.ZmlsdGVy.display_name": {
+          "source": "Filter",
+          "message": "Filter"
+        },
+        "app.Sm90Rm9ybQ.action.Z2V0LWZvcm0tc3VibWlzc2lvbnM.option.ZmlsdGVy.short_desc": {
+          "source": "Filter conditions",
+          "message": "Filterbedingungen"
+        },
+        "app.Sm90Rm9ybQ.action.Z2V0LWZvcm0tc3VibWlzc2lvbnM.option.b3JkZXJieQ.desc": {
+          "source": "Field to sort by (e.g., `created_at`, `updated_at`)",
+          "message": "Feld, nach dem sortiert werden soll (z. B. `created_at`, `updated_at`)"
+        },
+        "app.Sm90Rm9ybQ.action.Z2V0LWZvcm0tc3VibWlzc2lvbnM.option.b3JkZXJieQ.display_name": {
+          "source": "Order By",
+          "message": "Sortieren nach"
+        },
+        "app.Sm90Rm9ybQ.action.Z2V0LWZvcm0tc3VibWlzc2lvbnM.option.b3JkZXJieQ.short_desc": {
+          "source": "Sort order",
+          "message": "Sortierreihenfolge"
+        },
+        "app.Sm90Rm9ybQ.action.Z2V0LWZvcm0tc3VibWlzc2lvbnM.option.bGltaXQ.desc": {
+          "source": "Maximum number of submissions to return",
+          "message": "Maximale Anzahl der zurückzugebenden Übermittlungen"
+        },
+        "app.Sm90Rm9ybQ.action.Z2V0LWZvcm0tc3VibWlzc2lvbnM.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "Limit"
+        },
+        "app.Sm90Rm9ybQ.action.Z2V0LWZvcm0tc3VibWlzc2lvbnM.option.bGltaXQ.short_desc": {
+          "source": "Maximum results",
+          "message": "Maximale Ergebnisse"
+        },
+        "app.Sm90Rm9ybQ.action.Z2V0LWZvcm0tc3VibWlzc2lvbnM.short_desc": {
+          "source": "List submissions for a form",
+          "message": "Übermittlungen für ein Formular auflisten"
+        },
+        "app.Sm90Rm9ybQ.action.Z2V0LWZvcm0tcmVwb3J0cw.desc": {
+          "source": "Retrieve reports and analytics for a specific form",
+          "message": "Berichte und Analysen für ein bestimmtes Formular abrufen"
+        },
+        "app.Sm90Rm9ybQ.action.Z2V0LWZvcm0tcmVwb3J0cw.display_name": {
+          "source": "Get Form Reports",
+          "message": "Formularberichte abrufen"
+        },
+        "app.Sm90Rm9ybQ.action.Z2V0LWZvcm0tcmVwb3J0cw.option.Zm9ybUlE.desc": {
+          "source": "The form to retrieve reports for",
+          "message": "Das Formular, für das Berichte abgerufen werden sollen"
+        },
+        "app.Sm90Rm9ybQ.action.Z2V0LWZvcm0tcmVwb3J0cw.option.Zm9ybUlE.display_name": {
+          "source": "Form",
+          "message": "Formular"
+        },
+        "app.Sm90Rm9ybQ.action.Z2V0LWZvcm0tcmVwb3J0cw.option.Zm9ybUlE.short_desc": {
+          "source": "The form to get reports for",
+          "message": "Das Formular, für das Berichte abgerufen werden sollen"
+        },
+        "app.Sm90Rm9ybQ.action.Z2V0LWZvcm0tcmVwb3J0cw.short_desc": {
+          "source": "Get form analytics and reports",
+          "message": "Formularanalysen und -berichte abrufen"
+        },
+        "app.Sm90Rm9ybQ.action.Z2V0LWZvcm1z.desc": {
+          "source": "Retrieve all forms in the JotForm account with optional filtering",
+          "message": "Alle Formulare im JotForm-Konto mit optionaler Filterung abrufen"
+        },
+        "app.Sm90Rm9ybQ.action.Z2V0LWZvcm1z.display_name": {
+          "source": "Get Forms",
+          "message": "Formulare abrufen"
+        },
+        "app.Sm90Rm9ybQ.action.Z2V0LWZvcm1z.option.ZmlsdGVy.desc": {
+          "source": "Filter forms using JotForm filter syntax (e.g., {\"status\": \"ENABLED\"})",
+          "message": "Formulare mit der JotForm-Filtersyntax filtern (z. B. {\"status\": \"ENABLED\"})"
+        },
+        "app.Sm90Rm9ybQ.action.Z2V0LWZvcm1z.option.ZmlsdGVy.display_name": {
+          "source": "Filter",
+          "message": "Filter"
+        },
+        "app.Sm90Rm9ybQ.action.Z2V0LWZvcm1z.option.ZmlsdGVy.short_desc": {
+          "source": "Filter conditions",
+          "message": "Filterbedingungen"
+        },
+        "app.Sm90Rm9ybQ.action.Z2V0LWZvcm1z.option.b3JkZXJieQ.desc": {
+          "source": "Field to sort by (e.g., `created_at`, `updated_at`, `title`)",
+          "message": "Feld, nach dem sortiert werden soll (z. B. `created_at`, `updated_at`, `title`)"
+        },
+        "app.Sm90Rm9ybQ.action.Z2V0LWZvcm1z.option.b3JkZXJieQ.display_name": {
+          "source": "Order By",
+          "message": "Sortieren nach"
+        },
+        "app.Sm90Rm9ybQ.action.Z2V0LWZvcm1z.option.b3JkZXJieQ.short_desc": {
+          "source": "Sort order",
+          "message": "Sortierreihenfolge"
+        },
+        "app.Sm90Rm9ybQ.action.Z2V0LWZvcm1z.option.bGltaXQ.desc": {
+          "source": "Maximum number of forms to return",
+          "message": "Maximale Anzahl zurückzugebender Formulare"
+        },
+        "app.Sm90Rm9ybQ.action.Z2V0LWZvcm1z.option.bGltaXQ.display_name": {
+          "source": "Limit",
+          "message": "Limit"
+        },
+        "app.Sm90Rm9ybQ.action.Z2V0LWZvcm1z.option.bGltaXQ.short_desc": {
+          "source": "Maximum results",
+          "message": "Maximale Ergebnisse"
+        },
+        "app.Sm90Rm9ybQ.action.Z2V0LWZvcm1z.short_desc": {
+          "source": "List all forms",
+          "message": "Alle Formulare auflisten"
+        },
+        "app.Sm90Rm9ybQ.action.Z2V0LXN1Ym1pc3Npb24.desc": {
+          "source": "Retrieve a specific submission by its ID",
+          "message": "Eine bestimmte Übermittlung anhand ihrer ID abrufen"
+        },
+        "app.Sm90Rm9ybQ.action.Z2V0LXN1Ym1pc3Npb24.display_name": {
+          "source": "Get Submission",
+          "message": "Übermittlung abrufen"
+        },
+        "app.Sm90Rm9ybQ.action.Z2V0LXN1Ym1pc3Npb24.option.c3VibWlzc2lvbklE.desc": {
+          "source": "The unique ID of the submission to retrieve",
+          "message": "Die eindeutige ID der abzurufenden Übermittlung"
+        },
+        "app.Sm90Rm9ybQ.action.Z2V0LXN1Ym1pc3Npb24.option.c3VibWlzc2lvbklE.display_name": {
+          "source": "Submission ID",
+          "message": "Übermittlungs-ID"
+        },
+        "app.Sm90Rm9ybQ.action.Z2V0LXN1Ym1pc3Npb24.option.c3VibWlzc2lvbklE.short_desc": {
+          "source": "The submission to retrieve",
+          "message": "Die abzurufende Übermittlung"
+        },
+        "app.Sm90Rm9ybQ.action.Z2V0LXN1Ym1pc3Npb24.short_desc": {
+          "source": "Get a specific form submission",
+          "message": "Eine bestimmte Formularübermittlung abrufen"
+        },
+        "app.Sm90Rm9ybQ.action.ZGVsZXRlLXN1Ym1pc3Npb24.desc": {
+          "source": "Permanently delete a submission from a form",
+          "message": "Eine Übermittlung dauerhaft aus einem Formular löschen"
+        },
+        "app.Sm90Rm9ybQ.action.ZGVsZXRlLXN1Ym1pc3Npb24.display_name": {
+          "source": "Delete Submission",
+          "message": "Übermittlung löschen"
+        },
+        "app.Sm90Rm9ybQ.action.ZGVsZXRlLXN1Ym1pc3Npb24.option.c3VibWlzc2lvbklE.desc": {
+          "source": "The ID of the submission to delete",
+          "message": "Die ID der zu löschenden Übermittlung"
+        },
+        "app.Sm90Rm9ybQ.action.ZGVsZXRlLXN1Ym1pc3Npb24.option.c3VibWlzc2lvbklE.display_name": {
+          "source": "Submission ID",
+          "message": "Übermittlungs-ID"
+        },
+        "app.Sm90Rm9ybQ.action.ZGVsZXRlLXN1Ym1pc3Npb24.option.c3VibWlzc2lvbklE.short_desc": {
+          "source": "The submission to delete",
+          "message": "Die zu löschende Übermittlung"
+        },
+        "app.Sm90Rm9ybQ.action.ZGVsZXRlLXN1Ym1pc3Npb24.short_desc": {
+          "source": "Delete a form submission",
+          "message": "Eine Formularübermittlung löschen"
+        },
+        "app.Sm90Rm9ybQ.action.bWFrZS1hcGktY2FsbA.desc": {
+          "source": "Make a custom HTTP / REST API call to **JotForm** using the configured connection's authentication.\n\nSpecify the HTTP method, the URI path (relative to the connection's API base URL), optional query parameters, headers, and request body. The response is returned as a hash containing the status code, response headers, and response body.\n\nUse this action for endpoints that are not yet exposed as first-class actions on this app.",
+          "message": "Führen Sie einen benutzerdefinierten HTTP- / REST-API-Aufruf an **JotForm** unter Verwendung der Authentifizierung der konfigurierten Verbindung durch.\n\nGeben Sie die HTTP-Methode, den URI-Pfad (relativ zur API-Basis-URL der Verbindung), optionale Abfrageparameter, Header und den Anforderungstext an. Die Antwort wird als Hash zurückgegeben, der den Statuscode, die Antwort-Header und den Antworttext enthält.\n\nVerwenden Sie diese Aktion für Endpunkte, die in dieser App noch nicht als erstklassige Aktionen bereitgestellt werden."
+        },
+        "app.Sm90Rm9ybQ.action.bWFrZS1hcGktY2FsbA.display_name": {
+          "source": "Make an API call",
+          "message": "API-Aufruf ausführen"
+        },
+        "app.Sm90Rm9ybQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.desc": {
+          "source": "The request body. The effective type depends on `body_type`: JSON/form/YAML expect a hash, XML/text expect a string, multipart expects a file structure, binary expects raw bytes.",
+          "message": "Der Anfragen-Body. Der effektive Typ hängt von `body_type` ab: JSON/form/YAML erwarten einen Hash, XML/Text erwarten einen String, Multipart erwartet eine Dateistruktur, Binary erwartet Rohbytes."
+        },
+        "app.Sm90Rm9ybQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.display_name": {
+          "source": "Body",
+          "message": "Body"
+        },
+        "app.Sm90Rm9ybQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.short_desc": {
+          "source": "The request body",
+          "message": "Der Anfragen-Body"
+        },
+        "app.Sm90Rm9ybQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.desc": {
+          "source": "Upload a file using `multipart/form-data`. The body must be a @ref DataProvider::FileDataType \"FileDataType\" structure (filename + content + mime_type). The framework builds the multipart envelope and sets the boundary header.",
+          "message": "Laden Sie eine Datei mit `multipart/form-data` hoch. Der Body muss eine @ref DataProvider::FileDataType \"FileDataType\"-Struktur sein (filename + content + mime_type). Das Framework erstellt die Multipart-Hülle und setzt den Boundary-Header."
+        },
+        "app.Sm90Rm9ybQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.display_name": {
+          "source": "Multipart Form",
+          "message": "Multipart-Formular"
+        },
+        "app.Sm90Rm9ybQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.short_desc": {
+          "source": "Upload a file using multipart/form-data",
+          "message": "Eine Datei mit multipart/form-data hochladen"
+        },
+        "app.Sm90Rm9ybQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.desc": {
+          "source": "Pass the body to the REST client unchanged; the client decides serialization based on its configured `data` option and the value type",
+          "message": "Übergeben Sie den Body unverändert an den REST-Client; der Client entscheidet über die Serialisierung basierend auf seiner konfigurierten `data`-Option und dem Werttyp"
+        },
+        "app.Sm90Rm9ybQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.display_name": {
+          "source": "Auto",
+          "message": "Auto"
+        },
+        "app.Sm90Rm9ybQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.short_desc": {
+          "source": "Pass-through; use connection serialization and let the REST client decide",
+          "message": "Durchreichen; Verbindungsserialisierung verwenden und den REST-Client entscheiden lassen"
+        },
+        "app.Sm90Rm9ybQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.desc": {
+          "source": "Send the body as raw bytes. The body must be a binary value. Sets `Content-Type: application/octet-stream` unless overridden by `hdr`.",
+          "message": "Senden Sie den Body als Rohbytes. Der Body muss ein Binärwert sein. Setzt `Content-Type: application/octet-stream`, sofern nicht durch `hdr` überschrieben."
+        },
+        "app.Sm90Rm9ybQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.display_name": {
+          "source": "Raw Binary",
+          "message": "Rohbinärdaten"
+        },
+        "app.Sm90Rm9ybQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.short_desc": {
+          "source": "Send body as raw bytes",
+          "message": "Body als Rohbytes senden"
+        },
+        "app.Sm90Rm9ybQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.desc": {
+          "source": "Serialize a hash of form fields as `application/x-www-form-urlencoded`. The body must be a hash whose values are scalars (strings/numbers/booleans).",
+          "message": "Serialisieren Sie einen Hash von Formularfeldern als `application/x-www-form-urlencoded`. Der Body muss ein Hash sein, dessen Werte Skalare sind (Strings/Zahlen/Booleans)."
+        },
+        "app.Sm90Rm9ybQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.display_name": {
+          "source": "Form (URL-encoded)",
+          "message": "Formular (URL-kodiert)"
+        },
+        "app.Sm90Rm9ybQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.short_desc": {
+          "source": "Serialize body as application/x-www-form-urlencoded form fields",
+          "message": "Body als application/x-www-form-urlencoded-Formularfelder serialisieren"
+        },
+        "app.Sm90Rm9ybQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.desc": {
+          "source": "Serialize the body as JSON; sets `Content-Type: application/json`. The body should be a hash, list, or scalar value.",
+          "message": "Serialisieren Sie den Body als JSON; setzt `Content-Type: application/json`. Der Body sollte ein Hash, eine Liste oder ein Skalarwert sein."
+        },
+        "app.Sm90Rm9ybQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.display_name": {
+          "source": "JSON",
+          "message": "JSON"
+        },
+        "app.Sm90Rm9ybQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.short_desc": {
+          "source": "Serialize body as JSON",
+          "message": "Body als JSON serialisieren"
+        },
+        "app.Sm90Rm9ybQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.desc": {
+          "source": "Send the body as plain text. The body must be a string. Sets `Content-Type: text/plain`.",
+          "message": "Senden Sie den Body als Klartext. Der Body muss ein String sein. Setzt `Content-Type: text/plain`."
+        },
+        "app.Sm90Rm9ybQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.display_name": {
+          "source": "Plain Text",
+          "message": "Klartext"
+        },
+        "app.Sm90Rm9ybQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.short_desc": {
+          "source": "Send body as text/plain",
+          "message": "Body als text/plain senden"
+        },
+        "app.Sm90Rm9ybQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.desc": {
+          "source": "Send the body as XML. If the body is a hash it is serialized to XML; if it is a string it is sent verbatim. Sets `Content-Type: application/xml`.",
+          "message": "Senden Sie den Body als XML. Wenn der Body ein Hash ist, wird er zu XML serialisiert; wenn er ein String ist, wird er wörtlich gesendet. Setzt `Content-Type: application/xml`."
+        },
+        "app.Sm90Rm9ybQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.display_name": {
+          "source": "XML",
+          "message": "XML"
+        },
+        "app.Sm90Rm9ybQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.short_desc": {
+          "source": "Send body as XML",
+          "message": "Body als XML senden"
+        },
+        "app.Sm90Rm9ybQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.desc": {
+          "source": "Send the body as YAML. If the body is a hash it is serialized to YAML; if it is a string it is sent verbatim. Sets `Content-Type: application/x-yaml`.",
+          "message": "Senden Sie den Body als YAML. Wenn der Body ein Hash ist, wird er zu YAML serialisiert; wenn er ein String ist, wird er wörtlich gesendet. Setzt `Content-Type: application/x-yaml`."
+        },
+        "app.Sm90Rm9ybQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.display_name": {
+          "source": "YAML",
+          "message": "YAML"
+        },
+        "app.Sm90Rm9ybQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.short_desc": {
+          "source": "Send body as YAML",
+          "message": "Body als YAML senden"
+        },
+        "app.Sm90Rm9ybQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.desc": {
+          "source": "Selects the body serialization mode and the corresponding `Content-Type` header. Changing this field reshapes the `body` editor - selecting JSON exposes a JSON editor, selecting Multipart Form exposes a file picker, and so on.",
+          "message": "Wählt den Body-Serialisierungsmodus und den entsprechenden Header `Content-Type` aus. Das Ändern dieses Feldes passt den Editor `body` an – die Auswahl von JSON zeigt einen JSON-Editor an, die Auswahl von Multipart Form zeigt eine Dateiauswahl an usw."
+        },
+        "app.Sm90Rm9ybQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.display_name": {
+          "source": "Body Type",
+          "message": "Body-Typ"
+        },
+        "app.Sm90Rm9ybQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.short_desc": {
+          "source": "How the body is serialized and what Content-Type is sent",
+          "message": "Wie der Body serialisiert wird und welcher Content-Type gesendet wird"
+        },
+        "app.Sm90Rm9ybQ.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.desc": {
+          "source": "If `True`, non-2xx HTTP responses return as the normal response hash (with the actual status code) instead of raising `REST-RESPONSE-ERROR`. Useful for handling 4xx/5xx as data - e.g. checking whether a resource exists. Overrides the connection's `error_passthru` setting for this call only.",
+          "message": "Wenn `True`, werden Nicht-2xx-HTTP-Antworten als normaler Antwort-Hash (mit dem tatsächlichen Statuscode) zurückgegeben, anstatt `REST-RESPONSE-ERROR` auszulösen. Nützlich für die Behandlung von 4xx/5xx als Daten – z. B. zum Überprüfen, ob eine Ressource existiert. Überschreibt die Einstellung `error_passthru` der Verbindung nur für diesen Aufruf."
+        },
+        "app.Sm90Rm9ybQ.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.display_name": {
+          "source": "Return Errors as Data",
+          "message": "Fehler als Daten zurückgeben"
+        },
+        "app.Sm90Rm9ybQ.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.short_desc": {
+          "source": "Return non-2xx responses normally instead of throwing",
+          "message": "Nicht-2xx-Antworten normal zurückgeben, anstatt eine Exception auszulösen"
+        },
+        "app.Sm90Rm9ybQ.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.desc": {
+          "source": "Optional list of HTTP status codes treated as success. If set and the response status is not in this list, the action throws `REST-STATUS-ERROR`. When unset, the REST client's default behavior applies (typically: 2xx is success, non-2xx throws).",
+          "message": "Optionale Liste von HTTP-Statuscodes, die als Erfolg behandelt werden. Wenn festgelegt und der Antwortstatus nicht in dieser Liste enthalten ist, löst die Aktion `REST-STATUS-ERROR` aus. Wenn nicht festgelegt, gilt das Standardverhalten des REST-Clients (typischerweise: 2xx ist Erfolg, Nicht-2xx löst eine Exception aus)."
+        },
+        "app.Sm90Rm9ybQ.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.display_name": {
+          "source": "Expected Status Codes",
+          "message": "Erwartete Statuscodes"
+        },
+        "app.Sm90Rm9ybQ.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.short_desc": {
+          "source": "Response status codes treated as success",
+          "message": "Antwort-Statuscodes, die als Erfolg behandelt werden"
+        },
+        "app.Sm90Rm9ybQ.action.bWFrZS1hcGktY2FsbA.option.aGRy.desc": {
+          "source": "Hash of custom headers added to the request. These override any default headers set by `body_type` (e.g. supplying `Content-Type` here wins over the body-type default).",
+          "message": "Hash benutzerdefinierter Header, die der Anfrage hinzugefügt werden. Diese überschreiben alle von `body_type` festgelegten Standard-Header (z. B. überschreibt die Angabe von `Content-Type` hier den Standard für den Body-Typ)."
+        },
+        "app.Sm90Rm9ybQ.action.bWFrZS1hcGktY2FsbA.option.aGRy.display_name": {
+          "source": "Custom Headers",
+          "message": "Benutzerdefinierte Header"
+        },
+        "app.Sm90Rm9ybQ.action.bWFrZS1hcGktY2FsbA.option.aGRy.short_desc": {
+          "source": "Extra request headers",
+          "message": "Zusätzliche Anfrage-Header"
+        },
+        "app.Sm90Rm9ybQ.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.desc": {
+          "source": "If `True`, the response hash includes a `debug` sub-hash containing the request method/URL/headers (with sensitive values redacted), request and response sizes, and round-trip duration. Useful when investigating slow or failing calls. Off by default to keep responses lean.",
+          "message": "Wenn `True`, enthält der Antwort-Hash einen Sub-Hash `debug`, der die Anfragemethode/URL/Header (mit unkenntlich gemachten sensiblen Werten), Anfrage- und Antwortgrößen sowie die Verarbeitungsdauer enthält. Nützlich bei der Untersuchung langsamer oder fehlschlagender Aufrufe. Standardmäßig deaktiviert, um Antworten schlank zu halten."
+        },
+        "app.Sm90Rm9ybQ.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.display_name": {
+          "source": "Include Debug Info",
+          "message": "Debug-Informationen einschließen"
+        },
+        "app.Sm90Rm9ybQ.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.short_desc": {
+          "source": "Include request/timing/size debug info in the response",
+          "message": "Debug-Informationen zu Anfrage/Laufzeit/Größe in die Antwort einschließen"
+        },
+        "app.Sm90Rm9ybQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.desc": {
+          "source": "HTTP `OPTIONS`",
+          "message": "HTTP `OPTIONS`"
+        },
+        "app.Sm90Rm9ybQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.display_name": {
+          "source": "OPTIONS",
+          "message": "OPTIONS"
+        },
+        "app.Sm90Rm9ybQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.short_desc": {
+          "source": "HTTP OPTIONS",
+          "message": "HTTP OPTIONS"
+        },
+        "app.Sm90Rm9ybQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.desc": {
+          "source": "HTTP `DELETE`",
+          "message": "HTTP `DELETE`"
+        },
+        "app.Sm90Rm9ybQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.display_name": {
+          "source": "DELETE",
+          "message": "DELETE"
+        },
+        "app.Sm90Rm9ybQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.short_desc": {
+          "source": "HTTP DELETE",
+          "message": "HTTP DELETE"
+        },
+        "app.Sm90Rm9ybQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.desc": {
+          "source": "HTTP `GET`",
+          "message": "HTTP `GET`"
+        },
+        "app.Sm90Rm9ybQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.display_name": {
+          "source": "GET",
+          "message": "GET"
+        },
+        "app.Sm90Rm9ybQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.short_desc": {
+          "source": "HTTP GET",
+          "message": "HTTP GET"
+        },
+        "app.Sm90Rm9ybQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.desc": {
+          "source": "HTTP `HEAD`",
+          "message": "HTTP `HEAD`"
+        },
+        "app.Sm90Rm9ybQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.display_name": {
+          "source": "HEAD",
+          "message": "HEAD"
+        },
+        "app.Sm90Rm9ybQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.short_desc": {
+          "source": "HTTP HEAD",
+          "message": "HTTP HEAD"
+        },
+        "app.Sm90Rm9ybQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.desc": {
+          "source": "HTTP `PATCH`",
+          "message": "HTTP `PATCH`"
+        },
+        "app.Sm90Rm9ybQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.display_name": {
+          "source": "PATCH",
+          "message": "PATCH"
+        },
+        "app.Sm90Rm9ybQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.short_desc": {
+          "source": "HTTP PATCH",
+          "message": "HTTP PATCH"
+        },
+        "app.Sm90Rm9ybQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.desc": {
+          "source": "HTTP `POST`",
+          "message": "HTTP `POST`"
+        },
+        "app.Sm90Rm9ybQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.display_name": {
+          "source": "POST",
+          "message": "POST"
+        },
+        "app.Sm90Rm9ybQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.short_desc": {
+          "source": "HTTP POST",
+          "message": "HTTP POST"
+        },
+        "app.Sm90Rm9ybQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.desc": {
+          "source": "HTTP `PUT`",
+          "message": "HTTP `PUT`"
+        },
+        "app.Sm90Rm9ybQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.display_name": {
+          "source": "PUT",
+          "message": "PUT"
+        },
+        "app.Sm90Rm9ybQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.short_desc": {
+          "source": "HTTP PUT",
+          "message": "HTTP PUT"
+        },
+        "app.Sm90Rm9ybQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.desc": {
+          "source": "HTTP `TRACE`",
+          "message": "HTTP `TRACE`"
+        },
+        "app.Sm90Rm9ybQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.display_name": {
+          "source": "TRACE",
+          "message": "TRACE"
+        },
+        "app.Sm90Rm9ybQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.short_desc": {
+          "source": "HTTP TRACE",
+          "message": "HTTP TRACE"
+        },
+        "app.Sm90Rm9ybQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "Die für die Anfrage zu verwendende HTTP-Methode"
+        },
+        "app.Sm90Rm9ybQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.display_name": {
+          "source": "HTTP Method",
+          "message": "HTTP-Methode"
+        },
+        "app.Sm90Rm9ybQ.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.short_desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "Die für die Anfrage zu verwendende HTTP-Methode"
+        },
+        "app.Sm90Rm9ybQ.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain `{name}` placeholders that are replaced from `path_vars`. Example: `/users/{id}/comments`.",
+          "message": "Der URI-Pfad relativ zur API-Basis-URL der Verbindung. Kann `{name}`-Platzhalter enthalten, die aus `path_vars` ersetzt werden. Beispiel: `/users/{id}/comments`."
+        },
+        "app.Sm90Rm9ybQ.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.display_name": {
+          "source": "URI Path",
+          "message": "URI-Pfad"
+        },
+        "app.Sm90Rm9ybQ.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.short_desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain '{name}' placeholders that are replaced from 'path_vars'. Example: '/users/{id}/comments'",
+          "message": "Der URI-Pfad relativ zur API-Basis-URL der Verbindung. Kann '{name}'-Platzhalter enthalten, die aus 'path_vars' ersetzt werden. Beispiel: '/users/{id}/comments'"
+        },
+        "app.Sm90Rm9ybQ.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.desc": {
+          "source": "Hash of values substituted into `{name}` placeholders in the URI path. Example: with `path = /users/{id}` and `path_vars = {id: 123}` the framework sends `/users/123`. Values are URL-encoded.",
+          "message": "Hash von Werten, die in `{name}`-Platzhalter im URI-Pfad eingesetzt werden. Beispiel: Bei `path = /users/{id}` und `path_vars = {id: 123}` sendet das Framework `/users/123`. Werte werden URL-codiert."
+        },
+        "app.Sm90Rm9ybQ.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.display_name": {
+          "source": "Path Variables",
+          "message": "Pfadvariablen"
+        },
+        "app.Sm90Rm9ybQ.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.short_desc": {
+          "source": "Values for {name} placeholders in path",
+          "message": "Werte für {name}-Platzhalter im Pfad"
+        },
+        "app.Sm90Rm9ybQ.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.desc": {
+          "source": "Hash of query string parameters to append to the URI path. Values are URL-encoded; list values are joined with `,`.",
+          "message": "Hash von Abfragezeichenfolgen-Parametern, die an den URI-Pfad angehängt werden sollen. Werte werden URL-codiert; Listenwerte werden mit `,` zusammengefügt."
+        },
+        "app.Sm90Rm9ybQ.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.display_name": {
+          "source": "Query Arguments",
+          "message": "Abfrageargumente"
+        },
+        "app.Sm90Rm9ybQ.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.short_desc": {
+          "source": "Query string parameters",
+          "message": "Abfragezeichenfolgen-Parameter"
+        },
+        "app.Sm90Rm9ybQ.action.bWFrZS1hcGktY2FsbA.short_desc": {
+          "source": "Make a custom API call to JotForm",
+          "message": "Benutzerdefinierten API-Aufruf an JotForm durchführen"
+        },
+        "app.Sm90Rm9ybQ.action.bmV3LXBheW1lbnQ.desc": {
+          "source": "Fires when a payment is completed on a form with payment integration.\n\n**Note:** This trigger only works for payments made through the form UI.",
+          "message": "Wird ausgelöst, wenn eine Zahlung auf einem Formular mit Zahlungsintegration abgeschlossen wird.\n\n**Hinweis:** Dieser Trigger funktioniert nur für Zahlungen, die über die Formular-Benutzeroberfläche getätigt wurden."
+        },
+        "app.Sm90Rm9ybQ.action.bmV3LXBheW1lbnQ.display_name": {
+          "source": "New Payment",
+          "message": "Neue Zahlung"
+        },
+        "app.Sm90Rm9ybQ.action.bmV3LXBheW1lbnQ.option.Zm9ybUlE.desc": {
+          "source": "Select the form (with payment integration) to monitor for payments",
+          "message": "Wählen Sie das Formular (mit Zahlungsintegration) aus, das auf Zahlungen überwacht werden soll"
+        },
+        "app.Sm90Rm9ybQ.action.bmV3LXBheW1lbnQ.option.Zm9ybUlE.display_name": {
+          "source": "Form",
+          "message": "Formular"
+        },
+        "app.Sm90Rm9ybQ.action.bmV3LXBheW1lbnQ.option.Zm9ybUlE.short_desc": {
+          "source": "The form to watch for payments",
+          "message": "Das Formular, das auf Zahlungen überwacht werden soll"
+        },
+        "app.Sm90Rm9ybQ.action.bmV3LXBheW1lbnQ.short_desc": {
+          "source": "Trigger when a payment is received",
+          "message": "Auslösen, wenn eine Zahlung empfangen wird"
+        },
+        "app.Sm90Rm9ybQ.action.bmV3LXN1Ym1pc3Npb24.desc": {
+          "source": "Fires when a new submission is received on a form via the JotForm UI.\n\n**Note:** This trigger only works for submissions made through the form UI, not for API-created submissions. This is a JotForm platform limitation.",
+          "message": "Wird ausgelöst, wenn eine neue Übermittlung für ein Formular über die JotForm-Benutzeroberfläche empfangen wird.\n\n**Hinweis:** Dieser Trigger funktioniert nur für Übermittlungen, die über die Formular-Benutzeroberfläche erstellt wurden, nicht für über die API erstellte Übermittlungen. Dies ist eine Einschränkung der JotForm-Plattform."
+        },
+        "app.Sm90Rm9ybQ.action.bmV3LXN1Ym1pc3Npb24.display_name": {
+          "source": "New Submission",
+          "message": "Neue Übermittlung"
+        },
+        "app.Sm90Rm9ybQ.action.bmV3LXN1Ym1pc3Npb24.option.Zm9ybUlE.desc": {
+          "source": "Select the form to monitor for new submissions",
+          "message": "Wählen Sie das Formular aus, das auf neue Übermittlungen überwacht werden soll"
+        },
+        "app.Sm90Rm9ybQ.action.bmV3LXN1Ym1pc3Npb24.option.Zm9ybUlE.display_name": {
+          "source": "Form",
+          "message": "Formular"
+        },
+        "app.Sm90Rm9ybQ.action.bmV3LXN1Ym1pc3Npb24.option.Zm9ybUlE.short_desc": {
+          "source": "The form to watch for submissions",
+          "message": "Das Formular, das auf Übermittlungen überwacht werden soll"
+        },
+        "app.Sm90Rm9ybQ.action.bmV3LXN1Ym1pc3Npb24.short_desc": {
+          "source": "Trigger when a form receives a new submission",
+          "message": "Wird ausgelöst, wenn ein Formular eine neue Übermittlung erhält"
+        },
+        "app.Sm90Rm9ybQ.action.dXBkYXRlLXN1Ym1pc3Npb24.desc": {
+          "source": "Modify the answers in an existing form submission. Select a form first to see available fields.",
+          "message": "Ändern Sie die Antworten in einer bestehenden Formularübermittlung. Wählen Sie zuerst ein Formular aus, um die verfügbaren Felder anzuzeigen."
+        },
+        "app.Sm90Rm9ybQ.action.dXBkYXRlLXN1Ym1pc3Npb24.display_name": {
+          "source": "Update Submission",
+          "message": "Übermittlung aktualisieren"
+        },
+        "app.Sm90Rm9ybQ.action.dXBkYXRlLXN1Ym1pc3Npb24.option.Zm9ybUlE.desc": {
+          "source": "Select the form to get field definitions for the submission update. The submission fields will update based on your selection.",
+          "message": "Wählen Sie das Formular aus, um Felddefinitionen für die Übermittlungsaktualisierung abzurufen. Die Übermittlungsfelder werden basierend auf Ihrer Auswahl aktualisiert."
+        },
+        "app.Sm90Rm9ybQ.action.dXBkYXRlLXN1Ym1pc3Npb24.option.Zm9ybUlE.display_name": {
+          "source": "Form",
+          "message": "Formular"
+        },
+        "app.Sm90Rm9ybQ.action.dXBkYXRlLXN1Ym1pc3Npb24.option.Zm9ybUlE.short_desc": {
+          "source": "The form containing the submission",
+          "message": "Das Formular, das die Übermittlung enthält"
+        },
+        "app.Sm90Rm9ybQ.action.dXBkYXRlLXN1Ym1pc3Npb24.option.c3VibWlzc2lvbklE.desc": {
+          "source": "The ID of the submission to update",
+          "message": "Die ID der zu aktualisierenden Übermittlung"
+        },
+        "app.Sm90Rm9ybQ.action.dXBkYXRlLXN1Ym1pc3Npb24.option.c3VibWlzc2lvbklE.display_name": {
+          "source": "Submission ID",
+          "message": "Übermittlungs-ID"
+        },
+        "app.Sm90Rm9ybQ.action.dXBkYXRlLXN1Ym1pc3Npb24.option.c3VibWlzc2lvbklE.short_desc": {
+          "source": "The submission to update",
+          "message": "Die zu aktualisierende Übermittlung"
+        },
+        "app.Sm90Rm9ybQ.action.dXBkYXRlLXN1Ym1pc3Npb24.short_desc": {
+          "source": "Update an existing submission",
+          "message": "Eine bestehende Übermittlung aktualisieren"
+        },
+        "app.Sm90Rm9ybQ.desc": {
+          "source": "JotForm is an online form builder that enables creating forms, collecting submissions, and processing payments. This integration enables managing form submissions through the JotForm REST API.\n\n**Note:** Webhook-based triggers only fire for submissions made through the JotForm UI, not for API-created submissions.",
+          "message": "JotForm ist ein Online-Formulargenerator, der das Erstellen von Formularen, das Sammeln von Übermittlungen und das Verarbeiten von Zahlungen ermöglicht. Diese Integration ermöglicht die Verwaltung von Formularübermittlungen über die JotForm-REST-API.\n\n**Hinweis:** Webhook-basierte Trigger werden nur bei Übermittlungen ausgelöst, die über die JotForm-Benutzeroberfläche vorgenommen wurden, nicht bei über die API erstellten Übermittlungen."
+        },
+        "app.Sm90Rm9ybQ.display_name": {
+          "source": "JotForm",
+          "message": "JotForm"
+        },
+        "app.Sm90Rm9ybQ.short_desc": {
+          "source": "JotForm online form builder and data collection",
+          "message": "JotForm-Online-Formulargenerator und Datenerfassung"
+        }
+      }
+    }
+  }
+}

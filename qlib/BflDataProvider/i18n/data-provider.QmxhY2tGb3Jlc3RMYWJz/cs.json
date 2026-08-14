@@ -1,0 +1,489 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "cs": {
+      "messages": {
+        "app.QmxhY2tGb3Jlc3RMYWJz.action.Z2VuZXJhdGUtaW1hZ2U.desc": {
+          "source": "Generates an image from a text prompt via the BFL FLUX API.  BFL is asynchronous: submit returns a `polling_url`, and this action drives the polling loop via @ref qoreasyncjobutilsintro \"QoreAsyncJobUtils\" until the job reaches the `Ready` terminal state.\n\nThe response contains `result.sample` — a CDN URL of the generated image.  Download the image promptly; BFL CDN URLs are temporary.",
+          "message": "Vygeneruje obrázek z textového zadání (promptu) pomocí rozhraní BFL FLUX API. BFL funguje asynchronně: odeslání vrátí `polling_url` a tato akce řídí dotazovací smyčku přes @ref qoreasyncjobutilsintro \"QoreAsyncJobUtils\", dokud úloha nedosáhne koncového stavu `Ready`.\n\nOdpověď obsahuje `result.sample` – CDN URL vygenerovaného obrázku. Obrázek si stáhněte neprodleně; URL CDN od BFL jsou dočasné."
+        },
+        "app.QmxhY2tGb3Jlc3RMYWJz.action.Z2VuZXJhdGUtaW1hZ2U.display_name": {
+          "source": "Generate Image",
+          "message": "Generovat obrázek"
+        },
+        "app.QmxhY2tGb3Jlc3RMYWJz.action.Z2VuZXJhdGUtaW1hZ2U.option.YXNwZWN0X3JhdGlv.desc": {
+          "source": "Output aspect ratio.",
+          "message": "Poměr stran výstupu."
+        },
+        "app.QmxhY2tGb3Jlc3RMYWJz.action.Z2VuZXJhdGUtaW1hZ2U.option.YXNwZWN0X3JhdGlv.display_name": {
+          "source": "Aspect Ratio",
+          "message": "Poměr stran"
+        },
+        "app.QmxhY2tGb3Jlc3RMYWJz.action.Z2VuZXJhdGUtaW1hZ2U.option.YXNwZWN0X3JhdGlv.short_desc": {
+          "source": "Output aspect ratio",
+          "message": "Poměr stran výstupu"
+        },
+        "app.QmxhY2tGb3Jlc3RMYWJz.action.Z2VuZXJhdGUtaW1hZ2U.option.aGVpZ2h0.desc": {
+          "source": "Output image height in pixels (model-specific limits).",
+          "message": "Výška výstupního obrázku v pixelech (limity specifické pro daný model)."
+        },
+        "app.QmxhY2tGb3Jlc3RMYWJz.action.Z2VuZXJhdGUtaW1hZ2U.option.aGVpZ2h0.display_name": {
+          "source": "Height",
+          "message": "Výška"
+        },
+        "app.QmxhY2tGb3Jlc3RMYWJz.action.Z2VuZXJhdGUtaW1hZ2U.option.aGVpZ2h0.short_desc": {
+          "source": "Output image height in pixels",
+          "message": "Výška výstupního obrázku v pixelech"
+        },
+        "app.QmxhY2tGb3Jlc3RMYWJz.action.Z2VuZXJhdGUtaW1hZ2U.option.aW5wdXRfaW1hZ2U.desc": {
+          "source": "Base64-encoded input image, used by the `flux-kontext-pro` and `flux-kontext-max` models for image-to-image editing.",
+          "message": "Vstupní obrázek kódovaný v Base64, používaný modely `flux-kontext-pro` a `flux-kontext-max` pro úpravu obrázku na obrázek (image-to-image)."
+        },
+        "app.QmxhY2tGb3Jlc3RMYWJz.action.Z2VuZXJhdGUtaW1hZ2U.option.aW5wdXRfaW1hZ2U.display_name": {
+          "source": "Input Image (base64)",
+          "message": "Vstupní obrázek (base64)"
+        },
+        "app.QmxhY2tGb3Jlc3RMYWJz.action.Z2VuZXJhdGUtaW1hZ2U.option.aW5wdXRfaW1hZ2U.short_desc": {
+          "source": "Base64-encoded input image (for `flux-kontext-*` models)",
+          "message": "Vstupní obrázek kódovaný v Base64 (pro modely `flux-kontext-*`)"
+        },
+        "app.QmxhY2tGb3Jlc3RMYWJz.action.Z2VuZXJhdGUtaW1hZ2U.option.bW9kZWw.allowed-value.c3RyaW5nOmZsdXgtZGV2.display_name": {
+          "source": "FLUX Dev",
+          "message": "FLUX Dev"
+        },
+        "app.QmxhY2tGb3Jlc3RMYWJz.action.Z2VuZXJhdGUtaW1hZ2U.option.bW9kZWw.allowed-value.c3RyaW5nOmZsdXgta29udGV4dC1tYXg.display_name": {
+          "source": "FLUX Kontext Max (image edit)",
+          "message": "FLUX Kontext Max (úprava obrázku)"
+        },
+        "app.QmxhY2tGb3Jlc3RMYWJz.action.Z2VuZXJhdGUtaW1hZ2U.option.bW9kZWw.allowed-value.c3RyaW5nOmZsdXgta29udGV4dC1wcm8.display_name": {
+          "source": "FLUX Kontext Pro (image edit)",
+          "message": "FLUX Kontext Pro (úprava obrázku)"
+        },
+        "app.QmxhY2tGb3Jlc3RMYWJz.action.Z2VuZXJhdGUtaW1hZ2U.option.bW9kZWw.allowed-value.c3RyaW5nOmZsdXgtcHJv.display_name": {
+          "source": "FLUX Pro",
+          "message": "FLUX Pro"
+        },
+        "app.QmxhY2tGb3Jlc3RMYWJz.action.Z2VuZXJhdGUtaW1hZ2U.option.bW9kZWw.allowed-value.c3RyaW5nOmZsdXgtcHJvLTEuMQ.display_name": {
+          "source": "FLUX Pro 1.1",
+          "message": "FLUX Pro 1.1"
+        },
+        "app.QmxhY2tGb3Jlc3RMYWJz.action.Z2VuZXJhdGUtaW1hZ2U.option.bW9kZWw.allowed-value.c3RyaW5nOmZsdXgtcHJvLTEuMS11bHRyYQ.display_name": {
+          "source": "FLUX Pro 1.1 Ultra",
+          "message": "FLUX Pro 1.1 Ultra"
+        },
+        "app.QmxhY2tGb3Jlc3RMYWJz.action.Z2VuZXJhdGUtaW1hZ2U.option.bW9kZWw.desc": {
+          "source": "FLUX model identifier — `flux-pro-1.1`, `flux-pro-1.1-ultra` (highest quality), `flux-pro`, `flux-dev`, `flux-kontext-pro` / `flux-kontext-max` (image-to-image edit).",
+          "message": "Identifikátor modelu FLUX – `flux-pro-1.1`, `flux-pro-1.1-ultra` (nejvyšší kvalita), `flux-pro`, `flux-dev`, `flux-kontext-pro` / `flux-kontext-max` (úprava typu image-to-image)."
+        },
+        "app.QmxhY2tGb3Jlc3RMYWJz.action.Z2VuZXJhdGUtaW1hZ2U.option.bW9kZWw.display_name": {
+          "source": "Model",
+          "message": "Model"
+        },
+        "app.QmxhY2tGb3Jlc3RMYWJz.action.Z2VuZXJhdGUtaW1hZ2U.option.bW9kZWw.short_desc": {
+          "source": "FLUX model identifier",
+          "message": "Identifikátor modelu FLUX"
+        },
+        "app.QmxhY2tGb3Jlc3RMYWJz.action.Z2VuZXJhdGUtaW1hZ2U.option.bmVnYXRpdmVfcHJvbXB0.desc": {
+          "source": "Text describing what to avoid in the image.",
+          "message": "Text popisující, čemu se má model v obrázku vyhnout."
+        },
+        "app.QmxhY2tGb3Jlc3RMYWJz.action.Z2VuZXJhdGUtaW1hZ2U.option.bmVnYXRpdmVfcHJvbXB0.display_name": {
+          "source": "Negative Prompt",
+          "message": "Negativní prompt"
+        },
+        "app.QmxhY2tGb3Jlc3RMYWJz.action.Z2VuZXJhdGUtaW1hZ2U.option.bmVnYXRpdmVfcHJvbXB0.short_desc": {
+          "source": "What to avoid in the image",
+          "message": "Čemu se vyhnout v obrázku"
+        },
+        "app.QmxhY2tGb3Jlc3RMYWJz.action.Z2VuZXJhdGUtaW1hZ2U.option.c2VlZA.desc": {
+          "source": "Random seed for reproducibility — same seed + prompt should produce the same image.",
+          "message": "Náhodné číslo (seed) pro reprodukovatelnost – stejný seed + prompt by měl vygenerovat stejný obrázek."
+        },
+        "app.QmxhY2tGb3Jlc3RMYWJz.action.Z2VuZXJhdGUtaW1hZ2U.option.c2VlZA.display_name": {
+          "source": "Seed",
+          "message": "Seed"
+        },
+        "app.QmxhY2tGb3Jlc3RMYWJz.action.Z2VuZXJhdGUtaW1hZ2U.option.c2VlZA.short_desc": {
+          "source": "Random seed for reproducibility",
+          "message": "Náhodné číslo (seed) pro reprodukovatelnost"
+        },
+        "app.QmxhY2tGb3Jlc3RMYWJz.action.Z2VuZXJhdGUtaW1hZ2U.option.cHJvbXB0.desc": {
+          "source": "Text prompt describing the desired image.",
+          "message": "Textový prompt popisující požadovaný obrázek."
+        },
+        "app.QmxhY2tGb3Jlc3RMYWJz.action.Z2VuZXJhdGUtaW1hZ2U.option.cHJvbXB0.display_name": {
+          "source": "Prompt",
+          "message": "Prompt"
+        },
+        "app.QmxhY2tGb3Jlc3RMYWJz.action.Z2VuZXJhdGUtaW1hZ2U.option.cHJvbXB0.short_desc": {
+          "source": "Text prompt describing the image",
+          "message": "Textový prompt popisující obrázek"
+        },
+        "app.QmxhY2tGb3Jlc3RMYWJz.action.Z2VuZXJhdGUtaW1hZ2U.option.cHJvbXB0X3Vwc2FtcGxpbmc.desc": {
+          "source": "When `True`, BFL rewrites the prompt server-side for improved quality.  Off by default.",
+          "message": "Pokud je hodnota nastavena na `True`, BFL přepíše prompt na straně serveru za účelem vyšší kvality. Ve výchozím nastavení vypnuto."
+        },
+        "app.QmxhY2tGb3Jlc3RMYWJz.action.Z2VuZXJhdGUtaW1hZ2U.option.cHJvbXB0X3Vwc2FtcGxpbmc.display_name": {
+          "source": "Prompt Upsampling",
+          "message": "Převzorkování promptu (Upsampling)"
+        },
+        "app.QmxhY2tGb3Jlc3RMYWJz.action.Z2VuZXJhdGUtaW1hZ2U.option.cHJvbXB0X3Vwc2FtcGxpbmc.short_desc": {
+          "source": "Let BFL rewrite the prompt for better quality",
+          "message": "Nechat BFL přepsat prompt pro vyšší kvalitu"
+        },
+        "app.QmxhY2tGb3Jlc3RMYWJz.action.Z2VuZXJhdGUtaW1hZ2U.option.d2lkdGg.desc": {
+          "source": "Output image width in pixels (model-specific limits).",
+          "message": "Šířka výstupního obrázku v pixelech (limity specifické pro daný model)."
+        },
+        "app.QmxhY2tGb3Jlc3RMYWJz.action.Z2VuZXJhdGUtaW1hZ2U.option.d2lkdGg.display_name": {
+          "source": "Width",
+          "message": "Šířka"
+        },
+        "app.QmxhY2tGb3Jlc3RMYWJz.action.Z2VuZXJhdGUtaW1hZ2U.option.d2lkdGg.short_desc": {
+          "source": "Output image width in pixels",
+          "message": "Šířka výstupního obrázku v pixelech"
+        },
+        "app.QmxhY2tGb3Jlc3RMYWJz.action.Z2VuZXJhdGUtaW1hZ2U.short_desc": {
+          "source": "Generate an image from a text prompt (async)",
+          "message": "Generovat obrázek z textového promptu (asynchronně)"
+        },
+        "app.QmxhY2tGb3Jlc3RMYWJz.action.bWFrZS1hcGktY2FsbA.desc": {
+          "source": "Make a custom HTTP / REST API call to **Black Forest Labs** using the configured connection's authentication.\n\nSpecify the HTTP method, the URI path (relative to the connection's API base URL), optional query parameters, headers, and request body. The response is returned as a hash containing the status code, response headers, and response body.\n\nUse this action for endpoints that are not yet exposed as first-class actions on this app.",
+          "message": "Provést vlastní volání HTTP / REST API do **Black Forest Labs** pomocí ověření nakonfigurovaného připojení.\n\nZadejte metodu HTTP, cestu URI (relativní k základní adrese URL rozhraní API připojení), volitelné parametry dotazu, záhlaví a tělo požadavku. Odpověď je vrácena jako hash obsahující stavový kód, záhlaví odpovědi a tělo odpovědi.\n\nTuto akci použijte pro koncové body, které v této aplikaci ještě nejsou vystaveny jako plnohodnotné akce."
+        },
+        "app.QmxhY2tGb3Jlc3RMYWJz.action.bWFrZS1hcGktY2FsbA.display_name": {
+          "source": "Make an API call",
+          "message": "Provést volání API"
+        },
+        "app.QmxhY2tGb3Jlc3RMYWJz.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.desc": {
+          "source": "The request body. The effective type depends on `body_type`: JSON/form/YAML expect a hash, XML/text expect a string, multipart expects a file structure, binary expects raw bytes.",
+          "message": "Tělo požadavku. Efektivní typ závisí na `body_type`: JSON/form/YAML očekávají hash, XML/text očekávají řetězec, multipart očekává strukturu souboru, binary očekává surové bajty."
+        },
+        "app.QmxhY2tGb3Jlc3RMYWJz.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.display_name": {
+          "source": "Body",
+          "message": "Tělo"
+        },
+        "app.QmxhY2tGb3Jlc3RMYWJz.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.short_desc": {
+          "source": "The request body",
+          "message": "Tělo požadavku"
+        },
+        "app.QmxhY2tGb3Jlc3RMYWJz.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.desc": {
+          "source": "Upload a file using `multipart/form-data`. The body must be a @ref DataProvider::FileDataType \"FileDataType\" structure (filename + content + mime_type). The framework builds the multipart envelope and sets the boundary header.",
+          "message": "Nahrát soubor pomocí `multipart/form-data`. Tělo musí být struktura @ref DataProvider::FileDataType \"FileDataType\" (filename + content + mime_type). Framework vytvoří obálku multipart a nastaví záhlaví boundary."
+        },
+        "app.QmxhY2tGb3Jlc3RMYWJz.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.display_name": {
+          "source": "Multipart Form",
+          "message": "Multipart Form"
+        },
+        "app.QmxhY2tGb3Jlc3RMYWJz.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.short_desc": {
+          "source": "Upload a file using multipart/form-data",
+          "message": "Nahrát soubor pomocí multipart/form-data"
+        },
+        "app.QmxhY2tGb3Jlc3RMYWJz.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.desc": {
+          "source": "Pass the body to the REST client unchanged; the client decides serialization based on its configured `data` option and the value type",
+          "message": "Předat tělo klientovi REST beze změny; klient rozhodne o serializaci na základě své nakonfigurované možnosti `data` a typu hodnoty"
+        },
+        "app.QmxhY2tGb3Jlc3RMYWJz.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.display_name": {
+          "source": "Auto",
+          "message": "Automaticky"
+        },
+        "app.QmxhY2tGb3Jlc3RMYWJz.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.short_desc": {
+          "source": "Pass-through; use connection serialization and let the REST client decide",
+          "message": "Předání bez změn; použít serializaci připojení a nechat rozhodnutí na klientovi REST"
+        },
+        "app.QmxhY2tGb3Jlc3RMYWJz.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.desc": {
+          "source": "Send the body as raw bytes. The body must be a binary value. Sets `Content-Type: application/octet-stream` unless overridden by `hdr`.",
+          "message": "Odeslat tělo jako surové bajty. Tělo musí být binární hodnota. Nastavuje `Content-Type: application/octet-stream`, pokud není přepsáno `hdr`."
+        },
+        "app.QmxhY2tGb3Jlc3RMYWJz.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.display_name": {
+          "source": "Raw Binary",
+          "message": "Surová binární data"
+        },
+        "app.QmxhY2tGb3Jlc3RMYWJz.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.short_desc": {
+          "source": "Send body as raw bytes",
+          "message": "Odeslat tělo jako surové bajty"
+        },
+        "app.QmxhY2tGb3Jlc3RMYWJz.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.desc": {
+          "source": "Serialize a hash of form fields as `application/x-www-form-urlencoded`. The body must be a hash whose values are scalars (strings/numbers/booleans).",
+          "message": "Serializovat hash formulářových polí jako `application/x-www-form-urlencoded`. Tělo musí být hash, jehož hodnotami jsou skaláry (řetězce/čísla/booleovské hodnoty)."
+        },
+        "app.QmxhY2tGb3Jlc3RMYWJz.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.display_name": {
+          "source": "Form (URL-encoded)",
+          "message": "Formulář (URL-encoded)"
+        },
+        "app.QmxhY2tGb3Jlc3RMYWJz.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.short_desc": {
+          "source": "Serialize body as application/x-www-form-urlencoded form fields",
+          "message": "Serializovat tělo jako formulářová pole application/x-www-form-urlencoded"
+        },
+        "app.QmxhY2tGb3Jlc3RMYWJz.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.desc": {
+          "source": "Serialize the body as JSON; sets `Content-Type: application/json`. The body should be a hash, list, or scalar value.",
+          "message": "Serializovat tělo jako JSON; nastavuje `Content-Type: application/json`. Tělo by mělo být hash, seznam nebo skalární hodnota."
+        },
+        "app.QmxhY2tGb3Jlc3RMYWJz.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.display_name": {
+          "source": "JSON",
+          "message": "JSON"
+        },
+        "app.QmxhY2tGb3Jlc3RMYWJz.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.short_desc": {
+          "source": "Serialize body as JSON",
+          "message": "Serializovat tělo jako JSON"
+        },
+        "app.QmxhY2tGb3Jlc3RMYWJz.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.desc": {
+          "source": "Send the body as plain text. The body must be a string. Sets `Content-Type: text/plain`.",
+          "message": "Odeslat tělo jako prostý text. Tělo musí být řetězec. Nastavuje `Content-Type: text/plain`."
+        },
+        "app.QmxhY2tGb3Jlc3RMYWJz.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.display_name": {
+          "source": "Plain Text",
+          "message": "Čistý text"
+        },
+        "app.QmxhY2tGb3Jlc3RMYWJz.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.short_desc": {
+          "source": "Send body as text/plain",
+          "message": "Odeslat tělo jako text/plain"
+        },
+        "app.QmxhY2tGb3Jlc3RMYWJz.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.desc": {
+          "source": "Send the body as XML. If the body is a hash it is serialized to XML; if it is a string it is sent verbatim. Sets `Content-Type: application/xml`.",
+          "message": "Odeslat tělo jako XML. Pokud je tělo hash, serializuje se do XML; pokud je to řetězec, odešle se doslovně. Nastavuje `Content-Type: application/xml`."
+        },
+        "app.QmxhY2tGb3Jlc3RMYWJz.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.display_name": {
+          "source": "XML",
+          "message": "XML"
+        },
+        "app.QmxhY2tGb3Jlc3RMYWJz.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.short_desc": {
+          "source": "Send body as XML",
+          "message": "Odeslat tělo jako XML"
+        },
+        "app.QmxhY2tGb3Jlc3RMYWJz.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.desc": {
+          "source": "Send the body as YAML. If the body is a hash it is serialized to YAML; if it is a string it is sent verbatim. Sets `Content-Type: application/x-yaml`.",
+          "message": "Odeslat tělo jako YAML. Pokud je tělo hash, serializuje se do YAML; pokud je to řetězec, odešle se doslovně. Nastavuje `Content-Type: application/x-yaml`."
+        },
+        "app.QmxhY2tGb3Jlc3RMYWJz.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.display_name": {
+          "source": "YAML",
+          "message": "YAML"
+        },
+        "app.QmxhY2tGb3Jlc3RMYWJz.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.short_desc": {
+          "source": "Send body as YAML",
+          "message": "Odeslat tělo jako YAML"
+        },
+        "app.QmxhY2tGb3Jlc3RMYWJz.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.desc": {
+          "source": "Selects the body serialization mode and the corresponding `Content-Type` header. Changing this field reshapes the `body` editor - selecting JSON exposes a JSON editor, selecting Multipart Form exposes a file picker, and so on.",
+          "message": "Vybírá režim serializace těla a odpovídající záhlaví `Content-Type`. Změna tohoto pole upraví editor `body` – výběrem JSON se zobrazí editor JSON, výběrem Multipart Form se zobrazí výběr souboru a podobně."
+        },
+        "app.QmxhY2tGb3Jlc3RMYWJz.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.display_name": {
+          "source": "Body Type",
+          "message": "Typ těla"
+        },
+        "app.QmxhY2tGb3Jlc3RMYWJz.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.short_desc": {
+          "source": "How the body is serialized and what Content-Type is sent",
+          "message": "Jak je tělo serializováno a jaký Content-Type je odeslán"
+        },
+        "app.QmxhY2tGb3Jlc3RMYWJz.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.desc": {
+          "source": "If `True`, non-2xx HTTP responses return as the normal response hash (with the actual status code) instead of raising `REST-RESPONSE-ERROR`. Useful for handling 4xx/5xx as data - e.g. checking whether a resource exists. Overrides the connection's `error_passthru` setting for this call only.",
+          "message": "Pokud je `True`, odpovědi HTTP jiné než 2xx se vrátí jako běžný hash odpovědi (s reálným stavovým kódem) namísto vyvolání `REST-RESPONSE-ERROR`. Užitečné pro zpracování 4xx/5xx jako dat – např. kontrola, zda prostředek existuje. Přepisuje nastavení `error_passthru` připojení pouze pro toto volání."
+        },
+        "app.QmxhY2tGb3Jlc3RMYWJz.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.display_name": {
+          "source": "Return Errors as Data",
+          "message": "Vracet chyby jako data"
+        },
+        "app.QmxhY2tGb3Jlc3RMYWJz.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.short_desc": {
+          "source": "Return non-2xx responses normally instead of throwing",
+          "message": "Vracet odpovědi jiné než 2xx normálně namísto vyvolání výjimky"
+        },
+        "app.QmxhY2tGb3Jlc3RMYWJz.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.desc": {
+          "source": "Optional list of HTTP status codes treated as success. If set and the response status is not in this list, the action throws `REST-STATUS-ERROR`. When unset, the REST client's default behavior applies (typically: 2xx is success, non-2xx throws).",
+          "message": "Volitelný seznam stavových kódů HTTP považovaných za úspěch. Je-li nastaven a stav odpovědi není v tomto seznamu, akce vyvolá `REST-STATUS-ERROR`. Pokud není nastaven, uplatní se výchozí chování klienta REST (obvykle: 2xx je úspěch, jiné než 2xx vyvolá výjimku)."
+        },
+        "app.QmxhY2tGb3Jlc3RMYWJz.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.display_name": {
+          "source": "Expected Status Codes",
+          "message": "Očekávané stavové kódy"
+        },
+        "app.QmxhY2tGb3Jlc3RMYWJz.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.short_desc": {
+          "source": "Response status codes treated as success",
+          "message": "Stavové kódy odpovědi považované za úspěch"
+        },
+        "app.QmxhY2tGb3Jlc3RMYWJz.action.bWFrZS1hcGktY2FsbA.option.aGRy.desc": {
+          "source": "Hash of custom headers added to the request. These override any default headers set by `body_type` (e.g. supplying `Content-Type` here wins over the body-type default).",
+          "message": "Hash vlastních záhlaví přidaných k požadavku. Tyto přepisují jakákoli výchozí záhlaví nastavená `body_type` (např. zadání `Content-Type` zde má přednost před výchozím nastavením typu těla)."
+        },
+        "app.QmxhY2tGb3Jlc3RMYWJz.action.bWFrZS1hcGktY2FsbA.option.aGRy.display_name": {
+          "source": "Custom Headers",
+          "message": "Vlastní záhlaví"
+        },
+        "app.QmxhY2tGb3Jlc3RMYWJz.action.bWFrZS1hcGktY2FsbA.option.aGRy.short_desc": {
+          "source": "Extra request headers",
+          "message": "Dodatečná záhlaví požadavku"
+        },
+        "app.QmxhY2tGb3Jlc3RMYWJz.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.desc": {
+          "source": "If `True`, the response hash includes a `debug` sub-hash containing the request method/URL/headers (with sensitive values redacted), request and response sizes, and round-trip duration. Useful when investigating slow or failing calls. Off by default to keep responses lean.",
+          "message": "Pokud je `True`, hash odpovědi obsahuje pod-hash `debug` obsahující metodu/URL/záhlaví požadavku (s cenzurovanými citlivými hodnotami), velikosti požadavku a odpovědi a dobu trvání. Užitečné při zkoumání pomalých nebo selhávajících volání. Ve výchozím nastavení vypnuto pro zachování kompaktních odpovědí."
+        },
+        "app.QmxhY2tGb3Jlc3RMYWJz.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.display_name": {
+          "source": "Include Debug Info",
+          "message": "Zahrnout ladicí informace"
+        },
+        "app.QmxhY2tGb3Jlc3RMYWJz.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.short_desc": {
+          "source": "Include request/timing/size debug info in the response",
+          "message": "Zahrnout do odpovědi ladicí informace o požadavku/časování/velikosti"
+        },
+        "app.QmxhY2tGb3Jlc3RMYWJz.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.desc": {
+          "source": "HTTP `OPTIONS`",
+          "message": "HTTP `OPTIONS`"
+        },
+        "app.QmxhY2tGb3Jlc3RMYWJz.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.display_name": {
+          "source": "OPTIONS",
+          "message": "OPTIONS"
+        },
+        "app.QmxhY2tGb3Jlc3RMYWJz.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.short_desc": {
+          "source": "HTTP OPTIONS",
+          "message": "HTTP OPTIONS"
+        },
+        "app.QmxhY2tGb3Jlc3RMYWJz.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.desc": {
+          "source": "HTTP `DELETE`",
+          "message": "HTTP `DELETE`"
+        },
+        "app.QmxhY2tGb3Jlc3RMYWJz.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.display_name": {
+          "source": "DELETE",
+          "message": "DELETE"
+        },
+        "app.QmxhY2tGb3Jlc3RMYWJz.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.short_desc": {
+          "source": "HTTP DELETE",
+          "message": "HTTP DELETE"
+        },
+        "app.QmxhY2tGb3Jlc3RMYWJz.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.desc": {
+          "source": "HTTP `GET`",
+          "message": "HTTP `GET`"
+        },
+        "app.QmxhY2tGb3Jlc3RMYWJz.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.display_name": {
+          "source": "GET",
+          "message": "GET"
+        },
+        "app.QmxhY2tGb3Jlc3RMYWJz.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.short_desc": {
+          "source": "HTTP GET",
+          "message": "HTTP GET"
+        },
+        "app.QmxhY2tGb3Jlc3RMYWJz.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.desc": {
+          "source": "HTTP `HEAD`",
+          "message": "HTTP `HEAD`"
+        },
+        "app.QmxhY2tGb3Jlc3RMYWJz.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.display_name": {
+          "source": "HEAD",
+          "message": "HEAD"
+        },
+        "app.QmxhY2tGb3Jlc3RMYWJz.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.short_desc": {
+          "source": "HTTP HEAD",
+          "message": "HTTP HEAD"
+        },
+        "app.QmxhY2tGb3Jlc3RMYWJz.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.desc": {
+          "source": "HTTP `PATCH`",
+          "message": "HTTP `PATCH`"
+        },
+        "app.QmxhY2tGb3Jlc3RMYWJz.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.display_name": {
+          "source": "PATCH",
+          "message": "PATCH"
+        },
+        "app.QmxhY2tGb3Jlc3RMYWJz.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.short_desc": {
+          "source": "HTTP PATCH",
+          "message": "HTTP PATCH"
+        },
+        "app.QmxhY2tGb3Jlc3RMYWJz.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.desc": {
+          "source": "HTTP `POST`",
+          "message": "HTTP `POST`"
+        },
+        "app.QmxhY2tGb3Jlc3RMYWJz.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.display_name": {
+          "source": "POST",
+          "message": "POST"
+        },
+        "app.QmxhY2tGb3Jlc3RMYWJz.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.short_desc": {
+          "source": "HTTP POST",
+          "message": "HTTP POST"
+        },
+        "app.QmxhY2tGb3Jlc3RMYWJz.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.desc": {
+          "source": "HTTP `PUT`",
+          "message": "HTTP `PUT`"
+        },
+        "app.QmxhY2tGb3Jlc3RMYWJz.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.display_name": {
+          "source": "PUT",
+          "message": "PUT"
+        },
+        "app.QmxhY2tGb3Jlc3RMYWJz.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.short_desc": {
+          "source": "HTTP PUT",
+          "message": "HTTP PUT"
+        },
+        "app.QmxhY2tGb3Jlc3RMYWJz.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.desc": {
+          "source": "HTTP `TRACE`",
+          "message": "HTTP `TRACE`"
+        },
+        "app.QmxhY2tGb3Jlc3RMYWJz.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.display_name": {
+          "source": "TRACE",
+          "message": "TRACE"
+        },
+        "app.QmxhY2tGb3Jlc3RMYWJz.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.short_desc": {
+          "source": "HTTP TRACE",
+          "message": "HTTP TRACE"
+        },
+        "app.QmxhY2tGb3Jlc3RMYWJz.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "Metoda HTTP, která se má použít pro požadavek"
+        },
+        "app.QmxhY2tGb3Jlc3RMYWJz.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.display_name": {
+          "source": "HTTP Method",
+          "message": "Metoda HTTP"
+        },
+        "app.QmxhY2tGb3Jlc3RMYWJz.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.short_desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "Metoda HTTP, která se má použít pro požadavek"
+        },
+        "app.QmxhY2tGb3Jlc3RMYWJz.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain `{name}` placeholders that are replaced from `path_vars`. Example: `/users/{id}/comments`.",
+          "message": "Cesta URI relativní k základní adrese URL API připojení. Může obsahovat zástupné symboly `{name}`, které jsou nahrazeny z `path_vars`. Příklad: `/users/{id}/comments`."
+        },
+        "app.QmxhY2tGb3Jlc3RMYWJz.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.display_name": {
+          "source": "URI Path",
+          "message": "Cesta URI"
+        },
+        "app.QmxhY2tGb3Jlc3RMYWJz.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.short_desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain '{name}' placeholders that are replaced from 'path_vars'. Example: '/users/{id}/comments'",
+          "message": "Cesta URI relativní vůči základní URL API připojení. Může obsahovat zástupné symboly '{name}', které jsou nahrazeny z 'path_vars'. Příklad: '/users/{id}/comments'"
+        },
+        "app.QmxhY2tGb3Jlc3RMYWJz.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.desc": {
+          "source": "Hash of values substituted into `{name}` placeholders in the URI path. Example: with `path = /users/{id}` and `path_vars = {id: 123}` the framework sends `/users/123`. Values are URL-encoded.",
+          "message": "Haš hodnot nahrazených za zástupné symboly `{name}` v cestě URI. Příklad: s `path = /users/{id}` a `path_vars = {id: 123}` rozhraní odesílá `/users/123`. Hodnoty jsou kódovány v URL."
+        },
+        "app.QmxhY2tGb3Jlc3RMYWJz.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.display_name": {
+          "source": "Path Variables",
+          "message": "Proměnné cesty"
+        },
+        "app.QmxhY2tGb3Jlc3RMYWJz.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.short_desc": {
+          "source": "Values for {name} placeholders in path",
+          "message": "Hodnoty pro zástupné symboly {name} v cestě"
+        },
+        "app.QmxhY2tGb3Jlc3RMYWJz.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.desc": {
+          "source": "Hash of query string parameters to append to the URI path. Values are URL-encoded; list values are joined with `,`.",
+          "message": "Haš parametrů dotazovacího řetězce, které se připojí k cestě URI. Hodnoty jsou kódovány v URL; hodnoty seznamu jsou spojeny pomocí `,`."
+        },
+        "app.QmxhY2tGb3Jlc3RMYWJz.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.display_name": {
+          "source": "Query Arguments",
+          "message": "Argumenty dotazu"
+        },
+        "app.QmxhY2tGb3Jlc3RMYWJz.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.short_desc": {
+          "source": "Query string parameters",
+          "message": "Parametry dotazovacího řetězce"
+        },
+        "app.QmxhY2tGb3Jlc3RMYWJz.action.bWFrZS1hcGktY2FsbA.short_desc": {
+          "source": "Make a custom API call to Black Forest Labs",
+          "message": "Provést vlastní volání API do Black Forest Labs"
+        },
+        "app.QmxhY2tGb3Jlc3RMYWJz.desc": {
+          "source": "Provides access to [Black Forest Labs](https://bfl.ai) — the company behind the FLUX image generation models.\n\n**Image models** (selectable via the `model` action option):\n- `flux-pro-1.1` (default) — production text-to-image\n- `flux-pro-1.1-ultra` — highest quality, 4MP output\n- `flux-pro` — original FLUX Pro\n- `flux-dev` — faster + cheaper development model\n- `flux-kontext-pro` / `flux-kontext-max` — image-to-image edit (needs an `input_image`)\n\n**Video generation** is exposed only via the @ref qoremediautilsintro \"QoreMediaUtils\" `bfl` video-generator backend or the @ref bflrestclientintro \"BflRestClient\" `submitAndWait()` method directly — not as an action in this data provider.",
+          "message": "Poskytuje přístup k [Black Forest Labs](https://bfl.ai) – společnosti stojící za modely pro generování obrázků FLUX.\n\n**Modely pro generování obrázků** (volitelné pomocí možnosti akce `model`):\n- `flux-pro-1.1` (výchozí) – produkční generování text-to-image\n- `flux-pro-1.1-ultra` – nejvyšší kvalita, výstup 4 MP\n- `flux-pro` – původní FLUX Pro\n- `flux-dev` – rychlejší a levnější vývojový model\n- `flux-kontext-pro` / `flux-kontext-max` – úprava typu image-to-image (vyžaduje `input_image`)\n\n**Generování videa** je zpřístupněno pouze prostřednictvím backendu pro generování videa `bfl` modulu @ref qoremediautilsintro \"QoreMediaUtils\" nebo přímo metodou `submitAndWait()` klienta @ref bflrestclientintro \"BflRestClient\" – nikoli jako akce v tomto poskytovateli dat."
+        },
+        "app.QmxhY2tGb3Jlc3RMYWJz.display_name": {
+          "source": "Black Forest Labs",
+          "message": "Black Forest Labs"
+        },
+        "app.QmxhY2tGb3Jlc3RMYWJz.short_desc": {
+          "source": "Black Forest Labs FLUX text-to-image generation",
+          "message": "Generování text-to-image pomocí Black Forest Labs FLUX"
+        }
+      }
+    }
+  }
+}

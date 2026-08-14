@@ -666,15 +666,22 @@ public:
         return !pending_body_data.empty() || !pending_data_providers.empty();
     }
 
-    //! Returns true if any stream has buffered body data waiting to be drained
+    //! Returns true if a streaming stream has buffered body data waiting to be drained
     /** Used by QoreSocketObject::hasPendingData() to trigger re-polling of H2
-        operations when stream data was received in a previous TCP read but not
-        yet drained by the poll operation (analogous to the SSL pending check).
+        operations when incrementally deliverable stream data was received in a
+        previous TCP read but not yet drained by the poll operation (analogous to
+        the SSL pending check).
+
+        A normal non-streaming response is deliberately excluded.  Its body is
+        accumulated until END_STREAM and cannot be consumed while the request is
+        still pending; treating an ordinary partial body as actionable makes the
+        async controller poll with a zero timeout until the peer finishes the
+        response.
     */
     DLLLOCAL bool hasStreamData() const {
         std::lock_guard<std::recursive_mutex> lg(m);
         for (auto& [sid, info] : streams) {
-            if (!info->body.empty()) {
+            if ((info->streaming || info->is_connect) && !info->body.empty()) {
                 return true;
             }
         }
