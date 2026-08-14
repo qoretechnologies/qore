@@ -295,12 +295,18 @@ class CdsTest inherits QUnit::Test {
             CdsRestClientBase::getInstanceOptions(one, NOTHING, NOTHING),
             "the URL carries the connection's own scheme, since it is promoted onto the connection");
 
-        # several environments and nothing to say which: choosing one would silently read another
-        # company's data, so none is chosen and the connection stays on the discovery service
-        hash<auto> many = {"value": ({"UniqueName": "orgA", "Url": "https://a.crm17.dynamics.com"},
-                                     {"UniqueName": "orgB", "Url": "https://b.crm17.dynamics.com"})};
-        assertNothing(CdsRestClientBase::getInstanceOptions(many, NOTHING, NOTHING),
-            "no environment is chosen arbitrarily");
+        # several environments and nothing to say which: one is used and named, since a connection left
+        # on the discovery service reports success while every request 404s
+        hash<auto> many = {"value": ({"UniqueName": "orgB", "Url": "https://b.crm17.dynamics.com"},
+                                     {"UniqueName": "orgA", "Url": "https://a.crm17.dynamics.com"})};
+        assertEq({"url": "dynamics://a.crm17.dynamics.com", "organization": "orgA"},
+            CdsRestClientBase::getInstanceOptions(many, NOTHING, NOTHING),
+            "one environment is chosen, and the choice is stated in \"organization\"");
+        # the discovery service does not order its answer; the same credential must not move between
+        # environments only because Microsoft answered in a different order
+        assertEq(CdsRestClientBase::getInstanceOptions(many, NOTHING, NOTHING),
+            CdsRestClientBase::getInstanceOptions({"value": reverse(many.value)}, NOTHING, NOTHING),
+            "and the choice does not depend on the order the environments came back in");
         assertEq({"url": "dynamics://b.crm17.dynamics.com", "organization": "orgB"},
             CdsRestClientBase::getInstanceOptions(many, "orgB", NOTHING), "the named one is chosen");
         assertNothing(CdsRestClientBase::getInstanceOptions(many, "nosuch", NOTHING),

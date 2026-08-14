@@ -102,17 +102,22 @@ printf("%Y\n", ans.body);
     |the connection is created|with no URL, so it targets the discovery service (\c DefaultUrl)
     |it is authorized|the discovery service is an OAuth2 resource of its own, so the profile's <tt>{url}user_impersonation</tt> scope resolves to exactly the scope the discovery call needs - there is no special case
     |the token arrives|the environments the credential reaches are read from <tt>/api/discovery/v2.0/Instances</tt>
-    |the environment is chosen|where there is one, it is used; where there are several, \c organization names it
+    |the environment is chosen|\c organization names it; where it names none, the first is used
     |the URL is replaced|the environment's URL is returned as an option and promoted onto the connection, and the scope is resolved again against it
 
     The scheme declares \c auto_url, so nothing asks
     the user for a URL.
 
-    @note **No environment is ever chosen arbitrarily.**  A credential that reaches several environments
-    and names none leaves the connection on the discovery service, because connecting to whichever came
-    back first would read a different company's data without saying so.  \c organization is not a required
-    option either: requiring a value that only the authorization can produce makes the connection
-    impossible to create in the first place.
+    @note **An environment is always chosen, and the choice is always visible.**  A credential that
+    reaches several environments and names none gets the first of them in a stable order - the Global
+    Discovery Service does not order its answer, so an order of its own keeps the choice from moving
+    between authorizations - and the alternatives are logged as a warning.  The chosen environment is
+    written to \c organization, so what the connection works in is stated rather than implied, and
+    working in another one is a matter of changing that option and authorizing again.  Leaving the
+    connection on the discovery service instead would report success while every request 404s, which
+    says less than an explicit choice that can be read and overridden.  \c organization is not a
+    required option either: requiring a value that only the authorization can produce makes the
+    connection impossible to create in the first place.
 
     The discovery runs on all three hooks that can complete an authorization - the connection's
     \c processOAuth2TokenResponseImpl(), which is
@@ -406,14 +411,15 @@ public class CdsRestClientBase {
     }
 
     #! Returns the connection options for the environment to work in
-    /** With one environment there is nothing to choose.  With several, an arbitrary choice would silently
-        connect to the wrong company's data, so one is made only when \c organization names it; otherwise
-        the alternatives are logged and the connection is left targeting the discovery service, which is
-        what says the choice has still to be made.
+    /** With one environment there is nothing to choose.  With several, \c organization names the one to
+        work in; where it names none, the first in a stable order is used and the alternatives are logged
+        as a warning.  The environment chosen is returned as \c organization, so the connection states
+        what it works in rather than implying it, and moving to another one is a matter of changing that
+        option and authorizing again.
 
         @param body the Global Discovery Service response
         @param org the environment to select, by unique name, URL name or friendly name
-        @param logger any logger to report the alternatives to
+        @param logger any logger to report the choice and the alternatives to
 
         @return the connection options to update, or @ref nothing when no environment could be chosen
 
@@ -448,12 +454,16 @@ public class CdsRestClientBase {
         } else if (instances.size() == 1) {
             instance = instances[0];
         } else {
+            # the Global Discovery Service does not order its answer, so the choice is made on an order
+            # of its own; otherwise a working connection could move to another company's data the next
+            # time it is authorized, only because Microsoft answered in a different order
+            hash<auto> byname = map {($1.UniqueName ?? $1.Url): $1}, instances;
+            instance = byname{(sort(keys byname))[0]};
             if (logger) {
-                logger.info("Dynamics: the credential reaches %d environments: %y; set the "
-                    "\"organization\" option to choose one", instances.size(),
-                    (map $1.UniqueName, instances));
+                logger.warn("Dynamics: the credential reaches %d environments: %y; working in %y - set "
+                    "the \"organization\" option and authorize again to work in one of the others "
+                    "instead", instances.size(), (map $1.UniqueName, instances), instance.UniqueName);
             }
-            return;
         }
         if (logger) {
             logger.info("Dynamics: working in environment %y (%s)", instance.UniqueName, instance.Url);
@@ -1222,11 +1232,11 @@ public class DynamicsRestConnection inherits CdsRestConnection {
                     "short_desc": "The Dataverse environment to work in",
                     "type": "string",
                     "desc": "The Dataverse environment to work in, by its unique name.\n\n"
-                        "This is normally **discovered**: authorizing the connection asks Microsoft which "
-                        "environments the credential reaches, and where there is one it is used and this "
-                        "option is set to it. Set it by hand only where the credential reaches several, "
-                        "which is the one case that cannot be resolved without being told - connecting to "
-                        "an arbitrary one would read another company's data.",
+                        "This is **discovered**: authorizing the connection asks Microsoft which "
+                        "environments the credential reaches, uses one, and sets this option to it. "
+                        "Where the credential reaches several, the first is used and the others are "
+                        "logged; set this option to one of those and authorize again to work in it "
+                        "instead.",
                     "example_value": "orgb1c2d3e4",
                 },
             },
